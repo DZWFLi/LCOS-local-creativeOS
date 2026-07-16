@@ -2,7 +2,7 @@
 
 ## Current milestone
 
-Day 2 — Creative Review Layer.
+V0 pivot — AdFrame Script Review.
 
 ## Completed
 
@@ -24,12 +24,15 @@ Day 2 — Creative Review Layer.
 - Creative Review replaces numeric scoring with Issue / Impact / Evidence / Suggestion cards.
 - Review status supports Open / Accepted / Resolved and persists in localStorage.
 - PortaSplit review examples were calibrated against the real project iteration record rather than invented dashboard data.
+- Product direction narrowed from finished-video review to pre-production script and Shot Review.
+- Left rail now manages Script V1/V2/V3 and script sections; the center is an editable Script Canvas.
+- Human Review, Mock AI Skill analysis, Decision, V1/current comparison, local persistence, and Codex Handoff are implemented.
 
 ## In progress
 
-- Day 2 browser QA and milestone packaging.
+- Script Review pivot audit and portfolio narrative packaging.
 
 ## Next
 
-- Keep AI Analysis as a non-running presentation state until Day 3.
-- Prepare authentic media evidence for the PortaSplit case without changing the workspace layout.
+- Add the Match Night KOL/KOC case only after the PortaSplit path is approved.
+- Keep video-finished-asset evaluation as the future `AdFrame Motion` stage.

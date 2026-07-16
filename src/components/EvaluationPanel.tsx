@@ -1,133 +1,100 @@
-import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, Check, ChevronRight, Play, Sparkles } from 'lucide-react'
+import { useState } from 'react'
+import { AlertTriangle, Check, Plus, Sparkles, X } from 'lucide-react'
 import type { EvaluationTab } from '../App'
-import { creativeReviewDimensions, initialCreativeReviews } from '../data/creativeReviews'
-import type { CreativeReviewItem, CreativeReviewStatus } from '../types/evaluation'
+import type { AiReviewDraft, DecisionAction, ReviewStatus, ScriptReviewItem, ScriptSegment } from '../types/evaluation'
 
-const STORAGE_KEY = 'adframe.creative-reviews.v1'
-
-const statusLabels: Record<CreativeReviewStatus, string> = {
-  open: 'Open',
-  accepted: 'Accepted',
-  resolved: 'Resolved',
-}
-
-const nextStatus: Record<CreativeReviewStatus, CreativeReviewStatus> = {
-  open: 'accepted',
-  accepted: 'resolved',
-  resolved: 'open',
-}
-
-function loadReviews() {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY)
-    return saved ? (JSON.parse(saved) as CreativeReviewItem[]) : initialCreativeReviews
-  } catch {
-    return initialCreativeReviews
-  }
-}
+const statusFlow: Record<ReviewStatus, ReviewStatus> = { open: 'accepted', accepted: 'resolved', resolved: 'open' }
 
 interface EvaluationPanelProps {
   activeTab: EvaluationTab
-  assetId: string
+  aiDraft: AiReviewDraft
+  reviews: ScriptReviewItem[]
+  segment: ScriptSegment
+  versionId: string
+  onAiDraftChange: (draft: AiReviewDraft) => void
+  onReviewsChange: (reviews: ScriptReviewItem[]) => void
   onTabChange: (tab: EvaluationTab) => void
 }
 
-export function EvaluationPanel({ activeTab, assetId, onTabChange }: EvaluationPanelProps) {
-  const [reviews, setReviews] = useState<CreativeReviewItem[]>(loadReviews)
+export function EvaluationPanel({ activeTab, aiDraft, reviews, segment, versionId, onAiDraftChange, onReviewsChange, onTabChange }: EvaluationPanelProps) {
+  const [creating, setCreating] = useState(false)
+  const [filter, setFilter] = useState<'segment' | 'all'>('segment')
+  const [draft, setDraft] = useState({ issue: '', impact: '', suggestion: '' })
+  const visibleReviews = filter === 'all' ? reviews : reviews.filter((review) => review.segmentId === segment.id && review.versionId === versionId)
 
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(reviews))
-  }, [reviews])
+  const patchReview = (id: string, patch: Partial<ScriptReviewItem>) => {
+    onReviewsChange(reviews.map((review) => review.id === id ? { ...review, ...patch } : review))
+  }
 
-  const assetReviews = useMemo(
-    () => reviews.filter((review) => review.assetId === assetId),
-    [assetId, reviews],
-  )
+  const createReview = () => {
+    if (!draft.issue.trim()) return
+    onReviewsChange([...reviews, {
+      id: `review-${Date.now()}`,
+      versionId,
+      segmentId: segment.id,
+      category: 'Human Creative Review',
+      issue: draft.issue,
+      impact: draft.impact,
+      suggestion: draft.suggestion,
+      authorType: 'human',
+      status: 'open',
+      decisionAction: 'modify',
+    }])
+    setDraft({ issue: '', impact: '', suggestion: '' })
+    setCreating(false)
+  }
 
-  const updateStatus = (id: string) => {
-    setReviews((current) => current.map((review) => (
-      review.id === id ? { ...review, status: nextStatus[review.status] } : review
-    )))
+  const decideAi = (disposition: AiReviewDraft['disposition']) => {
+    onAiDraftChange({ ...aiDraft, disposition, updatedAt: new Date().toISOString() })
   }
 
   return (
-    <aside className="evaluation-panel" aria-label="创意评审面板">
-      <div className="evaluation-tabs" role="tablist" aria-label="评审视图">
-        {([
-          ['human', '创意判断'],
-          ['ai', 'AI 分析'],
-          ['summary', '综合决策'],
-        ] as const).map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            role="tab"
-            aria-selected={activeTab === id}
-            className={activeTab === id ? 'is-active' : ''}
-            onClick={() => onTabChange(id)}
-          >
-            {label}
-          </button>
+    <aside className="evaluation-panel" aria-label="脚本评审面板">
+      <div className="evaluation-tabs" role="tablist">
+        {([['human', '人工判断'], ['ai', 'AI 分析'], ['summary', 'Decision']] as const).map(([id, label]) => (
+          <button className={activeTab === id ? 'is-active' : ''} key={id} onClick={() => onTabChange(id)} role="tab" type="button">{label}</button>
         ))}
       </div>
+      <div className="recipe-row"><div><small>Review Recipe</small><strong>品牌产品短片</strong></div><span>{segment.timeRange} · {segment.title}</span></div>
 
-      <div className="recipe-row">
-        <div><small>Creative Review Recipe</small><strong>品牌商业短视频</strong></div>
-        <span>{assetReviews.length} Issues</span>
-      </div>
-
-      {activeTab === 'human' && (
-        <div className="tab-content creative-review-content" role="tabpanel">
-          <div className="review-dimensions" aria-label="评审维度">
-            {creativeReviewDimensions.map((dimension, index) => (
-              <span key={dimension.id}><i>0{index + 1}</i>{dimension.label}</span>
-            ))}
-          </div>
-
-          <div className="review-list">
-            {assetReviews.map((review) => {
-              const category = creativeReviewDimensions.find((item) => item.id === review.category)
-              return (
-                <article className={`review-card status-${review.status}`} key={review.id}>
-                  <header>
-                    <span>{category?.en}</span>
-                    <button type="button" onClick={() => updateStatus(review.id)}>
-                      {statusLabels[review.status]} <ChevronRight size={11} />
-                    </button>
-                  </header>
-                  <strong>{review.issue}</strong>
-                  <dl>
-                    <div><dt>Impact</dt><dd>{review.impact}</dd></div>
-                    <div><dt>Evidence</dt><dd>{review.evidence}</dd></div>
-                    <div><dt>Suggestion</dt><dd>{review.suggestion}</dd></div>
-                  </dl>
-                </article>
-              )
-            })}
-          </div>
-          <p className="persistence-note">状态会保存在当前浏览器；点击状态可推进 Open → Accepted → Resolved。</p>
+      {activeTab === 'human' && <div className="review-panel-body" role="tabpanel">
+        <div className="review-toolbar">
+          <button className={filter === 'segment' ? 'is-active' : ''} onClick={() => setFilter('segment')} type="button">当前段落</button>
+          <button className={filter === 'all' ? 'is-active' : ''} onClick={() => setFilter('all')} type="button">全部问题</button>
+          <button className="add-review" onClick={() => setCreating(true)} type="button"><Plus size={12} />新建</button>
         </div>
-      )}
-
-      {activeTab === 'ai' && (
-        <div className="tab-content ai-empty" role="tabpanel">
-          <Sparkles size={22} strokeWidth={1.5} />
-          <strong>AI 分析尚未运行</strong>
-          <p>AI 将生成初稿分析与证据，不替代创意判断，也不输出虚假评分。</p>
-          <button className="primary-action" type="button"><Play size={15} fill="currentColor" />生成分析初稿</button>
-          <div className="skill-list"><span>concept-fit-review</span><span>commercial-context-check</span><span>badcase-diagnosis</span></div>
+        {creating && <div className="new-review-form">
+          <header><strong>New Creative Review</strong><button onClick={() => setCreating(false)} type="button"><X size={13} /></button></header>
+          <label>Issue<textarea value={draft.issue} onChange={(event) => setDraft({ ...draft, issue: event.target.value })} /></label>
+          <label>Business Impact<textarea value={draft.impact} onChange={(event) => setDraft({ ...draft, impact: event.target.value })} /></label>
+          <label>Suggestion<textarea value={draft.suggestion} onChange={(event) => setDraft({ ...draft, suggestion: event.target.value })} /></label>
+          <button className="primary-action" onClick={createReview} type="button">保存 Review</button>
+        </div>}
+        <div className="review-list">
+          {visibleReviews.map((review) => <article className={`review-card status-${review.status}`} key={review.id}>
+            <header><span>{review.category} · {review.authorType.toUpperCase()}</span><button onClick={() => patchReview(review.id, { status: statusFlow[review.status] })} type="button">{review.status}</button></header>
+            <strong>{review.issue}</strong>
+            <dl><div><dt>Impact</dt><dd>{review.impact}</dd></div><div><dt>Suggestion</dt><dd>{review.suggestion}</dd></div></dl>
+            <footer><span>Decision</span>{(['keep', 'modify', 'remove'] as DecisionAction[]).map((action) => <button className={review.decisionAction === action ? 'is-active' : ''} key={action} onClick={() => patchReview(review.id, { decisionAction: action })} type="button">{action}</button>)}</footer>
+          </article>)}
+          {visibleReviews.length === 0 && <p className="empty-state">当前段落还没有评审问题。</p>}
         </div>
-      )}
+      </div>}
 
-      {activeTab === 'summary' && (
-        <div className="tab-content summary-preview" role="tabpanel">
-          <div><Check size={16} /><span><strong>保持</strong>石膏像角色设定与产品揭示结构</span></div>
-          <div><AlertTriangle size={16} /><span><strong>修改</strong>热感铺垫与安装动作因果</span></div>
-          <p>综合决策将在创意判断与 AI 分析完成后生成。</p>
-          <button className="secondary-action" type="button" disabled>生成综合决策</button>
-        </div>
-      )}
+      {activeTab === 'ai' && <div className="ai-review-panel" role="tabpanel">
+        <div className="ai-status"><Sparkles size={16} /><span><strong>Mock Skill Analysis</strong><small>Confidence · {aiDraft.confidence}</small></span><em>{aiDraft.disposition}</em></div>
+        {aiDraft.findings.map((finding) => <div className="skill-finding" key={finding.skill}><strong>{finding.skill}</strong><p>{finding.finding}</p></div>)}
+        <label className="ai-copy"><span>AI Original</span><textarea readOnly value={aiDraft.originalText} /></label>
+        <label className="ai-copy"><span>Human Revision</span><textarea value={aiDraft.humanRevision} onChange={(event) => onAiDraftChange({ ...aiDraft, humanRevision: event.target.value })} /></label>
+        <div className="ai-actions"><button onClick={() => decideAi('accepted')} type="button">Accept</button><button onClick={() => decideAi('revised')} type="button">Revise</button><button onClick={() => decideAi('rejected')} type="button">Reject</button></div>
+      </div>}
+
+      {activeTab === 'summary' && <div className="decision-panel" role="tabpanel">
+        <div><Check size={15} /><span><strong>Keep</strong>{reviews.filter((review) => review.decisionAction === 'keep').map((review) => review.suggestion).join('；') || '暂无'}</span></div>
+        <div><AlertTriangle size={15} /><span><strong>Modify</strong>{reviews.filter((review) => review.decisionAction === 'modify').map((review) => review.issue).join('；') || '暂无'}</span></div>
+        <div><X size={15} /><span><strong>Remove</strong>{reviews.filter((review) => review.decisionAction === 'remove').map((review) => review.issue).join('；') || '暂无'}</span></div>
+        <label>下一版目标<textarea defaultValue="建立人物热感与安装行为的因果过渡；把三步安装压成三个清晰切镜。" /></label>
+      </div>}
     </aside>
   )
 }
