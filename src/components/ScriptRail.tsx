@@ -18,7 +18,7 @@ export function ScriptRail({ versions, selectedVersionId, selectedSegmentId, onS
         {versions.map((item) => (
           <button className={`version-item${item.id === selectedVersionId ? ' is-selected' : ''}`} key={item.id} onClick={() => onSelectVersion(item.id)} type="button">
             <FileText size={14} />
-            <span><strong>{item.label}</strong><small>{item.note}</small></span>
+            <span><strong>{item.versionLabel}</strong><small>{item.summary}</small></span>
             {item.status === 'current' && <Check size={13} />}
           </button>
         ))}
@@ -28,7 +28,7 @@ export function ScriptRail({ versions, selectedVersionId, selectedSegmentId, onS
         {version.segments.map((segment) => (
           <button className={segment.id === selectedSegmentId ? 'is-selected' : ''} key={segment.id} onClick={() => onSelectSegment(segment.id)} type="button">
             <i>{String(segment.order).padStart(2, '0')}</i>
-            <span><strong>{segment.title}</strong><small>{segment.timeRange}</small></span>
+            <span><strong>{segment.beatName}</strong><small>{segment.timeStart}–{segment.timeEnd}s</small></span>
             <em className={`segment-status status-${segment.status}`} />
           </button>
         ))}

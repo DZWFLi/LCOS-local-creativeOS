@@ -1,26 +1,29 @@
 import { useState } from 'react'
 import { AlertTriangle, Check, Plus, Sparkles, X } from 'lucide-react'
 import type { EvaluationTab } from '../App'
-import type { AiReviewDraft, DecisionAction, ReviewStatus, ScriptReviewItem, ScriptSegment } from '../types/evaluation'
+import type { AiReviewDraft, DecisionAction, DecisionRecord, ReviewStatus, ScriptReviewItem, ScriptSegment } from '../types/evaluation'
 
-const statusFlow: Record<ReviewStatus, ReviewStatus> = { open: 'accepted', accepted: 'resolved', resolved: 'open' }
+const statusFlow: Record<ReviewStatus, ReviewStatus> = { open: 'accepted', accepted: 'resolved', resolved: 'open', rejected: 'open' }
 
 interface EvaluationPanelProps {
   activeTab: EvaluationTab
   aiDraft: AiReviewDraft
+  decision: DecisionRecord
   reviews: ScriptReviewItem[]
   segment: ScriptSegment
   versionId: string
   onAiDraftChange: (draft: AiReviewDraft) => void
+  onDecisionChange: (decision: DecisionRecord) => void
   onReviewsChange: (reviews: ScriptReviewItem[]) => void
   onTabChange: (tab: EvaluationTab) => void
 }
 
-export function EvaluationPanel({ activeTab, aiDraft, reviews, segment, versionId, onAiDraftChange, onReviewsChange, onTabChange }: EvaluationPanelProps) {
+export function EvaluationPanel({ activeTab, aiDraft, decision, reviews, segment, versionId, onAiDraftChange, onDecisionChange, onReviewsChange, onTabChange }: EvaluationPanelProps) {
   const [creating, setCreating] = useState(false)
   const [filter, setFilter] = useState<'segment' | 'all'>('segment')
-  const [draft, setDraft] = useState({ issue: '', impact: '', suggestion: '' })
-  const visibleReviews = filter === 'all' ? reviews : reviews.filter((review) => review.segmentId === segment.id && review.versionId === versionId)
+  const [draft, setDraft] = useState({ issue: '', businessImpact: '', evidenceText: '', suggestion: '' })
+  const versionReviews = reviews.filter((review) => review.versionId === versionId)
+  const visibleReviews = filter === 'all' ? versionReviews : versionReviews.filter((review) => review.segmentId === segment.id)
 
   const patchReview = (id: string, patch: Partial<ScriptReviewItem>) => {
     onReviewsChange(reviews.map((review) => review.id === id ? { ...review, ...patch } : review))
@@ -34,13 +37,14 @@ export function EvaluationPanel({ activeTab, aiDraft, reviews, segment, versionI
       segmentId: segment.id,
       category: 'Human Creative Review',
       issue: draft.issue,
-      impact: draft.impact,
+      businessImpact: draft.businessImpact,
+      evidenceText: draft.evidenceText || `${segment.timeStart}–${segment.timeEnd}s · ${segment.beatName}`,
       suggestion: draft.suggestion,
       authorType: 'human',
       status: 'open',
       decisionAction: 'modify',
     }])
-    setDraft({ issue: '', impact: '', suggestion: '' })
+    setDraft({ issue: '', businessImpact: '', evidenceText: '', suggestion: '' })
     setCreating(false)
   }
 
@@ -55,7 +59,7 @@ export function EvaluationPanel({ activeTab, aiDraft, reviews, segment, versionI
           <button className={activeTab === id ? 'is-active' : ''} key={id} onClick={() => onTabChange(id)} role="tab" type="button">{label}</button>
         ))}
       </div>
-      <div className="recipe-row"><div><small>Review Recipe</small><strong>品牌产品短片</strong></div><span>{segment.timeRange} · {segment.title}</span></div>
+      <div className="recipe-row"><div><small>Review Recipe</small><strong>品牌产品短片</strong></div><span>{segment.timeStart}–{segment.timeEnd}s · {segment.beatName}</span></div>
 
       {activeTab === 'human' && <div className="review-panel-body" role="tabpanel">
         <div className="review-toolbar">
@@ -66,7 +70,8 @@ export function EvaluationPanel({ activeTab, aiDraft, reviews, segment, versionI
         {creating && <div className="new-review-form">
           <header><strong>New Creative Review</strong><button onClick={() => setCreating(false)} type="button"><X size={13} /></button></header>
           <label>Issue<textarea value={draft.issue} onChange={(event) => setDraft({ ...draft, issue: event.target.value })} /></label>
-          <label>Business Impact<textarea value={draft.impact} onChange={(event) => setDraft({ ...draft, impact: event.target.value })} /></label>
+          <label>Business Impact<textarea value={draft.businessImpact} onChange={(event) => setDraft({ ...draft, businessImpact: event.target.value })} /></label>
+          <label>Evidence<textarea value={draft.evidenceText} placeholder={`${segment.timeStart}–${segment.timeEnd}s · 对应文本证据`} onChange={(event) => setDraft({ ...draft, evidenceText: event.target.value })} /></label>
           <label>Suggestion<textarea value={draft.suggestion} onChange={(event) => setDraft({ ...draft, suggestion: event.target.value })} /></label>
           <button className="primary-action" onClick={createReview} type="button">保存 Review</button>
         </div>}
@@ -74,7 +79,7 @@ export function EvaluationPanel({ activeTab, aiDraft, reviews, segment, versionI
           {visibleReviews.map((review) => <article className={`review-card status-${review.status}`} key={review.id}>
             <header><span>{review.category} · {review.authorType.toUpperCase()}</span><button onClick={() => patchReview(review.id, { status: statusFlow[review.status] })} type="button">{review.status}</button></header>
             <strong>{review.issue}</strong>
-            <dl><div><dt>Impact</dt><dd>{review.impact}</dd></div><div><dt>Suggestion</dt><dd>{review.suggestion}</dd></div></dl>
+            <dl><div><dt>Impact</dt><dd>{review.businessImpact}</dd></div><div><dt>Evidence</dt><dd>{review.evidenceText}</dd></div><div><dt>Suggestion</dt><dd>{review.suggestion}</dd></div></dl>
             <footer><span>Decision</span>{(['keep', 'modify', 'remove'] as DecisionAction[]).map((action) => <button className={review.decisionAction === action ? 'is-active' : ''} key={action} onClick={() => patchReview(review.id, { decisionAction: action })} type="button">{action}</button>)}</footer>
           </article>)}
           {visibleReviews.length === 0 && <p className="empty-state">当前段落还没有评审问题。</p>}
@@ -90,10 +95,10 @@ export function EvaluationPanel({ activeTab, aiDraft, reviews, segment, versionI
       </div>}
 
       {activeTab === 'summary' && <div className="decision-panel" role="tabpanel">
-        <div><Check size={15} /><span><strong>Keep</strong>{reviews.filter((review) => review.decisionAction === 'keep').map((review) => review.suggestion).join('；') || '暂无'}</span></div>
-        <div><AlertTriangle size={15} /><span><strong>Modify</strong>{reviews.filter((review) => review.decisionAction === 'modify').map((review) => review.issue).join('；') || '暂无'}</span></div>
-        <div><X size={15} /><span><strong>Remove</strong>{reviews.filter((review) => review.decisionAction === 'remove').map((review) => review.issue).join('；') || '暂无'}</span></div>
-        <label>下一版目标<textarea defaultValue="建立人物热感与安装行为的因果过渡；把三步安装压成三个清晰切镜。" /></label>
+        <div><Check size={15} /><span><strong>Keep</strong>{decision.keep.join('；') || '暂无'}</span></div>
+        <div><AlertTriangle size={15} /><span><strong>Modify</strong>{decision.modify.join('；') || '暂无'}</span></div>
+        <div><X size={15} /><span><strong>Remove</strong>{decision.remove.join('；') || '暂无'}</span></div>
+        <label>下一版目标<textarea value={decision.nextVersionGoal} onChange={(event) => onDecisionChange({ ...decision, nextVersionGoal: event.target.value })} /></label>
       </div>}
     </aside>
   )

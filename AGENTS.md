@@ -2,7 +2,7 @@
 
 ## Project Goal
 
-Build a polished one-page portfolio demo for evaluating AIGC image and video assets through human judgment and mock AI/Skill evaluation.
+Build a polished one-page portfolio demo for reviewing commercial-video scripts through human creative judgment and mock AI/Skill analysis.
 
 This is a portfolio demo, not a production SaaS.
 
@@ -10,9 +10,9 @@ This is a portfolio demo, not a production SaaS.
 
 - One page, frontend only.
 - React, TypeScript, Vite, plain CSS, React state, localStorage, local mock data.
-- Two preset cases: one video and one image.
-- Six fixed evaluation dimensions.
-- Human evaluation, mock AI evaluation, conflict detection, Markdown/JSON export, and Codex handoff.
+- One approved PortaSplit case with Script V1/V2/V3 and reusable script segments.
+- Brief, Creative Direction, script versions, Review Cards, Decision and derived-output placeholders.
+- Human review, mock AI drafts, Accept/Revise/Reject, source/current comparison, Markdown/JSON export, and Codex handoff.
 - No backend, database, authentication, real model API, real CLI execution, workflow editor, or multi-user features.
 - The second case proves data switching only; it must not become a second product flow.
 
@@ -43,7 +43,7 @@ This is a portfolio demo, not a production SaaS.
 ## UI Rules
 
 - Desktop-first at 1366×768; usable at 1024px without horizontal overflow.
-- Dark editorial review-workbench style; media is the primary visual focus.
+- Dark editorial review-workbench style; the script canvas is the primary visual focus.
 - Avoid fake statistics, excessive cards, gradients, pills, and nested panels.
 - Use CSS variables for main design tokens.
 - Controls require visible hover, selected, disabled, loading, and focus states.

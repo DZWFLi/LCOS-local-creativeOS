@@ -26,11 +26,17 @@ V0 pivot — AdFrame Script Review.
 - PortaSplit review examples were calibrated against the real project iteration record rather than invented dashboard data.
 - Product direction narrowed from finished-video review to pre-production script and Shot Review.
 - Left rail now manages Script V1/V2/V3 and script sections; the center is an editable Script Canvas.
-- Human Review, Mock AI Skill analysis, Decision, V1/current comparison, local persistence, and Codex Handoff are implemented.
+- Human Review, version-bound Mock AI Skill analysis, Decision, source/current comparison, local persistence, and Codex Handoff are implemented.
+- Review Cards are isolated by Script Version + Segment; switching versions no longer mixes review counts, AI drafts, decisions or exports.
+- Brief Snapshot and Creative Direction now supply the commercial judgment context; Purpose, Product Role and Locked Elements are visible per segment.
+- Prompt editing was removed from the master script. Shot List, Prompt Pack and Vendor Brief remain clearly marked derived outputs.
+- Markdown, JSON and Codex Handoff exports now contain the selected version, accepted issues, evidence, Keep/Modify/Remove decisions and next-version goal.
+- Buddy completed `task_909dd410`; its intermediate build blockers were resolved and the task passed final review.
+- Day 2 lint/build pass; 1366×768 and 1024×768 have no horizontal overflow.
 
 ## In progress
 
-- Script Review pivot audit and portfolio narrative packaging.
+- Day 2 final audit packaging and Sol review handoff.
 
 ## Next
 

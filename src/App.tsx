@@ -3,24 +3,34 @@ import { EvaluationPanel } from './components/EvaluationPanel'
 import { ExportDrawer } from './components/ExportDrawer'
 import { ScriptCanvas } from './components/ScriptCanvas'
 import { ScriptRail } from './components/ScriptRail'
-import { initialAiDrafts, initialScriptReviews, scriptProject } from './data/scriptProject'
-import type { AiReviewDraft, ScriptReviewItem, ScriptSegment, ScriptVersion } from './types/evaluation'
+import { initialAiDrafts, initialDecisions, initialScriptReviews, scriptProject } from './data/scriptProject'
+import type { AiReviewDraft, DecisionRecord, ScriptReviewItem, ScriptSegment, ScriptVersion } from './types/evaluation'
 import './App.css'
 
 export type EvaluationTab = 'human' | 'ai' | 'summary'
 
-const SCRIPT_KEY = 'adframe.script-versions.v1'
-const REVIEW_KEY = 'adframe.script-reviews.v1'
-const AI_KEY = 'adframe.script-ai-drafts.v1'
+const SCRIPT_KEY = 'adframe.script-versions.v2'
+const REVIEW_KEY = 'adframe.script-reviews.v2'
+const AI_KEY = 'adframe.script-ai-drafts.v2'
+const DECISION_KEY = 'adframe.script-decisions.v1'
 
 function loadStored<T>(key: string, fallback: T): T {
   try { const value = localStorage.getItem(key); return value ? JSON.parse(value) as T : fallback } catch { return fallback }
+}
+
+function saveStored(key: string, value: unknown) {
+  try { localStorage.setItem(key, JSON.stringify(value)) } catch { /* Demo remains usable without persistence. */ }
+}
+
+function emptyDecision(versionId: string): DecisionRecord {
+  return { id: `decision-${versionId}`, versionId, acceptedIssues: [], rejectedIssues: [], keep: [], modify: [], remove: [], nextVersionGoal: '', unresolvedQuestions: [], decisionSource: 'ai-assisted', createdAt: new Date().toISOString() }
 }
 
 function App() {
   const [versions, setVersions] = useState<ScriptVersion[]>(() => loadStored(SCRIPT_KEY, scriptProject.versions))
   const [reviews, setReviews] = useState<ScriptReviewItem[]>(() => loadStored(REVIEW_KEY, initialScriptReviews))
   const [aiDrafts, setAiDrafts] = useState<AiReviewDraft[]>(() => loadStored(AI_KEY, initialAiDrafts))
+  const [decisions, setDecisions] = useState<DecisionRecord[]>(() => loadStored(DECISION_KEY, initialDecisions))
   const [selectedVersionId, setSelectedVersionId] = useState('script-v3')
   const [selectedSegmentId, setSelectedSegmentId] = useState('heat-setup')
   const [activeTab, setActiveTab] = useState<EvaluationTab>('human')
@@ -30,13 +40,17 @@ function App() {
 
   const version = versions.find((item) => item.id === selectedVersionId) ?? versions[0]
   const segment = version.segments.find((item) => item.id === selectedSegmentId) ?? version.segments[0]
-  const baselineSegment = versions[0].segments.find((item) => item.id === segment.id) ?? versions[0].segments[0]
-  const aiDraft = aiDrafts.find((item) => item.segmentId === segment.id) ?? aiDrafts[0]
+  const sourceVersion = versions.find((item) => item.id === version.sourceVersionId)
+  const baselineSegment = sourceVersion?.segments.find((item) => item.id === segment.id)
+  const aiDraft = aiDrafts.find((item) => item.versionId === version.id && item.segmentId === segment.id)
+    ?? { versionId: version.id, segmentId: segment.id, findings: [{ skill: 'Brief Alignment', finding: '该版本尚未运行 Mock Skill 分析。' }], originalText: '等待当前版本的分析草稿。', humanRevision: '', disposition: 'pending' as const, confidence: 'medium' as const, updatedAt: null }
   const versionReviews = useMemo(() => reviews.filter((item) => item.versionId === version.id), [reviews, version.id])
+  const decision = decisions.find((item) => item.versionId === version.id) ?? emptyDecision(version.id)
 
-  useEffect(() => localStorage.setItem(SCRIPT_KEY, JSON.stringify(versions)), [versions])
-  useEffect(() => localStorage.setItem(REVIEW_KEY, JSON.stringify(reviews)), [reviews])
-  useEffect(() => localStorage.setItem(AI_KEY, JSON.stringify(aiDrafts)), [aiDrafts])
+  useEffect(() => saveStored(SCRIPT_KEY, versions), [versions])
+  useEffect(() => saveStored(REVIEW_KEY, reviews), [reviews])
+  useEffect(() => saveStored(AI_KEY, aiDrafts), [aiDrafts])
+  useEffect(() => saveStored(DECISION_KEY, decisions), [decisions])
 
   const selectVersion = (id: string) => {
     setSelectedVersionId(id)
@@ -50,16 +64,39 @@ function App() {
       : item))
   }
 
-  const changeAiDraft = (next: AiReviewDraft) => setAiDrafts((current) => current.map((item) => item.segmentId === next.segmentId ? next : item))
+  const changeAiDraft = (next: AiReviewDraft) => setAiDrafts((current) => {
+    const exists = current.some((item) => item.versionId === next.versionId && item.segmentId === next.segmentId)
+    return exists ? current.map((item) => item.versionId === next.versionId && item.segmentId === next.segmentId ? next : item) : [...current, next]
+  })
+
+  const changeReviews = (nextReviews: ScriptReviewItem[]) => {
+    setReviews(nextReviews)
+    const scoped = nextReviews.filter((item) => item.versionId === version.id)
+    const nextDecision = {
+      ...decision,
+      acceptedIssues: scoped.filter((item) => item.status === 'accepted').map((item) => item.issue),
+      rejectedIssues: scoped.filter((item) => item.status === 'rejected').map((item) => item.issue),
+      keep: scoped.filter((item) => item.decisionAction === 'keep').map((item) => item.suggestion || item.issue),
+      modify: scoped.filter((item) => item.decisionAction === 'modify').map((item) => item.suggestion || item.issue),
+      remove: scoped.filter((item) => item.decisionAction === 'remove').map((item) => item.issue),
+    }
+    setDecisions((current) => current.some((item) => item.versionId === version.id)
+      ? current.map((item) => item.versionId === version.id ? nextDecision : item)
+      : [...current, nextDecision])
+  }
+
+  const changeDecision = (next: DecisionRecord) => setDecisions((current) => current.some((item) => item.versionId === next.versionId)
+    ? current.map((item) => item.versionId === next.versionId ? next : item)
+    : [...current, next])
 
   return <div className="app-shell">
     <header className="topbar"><div className="brand">AdFrame <span>Script</span></div><div className="topbar-divider" /><div className="current-project">{scriptProject.title}</div><div className="topbar-status"><span className="status-dot" />V0 · Script Review</div></header>
     <main className="workspace script-workspace">
       <ScriptRail versions={versions} selectedVersionId={version.id} selectedSegmentId={segment.id} onSelectVersion={selectVersion} onSelectSegment={setSelectedSegmentId} />
-      <ScriptCanvas baselineSegment={baselineSegment} brief={scriptProject.brief} compareOpen={compareOpen} contextOpen={contextOpen} reviews={versionReviews} segments={version.segments} selectedSegmentId={segment.id} onChangeSegment={changeSegment} onSelectSegment={setSelectedSegmentId} onToggleCompare={() => setCompareOpen((open) => !open)} onToggleContext={() => setContextOpen((open) => !open)} />
-      <EvaluationPanel activeTab={activeTab} aiDraft={aiDraft} reviews={reviews} segment={segment} versionId={version.id} onAiDraftChange={changeAiDraft} onReviewsChange={setReviews} onTabChange={setActiveTab} />
+      <ScriptCanvas baselineSegment={baselineSegment} brief={scriptProject.brief} creativeDirection={scriptProject.creativeDirection} compareOpen={compareOpen} contextOpen={contextOpen} reviews={versionReviews} segments={version.segments} selectedSegmentId={segment.id} sourceVersionLabel={sourceVersion?.versionLabel} onChangeSegment={changeSegment} onSelectSegment={setSelectedSegmentId} onToggleCompare={() => setCompareOpen((open) => !open)} onToggleContext={() => setContextOpen((open) => !open)} />
+      <EvaluationPanel activeTab={activeTab} aiDraft={aiDraft} decision={decision} reviews={reviews} segment={segment} versionId={version.id} onAiDraftChange={changeAiDraft} onDecisionChange={changeDecision} onReviewsChange={changeReviews} onTabChange={setActiveTab} />
     </main>
-    <ExportDrawer open={drawerOpen} project={{ ...scriptProject, versions }} version={version} reviews={versionReviews} aiDrafts={aiDrafts} onToggle={() => setDrawerOpen((open) => !open)} />
+    <ExportDrawer open={drawerOpen} decision={decision} project={{ ...scriptProject, versions }} version={version} reviews={versionReviews} aiDrafts={aiDrafts.filter((item) => item.versionId === version.id)} onToggle={() => setDrawerOpen((open) => !open)} />
   </div>
 }
 
