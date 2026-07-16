@@ -22,6 +22,27 @@ export interface DemoAsset {
   source: string
 }
 
+export type CreativeReviewCategory =
+  | 'conceptFit'
+  | 'brandFit'
+  | 'productCommunication'
+  | 'platformFit'
+  | 'visualExecution'
+  | 'aiReliability'
+
+export type CreativeReviewStatus = 'open' | 'accepted' | 'resolved'
+
+export interface CreativeReviewItem {
+  id: string
+  assetId: string
+  category: CreativeReviewCategory
+  issue: string
+  impact: string
+  evidence: string
+  suggestion: string
+  status: CreativeReviewStatus
+}
+
 export type DimensionScores = Record<EvaluationDimensionId, number>
 
 export interface HumanEvaluation {

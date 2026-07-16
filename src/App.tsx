@@ -25,7 +25,7 @@ function App() {
         <div className="current-project">{selectedAsset.title}</div>
         <div className="topbar-status">
           <span className="status-dot" />
-          Day 1 · 静态骨架
+          Day 2 · Creative Review Layer
         </div>
       </header>
 
@@ -40,7 +40,11 @@ function App() {
           contextOpen={contextOpen}
           onToggleContext={() => setContextOpen((open) => !open)}
         />
-        <EvaluationPanel activeTab={activeTab} onTabChange={setActiveTab} />
+        <EvaluationPanel
+          activeTab={activeTab}
+          assetId={selectedAsset.id}
+          onTabChange={setActiveTab}
+        />
       </main>
 
       <ExportDrawer open={drawerOpen} onToggle={() => setDrawerOpen((open) => !open)} />

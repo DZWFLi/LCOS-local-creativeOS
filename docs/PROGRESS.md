@@ -2,7 +2,7 @@
 
 ## Current milestone
 
-Day 1 — scope, research, visual direction, and static workspace shell.
+Day 2 — Creative Review Layer.
 
 ## Completed
 
@@ -20,12 +20,16 @@ Day 1 — scope, research, visual direction, and static workspace shell.
 - Asset/version switching, evaluation-tab switching, context expansion, and export-drawer expansion implemented as presentation-only interactions.
 - `npm run lint` and `npm run build` pass.
 - 1366×768 and 1024×768 evidence saved under `docs/qa/`; 1024px has no horizontal overflow.
+- Day 1 passed Sol review; `docs/DAY1_SOL_REVIEW.md` remains the frozen audit baseline.
+- Creative Review replaces numeric scoring with Issue / Impact / Evidence / Suggestion cards.
+- Review status supports Open / Accepted / Resolved and persists in localStorage.
+- PortaSplit review examples were calibrated against the real project iteration record rather than invented dashboard data.
 
 ## In progress
 
-- Day 1 visual polish and final audit packaging.
+- Day 2 browser QA and milestone packaging.
 
 ## Next
 
-- Hold the Day 1 boundary until review.
-- Day 2, only after approval: human scoring, issue tags, notes, and local persistence.
+- Keep AI Analysis as a non-running presentation state until Day 3.
+- Prepare authentic media evidence for the PortaSplit case without changing the workspace layout.
