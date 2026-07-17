@@ -28,6 +28,7 @@ Day 3 以“作品集 Demo，而非创业 MVP”为边界完成。当前版本�
 
 - 子 Agent：PortaSplit 广告逻辑审查、三分钟演示稿、Day 3 QA Guard。
 - WorkBuddy：README 与 Case Study 初稿，Bridge 任务 `task_b7d4c241`。
+- WorkBuddy：Day 3 只读终审，Bridge 任务 `task_8f7549eb`；结论为 Pass，未修改文件。
 - Codex 总控：版本数据校准、事实修订、范围取舍、构建与视觉回归、最终验收。
 
 ## 5. 验证
@@ -35,6 +36,7 @@ Day 3 以“作品集 Demo，而非创业 MVP”为边界完成。当前版本�
 - `npm run lint`：通过。
 - `npm run build`：通过。
 - `git diff --check`：通过。
+- Buddy 独立复跑 `npm run lint` / `npm run build` / `git diff --check`：通过；确认版本链、V2 Review/AI/Decision 证据和四份作品集文档均无阻塞项。
 - Edge Headless 1366×768：页面身份、Script V2、PRODUCT SETUP、两条 Review 均可见，无横向溢出。
 - Edge Headless 1024×768：三栏保持可读，顶部与底部入口未裁切，无横向溢出。
 - DOM smoke：AdFrame、Script V2、PRODUCT SETUP、Review 文案均存在，无 Vite 错误覆盖层。
