@@ -2,7 +2,7 @@
 
 ## Current milestone
 
-V0 pivot — AdFrame Script Review.
+Day 2.5 Lite — reusable Script Review hardening.
 
 ## Completed
 
@@ -33,10 +33,15 @@ V0 pivot — AdFrame Script Review.
 - Markdown, JSON and Codex Handoff exports now contain the selected version, accepted issues, evidence, Keep/Modify/Remove decisions and next-version goal.
 - Buddy completed `task_909dd410`; its intermediate build blockers were resolved and the task passed final review.
 - Day 2 lint/build pass; 1366×768 and 1024×768 have no horizontal overflow.
+- Stable Day 2 snapshot tagged as `v0.2.0-script-review`; hardening continues on `refactor/reusable-review-core`.
+- Script, Review, AI Draft, Decision and UI start state now persist in one schema-versioned project envelope.
+- Legacy Day 2 localStorage keys migrate once into the new envelope; incompatible/corrupt state falls back to demo seed.
+- Demo Reset uses a confirmation dialog and restores Script V2 / PRODUCT SETUP / Human Review with an Open Review and pending AI Draft.
+- Markdown and Codex/JSON payload assembly moved out of the UI component into reusable builders.
 
 ## In progress
 
-- Day 2 final audit packaging and Sol review handoff.
+- Day 2.5 final regression, Buddy review and audit packaging.
 
 ## Next
 

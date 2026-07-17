@@ -112,3 +112,24 @@ export interface DecisionRecord {
   decisionSource: 'human' | 'ai-assisted' | 'client'
   createdAt: string
 }
+
+export interface DemoUiState {
+  selectedVersionId: string
+  selectedSegmentId: string
+  activeTab: 'human' | 'ai' | 'summary'
+}
+
+export interface ProjectState {
+  versions: ScriptVersion[]
+  reviews: ScriptReviewItem[]
+  aiDrafts: AiReviewDraft[]
+  decisions: DecisionRecord[]
+  ui: DemoUiState
+}
+
+export interface StoredDemoState {
+  schemaVersion: number
+  projectId: string
+  updatedAt: string
+  data: ProjectState
+}

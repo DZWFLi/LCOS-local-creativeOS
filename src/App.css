@@ -5,6 +5,17 @@
 .topbar-divider { width: 1px; height: 22px; background: var(--line); }
 .current-project { font-size: 13px; font-weight: 600; }
 .topbar-status { margin-left: auto; display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 11px; }
+.reset-demo { margin-left: auto; display: inline-flex; align-items: center; gap: 7px; border: 0; background: transparent; color: #929ba6; font: inherit; font-size: 11px; cursor: pointer; }
+.reset-demo:hover, .reset-demo:focus-visible { color: var(--accent); }
+.reset-demo + .topbar-status { margin-left: 10px; }
+.reset-overlay { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; background: rgba(5, 7, 9, .76); backdrop-filter: blur(5px); }
+.reset-dialog { width: min(420px, calc(100vw - 32px)); border: 1px solid #2a3139; background: #12161b; padding: 26px; box-shadow: 0 24px 80px rgba(0, 0, 0, .5); }
+.reset-dialog small { color: var(--accent); letter-spacing: .14em; }
+.reset-dialog h2 { margin: 10px 0 8px; font-size: 21px; }
+.reset-dialog p { margin: 0; color: #9ca5af; font-size: 13px; line-height: 1.7; }
+.reset-dialog > div { display: flex; justify-content: flex-end; gap: 9px; margin-top: 24px; }
+.reset-dialog button { border: 1px solid #303740; background: transparent; color: #c8ced5; padding: 8px 14px; font: inherit; cursor: pointer; }
+.reset-dialog .confirm-reset { border-color: var(--accent); background: var(--accent); color: #07110f; }
 .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
 
 .workspace { height: calc(100dvh - var(--topbar-h) - var(--drawer-h)); display: grid; grid-template-columns: 224px minmax(480px, 1fr) 376px; min-width: 0; }
