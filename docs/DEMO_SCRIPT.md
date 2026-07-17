@@ -1,16 +1,7 @@
 # Demo Script
 
-## Story target
+Day 3 的正式三分钟演示稿已冻结在 [`docs/DEMO_SCRIPT_DAY3.md`](./DEMO_SCRIPT_DAY3.md)。
 
-In roughly two minutes, show that an AIGC commercial asset can be reviewed against its Brief, assessed independently by a human and an AI Skill, converted into explicit conflicts and recommendations, and handed to Codex as reusable optimization context.
+固定起点：`Script V2 / PRODUCT SETUP / 人工判断`。
 
-## Draft sequence
-
-1. Introduce the asset goal and generation context.
-2. Complete one high-value human judgment and time-point issue.
-3. Run the mock AI evaluation.
-4. Show a meaningful human/AI conflict and explain why averaging would hide it.
-5. Review the consolidated recommendation.
-6. Export the context and copy the Codex handoff.
-
-This script remains provisional until the UI and cases are finalized.
+演示前先点击“恢复演示数据”，现场只走 Brief → Human Review → Mock AI Revise → Decision → Codex Handoff，不扩展第二案例或真实 API。

@@ -2,7 +2,7 @@
 
 ## Current milestone
 
-Day 2.5 Lite — reusable Script Review hardening.
+Day 3 — portfolio demo packaging and PortaSplit narrative calibration.
 
 ## Completed
 
@@ -38,12 +38,17 @@ Day 2.5 Lite — reusable Script Review hardening.
 - Legacy Day 2 localStorage keys migrate once into the new envelope; incompatible/corrupt state falls back to demo seed.
 - Demo Reset uses a confirmation dialog and restores Script V2 / PRODUCT SETUP / Human Review with an Open Review and pending AI Draft.
 - Markdown and Codex/JSON payload assembly moved out of the UI component into reusable builders.
+- Day 2.5 passed Codex, sub-agent and WorkBuddy review and was frozen at commits `b3d590d` and `48f03ad`.
+- PortaSplit V1/V2/V3 now form a truthful revision chain: ice-block draft → human heat actions with an over-dense install paragraph → three-shot production handoff candidate.
+- Script V2 / PRODUCT SETUP includes two evidence-backed Human Review cards and a segment-specific Mock AI draft.
+- Day 3 demo script, portfolio README and case study are complete.
+- 1366×768 and 1024×768 Day 3 screenshots render without horizontal overflow.
 
 ## In progress
 
-- Day 2.5 final regression, Buddy review and audit packaging.
+- Day 3 final interaction regression, Buddy verification and audit packaging.
 
 ## Next
 
-- Add the Match Night KOL/KOC case only after the PortaSplit path is approved.
+- Keep Match Night deferred until project-scoped seed/storage can be added without weakening the three-minute demo.
 - Keep video-finished-asset evaluation as the future `AdFrame Motion` stage.
