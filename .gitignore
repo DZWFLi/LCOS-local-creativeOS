@@ -14,6 +14,9 @@ dist-ssr
 .vite-dev*.log
 .workbuddy/
 
+# Local handoff package; its contents are tracked as source documents.
+Local_Creative_OS_Codex_Development_Package_20260719_073944.zip
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

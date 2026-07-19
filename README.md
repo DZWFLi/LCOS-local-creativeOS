@@ -1,134 +1,485 @@
-# AdFrame Script — 商业视频脚本 AI 协同评审台
+# Local Creative OS
 
-**一个前端作品集 Demo，定位"本地创意操作系统评审模块"。不依赖后端、数据库或真实 AI API。**
+> Canvas 型个人创意项目操作系统
+> 当前阶段：正式开发前基线冻结、技术 Spike 与 Sprint 0
+> 当前原则：先验证真实闭环，再扩展完整平台。
 
----
+## 1. 项目定位
 
-## 定位
+Local Creative OS 是一个以 **Project + 单张持续 Canvas** 为工作容器、以 **Workspace** 为语义视角、以本地项目上下文为核心、由 Codex / Buddy 等执行者完成真实任务的个人 Creative OS。
 
-AdFrame 是一页式商业视频脚本评审工作台。它把 Brief、人工创意判断和 AI Skill 分析统一到脚本版本中，定位商业视频脚本的问题，生成可执行的修改决策和下一轮创作上下文，最终通过 Markdown/JSON/Codex Handoff 传递给下游制作。
+它不替代 PowerPoint、Figma、Canva、飞书、Notion、图片编辑器或视频编辑器。
 
-这不是 SaaS 产品、不是通用视频批注工具、不是 AI 内容生成器。它是一个**前端 Demo，证明评审闭环可以发生在一个可理解、可交互、可导出上下文的界面里**。
+它负责：
 
----
+- 看资料；
+- 形成判断；
+- 组织可追溯 Context；
+- 创建 Command；
+- 派发真实 Run；
+- 追踪执行状态；
+- 回收 Changed Files / Artifact；
+- 管理 Revision、Checkpoint 与交付。
 
-## 为什么从脚本切入
+一句话：
 
-最早的 AdFrame 概念是"AIGC 视频成品评测台"——人看 AI 生成的广告视频，逐条打分。但调研后发现两个问题：
-
-1. **视频成品的修改成本太高**。商业逻辑问题（人物动机缺失、产品植入生硬）在成品阶段已无法低成本修正。
-2. **广告行业真实工作流里，Brief、脚本、分镜和客户反馈的交汇点才是判断发生的地方**。
-
-转向脚本评审后，输入变成结构化文本 + 明确 Brief，AI 判断更稳定，修改成本更低，输出可直接拆成 Shot List 和 Prompt Pack。
-
----
-
-## 当前功能（V0.2.5）
-
-| 功能 | 说明 |
-|------|------|
-| **脚本版本管理** | V1 → V2 → V3 三版本链，每版含 5 个剧本段落（HOOK / HEAT SETUP / PRODUCT SETUP / COOLING PAYOFF / END CARD），版本间 sourceVersionId + decisionId 追溯 |
-| **Creative Review 评审卡** | Issue / Business Impact / Evidence / Suggestion 四字段，Open → Accepted → Resolved 状态流转，Keep / Modify / Remove 决策动作 |
-| **Mock AI Skill 分析** | 模拟 Brief Alignment、Character Motivation、Product Communication 三项 Skill 分析草稿，AI Original 与 Human Revision 并存 |
-| **决策汇总** | 自动从评审卡同步 Keep / Modify / Remove 清单 + Next Version Goal |
-| **版本对比** | Source / Current 版本并排对比，显示同一段落的 beat action |
-| **localStorage 持久化** | Schema 版本化的单 key 存储信封，legacy 数据自动迁移，刷新后状态不丢失 |
-| **导出** | Markdown（含 Brief、评审、决策、Next Goal）、JSON（结构化 Handoff payload）、Codex Handoff（一键复制） |
-| **Demo 重置** | 确认对话框 → 恢复 Script V2 / PRODUCT SETUP / Human Review 初始状态 |
+> Local Creative OS 不直接制作内容，而是让用户在一个持续项目空间中看懂内容、形成判断、派发任务，并把过程与结果重新归位。
 
 ---
 
-## 3 分钟演示路径
+## 2. Alpha 要证明什么
 
-```bash
-npm install && npm run dev
+Alpha 只验证一条真实闭环：
+
+```mermaid
+flowchart LR
+    A[打开本地 Project]
+    --> B[进入 Workspace]
+    --> C[Canvas 查看资料]
+    --> D[Preview / Note]
+    --> E[创建 Command]
+    --> F[真实 Codex Run]
+    --> G[Artifact Return]
+    --> H[Accept / Retry]
+    --> I[Checkpoint]
+    --> J[关闭并恢复]
 ```
 
-然后按以下顺序演示：
+Alpha 成功口径：
 
-1. **左栏切版本**：点击 Script V1 → V2 → V3，右侧评审卡和 AI 草稿跟随切换
-2. **展开创意方向**：点击顶部 Brief Bar 展开 Creative Direction + Locked Elements
-3. **人工评审**：Human Review tab → 查看 V2 的两条评审卡 → 点击 status 按钮流转状态 → 更改 Decision Action
-4. **AI 分析**：切到 AI 分析 tab → 查看 Mock Skill Finding → 编辑 Human Revision → Accept / Revise / Reject
-5. **版本对比**：点击 Source / Current Compare 按钮 → 查看 V1 与当前版本同一段落差异
-6. **决策页**：切到 Decision tab → 查看自动汇总的 Keep/Modify/Remove → 编辑 Next Version Goal
-7. **导出**：展开底部 Context / Export 抽屉 → 下载 Markdown → 下载 JSON → 复制 Codex Handoff
-8. **重置**：点击顶部"恢复演示数据" → 确认 → 回到 V2 / PRODUCT SETUP
+- 5 次真实 Codex Run 中至少 4 次结果正确回到项目；
+- 从选中文件到创建 Run 不超过 3 个核心动作；
+- 用户能查看本次 Run 使用了哪些资料；
+- 不打开文件系统也能找到 Changed File；
+- 关闭重开后恢复 Workspace、视口和待确认 Run；
+- 用户无需说明即可区分 Source、AI Draft、Run 与 Decision。
 
 ---
 
-## 技术边界
+## 3. Alpha 范围
 
-| 包含 | 不包含 |
-|------|--------|
-| React 19 + TypeScript + Vite | 后端 / 数据库 / 认证 |
-| 纯前端，localStorage 持久化 | 真实 AI API / 模型调用 |
-| lucide-react 图标（唯一 UI 依赖） | 组件框架（MUI/Ant Design/Tailwind） |
-| 一个预设案例：PortaSplit / The Thinker | 第二案例（Match Night KOL/KOC） |
-| 5 个剧本段落的 V1/V2/V3 版本 | 多用户协作 / 权限 |
-| 1024px 响应式 | 移动端 |
+### 必做
+
+- 一个本地 Project；
+- 一张持续存在的 Project Canvas；
+- 2–3 个 Workspace，作为同一 Canvas 的 Semantic Viewport；
+- MD、图片、PPT 输入；
+- Artifact、ArtifactView、ArtifactRevision；
+- 基础 Relation；
+- Preview；
+- 文件级备注；
+- PPT / PDF 当前页级备注；
+- 在原生工具中打开；
+- Command 最小版；
+- Context Lens；
+- Bridge / Codex 真实 Run；
+- `queued / running / waiting_input / review / completed / failed`；
+- Changed Files；
+- Artifact Return；
+- 人工 Accept / Retry；
+- 手动 Checkpoint；
+- 项目关闭与恢复。
+
+### Alpha 不做
+
+- 三视图完整实现；
+- 飞书写回和变化监听；
+- Notion；
+- Buddy 深度集成；
+- Delivery Bundle 完整系统；
+- 跨项目搜索；
+- 自动整理本地目录；
+- 自动版本建议；
+- Figma / Canva 直接执行；
+- 多人协作；
+- Electron / Tauri；
+- 插件市场；
+- 多 Agent 自由编排；
+- 视频逐帧、完整代理与画面级 Diff。
 
 ---
 
-## 运行
+## 4. 冻结产品模型
 
-```bash
-git clone <repo-url>
-cd 演示demo
-npm install
-npm run dev        # 开发服务器，默认 localhost:5173
-npm run build      # 生产构建
-npm run lint       # Oxlint 检查
+### 4.1 Project
+
+Project 是唯一正式项目身份。
+
+一个 Project 对应：
+
+- 一个本地根目录；
+- 一张持续存在的 Project Canvas；
+- 一套 Project Graph；
+- 多个 Workspace；
+- 多个 Artifact、Run、Revision 与 Checkpoint。
+
+### 4.2 Workspace
+
+```text
+Workspace = Semantic Viewport
 ```
 
----
+Workspace 不是页面、路由、独立 Canvas、独立 Graph、真实文件夹或 Codex / Buddy GUI Project。
 
-## 项目结构
+Workspace 保存：
 
+- viewport；
+- zoom；
+- focusedNodeIds；
+- visibleLayers；
+- layoutPreset；
+- contextPolicy；
+- selectionState；
+- 可选 intent。
+
+`intent` 为可选元数据，可为空、修改和移除，只影响推荐与环境，不限制能力。
+
+### 4.3 Artifact 与 ArtifactView
+
+```mermaid
+flowchart LR
+    A[Artifact<br/>真实内容身份]
+    --> V1[ArtifactView A]
+    --> V2[ArtifactView B]
+    A --> R[ArtifactRevision]
 ```
-src/
-├── App.tsx                          # 主组件，状态管理 + 四区布局
-├── components/
-│   ├── ScriptRail.tsx               # 左栏：版本列表 + 段落导航
-│   ├── ScriptCanvas.tsx             # 中栏：Brief Bar + 段落编辑 + 版本对比
-│   ├── EvaluationPanel.tsx          # 右栏：人工评审 / AI 分析 / Decision 三 Tab
-│   └── ExportDrawer.tsx             # 底栏：Markdown / JSON / Codex Handoff 导出
-├── data/
-│   └── scriptProject.ts             # PortaSplit 预设数据（Brief、版本、评审、AI 草稿）
-├── types/
-│   └── evaluation.ts                # 全部 TypeScript 类型定义
-├── services/
-│   └── reviewExports.ts             # 导出逻辑（手写 Markdown + Handoff JSON）
-├── infrastructure/
-│   └── demoStorage.ts              # localStorage 封装（schema 版本化 + 迁移）
-├── demo/
-│   └── seed.ts                     # Demo 初始状态 + schema 版本常量
-├── index.css                       # CSS 变量（暗色 Token）
-└── App.css                         # 全部布局与组件样式
+
+规则：
+
+- 一个 Artifact 可以拥有多个 ArtifactView；
+- 默认一个 Artifact 在同一 Workspace 中只有一个 View；
+- 重复拖入时定位已有 View；
+- 用户明确“创建额外引用”时才增加第二个 View；
+- View 保存独立位置、尺寸、展示状态和可选锁定 Revision；
+- 删除 View 不删除 Artifact；
+- Artifact Note 对所有 View 可见；
+- ArtifactView Note 只在当前引用位置可见。
+
+### 4.4 Run 与 Conversation
+
+Alpha 关系：
+
+```text
+Conversation : Run = 1 : N
+Run : External Thread = 1 : 1
 ```
 
+OS / Bridge 保存 Run 真相。Codex GUI Thread 或 Buddy Task 只是执行会话，不是项目状态源。
+
+### 4.5 Checkpoint
+
+Checkpoint 属于 Project，可记录：
+
+- 当前 Workspace；
+- Canvas Snapshot；
+- Context Snapshot；
+- Change Set；
+- 关联 Run；
+- 选中对象；
+- 可选 Delivery Snapshot。
+
+稳定历史统一收拢为 Checkpoint，不再创建另一套“冻结区域”。
+
 ---
 
-## 已验证项
+## 5. UI 与交互冻结决策
 
-| 检查 | 状态 | 详情 |
-|------|------|------|
-| TypeScript Build | ✅ | `tsc -b && vite build` 通过 |
-| Lint (Oxlint) | ✅ | 0 errors, 0 warnings |
-| 1366×768 视觉 | ✅ | 三栏完整，无溢出 |
-| 1024×768 响应式 | ✅ | 左栏收缩至 168px，无横向溢出 |
-| localStorage 持久化 | ✅ | 刷新保留状态，损坏自动回退 seed |
-| 版本隔离 | ✅ | 切版本时评审/AI/Decision 正确联动 |
-| 案例依据可追溯 | ✅ | 项目逻辑与修改依据来自真实迭代；Mock AI、时间和界面状态为演示用结构化数据 |
+### 5.1 App Shell
+
+默认常驻：
+
+- Project Tabs；
+- Workspace Dock；
+- Canvas；
+- Mini-map。
+
+Inspector 默认关闭，按需 Overlay。Canvas 保持主要可用面积。
+
+### 5.2 节点交互
+
+- Hover：少量快捷操作与连接锚点；
+- 单击：打开屏幕坐标状态 Overlay；
+- Enter：打开 / 收起选中节点状态；
+- 双击：打开一度关系；
+- `C`：创建 Command；
+- Command 内 `Cmd/Ctrl + Enter`：执行 Run；
+- `Cmd/Ctrl + O`：打开原生工具；
+- `Esc`：按优先级逐级退出；
+- 低于 40% Zoom 时，单击默认只选中，Enter 可强制打开紧凑详情。
+
+状态 Overlay 必须通过 Portal 渲染，不进入 React Flow / ELK / Mini-map 布局。
+
+### 5.3 Inspector
+
+Inspector：
+
+- 单实例；
+- 默认关闭；
+- 局部导航栈；
+- 模式包括 Relation、Preview、Context、Activity、Compare；
+- 一次只呈现一个主要模式；
+- Compare 只扩展当前 Inspector；
+- Workspace 切换时关闭或重置；
+- Esc 按局部栈逐级退出。
+
+### 5.4 Artifact Return
+
+正式落位顺序：
+
+```text
+Target → Working → Run → Pending Return Zone
+```
+
+Target 与 Context 必须分离。返回 Artifact 在用户确认前保持 Draft / Pending，不自动成为 Current。
+
+### 5.5 信息密度
+
+> 当前内容留在 Canvas，辅助内容堆叠，非当前区域折叠，旧过程进入 Activity，稳定历史收拢为 Checkpoint，独立分支才进入 Sub-canvas。
+
+- 同类辅助对象数量达到 4 个且未被选中、Pin 或参与 Run 时进入 Stack；
+- 当前 Workspace Region 展开；
+- 非当前 Region 可折叠；
+- Canvas 只保留 active Run 与最近 completed；
+- 更旧 Run 进入 Activity；
+- Sub-canvas 仅用户主动创建，Alpha 默认不出现。
 
 ---
 
-## 路线图
+## 6. 系统职责
 
-| 阶段 | 内容 |
-|------|------|
-| Day 1 | 静态工作台骨架（三栏布局、视觉 Token、展示级交互） |
-| Day 2 | 人工评审 + Mock AI + 决策 + localStorage + 导出闭环 |
-| Day 2.5 | 存储/导出/种子架构抽离、Demo 重置、构建修复 |
-| Day 3 | 案例文档 + 项目 README（当前） |
-| 未来 | Match Night KOL/KOC 第二案例；AdFrame Visual（分镜评审）；AdFrame Motion（视频成品评审） |
+```mermaid
+flowchart TB
+    OS[Local Creative OS]
+    Bridge[MCP Bridge / Execution Router]
+    Codex[Codex GUI / CLI]
+    Buddy[WorkBuddy]
+    FS[Local File System]
+
+    OS --> Bridge
+    Bridge --> Codex
+    Bridge --> Buddy
+    Codex --> FS
+    Buddy --> FS
+    FS --> Bridge
+    Bridge --> OS
+```
+
+- OS 管项目、Workspace、Artifact、Context、关系、版本和 UI；
+- Bridge 管 Run、状态、事件、执行者、Changed Files 与 Artifact Return；
+- Codex / Buddy GUI 管执行会话；
+- 文件系统保存真实内容；
+- GUI 项目名称不能成为数据主键；
+- Workspace 不映射为 GUI Project 或真实目录。
+
+---
+
+## 7. 建议技术架构
+
+```mermaid
+flowchart LR
+    Web[React + TypeScript + Vite]
+    --> Core[Node.js + TypeScript Local Core<br/>127.0.0.1]
+    --> DB[SQLite + Project Directory]
+    --> Bridge[Bridge / Runtime Adapter]
+    --> Codex[Codex]
+```
+
+建议组件：
+
+- Canvas：`@xyflow/react`；
+- 自动布局 Spike：ELK.js，只计算坐标；
+- UI 本地交互：Zustand；
+- Local Core 数据：TanStack Query；
+- 实时状态：SSE 优先，必要时 WebSocket；
+- 预览：图片 / Markdown / PDF.js；PPT 通过本地转换生成缩略图或 PDF；
+- 数据库：SQLite，WAL，元数据与关系，不存大 BLOB；
+- Bridge：复用现有任务闭环，逐步补充 Project、Context、waiting_input 与结构化 Artifact Return。
+
+以上是架构基线，不代表允许一次引入全部依赖。新增依赖必须在获批 Sprint 中说明理由。
+
+---
+
+## 8. 目标仓库结构
+
+```text
+apps/
+├── web/
+└── local-core/
+
+packages/
+├── domain/
+├── contracts/
+├── ui/
+└── skills/
+
+projects/
+docs/
+├── product/
+├── architecture/
+├── design/
+├── handoffs/
+├── audit/
+├── qa/
+└── archive/
+
+scripts/
+AGENTS.md
+README.md
+.env.example
+package.json
+```
+
+现有 AdFrame Review Prototype 作为可复用模块保留，未来归入：
+
+```text
+apps/web/src/features/review/
+```
+
+不要继续把旧三栏 Demo 扩展成主 App Shell。
+
+---
+
+## 9. 核心领域对象
+
+Alpha 最小实体：
+
+- Project
+- Workspace
+- Artifact
+- ArtifactView
+- ArtifactRevision
+- Relation
+- Note
+- Command
+- Conversation
+- Run
+- ContextSnapshot
+- SkillRef
+- Checkpoint
+- SourceSnapshot
+
+正式开发前必须冻结：
+
+- TypeScript Domain Types；
+- SQLite Schema；
+- REST / SSE 合同；
+- Runtime Adapter；
+- Connector Adapter；
+- schemaVersion；
+- migration 策略；
+- 文件冲突与回滚规则。
+
+---
+
+## 10. 存储与性能预算
+
+### Canvas LOD
+
+- 0–80：完整节点；
+- 81–150：简化节点；
+- 151–300：聚合、Stack、折叠 Process；
+- 300+：总览，不承诺完整节点同屏；
+- 持续流动关系线最多 2 条；
+- Workspace Camera 移动时暂停复杂动画。
+
+### 缓存
+
+- 默认全局可再生缓存预算：5GB；
+- 正式数据、缓存和临时文件必须分开；
+- 原始文件默认链接，不默认复制；
+- SQLite 只保存元数据和关系；
+- 缩略图、Preview、提取文本使用内容哈希缓存；
+- Heavy Task 同时 1 个；
+- Light Task 同时 2–3 个。
+
+### Preview
+
+- 图片节点缩略图最长边 320–480px；
+- Inspector 图片预览最长边 1600–2048px；
+- PPT / PDF：Thumbnail → Page Preview → Original；
+- 优先当前页与可见页；
+- 不预生成全部高清页面；
+- 视频 Alpha 只保存路径、封面和元数据。
+
+---
+
+## 11. 安全与文件规则
+
+- Local Core 只绑定 `127.0.0.1`；
+- API Key、OAuth Token 和凭证不得进入前端、项目目录或 Git；
+- GUI / 外部工具不得直接写 `.creative-os`；
+- 高风险移动、重命名、覆盖、删除、上传和写回必须预览、确认、记录并可恢复；
+- Run 开始记录目标文件哈希，写入前重新校验；
+- 发生外部修改时进入 stale / waiting_input，不静默覆盖；
+- Alpha 采用单写 Run；
+- 未绑定 GUI 修改记录为 External Change，不自动归因给最近 Run。
+
+---
+
+## 12. 开发阶段
+
+### Sprint 0：基线与 Spike
+
+- 仓库审计；
+- 保护旧 Prototype；
+- 目录与领域边界；
+- Canvas 性能 Spike；
+- 文件 Preview Spike；
+- Local Core / Bridge / Codex Runtime Spike；
+- 飞书读取 / Snapshot Spike；
+- ERD、Schema、接口合同；
+- PortaSplit 可 Reset 样例；
+- Golden Path 与失败路径。
+
+### Sprint 1 及以后
+
+只开发经批准的 Sprint Scope。不得根据完整 PRD 自行展开全部功能。
+
+---
+
+## 13. 启动门槛
+
+正式 Alpha 开发前必须满足：
+
+- PRD 与 UI Spec 无核心冲突；
+- Alpha Scope 冻结；
+- Workspace / ArtifactView 规则确认；
+- Command → Run → Return 原型通过；
+- Canvas 与文件 Preview Spike 有基线；
+- Bridge / Codex 真实闭环通过；
+- 数据模型与接口合同冻结；
+- PortaSplit 样例与验收脚本完成；
+- Repo、CI、密钥与回滚规则完成；
+- Sprint 只包含已确认能力。
+
+---
+
+## 14. 文档优先级
+
+发生冲突时，按以下顺序执行：
+
+1. 用户当前明确指令；
+2. 当前获批 Sprint / Handoff；
+3. `AGENTS.md`；
+4. 最新 PRD 冻结决策稿；
+5. 最新 UI & Interaction Spec 冻结决策稿；
+6. 本 README；
+7. 已批准 ADR；
+8. 旧 PRD、旧 UI Spec 与 AdFrame 历史文档。
+
+旧文档只用于追溯，不得覆盖最新冻结结论。
+
+---
+
+## 15. 当前默认动作
+
+Codex 首次进入仓库时：
+
+1. 阅读 `README.md`、`AGENTS.md` 和当前 Handoff；
+2. 检查 Git 状态、目录、依赖、脚本与现有文档；
+3. 确认旧 Prototype 可运行；
+4. 输出当前架构与差距报告；
+5. 提交 Sprint 0 实施计划；
+6. 在未获确认前，不进行大范围迁移或产品功能开发。
+
+详细执行规则见 `AGENTS.md` 和 `CODEX_START_HERE.md`。
