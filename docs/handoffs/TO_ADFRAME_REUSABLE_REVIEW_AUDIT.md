@@ -1,11 +1,12 @@
 # TO_ADFRAME_REUSABLE_REVIEW_AUDIT
 
-> status: `dispatched`  
+> status: `completed_and_accepted`
 > handoff_id: `OS-ADFRAME-REVIEW-AUDIT-001`  
 > project_id: `local-creative-os`  
 > task_id: `os-adframe-review-audit-20260719-001`  
 > dispatched_at: `2026-07-19`  
 > dispatch_target: `codex://threads/019f69d0-f0f0-7612-98f1-8c6bb245a323`
+> return_path: `E:\Codex 项目\OS开发\docs\audit\ADFRAME_REUSABLE_REVIEW_AUDIT_RETURN.md`
 
 ## 目标项目
 

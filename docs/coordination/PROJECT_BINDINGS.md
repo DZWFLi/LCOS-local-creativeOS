@@ -14,7 +14,7 @@
 | --- | --- | --- | --- | --- |
 | Local Creative OS | `codex://threads/019f7958-59f0-7833-bf02-288b90b4222a` | `E:\Codex 项目\OS开发` | 产品与开发总控 | OS 仓库冻结文档、Git、测试结果 |
 | AdFrame 历史 Prototype | `codex://threads/019f69d0-f0f0-7612-98f1-8c6bb245a323` | 冻结旧仓库：`E:\Codex 项目\演示demo` | Review Prototype 与历史模块来源 | 旧仓库文件和 Git；不得成为新 App Shell 状态源 |
-| AI Bridge | `codex://threads/019f462f-5bfb-7450-943e-2a40e0ca32c7` | 已知工作目录：`E:\Codex 项目\buddy协同测试` | Run 与执行基础设施来源 | Bridge 仓库、任务记录、事件和 Artifact Return 证据 |
+| AI Bridge | `codex://threads/019f462f-5bfb-7450-943e-2a40e0ca32c7` | 协调目录：`E:\Codex 项目\buddy协同测试`；审计定位的源码：`E:\Buddy项目\ai-bridge` | Run 与执行基础设施来源 | Bridge 仓库、任务记录、事件和 Artifact Return 证据 |
 
 补充来源：新 OS 仓库基线来自完整归档 `E:\Codex 项目\项目归档\AdFrame_Script_Review_Day3_2026-07-19.zip`；旧仓库保持不动。
 
@@ -83,7 +83,7 @@
 1. AdFrame 可复用 Review 审计：`os-adframe-review-audit-20260719-001`；
 2. Bridge Alpha Runtime Spine 审计：`os-bridge-runtime-spine-audit-20260719-001`。
 
-两份 Return 完成并由 OS 复核后，才能冻结 Sprint 1 的迁移与接口范围。
+两份 Return 已完成并由 OS 复核。AdFrame 只作为业务规则与交互证据库；Bridge 仍需先完成源码 Git 基线与最小 Runtime Contract，才能进入 OS Runtime 接入。
 
 可并行但不得提前开发的 OS 工作：维护契约草案、验收场景、测试夹具要求和风险清单。不得在审计返回前迁移历史模块或接入真实 Bridge Runtime。
 

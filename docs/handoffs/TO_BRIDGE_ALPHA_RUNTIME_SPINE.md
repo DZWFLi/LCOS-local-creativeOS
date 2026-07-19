@@ -1,11 +1,12 @@
 # TO_BRIDGE_ALPHA_RUNTIME_SPINE
 
-> status: `dispatched`  
+> status: `completed_and_accepted`
 > handoff_id: `OS-BRIDGE-RUNTIME-SPINE-001`  
 > project_id: `local-creative-os`  
 > task_id: `os-bridge-runtime-spine-audit-20260719-001`  
 > dispatched_at: `2026-07-19`  
 > dispatch_target: `codex://threads/019f462f-5bfb-7450-943e-2a40e0ca32c7`
+> return_path: `E:\Codex 项目\OS开发\docs\audit\BRIDGE_ALPHA_RUNTIME_SPINE_AUDIT_RETURN.md`
 
 ## 目标项目
 
