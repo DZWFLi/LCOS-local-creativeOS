@@ -208,6 +208,17 @@ Inspector Context 模式显示：
 
 节点不能只靠颜色区分。
 
+### 5.1 分类不是固定分区
+
+`Source / Target / Review / Return` 是左侧可点击的四类直觉分类层，不是钉死在 Canvas 上的列、泳道或区域标题。
+
+- 默认 Canvas 不常驻 `SOURCE ZONE / TARGET / REVIEW / RETURN ZONE` 标题；
+- 点击左侧分类只筛选或提亮对应节点，不强制移动节点；
+- 节点保持自由拖拽，分类不决定坐标；
+- 分类可由用户标签及 Connector / API 元数据建议，用户可覆盖；
+- 原型中的自动分类必须标为 Prototype classification，不冒充真实 API 已接通；
+- 左 Source、中 Working、右 Output、下 Process 只是默认局部排布倾向，不是强制分栏。
+
 | 家族 | 形态 | 边框 / 标识 | 位置倾向 | 文案状态 |
 | --- | --- | --- | --- | --- |
 | Source / Original | 文件卡 + 真实缩略图 | 实线瓷白、来源图标 | 左 | Source |
@@ -245,6 +256,13 @@ Inspector Context 模式显示：
 - 持续流动线只允许当前 Running 和选中生成关系，同屏最多 2 条；
 - reduced motion 下关闭银线流动，保留快速定位与状态变化。
 
+交互真实性要求：
+
+- Artifact、Context、Process 与 Decision 节点必须真实可拖拽；
+- 拖动时连线跟随，释放后保留新位置；
+- Mini-map 视口框必须可拖动并控制主 Canvas 相机；
+- 点击 Mini-map 区域可定位，主 Canvas 平移/缩放也必须反向同步视口框。
+
 快捷键：
 
 - `C` 创建 Command；
@@ -269,4 +287,3 @@ Inspector Context 模式显示：
 Figma Make 不得自行加入：聊天侧栏、永久右栏、Dashboard 数据图、完整文件管理器、节点自由编辑器、流程看板、Agent 市场、团队成员、云同步、消息中心或计费页面。
 
 遇到缺失信息时，优先使用本文件 Fixture，不得依据旧 AdFrame 截图推导新 Shell。
-

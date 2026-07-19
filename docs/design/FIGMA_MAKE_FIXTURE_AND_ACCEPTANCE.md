@@ -57,6 +57,9 @@ Run：
 - [ ] review → Compare / Accept / Retry；
 - [ ] Accept → Current Revision；
 - [ ] Create Checkpoint → completed 收拢 Activity。
+- [ ] 任一节点 → 自由拖拽并保留新位置，连线实时跟随；
+- [ ] Mini-map 视口框 → 拖动后主 Canvas 相机同步移动；
+- [ ] 左侧 Source / Target / Review / Return → 点击后筛选或提亮，不改变节点坐标。
 
 ## 3. 视觉验收
 
@@ -71,6 +74,8 @@ Run：
 - [ ] Draft 与 Current 有形态、文案和来源差异；
 - [ ] Mini-map 不显示文件名；
 - [ ] 无 Dashboard 图表、聊天侧栏或后台菜单。
+- [ ] Canvas 不常驻 Source / Target / Review / Return 分区标题或刚性泳道；
+- [ ] 节点正面不常驻详细元数据，详情由右上角 `?` 与 Hover 二级菜单承载。
 
 ## 4. 交互验收
 
@@ -104,4 +109,3 @@ Run：
 - [ ] 中文字号不低于规范；
 - [ ] Fixture 名称与状态保持一致；
 - [ ] 未经定义的功能没有被模型自行补齐。
-
