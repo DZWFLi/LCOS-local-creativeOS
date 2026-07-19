@@ -1,9 +1,11 @@
 # TO_ADFRAME_REUSABLE_REVIEW_AUDIT
 
-> status: `draft_not_dispatched`  
+> status: `dispatched`  
 > handoff_id: `OS-ADFRAME-REVIEW-AUDIT-001`  
 > project_id: `local-creative-os`  
-> task_id: `not_dispatched`
+> task_id: `os-adframe-review-audit-20260719-001`  
+> dispatched_at: `2026-07-19`  
+> dispatch_target: `codex://threads/019f69d0-f0f0-7612-98f1-8c6bb245a323`
 
 ## 目标项目
 
@@ -68,4 +70,3 @@
 ## 截止时间
 
 未设定；正式派发时补充。
-

@@ -78,18 +78,18 @@
 - 建立新基线 Commit / Tag；
 - 补齐 Sprint 0 的 lint、typecheck、unit test、build 与 smoke test 质量门。
 
-下一步候选（尚未派单或获批实施）：
+已正式派发的只读审计：
 
-1. 向 AdFrame 发出只读可复用 Review 审计；
-2. 向 Bridge 发出 Alpha Runtime Spine 只读缺口审计；
-3. OS 复核两份 Return 后，冻结 Sprint 1 的迁移与接口范围。
+1. AdFrame 可复用 Review 审计：`os-adframe-review-audit-20260719-001`；
+2. Bridge Alpha Runtime Spine 审计：`os-bridge-runtime-spine-audit-20260719-001`。
+
+两份 Return 完成并由 OS 复核后，才能冻结 Sprint 1 的迁移与接口范围。
 
 可并行但不得提前开发的 OS 工作：维护契约草案、验收场景、测试夹具要求和风险清单。不得在审计返回前迁移历史模块或接入真实 Bridge Runtime。
 
 ## 5. 修改权限
 
 - 本轮只允许修改 `E:\Codex 项目\OS开发\docs\coordination\` 与 `E:\Codex 项目\OS开发\docs\handoffs\`。
-- 两份 Handoff 当前都是 Draft，不等于已派单。
-- 未生成真实 `task_id` 前，不得宣称 Bridge / Buddy 已接单。
+- 两份 Handoff 已于 2026-07-19 派发到对应 Codex 任务。
+- 当前是 Codex 跨任务派发，不是 AI Bridge / Buddy 结构化任务；不得将上述 task ID 描述为 Bridge 队列任务。
 - 任何目标项目写入都必须在获批 Handoff 中逐项列明。
-

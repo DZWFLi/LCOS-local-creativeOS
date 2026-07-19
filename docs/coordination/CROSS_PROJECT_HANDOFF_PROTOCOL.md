@@ -94,12 +94,11 @@ OS 主控必须亲自检查：
 
 首次不通过可发出一次带失败证据的返工续单。第二次仍不通过、目标变化或风险上升时停止自动往返，由 Dz 决定。
 
-## 8. 本轮冻结说明
+## 8. 当前派发状态
 
-本轮只建立绑定、协议和两份 Handoff 草案：
+两份 Handoff 已于 2026-07-19 通过 Codex 跨任务消息正式派发：
 
-- 不向 AdFrame 或 Bridge 发送消息；
-- 不创建 Bridge / Buddy 任务；
-- 不修改目标项目仓库；
-- 不实施迁移、Runtime 接入或新功能。
+- AdFrame：`os-adframe-review-audit-20260719-001`；
+- Bridge：`os-bridge-runtime-spine-audit-20260719-001`。
 
+这两个编号是 OS 协调任务编号，不是 AI Bridge / Buddy 队列中的 `task_id`。本次只读审计仍然禁止修改目标项目仓库，不实施迁移、Runtime 接入或新功能。
