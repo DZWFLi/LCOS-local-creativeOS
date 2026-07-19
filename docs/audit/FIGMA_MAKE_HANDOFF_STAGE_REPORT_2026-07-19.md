@@ -5,6 +5,12 @@
 > 实际状态：阶段交付已提前形成，可交给 Figma Make 开始高保真原型  
 > 代码实现状态：未开发；本阶段仅冻结原型输入、交互状态与验收
 
+Figma Make 首轮已于 2026-07-19 提交：
+
+`https://www.figma.com/make/FPiaXr4SrWJYecq3uUR080/Untitled?t=JmUnQmGl5JE6GkPa-0`
+
+自动审查值守：`local-creative-os-figma-make`，每 20 分钟低频检查，至 22:00 停止新增。
+
 ## 1. 阶段目标
 
 把 Local Creative OS 的冻结 PRD、UI Spec、仓库基线和两个历史项目审计，压缩成 Figma Make 无需猜测即可使用的高保真原型开发包。
