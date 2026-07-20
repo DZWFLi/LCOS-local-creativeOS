@@ -4,6 +4,8 @@
 > 用途：交给 Figma Make 生成桌面端高保真、可点击 Alpha 原型  
 > 产品状态：交互与视觉目标稿，不代表 Runtime、Local Core 或文件能力已经接通
 
+视觉材质的权威细则见 `docs/design/CREATIVE_OS_MATERIAL_VISUAL_SYSTEM.md`。
+
 ## 1. 这次原型要证明什么
 
 用户能在一张持续存在的 Project Canvas 上完成一条清晰闭环：
