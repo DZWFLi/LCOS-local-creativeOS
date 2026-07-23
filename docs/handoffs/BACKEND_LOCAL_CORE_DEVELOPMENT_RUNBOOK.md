@@ -79,6 +79,35 @@ Get-NetTCPConnection -LocalAddress 127.0.0.1 -LocalPort 43121 -ErrorAction Silen
 
 不要自动终止未知进程。确认 owner 后再由用户决定是否关闭。
 
+## Browser Preview Stack
+
+同时启动 Local Core 与 Web：
+
+```powershell
+npm run dev:stack
+```
+
+入口：
+
+```text
+Web:         http://127.0.0.1:5173
+Diagnostics: http://127.0.0.1:5173/__diagnostics
+Local Core:  http://127.0.0.1:43121
+Dev Proxy:   /api/local-core/v1/*
+```
+
+Web 使用 `--strictPort`。若 `5173` 已被占用，dev stack 明确失败并清理本轮启动的兄弟进程，不会静默漂移到其他端口；先确认占用者，再由用户决定是否关闭。
+
+Diagnostics 是独立 dev-only 页面，不进入现有 Inspector，也不替换 Canvas Fixture。浏览器只通过同源 Vite Proxy 读取 Local Core。
+
+生成只读测试报告：
+
+```powershell
+npm run test:report
+```
+
+生成文件位于 `public/dev-test-report.json`，已被 Git 忽略。网页只能读取报告，不能启动测试或执行 Shell。
+
 ## 质量检查
 
 局部：
