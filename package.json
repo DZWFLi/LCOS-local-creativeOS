@@ -1,16 +1,20 @@
 {
-  "name": "adframe-demo",
+  "name": "local-creative-os",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.6.0",
   "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "lint": "oxlint",
-    "preview": "vite preview",
-    "typecheck": "tsc -b --pretty false",
-    "test": "vitest run",
-    "smoke": "node scripts/smoke.mjs",
+    "dev": "npm run dev --workspace @local-creative-os/web",
+    "build": "npm run build --workspace @local-creative-os/web",
+    "lint": "npm run lint --workspace @local-creative-os/web && npm run lint --workspace @local-creative-os/domain && npm run lint --workspace @local-creative-os/contracts",
+    "preview": "npm run preview --workspace @local-creative-os/web",
+    "typecheck": "npm run typecheck --workspace @local-creative-os/web && npm run typecheck --workspace @local-creative-os/domain && npm run typecheck --workspace @local-creative-os/contracts",
+    "test": "npm run test --workspace @local-creative-os/web && npm run test --workspace @local-creative-os/domain && npm run test --workspace @local-creative-os/contracts",
+    "smoke": "npm run smoke --workspace @local-creative-os/web",
     "check": "npm run lint && npm run typecheck && npm run test && npm run build && npm run smoke"
   },
   "dependencies": {
