@@ -1,19 +1,27 @@
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import { createLocalCoreServer, LOCAL_CORE_DEV_PORT } from './server.js'
+import { SqliteMetadataRepository } from './metadata-repository.js'
 
 export { getHealthStatus } from './health.js'
 export { ExplicitProjectCatalog } from './project-catalog.js'
 export { validateProjectRoot } from './project-root.js'
 export { createLocalCoreServer, LOCAL_CORE_DEV_PORT } from './server.js'
+export { SqliteMetadataRepository } from './metadata-repository.js'
 
 async function main(): Promise<void> {
-  const server = createLocalCoreServer({ port: LOCAL_CORE_DEV_PORT })
+  const databasePath = process.env.LOCAL_CORE_DB_PATH
+    ?? fileURLToPath(new URL('../.data/phase2-lite.sqlite', import.meta.url))
+  const metadataRepository = new SqliteMetadataRepository(databasePath)
+  const server = createLocalCoreServer({ port: LOCAL_CORE_DEV_PORT, metadataRepository })
   const address = await server.start()
-  process.stdout.write(`Local Core read-only Phase 1A listening on http://${address.host}:${address.port}\n`)
+  process.stdout.write(`Local Core Phase 2 Lite listening on http://${address.host}:${address.port}\n`)
 
   const shutdown = () => {
-    void server.close().then(() => process.exit(0))
+    void server.close().then(() => {
+      metadataRepository.close()
+      process.exit(0)
+    })
   }
   process.once('SIGINT', shutdown)
   process.once('SIGTERM', shutdown)

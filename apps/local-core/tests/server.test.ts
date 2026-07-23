@@ -45,8 +45,8 @@ describe('Local Core HTTP server', () => {
     await expect(response.json()).resolves.toEqual({
       status: 'ok',
       service: 'local-core',
-      mode: 'read_only_phase_1a',
-      version: '0.1.0',
+      mode: 'phase_2_lite',
+      version: '0.2.0-lite',
     })
   })
 

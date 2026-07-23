@@ -11,6 +11,7 @@ export type ProjectId = Brand<string, 'ProjectId'>
 export type WorkspaceId = Brand<string, 'WorkspaceId'>
 export type ArtifactId = Brand<string, 'ArtifactId'>
 export type ArtifactViewId = Brand<string, 'ArtifactViewId'>
+export type RelationId = Brand<string, 'RelationId'>
 export type ArtifactRevisionId = Brand<string, 'ArtifactRevisionId'>
 export type NoteId = Brand<string, 'NoteId'>
 export type ContextSnapshotId = Brand<string, 'ContextSnapshotId'>
@@ -95,6 +96,17 @@ export interface ArtifactView {
   readonly size: { readonly width: number; readonly height: number }
   readonly displayMode: 'card' | 'thumbnail' | 'compact'
   readonly collapsed: boolean
+}
+
+export interface Relation {
+  readonly id: RelationId
+  readonly projectId: ProjectId
+  readonly workspaceId: WorkspaceId
+  readonly sourceArtifactViewId: ArtifactViewId
+  readonly targetArtifactViewId: ArtifactViewId
+  readonly kind: string
+  readonly createdAt: IsoDateTime
+  readonly updatedAt: IsoDateTime
 }
 
 export type ArtifactRevisionSource = 'import' | 'run' | 'external'

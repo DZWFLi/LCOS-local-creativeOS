@@ -15,7 +15,9 @@ import {
 
 import type {
   HealthStatus,
+  MetadataStoreStatus,
   ProjectCatalogEntry,
+  ProjectGraphSnapshot,
   Result,
   ValidatedProjectRoot,
 } from '@local-creative-os/contracts'
@@ -35,7 +37,73 @@ interface DiagnosticsSnapshot {
   readonly health?: RuntimeCall<HealthStatus>
   readonly catalog?: RuntimeCall<readonly ProjectCatalogEntry[]>
   readonly report?: Result<StructuredTestReport>
+  readonly metadata?: RuntimeCall<MetadataStoreStatus>
+  readonly graph?: RuntimeCall<ProjectGraphSnapshot>
   readonly refreshedAt?: string
+}
+
+const DISPOSABLE_PROJECT_ID = 'disposable-portasplit-phase2-lite'
+
+function disposablePortaSplitSnapshot(): ProjectGraphSnapshot {
+  const now = new Date().toISOString()
+  return {
+    schemaVersion: 1,
+    project: {
+      id: DISPOSABLE_PROJECT_ID as ProjectGraphSnapshot['project']['id'],
+      name: 'PortaSplit · Phase 2 Lite',
+      rootPath: 'disposable://portasplit-phase2-lite',
+      createdAt: now,
+      updatedAt: now,
+    },
+    workspaces: [{
+      id: 'disposable-workspace-main' as ProjectGraphSnapshot['workspaces'][number]['id'],
+      projectId: DISPOSABLE_PROJECT_ID as ProjectGraphSnapshot['project']['id'],
+      name: 'Main Canvas',
+      intent: 'build',
+      viewport: { x: 128, y: 72, zoom: 0.92 },
+      focusedNodeIds: ['disposable-view-brief', 'disposable-view-board'],
+      visibleLayers: ['core'],
+      updatedAt: now,
+    }],
+    artifacts: [
+      {
+        id: 'disposable-artifact-brief' as ProjectGraphSnapshot['artifacts'][number]['id'],
+        projectId: DISPOSABLE_PROJECT_ID as ProjectGraphSnapshot['project']['id'],
+        title: 'PortaSplit Brief', kind: 'markdown', localPath: 'disposable://portasplit/brief.md',
+        availability: 'available', createdAt: now, updatedAt: now,
+      },
+      {
+        id: 'disposable-artifact-board' as ProjectGraphSnapshot['artifacts'][number]['id'],
+        projectId: DISPOSABLE_PROJECT_ID as ProjectGraphSnapshot['project']['id'],
+        title: 'Direction Board', kind: 'image', localPath: 'disposable://portasplit/board.png',
+        availability: 'available', createdAt: now, updatedAt: now,
+      },
+    ],
+    artifactViews: [
+      {
+        id: 'disposable-view-brief' as ProjectGraphSnapshot['artifactViews'][number]['id'],
+        artifactId: 'disposable-artifact-brief' as ProjectGraphSnapshot['artifacts'][number]['id'],
+        workspaceId: 'disposable-workspace-main' as ProjectGraphSnapshot['workspaces'][number]['id'],
+        referenceKind: 'primary', position: { x: 120, y: 180 },
+        size: { width: 280, height: 180 }, displayMode: 'card', collapsed: false,
+      },
+      {
+        id: 'disposable-view-board' as ProjectGraphSnapshot['artifactViews'][number]['id'],
+        artifactId: 'disposable-artifact-board' as ProjectGraphSnapshot['artifacts'][number]['id'],
+        workspaceId: 'disposable-workspace-main' as ProjectGraphSnapshot['workspaces'][number]['id'],
+        referenceKind: 'primary', position: { x: 520, y: 210 },
+        size: { width: 320, height: 220 }, displayMode: 'thumbnail', collapsed: false,
+      },
+    ],
+    relations: [{
+      id: 'disposable-relation-brief-board' as ProjectGraphSnapshot['relations'][number]['id'],
+      projectId: DISPOSABLE_PROJECT_ID as ProjectGraphSnapshot['project']['id'],
+      workspaceId: 'disposable-workspace-main' as ProjectGraphSnapshot['workspaces'][number]['id'],
+      sourceArtifactViewId: 'disposable-view-brief' as ProjectGraphSnapshot['artifactViews'][number]['id'],
+      targetArtifactViewId: 'disposable-view-board' as ProjectGraphSnapshot['artifactViews'][number]['id'],
+      kind: 'informs', createdAt: now, updatedAt: now,
+    }],
+  }
 }
 
 function ErrorCode({ result }: { readonly result: Result<unknown> | undefined }) {
@@ -79,16 +147,20 @@ export function RuntimeDiagnosticsPage() {
 
   const refresh = useCallback(async (signal?: AbortSignal) => {
     setRefreshing(true)
-    const [health, catalog, report] = await Promise.all([
+    const [health, catalog, report, metadata, graph] = await Promise.all([
       client.health(signal),
       client.catalog(signal),
       loadStructuredTestReport(signal),
+      client.metadataStatus(signal),
+      client.projectGraph(DISPOSABLE_PROJECT_ID, signal),
     ])
     if (signal?.aborted) return
     setSnapshot({
       health,
       catalog,
       report,
+      metadata,
+      graph,
       refreshedAt: new Date().toISOString(),
     })
     setRefreshing(false)
@@ -110,6 +182,8 @@ export function RuntimeDiagnosticsPage() {
   const health = snapshot.health?.result.ok ? snapshot.health.result.value : undefined
   const catalog = snapshot.catalog?.result.ok ? snapshot.catalog.result.value : []
   const report = snapshot.report?.ok ? snapshot.report.value : undefined
+  const metadata = snapshot.metadata?.result.ok ? snapshot.metadata.result.value : undefined
+  const graph = snapshot.graph?.result.ok ? snapshot.graph.result.value : undefined
 
   const checks = useMemo(() => [
     {
@@ -119,7 +193,7 @@ export function RuntimeDiagnosticsPage() {
     },
     {
       label: 'Health contract',
-      passed: health?.service === 'local-core' && health.mode === 'read_only_phase_1a',
+      passed: health?.service === 'local-core' && health.mode === 'phase_2_lite',
       detail: health === undefined ? 'No valid health payload' : `${health.service} · ${health.mode}`,
     },
     {
@@ -147,12 +221,17 @@ export function RuntimeDiagnosticsPage() {
     setValidatingRoot(false)
   }
 
+  const saveDisposable = async () => {
+    await client.saveProjectGraph(disposablePortaSplitSnapshot())
+    await refresh()
+  }
+
   return <main className="runtime-diagnostics" data-testid="runtime-diagnostics">
     <header className="diagnostics-header">
       <div>
         <p className="diagnostics-kicker">Local Creative OS · Development</p>
         <h1>Runtime Diagnostics</h1>
-        <p>只读检查浏览器、Vite Proxy 与 Local Core 的当前连接，不改变项目数据。</p>
+        <p>检查浏览器、Vite Proxy 与 Local Core，并仅允许写入明确标记的 disposable Phase 2 Lite 元数据。</p>
       </div>
       <div className="diagnostics-header-actions">
         <span className={`online-state ${online ? 'is-online' : 'is-offline'}`}>
@@ -169,7 +248,7 @@ export function RuntimeDiagnosticsPage() {
     <section className="diagnostics-origin-strip" aria-label="Data source status">
       <span>Canvas data</span><SourceBadge origin="fixture" />
       <span>Diagnostics data</span><SourceBadge origin="runtime" />
-      <small>两种来源并存，不互相冒充。</small>
+      <small>正式 Canvas 仍未迁移；下方 disposable 项目来自 SQLite Runtime。</small>
     </section>
 
     <div className="diagnostics-grid">
@@ -248,6 +327,28 @@ export function RuntimeDiagnosticsPage() {
           <pre>{JSON.stringify(report, null, 2)}</pre>
         </details>}
         <p className="panel-note">报告只由 CLI 生成，网页不能启动测试或执行 Shell。</p>
+      </section>
+
+      <section className="diagnostics-panel catalog-panel">
+        <div className="panel-heading"><Database size={18} /><h2>Phase 2 Lite Metadata</h2><SourceBadge origin="runtime" /></div>
+        <ErrorCode result={snapshot.metadata?.result} />
+        <ErrorCode result={snapshot.graph?.result} />
+        {metadata && <dl className="health-grid">
+          <div><dt>schemaVersion</dt><dd>{metadata.schemaVersion}</dd></div>
+          <div><dt>Storage</dt><dd>{metadata.metadataOnly ? 'Metadata only' : 'Unexpected'}</dd></div>
+        </dl>}
+        {metadata && <code className="database-path">{metadata.databasePath}</code>}
+        {graph ? <div className="catalog-empty">
+          <strong>{graph.project.name}</strong><br />
+          {graph.workspaces.length} Workspace · {graph.artifacts.length} Artifacts · {graph.artifactViews.length} Views · {graph.relations.length} Relation<br />
+          Camera {graph.workspaces[0]?.viewport.x}, {graph.workspaces[0]?.viewport.y} · {graph.workspaces[0]?.viewport.zoom}
+          <ul className="catalog-list">{graph.artifactViews.map((view) => <li key={view.id}>
+            <strong>{graph.artifacts.find((artifact) => artifact.id === view.artifactId)?.title}</strong>
+            <span>x {view.position.x} · y {view.position.y} · {view.size.width}×{view.size.height}</span>
+          </li>)}</ul>
+        </div> : <button type="button" onClick={() => void saveDisposable()}>
+          Create disposable PortaSplit metadata
+        </button>}
       </section>
     </div>
   </main>

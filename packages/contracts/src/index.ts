@@ -22,6 +22,7 @@ import type {
   Run,
   RunEvent,
   RunId,
+  Relation,
   Workspace,
   WorkspaceId,
 } from '../../domain/src/index.js'
@@ -61,8 +62,28 @@ export type ContractResult<Value> = Result<Value>
 export interface HealthStatus {
   readonly status: 'ok'
   readonly service: 'local-core'
-  readonly mode: 'read_only_phase_1a'
+  readonly mode: 'read_only_phase_1a' | 'phase_2_lite'
   readonly version: string
+}
+
+export interface ProjectGraphSnapshot {
+  readonly schemaVersion: number
+  readonly project: Project
+  readonly workspaces: readonly Workspace[]
+  readonly artifacts: readonly Artifact[]
+  readonly artifactViews: readonly ArtifactView[]
+  readonly relations: readonly Relation[]
+}
+
+export interface SaveProjectGraphInput {
+  readonly disposable: true
+  readonly snapshot: ProjectGraphSnapshot
+}
+
+export interface MetadataStoreStatus {
+  readonly schemaVersion: number
+  readonly databasePath: string
+  readonly metadataOnly: true
 }
 
 export interface ValidateProjectRootInput {
@@ -130,4 +151,12 @@ export interface ExecutionRuntimeContract {
   retryRun(runId: RunId): Promise<ContractResult<Run>>
   getEvents(runId: RunId, afterSequence?: number): Promise<ContractResult<readonly RunEvent[]>>
   getReturns(runId: RunId): Promise<ContractResult<readonly ArtifactReturn[]>>
+}
+
+export type {
+  Artifact,
+  ArtifactView,
+  Project,
+  Relation,
+  Workspace,
 }

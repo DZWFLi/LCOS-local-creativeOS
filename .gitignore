@@ -14,6 +14,9 @@ dist-ssr
 .vite-dev*.log
 .workbuddy/
 public/dev-test-report.json
+apps/local-core/.data/
+# Disposable artifact from an early Phase 2 Lite cwd-path validation.
+apps/local-core/apps/local-core/.data/
 
 # Local handoff package; its contents are tracked as source documents.
 Local_Creative_OS_Codex_Development_Package_20260719_073944.zip

@@ -1,7 +1,9 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 
 import type {
+  ProjectGraphSnapshot,
   ProjectCatalog,
+  SaveProjectGraphInput,
   ValidateProjectRootInput,
 } from '@local-creative-os/contracts'
 
@@ -9,6 +11,7 @@ import { failure } from './errors.js'
 import { getHealthStatus } from './health.js'
 import { ExplicitProjectCatalog } from './project-catalog.js'
 import { validateProjectRoot } from './project-root.js'
+import { SqliteMetadataRepository } from './metadata-repository.js'
 
 const LOOPBACK_HOST = '127.0.0.1'
 const MAX_BODY_BYTES = 64 * 1024
@@ -20,6 +23,7 @@ export interface LocalCoreServerOptions {
   readonly catalog?: ProjectCatalog
   readonly allowedRoot?: string
   readonly requestTimeoutMs?: number
+  readonly metadataRepository?: SqliteMetadataRepository
 }
 
 export interface LocalCoreAddress {
@@ -71,7 +75,8 @@ async function withAbort<Value>(operation: Promise<Value>, signal: AbortSignal):
 }
 
 function statusForError(code: string): number {
-  if (code === 'PROJECT_ROOT_NOT_FOUND') return 404
+  if (code === 'PROJECT_ROOT_NOT_FOUND' || code === 'NOT_FOUND') return 404
+  if (code === 'UNAVAILABLE') return 503
   if (code === 'ABORTED') return 499
   if (code === 'INTERNAL') return 500
   return 400
@@ -88,6 +93,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
   }
 
   const catalog = options.catalog ?? new ExplicitProjectCatalog([])
+  const metadata = options.metadataRepository
   let server: Server | undefined
   let currentAddress: LocalCoreAddress | undefined
   let lifecycleSignal: AbortSignal | undefined
@@ -113,8 +119,86 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
         return
       }
       if (request.method === 'GET' && url.pathname === '/projects') {
-        const result = await withAbort(catalog.list(controller.signal), controller.signal)
+        const result = metadata === undefined
+          ? await withAbort(catalog.list(controller.signal), controller.signal)
+          : {
+              ok: true as const,
+              value: metadata.listProjects().map((project) => ({
+                id: project.id,
+                name: project.name,
+                rootPath: project.rootPath,
+              })),
+            }
         sendJson(response, result.ok ? 200 : statusForError(result.error.code), result)
+        return
+      }
+      if (request.method === 'GET' && url.pathname === '/metadata/status') {
+        if (metadata === undefined) {
+          sendJson(response, 503, failure('UNAVAILABLE', 'Metadata repository is not configured.'))
+          return
+        }
+        sendJson(response, 200, {
+          ok: true,
+          value: {
+            schemaVersion: metadata.schemaVersion,
+            databasePath: metadata.databasePath,
+            metadataOnly: true,
+          },
+        })
+        return
+      }
+      const graphMatch = /^\/projects\/([^/]+)\/graph$/.exec(url.pathname)
+      if (request.method === 'GET' && graphMatch !== null) {
+        if (metadata === undefined) {
+          sendJson(response, 503, failure('UNAVAILABLE', 'Metadata repository is not configured.'))
+          return
+        }
+        const projectId = decodeURIComponent(graphMatch[1] ?? '')
+        const snapshot = metadata.get(projectId)
+        if (snapshot === undefined) {
+          sendJson(response, 404, failure('NOT_FOUND', 'Project metadata was not found.'))
+          return
+        }
+        sendJson(response, 200, { ok: true, value: snapshot })
+        return
+      }
+      if (request.method === 'PUT' && graphMatch !== null) {
+        if (metadata === undefined) {
+          sendJson(response, 503, failure('UNAVAILABLE', 'Metadata repository is not configured.'))
+          return
+        }
+        let input: unknown
+        try {
+          input = await readJsonBody(request, controller.signal)
+        } catch {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Request body must be valid JSON under 64 KiB.'))
+          return
+        }
+        if (
+          typeof input !== 'object'
+          || input === null
+          || !('disposable' in input)
+          || input.disposable !== true
+          || !('snapshot' in input)
+          || typeof input.snapshot !== 'object'
+          || input.snapshot === null
+        ) {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'A disposable project snapshot is required.'))
+          return
+        }
+        const saveInput = input as SaveProjectGraphInput
+        const projectId = decodeURIComponent(graphMatch[1] ?? '')
+        if (String(saveInput.snapshot.project.id) !== projectId) {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Route project id must match snapshot project id.'))
+          return
+        }
+        try {
+          metadata.save(saveInput.snapshot as ProjectGraphSnapshot)
+          sendJson(response, 200, { ok: true, value: metadata.get(projectId) })
+        } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : 'Metadata could not be saved.'
+          sendJson(response, 400, failure('VALIDATION', message))
+        }
         return
       }
       if (request.method === 'POST' && url.pathname === '/project-roots/validate') {

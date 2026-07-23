@@ -1,6 +1,9 @@
 import type { ContractError, Result } from '@local-creative-os/contracts'
 
 export type LocalCoreErrorCode =
+  | 'NOT_FOUND'
+  | 'UNAVAILABLE'
+  | 'VALIDATION'
   | 'INVALID_ARGUMENT'
   | 'PROJECT_ROOT_NOT_FOUND'
   | 'PROJECT_ROOT_NOT_DIRECTORY'

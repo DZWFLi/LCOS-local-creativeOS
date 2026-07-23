@@ -1,7 +1,9 @@
 import type {
   ContractError,
   HealthStatus,
+  MetadataStoreStatus,
   ProjectCatalogEntry,
+  ProjectGraphSnapshot,
   Result,
   ValidatedProjectRoot,
 } from '@local-creative-os/contracts'
@@ -32,6 +34,9 @@ export interface LocalCoreClient {
   health(signal?: AbortSignal): Promise<RuntimeCall<HealthStatus>>
   catalog(signal?: AbortSignal): Promise<RuntimeCall<readonly ProjectCatalogEntry[]>>
   validateProjectRoot(rootPath: string, signal?: AbortSignal): Promise<RuntimeCall<ValidatedProjectRoot>>
+  metadataStatus(signal?: AbortSignal): Promise<RuntimeCall<MetadataStoreStatus>>
+  projectGraph(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<ProjectGraphSnapshot>>
+  saveProjectGraph(snapshot: ProjectGraphSnapshot, signal?: AbortSignal): Promise<RuntimeCall<ProjectGraphSnapshot>>
 }
 
 function runtimeError(
@@ -48,7 +53,7 @@ function isHealthStatus(value: unknown): value is HealthStatus {
   return (
     candidate.status === 'ok'
     && candidate.service === 'local-core'
-    && candidate.mode === 'read_only_phase_1a'
+    && (candidate.mode === 'read_only_phase_1a' || candidate.mode === 'phase_2_lite')
     && typeof candidate.version === 'string'
   )
 }
@@ -177,6 +182,26 @@ export function createLocalCoreClient(): LocalCoreClient {
           body: JSON.stringify({ rootPath }),
         },
         decode: decodeResult<ValidatedProjectRoot>,
+      })
+    },
+    metadataStatus(signal) {
+      return request('/metadata/status', { signal, decode: decodeResult<MetadataStoreStatus> })
+    },
+    projectGraph(projectId, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/graph`, {
+        signal,
+        decode: decodeResult<ProjectGraphSnapshot>,
+      })
+    },
+    saveProjectGraph(snapshot, signal) {
+      return request(`/projects/${encodeURIComponent(snapshot.project.id)}/graph`, {
+        signal,
+        init: {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ disposable: true, snapshot }),
+        },
+        decode: decodeResult<ProjectGraphSnapshot>,
       })
     },
   }
