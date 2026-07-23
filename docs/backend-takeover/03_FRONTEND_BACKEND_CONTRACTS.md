@@ -75,4 +75,4 @@ Repository、REST/SSE、SQLite、migration、文件导入/哈希、Watcher、Pre
 5. 明确 `Artifact.localPath` 在 Source 链接与 Revision 路径之间的唯一语义；
 6. `ChangedFile` 保持 project-relative path + hash，不接受只含文件名字符串；
 7. canonical `RunId` 与 legacy Bridge `task_id` 明确分离；
-8. `ContractError` 后续补 `RECOVERY_REQUIRED`、`PROJECT_ROOT_INVALID` 等稳定错误，但不在未批准时扩写。
+8. `ContractError` 后续按获批的只读 Local Core 切片补 `PROJECT_ROOT_INVALID` 等稳定错误；`RECOVERY_REQUIRED` 留到 Runtime / 恢复合同阶段。

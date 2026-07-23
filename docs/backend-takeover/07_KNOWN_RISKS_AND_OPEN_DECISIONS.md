@@ -28,15 +28,13 @@ Git HEAD
 | Pending Return 直接 Current | 破坏人工真相 | Accept 前保持 Draft/Pending |
 | 旧性能文档与冻结值冲突 | 测试口径漂移 | 以最新最多 2 条为准 |
 
-## 3. 需用户批准项
+## 3. 已解决决定
 
-### 建议现在确认
-
-1. 先整合 v0.6.0 候选进主仓并建立新基线提交：**建议是**。
-2. 后端从新基线创建独立干净 worktree / `codex/backend-phase-0`：**建议是**。
-3. Phase 1 仅做无 SQLite 的只读 Local Core 骨架：**建议是**。
-4. canonical identity 使用新 `runId` + legacy `task_id` mapping：**建议是**。
-5. `waiting_input` 是一等 Runtime 状态，且只能由 OS/用户继续：**建议是**。
+1. v0.6.0 候选已整合并建立 Git 基线；
+2. 后端已从新基线建立独立干净 worktree；
+3. 第一条后端任务保持无 SQLite 的只读 Local Core 骨架；
+4. canonical identity 采用新 `runId` + legacy `task_id` mapping；
+5. `waiting_input` 保持一等 Runtime 状态，且只能由 OS/用户继续。
 
 ### 后续单独批准
 
@@ -47,17 +45,18 @@ Git HEAD
 10. Bridge OS mode 是否强制拒绝非 loopback；
 11. Codex-only 是否为首个 Runtime Spike。
 
-## 4. Worktree 决策
+## 4. Worktree 现状
 
-当前工作区不适合继续作为后端工作区。
+后端工作区：
 
-推荐不是“现在从旧 HEAD 建一个空 worktree”，因为旧 HEAD 不含未跟踪的 Web/Domain/Contracts；推荐是：
+```text
+path:   E:\Codex 项目\OS开发-backend-phase-0
+branch: codex/backend-phase-0
+base:   74bf4f8196bd06cbcd12ccaee21e450ac8304dbc
+```
 
-1. 在现有主仓由各 owner 整合并审查候选；
-2. 形成新 baseline commit；
-3. 从该 commit 创建独立 backend worktree；
-4. 原脏目录保留作为整合现场，不复制未知改动。
+该 worktree 已完成冷启动质量链。原脏目录保留用户改动，没有复制未知文件进入后端分支。
 
-## 5. 停止线
+## 5. 当前停止线
 
-本轮到此停止，不创建 branch/worktree/commit，也不创建 `apps/local-core`。原因：用户要求先提交 Phase 0 方案并等待批准，且当前尚无可引用的新基线提交。
+基线阻断已经解除。`apps/local-core` 尚未创建；开始首个编码切片时仍必须遵守：只读、loopback、无 SQLite、无 Watcher、无 Bridge、无真实文件写入。

@@ -82,19 +82,22 @@ ZIP 实测 SHA256 与交接一致：
 | Domain | PASS | PASS | 1 file / 3 tests |
 | Contracts | PASS | PASS | 1 file / 1 test |
 
-## 5. 推荐基线
+## 5. 已建立的集成基线
 
-推荐顺序：
+已完成：
 
-1. 前端 owner 以候选 ZIP 哈希为输入，执行可审查整合；
-2. 从仓库测试发现范围中排除 `前端测试/`、证据包与临时展开目录；
+1. 以候选 ZIP 固定 SHA256 为输入执行隔离整合；
+2. Web 测试显式限定为 `apps/web/tests`，不再收集 `前端测试/`、证据包与临时展开目录；
 3. 根质量门显式覆盖 Web、Domain、Contracts；
-4. 完整质量链通过后创建一个新的前端集成基线提交；
-5. 从该提交创建 `codex/backend-phase-0` 独立 worktree。
+4. 创建集成基线 `74bf4f8196bd06cbcd12ccaee21e450ac8304dbc`；
+5. 创建 `codex/backend-phase-0` 独立 worktree；
+6. 在新 worktree 冷启动运行 `npm ci && npm run check`，结果通过。
 
-不推荐：
+仍然禁止：
 
 - 继续在当前脏目录多人并行；
 - 从当前 HEAD 创建干净 worktree 后手工复制未跟踪的候选文件；
 - 把 ZIP 回归结果当成主仓质量结果；
-- 后端自行解决前端独有/删除文件选择。
+- 在原脏工作区继续后端编码；
+- 将 Candidate 的 `localStorage v9` 当作正式持久化；
+- 将 v0.6.0 的 `PARTIAL PASS` 写成完整 PASS。
