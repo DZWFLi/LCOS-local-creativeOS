@@ -39,6 +39,13 @@ export interface ContractError {
     | 'CANCELLED'
     | 'FIXTURE_ONLY'
     | 'VALIDATION'
+    | 'INVALID_ARGUMENT'
+    | 'PROJECT_ROOT_NOT_FOUND'
+    | 'PROJECT_ROOT_NOT_DIRECTORY'
+    | 'PROJECT_ROOT_NOT_READABLE'
+    | 'PATH_OUTSIDE_ALLOWED_ROOT'
+    | 'ABORTED'
+    | 'INTERNAL'
   readonly message: string
   readonly retryable: boolean
   readonly origin: ContractOrigin
@@ -50,6 +57,39 @@ export type Result<Value> =
 
 /** Backwards-compatible name for existing adapter drafts. */
 export type ContractResult<Value> = Result<Value>
+
+export interface HealthStatus {
+  readonly status: 'ok'
+  readonly service: 'local-core'
+  readonly mode: 'read_only_phase_1a'
+  readonly version: string
+}
+
+export interface ValidateProjectRootInput {
+  readonly rootPath: string
+}
+
+export interface ValidatedProjectRoot {
+  readonly normalizedPath: string
+  readonly exists: true
+  readonly isDirectory: true
+  readonly readable: true
+}
+
+export interface ProjectCatalogEntry {
+  readonly id: string
+  readonly name: string
+  readonly rootPath: string
+}
+
+/** Structural subset accepted from the platform AbortSignal without a DOM dependency. */
+export interface AbortSignal {
+  readonly aborted: boolean
+}
+
+export interface ProjectCatalog {
+  list(signal?: AbortSignal): Promise<Result<readonly ProjectCatalogEntry[]>>
+}
 
 export interface WorkspaceQueryContract {
   getWorkspaces(query: WorkspaceQuery): Promise<Result<readonly Workspace[]>>

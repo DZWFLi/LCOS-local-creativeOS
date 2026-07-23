@@ -1,0 +1,16 @@
+{
+  "name": "@local-creative-os/local-core",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json --pretty false",
+    "start": "node dist/index.js",
+    "lint": "oxlint src tests",
+    "typecheck": "tsc -p tsconfig.json --noEmit --pretty false",
+    "test": "vitest run tests"
+  },
+  "dependencies": {
+    "@local-creative-os/contracts": "0.1.0"
+  }
+}
