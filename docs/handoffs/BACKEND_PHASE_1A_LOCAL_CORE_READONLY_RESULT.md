@@ -1,9 +1,9 @@
 # Backend Phase 1A — Local Core Read-only Result
 
-> 日期：2026-07-23  
-> 分支：`codex/backend-phase-0`  
-> 基线：`c1d60853aac4fbbe6753fc5b3c2b2ce04dcff8fa`  
-> 状态：实现与验证完成，未提交、未 Push
+> 日期：2026-07-23
+> 分支：`codex/backend-phase-0`
+> 基线：`c1d60853aac4fbbe6753fc5b3c2b2ce04dcff8fa`
+> 状态：实现与验证完成，已提交 `ef8f470`、未 Push
 
 ## 1. 任务摘要
 

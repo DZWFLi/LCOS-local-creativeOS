@@ -3,7 +3,11 @@ import { createServer } from 'node:net'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { ExplicitProjectCatalog } from '../src/project-catalog.js'
-import { createLocalCoreServer, type LocalCoreServer } from '../src/server.js'
+import {
+  createLocalCoreServer,
+  LOCAL_CORE_DEV_PORT,
+  type LocalCoreServer,
+} from '../src/server.js'
 
 const activeServers: LocalCoreServer[] = []
 
@@ -26,6 +30,10 @@ async function startServer(server = createLocalCoreServer()): Promise<{
 }
 
 describe('Local Core HTTP server', () => {
+  it('publishes one stable loopback development port', () => {
+    expect(LOCAL_CORE_DEV_PORT).toBe(43121)
+  })
+
   it('serves health on loopback with no CORS grant', async () => {
     const { baseUrl } = await startServer()
     const response = await fetch(`${baseUrl}/health`)

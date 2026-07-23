@@ -1,14 +1,14 @@
 import { pathToFileURL } from 'node:url'
 
-import { createLocalCoreServer } from './server.js'
+import { createLocalCoreServer, LOCAL_CORE_DEV_PORT } from './server.js'
 
 export { getHealthStatus } from './health.js'
 export { ExplicitProjectCatalog } from './project-catalog.js'
 export { validateProjectRoot } from './project-root.js'
-export { createLocalCoreServer } from './server.js'
+export { createLocalCoreServer, LOCAL_CORE_DEV_PORT } from './server.js'
 
 async function main(): Promise<void> {
-  const server = createLocalCoreServer()
+  const server = createLocalCoreServer({ port: LOCAL_CORE_DEV_PORT })
   const address = await server.start()
   process.stdout.write(`Local Core read-only Phase 1A listening on http://${address.host}:${address.port}\n`)
 
