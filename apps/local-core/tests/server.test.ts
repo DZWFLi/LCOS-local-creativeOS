@@ -2,6 +2,8 @@ import { createServer } from 'node:net'
 
 import { afterEach, describe, expect, it } from 'vitest'
 
+import type { ProjectCatalog } from '@local-creative-os/contracts'
+
 import { ExplicitProjectCatalog } from '../src/project-catalog.js'
 import {
   createLocalCoreServer,
@@ -52,6 +54,10 @@ describe('Local Core HTTP server', () => {
     expect(() => createLocalCoreServer({ host })).toThrow('only bind to 127.0.0.1')
   })
 
+  it.each([0, -1, Number.POSITIVE_INFINITY])('rejects invalid request timeout %s', (requestTimeoutMs) => {
+    expect(() => createLocalCoreServer({ requestTimeoutMs })).toThrow('positive finite number')
+  })
+
   it('serves only the explicitly injected project catalog', async () => {
     const entry = { id: 'p1', name: 'PortaSplit', rootPath: 'E:\\PortaSplit' }
     const catalog = new ExplicitProjectCatalog([entry])
@@ -60,6 +66,21 @@ describe('Local Core HTTP server', () => {
 
     expect(response.status).toBe(200)
     await expect(response.json()).resolves.toEqual({ ok: true, value: [entry] })
+  })
+
+  it('rejects duplicate ids from the explicit catalog at the HTTP boundary', async () => {
+    const catalog = new ExplicitProjectCatalog([
+      { id: 'duplicate', name: 'One', rootPath: 'E:\\One' },
+      { id: 'duplicate', name: 'Two', rootPath: 'E:\\Two' },
+    ])
+    const { baseUrl } = await startServer(createLocalCoreServer({ catalog }))
+    const response = await fetch(`${baseUrl}/projects`)
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'INVALID_ARGUMENT' },
+    })
   })
 
   it('validates a project root through the HTTP boundary', async () => {
@@ -91,6 +112,81 @@ describe('Local Core HTTP server', () => {
     expect(JSON.stringify(body)).not.toContain('stack')
   })
 
+  it('enforces the configured allowed root at the HTTP boundary', async () => {
+    const { baseUrl } = await startServer(createLocalCoreServer({ allowedRoot: process.cwd() }))
+    const response = await fetch(`${baseUrl}/project-roots/validate`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ rootPath: process.env.SystemRoot ?? 'C:\\Windows' }),
+    })
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'PATH_OUTSIDE_ALLOWED_ROOT' },
+    })
+  })
+
+  it('rejects malformed JSON with a stable error', async () => {
+    const { baseUrl } = await startServer()
+    const response = await fetch(`${baseUrl}/project-roots/validate`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{',
+    })
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'INVALID_ARGUMENT', origin: 'runtime' },
+    })
+  })
+
+  it('rejects request bodies larger than the read-only limit', async () => {
+    const { baseUrl } = await startServer()
+    const response = await fetch(`${baseUrl}/project-roots/validate`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ rootPath: 'x'.repeat(65 * 1024) }),
+    })
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'INVALID_ARGUMENT' },
+    })
+  })
+
+  it('returns a stable error for an unknown route', async () => {
+    const { baseUrl } = await startServer()
+    const response = await fetch(`${baseUrl}/not-a-route`)
+
+    expect(response.status).toBe(404)
+    await expect(response.json()).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'INVALID_ARGUMENT' },
+    })
+  })
+
+  it('aborts a slow boundary operation when the request timeout expires', async () => {
+    const neverCompletes: ProjectCatalog = {
+      async list() {
+        return await new Promise(() => undefined)
+      },
+    }
+    const { baseUrl } = await startServer(createLocalCoreServer({
+      catalog: neverCompletes,
+      requestTimeoutMs: 20,
+    }))
+    const response = await fetch(`${baseUrl}/projects`)
+
+    expect(response.status).toBe(408)
+    await expect(response.json()).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'ABORTED', message: 'Request timed out.' },
+    })
+  })
+
   it('supports an aborted start signal', async () => {
     const controller = new AbortController()
     controller.abort()
@@ -98,6 +194,37 @@ describe('Local Core HTTP server', () => {
 
     await expect(server.start(controller.signal)).rejects.toMatchObject({ name: 'AbortError' })
     expect(server.address()).toBeUndefined()
+  })
+
+  it('does not lose an abort raised while the server is starting', async () => {
+    const controller = new AbortController()
+    const server = createLocalCoreServer()
+    const started = server.start(controller.signal)
+    controller.abort()
+
+    await expect(started).rejects.toMatchObject({ name: 'AbortError' })
+    expect(server.address()).toBeUndefined()
+  })
+
+  it('uses the lifecycle signal to close an already started server', async () => {
+    const controller = new AbortController()
+    const { server, port } = await startServer(createLocalCoreServer())
+    await server.close()
+
+    const lifecycleServer = createLocalCoreServer({ port })
+    activeServers.push(lifecycleServer)
+    await lifecycleServer.start(controller.signal)
+    controller.abort()
+
+    await new Promise<void>((resolvePromise) => setTimeout(resolvePromise, 20))
+    expect(lifecycleServer.address()).toBeUndefined()
+
+    const rebound = createServer()
+    await new Promise<void>((resolvePromise, reject) => {
+      rebound.once('error', reject)
+      rebound.listen(port, '127.0.0.1', () => resolvePromise())
+    })
+    await new Promise<void>((resolvePromise) => rebound.close(() => resolvePromise()))
   })
 
   it('gracefully closes and releases its port for immediate rebinding', async () => {

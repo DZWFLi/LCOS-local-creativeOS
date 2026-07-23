@@ -18,6 +18,8 @@ http://127.0.0.1:43121
 
 当前没有自动重载、后台守护进程或子进程编排。停止服务使用当前终端的 `Ctrl+C`，Local Core 会关闭 HTTP server 并释放端口。
 
+每个 HTTP 请求默认有 10 秒只读处理时限。超时返回 HTTP `408` 与稳定的 `ABORTED` 错误；不会因为等待 Catalog 或文件系统响应而无限占用请求。
+
 ## 健康检查
 
 ```powershell
@@ -82,10 +84,10 @@ Get-NetTCPConnection -LocalAddress 127.0.0.1 -LocalPort 43121 -ErrorAction Silen
 局部：
 
 ```powershell
-npm run lint --workspace @local-creative-os/local-core
-npm run typecheck --workspace @local-creative-os/local-core
-npm run test --workspace @local-creative-os/local-core
+npm run check:local-core
 ```
+
+该命令依次执行 Local Core 的 lint、typecheck、unit test 与 build。
 
 阶段收口：
 
@@ -106,3 +108,19 @@ npm run check
 - 真实用户文件写入。
 
 上述能力不得从 Health 或 UI 中冒充为已实现。
+
+## 已覆盖的绿色边界
+
+- 非 loopback host 拒绝；
+- 固定开发端口；
+- 无效 timeout 配置拒绝；
+- 请求超时映射为稳定 `ABORTED`；
+- malformed JSON；
+- 64 KiB request body 上限；
+- unknown route；
+- duplicate Project ID；
+- allowed root containment；
+- 启动前 Abort；
+- 运行期 Abort 触发关闭；
+- graceful shutdown；
+- 端口释放后重新绑定。

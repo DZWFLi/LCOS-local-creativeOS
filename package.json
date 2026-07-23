@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "npm run dev --workspace @local-creative-os/web",
     "dev:local-core": "npm run dev --workspace @local-creative-os/local-core",
+    "check:local-core": "npm run check --workspace @local-creative-os/local-core",
     "build": "npm run build --workspace @local-creative-os/web",
     "lint": "npm run lint --workspace @local-creative-os/web && npm run lint --workspace @local-creative-os/local-core && npm run lint --workspace @local-creative-os/domain && npm run lint --workspace @local-creative-os/contracts",
     "preview": "npm run preview --workspace @local-creative-os/web",

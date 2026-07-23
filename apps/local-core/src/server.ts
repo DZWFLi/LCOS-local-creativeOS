@@ -19,6 +19,7 @@ export interface LocalCoreServerOptions {
   readonly port?: number
   readonly catalog?: ProjectCatalog
   readonly allowedRoot?: string
+  readonly requestTimeoutMs?: number
 }
 
 export interface LocalCoreAddress {
@@ -53,6 +54,22 @@ async function readJsonBody(request: IncomingMessage, signal: AbortSignal): Prom
   return JSON.parse(Buffer.concat(chunks).toString('utf8'))
 }
 
+async function withAbort<Value>(operation: Promise<Value>, signal: AbortSignal): Promise<Value> {
+  if (signal.aborted) throw new DOMException('Operation aborted', 'AbortError')
+
+  let abort: (() => void) | undefined
+  const aborted = new Promise<never>((_resolve, reject) => {
+    abort = () => reject(new DOMException('Operation aborted', 'AbortError'))
+    signal.addEventListener('abort', abort, { once: true })
+  })
+
+  try {
+    return await Promise.race([operation, aborted])
+  } finally {
+    if (abort !== undefined) signal.removeEventListener('abort', abort)
+  }
+}
+
 function statusForError(code: string): number {
   if (code === 'PROJECT_ROOT_NOT_FOUND') return 404
   if (code === 'ABORTED') return 499
@@ -65,13 +82,24 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
   if (host !== LOOPBACK_HOST) {
     throw new Error('Local Core may only bind to 127.0.0.1.')
   }
+  const requestTimeoutMs = options.requestTimeoutMs ?? 10_000
+  if (!Number.isFinite(requestTimeoutMs) || requestTimeoutMs <= 0) {
+    throw new Error('Local Core requestTimeoutMs must be a positive finite number.')
+  }
 
   const catalog = options.catalog ?? new ExplicitProjectCatalog([])
   let server: Server | undefined
   let currentAddress: LocalCoreAddress | undefined
+  let lifecycleSignal: AbortSignal | undefined
+  let lifecycleAbort: (() => void) | undefined
 
   const handleRequest = async (request: IncomingMessage, response: ServerResponse): Promise<void> => {
     const controller = new AbortController()
+    let timedOut = false
+    const timeout = setTimeout(() => {
+      timedOut = true
+      controller.abort()
+    }, requestTimeoutMs)
     const abort = () => controller.abort()
     request.once('aborted', abort)
     response.once('close', () => {
@@ -85,7 +113,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
         return
       }
       if (request.method === 'GET' && url.pathname === '/projects') {
-        const result = await catalog.list(controller.signal)
+        const result = await withAbort(catalog.list(controller.signal), controller.signal)
         sendJson(response, result.ok ? 200 : statusForError(result.error.code), result)
         return
       }
@@ -110,21 +138,40 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
           sendJson(response, 400, result)
           return
         }
-        const result = await validateProjectRoot((input as ValidateProjectRootInput).rootPath, {
-          signal: controller.signal,
-          ...(options.allowedRoot === undefined ? {} : { allowedRoot: options.allowedRoot }),
-        })
+        const result = await withAbort(
+          validateProjectRoot((input as ValidateProjectRootInput).rootPath, {
+            signal: controller.signal,
+            ...(options.allowedRoot === undefined ? {} : { allowedRoot: options.allowedRoot }),
+          }),
+          controller.signal,
+        )
         sendJson(response, result.ok ? 200 : statusForError(result.error.code), result)
         return
       }
       sendJson(response, 404, failure('INVALID_ARGUMENT', 'Route not found.'))
-    } catch {
-      if (!response.headersSent) sendJson(response, 500, failure('INTERNAL', 'Unexpected Local Core error.'))
+    } catch (error: unknown) {
+      if (
+        error instanceof DOMException
+        && error.name === 'AbortError'
+        && !response.headersSent
+        && !response.destroyed
+      ) {
+        sendJson(
+          response,
+          timedOut ? 408 : 499,
+          failure('ABORTED', timedOut ? 'Request timed out.' : 'Request was aborted.'),
+        )
+      } else if (!response.headersSent && !response.destroyed) {
+        sendJson(response, 500, failure('INTERNAL', 'Unexpected Local Core error.'))
+      }
       else response.destroy()
+    } finally {
+      clearTimeout(timeout)
+      request.removeListener('aborted', abort)
     }
   }
 
-  return {
+  const api: LocalCoreServer = {
     async start(signal?: AbortSignal): Promise<LocalCoreAddress> {
       if (signal?.aborted) throw new DOMException('Start aborted', 'AbortError')
       if (server !== undefined) throw new Error('Local Core server is already started.')
@@ -134,10 +181,15 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
       })
       server = nextServer
 
-      const onAbort = () => nextServer.close()
+      let rejectStart: ((reason?: unknown) => void) | undefined
+      const onAbort = () => {
+        nextServer.close()
+        rejectStart?.(new DOMException('Start aborted', 'AbortError'))
+      }
       signal?.addEventListener('abort', onAbort, { once: true })
       try {
         await new Promise<void>((resolvePromise, reject) => {
+          rejectStart = reject
           nextServer.once('error', reject)
           nextServer.listen(options.port ?? 0, host, () => {
             nextServer.off('error', reject)
@@ -148,6 +200,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
         server = undefined
         throw error
       } finally {
+        rejectStart = undefined
         signal?.removeEventListener('abort', onAbort)
       }
 
@@ -158,12 +211,32 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
         throw new Error('Local Core did not receive a TCP address.')
       }
       currentAddress = { host: LOOPBACK_HOST, port: bound.port }
+      if (signal !== undefined) {
+        if (signal.aborted) {
+          await api.close()
+          throw new DOMException('Start aborted', 'AbortError')
+        }
+        lifecycleSignal = signal
+        lifecycleAbort = () => {
+          void api.close()
+        }
+        signal.addEventListener('abort', lifecycleAbort, { once: true })
+        if (signal.aborted) {
+          await api.close()
+          throw new DOMException('Start aborted', 'AbortError')
+        }
+      }
       return currentAddress
     },
 
     async close(): Promise<void> {
       const activeServer = server
       if (activeServer === undefined) return
+      if (lifecycleSignal !== undefined && lifecycleAbort !== undefined) {
+        lifecycleSignal.removeEventListener('abort', lifecycleAbort)
+      }
+      lifecycleSignal = undefined
+      lifecycleAbort = undefined
       await new Promise<void>((resolvePromise, reject) => {
         activeServer.close((error) => {
           if (error) reject(error)
@@ -179,4 +252,6 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
       return currentAddress
     },
   }
+
+  return api
 }
