@@ -1,10 +1,10 @@
 # Recommended Backend Phase 0
 
-> 状态：提案，未批准，未编码
+> 状态：集成基线与后端 worktree 已完成；首个 Local Core 编码切片待执行
 
 ## 1. 推荐集成基线
 
-采用 v0.6.0 候选包作为“前端整合输入”，不是直接覆盖源：
+已采用 v0.6.0 候选包作为“前端整合输入”，没有直接覆盖原脏工作区：
 
 1. 校验固定 ZIP SHA256；
 2. 由前端 owner 审查 37 candidate-only、20 different、8 repo-only；
@@ -12,7 +12,7 @@
 4. 修复测试发现范围，防止 `前端测试/` 被 Vitest 收集；
 5. 根质量门显式覆盖 Web、Domain、Contracts；
 6. 完整链通过；
-7. 创建新的可追溯 frontend integration baseline commit；
+7. 创建可追溯 frontend integration baseline `74bf4f8196bd06cbcd12ccaee21e450ac8304dbc`；
 8. 从该提交创建 `codex/backend-phase-0` 独立 worktree。
 
 ## 2. 目录结构
@@ -187,16 +187,16 @@ Phase 1：
 - Phase 1 服务可删除，不创建用户数据；
 - 不使用 `reset --hard`，不覆盖未提交文件。
 
-## 15. 需用户决定项
+## 15. 决定状态
 
-1. 批准先整合 v0.6.0 并建立新基线；
-2. 批准从新基线创建独立干净 worktree / `codex/backend-phase-0`；
-3. 批准 Phase 1 仅做无 SQLite 的只读骨架；
-4. 暂缓 Scope persistence，直到前端 Child Scope 闭环和产品范围确认；
-5. 冻结新 `runId` + legacy `task_id` mapping。
+1. v0.6.0 新基线：已完成；
+2. 独立干净 backend worktree：已完成；
+3. Phase 1 无 SQLite 只读骨架：已确定为下一条任务；
+4. Scope persistence：继续暂缓，等待 Child Scope 闭环和产品范围确认；
+5. 新 `runId` + legacy `task_id` mapping：已冻结为后续 Runtime 方向。
 
 ## 16. 下一条最小安全编码任务
 
-在上述 1–3 获批且新基线提交存在后：
+当前已经满足基线、worktree 与质量门条件：
 
 > 建立仅绑定 `127.0.0.1` 的 Local Core 只读骨架，实现 health、显式 Project root 校验与只读 Project Catalog；使用结构化 Result/Error、AbortSignal 和 graceful shutdown；不引入 SQLite，不扫描/写入真实用户文件，不创建 `.creative-os`，不接 Bridge。

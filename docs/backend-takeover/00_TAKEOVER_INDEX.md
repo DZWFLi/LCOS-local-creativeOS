@@ -1,12 +1,18 @@
 # Backend Takeover Index
 
 > 日期：2026-07-23
-> 状态：Phase 0 只读接管完成，等待批准
+> 状态：Phase 0 接管与基线整合完成；后端干净 worktree 已就绪
 > 写入范围：仅本目录九份 Markdown；未修改业务代码、依赖、lockfile、Bridge 或用户文件
 
 ## 结论
 
-当前不具备直接编码条件。推荐先由前端 owner 将已验收的 `v0.6.0` 候选包整合进主仓、修复根质量门污染并建立可追溯基线提交；随后从该提交建立独立干净 worktree / `codex/backend-phase-0` 分支。后端不能继续使用当前脏工作区作为多人协作基线。
+原审计识别的三项基线阻断已经解决：
+
+- v0.6.0 候选已整合为 Git 基线 `74bf4f8196bd06cbcd12ccaee21e450ac8304dbc`；
+- Web、Domain、Contracts 测试已经隔离，合计 22 files / 73 tests；
+- 后端干净 worktree 已建立在 `E:\Codex 项目\OS开发-backend-phase-0`，分支为 `codex/backend-phase-0`。
+
+原工作区仍保留用户未提交内容，不再作为后端编码现场。v0.6.0 的 Child Scope 与同链 Accept / Checkpoint 仍是产品验证缺口，不因基线完成而自动升级为 PASS。
 
 ## 证据源
 
@@ -41,4 +47,4 @@ flowchart LR
     --> G["只读 Local Core 骨架"]
 ```
 
-未通过 D、E、F 前，不创建 `apps/local-core`，不引入 SQLite、Watcher、Bridge Adapter 或真实文件写入。
+基线门 D、E 已通过。最小合同审计已完成，下一步可以在后端 worktree 创建获批的只读 Local Core 骨架；SQLite、Watcher、Bridge Adapter 与真实文件写入仍然不在首个编码切片内。
