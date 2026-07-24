@@ -85,6 +85,15 @@ export class SqliteMetadataRepository {
       this.#database.exec('COMMIT;')
     } catch (error: unknown) {
       this.#database.exec('ROLLBACK;')
+      const msg = error instanceof Error ? error.message : String(error)
+      if (msg.includes('FOREIGN KEY')) {
+        // Log FK detail to help diagnose which constraint failed
+        process.stderr.write(`[FK] save() failed for project=${String(snapshot.project.id)}. ` +
+          `workspaces=${snapshot.workspaces.length} artifacts=${snapshot.artifacts.length} ` +
+          `views=${snapshot.artifactViews.length} relatives=${snapshot.relations.length} ` +
+          `checkpoints=${(snapshot.checkpoints ?? []).length}. ` +
+          `activeWorkspaceId from checkpoint context not available in inner scope.n`)
+      }
       throw error
     }
   }

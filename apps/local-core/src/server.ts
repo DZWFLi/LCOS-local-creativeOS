@@ -219,7 +219,9 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
           metadata.save(saveInput.snapshot as ProjectGraphSnapshot)
           sendJson(response, 200, { ok: true, value: metadata.get(projectId) })
         } catch (error: unknown) {
-          sendJson(response, 400, failure('VALIDATION', error instanceof Error ? error.message : 'Metadata could not be saved.'))
+          const detail = error instanceof Error ? error.message : String(error)
+          process.stderr.write(`[API] PUT /graph save failed: ${detail}\n`)
+          sendJson(response, 400, failure('VALIDATION', detail))
         }
         return
       }
