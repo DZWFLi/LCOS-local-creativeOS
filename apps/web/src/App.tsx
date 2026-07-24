@@ -237,6 +237,7 @@ export function App() {
         } else {
           setSaveStatus('unsaved')
           setNotice(`保存失败: ${result.error ?? 'Local Core 不可用'}`)
+          console.warn('[RuntimeBridge] Save failed:', result.error)
         }
         saveProjectCatalog(projects)
       }).catch(() => {
@@ -245,7 +246,7 @@ export function App() {
       })
     }, 280)
     return () => window.clearTimeout(timer)
-  }, [activeProjectId, camera, edges, nodes, performanceFixture, projects, scopeId, scopes, workRail, workspaceId, workspaces])
+  }, [activeProjectId, edges, nodes, performanceFixture, projects, workRail, workspaceId, workspaces])
 
   useEffect(() => {
     if (!activeRun) return
