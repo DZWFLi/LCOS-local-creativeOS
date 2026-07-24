@@ -28,7 +28,7 @@ describe('Local Core Phase 1A contracts', () => {
     expectTypeOf<HealthStatus>().toMatchTypeOf<{
       status: 'ok'
       service: 'local-core'
-      mode: 'read_only_phase_1a' | 'phase_2_lite'
+      mode: 'read_only_phase_1a' | 'phase_2_lite' | 'phase_2_5'
       version: string
     }>()
     expectTypeOf<ValidateProjectRootInput>().toHaveProperty('rootPath')

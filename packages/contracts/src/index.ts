@@ -13,28 +13,43 @@ import type {
   CommandId,
   ContextSnapshot,
   ContextSnapshotId,
+  GraphVersion,
   Note,
   Project,
   ProjectId,
   PreviewResult,
   PreviewKind,
-  WorkspaceQuery,
-  WorkspaceViewportCommand,
   Run,
   RunEvent,
   RunId,
   Relation,
+  RelationId,
+  Scope,
   Workspace,
   WorkspaceId,
+  WorkspaceContextPolicy,
+  WorkspaceViewport,
 } from '../../domain/src/index.js'
 
-/** Pure application boundaries for Frontend Interaction Foundation. */
+// Re-add types that were removed from domain (keep contracts boundary stable)
+export interface WorkspaceQuery {
+  readonly projectId: ProjectId
+  readonly workspaceId?: WorkspaceId
+}
+export interface WorkspaceViewportCommand {
+  readonly workspaceId: WorkspaceId
+  readonly viewport: WorkspaceViewport
+}
+
+// ==================== Core types ====================
+
 export type ContractOrigin = 'fixture' | 'runtime'
 
 export interface ContractError {
   readonly code:
     | 'NOT_FOUND'
     | 'CONFLICT'
+    | 'STALE_GRAPH_VERSION'
     | 'INPUT_REQUIRED'
     | 'UNAVAILABLE'
     | 'STALE'
@@ -57,19 +72,24 @@ export type Result<Value> =
   | { readonly ok: true; readonly value: Value }
   | { readonly ok: false; readonly error: ContractError }
 
-/** Backwards-compatible name for existing adapter drafts. */
 export type ContractResult<Value> = Result<Value>
+
+// ==================== Health & Metadata ====================
 
 export interface HealthStatus {
   readonly status: 'ok'
   readonly service: 'local-core'
-  readonly mode: 'read_only_phase_1a' | 'phase_2_lite'
+  readonly mode: 'read_only_phase_1a' | 'phase_2_lite' | 'phase_2_5'
   readonly version: string
 }
 
+// ==================== Project Graph Snapshot ====================
+
 export interface ProjectGraphSnapshot {
   readonly schemaVersion: number
+  readonly graphVersion: GraphVersion
   readonly project: Project
+  readonly scopes: readonly Scope[]
   readonly workspaces: readonly Workspace[]
   readonly artifacts: readonly Artifact[]
   readonly artifactViews: readonly ArtifactView[]
@@ -79,10 +99,42 @@ export interface ProjectGraphSnapshot {
   readonly checkpoints: readonly Checkpoint[]
 }
 
+// ==================== Mutation ====================
+
+export type MutationOperation =
+  | { readonly type: 'bootstrap'; readonly snapshot: ProjectGraphSnapshot }
+  | { readonly type: 'move_artifact_view'; readonly viewId: ArtifactViewId; readonly x: number; readonly y: number }
+  | { readonly type: 'resize_artifact_view'; readonly viewId: ArtifactViewId; readonly width: number; readonly height: number }
+  | { readonly type: 'update_workspace_viewport'; readonly workspaceId: WorkspaceId; readonly viewport: WorkspaceViewport }
+  | { readonly type: 'upsert_workspace'; readonly workspace: Workspace }
+  | { readonly type: 'delete_workspace'; readonly workspaceId: WorkspaceId }
+  | { readonly type: 'upsert_scope'; readonly scope: Scope }
+  | { readonly type: 'upsert_artifact'; readonly artifact: Artifact }
+  | { readonly type: 'upsert_artifact_view'; readonly view: ArtifactView }
+  | { readonly type: 'delete_artifact_view'; readonly viewId: ArtifactViewId }
+  | { readonly type: 'upsert_relation'; readonly relation: Relation }
+  | { readonly type: 'delete_relation'; readonly relationId: RelationId }
+  | { readonly type: 'upsert_note'; readonly note: Note }
+  | { readonly type: 'create_checkpoint'; readonly checkpoint: Checkpoint }
+  | { readonly type: 'upsert_artifact_revision'; readonly revision: ArtifactRevision }
+
+export interface MutationBatch {
+  readonly baseVersion: GraphVersion
+  readonly ops: readonly MutationOperation[]
+}
+
+export interface MutationResult {
+  readonly graphVersion: GraphVersion
+  readonly appliedOps: number
+}
+
+// ==================== Legacy Save (deprecated, kept for bootstrap/import) ====================
+
 export interface SaveProjectGraphInput {
-  readonly disposable: true
   readonly snapshot: ProjectGraphSnapshot
 }
+
+// ==================== Metadata ====================
 
 export interface MetadataStoreStatus {
   readonly schemaVersion: number
@@ -101,16 +153,20 @@ export interface ValidatedProjectRoot {
   readonly readable: true
 }
 
+// ==================== Catalog ====================
+
 export interface ProjectCatalogEntry {
   readonly id: string
   readonly name: string
   readonly rootPath: string
+  readonly graphVersion: GraphVersion
 }
 
-/** Structural subset accepted from the platform AbortSignal without a DOM dependency. */
 export interface AbortSignal {
   readonly aborted: boolean
 }
+
+// ==================== Contracts ====================
 
 export interface ProjectCatalog {
   list(signal?: AbortSignal): Promise<Result<readonly ProjectCatalogEntry[]>>
@@ -157,13 +213,17 @@ export interface ExecutionRuntimeContract {
   getReturns(runId: RunId): Promise<ContractResult<readonly ArtifactReturn[]>>
 }
 
+// Re-exports
 export type {
   Artifact,
   ArtifactRevision,
   ArtifactView,
   Checkpoint,
+  GraphVersion,
   Note,
   Project,
   Relation,
+  Scope,
   Workspace,
+  WorkspaceContextPolicy,
 }

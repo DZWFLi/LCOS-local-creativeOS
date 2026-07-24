@@ -1,14 +1,20 @@
 /**
- * Frontend Alpha domain vocabulary.
+ * Phase 2.5 Data Spine Cleanup — Domain Rewrite
  *
- * These are pure, transport- and persistence-agnostic types. They deliberately
- * do not describe REST, SQLite, filesystem access, or Bridge implementation.
+ * Key changes:
+ * - Scope is now a formal domain entity (was implicit/absent)
+ * - Relation references entities, not ArtifactViews
+ * - Workspace has scopeId + contextPolicy (formalized)
+ * - ArtifactView belongs to Scope, not Workspace
+ * - Project has graphVersion for optimistic concurrency
+ * - Checkpoint is immutable snapshot only (no junction tables)
  */
 
 export type Brand<Value, Name extends string> = Value & { readonly __brand: Name }
 
 export type ProjectId = Brand<string, 'ProjectId'>
 export type WorkspaceId = Brand<string, 'WorkspaceId'>
+export type ScopeId = Brand<string, 'ScopeId'>
 export type ArtifactId = Brand<string, 'ArtifactId'>
 export type ArtifactViewId = Brand<string, 'ArtifactViewId'>
 export type RelationId = Brand<string, 'RelationId'>
@@ -24,17 +30,38 @@ export type CheckpointId = Brand<string, 'CheckpointId'>
 export type ContentHash = Brand<string, 'ContentHash'>
 
 export type IsoDateTime = string
+export type GraphVersion = Brand<number, 'GraphVersion'>
 
 export type JsonPrimitive = boolean | number | string | null
 export type JsonValue = JsonPrimitive | JsonValue[] | { readonly [key: string]: JsonValue }
+
+// ==================== Project ====================
 
 export interface Project {
   readonly id: ProjectId
   readonly name: string
   readonly rootPath: string
+  readonly graphVersion: GraphVersion
   readonly createdAt: IsoDateTime
   readonly updatedAt: IsoDateTime
 }
+
+// ==================== Scope ====================
+
+export type ScopeKind = 'root' | 'collection' | 'context' | 'delivery'
+
+export interface Scope {
+  readonly id: ScopeId
+  readonly projectId: ProjectId
+  readonly parentScopeId: ScopeId | null
+  readonly containerViewId: ArtifactViewId | null
+  readonly kind: ScopeKind
+  readonly name: string
+  readonly createdAt: IsoDateTime
+  readonly updatedAt: IsoDateTime
+}
+
+// ==================== Workspace ====================
 
 export type WorkspaceIntent = 'understand' | 'explore' | 'build' | 'decide' | null
 
@@ -44,30 +71,22 @@ export interface WorkspaceViewport {
   readonly zoom: number
 }
 
+export type WorkspaceContextPolicy = 'workspace-related' | 'selection-only'
+
 export interface Workspace {
   readonly id: WorkspaceId
   readonly projectId: ProjectId
+  readonly scopeId: ScopeId
   readonly name: string
   readonly intent: WorkspaceIntent
   readonly viewport: WorkspaceViewport
-  readonly focusedNodeIds: readonly string[]
+  readonly focusedNodeIds: readonly string[] // artifact_view IDs currently focused
   readonly visibleLayers: readonly string[]
-  readonly layoutPreset?: string
-  readonly contextPolicy?: JsonValue
-  readonly selectionState?: JsonValue
+  readonly contextPolicy: WorkspaceContextPolicy
   readonly updatedAt: IsoDateTime
 }
 
-export interface WorkspaceQuery {
-  readonly projectId: ProjectId
-  readonly workspaceId?: WorkspaceId
-  readonly includeViewport?: boolean
-}
-
-export interface WorkspaceViewportCommand {
-  readonly workspaceId: WorkspaceId
-  readonly viewport: WorkspaceViewport
-}
+// ==================== Artifact ====================
 
 export type ArtifactKind = 'markdown' | 'image' | 'presentation' | 'pdf' | 'other'
 export type ArtifactAvailability = 'available' | 'missing' | 'stale'
@@ -84,12 +103,17 @@ export interface Artifact {
   readonly updatedAt: IsoDateTime
 }
 
+// ==================== ArtifactView ====================
+
+// ArtifactView belongs to Scope, not Workspace.
+// A single Artifact can have multiple Views across different Scopes.
+
 export type ArtifactViewReferenceKind = 'primary' | 'explicit_additional'
 
 export interface ArtifactView {
   readonly id: ArtifactViewId
   readonly artifactId: ArtifactId
-  readonly workspaceId: WorkspaceId
+  readonly scopeId: ScopeId
   readonly revisionId?: ArtifactRevisionId
   readonly referenceKind: ArtifactViewReferenceKind
   readonly position: { readonly x: number; readonly y: number }
@@ -98,16 +122,26 @@ export interface ArtifactView {
   readonly collapsed: boolean
 }
 
+// ==================== Relation ====================
+
+// Relation connects Domain Entities, not Views.
+// Deleting a view does NOT delete the business relationship.
+
+export type RelationEntityType = 'artifact' | 'note' | 'scope'
+
 export interface Relation {
   readonly id: RelationId
   readonly projectId: ProjectId
-  readonly workspaceId: WorkspaceId
-  readonly sourceArtifactViewId: ArtifactViewId
-  readonly targetArtifactViewId: ArtifactViewId
+  readonly sourceEntityType: RelationEntityType
+  readonly sourceEntityId: string
+  readonly targetEntityType: RelationEntityType
+  readonly targetEntityId: string
   readonly kind: string
   readonly createdAt: IsoDateTime
   readonly updatedAt: IsoDateTime
 }
+
+// ==================== ArtifactRevision ====================
 
 export type ArtifactRevisionSource = 'import' | 'run' | 'external'
 export type ArtifactRevisionStatus = 'draft' | 'current' | 'superseded'
@@ -124,19 +158,7 @@ export interface ArtifactRevision {
   readonly createdAt: IsoDateTime
 }
 
-export type PreviewState = 'idle' | 'loading' | 'ready' | 'error'
-export type PreviewKind = 'thumbnail' | 'page' | 'original'
-
-export interface PreviewResult {
-  readonly artifactId: ArtifactId
-  readonly state: PreviewState
-  readonly kind: PreviewKind
-  readonly origin: 'fixture' | 'runtime'
-  readonly contentUrl?: string
-  readonly pageIndex?: number
-  readonly pageCount?: number
-  readonly errorMessage?: string
-}
+// ==================== Note ====================
 
 export type NoteAnchor =
   | { readonly scope: 'artifact'; readonly artifactId: ArtifactId }
@@ -151,6 +173,38 @@ export interface Note {
   readonly createdAt: IsoDateTime
   readonly updatedAt: IsoDateTime
 }
+
+// ==================== Checkpoint ====================
+
+// Checkpoint is an immutable historical snapshot.
+// It does NOT participate in autosave — the camera lives in Workspace.viewport.
+
+export interface Checkpoint {
+  readonly id: CheckpointId
+  readonly projectId: ProjectId
+  readonly scopeId: ScopeId
+  readonly label: string
+  readonly snapshotJson: JsonValue
+  readonly createdAt: IsoDateTime
+}
+
+// ==================== Preview (unchanged) ====================
+
+export type PreviewState = 'idle' | 'loading' | 'ready' | 'error'
+export type PreviewKind = 'thumbnail' | 'page' | 'original'
+
+export interface PreviewResult {
+  readonly artifactId: ArtifactId
+  readonly state: PreviewState
+  readonly kind: PreviewKind
+  readonly origin: 'fixture' | 'runtime'
+  readonly contentUrl?: string
+  readonly pageIndex?: number
+  readonly pageCount?: number
+  readonly errorMessage?: string
+}
+
+// ==================== Run (preserved, Phase 5) ====================
 
 export interface ContextSourceRef {
   readonly artifactId?: ArtifactId
@@ -197,7 +251,6 @@ export interface Run {
   readonly projectId: ProjectId
   readonly conversationId: ConversationId
   readonly commandId: CommandId
-  /** Immutable for this run. A changed context requires a new run. */
   readonly contextSnapshotId: ContextSnapshotId
   readonly executor: RunExecutor
   readonly externalThreadId?: string
@@ -249,24 +302,12 @@ export interface ArtifactReturn {
   readonly createdAt: IsoDateTime
 }
 
-export interface Checkpoint {
-  readonly id: CheckpointId
-  readonly projectId: ProjectId
-  readonly workspaceId: WorkspaceId
-  readonly contextSnapshotId?: ContextSnapshotId
-  readonly artifactRevisionIds: readonly ArtifactRevisionId[]
-  readonly relatedRunIds: readonly RunId[]
-  readonly canvasSnapshot: JsonValue
-  readonly createdAt: IsoDateTime
-}
-
 export type ArtifactReturnPlacement =
   | { readonly zone: 'target'; readonly artifactId: ArtifactId }
   | { readonly zone: 'working'; readonly artifactId: ArtifactId }
   | { readonly zone: 'run'; readonly runId: RunId }
   | { readonly zone: 'pending_return'; readonly workspaceId: WorkspaceId }
 
-/** Target and Context are intentionally independent. */
 export function resolveArtifactReturnPlacement(command: Command, run?: Run): ArtifactReturnPlacement {
   if (command.targetArtifactId) return { zone: 'target', artifactId: command.targetArtifactId }
   if (command.workingArtifactId) return { zone: 'working', artifactId: command.workingArtifactId }
