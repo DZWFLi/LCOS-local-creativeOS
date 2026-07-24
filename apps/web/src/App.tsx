@@ -16,6 +16,7 @@ import { RunConfirmDialog } from './features/create/RunConfirmDialog'
 import { ScopeCreateDialog } from './features/create/ScopeCreateDialog'
 import { ProjectCreateDialog } from './features/create/ProjectCreateDialog'
 import { clearPrototypeState, loadProjectCatalog, loadPrototypeState, saveProjectCatalog, savePrototypeState } from './state/prototypeStorage'
+import { RuntimeBridge, type DataSource, type SaveStatus } from './runtime/runtimeBridge'
 import { createWorkspaceRecord, duplicateWorkspaceRecord, moveWorkspaceRecord, removeWorkspaceRecord, toggleWorkspaceLayer, updateWorkspaceRecord } from './state/workspaceState'
 import { fitBounds, getSelectionBounds, nodeDimensions, revealNode } from './features/canvas/canvasGeometry'
 import { findPendingReturnPosition } from './features/canvas/canvasLayout'
@@ -77,7 +78,8 @@ export function App() {
   const [checkpoint, setCheckpoint] = useState(false)
   const [spaceHeld, setSpaceHeld] = useState(false)
   const [notice, setNotice] = useState('已恢复上次工作现场')
-  const [saveStatus, setSaveStatus] = useState<'saving' | 'saved'>('saved')
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved')
+  const [dataSource, setDataSource] = useState<DataSource>('none')
   const [workRail, setWorkRail] = useState<WorkRailPreferences>(initial.workRail)
   const [dockCollapsed, setDockCollapsed] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 1366)
   const [miniMapCollapsed, setMiniMapCollapsed] = useState(false)
@@ -100,6 +102,32 @@ export function App() {
   const runConfirmFrameRef = useRef<number | null>(null)
   const seededStateRef = useRef(false)
   const projectStateCacheRef = useRef<Map<string, PersistedPrototypeState>>(new Map([[initialProjectId, initial]]))
+  const bridgeRef = useRef(new RuntimeBridge(initialProjectId))
+
+  // Try loading from Local Core on mount. Never silently fall back — show notice if offline.
+  useEffect(() => {
+    const bridge = bridgeRef.current
+    bridge.isAvailable().then((available) => {
+      if (!available) {
+        setNotice('Local Core 离线，当前为本地 Fixture 模式')
+        return
+      }
+      bridge.loadProject().then((result) => {
+        if (result.source === 'runtime' && result.state) {
+          setGraph(result.state)
+          setWorkspaces(result.state.workspaces)
+          setScopes(result.state.scopes)
+          setWorkspaceId(result.state.activeWorkspaceId)
+          setScopeId(result.state.activeScopeId)
+          setCamera(result.state.scopes[0]?.camera ?? camera)
+          setDataSource('runtime')
+          setNotice('已从 Local Core 恢复项目')
+        }
+      }).catch(() => {
+        setNotice('Local Core 加载失败，使用本地 Fixture')
+      })
+    })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const activeProject = projects.find((project) => project.id === activeProjectId) ?? projects[0]
   const activeWorkspace = workspaces.find((workspace) => workspace.id === workspaceId) ?? workspaces[0]
@@ -191,9 +219,23 @@ export function App() {
       const persistedScopes = scopes.map((scope) => scope.id === scopeId ? { ...scope, camera, updatedAt: now } : scope)
       const snapshot: PersistedPrototypeState = { version: 9, projectId: activeProjectId, nodes, edges, workspaces: persistedWorkspaces, scopes: persistedScopes, activeWorkspaceId: workspaceId, activeScopeId: scopeId, workRail }
       projectStateCacheRef.current.set(activeProjectId, snapshot)
-      savePrototypeState(activeProjectId, snapshot)
-      saveProjectCatalog(projects)
-      setSaveStatus('saved')
+
+      // Save to Local Core via runtimeBridge
+      const bridge = bridgeRef.current
+      bridge.saveProject(snapshot).then((result) => {
+        if (result.status === 'saved') {
+          setSaveStatus('saved')
+          setDataSource('runtime')
+          setNotice('已保存至 Local Core')
+        } else {
+          setSaveStatus('unsaved')
+          setNotice(`保存失败: ${result.error ?? 'Local Core 不可用'}`)
+        }
+        saveProjectCatalog(projects)
+      }).catch(() => {
+        setSaveStatus('unsaved')
+        setNotice('保存失败: Local Core 连接异常')
+      })
     }, 280)
     return () => window.clearTimeout(timer)
   }, [activeProjectId, camera, edges, nodes, performanceFixture, projects, scopeId, scopes, workRail, workspaceId, workspaces])
@@ -767,7 +809,7 @@ export function App() {
         </div>
       })}<button className="add-tab chrome-control" aria-label="新建或打开项目" onClick={() => setProjectOpen(false)}><span>+</span></button></div>
       <button className="new-run-button" onClick={requestComposerFocus}><Play size={13} />告诉 AI</button>
-      <button className="runtime-badge saved" onClick={() => setNotice('当前为本地前端 Fixture，后续接入 Local Core 与 Bridge')}><Cloud size={13} /> {saveStatus === 'saving' ? '正在保存…' : '已全部保存'} <span>本地</span></button>
+      <button className={`runtime-badge ${saveStatus}`} onClick={() => setNotice(dataSource === 'runtime' ? '数据来自 Local Core \u00b7 SQLite' : '\u5f53\u524d\u4e3a Fixture \u6f14\u793a\u6a21\u5f0f')}><Cloud size={13} /> {saveStatus === 'saving' ? '\u6b63\u5728\u4fdd\u5b58\u2026' : saveStatus === 'unsaved' ? '\u672a\u4fdd\u5b58' : '\u5df2\u4fdd\u5b58'} <span>{dataSource === 'runtime' ? 'Runtime' : 'Fixture'}</span></button>
     </header>
     <section className={`scene intent-${activeWorkspace.intent ?? 'blank'}`} style={sceneStyle} data-project-id={activeProjectId} data-scope-id={scopeId} data-workspace-id={workspaceId} data-workspace-intent={activeWorkspace.intent ?? 'blank'}>
       <WorkspaceDock workspaces={workspaces} activeId={workspaceId} collapsed={dockCollapsed} onCollapsedChange={setDockCollapsed} onOverview={fitScope} onChange={changeWorkspace} onAddWorkspace={() => setWorkspaceEditor({ mode: 'create' })} onEditWorkspace={(id) => setWorkspaceEditor({ mode: 'edit', id })} onDuplicateWorkspace={duplicateWorkspace} onDeleteWorkspace={deleteWorkspace} onMoveWorkspace={moveWorkspace} onSaveView={saveCurrentView} visibleLayers={visibleLayers} onToggleLayer={toggleLayer} onOpenCreate={() => setCreateDialogOpen(true)} onArrangeCanvas={previewScopeLayout} runStatus={activeRun?.status ?? null} />

@@ -47,7 +47,7 @@ const DISPOSABLE_PROJECT_ID = 'disposable-portasplit-phase2-lite'
 function disposablePortaSplitSnapshot(): ProjectGraphSnapshot {
   const now = new Date().toISOString()
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     project: {
       id: DISPOSABLE_PROJECT_ID as ProjectGraphSnapshot['project']['id'],
       name: 'PortaSplit · Phase 2 Lite',
@@ -103,6 +103,9 @@ function disposablePortaSplitSnapshot(): ProjectGraphSnapshot {
       targetArtifactViewId: 'disposable-view-board' as ProjectGraphSnapshot['artifactViews'][number]['id'],
       kind: 'informs', createdAt: now, updatedAt: now,
     }],
+    notes: [],
+    artifactRevisions: [],
+    checkpoints: [],
   }
 }
 
