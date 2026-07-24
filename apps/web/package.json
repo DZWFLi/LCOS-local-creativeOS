@@ -4,12 +4,12 @@
   "version": "0.6.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --host 127.0.0.1 --port 5173 --strictPort",
+    "dev": "vite --host 127.0.0.1",
     "build": "tsc -p tsconfig.json --noEmit && vite build",
     "lint": "oxlint src tests",
     "preview": "vite preview --host 127.0.0.1",
     "typecheck": "tsc -p tsconfig.json --noEmit --pretty false",
-    "test": "vitest run apps/web/tests",
+    "test": "vitest run",
     "smoke": "node ../../scripts/smoke.mjs"
   },
   "dependencies": {

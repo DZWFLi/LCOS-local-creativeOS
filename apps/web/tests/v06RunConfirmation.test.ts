@@ -2,13 +2,12 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 describe('v0.6 centered run confirmation and Canvas lock', () => {
-  const readSource = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8').replaceAll('\r\n', '\n')
-  const app = readSource('../src/App.tsx')
-  const dialog = readSource('../src/features/create/RunConfirmDialog.tsx')
-  const rail = readSource('../src/features/workrail/WorkRail.tsx')
-  const createDialog = readSource('../src/features/create/CreateContentDialog.tsx')
-  const canvas = readSource('../src/features/canvas/ProjectCanvas.tsx')
-  const css = readSource('../src/surface.css')
+  const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8')
+  const dialog = readFileSync(new URL('../src/features/create/RunConfirmDialog.tsx', import.meta.url), 'utf8')
+  const rail = readFileSync(new URL('../src/features/workrail/WorkRail.tsx', import.meta.url), 'utf8')
+  const createDialog = readFileSync(new URL('../src/features/create/CreateContentDialog.tsx', import.meta.url), 'utf8')
+  const canvas = readFileSync(new URL('../src/features/canvas/ProjectCanvas.tsx', import.meta.url), 'utf8')
+  const css = readFileSync(new URL('../src/surface.css', import.meta.url), 'utf8')
 
   it('opens one centered confirmation instead of starting immediately', () => {
     expect(app).toContain('setRunConfirmOpen(true)')

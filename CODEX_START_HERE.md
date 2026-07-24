@@ -1,133 +1,34 @@
-# CODEX_START_HERE
+# Codex Start Here · Local Creative OS v0.6.0
 
-你正在接手 Local Creative OS 仓库。
+本包是完整累计版，不要再分别套用 Phase 1、2、3 的旧代码。历史文档已移至 `docs/archive/`。
 
-## 任务目标
+## 执行顺序
 
-先建立可靠开发基线，再根据获批 Sprint 开发。不要从完整 PRD 一次实现整个平台。
+1. 阅读 `README.md`；
+2. 阅读 `docs/release/V0.6.0_FRONTEND_BASELINE.md`；
+3. 执行 `npm ci`；
+4. 执行 `npm run check`；
+5. 启动 `npm run dev -- --port 5193`，或使用一个空闲端口；
+6. 严格按 `CODEX_RUN_V0.6.0_FULL_REGRESSION.md` 做正常交互回归；
+7. 只生成测试报告和截图，不修改产品源码。
 
-## 第一步：阅读
+## 禁止事项
 
-1. `README.md`
-2. `AGENTS.md`
-3. 最新 PRD 冻结决策稿
-4. 最新 UI & Interaction Spec 冻结决策稿
-5. 当前 Handoff
-6. 当前代码、测试与历史报告
+- 不得重新设计 UI；
+- 不得添加第二个 Work Rail、聊天侧栏或独立 Command 大面板；
+- 不得修改 Fixture 来绕过失败；
+- 不得只用 `?state=` 截图替代正常交互；
+- 不得因 Resize Handle 不存在判失败，v0.6 已冻结为紧凑 / 标准 / 展开三档密度；
+- 不得把 Current Artifact 判定为必须进入 Pending Return Zone；该区域只容纳 Draft / Pending；
+- 不得接入真实后端、文件写回或新依赖。
 
-## 第二步：检查仓库
+## 报告要求
 
-执行：
+报告必须区分：
 
-```bash
-git status
-git branch
-git log --oneline -10
-git diff --check
-```
+- 正常交互 PASS；
+- Fixture 仅证明目标状态可渲染；
+- 未测试；
+- 前端 Fixture 与真实后端边界。
 
-然后检查：
-
-- 所有 `package.json`；
-- lockfile；
-- TypeScript / Vite 配置；
-- scripts；
-- README / AGENTS；
-- src / docs / tests / scripts；
-- `.env*` 与敏感信息；
-- localStorage；
-- schemaVersion；
-- ReviewRepository；
-- ReviewEvaluator；
-- ExecutionRuntime；
-- Bridge / Codex；
-- Mock / CopyOnly；
-- changed_files / artifacts。
-
-## 第三步：验证当前基线
-
-只运行仓库中已存在的命令：
-
-```bash
-npm run lint
-npm run typecheck
-npm run test
-npm run build
-npm run smoke
-```
-
-不存在的命令不要自行创建。不要为了通过而立即修改代码。
-
-## 第四步：生成报告
-
-生成：
-
-```text
-docs/audit/CURRENT_REPOSITORY_BASELINE.md
-docs/architecture/CURRENT_TO_TARGET_ARCHITECTURE.md
-docs/handoffs/SPRINT_0_PROPOSAL.md
-```
-
-### `CURRENT_REPOSITORY_BASELINE.md`
-
-包含 Git 状态、目录树、可运行命令、检查结果、旧 Prototype 状态、可复用模块、Demo 专属模块、高耦合点、敏感信息、绝对路径、localStorage、依赖与配置风险。
-
-### `CURRENT_TO_TARGET_ARCHITECTURE.md`
-
-至少包含：
-
-```mermaid
-flowchart LR
-    Old[AdFrame Review Prototype]
-    --> Reuse[Reusable Review Module]
-
-    Target[Local Creative OS]
-    --> Web[apps/web]
-    --> Core[apps/local-core]
-    --> Bridge[MCP Bridge / Codex]
-```
-
-列出保留、移动、归档、新建、暂缓和不应继续扩展的内容。
-
-### `SPRINT_0_PROPOSAL.md`
-
-Sprint 0 只能包含：
-
-- 保护稳定 Prototype；
-- 建立目录与边界；
-- 补齐开发基线；
-- Canvas Spike；
-- 文件 Preview Spike；
-- Runtime Spike；
-- 数据 / 接口合同；
-- PortaSplit Reset 样例；
-- Golden Path / Failure Path。
-
-必须写任务拆分、预计修改文件、依赖、风险、验收、回滚和需用户确认项。
-
-## 第五步：停止
-
-完成三份报告后停止，不要自动：
-
-- 移动文件；
-- 重写 App；
-- 新建完整 App Shell；
-- 接 API；
-- 接 Codex Runtime；
-- 接 MCP；
-- 引入 SQLite；
-- 升级依赖；
-- 提交；
-- Push；
-- 创建 Tag 或 Branch。
-
-等待用户批准 `SPRINT_0_PROPOSAL.md`。
-
-## 最终回复格式
-
-1. 检查了什么；
-2. 哪些命令通过 / 失败；
-3. 发现的最高风险；
-4. 生成的三份文件；
-5. 建议的 Sprint 0 顺序；
-6. 当前是否适合开始编码。
+遇到 P0 后停止当前链路，保留干净证据；可以从独立 Fixture URL 继续测试互不依赖的其他模块，但不能把 Fixture 结果算作失败链路通过。

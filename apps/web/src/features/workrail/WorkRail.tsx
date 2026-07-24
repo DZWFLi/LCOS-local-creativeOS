@@ -59,6 +59,7 @@ interface Props {
   onTogglePositionLock: (nodeId: string) => void
   onShowRun: () => void
 }
+
 type DetailPanel = 'none' | 'relations' | 'context'
 
 export function WorkRail(props: Props) {
@@ -278,3 +279,4 @@ function Composer(props: Props & { mode: WorkRailMode }) {
     <div className="composer-footer"><span>{reason}</span><kbd>C</kbd><span>聚焦输入</span></div>
   </footer>
 }
+
