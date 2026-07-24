@@ -31,3 +31,10 @@ Local_Creative_OS_Codex_Development_Package_20260719_073944.zip
 *.njsproj
 *.sln
 *.sw?
+
+# Test evidence and screenshots (not source code)
+.playwright-cli/
+前端测试/
+后端搭建/
+/*.png
+/*.jpg

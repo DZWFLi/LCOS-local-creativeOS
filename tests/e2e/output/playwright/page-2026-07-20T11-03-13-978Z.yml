@@ -1,0 +1,133 @@
+- main [ref=e3]:
+  - generic [ref=e4]:
+    - generic [ref=e5]: Local Creative OS
+    - generic [ref=e10]:
+      - button "PortaSplit" [ref=e11] [cursor=pointer]
+      - button "打开项目" [ref=e15] [cursor=pointer]:
+        - generic [ref=e16]: +
+    - button "New Run" [ref=e17] [cursor=pointer]
+    - button "Prototype Data Not persisted" [ref=e20] [cursor=pointer]:
+      - text: Prototype Data
+      - generic [ref=e23]: Not persisted
+  - generic [ref=e24]:
+    - complementary [ref=e25]:
+      - button "Project Overview" [ref=e26] [cursor=pointer]
+      - generic [ref=e28]:
+        - button "Understand" [ref=e29] [cursor=pointer]
+        - button "删除 Understand" [ref=e31] [cursor=pointer]
+      - generic [ref=e35]:
+        - button "Explore" [ref=e36] [cursor=pointer]
+        - button "删除 Explore" [ref=e38] [cursor=pointer]
+      - generic [ref=e42]:
+        - button "Build" [ref=e43] [cursor=pointer]
+        - button "删除 Build" [ref=e45] [cursor=pointer]
+      - generic [ref=e49]:
+        - button "Decide" [ref=e50] [cursor=pointer]
+        - button "删除 Decide" [ref=e52] [cursor=pointer]
+      - button "Core content" [ref=e56] [cursor=pointer]
+      - button "Process layer" [ref=e58] [cursor=pointer]
+    - generic [ref=e61]:
+      - img "Editable relationships"
+      - button "Open 品牌 Brief.pptx details Connect to 品牌 Brief.pptx Connect from 品牌 Brief.pptx ● Source 品牌 Brief.pptx 12 页 · 已同步" [ref=e76]:
+        - button "Open 品牌 Brief.pptx details" [ref=e77] [cursor=pointer]: "?"
+        - button "Connect to 品牌 Brief.pptx" [ref=e78] [cursor=pointer]
+        - button "Connect from 品牌 Brief.pptx" [ref=e79] [cursor=pointer]
+        - generic [ref=e81]:
+          - generic [ref=e82]: ●
+          - text: Source
+        - generic [ref=e83]: SOURCE FILE
+        - generic [ref=e85]:
+          - generic [ref=e86]: 品牌 Brief.pptx
+          - generic [ref=e87]: 12 页 · 已同步
+      - button "Open 客户反馈.md details Connect to 客户反馈.md Connect from 客户反馈.md ● Source 客户反馈.md 利益点需要更直接" [ref=e88]:
+        - button "Open 客户反馈.md details" [ref=e89] [cursor=pointer]: "?"
+        - button "Connect to 客户反馈.md" [ref=e90] [cursor=pointer]
+        - button "Connect from 客户反馈.md" [ref=e91] [cursor=pointer]
+        - generic [ref=e93]:
+          - generic [ref=e94]: ●
+          - text: Source
+        - generic [ref=e95]: SOURCE FILE
+        - generic [ref=e97]:
+          - generic [ref=e98]: 客户反馈.md
+          - generic [ref=e99]: 利益点需要更直接
+      - button "Open 参考构图.jpg details Connect to 参考构图.jpg Connect from 参考构图.jpg ◇ Context 参考构图.jpg 本地参考 · 已链接" [ref=e100]:
+        - button "Open 参考构图.jpg details" [ref=e101] [cursor=pointer]: "?"
+        - button "Connect to 参考构图.jpg" [ref=e102] [cursor=pointer]
+        - button "Connect from 参考构图.jpg" [ref=e103] [cursor=pointer]
+        - generic [ref=e105]:
+          - generic [ref=e106]: ◇
+          - text: Context
+        - generic [ref=e107]: Context
+        - generic [ref=e109]:
+          - generic [ref=e110]: 参考构图.jpg
+          - generic [ref=e111]: 本地参考 · 已链接
+      - button "Open 当前提案.pptx details Connect to 当前提案.pptx Connect from 当前提案.pptx ◆ Working 当前提案.pptx Current v6 · 第 5 页有备注 Current" [ref=e112]:
+        - button "Open 当前提案.pptx details" [ref=e113] [cursor=pointer]: "?"
+        - button "Connect to 当前提案.pptx" [ref=e114] [cursor=pointer]
+        - button "Connect from 当前提案.pptx" [ref=e115] [cursor=pointer]
+        - generic [ref=e117]:
+          - generic [ref=e118]: ◆
+          - text: Working
+        - generic [ref=e119]: CURRENT REVISION
+        - generic [ref=e121]:
+          - generic [ref=e122]: 当前提案.pptx
+          - generic [ref=e123]: Current v6 · 第 5 页有备注
+        - generic [ref=e124]: Current
+      - button "Open RUN-042 · 修改第 5 页 details Connect to RUN-042 · 修改第 5 页 Connect from RUN-042 · 修改第 5 页 → Run RUN-042 · 修改第 5 页 Completed · 1 file changed" [ref=e125]:
+        - button "Open RUN-042 · 修改第 5 页 details" [ref=e126] [cursor=pointer]: "?"
+        - button "Connect to RUN-042 · 修改第 5 页" [ref=e127] [cursor=pointer]
+        - button "Connect from RUN-042 · 修改第 5 页" [ref=e128] [cursor=pointer]
+        - generic [ref=e130]:
+          - generic [ref=e131]: →
+          - text: Run
+        - generic [ref=e132]:
+          - generic [ref=e133]: RUN-042 · 修改第 5 页
+          - generic [ref=e134]: Completed · 1 file changed
+      - button "Open 当前提案_v7_AI.pptx details Connect to 当前提案_v7_AI.pptx Connect from 当前提案_v7_AI.pptx ✦ Generated 当前提案_v7_AI.pptx Pending Return Zone Draft" [ref=e135]:
+        - button "Open 当前提案_v7_AI.pptx details" [ref=e136] [cursor=pointer]: "?"
+        - button "Connect to 当前提案_v7_AI.pptx" [ref=e137] [cursor=pointer]
+        - button "Connect from 当前提案_v7_AI.pptx" [ref=e138] [cursor=pointer]
+        - generic [ref=e140]:
+          - generic [ref=e141]: ✦
+          - text: Generated
+        - generic [ref=e142]: DRAFT RETURN
+        - generic [ref=e144]:
+          - generic [ref=e145]: 当前提案_v7_AI.pptx
+          - generic [ref=e146]: Pending Return Zone
+        - generic [ref=e147]: Draft
+      - 'button "Open 关键决策 #03 details Connect to 关键决策 #03 Connect from 关键决策 #03 ✓ Decision 关键决策 #03 保留品牌蓝 · 不改封面" [ref=e148]':
+        - 'button "Open 关键决策 #03 details" [ref=e149] [cursor=pointer]': "?"
+        - 'button "Connect to 关键决策 #03" [ref=e150] [cursor=pointer]'
+        - 'button "Connect from 关键决策 #03" [ref=e151] [cursor=pointer]'
+        - generic [ref=e153]:
+          - generic [ref=e154]: ✓
+          - text: Decision
+        - generic [ref=e155]: HUMAN LOCK
+        - generic [ref=e157]:
+          - generic [ref=e158]: "关键决策 #03"
+          - generic [ref=e159]: 保留品牌蓝 · 不改封面
+      - button "Open 早期 Run details Connect to 早期 Run Connect from 早期 Run → Run 早期 Run 已收拢到 Activity" [ref=e160]:
+        - button "Open 早期 Run details" [ref=e161] [cursor=pointer]: "?"
+        - button "Connect to 早期 Run" [ref=e162] [cursor=pointer]
+        - button "Connect from 早期 Run" [ref=e163] [cursor=pointer]
+        - generic [ref=e165]:
+          - generic [ref=e166]: →
+          - text: Run
+        - generic [ref=e167]:
+          - generic [ref=e168]: 早期 Run
+          - generic [ref=e169]: 已收拢到 Activity
+    - generic [ref=e170]:
+      - generic [ref=e171]:
+        - text: Canvas
+        - generic [ref=e172]:
+          - text: physical position
+          - button "收起 Mini-map" [ref=e173] [cursor=pointer]: −
+      - generic [ref=e184]:
+        - button [ref=e185] [cursor=pointer]
+        - generic [ref=e187]: 100%
+        - button [ref=e188] [cursor=pointer]
+        - button [ref=e190] [cursor=pointer]
+    - generic:
+      - text: Understand
+      - generic: Semantic Viewport
+    - generic [ref=e196]: Prototype Data · Runtime not connected
