@@ -4,26 +4,35 @@ import { DatabaseSync, type SQLInputValue } from 'node:sqlite'
 
 import type {
   Artifact,
+  ArtifactId,
   ArtifactRevision,
+  ArtifactRevisionId,
   ArtifactView,
+  ArtifactViewId,
   Checkpoint,
+  CheckpointId,
+  GraphVersion,
   Note,
+  NoteId,
   Project,
-  ProjectGraphSnapshot,
+  ProjectId,
   Relation,
+  RelationId,
+  Scope,
+  ScopeId,
   Workspace,
-} from '@local-creative-os/contracts'
+  WorkspaceId,
+} from '@local-creative-os/domain'
+import type { MutationBatch, ProjectGraphSnapshot } from '@local-creative-os/contracts'
 
-const SCHEMA_VERSION = 2
+type Row = Record<string, SQLInputValue | undefined>
 
-type Row = Record<string, unknown>
-
-function json<T>(value: unknown): T {
-  return JSON.parse(String(value)) as T
+function json<T>(value: SQLInputValue): T {
+  if (typeof value !== 'string') return JSON.parse('null') as unknown as T
+  try { return JSON.parse(value) as T } catch { return JSON.parse('null') as unknown as T }
 }
 
 export interface MetadataRepositoryOptions {
-  /** When true, only projects with 'disposable-' prefix are writable (Phase 2 default). */
   readonly disposableOnly?: boolean
 }
 
@@ -34,495 +43,427 @@ export class SqliteMetadataRepository {
 
   constructor(databasePath: string, options: MetadataRepositoryOptions = {}) {
     this.databasePath = resolve(databasePath)
-    this.#disposableOnly = options.disposableOnly ?? true
+    this.#disposableOnly = options.disposableOnly ?? false
     mkdirSync(dirname(this.databasePath), { recursive: true })
     this.#database = new DatabaseSync(this.databasePath)
-    this.#database.exec('PRAGMA foreign_keys = ON;')
+    this.#database.exec('PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;')
     this.#migrate()
   }
 
-  get schemaVersion(): number {
-    return Number((this.#database.prepare('PRAGMA user_version').get() as Row).user_version)
+  close(): void { this.#database.close() }
+
+  // ==================== Migration ====================
+
+  #migrate(): void {
+    const version = this.#database.prepare('PRAGMA user_version').get() as { user_version: number }
+    if (version.user_version === 0) { this.#migrate_001(); return }
+    if (version.user_version === 1) { this.#migrate_002_from_v1(); return }
+    if (version.user_version === 2) { this.#migrate_003_from_v2(); return }
+    // v3 = current
   }
 
-  close(): void {
-    this.#database.close()
+  #migrate_001(): void {
+    this.#database.exec(`
+      BEGIN;
+      CREATE TABLE projects (
+        id TEXT PRIMARY KEY, name TEXT NOT NULL, root_path TEXT NOT NULL,
+        graph_version INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+      );
+      CREATE TABLE scopes (
+        id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        parent_scope_id TEXT, container_view_id TEXT,
+        kind TEXT NOT NULL, name TEXT NOT NULL,
+        created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+      );
+      CREATE TABLE workspaces (
+        id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        scope_id TEXT NOT NULL, name TEXT NOT NULL, intent TEXT,
+        viewport TEXT NOT NULL, focused_node_ids TEXT NOT NULL DEFAULT '[]',
+        visible_layers TEXT NOT NULL DEFAULT '["core","process"]',
+        context_policy TEXT NOT NULL DEFAULT 'selection-only',
+        updated_at TEXT NOT NULL
+      );
+      CREATE TABLE artifacts (
+        id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        title TEXT NOT NULL, kind TEXT NOT NULL, local_path TEXT NOT NULL,
+        availability TEXT NOT NULL, current_revision_id TEXT,
+        created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+      );
+      CREATE TABLE artifact_views (
+        id TEXT PRIMARY KEY, artifact_id TEXT NOT NULL REFERENCES artifacts(id) ON DELETE RESTRICT,
+        scope_id TEXT NOT NULL, revision_id TEXT,
+        reference_kind TEXT NOT NULL, position TEXT NOT NULL, size TEXT NOT NULL,
+        display_mode TEXT NOT NULL, collapsed INTEGER NOT NULL DEFAULT 0
+      );
+      CREATE TABLE relations (
+        id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        source_entity_type TEXT NOT NULL, source_entity_id TEXT NOT NULL,
+        target_entity_type TEXT NOT NULL, target_entity_id TEXT NOT NULL,
+        kind TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+      );
+      CREATE TABLE artifact_revisions (
+        id TEXT PRIMARY KEY, artifact_id TEXT NOT NULL REFERENCES artifacts(id) ON DELETE CASCADE,
+        parent_revision_id TEXT, local_path TEXT NOT NULL, content_hash TEXT NOT NULL,
+        source TEXT NOT NULL, run_id TEXT, status TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+      CREATE TABLE notes (
+        id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        anchor_scope TEXT NOT NULL, artifact_id TEXT, artifact_view_id TEXT, page_index INTEGER,
+        body TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+      );
+      CREATE TABLE checkpoints (
+        id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        scope_id TEXT NOT NULL, label TEXT NOT NULL DEFAULT '',
+        snapshot_json TEXT NOT NULL, created_at TEXT NOT NULL
+      );
+      PRAGMA user_version = 3;
+      CREATE UNIQUE INDEX idx_revision_current
+        ON artifact_revisions(artifact_id) WHERE status = 'current';
+      COMMIT;
+    `)
   }
 
-  // ==================== snapshot save/get ====================
+  #migrate_002_from_v1(): void {
+    // v1 → v3: drop old schema, create new. Phase 2 data is disposable.
+    const backup = this.databasePath + '.bak'
+    this.#database.exec(`VACUUM INTO '${backup.replace(/\\/g, '\\\\')}'`)
+    this.#database.exec(`
+      BEGIN;
+      DROP TABLE IF EXISTS workspaces;
+      DROP TABLE IF EXISTS artifacts;
+      DROP TABLE IF EXISTS artifact_views;
+      DROP TABLE IF EXISTS relations;
+      DROP TABLE IF EXISTS artifact_revisions;
+      DROP TABLE IF EXISTS notes;
+      DROP TABLE IF EXISTS checkpoints;
+      DROP TABLE IF EXISTS projects;
+      CREATE TABLE projects (
+        id TEXT PRIMARY KEY, name TEXT NOT NULL, root_path TEXT NOT NULL,
+        graph_version INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+      );
+      CREATE TABLE scopes (
+        id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        parent_scope_id TEXT, container_view_id TEXT,
+        kind TEXT NOT NULL, name TEXT NOT NULL,
+        created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+      );
+      CREATE TABLE workspaces (
+        id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        scope_id TEXT NOT NULL, name TEXT NOT NULL, intent TEXT,
+        viewport TEXT NOT NULL, focused_node_ids TEXT NOT NULL DEFAULT '[]',
+        visible_layers TEXT NOT NULL DEFAULT '["core","process"]',
+        context_policy TEXT NOT NULL DEFAULT 'selection-only',
+        updated_at TEXT NOT NULL
+      );
+      CREATE TABLE artifacts (
+        id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        title TEXT NOT NULL, kind TEXT NOT NULL, local_path TEXT NOT NULL,
+        availability TEXT NOT NULL, current_revision_id TEXT,
+        created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+      );
+      CREATE TABLE artifact_views (
+        id TEXT PRIMARY KEY, artifact_id TEXT NOT NULL REFERENCES artifacts(id) ON DELETE RESTRICT,
+        scope_id TEXT NOT NULL, revision_id TEXT,
+        reference_kind TEXT NOT NULL, position TEXT NOT NULL, size TEXT NOT NULL,
+        display_mode TEXT NOT NULL, collapsed INTEGER NOT NULL DEFAULT 0
+      );
+      CREATE TABLE relations (
+        id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        source_entity_type TEXT NOT NULL, source_entity_id TEXT NOT NULL,
+        target_entity_type TEXT NOT NULL, target_entity_id TEXT NOT NULL,
+        kind TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+      );
+      CREATE TABLE artifact_revisions (
+        id TEXT PRIMARY KEY, artifact_id TEXT NOT NULL REFERENCES artifacts(id) ON DELETE CASCADE,
+        parent_revision_id TEXT, local_path TEXT NOT NULL, content_hash TEXT NOT NULL,
+        source TEXT NOT NULL, run_id TEXT, status TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+      CREATE TABLE notes (
+        id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        anchor_scope TEXT NOT NULL, artifact_id TEXT, artifact_view_id TEXT, page_index INTEGER,
+        body TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+      );
+      CREATE TABLE checkpoints (
+        id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        scope_id TEXT NOT NULL, label TEXT NOT NULL DEFAULT '',
+        snapshot_json TEXT NOT NULL, created_at TEXT NOT NULL
+      );
+      PRAGMA user_version = 3;
+      CREATE UNIQUE INDEX idx_revision_current
+        ON artifact_revisions(artifact_id) WHERE status = 'current';
+      COMMIT;
+    `)
+  }
+
+  #migrate_003_from_v2(): void {
+    // v2 (old Phase 2 schema with canvas_snapshot) → v3
+    const backup = this.databasePath + '.bak'
+    this.#database.exec(`VACUUM INTO '${backup.replace(/\\/g, '\\\\')}'`)
+    this.#database.exec(`DROP TABLE IF EXISTS checkpoint_revision_ids`)
+    this.#database.exec(`DROP TABLE IF EXISTS checkpoint_run_ids`)
+    this.#database.exec(`DROP TABLE IF EXISTS checkpoints`)
+    this.#database.exec(`
+      CREATE TABLE checkpoints (
+        id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        scope_id TEXT NOT NULL, label TEXT NOT NULL DEFAULT '',
+        snapshot_json TEXT NOT NULL, created_at TEXT NOT NULL
+      );
+    `)
+    // Add scope_id to workspaces if missing
+    try { this.#database.exec(`ALTER TABLE workspaces ADD COLUMN scope_id TEXT NOT NULL DEFAULT ''`) } catch {}
+    try { this.#database.exec(`ALTER TABLE workspaces ADD COLUMN context_policy TEXT NOT NULL DEFAULT 'selection-only'`) } catch {}
+    try { this.#database.exec(`ALTER TABLE projects ADD COLUMN graph_version INTEGER NOT NULL DEFAULT 1`) } catch {}
+    this.#database.exec(`PRAGMA user_version = 3`)
+  }
+
+  // ==================== Graph Save/Load ====================
 
   save(snapshot: ProjectGraphSnapshot): void {
-    if (snapshot.schemaVersion !== SCHEMA_VERSION) {
-      throw new Error(`Expected schemaVersion ${SCHEMA_VERSION}.`)
-    }
     if (this.#disposableOnly) {
       if (!String(snapshot.project.id).startsWith('disposable-')) {
-        throw new Error('Only disposable projects are accepted. Disable disposableOnly to allow real projects.')
-      }
-      if (!snapshot.project.rootPath.startsWith('disposable://')) {
-        throw new Error('Disposable projects must use a disposable:// root.')
+        throw new Error('Only disposable projects are accepted.')
       }
     }
     this.#database.exec('BEGIN IMMEDIATE;')
     try {
+      const pid = snapshot.project.id
+      // Delete in reverse dependency order
+      this.#database.prepare('DELETE FROM checkpoints WHERE project_id = ?').run(pid as SQLInputValue)
+      this.#database.prepare('DELETE FROM notes WHERE project_id = ?').run(pid as SQLInputValue)
+      this.#database.prepare('DELETE FROM relations WHERE project_id = ?').run(pid as SQLInputValue)
+      this.#database.prepare('DELETE FROM artifact_views WHERE artifact_id IN (SELECT id FROM artifacts WHERE project_id = ?)').run(pid as SQLInputValue)
+      this.#database.prepare('DELETE FROM artifact_revisions WHERE artifact_id IN (SELECT id FROM artifacts WHERE project_id = ?)').run(pid as SQLInputValue)
+      this.#database.prepare('DELETE FROM artifacts WHERE project_id = ?').run(pid as SQLInputValue)
+      this.#database.prepare('DELETE FROM workspaces WHERE project_id = ?').run(pid as SQLInputValue)
+      this.#database.prepare('DELETE FROM scopes WHERE project_id = ?').run(pid as SQLInputValue)
+
+      // Re-insert
       this.#upsertProject(snapshot.project)
-      // Clear existing children in dependency order
-      this.#database.prepare('DELETE FROM checkpoints WHERE project_id = ?').run(snapshot.project.id)
-      this.#database.prepare('DELETE FROM notes WHERE project_id = ?').run(snapshot.project.id)
-      this.#database.prepare('DELETE FROM artifact_revisions WHERE artifact_id IN (SELECT id FROM artifacts WHERE project_id = ?)').run(snapshot.project.id)
-      this.#database.prepare('DELETE FROM relations WHERE project_id = ?').run(snapshot.project.id)
-      this.#database.prepare('DELETE FROM artifact_views WHERE project_id = ?').run(snapshot.project.id)
-      this.#database.prepare('DELETE FROM artifacts WHERE project_id = ?').run(snapshot.project.id)
-      this.#database.prepare('DELETE FROM workspaces WHERE project_id = ?').run(snapshot.project.id)
-      // Re-insert all
+      for (const scope of snapshot.scopes) this.#upsertScope(scope, pid)
       for (const workspace of snapshot.workspaces) this.#upsertWorkspace(workspace)
       for (const artifact of snapshot.artifacts) this.#upsertArtifact(artifact)
-      for (const view of snapshot.artifactViews) this.#upsertArtifactView(view, snapshot.project.id)
+      for (const revision of snapshot.artifactRevisions) this.#upsertArtifactRevision(revision)
+      for (const view of snapshot.artifactViews) this.#upsertArtifactView(view)
       for (const relation of snapshot.relations) this.#upsertRelation(relation)
-      for (const revision of snapshot.artifactRevisions ?? []) this.#upsertArtifactRevision(revision)
-      for (const note of snapshot.notes ?? []) this.#upsertNote(note)
-      for (const checkpoint of snapshot.checkpoints ?? []) this.#upsertCheckpoint(checkpoint)
+      for (const note of snapshot.notes) this.#upsertNote(note)
+      for (const checkpoint of snapshot.checkpoints) this.#upsertCheckpoint(checkpoint)
+
       this.#database.exec('COMMIT;')
     } catch (error: unknown) {
       this.#database.exec('ROLLBACK;')
-      const msg = error instanceof Error ? error.message : String(error)
-      if (msg.includes('FOREIGN KEY')) {
-        // Log FK detail to help diagnose which constraint failed
-        process.stderr.write(`[FK] save() failed for project=${String(snapshot.project.id)}. ` +
-          `workspaces=${snapshot.workspaces.length} artifacts=${snapshot.artifacts.length} ` +
-          `views=${snapshot.artifactViews.length} relatives=${snapshot.relations.length} ` +
-          `checkpoints=${(snapshot.checkpoints ?? []).length}. ` +
-          `activeWorkspaceId from checkpoint context not available in inner scope.n`)
-      }
       throw error
     }
   }
 
   get(projectId: string): ProjectGraphSnapshot | undefined {
-    const projectRow = this.#database.prepare('SELECT * FROM projects WHERE id = ?').get(projectId) as Row | undefined
-    if (projectRow === undefined) return undefined
-    const rows = (sql: string, ...params: SQLInputValue[]): Row[] =>
-      (this.#database.prepare(sql).all(...params) as Row[])
+    const projectRows = this.#database.prepare('SELECT * FROM projects WHERE id = ?').all(projectId as SQLInputValue) as Row[]
+    if (!projectRows.length) return undefined
+    const project = this.#project(projectRows[0] as Row)
+
+    const scopes = (this.#database.prepare('SELECT * FROM scopes WHERE project_id = ?').all(project.id as SQLInputValue) as Row[]).map((r) => this.#scope(r))
+    const workspaces = (this.#database.prepare('SELECT * FROM workspaces WHERE project_id = ?').all(project.id as SQLInputValue) as Row[]).map((r) => this.#workspace(r))
+    const artifacts = (this.#database.prepare('SELECT * FROM artifacts WHERE project_id = ?').all(project.id as SQLInputValue) as Row[]).map((r) => this.#artifact(r))
+    const revisionRows = (this.#database.prepare('SELECT r.* FROM artifact_revisions r JOIN artifacts a ON r.artifact_id = a.id WHERE a.project_id = ?').all(project.id as SQLInputValue) as Row[])
+    const artifactRevisions = revisionRows.map((r) => this.#artifactRevision(r))
+    const viewRows = (this.#database.prepare('SELECT v.* FROM artifact_views v JOIN artifacts a ON v.artifact_id = a.id WHERE a.project_id = ?').all(project.id as SQLInputValue) as Row[])
+    const artifactViews = viewRows.map((r) => this.#artifactView(r))
+    const relations = (this.#database.prepare('SELECT * FROM relations WHERE project_id = ?').all(project.id as SQLInputValue) as Row[]).map((r) => this.#relation(r))
+    const notes = (this.#database.prepare('SELECT * FROM notes WHERE project_id = ?').all(project.id as SQLInputValue) as Row[]).map((r) => this.#note(r))
+    const checkpoints = (this.#database.prepare('SELECT * FROM checkpoints WHERE project_id = ?').all(project.id as SQLInputValue) as Row[]).map((r) => this.#checkpoint(r))
+
     return {
-      schemaVersion: this.schemaVersion,
-      project: this.#project(projectRow),
-      workspaces: rows('SELECT * FROM workspaces WHERE project_id = ? ORDER BY id', projectId).map((r) => this.#workspace(r)),
-      artifacts: rows('SELECT * FROM artifacts WHERE project_id = ? ORDER BY id', projectId).map((r) => this.#artifact(r)),
-      artifactViews: rows('SELECT * FROM artifact_views WHERE project_id = ? ORDER BY id', projectId).map((r) => this.#artifactView(r)),
-      relations: rows('SELECT * FROM relations WHERE project_id = ? ORDER BY id', projectId).map((r) => this.#relation(r)),
-      notes: rows('SELECT * FROM notes WHERE project_id = ? ORDER BY created_at', projectId).map((r) => this.#note(r)),
-      artifactRevisions: rows('SELECT ar.* FROM artifact_revisions ar JOIN artifacts a ON a.id = ar.artifact_id WHERE a.project_id = ? ORDER BY ar.created_at', projectId).map((r) => this.#artifactRevision(r)),
-      checkpoints: rows('SELECT * FROM checkpoints WHERE project_id = ? ORDER BY created_at', projectId).map((r) => this.#checkpoint(r)),
+      schemaVersion: 3,
+      graphVersion: project.graphVersion as GraphVersion,
+      project,
+      scopes,
+      workspaces,
+      artifacts,
+      artifactViews,
+      relations,
+      artifactRevisions,
+      notes,
+      checkpoints,
     }
   }
 
-  listProjects(): readonly Project[] {
-    return (this.#database.prepare('SELECT * FROM projects ORDER BY updated_at DESC').all() as Row[])
-      .map((row) => this.#project(row))
-  }
+  // ==================== Mutation ====================
 
-  // ==================== individual CRUD ====================
+  applyMutations(batch: MutationBatch): void {
+    this.#database.exec('BEGIN IMMEDIATE;')
+    try {
+      for (const op of batch.ops) {
+        switch (op.type) {
+          case 'bootstrap':
+            this.save(op.snapshot)
+            break
+          case 'move_artifact_view':
+            this.#database.prepare(`UPDATE artifact_views SET position = json_set(position, '$.x', ?, '$.y', ?) WHERE id = ?`)
+              .run(op.x as SQLInputValue, op.y as SQLInputValue, op.viewId as SQLInputValue)
+            break
+          case 'upsert_workspace':
+            this.#upsertWorkspace(op.workspace)
+            break
+          case 'upsert_scope':
+            this.#upsertScope(op.scope, op.scope.projectId)
+            break
+          case 'upsert_artifact':
+            this.#upsertArtifact(op.artifact)
+            break
+          case 'upsert_artifact_view':
+            this.#upsertArtifactView(op.view)
+            break
+          case 'delete_artifact_view':
+            this.#database.prepare('DELETE FROM artifact_views WHERE id = ?').run(op.viewId as SQLInputValue)
+            break
+          case 'upsert_relation':
+            this.#upsertRelation(op.relation)
+            break
+          case 'delete_relation':
+            this.#database.prepare('DELETE FROM relations WHERE id = ?').run(op.relationId as SQLInputValue)
+            break
+          case 'upsert_note':
+            this.#upsertNote(op.note)
+            break
+          case 'create_checkpoint':
+            this.#upsertCheckpoint(op.checkpoint)
+            break
+          case 'upsert_artifact_revision':
+            this.#upsertArtifactRevision(op.revision)
+            break
+        }
+      }
 
-  // -- Project --
-
-  getProject(projectId: string): Project | undefined {
-    const row = this.#database.prepare('SELECT * FROM projects WHERE id = ?').get(projectId) as Row | undefined
-    return row === undefined ? undefined : this.#project(row)
-  }
-
-  createProject(project: Project): void {
-    if (this.#disposableOnly) {
-      if (!String(project.id).startsWith('disposable-')) throw new Error('Only disposable projects are accepted.')
-      if (!project.rootPath.startsWith('disposable://')) throw new Error('Disposable projects must use a disposable:// root.')
-    }
-    this.#upsertProject(project)
-  }
-
-  // -- Workspace --
-
-  getWorkspace(workspaceId: string): Workspace | undefined {
-    const row = this.#database.prepare('SELECT * FROM workspaces WHERE id = ?').get(workspaceId) as Row | undefined
-    return row === undefined ? undefined : this.#workspace(row)
-  }
-
-  getWorkspaces(projectId: string): readonly Workspace[] {
-    return (this.#database.prepare('SELECT * FROM workspaces WHERE project_id = ? ORDER BY id').all(projectId) as Row[])
-      .map((r) => this.#workspace(r))
-  }
-
-  upsertWorkspace(workspace: Workspace): void {
-    this.#upsertWorkspace(workspace)
-  }
-
-  // -- Artifact --
-
-  getArtifact(artifactId: string): Artifact | undefined {
-    const row = this.#database.prepare('SELECT * FROM artifacts WHERE id = ?').get(artifactId) as Row | undefined
-    return row === undefined ? undefined : this.#artifact(row)
-  }
-
-  getArtifacts(projectId: string): readonly Artifact[] {
-    return (this.#database.prepare('SELECT * FROM artifacts WHERE project_id = ? ORDER BY id').all(projectId) as Row[])
-      .map((r) => this.#artifact(r))
-  }
-
-  upsertArtifact(artifact: Artifact): void {
-    this.#upsertArtifact(artifact)
-  }
-
-  // -- ArtifactView --
-
-  getArtifactView(viewId: string): ArtifactView | undefined {
-    const row = this.#database.prepare('SELECT * FROM artifact_views WHERE id = ?').get(viewId) as Row | undefined
-    return row === undefined ? undefined : this.#artifactView(row)
-  }
-
-  getArtifactViews(projectId: string): readonly ArtifactView[] {
-    return (this.#database.prepare('SELECT * FROM artifact_views WHERE project_id = ? ORDER BY id').all(projectId) as Row[])
-      .map((r) => this.#artifactView(r))
-  }
-
-  upsertArtifactView(view: ArtifactView, projectId: string): void {
-    this.#upsertArtifactView(view, projectId)
-  }
-
-  deleteArtifactView(viewId: string): void {
-    this.#database.prepare('DELETE FROM relations WHERE source_view_id = ? OR target_view_id = ?').run(viewId, viewId)
-    this.#database.prepare('DELETE FROM artifact_views WHERE id = ?').run(viewId)
-  }
-
-  // -- Relation --
-
-  getRelation(relationId: string): Relation | undefined {
-    const row = this.#database.prepare('SELECT * FROM relations WHERE id = ?').get(relationId) as Row | undefined
-    return row === undefined ? undefined : this.#relation(row)
-  }
-
-  getRelations(projectId: string): readonly Relation[] {
-    return (this.#database.prepare('SELECT * FROM relations WHERE project_id = ? ORDER BY id').all(projectId) as Row[])
-      .map((r) => this.#relation(r))
-  }
-
-  upsertRelation(relation: Relation): void {
-    this.#upsertRelation(relation)
-  }
-
-  deleteRelation(relationId: string): void {
-    this.#database.prepare('DELETE FROM relations WHERE id = ?').run(relationId)
-  }
-
-  // -- Note --
-
-  getNote(noteId: string): Note | undefined {
-    const row = this.#database.prepare('SELECT * FROM notes WHERE id = ?').get(noteId) as Row | undefined
-    return row === undefined ? undefined : this.#note(row)
-  }
-
-  getNotes(projectId: string): readonly Note[] {
-    return (this.#database.prepare('SELECT * FROM notes WHERE project_id = ? ORDER BY created_at').all(projectId) as Row[])
-      .map((r) => this.#note(r))
-  }
-
-  upsertNote(note: Note): void {
-    this.#upsertNote(note)
-  }
-
-  deleteNote(noteId: string): void {
-    this.#database.prepare('DELETE FROM notes WHERE id = ?').run(noteId)
-  }
-
-  // -- ArtifactRevision --
-
-  getArtifactRevision(revisionId: string): ArtifactRevision | undefined {
-    const row = this.#database.prepare('SELECT * FROM artifact_revisions WHERE id = ?').get(revisionId) as Row | undefined
-    return row === undefined ? undefined : this.#artifactRevision(row)
-  }
-
-  getArtifactRevisions(artifactId: string): readonly ArtifactRevision[] {
-    return (this.#database.prepare('SELECT * FROM artifact_revisions WHERE artifact_id = ? ORDER BY created_at').all(artifactId) as Row[])
-      .map((r) => this.#artifactRevision(r))
-  }
-
-  upsertArtifactRevision(revision: ArtifactRevision): void {
-    this.#upsertArtifactRevision(revision)
-  }
-
-  // -- Checkpoint --
-
-  getCheckpoint(checkpointId: string): Checkpoint | undefined {
-    const row = this.#database.prepare('SELECT * FROM checkpoints WHERE id = ?').get(checkpointId) as Row | undefined
-    return row === undefined ? undefined : this.#checkpoint(row)
-  }
-
-  getCheckpoints(projectId: string): readonly Checkpoint[] {
-    return (this.#database.prepare('SELECT * FROM checkpoints WHERE project_id = ? ORDER BY created_at').all(projectId) as Row[])
-      .map((r) => this.#checkpoint(r))
-  }
-
-  upsertCheckpoint(checkpoint: Checkpoint): void {
-    this.#upsertCheckpoint(checkpoint)
-  }
-
-  // ==================== migration ====================
-
-  #migrate(): void {
-    let version = this.schemaVersion
-    if (version > SCHEMA_VERSION) throw new Error(`Unsupported schemaVersion ${version}.`)
-
-    if (version === 0) {
-      this.#database.exec(`
-        BEGIN;
-        CREATE TABLE projects (
-          id TEXT PRIMARY KEY, name TEXT NOT NULL, root_path TEXT NOT NULL,
-          created_at TEXT NOT NULL, updated_at TEXT NOT NULL
-        );
-        CREATE TABLE workspaces (
-          id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-          name TEXT NOT NULL, intent TEXT, camera_x REAL NOT NULL, camera_y REAL NOT NULL,
-          camera_zoom REAL NOT NULL CHECK(camera_zoom > 0), focused_node_ids TEXT NOT NULL,
-          visible_layers TEXT NOT NULL, layout_preset TEXT, context_policy TEXT,
-          selection_state TEXT, updated_at TEXT NOT NULL
-        );
-        CREATE TABLE artifacts (
-          id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-          title TEXT NOT NULL, kind TEXT NOT NULL, local_path TEXT NOT NULL,
-          availability TEXT NOT NULL, current_revision_id TEXT,
-          created_at TEXT NOT NULL, updated_at TEXT NOT NULL
-        );
-        CREATE TABLE artifact_views (
-          id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-          artifact_id TEXT NOT NULL REFERENCES artifacts(id) ON DELETE RESTRICT,
-          workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-          revision_id TEXT, reference_kind TEXT NOT NULL,
-          position_x REAL NOT NULL, position_y REAL NOT NULL,
-          width REAL NOT NULL CHECK(width > 0), height REAL NOT NULL CHECK(height > 0),
-          display_mode TEXT NOT NULL, collapsed INTEGER NOT NULL CHECK(collapsed IN (0, 1))
-        );
-        CREATE TABLE relations (
-          id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-          workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-          source_view_id TEXT NOT NULL REFERENCES artifact_views(id) ON DELETE CASCADE,
-          target_view_id TEXT NOT NULL REFERENCES artifact_views(id) ON DELETE CASCADE,
-          kind TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
-          CHECK(source_view_id <> target_view_id)
-        );
-        PRAGMA user_version = 1;
-        COMMIT;
-      `)
-      version = 1
-    }
-
-    if (version === 1) {
-      this.#database.exec(`
-        BEGIN;
-        CREATE TABLE artifact_revisions (
-          id TEXT PRIMARY KEY, artifact_id TEXT NOT NULL REFERENCES artifacts(id) ON DELETE CASCADE,
-          parent_revision_id TEXT, local_path TEXT NOT NULL, content_hash TEXT NOT NULL,
-          source TEXT NOT NULL, run_id TEXT, status TEXT NOT NULL,
-          created_at TEXT NOT NULL
-        );
-        CREATE TABLE notes (
-          id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-          anchor_scope TEXT NOT NULL, artifact_id TEXT, artifact_view_id TEXT, page_index INTEGER,
-          body TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
-        );
-        CREATE TABLE checkpoints (
-          id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-          workspace_id TEXT NOT NULL, label TEXT NOT NULL DEFAULT '',
-          snapshot_json TEXT NOT NULL, created_at TEXT NOT NULL
-        );
-        PRAGMA user_version = 2;
-        COMMIT;
-      `)
+      this.#database.exec('COMMIT;')
+    } catch (error: unknown) {
+      this.#database.exec('ROLLBACK;')
+      throw error
     }
   }
 
-  // ==================== upsert helpers ====================
+  // ==================== Upsert helpers ====================
 
   #upsertProject(value: Project): void {
     this.#database.prepare(`
-      INSERT INTO projects VALUES (?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET name=excluded.name, root_path=excluded.root_path, updated_at=excluded.updated_at
-    `).run(value.id, value.name, value.rootPath, value.createdAt, value.updatedAt)
+      INSERT INTO projects VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET name=excluded.name, graph_version=graph_version+1, updated_at=excluded.updated_at
+    `).run(value.id as SQLInputValue, value.name, value.rootPath, value.graphVersion as unknown as number, value.createdAt, value.updatedAt)
+  }
+
+  #upsertScope(value: Scope, projectId: ProjectId): void {
+    this.#database.prepare(`
+      INSERT INTO scopes VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET parent_scope_id=excluded.parent_scope_id, name=excluded.name, updated_at=excluded.updated_at
+    `).run(value.id as SQLInputValue, projectId as SQLInputValue, value.parentScopeId as SQLInputValue ?? null, value.containerViewId as SQLInputValue ?? null, value.kind, value.name, value.createdAt, value.updatedAt)
   }
 
   #upsertWorkspace(value: Workspace): void {
     this.#database.prepare(`
-      INSERT INTO workspaces VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET name=excluded.name, intent=excluded.intent,
-      camera_x=excluded.camera_x, camera_y=excluded.camera_y, camera_zoom=excluded.camera_zoom,
-      focused_node_ids=excluded.focused_node_ids, visible_layers=excluded.visible_layers,
-      layout_preset=excluded.layout_preset, context_policy=excluded.context_policy,
-      selection_state=excluded.selection_state, updated_at=excluded.updated_at
+      INSERT INTO workspaces VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET name=excluded.name, viewport=excluded.viewport, visible_layers=excluded.visible_layers, context_policy=excluded.context_policy, updated_at=excluded.updated_at
     `).run(
-      value.id, value.projectId, value.name, value.intent,
-      value.viewport.x, value.viewport.y, value.viewport.zoom,
+      value.id as SQLInputValue, value.projectId as SQLInputValue, value.scopeId as SQLInputValue,
+      value.name, value.intent, JSON.stringify(value.viewport),
       JSON.stringify(value.focusedNodeIds), JSON.stringify(value.visibleLayers),
-      value.layoutPreset ?? null,
-      value.contextPolicy === undefined ? null : JSON.stringify(value.contextPolicy),
-      value.selectionState === undefined ? null : JSON.stringify(value.selectionState),
-      value.updatedAt,
+      value.contextPolicy, value.updatedAt,
     )
   }
 
   #upsertArtifact(value: Artifact): void {
     this.#database.prepare(`
       INSERT INTO artifacts VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET title=excluded.title, kind=excluded.kind,
-      local_path=excluded.local_path, availability=excluded.availability, updated_at=excluded.updated_at
-    `).run(
-      value.id, value.projectId, value.title, value.kind, value.localPath,
-      value.availability, value.currentRevisionId ?? null, value.createdAt, value.updatedAt,
-    )
+      ON CONFLICT(id) DO UPDATE SET title=excluded.title, availability=excluded.availability, current_revision_id=excluded.current_revision_id, updated_at=excluded.updated_at
+    `).run(value.id as SQLInputValue, value.projectId as SQLInputValue, value.title, value.kind, value.localPath, value.availability, value.currentRevisionId as SQLInputValue ?? null, value.createdAt, value.updatedAt)
   }
 
-  #upsertArtifactView(value: ArtifactView, projectId: string): void {
+  #upsertArtifactView(value: ArtifactView): void {
     this.#database.prepare(`
-      INSERT INTO artifact_views VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET position_x=excluded.position_x, position_y=excluded.position_y,
-      width=excluded.width, height=excluded.height, display_mode=excluded.display_mode, collapsed=excluded.collapsed
-    `).run(
-      value.id, projectId, value.artifactId, value.workspaceId, value.revisionId ?? null,
-      value.referenceKind, value.position.x, value.position.y, value.size.width, value.size.height,
-      value.displayMode, value.collapsed ? 1 : 0,
-    )
+      INSERT INTO artifact_views VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET position=excluded.position, size=excluded.size, display_mode=excluded.display_mode
+    `).run(value.id as SQLInputValue, value.artifactId as SQLInputValue, value.scopeId as SQLInputValue, value.revisionId as SQLInputValue ?? null,
+      value.referenceKind, JSON.stringify(value.position), JSON.stringify(value.size),
+      value.displayMode, value.collapsed ? 1 : 0)
   }
 
   #upsertRelation(value: Relation): void {
     this.#database.prepare(`
-      INSERT INTO relations VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO relations VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET kind=excluded.kind, updated_at=excluded.updated_at
-    `).run(
-      value.id, value.projectId, value.workspaceId, value.sourceArtifactViewId,
-      value.targetArtifactViewId, value.kind, value.createdAt, value.updatedAt,
-    )
-  }
-
-  #upsertNote(value: Note): void {
-    const anchor = value.anchor as { scope: string; artifactId?: string; artifactViewId?: string; pageIndex?: number }
-    this.#database.prepare(`
-      INSERT INTO notes VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET body=excluded.body, updated_at=excluded.updated_at
-    `).run(
-      value.id, value.projectId, anchor.scope,
-      anchor.artifactId ?? null, anchor.artifactViewId ?? null,
-      anchor.pageIndex ?? null,
-      value.body, value.createdAt, value.updatedAt,
-    )
+    `).run(value.id as SQLInputValue, value.projectId as SQLInputValue, value.sourceEntityType, value.sourceEntityId, value.targetEntityType, value.targetEntityId, value.kind, value.createdAt, value.updatedAt)
   }
 
   #upsertArtifactRevision(value: ArtifactRevision): void {
     this.#database.prepare(`
       INSERT INTO artifact_revisions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET status=excluded.status
-    `).run(
-      value.id, value.artifactId, value.parentRevisionId ?? null,
-      value.localPath, value.contentHash, value.source,
-      value.runId ?? null, value.status, value.createdAt,
-    )
+    `).run(value.id as SQLInputValue, value.artifactId as SQLInputValue, value.parentRevisionId as SQLInputValue ?? null, value.localPath, value.contentHash as SQLInputValue, value.source, value.runId as SQLInputValue ?? null, value.status, value.createdAt)
+  }
+
+  #upsertNote(value: Note): void {
+    this.#database.prepare(`
+      INSERT INTO notes VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET body=excluded.body, updated_at=excluded.updated_at
+    `).run(value.id as SQLInputValue, value.projectId as SQLInputValue, JSON.stringify(value.anchor),
+      (value.anchor.scope === 'artifact' ? (value.anchor as {artifactId: string}).artifactId : null) ?? null,
+      (value.anchor.scope === 'artifact_view' ? (value.anchor as {artifactViewId: string}).artifactViewId : null) ?? null,
+      (value.anchor.scope === 'page' ? (value.anchor as {pageIndex: number}).pageIndex : null) ?? null,
+      value.body, value.createdAt, value.updatedAt)
   }
 
   #upsertCheckpoint(value: Checkpoint): void {
-    const snapshot = JSON.stringify(value.canvasSnapshot)
     this.#database.prepare(`
       INSERT INTO checkpoints VALUES (?, ?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET snapshot_json=excluded.snapshot_json
-    `).run(
-      value.id, value.projectId, value.workspaceId,
-      '',
-      snapshot, value.createdAt,
-    )
+      ON CONFLICT(id) DO NOTHING
+    `).run(value.id as SQLInputValue, value.projectId as SQLInputValue, value.scopeId as SQLInputValue, value.label, JSON.stringify(value.snapshotJson), value.createdAt)
   }
 
-  // ==================== row mappers ====================
+  // ==================== Row → Entity ====================
 
   #project(row: Row): Project {
-    return { id: row.id as Project['id'], name: String(row.name), rootPath: String(row.root_path), createdAt: String(row.created_at), updatedAt: String(row.updated_at) }
+    return { id: row.id as ProjectId, name: String(row.name), rootPath: String(row.root_path), graphVersion: (row.graph_version as number) as GraphVersion, createdAt: String(row.created_at), updatedAt: String(row.updated_at) }
+  }
+
+  #scope(row: Row): Scope {
+    return { id: row.id as ScopeId, projectId: row.project_id as ProjectId, parentScopeId: (row.parent_scope_id ?? null) as ScopeId | null, containerViewId: (row.container_view_id ?? null) as ArtifactViewId | null, kind: String(row.kind) as Scope['kind'], name: String(row.name), createdAt: String(row.created_at), updatedAt: String(row.updated_at) }
   }
 
   #workspace(row: Row): Workspace {
-    return {
-      id: row.id as Workspace['id'], projectId: row.project_id as Workspace['projectId'],
-      name: String(row.name), intent: row.intent as Workspace['intent'],
-      viewport: { x: Number(row.camera_x), y: Number(row.camera_y), zoom: Number(row.camera_zoom) },
-      focusedNodeIds: json<readonly string[]>(row.focused_node_ids),
-      visibleLayers: json<readonly string[]>(row.visible_layers),
-      ...(row.layout_preset === null ? {} : { layoutPreset: String(row.layout_preset) }),
-      ...(row.context_policy === null ? {} : { contextPolicy: json<NonNullable<Workspace['contextPolicy']>>(row.context_policy) }),
-      ...(row.selection_state === null ? {} : { selectionState: json<NonNullable<Workspace['selectionState']>>(row.selection_state) }),
-      updatedAt: String(row.updated_at),
-    }
+    return { id: row.id as WorkspaceId, projectId: row.project_id as ProjectId, scopeId: row.scope_id as ScopeId, name: String(row.name), intent: row.intent ? String(row.intent) as Workspace['intent'] : null, viewport: json<Workspace['viewport']>(row.viewport), focusedNodeIds: json<string[]>(row.focused_node_ids), visibleLayers: json<string[]>(row.visible_layers), contextPolicy: String(row.context_policy ?? 'selection-only') as Workspace['contextPolicy'], updatedAt: String(row.updated_at) }
   }
 
   #artifact(row: Row): Artifact {
-    return {
-      id: row.id as Artifact['id'], projectId: row.project_id as Artifact['projectId'],
-      title: String(row.title), kind: row.kind as Artifact['kind'], localPath: String(row.local_path),
-      availability: row.availability as Artifact['availability'],
-      ...(row.current_revision_id === null ? {} : { currentRevisionId: row.current_revision_id as NonNullable<Artifact['currentRevisionId']> }),
-      createdAt: String(row.created_at), updatedAt: String(row.updated_at),
-    }
+    return { id: row.id as ArtifactId, projectId: row.project_id as ProjectId, title: String(row.title), kind: String(row.kind) as Artifact['kind'], localPath: String(row.local_path), availability: String(row.availability) as Artifact['availability'], ...(row.current_revision_id === null || row.current_revision_id === undefined ? {} : { currentRevisionId: row.current_revision_id as ArtifactRevisionId }), createdAt: String(row.created_at), updatedAt: String(row.updated_at) }
   }
 
   #artifactView(row: Row): ArtifactView {
-    return {
-      id: row.id as ArtifactView['id'], artifactId: row.artifact_id as ArtifactView['artifactId'],
-      workspaceId: row.workspace_id as ArtifactView['workspaceId'],
-      ...(row.revision_id === null ? {} : { revisionId: row.revision_id as NonNullable<ArtifactView['revisionId']> }),
-      referenceKind: row.reference_kind as ArtifactView['referenceKind'],
-      position: { x: Number(row.position_x), y: Number(row.position_y) },
-      size: { width: Number(row.width), height: Number(row.height) },
-      displayMode: row.display_mode as ArtifactView['displayMode'], collapsed: Number(row.collapsed) === 1,
-    }
+    return { id: row.id as ArtifactViewId, artifactId: row.artifact_id as ArtifactId, scopeId: row.scope_id as ScopeId, ...(row.revision_id === null || row.revision_id === undefined ? {} : { revisionId: row.revision_id as ArtifactRevisionId }), referenceKind: String(row.reference_kind) as ArtifactView['referenceKind'], position: json<ArtifactView['position']>(row.position), size: json<ArtifactView['size']>(row.size), displayMode: String(row.display_mode) as ArtifactView['displayMode'], collapsed: (row.collapsed as number) === 1 }
   }
 
   #relation(row: Row): Relation {
-    return {
-      id: row.id as Relation['id'], projectId: row.project_id as Relation['projectId'],
-      workspaceId: row.workspace_id as Relation['workspaceId'],
-      sourceArtifactViewId: row.source_view_id as Relation['sourceArtifactViewId'],
-      targetArtifactViewId: row.target_view_id as Relation['targetArtifactViewId'],
-      kind: String(row.kind), createdAt: String(row.created_at), updatedAt: String(row.updated_at),
-    }
-  }
-
-  #note(row: Row): Note {
-    const scope = String(row.anchor_scope)
-    const base = { scope: scope as Note['anchor']['scope'], artifactId: row.artifact_id as string | undefined } as Note['anchor']
-    if (scope === 'artifact_view') {
-      ;(base as { scope: 'artifact_view'; artifactId: string; artifactViewId: string }).artifactViewId = String(row.artifact_view_id)
-    }
-    if (scope === 'page' && row.page_index !== null) {
-      ;(base as { scope: 'page'; artifactId: string; pageIndex: number }).pageIndex = Number(row.page_index)
-    }
-    return {
-      id: row.id as Note['id'], projectId: row.project_id as Note['projectId'],
-      anchor: base, body: String(row.body),
-      createdAt: String(row.created_at), updatedAt: String(row.updated_at),
-    }
+    return { id: row.id as RelationId, projectId: row.project_id as ProjectId, sourceEntityType: String(row.source_entity_type) as Relation['sourceEntityType'], sourceEntityId: String(row.source_entity_id), targetEntityType: String(row.target_entity_type) as Relation['targetEntityType'], targetEntityId: String(row.target_entity_id), kind: String(row.kind), createdAt: String(row.created_at), updatedAt: String(row.updated_at) }
   }
 
   #artifactRevision(row: Row): ArtifactRevision {
-    return {
-      id: row.id as ArtifactRevision['id'], artifactId: row.artifact_id as ArtifactRevision['artifactId'],
-      ...(row.parent_revision_id === null ? {} : { parentRevisionId: row.parent_revision_id as NonNullable<ArtifactRevision['parentRevisionId']> }),
-      localPath: String(row.local_path), contentHash: row.content_hash as ArtifactRevision['contentHash'],
-      source: row.source as ArtifactRevision['source'],
-      ...(row.run_id === null ? {} : { runId: row.run_id as NonNullable<ArtifactRevision['runId']> }),
-      status: row.status as ArtifactRevision['status'], createdAt: String(row.created_at),
+    return { id: row.id as ArtifactRevisionId, artifactId: row.artifact_id as ArtifactId, localPath: String(row.local_path), contentHash: String(row.content_hash) as ArtifactRevision['contentHash'], source: String(row.source) as ArtifactRevision['source'], status: String(row.status) as ArtifactRevision['status'], createdAt: String(row.created_at), ...(row.parent_revision_id ? { parentRevisionId: row.parent_revision_id as ArtifactRevisionId } : {}), ...(row.run_id ? { runId: row.run_id as ArtifactRevision['runId'] } : {}) } as ArtifactRevision
+  }
+
+  #note(row: Row): Note {
+    const anchorScope = String(row.anchor_scope)
+    let anchor: Note['anchor']
+    if (anchorScope === 'artifact_view') {
+      anchor = { scope: 'artifact_view', artifactId: row.artifact_id as ArtifactId, artifactViewId: row.artifact_view_id as ArtifactViewId }
+    } else if (anchorScope === 'page') {
+      anchor = { scope: 'page', artifactId: row.artifact_id as ArtifactId, pageIndex: (row.page_index as number) ?? 0 }
+    } else {
+      anchor = { scope: 'artifact', artifactId: (row.artifact_id ?? '') as ArtifactId }
     }
+    return { id: row.id as NoteId, projectId: row.project_id as ProjectId, anchor, body: String(row.body), createdAt: String(row.created_at), updatedAt: String(row.updated_at) }
   }
 
   #checkpoint(row: Row): Checkpoint {
-    return {
-      id: row.id as Checkpoint['id'], projectId: row.project_id as Checkpoint['projectId'],
-      workspaceId: row.workspace_id as Checkpoint['workspaceId'],
-      artifactRevisionIds: [],
-      relatedRunIds: [],
-      canvasSnapshot: json<Checkpoint['canvasSnapshot']>(row.snapshot_json),
-      createdAt: String(row.created_at),
-    }
+    return { id: row.id as CheckpointId, projectId: row.project_id as ProjectId, scopeId: row.scope_id as ScopeId, label: String(row.label ?? ''), snapshotJson: json<Checkpoint['snapshotJson']>(row.snapshot_json), createdAt: String(row.created_at) }
   }
 }
-
-export { SCHEMA_VERSION }
