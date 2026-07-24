@@ -147,7 +147,7 @@ describe('Local Core HTTP server', () => {
     const response = await fetch(`${baseUrl}/project-roots/validate`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ rootPath: 'x'.repeat(65 * 1024) }),
+      body: JSON.stringify({ rootPath: 'x'.repeat(2 * 1024 * 1024) }), // 2 MiB > 1 MiB limit
     })
 
     expect(response.status).toBe(400)

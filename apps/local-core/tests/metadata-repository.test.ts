@@ -234,7 +234,7 @@ describe('SqliteMetadataRepository', () => {
     repository.close()
   })
 
-  it('Checkpoint CRUD preserves junction tables', async () => {
+  it('Checkpoint CRUD stores snapshot_json', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'local-core-phase2-'))
     cleanup.push(directory)
     const repository = new SqliteMetadataRepository(join(directory, 'metadata.sqlite'))
@@ -246,9 +246,9 @@ describe('SqliteMetadataRepository', () => {
       id: 'cp-2' as Checkpoint['id'],
       projectId: snap.project.id,
       workspaceId: snap.workspaces[0].id,
-      artifactRevisionIds: [snap.artifactRevisions[0].id],
-      relatedRunIds: ['run-1' as Checkpoint['relatedRunIds'][number], 'run-2' as Checkpoint['relatedRunIds'][number]],
-      canvasSnapshot: { nodes: [{ id: 'n1' }] },
+      artifactRevisionIds: [],
+      relatedRunIds: [],
+      canvasSnapshot: { nodes: [{ id: 'n1' }], camera: { x: 100, y: 200, zoom: 1.5 } },
       createdAt: now,
     }
     repository.upsertCheckpoint(cp)
@@ -256,8 +256,7 @@ describe('SqliteMetadataRepository', () => {
     expect(checkpoints).toHaveLength(2)
     const restored = checkpoints.find((c) => c.id === 'cp-2')
     expect(restored).toBeDefined()
-    expect(restored!.artifactRevisionIds).toHaveLength(1)
-    expect(restored!.relatedRunIds).toHaveLength(2)
+    expect(restored!.canvasSnapshot).toEqual({ nodes: [{ id: 'n1' }], camera: { x: 100, y: 200, zoom: 1.5 } })
     repository.close()
   })
 

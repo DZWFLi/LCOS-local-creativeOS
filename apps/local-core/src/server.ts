@@ -21,7 +21,7 @@ import { validateProjectRoot } from './project-root.js'
 import { SqliteMetadataRepository } from './metadata-repository.js'
 
 const LOOPBACK_HOST = '127.0.0.1'
-const MAX_BODY_BYTES = 64 * 1024
+const MAX_BODY_BYTES = 1 * 1024 * 1024 // 1 MiB
 export const LOCAL_CORE_DEV_PORT = 43121
 
 export interface LocalCoreServerOptions {

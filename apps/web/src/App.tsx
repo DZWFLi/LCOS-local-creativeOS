@@ -80,6 +80,7 @@ export function App() {
   const [notice, setNotice] = useState('已恢复上次工作现场')
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved')
   const [dataSource, setDataSource] = useState<DataSource>('none')
+  const [bootMode, setBootMode] = useState<'loading' | 'runtime' | 'offline'>('loading')
   const [workRail, setWorkRail] = useState<WorkRailPreferences>(initial.workRail)
   const [dockCollapsed, setDockCollapsed] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 1366)
   const [miniMapCollapsed, setMiniMapCollapsed] = useState(false)
@@ -104,12 +105,13 @@ export function App() {
   const projectStateCacheRef = useRef<Map<string, PersistedPrototypeState>>(new Map([[initialProjectId, initial]]))
   const bridgeRef = useRef(new RuntimeBridge(initialProjectId))
 
-  // Try loading from Local Core on mount. Never silently fall back — show notice if offline.
+  // Try loading from Local Core on mount. Boot stays 'loading' until resolved.
   useEffect(() => {
     const bridge = bridgeRef.current
     bridge.isAvailable().then((available) => {
       if (!available) {
-        setNotice('Local Core 离线，当前为本地 Fixture 模式')
+        setNotice('Local Core 离线，当前为 Demo 模式')
+        setBootMode('offline')
         return
       }
       bridge.loadProject().then((result) => {
@@ -121,10 +123,14 @@ export function App() {
           setScopeId(result.state.activeScopeId)
           setCamera(result.state.scopes[0]?.camera ?? camera)
           setDataSource('runtime')
+          setBootMode('runtime')
           setNotice('已从 Local Core 恢复项目')
+        } else {
+          setBootMode('offline')
         }
       }).catch(() => {
-        setNotice('Local Core 加载失败，使用本地 Fixture')
+        setBootMode('offline')
+        setNotice('Local Core 连接异常，使用 Demo 模式')
       })
     })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -212,6 +218,7 @@ export function App() {
 
   useEffect(() => {
     if (performanceFixture) return
+    if (bootMode === 'loading') return // Hydration gate: prevent saving before runtime load completes
     setSaveStatus('saving')
     const timer = window.setTimeout(() => {
       const now = new Date().toISOString()

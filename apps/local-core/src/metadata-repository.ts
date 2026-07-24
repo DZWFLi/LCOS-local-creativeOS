@@ -22,22 +22,19 @@ function json<T>(value: unknown): T {
   return JSON.parse(String(value)) as T
 }
 
-/** Disposable guard: only projects with disposable- prefix are writable. */
-function assertDisposable(projectId: string, rootPath: string): void {
-  if (!String(projectId).startsWith('disposable-')) {
-    throw new Error('Only disposable projects are accepted in Phase 2.')
-  }
-  if (!rootPath.startsWith('disposable://')) {
-    throw new Error('Disposable projects must use a disposable:// root.')
-  }
+export interface MetadataRepositoryOptions {
+  /** When true, only projects with 'disposable-' prefix are writable (Phase 2 default). */
+  readonly disposableOnly?: boolean
 }
 
 export class SqliteMetadataRepository {
   readonly databasePath: string
   readonly #database: DatabaseSync
+  readonly #disposableOnly: boolean
 
-  constructor(databasePath: string) {
+  constructor(databasePath: string, options: MetadataRepositoryOptions = {}) {
     this.databasePath = resolve(databasePath)
+    this.#disposableOnly = options.disposableOnly ?? true
     mkdirSync(dirname(this.databasePath), { recursive: true })
     this.#database = new DatabaseSync(this.databasePath)
     this.#database.exec('PRAGMA foreign_keys = ON;')
@@ -58,13 +55,18 @@ export class SqliteMetadataRepository {
     if (snapshot.schemaVersion !== SCHEMA_VERSION) {
       throw new Error(`Expected schemaVersion ${SCHEMA_VERSION}.`)
     }
-    assertDisposable(String(snapshot.project.id), snapshot.project.rootPath)
+    if (this.#disposableOnly) {
+      if (!String(snapshot.project.id).startsWith('disposable-')) {
+        throw new Error('Only disposable projects are accepted. Disable disposableOnly to allow real projects.')
+      }
+      if (!snapshot.project.rootPath.startsWith('disposable://')) {
+        throw new Error('Disposable projects must use a disposable:// root.')
+      }
+    }
     this.#database.exec('BEGIN IMMEDIATE;')
     try {
       this.#upsertProject(snapshot.project)
       // Clear existing children in dependency order
-      this.#database.prepare('DELETE FROM checkpoint_run_ids WHERE checkpoint_id IN (SELECT id FROM checkpoints WHERE project_id = ?)').run(snapshot.project.id)
-      this.#database.prepare('DELETE FROM checkpoint_revision_ids WHERE checkpoint_id IN (SELECT id FROM checkpoints WHERE project_id = ?)').run(snapshot.project.id)
       this.#database.prepare('DELETE FROM checkpoints WHERE project_id = ?').run(snapshot.project.id)
       this.#database.prepare('DELETE FROM notes WHERE project_id = ?').run(snapshot.project.id)
       this.#database.prepare('DELETE FROM artifact_revisions WHERE artifact_id IN (SELECT id FROM artifacts WHERE project_id = ?)').run(snapshot.project.id)
@@ -120,7 +122,10 @@ export class SqliteMetadataRepository {
   }
 
   createProject(project: Project): void {
-    assertDisposable(String(project.id), project.rootPath)
+    if (this.#disposableOnly) {
+      if (!String(project.id).startsWith('disposable-')) throw new Error('Only disposable projects are accepted.')
+      if (!project.rootPath.startsWith('disposable://')) throw new Error('Disposable projects must use a disposable:// root.')
+    }
     this.#upsertProject(project)
   }
 
@@ -314,18 +319,8 @@ export class SqliteMetadataRepository {
         );
         CREATE TABLE checkpoints (
           id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-          workspace_id TEXT NOT NULL, context_snapshot_id TEXT,
-          canvas_snapshot TEXT NOT NULL, created_at TEXT NOT NULL
-        );
-        CREATE TABLE checkpoint_revision_ids (
-          checkpoint_id TEXT NOT NULL REFERENCES checkpoints(id) ON DELETE CASCADE,
-          revision_id TEXT NOT NULL,
-          PRIMARY KEY (checkpoint_id, revision_id)
-        );
-        CREATE TABLE checkpoint_run_ids (
-          checkpoint_id TEXT NOT NULL REFERENCES checkpoints(id) ON DELETE CASCADE,
-          run_id TEXT NOT NULL,
-          PRIMARY KEY (checkpoint_id, run_id)
+          workspace_id TEXT NOT NULL, label TEXT NOT NULL DEFAULT '',
+          snapshot_json TEXT NOT NULL, created_at TEXT NOT NULL
         );
         PRAGMA user_version = 2;
         COMMIT;
@@ -419,23 +414,15 @@ export class SqliteMetadataRepository {
   }
 
   #upsertCheckpoint(value: Checkpoint): void {
+    const snapshot = JSON.stringify(value.canvasSnapshot)
     this.#database.prepare(`
       INSERT INTO checkpoints VALUES (?, ?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET canvas_snapshot=excluded.canvas_snapshot
+      ON CONFLICT(id) DO UPDATE SET snapshot_json=excluded.snapshot_json
     `).run(
       value.id, value.projectId, value.workspaceId,
-      value.contextSnapshotId ?? null,
-      JSON.stringify(value.canvasSnapshot), value.createdAt,
+      '',
+      snapshot, value.createdAt,
     )
-    // Junction tables: delete and re-insert
-    this.#database.prepare('DELETE FROM checkpoint_revision_ids WHERE checkpoint_id = ?').run(value.id)
-    for (const revId of value.artifactRevisionIds) {
-      this.#database.prepare('INSERT OR IGNORE INTO checkpoint_revision_ids VALUES (?, ?)').run(value.id, revId)
-    }
-    this.#database.prepare('DELETE FROM checkpoint_run_ids WHERE checkpoint_id = ?').run(value.id)
-    for (const runId of value.relatedRunIds) {
-      this.#database.prepare('INSERT OR IGNORE INTO checkpoint_run_ids VALUES (?, ?)').run(value.id, runId)
-    }
   }
 
   // ==================== row mappers ====================
@@ -518,15 +505,12 @@ export class SqliteMetadataRepository {
   }
 
   #checkpoint(row: Row): Checkpoint {
-    const revisionRows = this.#database.prepare('SELECT revision_id FROM checkpoint_revision_ids WHERE checkpoint_id = ?').all(row.id as SQLInputValue) as Row[]
-    const runRows = this.#database.prepare('SELECT run_id FROM checkpoint_run_ids WHERE checkpoint_id = ?').all(row.id as SQLInputValue) as Row[]
     return {
       id: row.id as Checkpoint['id'], projectId: row.project_id as Checkpoint['projectId'],
       workspaceId: row.workspace_id as Checkpoint['workspaceId'],
-      ...(row.context_snapshot_id === null ? {} : { contextSnapshotId: row.context_snapshot_id as NonNullable<Checkpoint['contextSnapshotId']> }),
-      artifactRevisionIds: revisionRows.map((r) => r.revision_id as Checkpoint['artifactRevisionIds'][number]),
-      relatedRunIds: runRows.map((r) => r.run_id as Checkpoint['relatedRunIds'][number]),
-      canvasSnapshot: json<Checkpoint['canvasSnapshot']>(row.canvas_snapshot),
+      artifactRevisionIds: [],
+      relatedRunIds: [],
+      canvasSnapshot: json<Checkpoint['canvasSnapshot']>(row.snapshot_json),
       createdAt: String(row.created_at),
     }
   }
