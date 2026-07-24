@@ -135,6 +135,7 @@ export function mapGraphToState(graph: ProjectGraphSnapshot, projectId: string):
       current: !isStale,
       disabled: isMissing,
       fileType: artifact?.kind,
+      scopeId: 'scope-root',
     }
   })
 
@@ -154,7 +155,7 @@ export function mapGraphToState(graph: ProjectGraphSnapshot, projectId: string):
     intent: (ws.intent ?? null) as Workspace['intent'],
     scopeId: String(ws.id),
     camera: { x: ws.viewport.x, y: ws.viewport.y, zoom: ws.viewport.zoom },
-    visibleLayers: (ws.visibleLayers as Workspace['visibleLayers']) ?? ['core'],
+    visibleLayers: ['core', 'process'] as Workspace['visibleLayers'],
     focusedNodeIds: ws.focusedNodeIds as string[],
     contextPolicy: 'selection-only' as const,
     createdAt: ws.updatedAt,
@@ -162,7 +163,7 @@ export function mapGraphToState(graph: ProjectGraphSnapshot, projectId: string):
   }))
 
   const scopes: CanvasScope[] = workspaces.map((ws) => ({
-    id: ws.scopeId,
+    id: 'scope-root',
     label: ws.label,
     kind: 'root' as const,
     parentScopeId: null,
@@ -187,7 +188,7 @@ export function mapGraphToState(graph: ProjectGraphSnapshot, projectId: string):
 function defaultWorkspace(): Workspace {
   return {
     id: 'workspace-main', label: 'Main', intent: null, scopeId: 'scope-root',
-    camera: { x: 0, y: 0, zoom: 1 }, visibleLayers: ['core'],
+    camera: { x: 0, y: 0, zoom: 1 }, visibleLayers: ['core', 'process'],
     focusedNodeIds: [], contextPolicy: 'selection-only',
     createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
   }
