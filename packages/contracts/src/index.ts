@@ -13,6 +13,7 @@ import type {
   CommandId,
   ContextSnapshot,
   ContextSnapshotId,
+  Note,
   Project,
   ProjectId,
   PreviewResult,
@@ -73,6 +74,9 @@ export interface ProjectGraphSnapshot {
   readonly artifacts: readonly Artifact[]
   readonly artifactViews: readonly ArtifactView[]
   readonly relations: readonly Relation[]
+  readonly notes: readonly Note[]
+  readonly artifactRevisions: readonly ArtifactRevision[]
+  readonly checkpoints: readonly Checkpoint[]
 }
 
 export interface SaveProjectGraphInput {
@@ -155,7 +159,10 @@ export interface ExecutionRuntimeContract {
 
 export type {
   Artifact,
+  ArtifactRevision,
   ArtifactView,
+  Checkpoint,
+  Note,
   Project,
   Relation,
   Workspace,

@@ -1,10 +1,17 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 
 import type {
+  Artifact,
+  ArtifactView,
+  Checkpoint,
+  Note,
+  Project,
   ProjectGraphSnapshot,
   ProjectCatalog,
+  Relation,
   SaveProjectGraphInput,
   ValidateProjectRootInput,
+  Workspace,
 } from '@local-creative-os/contracts'
 
 import { failure } from './errors.js'
@@ -82,6 +89,23 @@ function statusForError(code: string): number {
   return 400
 }
 
+function requireMetadata(metadata: SqliteMetadataRepository | undefined, response: ServerResponse): metadata is SqliteMetadataRepository {
+  if (metadata === undefined) {
+    sendJson(response, 503, failure('UNAVAILABLE', 'Metadata repository is not configured.'))
+    return false
+  }
+  return true
+}
+
+function requireProject(projectId: string, metadata: SqliteMetadataRepository, response: ServerResponse): Project | undefined {
+  const project = metadata.getProject(projectId)
+  if (project === undefined) {
+    sendJson(response, 404, failure('NOT_FOUND', 'Project not found.'))
+    return undefined
+  }
+  return project
+}
+
 export function createLocalCoreServer(options: LocalCoreServerOptions = {}): LocalCoreServer {
   const host = options.host ?? LOOPBACK_HOST
   if (host !== LOOPBACK_HOST) {
@@ -114,75 +138,74 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
 
     try {
       const url = new URL(request.url ?? '/', `http://${LOOPBACK_HOST}`)
-      if (request.method === 'GET' && url.pathname === '/health') {
+      const method = request.method ?? 'GET'
+      const pathname = url.pathname
+
+      // ---- Health ----
+      if (method === 'GET' && pathname === '/health') {
         sendJson(response, 200, getHealthStatus())
         return
       }
-      if (request.method === 'GET' && url.pathname === '/projects') {
+
+      // ---- Project Catalog ----
+      if (method === 'GET' && pathname === '/projects') {
         const result = metadata === undefined
           ? await withAbort(catalog.list(controller.signal), controller.signal)
-          : {
-              ok: true as const,
-              value: metadata.listProjects().map((project) => ({
-                id: project.id,
-                name: project.name,
-                rootPath: project.rootPath,
-              })),
-            }
+          : { ok: true as const, value: metadata.listProjects().map((p) => ({ id: p.id, name: p.name, rootPath: p.rootPath })) }
         sendJson(response, result.ok ? 200 : statusForError(result.error.code), result)
         return
       }
-      if (request.method === 'GET' && url.pathname === '/metadata/status') {
-        if (metadata === undefined) {
-          sendJson(response, 503, failure('UNAVAILABLE', 'Metadata repository is not configured.'))
-          return
-        }
+
+      // ---- Metadata Status ----
+      if (method === 'GET' && pathname === '/metadata/status') {
+        if (!requireMetadata(metadata, response)) return
         sendJson(response, 200, {
           ok: true,
-          value: {
-            schemaVersion: metadata.schemaVersion,
-            databasePath: metadata.databasePath,
-            metadataOnly: true,
-          },
+          value: { schemaVersion: metadata.schemaVersion, databasePath: metadata.databasePath, metadataOnly: true },
         })
         return
       }
-      const graphMatch = /^\/projects\/([^/]+)\/graph$/.exec(url.pathname)
-      if (request.method === 'GET' && graphMatch !== null) {
-        if (metadata === undefined) {
-          sendJson(response, 503, failure('UNAVAILABLE', 'Metadata repository is not configured.'))
-          return
-        }
-        const projectId = decodeURIComponent(graphMatch[1] ?? '')
-        const snapshot = metadata.get(projectId)
-        if (snapshot === undefined) {
-          sendJson(response, 404, failure('NOT_FOUND', 'Project metadata was not found.'))
-          return
-        }
-        sendJson(response, 200, { ok: true, value: snapshot })
-        return
-      }
-      if (request.method === 'PUT' && graphMatch !== null) {
-        if (metadata === undefined) {
-          sendJson(response, 503, failure('UNAVAILABLE', 'Metadata repository is not configured.'))
-          return
-        }
+
+      // ---- Project Root Validation ----
+      if (method === 'POST' && pathname === '/project-roots/validate') {
         let input: unknown
-        try {
-          input = await readJsonBody(request, controller.signal)
-        } catch {
+        try { input = await readJsonBody(request, controller.signal) } catch {
           sendJson(response, 400, failure('INVALID_ARGUMENT', 'Request body must be valid JSON under 64 KiB.'))
           return
         }
-        if (
-          typeof input !== 'object'
-          || input === null
-          || !('disposable' in input)
-          || input.disposable !== true
-          || !('snapshot' in input)
-          || typeof input.snapshot !== 'object'
-          || input.snapshot === null
-        ) {
+        if (typeof input !== 'object' || input === null || !('rootPath' in input) || typeof input.rootPath !== 'string') {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'rootPath must be a string.'))
+          return
+        }
+        const result = await withAbort(
+          validateProjectRoot((input as ValidateProjectRootInput).rootPath, {
+            signal: controller.signal,
+            ...(options.allowedRoot === undefined ? {} : { allowedRoot: options.allowedRoot }),
+          }),
+          controller.signal,
+        )
+        sendJson(response, result.ok ? 200 : statusForError(result.error.code), result)
+        return
+      }
+
+      // ==================== Project Graph (snapshot) ====================
+      const graphMatch = /^\/projects\/([^/]+)\/graph$/.exec(pathname)
+      if (method === 'GET' && graphMatch !== null) {
+        if (!requireMetadata(metadata, response)) return
+        const projectId = decodeURIComponent(graphMatch[1] ?? '')
+        if (!requireProject(projectId, metadata, response)) return
+        const snapshot = metadata.get(projectId)
+        sendJson(response, 200, { ok: true, value: snapshot })
+        return
+      }
+      if (method === 'PUT' && graphMatch !== null) {
+        if (!requireMetadata(metadata, response)) return
+        let input: unknown
+        try { input = await readJsonBody(request, controller.signal) } catch {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Request body must be valid JSON under 64 KiB.'))
+          return
+        }
+        if (typeof input !== 'object' || input === null || !('disposable' in input) || input.disposable !== true || !('snapshot' in input) || typeof input.snapshot !== 'object' || input.snapshot === null) {
           sendJson(response, 400, failure('INVALID_ARGUMENT', 'A disposable project snapshot is required.'))
           return
         }
@@ -196,59 +219,27 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
           metadata.save(saveInput.snapshot as ProjectGraphSnapshot)
           sendJson(response, 200, { ok: true, value: metadata.get(projectId) })
         } catch (error: unknown) {
-          const message = error instanceof Error ? error.message : 'Metadata could not be saved.'
-          sendJson(response, 400, failure('VALIDATION', message))
+          sendJson(response, 400, failure('VALIDATION', error instanceof Error ? error.message : 'Metadata could not be saved.'))
         }
         return
       }
-      if (request.method === 'POST' && url.pathname === '/project-roots/validate') {
-        let input: unknown
-        try {
-          input = await readJsonBody(request, controller.signal)
-        } catch (error: unknown) {
-          const result = error instanceof DOMException && error.name === 'AbortError'
-            ? failure('ABORTED', 'Request was aborted.')
-            : failure('INVALID_ARGUMENT', 'Request body must be valid JSON under 64 KiB.')
-          sendJson(response, statusForError(result.error.code), result)
-          return
-        }
-        if (
-          typeof input !== 'object'
-          || input === null
-          || !('rootPath' in input)
-          || typeof input.rootPath !== 'string'
-        ) {
-          const result = failure('INVALID_ARGUMENT', 'rootPath must be a string.')
-          sendJson(response, 400, result)
-          return
-        }
-        const result = await withAbort(
-          validateProjectRoot((input as ValidateProjectRootInput).rootPath, {
-            signal: controller.signal,
-            ...(options.allowedRoot === undefined ? {} : { allowedRoot: options.allowedRoot }),
-          }),
-          controller.signal,
-        )
-        sendJson(response, result.ok ? 200 : statusForError(result.error.code), result)
+
+      // ==================== Individual CRUD routes ====================
+
+      const entityResult = await handleEntityRoute(method, pathname, metadata, request, controller.signal)
+      if (entityResult !== undefined) {
+        sendJson(response, entityResult.status, entityResult.body)
         return
       }
+
+      // Fallback
       sendJson(response, 404, failure('INVALID_ARGUMENT', 'Route not found.'))
     } catch (error: unknown) {
-      if (
-        error instanceof DOMException
-        && error.name === 'AbortError'
-        && !response.headersSent
-        && !response.destroyed
-      ) {
-        sendJson(
-          response,
-          timedOut ? 408 : 499,
-          failure('ABORTED', timedOut ? 'Request timed out.' : 'Request was aborted.'),
-        )
+      if (error instanceof DOMException && error.name === 'AbortError' && !response.headersSent && !response.destroyed) {
+        sendJson(response, timedOut ? 408 : 499, failure('ABORTED', timedOut ? 'Request timed out.' : 'Request was aborted.'))
       } else if (!response.headersSent && !response.destroyed) {
         sendJson(response, 500, failure('INTERNAL', 'Unexpected Local Core error.'))
-      }
-      else response.destroy()
+      } else response.destroy()
     } finally {
       clearTimeout(timeout)
       request.removeListener('aborted', abort)
@@ -266,19 +257,13 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
       server = nextServer
 
       let rejectStart: ((reason?: unknown) => void) | undefined
-      const onAbort = () => {
-        nextServer.close()
-        rejectStart?.(new DOMException('Start aborted', 'AbortError'))
-      }
+      const onAbort = () => { nextServer.close(); rejectStart?.(new DOMException('Start aborted', 'AbortError')) }
       signal?.addEventListener('abort', onAbort, { once: true })
       try {
         await new Promise<void>((resolvePromise, reject) => {
           rejectStart = reject
           nextServer.once('error', reject)
-          nextServer.listen(options.port ?? 0, host, () => {
-            nextServer.off('error', reject)
-            resolvePromise()
-          })
+          nextServer.listen(options.port ?? 0, host, () => { nextServer.off('error', reject); resolvePromise() })
         })
       } catch (error: unknown) {
         server = undefined
@@ -290,25 +275,17 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
 
       const bound = nextServer.address()
       if (bound === null || typeof bound === 'string') {
-        await new Promise<void>((resolvePromise) => nextServer.close(() => resolvePromise()))
+        await new Promise<void>((r) => nextServer.close(() => r()))
         server = undefined
         throw new Error('Local Core did not receive a TCP address.')
       }
       currentAddress = { host: LOOPBACK_HOST, port: bound.port }
       if (signal !== undefined) {
-        if (signal.aborted) {
-          await api.close()
-          throw new DOMException('Start aborted', 'AbortError')
-        }
+        if (signal.aborted) { await api.close(); throw new DOMException('Start aborted', 'AbortError') }
         lifecycleSignal = signal
-        lifecycleAbort = () => {
-          void api.close()
-        }
+        lifecycleAbort = () => { void api.close() }
         signal.addEventListener('abort', lifecycleAbort, { once: true })
-        if (signal.aborted) {
-          await api.close()
-          throw new DOMException('Start aborted', 'AbortError')
-        }
+        if (signal.aborted) { await api.close(); throw new DOMException('Start aborted', 'AbortError') }
       }
       return currentAddress
     },
@@ -322,20 +299,218 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
       lifecycleSignal = undefined
       lifecycleAbort = undefined
       await new Promise<void>((resolvePromise, reject) => {
-        activeServer.close((error) => {
-          if (error) reject(error)
-          else resolvePromise()
-        })
+        activeServer.close((error) => { if (error) reject(error); else resolvePromise() })
         activeServer.closeAllConnections()
       })
       server = undefined
       currentAddress = undefined
     },
 
-    address(): LocalCoreAddress | undefined {
-      return currentAddress
-    },
+    address(): LocalCoreAddress | undefined { return currentAddress },
   }
 
   return api
+}
+
+// ==================== Entity route handler ====================
+
+type RouteResult = { status: number; body: unknown } | undefined
+
+async function handleEntityRoute(
+  method: string,
+  pathname: string,
+  metadata: SqliteMetadataRepository | undefined,
+  request: IncomingMessage,
+  signal: AbortSignal,
+): Promise<RouteResult> {
+  // All entity routes require metadata
+  if (metadata === undefined) return undefined
+  // --- Project ---
+  const projectMatch = /^\/projects\/([^/]+)$/.exec(pathname)
+  if (projectMatch !== null) {
+    const projectId = decodeURIComponent(projectMatch[1] ?? '')
+    if (method === 'GET') {
+      const project = metadata.getProject(projectId)
+      return project === undefined ? { status: 404, body: failure('NOT_FOUND', 'Project not found.') } : { status: 200, body: { ok: true, value: project } }
+    }
+    return undefined
+  }
+
+  // --- Workspaces ---
+  const wsListMatch = /^\/projects\/([^/]+)\/workspaces$/.exec(pathname)
+  const wsOneMatch = /^\/projects\/([^/]+)\/workspaces\/([^/]+)$/.exec(pathname)
+  if (wsListMatch !== null) {
+    const projectId = decodeURIComponent(wsListMatch[1] ?? '')
+    if (method === 'GET') {
+      return { status: 200, body: { ok: true, value: metadata.getWorkspaces(projectId) } }
+    }
+    if (method === 'POST') {
+      const body = await readJsonBody(request, signal)
+      const ws = body as Workspace
+      if (!ws.id || !ws.projectId) return { status: 400, body: failure('INVALID_ARGUMENT', 'Workspace must have id and projectId.') }
+      metadata.upsertWorkspace(ws)
+      return { status: 200, body: { ok: true, value: ws } }
+    }
+    return undefined
+  }
+  if (wsOneMatch !== null) {
+    const wsId = decodeURIComponent(wsOneMatch[2] ?? '')
+    if (method === 'GET') {
+      const ws = metadata.getWorkspace(wsId)
+      return ws === undefined ? { status: 404, body: failure('NOT_FOUND', 'Workspace not found.') } : { status: 200, body: { ok: true, value: ws } }
+    }
+    if (method === 'PUT') {
+      const body = await readJsonBody(request, signal)
+      metadata.upsertWorkspace(body as Workspace)
+      return { status: 200, body: { ok: true, value: body } }
+    }
+    return undefined
+  }
+
+  // --- Artifacts ---
+  const artListMatch = /^\/projects\/([^/]+)\/artifacts$/.exec(pathname)
+  const artOneMatch = /^\/projects\/([^/]+)\/artifacts\/([^/]+)$/.exec(pathname)
+  if (artListMatch !== null && method === 'GET') {
+    const projectId = decodeURIComponent(artListMatch[1] ?? '')
+    return { status: 200, body: { ok: true, value: metadata.getArtifacts(projectId) } }
+  }
+  if (artOneMatch !== null) {
+    const artId = decodeURIComponent(artOneMatch[2] ?? '')
+    if (method === 'GET') {
+      const art = metadata.getArtifact(artId)
+      return art === undefined ? { status: 404, body: failure('NOT_FOUND', 'Artifact not found.') } : { status: 200, body: { ok: true, value: art } }
+    }
+    if (method === 'PUT') {
+      const body = await readJsonBody(request, signal)
+      metadata.upsertArtifact(body as Artifact)
+      return { status: 200, body: { ok: true, value: body } }
+    }
+    return undefined
+  }
+
+  // --- ArtifactViews ---
+  const avListMatch = /^\/projects\/([^/]+)\/artifact-views$/.exec(pathname)
+  const avOneMatch = /^\/projects\/([^/]+)\/artifact-views\/([^/]+)$/.exec(pathname)
+  if (avListMatch !== null && method === 'GET') {
+    const projectId = decodeURIComponent(avListMatch[1] ?? '')
+    return { status: 200, body: { ok: true, value: metadata.getArtifactViews(projectId) } }
+  }
+  if (avOneMatch !== null) {
+    const viewId = decodeURIComponent(avOneMatch[2] ?? '')
+    if (method === 'GET') {
+      const view = metadata.getArtifactView(viewId)
+      return view === undefined ? { status: 404, body: failure('NOT_FOUND', 'ArtifactView not found.') } : { status: 200, body: { ok: true, value: view } }
+    }
+    if (method === 'PUT') {
+      const body = await readJsonBody(request, signal)
+      const view = body as ArtifactView
+      metadata.upsertArtifactView(view, String(avOneMatch[1]))
+      return { status: 200, body: { ok: true, value: view } }
+    }
+    if (method === 'DELETE') {
+      metadata.deleteArtifactView(viewId)
+      return { status: 200, body: { ok: true, value: null } }
+    }
+    return undefined
+  }
+
+  // --- Relations ---
+  const relListMatch = /^\/projects\/([^/]+)\/relations$/.exec(pathname)
+  const relOneMatch = /^\/projects\/([^/]+)\/relations\/([^/]+)$/.exec(pathname)
+  if (relListMatch !== null && method === 'GET') {
+    const projectId = decodeURIComponent(relListMatch[1] ?? '')
+    return { status: 200, body: { ok: true, value: metadata.getRelations(projectId) } }
+  }
+  if (relOneMatch !== null) {
+    const relId = decodeURIComponent(relOneMatch[2] ?? '')
+    if (method === 'GET') {
+      const rel = metadata.getRelation(relId)
+      return rel === undefined ? { status: 404, body: failure('NOT_FOUND', 'Relation not found.') } : { status: 200, body: { ok: true, value: rel } }
+    }
+    if (method === 'PUT') {
+      const body = await readJsonBody(request, signal)
+      metadata.upsertRelation(body as Relation)
+      return { status: 200, body: { ok: true, value: body } }
+    }
+    if (method === 'DELETE') {
+      metadata.deleteRelation(relId)
+      return { status: 200, body: { ok: true, value: null } }
+    }
+    return undefined
+  }
+
+  // --- Notes ---
+  const noteListMatch = /^\/projects\/([^/]+)\/notes$/.exec(pathname)
+  const noteOneMatch = /^\/projects\/([^/]+)\/notes\/([^/]+)$/.exec(pathname)
+  if (noteListMatch !== null) {
+    const projectId = decodeURIComponent(noteListMatch[1] ?? '')
+    if (method === 'GET') {
+      return { status: 200, body: { ok: true, value: metadata.getNotes(projectId) } }
+    }
+    if (method === 'POST') {
+      const body = await readJsonBody(request, signal)
+      metadata.upsertNote(body as Note)
+      return { status: 200, body: { ok: true, value: body } }
+    }
+    return undefined
+  }
+  if (noteOneMatch !== null) {
+    const noteId = decodeURIComponent(noteOneMatch[2] ?? '')
+    if (method === 'GET') {
+      const note = metadata.getNote(noteId)
+      return note === undefined ? { status: 404, body: failure('NOT_FOUND', 'Note not found.') } : { status: 200, body: { ok: true, value: note } }
+    }
+    if (method === 'PUT') {
+      const body = await readJsonBody(request, signal)
+      metadata.upsertNote(body as Note)
+      return { status: 200, body: { ok: true, value: body } }
+    }
+    if (method === 'DELETE') {
+      metadata.deleteNote(noteId)
+      return { status: 200, body: { ok: true, value: null } }
+    }
+    return undefined
+  }
+
+  // --- ArtifactRevisions ---
+  const revListMatch = /^\/artifacts\/([^/]+)\/revisions$/.exec(pathname)
+  const revOneMatch = /^\/artifacts\/([^/]+)\/revisions\/([^/]+)$/.exec(pathname)
+  if (revListMatch !== null && method === 'GET') {
+    const artId = decodeURIComponent(revListMatch[1] ?? '')
+    return { status: 200, body: { ok: true, value: metadata.getArtifactRevisions(artId) } }
+  }
+  if (revOneMatch !== null) {
+    const revId = decodeURIComponent(revOneMatch[2] ?? '')
+    if (method === 'GET') {
+      const rev = metadata.getArtifactRevision(revId)
+      return rev === undefined ? { status: 404, body: failure('NOT_FOUND', 'ArtifactRevision not found.') } : { status: 200, body: { ok: true, value: rev } }
+    }
+    return undefined
+  }
+
+  // --- Checkpoints ---
+  const cpListMatch = /^\/projects\/([^/]+)\/checkpoints$/.exec(pathname)
+  const cpOneMatch = /^\/projects\/([^/]+)\/checkpoints\/([^/]+)$/.exec(pathname)
+  if (cpListMatch !== null) {
+    const projectId = decodeURIComponent(cpListMatch[1] ?? '')
+    if (method === 'GET') {
+      return { status: 200, body: { ok: true, value: metadata.getCheckpoints(projectId) } }
+    }
+    if (method === 'POST') {
+      const body = await readJsonBody(request, signal)
+      metadata.upsertCheckpoint(body as Checkpoint)
+      return { status: 200, body: { ok: true, value: body } }
+    }
+    return undefined
+  }
+  if (cpOneMatch !== null) {
+    const cpId = decodeURIComponent(cpOneMatch[2] ?? '')
+    if (method === 'GET') {
+      const cp = metadata.getCheckpoint(cpId)
+      return cp === undefined ? { status: 404, body: failure('NOT_FOUND', 'Checkpoint not found.') } : { status: 200, body: { ok: true, value: cp } }
+    }
+    return undefined
+  }
+
+  return undefined
 }

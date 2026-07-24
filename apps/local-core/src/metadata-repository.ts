@@ -1,22 +1,35 @@
 import { mkdirSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
-import { DatabaseSync } from 'node:sqlite'
+import { DatabaseSync, type SQLInputValue } from 'node:sqlite'
 
 import type {
   Artifact,
+  ArtifactRevision,
   ArtifactView,
+  Checkpoint,
+  Note,
   Project,
   ProjectGraphSnapshot,
   Relation,
   Workspace,
 } from '@local-creative-os/contracts'
 
-const SCHEMA_VERSION = 1
+const SCHEMA_VERSION = 2
 
 type Row = Record<string, unknown>
 
 function json<T>(value: unknown): T {
   return JSON.parse(String(value)) as T
+}
+
+/** Disposable guard: only projects with disposable- prefix are writable. */
+function assertDisposable(projectId: string, rootPath: string): void {
+  if (!String(projectId).startsWith('disposable-')) {
+    throw new Error('Only disposable projects are accepted in Phase 2.')
+  }
+  if (!rootPath.startsWith('disposable://')) {
+    throw new Error('Disposable projects must use a disposable:// root.')
+  }
 }
 
 export class SqliteMetadataRepository {
@@ -39,27 +52,34 @@ export class SqliteMetadataRepository {
     this.#database.close()
   }
 
+  // ==================== snapshot save/get ====================
+
   save(snapshot: ProjectGraphSnapshot): void {
     if (snapshot.schemaVersion !== SCHEMA_VERSION) {
       throw new Error(`Expected schemaVersion ${SCHEMA_VERSION}.`)
     }
-    if (!String(snapshot.project.id).startsWith('disposable-')) {
-      throw new Error('Phase 2 Lite only accepts disposable projects.')
-    }
-    if (!snapshot.project.rootPath.startsWith('disposable://')) {
-      throw new Error('Phase 2 Lite disposable projects must use a disposable:// root.')
-    }
+    assertDisposable(String(snapshot.project.id), snapshot.project.rootPath)
     this.#database.exec('BEGIN IMMEDIATE;')
     try {
       this.#upsertProject(snapshot.project)
+      // Clear existing children in dependency order
+      this.#database.prepare('DELETE FROM checkpoint_run_ids WHERE checkpoint_id IN (SELECT id FROM checkpoints WHERE project_id = ?)').run(snapshot.project.id)
+      this.#database.prepare('DELETE FROM checkpoint_revision_ids WHERE checkpoint_id IN (SELECT id FROM checkpoints WHERE project_id = ?)').run(snapshot.project.id)
+      this.#database.prepare('DELETE FROM checkpoints WHERE project_id = ?').run(snapshot.project.id)
+      this.#database.prepare('DELETE FROM notes WHERE project_id = ?').run(snapshot.project.id)
+      this.#database.prepare('DELETE FROM artifact_revisions WHERE artifact_id IN (SELECT id FROM artifacts WHERE project_id = ?)').run(snapshot.project.id)
       this.#database.prepare('DELETE FROM relations WHERE project_id = ?').run(snapshot.project.id)
       this.#database.prepare('DELETE FROM artifact_views WHERE project_id = ?').run(snapshot.project.id)
       this.#database.prepare('DELETE FROM artifacts WHERE project_id = ?').run(snapshot.project.id)
       this.#database.prepare('DELETE FROM workspaces WHERE project_id = ?').run(snapshot.project.id)
+      // Re-insert all
       for (const workspace of snapshot.workspaces) this.#upsertWorkspace(workspace)
       for (const artifact of snapshot.artifacts) this.#upsertArtifact(artifact)
       for (const view of snapshot.artifactViews) this.#upsertArtifactView(view, snapshot.project.id)
       for (const relation of snapshot.relations) this.#upsertRelation(relation)
+      for (const revision of snapshot.artifactRevisions ?? []) this.#upsertArtifactRevision(revision)
+      for (const note of snapshot.notes ?? []) this.#upsertNote(note)
+      for (const checkpoint of snapshot.checkpoints ?? []) this.#upsertCheckpoint(checkpoint)
       this.#database.exec('COMMIT;')
     } catch (error: unknown) {
       this.#database.exec('ROLLBACK;')
@@ -70,14 +90,18 @@ export class SqliteMetadataRepository {
   get(projectId: string): ProjectGraphSnapshot | undefined {
     const projectRow = this.#database.prepare('SELECT * FROM projects WHERE id = ?').get(projectId) as Row | undefined
     if (projectRow === undefined) return undefined
-    const rows = (sql: string): Row[] => this.#database.prepare(sql).all(projectId) as Row[]
+    const rows = (sql: string, ...params: SQLInputValue[]): Row[] =>
+      (this.#database.prepare(sql).all(...params) as Row[])
     return {
       schemaVersion: this.schemaVersion,
       project: this.#project(projectRow),
-      workspaces: rows('SELECT * FROM workspaces WHERE project_id = ? ORDER BY id').map((row) => this.#workspace(row)),
-      artifacts: rows('SELECT * FROM artifacts WHERE project_id = ? ORDER BY id').map((row) => this.#artifact(row)),
-      artifactViews: rows('SELECT * FROM artifact_views WHERE project_id = ? ORDER BY id').map((row) => this.#artifactView(row)),
-      relations: rows('SELECT * FROM relations WHERE project_id = ? ORDER BY id').map((row) => this.#relation(row)),
+      workspaces: rows('SELECT * FROM workspaces WHERE project_id = ? ORDER BY id', projectId).map((r) => this.#workspace(r)),
+      artifacts: rows('SELECT * FROM artifacts WHERE project_id = ? ORDER BY id', projectId).map((r) => this.#artifact(r)),
+      artifactViews: rows('SELECT * FROM artifact_views WHERE project_id = ? ORDER BY id', projectId).map((r) => this.#artifactView(r)),
+      relations: rows('SELECT * FROM relations WHERE project_id = ? ORDER BY id', projectId).map((r) => this.#relation(r)),
+      notes: rows('SELECT * FROM notes WHERE project_id = ? ORDER BY created_at', projectId).map((r) => this.#note(r)),
+      artifactRevisions: rows('SELECT ar.* FROM artifact_revisions ar JOIN artifacts a ON a.id = ar.artifact_id WHERE a.project_id = ? ORDER BY ar.created_at', projectId).map((r) => this.#artifactRevision(r)),
+      checkpoints: rows('SELECT * FROM checkpoints WHERE project_id = ? ORDER BY created_at', projectId).map((r) => this.#checkpoint(r)),
     }
   }
 
@@ -86,13 +110,151 @@ export class SqliteMetadataRepository {
       .map((row) => this.#project(row))
   }
 
+  // ==================== individual CRUD ====================
+
+  // -- Project --
+
+  getProject(projectId: string): Project | undefined {
+    const row = this.#database.prepare('SELECT * FROM projects WHERE id = ?').get(projectId) as Row | undefined
+    return row === undefined ? undefined : this.#project(row)
+  }
+
+  createProject(project: Project): void {
+    assertDisposable(String(project.id), project.rootPath)
+    this.#upsertProject(project)
+  }
+
+  // -- Workspace --
+
+  getWorkspace(workspaceId: string): Workspace | undefined {
+    const row = this.#database.prepare('SELECT * FROM workspaces WHERE id = ?').get(workspaceId) as Row | undefined
+    return row === undefined ? undefined : this.#workspace(row)
+  }
+
+  getWorkspaces(projectId: string): readonly Workspace[] {
+    return (this.#database.prepare('SELECT * FROM workspaces WHERE project_id = ? ORDER BY id').all(projectId) as Row[])
+      .map((r) => this.#workspace(r))
+  }
+
+  upsertWorkspace(workspace: Workspace): void {
+    this.#upsertWorkspace(workspace)
+  }
+
+  // -- Artifact --
+
+  getArtifact(artifactId: string): Artifact | undefined {
+    const row = this.#database.prepare('SELECT * FROM artifacts WHERE id = ?').get(artifactId) as Row | undefined
+    return row === undefined ? undefined : this.#artifact(row)
+  }
+
+  getArtifacts(projectId: string): readonly Artifact[] {
+    return (this.#database.prepare('SELECT * FROM artifacts WHERE project_id = ? ORDER BY id').all(projectId) as Row[])
+      .map((r) => this.#artifact(r))
+  }
+
+  upsertArtifact(artifact: Artifact): void {
+    this.#upsertArtifact(artifact)
+  }
+
+  // -- ArtifactView --
+
+  getArtifactView(viewId: string): ArtifactView | undefined {
+    const row = this.#database.prepare('SELECT * FROM artifact_views WHERE id = ?').get(viewId) as Row | undefined
+    return row === undefined ? undefined : this.#artifactView(row)
+  }
+
+  getArtifactViews(projectId: string): readonly ArtifactView[] {
+    return (this.#database.prepare('SELECT * FROM artifact_views WHERE project_id = ? ORDER BY id').all(projectId) as Row[])
+      .map((r) => this.#artifactView(r))
+  }
+
+  upsertArtifactView(view: ArtifactView, projectId: string): void {
+    this.#upsertArtifactView(view, projectId)
+  }
+
   deleteArtifactView(viewId: string): void {
+    this.#database.prepare('DELETE FROM relations WHERE source_view_id = ? OR target_view_id = ?').run(viewId, viewId)
     this.#database.prepare('DELETE FROM artifact_views WHERE id = ?').run(viewId)
   }
 
+  // -- Relation --
+
+  getRelation(relationId: string): Relation | undefined {
+    const row = this.#database.prepare('SELECT * FROM relations WHERE id = ?').get(relationId) as Row | undefined
+    return row === undefined ? undefined : this.#relation(row)
+  }
+
+  getRelations(projectId: string): readonly Relation[] {
+    return (this.#database.prepare('SELECT * FROM relations WHERE project_id = ? ORDER BY id').all(projectId) as Row[])
+      .map((r) => this.#relation(r))
+  }
+
+  upsertRelation(relation: Relation): void {
+    this.#upsertRelation(relation)
+  }
+
+  deleteRelation(relationId: string): void {
+    this.#database.prepare('DELETE FROM relations WHERE id = ?').run(relationId)
+  }
+
+  // -- Note --
+
+  getNote(noteId: string): Note | undefined {
+    const row = this.#database.prepare('SELECT * FROM notes WHERE id = ?').get(noteId) as Row | undefined
+    return row === undefined ? undefined : this.#note(row)
+  }
+
+  getNotes(projectId: string): readonly Note[] {
+    return (this.#database.prepare('SELECT * FROM notes WHERE project_id = ? ORDER BY created_at').all(projectId) as Row[])
+      .map((r) => this.#note(r))
+  }
+
+  upsertNote(note: Note): void {
+    this.#upsertNote(note)
+  }
+
+  deleteNote(noteId: string): void {
+    this.#database.prepare('DELETE FROM notes WHERE id = ?').run(noteId)
+  }
+
+  // -- ArtifactRevision --
+
+  getArtifactRevision(revisionId: string): ArtifactRevision | undefined {
+    const row = this.#database.prepare('SELECT * FROM artifact_revisions WHERE id = ?').get(revisionId) as Row | undefined
+    return row === undefined ? undefined : this.#artifactRevision(row)
+  }
+
+  getArtifactRevisions(artifactId: string): readonly ArtifactRevision[] {
+    return (this.#database.prepare('SELECT * FROM artifact_revisions WHERE artifact_id = ? ORDER BY created_at').all(artifactId) as Row[])
+      .map((r) => this.#artifactRevision(r))
+  }
+
+  upsertArtifactRevision(revision: ArtifactRevision): void {
+    this.#upsertArtifactRevision(revision)
+  }
+
+  // -- Checkpoint --
+
+  getCheckpoint(checkpointId: string): Checkpoint | undefined {
+    const row = this.#database.prepare('SELECT * FROM checkpoints WHERE id = ?').get(checkpointId) as Row | undefined
+    return row === undefined ? undefined : this.#checkpoint(row)
+  }
+
+  getCheckpoints(projectId: string): readonly Checkpoint[] {
+    return (this.#database.prepare('SELECT * FROM checkpoints WHERE project_id = ? ORDER BY created_at').all(projectId) as Row[])
+      .map((r) => this.#checkpoint(r))
+  }
+
+  upsertCheckpoint(checkpoint: Checkpoint): void {
+    this.#upsertCheckpoint(checkpoint)
+  }
+
+  // ==================== migration ====================
+
   #migrate(): void {
-    const version = this.schemaVersion
+    let version = this.schemaVersion
     if (version > SCHEMA_VERSION) throw new Error(`Unsupported schemaVersion ${version}.`)
+
     if (version === 0) {
       this.#database.exec(`
         BEGIN;
@@ -133,8 +295,45 @@ export class SqliteMetadataRepository {
         PRAGMA user_version = 1;
         COMMIT;
       `)
+      version = 1
+    }
+
+    if (version === 1) {
+      this.#database.exec(`
+        BEGIN;
+        CREATE TABLE artifact_revisions (
+          id TEXT PRIMARY KEY, artifact_id TEXT NOT NULL REFERENCES artifacts(id) ON DELETE CASCADE,
+          parent_revision_id TEXT, local_path TEXT NOT NULL, content_hash TEXT NOT NULL,
+          source TEXT NOT NULL, run_id TEXT, status TEXT NOT NULL,
+          created_at TEXT NOT NULL
+        );
+        CREATE TABLE notes (
+          id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+          anchor_scope TEXT NOT NULL, artifact_id TEXT, artifact_view_id TEXT, page_index INTEGER,
+          body TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+        );
+        CREATE TABLE checkpoints (
+          id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+          workspace_id TEXT NOT NULL, context_snapshot_id TEXT,
+          canvas_snapshot TEXT NOT NULL, created_at TEXT NOT NULL
+        );
+        CREATE TABLE checkpoint_revision_ids (
+          checkpoint_id TEXT NOT NULL REFERENCES checkpoints(id) ON DELETE CASCADE,
+          revision_id TEXT NOT NULL,
+          PRIMARY KEY (checkpoint_id, revision_id)
+        );
+        CREATE TABLE checkpoint_run_ids (
+          checkpoint_id TEXT NOT NULL REFERENCES checkpoints(id) ON DELETE CASCADE,
+          run_id TEXT NOT NULL,
+          PRIMARY KEY (checkpoint_id, run_id)
+        );
+        PRAGMA user_version = 2;
+        COMMIT;
+      `)
     }
   }
+
+  // ==================== upsert helpers ====================
 
   #upsertProject(value: Project): void {
     this.#database.prepare(`
@@ -195,6 +394,52 @@ export class SqliteMetadataRepository {
     )
   }
 
+  #upsertNote(value: Note): void {
+    const anchor = value.anchor as { scope: string; artifactId?: string; artifactViewId?: string; pageIndex?: number }
+    this.#database.prepare(`
+      INSERT INTO notes VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET body=excluded.body, updated_at=excluded.updated_at
+    `).run(
+      value.id, value.projectId, anchor.scope,
+      anchor.artifactId ?? null, anchor.artifactViewId ?? null,
+      anchor.pageIndex ?? null,
+      value.body, value.createdAt, value.updatedAt,
+    )
+  }
+
+  #upsertArtifactRevision(value: ArtifactRevision): void {
+    this.#database.prepare(`
+      INSERT INTO artifact_revisions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET status=excluded.status
+    `).run(
+      value.id, value.artifactId, value.parentRevisionId ?? null,
+      value.localPath, value.contentHash, value.source,
+      value.runId ?? null, value.status, value.createdAt,
+    )
+  }
+
+  #upsertCheckpoint(value: Checkpoint): void {
+    this.#database.prepare(`
+      INSERT INTO checkpoints VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET canvas_snapshot=excluded.canvas_snapshot
+    `).run(
+      value.id, value.projectId, value.workspaceId,
+      value.contextSnapshotId ?? null,
+      JSON.stringify(value.canvasSnapshot), value.createdAt,
+    )
+    // Junction tables: delete and re-insert
+    this.#database.prepare('DELETE FROM checkpoint_revision_ids WHERE checkpoint_id = ?').run(value.id)
+    for (const revId of value.artifactRevisionIds) {
+      this.#database.prepare('INSERT OR IGNORE INTO checkpoint_revision_ids VALUES (?, ?)').run(value.id, revId)
+    }
+    this.#database.prepare('DELETE FROM checkpoint_run_ids WHERE checkpoint_id = ?').run(value.id)
+    for (const runId of value.relatedRunIds) {
+      this.#database.prepare('INSERT OR IGNORE INTO checkpoint_run_ids VALUES (?, ?)').run(value.id, runId)
+    }
+  }
+
+  // ==================== row mappers ====================
+
   #project(row: Row): Project {
     return { id: row.id as Project['id'], name: String(row.name), rootPath: String(row.root_path), createdAt: String(row.created_at), updatedAt: String(row.updated_at) }
   }
@@ -242,6 +487,47 @@ export class SqliteMetadataRepository {
       sourceArtifactViewId: row.source_view_id as Relation['sourceArtifactViewId'],
       targetArtifactViewId: row.target_view_id as Relation['targetArtifactViewId'],
       kind: String(row.kind), createdAt: String(row.created_at), updatedAt: String(row.updated_at),
+    }
+  }
+
+  #note(row: Row): Note {
+    const scope = String(row.anchor_scope)
+    const base = { scope: scope as Note['anchor']['scope'], artifactId: row.artifact_id as string | undefined } as Note['anchor']
+    if (scope === 'artifact_view') {
+      ;(base as { scope: 'artifact_view'; artifactId: string; artifactViewId: string }).artifactViewId = String(row.artifact_view_id)
+    }
+    if (scope === 'page' && row.page_index !== null) {
+      ;(base as { scope: 'page'; artifactId: string; pageIndex: number }).pageIndex = Number(row.page_index)
+    }
+    return {
+      id: row.id as Note['id'], projectId: row.project_id as Note['projectId'],
+      anchor: base, body: String(row.body),
+      createdAt: String(row.created_at), updatedAt: String(row.updated_at),
+    }
+  }
+
+  #artifactRevision(row: Row): ArtifactRevision {
+    return {
+      id: row.id as ArtifactRevision['id'], artifactId: row.artifact_id as ArtifactRevision['artifactId'],
+      ...(row.parent_revision_id === null ? {} : { parentRevisionId: row.parent_revision_id as NonNullable<ArtifactRevision['parentRevisionId']> }),
+      localPath: String(row.local_path), contentHash: row.content_hash as ArtifactRevision['contentHash'],
+      source: row.source as ArtifactRevision['source'],
+      ...(row.run_id === null ? {} : { runId: row.run_id as NonNullable<ArtifactRevision['runId']> }),
+      status: row.status as ArtifactRevision['status'], createdAt: String(row.created_at),
+    }
+  }
+
+  #checkpoint(row: Row): Checkpoint {
+    const revisionRows = this.#database.prepare('SELECT revision_id FROM checkpoint_revision_ids WHERE checkpoint_id = ?').all(row.id as SQLInputValue) as Row[]
+    const runRows = this.#database.prepare('SELECT run_id FROM checkpoint_run_ids WHERE checkpoint_id = ?').all(row.id as SQLInputValue) as Row[]
+    return {
+      id: row.id as Checkpoint['id'], projectId: row.project_id as Checkpoint['projectId'],
+      workspaceId: row.workspace_id as Checkpoint['workspaceId'],
+      ...(row.context_snapshot_id === null ? {} : { contextSnapshotId: row.context_snapshot_id as NonNullable<Checkpoint['contextSnapshotId']> }),
+      artifactRevisionIds: revisionRows.map((r) => r.revision_id as Checkpoint['artifactRevisionIds'][number]),
+      relatedRunIds: runRows.map((r) => r.run_id as Checkpoint['relatedRunIds'][number]),
+      canvasSnapshot: json<Checkpoint['canvasSnapshot']>(row.canvas_snapshot),
+      createdAt: String(row.created_at),
     }
   }
 }

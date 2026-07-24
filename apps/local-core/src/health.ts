@@ -1,6 +1,6 @@
 import type { HealthStatus } from '@local-creative-os/contracts'
 
-export const LOCAL_CORE_VERSION = '0.2.0-lite'
+export const LOCAL_CORE_VERSION = '0.3.0-phase2'
 
 export function getHealthStatus(): HealthStatus {
   return {

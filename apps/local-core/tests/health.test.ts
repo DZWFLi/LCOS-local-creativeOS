@@ -8,7 +8,7 @@ describe('health', () => {
       status: 'ok',
       service: 'local-core',
       mode: 'phase_2_lite',
-      version: '0.2.0-lite',
+      version: '0.3.0-phase2',
     })
   })
 })
