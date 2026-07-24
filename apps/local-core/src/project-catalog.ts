@@ -1,5 +1,6 @@
 import type {
   AbortSignal as ContractAbortSignal,
+  GraphVersion,
   ProjectCatalog,
   ProjectCatalogEntry,
   Result,
@@ -8,7 +9,7 @@ import type {
 import { failure } from './errors.js'
 
 function cloneEntry(entry: ProjectCatalogEntry): ProjectCatalogEntry {
-  return { id: entry.id, name: entry.name, rootPath: entry.rootPath }
+  return { id: entry.id, name: entry.name, rootPath: entry.rootPath, graphVersion: entry.graphVersion ?? (1 as GraphVersion) }
 }
 
 export class ExplicitProjectCatalog implements ProjectCatalog {

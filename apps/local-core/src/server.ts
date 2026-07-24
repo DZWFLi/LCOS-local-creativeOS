@@ -4,14 +4,14 @@ import type {
   Artifact,
   ArtifactView,
   Checkpoint,
+  MutationBatch,
   Note,
   Project,
   ProjectGraphSnapshot,
   ProjectCatalog,
   Relation,
-  SaveProjectGraphInput,
-  ValidateProjectRootInput,
   Workspace,
+  ValidateProjectRootInput,
 } from '@local-creative-os/contracts'
 
 import { failure } from './errors.js'
@@ -202,26 +202,44 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
         if (!requireMetadata(metadata, response)) return
         let input: unknown
         try { input = await readJsonBody(request, controller.signal) } catch {
-          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Request body must be valid JSON under 64 KiB.'))
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Request body must be valid JSON.'))
           return
         }
-        if (typeof input !== 'object' || input === null || !('disposable' in input) || input.disposable !== true || !('snapshot' in input) || typeof input.snapshot !== 'object' || input.snapshot === null) {
-          sendJson(response, 400, failure('INVALID_ARGUMENT', 'A disposable project snapshot is required.'))
+        if (typeof input !== 'object' || input === null || !('snapshot' in input) || typeof input.snapshot !== 'object' || input.snapshot === null) {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'A project snapshot is required.'))
           return
         }
-        const saveInput = input as SaveProjectGraphInput
+        const saveInput = input as { snapshot: ProjectGraphSnapshot }
         const projectId = decodeURIComponent(graphMatch[1] ?? '')
         if (String(saveInput.snapshot.project.id) !== projectId) {
           sendJson(response, 400, failure('INVALID_ARGUMENT', 'Route project id must match snapshot project id.'))
           return
         }
         try {
-          metadata.save(saveInput.snapshot as ProjectGraphSnapshot)
+          metadata.save(saveInput.snapshot)
           sendJson(response, 200, { ok: true, value: metadata.get(projectId) })
         } catch (error: unknown) {
-          const detail = error instanceof Error ? error.message : String(error)
-          process.stderr.write(`[API] PUT /graph save failed: ${detail}\n`)
-          sendJson(response, 400, failure('VALIDATION', detail))
+          sendJson(response, 400, failure('VALIDATION', error instanceof Error ? error.message : 'Metadata could not be saved.'))
+        }
+        return
+      }
+      if (method === 'POST' && graphMatch !== null) {
+        if (!requireMetadata(metadata, response)) return
+        let input: unknown
+        try { input = await readJsonBody(request, controller.signal) } catch {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Request body must be valid JSON.'))
+          return
+        }
+        if (typeof input !== 'object' || input === null || !('baseVersion' in input) || !('ops' in input) || !Array.isArray((input as { ops: unknown }).ops)) {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'A mutation batch with baseVersion and ops is required.'))
+          return
+        }
+        const batch = input as unknown as MutationBatch
+        try {
+          metadata.applyMutations(batch)
+          sendJson(response, 200, { ok: true, value: { appliedOps: batch.ops.length } })
+        } catch (error: unknown) {
+          sendJson(response, 400, failure('VALIDATION', error instanceof Error ? error.message : 'Mutations could not be applied.'))
         }
         return
       }
@@ -406,7 +424,7 @@ async function handleEntityRoute(
     if (method === 'PUT') {
       const body = await readJsonBody(request, signal)
       const view = body as ArtifactView
-      metadata.upsertArtifactView(view, String(avOneMatch[1]))
+      metadata.upsertArtifactView(view)
       return { status: 200, body: { ok: true, value: view } }
     }
     if (method === 'DELETE') {

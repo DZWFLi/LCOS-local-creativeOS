@@ -344,7 +344,98 @@ export class SqliteMetadataRepository {
     }
   }
 
-  // ==================== Upsert helpers ====================
+  // ==================== Public CRUD (exposed for server routes) ====================
+
+  getProject(projectId: string): Project | undefined {
+    const rows = this.#database.prepare('SELECT * FROM projects WHERE id = ?').all(projectId as SQLInputValue) as Row[]
+    return rows.length ? this.#project(rows[0] as Row) : undefined
+  }
+
+  listProjects(): Project[] {
+    return (this.#database.prepare('SELECT * FROM projects').all() as Row[]).map((r) => this.#project(r as Row))
+  }
+
+  getWorkspaces(projectId: string): Workspace[] {
+    return (this.#database.prepare('SELECT * FROM workspaces WHERE project_id = ?').all(projectId as SQLInputValue) as Row[]).map((r) => this.#workspace(r))
+  }
+
+  getWorkspace(workspaceId: string): Workspace | undefined {
+    const rows = this.#database.prepare('SELECT * FROM workspaces WHERE id = ?').all(workspaceId as SQLInputValue) as Row[]
+    return rows.length ? this.#workspace(rows[0] as Row) : undefined
+  }
+
+  upsertWorkspace(value: Workspace): void { this.#upsertWorkspace(value) }
+
+  getArtifacts(projectId: string): Artifact[] {
+    return (this.#database.prepare('SELECT * FROM artifacts WHERE project_id = ?').all(projectId as SQLInputValue) as Row[]).map((r) => this.#artifact(r))
+  }
+
+  getArtifact(artifactId: string): Artifact | undefined {
+    const rows = this.#database.prepare('SELECT * FROM artifacts WHERE id = ?').all(artifactId as SQLInputValue) as Row[]
+    return rows.length ? this.#artifact(rows[0] as Row) : undefined
+  }
+
+  upsertArtifact(value: Artifact): void { this.#upsertArtifact(value) }
+
+  getArtifactViews(artifactId: string): ArtifactView[] {
+    return (this.#database.prepare('SELECT * FROM artifact_views WHERE artifact_id = ?').all(artifactId as SQLInputValue) as Row[]).map((r) => this.#artifactView(r))
+  }
+
+  getArtifactView(viewId: string): ArtifactView | undefined {
+    const rows = this.#database.prepare('SELECT * FROM artifact_views WHERE id = ?').all(viewId as SQLInputValue) as Row[]
+    return rows.length ? this.#artifactView(rows[0] as Row) : undefined
+  }
+
+  upsertArtifactView(value: ArtifactView): void { this.#upsertArtifactView(value) }
+  deleteArtifactView(viewId: string): void { this.#database.prepare('DELETE FROM artifact_views WHERE id = ?').run(viewId as SQLInputValue) }
+
+  getRelations(projectId: string): Relation[] {
+    return (this.#database.prepare('SELECT * FROM relations WHERE project_id = ?').all(projectId as SQLInputValue) as Row[]).map((r) => this.#relation(r))
+  }
+
+  getRelation(relationId: string): Relation | undefined {
+    const rows = this.#database.prepare('SELECT * FROM relations WHERE id = ?').all(relationId as SQLInputValue) as Row[]
+    return rows.length ? this.#relation(rows[0] as Row) : undefined
+  }
+
+  upsertRelation(value: Relation): void { this.#upsertRelation(value) }
+  deleteRelation(relationId: string): void { this.#database.prepare('DELETE FROM relations WHERE id = ?').run(relationId as SQLInputValue) }
+
+  getNotes(projectId: string): Note[] {
+    return (this.#database.prepare('SELECT * FROM notes WHERE project_id = ?').all(projectId as SQLInputValue) as Row[]).map((r) => this.#note(r))
+  }
+
+  getNote(noteId: string): Note | undefined {
+    const rows = this.#database.prepare('SELECT * FROM notes WHERE id = ?').all(noteId as SQLInputValue) as Row[]
+    return rows.length ? this.#note(rows[0] as Row) : undefined
+  }
+
+  upsertNote(value: Note): void { this.#upsertNote(value) }
+  deleteNote(noteId: string): void { this.#database.prepare('DELETE FROM notes WHERE id = ?').run(noteId as SQLInputValue) }
+
+  getArtifactRevisions(artifactId: string): ArtifactRevision[] {
+    return (this.#database.prepare('SELECT * FROM artifact_revisions WHERE artifact_id = ?').all(artifactId as SQLInputValue) as Row[]).map((r) => this.#artifactRevision(r))
+  }
+
+  getArtifactRevision(revisionId: string): ArtifactRevision | undefined {
+    const rows = this.#database.prepare('SELECT * FROM artifact_revisions WHERE id = ?').all(revisionId as SQLInputValue) as Row[]
+    return rows.length ? this.#artifactRevision(rows[0] as Row) : undefined
+  }
+
+  getCheckpoints(projectId: string): Checkpoint[] {
+    return (this.#database.prepare('SELECT * FROM checkpoints WHERE project_id = ?').all(projectId as SQLInputValue) as Row[]).map((r) => this.#checkpoint(r))
+  }
+
+  getCheckpoint(checkpointId: string): Checkpoint | undefined {
+    const rows = this.#database.prepare('SELECT * FROM checkpoints WHERE id = ?').all(checkpointId as SQLInputValue) as Row[]
+    return rows.length ? this.#checkpoint(rows[0] as Row) : undefined
+  }
+
+  upsertCheckpoint(value: Checkpoint): void { this.#upsertCheckpoint(value) }
+
+  get schemaVersion(): number { return 3 }
+
+  // ==================== Private helpers ====================
 
   #upsertProject(value: Project): void {
     this.#database.prepare(`
@@ -431,7 +522,17 @@ export class SqliteMetadataRepository {
   }
 
   #workspace(row: Row): Workspace {
-    return { id: row.id as WorkspaceId, projectId: row.project_id as ProjectId, scopeId: row.scope_id as ScopeId, name: String(row.name), intent: row.intent ? String(row.intent) as Workspace['intent'] : null, viewport: json<Workspace['viewport']>(row.viewport), focusedNodeIds: json<string[]>(row.focused_node_ids), visibleLayers: json<string[]>(row.visible_layers), contextPolicy: String(row.context_policy ?? 'selection-only') as Workspace['contextPolicy'], updatedAt: String(row.updated_at) }
+    const id = row.id as WorkspaceId
+    const projectId = row.project_id as ProjectId
+    const scopeId = (row.scope_id as SQLInputValue) as unknown as ScopeId
+    const name = String(row.name)
+    const intent = row.intent ? String(row.intent) as Workspace['intent'] : null
+    const viewport = json<Workspace['viewport']>(row.viewport as SQLInputValue)
+    const focusedNodeIds = json<string[]>((row.focused_node_ids ?? '[]') as SQLInputValue)
+    const visibleLayers = json<string[]>((row.visible_layers ?? '["core","process"]') as SQLInputValue)
+    const contextPolicy = (String(row.context_policy ?? 'selection-only')) as Workspace['contextPolicy']
+    const updatedAt = String(row.updated_at)
+    return { id, projectId, scopeId, name, intent, viewport, focusedNodeIds, visibleLayers, contextPolicy, updatedAt }
   }
 
   #artifact(row: Row): Artifact {
@@ -439,7 +540,7 @@ export class SqliteMetadataRepository {
   }
 
   #artifactView(row: Row): ArtifactView {
-    return { id: row.id as ArtifactViewId, artifactId: row.artifact_id as ArtifactId, scopeId: row.scope_id as ScopeId, ...(row.revision_id === null || row.revision_id === undefined ? {} : { revisionId: row.revision_id as ArtifactRevisionId }), referenceKind: String(row.reference_kind) as ArtifactView['referenceKind'], position: json<ArtifactView['position']>(row.position), size: json<ArtifactView['size']>(row.size), displayMode: String(row.display_mode) as ArtifactView['displayMode'], collapsed: (row.collapsed as number) === 1 }
+    return { id: row.id as ArtifactViewId, artifactId: row.artifact_id as ArtifactId, scopeId: (row.scope_id ?? '') as unknown as ScopeId, ...(row.revision_id ? { revisionId: row.revision_id as ArtifactRevisionId } : {}), referenceKind: String(row.reference_kind) as ArtifactView['referenceKind'], position: json<ArtifactView['position']>(row.position as SQLInputValue), size: json<ArtifactView['size']>(row.size as SQLInputValue), displayMode: String(row.display_mode) as ArtifactView['displayMode'], collapsed: (row.collapsed as number) === 1 } as ArtifactView
   }
 
   #relation(row: Row): Relation {
@@ -464,6 +565,6 @@ export class SqliteMetadataRepository {
   }
 
   #checkpoint(row: Row): Checkpoint {
-    return { id: row.id as CheckpointId, projectId: row.project_id as ProjectId, scopeId: row.scope_id as ScopeId, label: String(row.label ?? ''), snapshotJson: json<Checkpoint['snapshotJson']>(row.snapshot_json), createdAt: String(row.created_at) }
+    return { id: row.id as CheckpointId, projectId: row.project_id as ProjectId, scopeId: (row.scope_id ?? '') as unknown as ScopeId, label: String(row.label ?? ''), snapshotJson: json<Checkpoint['snapshotJson']>(row.snapshot_json as SQLInputValue), createdAt: String(row.created_at) }
   }
 }
