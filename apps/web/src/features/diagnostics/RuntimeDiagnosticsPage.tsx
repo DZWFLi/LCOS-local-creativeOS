@@ -20,6 +20,7 @@ import type {
   ProjectGraphSnapshot,
   Result,
   ValidatedProjectRoot,
+  WorkspaceContextPolicy,
 } from '@local-creative-os/contracts'
 
 import {
@@ -46,35 +47,48 @@ const DISPOSABLE_PROJECT_ID = 'disposable-portasplit-phase2-lite'
 
 function disposablePortaSplitSnapshot(): ProjectGraphSnapshot {
   const now = new Date().toISOString()
+  const projectId = DISPOSABLE_PROJECT_ID as ProjectGraphSnapshot['project']['id']
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
+    graphVersion: 1 as ProjectGraphSnapshot['graphVersion'],
     project: {
-      id: DISPOSABLE_PROJECT_ID as ProjectGraphSnapshot['project']['id'],
-      name: 'PortaSplit · Phase 2 Lite',
+      id: projectId,
+      name: 'PortaSplit · Phase 2.5',
       rootPath: 'disposable://portasplit-phase2-lite',
-      createdAt: now,
-      updatedAt: now,
+      graphVersion: 1 as ProjectGraphSnapshot['project']['graphVersion'],
+      createdAt: now, updatedAt: now,
     },
+    scopes: [{
+      id: 'disposable-scope-root' as ProjectGraphSnapshot['scopes'][number]['id'],
+      projectId,
+      parentScopeId: null,
+      containerViewId: null,
+      kind: 'root',
+      name: 'Root',
+      createdAt: now, updatedAt: now,
+    }],
     workspaces: [{
       id: 'disposable-workspace-main' as ProjectGraphSnapshot['workspaces'][number]['id'],
-      projectId: DISPOSABLE_PROJECT_ID as ProjectGraphSnapshot['project']['id'],
+      projectId,
+      scopeId: 'disposable-scope-root' as ProjectGraphSnapshot['workspaces'][number]['scopeId'],
       name: 'Main Canvas',
       intent: 'build',
       viewport: { x: 128, y: 72, zoom: 0.92 },
       focusedNodeIds: ['disposable-view-brief', 'disposable-view-board'],
       visibleLayers: ['core'],
+      contextPolicy: 'selection-only' as WorkspaceContextPolicy,
       updatedAt: now,
     }],
     artifacts: [
       {
         id: 'disposable-artifact-brief' as ProjectGraphSnapshot['artifacts'][number]['id'],
-        projectId: DISPOSABLE_PROJECT_ID as ProjectGraphSnapshot['project']['id'],
+        projectId,
         title: 'PortaSplit Brief', kind: 'markdown', localPath: 'disposable://portasplit/brief.md',
         availability: 'available', createdAt: now, updatedAt: now,
       },
       {
         id: 'disposable-artifact-board' as ProjectGraphSnapshot['artifacts'][number]['id'],
-        projectId: DISPOSABLE_PROJECT_ID as ProjectGraphSnapshot['project']['id'],
+        projectId,
         title: 'Direction Board', kind: 'image', localPath: 'disposable://portasplit/board.png',
         availability: 'available', createdAt: now, updatedAt: now,
       },
@@ -83,14 +97,14 @@ function disposablePortaSplitSnapshot(): ProjectGraphSnapshot {
       {
         id: 'disposable-view-brief' as ProjectGraphSnapshot['artifactViews'][number]['id'],
         artifactId: 'disposable-artifact-brief' as ProjectGraphSnapshot['artifacts'][number]['id'],
-        workspaceId: 'disposable-workspace-main' as ProjectGraphSnapshot['workspaces'][number]['id'],
+        scopeId: 'disposable-scope-root' as ProjectGraphSnapshot['artifactViews'][number]['scopeId'],
         referenceKind: 'primary', position: { x: 120, y: 180 },
         size: { width: 280, height: 180 }, displayMode: 'card', collapsed: false,
       },
       {
         id: 'disposable-view-board' as ProjectGraphSnapshot['artifactViews'][number]['id'],
         artifactId: 'disposable-artifact-board' as ProjectGraphSnapshot['artifacts'][number]['id'],
-        workspaceId: 'disposable-workspace-main' as ProjectGraphSnapshot['workspaces'][number]['id'],
+        scopeId: 'disposable-scope-root' as ProjectGraphSnapshot['artifactViews'][number]['scopeId'],
         referenceKind: 'primary', position: { x: 520, y: 210 },
         size: { width: 320, height: 220 }, displayMode: 'thumbnail', collapsed: false,
       },
@@ -98,9 +112,8 @@ function disposablePortaSplitSnapshot(): ProjectGraphSnapshot {
     relations: [{
       id: 'disposable-relation-brief-board' as ProjectGraphSnapshot['relations'][number]['id'],
       projectId: DISPOSABLE_PROJECT_ID as ProjectGraphSnapshot['project']['id'],
-      workspaceId: 'disposable-workspace-main' as ProjectGraphSnapshot['workspaces'][number]['id'],
-      sourceArtifactViewId: 'disposable-view-brief' as ProjectGraphSnapshot['artifactViews'][number]['id'],
-      targetArtifactViewId: 'disposable-view-board' as ProjectGraphSnapshot['artifactViews'][number]['id'],
+      sourceEntityType: 'artifact', sourceEntityId: 'disposable-artifact-brief',
+      targetEntityType: 'artifact', targetEntityId: 'disposable-artifact-board',
       kind: 'informs', createdAt: now, updatedAt: now,
     }],
     notes: [],

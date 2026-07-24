@@ -4,7 +4,7 @@ import { createFixtureFrontendAdapter, fixtureProjectId } from '../src/adapters/
 describe('frontend adapter boundary', () => {
   it('serves WorkspaceQuery from an explicit fixture origin', async () => {
     const adapter = createFixtureFrontendAdapter()
-    const result = await adapter.workspace.getWorkspaces({ projectId: fixtureProjectId, includeViewport: true })
+    const result = await adapter.workspace.getWorkspaces({ projectId: fixtureProjectId })
     expect(adapter.origin).toBe('fixture')
     expect(result.ok && result.value).toHaveLength(4)
   })

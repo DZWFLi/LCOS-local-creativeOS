@@ -1,5 +1,4 @@
-import type { ProjectGraphSnapshot } from '@local-creative-os/contracts'
-import type { JsonValue } from '@local-creative-os/domain'
+import type { GraphVersion, ProjectGraphSnapshot, Scope, WorkspaceContextPolicy } from '@local-creative-os/contracts'
 import type {
   Camera,
   CanvasEdge,
@@ -98,20 +97,14 @@ export class RuntimeBridge {
     try {
       const call = await this.client.health()
       return call.result.ok
-    } catch {
-      return false
-    }
+    } catch { return false }
   }
 }
 
-// ==================== Snapshot → AppState ====================
+// ==================== GraphSnapshot → AppState ====================
 
 const KIND_TO_NODE: Record<string, CanvasNode['kind']> = {
-  markdown: 'source',
-  image: 'source',
-  presentation: 'source',
-  pdf: 'source',
-  other: 'context',
+  markdown: 'source', image: 'source', presentation: 'source', pdf: 'source', other: 'context',
 }
 
 export function mapGraphToState(graph: ProjectGraphSnapshot, projectId: string): PersistedPrototypeState {
@@ -122,64 +115,60 @@ export function mapGraphToState(graph: ProjectGraphSnapshot, projectId: string):
     const isStale = artifact?.availability === 'stale'
     const isMissing = artifact?.availability === 'missing'
     return {
-      id: view.id,
+      id: String(view.id),
       kind: artifact ? (KIND_TO_NODE[artifact.kind] ?? 'context') : 'context',
       title: artifact?.title ?? String(view.id),
       subtitle: artifact?.kind ?? '',
-      x: view.position.x,
-      y: view.position.y,
-      width: view.size.width,
-      height: view.size.height,
+      x: view.position.x, y: view.position.y,
+      width: view.size.width, height: view.size.height,
       displayMode: view.displayMode === 'compact' ? 'compact' as const : 'standard' as const,
-      draft: isStale,
-      current: !isStale,
-      disabled: isMissing,
+      draft: isStale, current: !isStale, disabled: isMissing,
       fileType: artifact?.kind,
-      scopeId: 'scope-root',
+      scopeId: String(view.scopeId),
     }
   })
 
   const edges: CanvasEdge[] = graph.relations.map((rel) => ({
     id: String(rel.id),
-    from: String(rel.sourceArtifactViewId),
-    to: String(rel.targetArtifactViewId),
+    from: String(rel.sourceEntityId),
+    to: String(rel.targetEntityId),
     kind: (rel.kind === 'informs' || rel.kind === 'reference') ? 'reference' as const : 'modify' as const,
     active: false,
   }))
 
-  const camera0: Camera = graph.workspaces[0]?.viewport ?? { x: 0, y: 0, zoom: 1 }
-
+  // Workspaces from snapshot
   const workspaces: Workspace[] = graph.workspaces.map((ws) => ({
     id: String(ws.id),
     label: ws.name,
     intent: (ws.intent ?? null) as Workspace['intent'],
-    scopeId: String(ws.id),
+    scopeId: String(ws.scopeId),
     camera: { x: ws.viewport.x, y: ws.viewport.y, zoom: ws.viewport.zoom },
-    visibleLayers: ['core', 'process'] as Workspace['visibleLayers'],
+    visibleLayers: (ws.visibleLayers as Workspace['visibleLayers']) ?? ['core', 'process'],
     focusedNodeIds: ws.focusedNodeIds as string[],
-    contextPolicy: 'selection-only' as const,
-    createdAt: ws.updatedAt,
-    updatedAt: ws.updatedAt,
+    contextPolicy: (ws.contextPolicy ?? 'selection-only') as Workspace['contextPolicy'],
+    createdAt: ws.updatedAt, updatedAt: ws.updatedAt,
   }))
 
-  const scopes: CanvasScope[] = workspaces.map((ws) => ({
-    id: 'scope-root',
-    label: ws.label,
-    kind: 'root' as const,
-    parentScopeId: null,
-    camera: ws.camera,
-  }))
+  // Scopes from snapshot
+  const scopes: CanvasScope[] = graph.scopes.length > 0
+    ? graph.scopes.map((s: Scope) => ({
+        id: String(s.id), label: s.name,
+        kind: s.kind as CanvasScope['kind'],
+        parentScopeId: s.parentScopeId ? String(s.parentScopeId) : null,
+        camera: workspaces.find((w) => w.scopeId === String(s.id))?.camera ?? { x: 0, y: 0, zoom: 1 },
+      }))
+    : workspaces.map((ws) => ({ id: 'scope-root', label: ws.label, kind: 'root' as const, parentScopeId: null, camera: ws.camera }))
+
+  const defaultCamera = scopes[0]?.camera ?? { x: 0, y: 0, zoom: 1 }
+  const firstWkid = workspaces[0]?.id ?? 'workspace-main'
 
   const workRail: WorkRailPreferences = { pinned: true, collapsed: false, width: 350 }
 
   return {
-    version: 9,
-    projectId,
-    nodes: nodes.length > 0 ? nodes : [],
-    edges,
+    version: 9, projectId, nodes, edges,
     workspaces: workspaces.length > 0 ? workspaces : [defaultWorkspace()],
-    scopes: scopes.length > 0 ? scopes : [{ id: 'scope-root', label: 'Root', kind: 'root', parentScopeId: null, camera: camera0 }],
-    activeWorkspaceId: workspaces[0]?.id ?? 'workspace-main',
+    scopes: scopes.length > 0 ? scopes : [{ id: 'scope-root', label: 'Root', kind: 'root', parentScopeId: null, camera: defaultCamera }],
+    activeWorkspaceId: firstWkid,
     activeScopeId: scopes[0]?.id ?? 'scope-root',
     workRail,
   }
@@ -194,38 +183,52 @@ function defaultWorkspace(): Workspace {
   }
 }
 
-// ==================== AppState → Snapshot ====================
+// ==================== AppState → GraphSnapshot ====================
 
 export function mapStateToGraph(state: PersistedPrototypeState, projectId: string): ProjectGraphSnapshot {
   const now = new Date().toISOString()
+  const graphVersion = 1 as GraphVersion // increment handled by server
 
+  // Scopes
+  const scopes: ProjectGraphSnapshot['scopes'] = state.scopes.map((s) => ({
+    id: s.id as ProjectGraphSnapshot['scopes'][number]['id'],
+    projectId: projectId as ProjectGraphSnapshot['scopes'][number]['projectId'],
+    parentScopeId: s.parentScopeId ? (s.parentScopeId as ProjectGraphSnapshot['scopes'][number]['parentScopeId']) : null,
+    containerViewId: null,
+    kind: (s.kind ?? 'root') as ProjectGraphSnapshot['scopes'][number]['kind'],
+    name: s.label,
+    createdAt: now, updatedAt: now,
+  }))
+
+  // Workspaces
   const workspaces: ProjectGraphSnapshot['workspaces'] = state.workspaces.map((ws) => ({
     id: ws.id as ProjectGraphSnapshot['workspaces'][number]['id'],
     projectId: projectId as ProjectGraphSnapshot['workspaces'][number]['projectId'],
-    name: ws.label,
-    intent: ws.intent,
+    scopeId: ws.scopeId as ProjectGraphSnapshot['workspaces'][number]['scopeId'],
+    name: ws.label, intent: ws.intent,
     viewport: { x: ws.camera.x, y: ws.camera.y, zoom: ws.camera.zoom },
     focusedNodeIds: ws.focusedNodeIds,
     visibleLayers: ws.visibleLayers,
+    contextPolicy: (ws.contextPolicy ?? 'selection-only') as WorkspaceContextPolicy,
     updatedAt: now,
   }))
 
+  // Artifacts + ArtifactViews from core nodes (filter out process/note/decision)
   const coreNodes = state.nodes.filter((n) => n.kind !== 'process' && n.kind !== 'note' && n.kind !== 'decision')
   const artifacts: ProjectGraphSnapshot['artifacts'] = coreNodes.map((n) => ({
     id: n.id as ProjectGraphSnapshot['artifacts'][number]['id'],
     projectId: projectId as ProjectGraphSnapshot['artifacts'][number]['projectId'],
     title: n.title,
-    kind: kindToArtifactKind(n.kind),
+    kind: kindToArtifactKind(n.kind) as ProjectGraphSnapshot['artifacts'][number]['kind'],
     localPath: `disposable://${n.id}`,
     availability: n.disabled ? 'missing' as const : n.draft ? 'stale' as const : 'available' as const,
-    createdAt: now,
-    updatedAt: now,
+    createdAt: now, updatedAt: now,
   }))
 
   const artifactViews: ProjectGraphSnapshot['artifactViews'] = coreNodes.map((n) => ({
     id: n.id as ProjectGraphSnapshot['artifactViews'][number]['id'],
     artifactId: n.id as ProjectGraphSnapshot['artifactViews'][number]['artifactId'],
-    workspaceId: state.activeWorkspaceId as ProjectGraphSnapshot['artifactViews'][number]['workspaceId'],
+    scopeId: (n.scopeId ?? state.activeScopeId) as ProjectGraphSnapshot['artifactViews'][number]['scopeId'],
     referenceKind: 'primary' as const,
     position: { x: n.x, y: n.y },
     size: { width: n.width, height: n.height },
@@ -233,41 +236,34 @@ export function mapStateToGraph(state: PersistedPrototypeState, projectId: strin
     collapsed: false,
   }))
 
+  // Relations: entity-based (sourceEntityType/sourceEntityId)
   const relations: ProjectGraphSnapshot['relations'] = state.edges.map((e) => ({
     id: e.id as ProjectGraphSnapshot['relations'][number]['id'],
     projectId: projectId as ProjectGraphSnapshot['relations'][number]['projectId'],
-    workspaceId: state.activeWorkspaceId as ProjectGraphSnapshot['relations'][number]['workspaceId'],
-    sourceArtifactViewId: e.from as ProjectGraphSnapshot['relations'][number]['sourceArtifactViewId'],
-    targetArtifactViewId: e.to as ProjectGraphSnapshot['relations'][number]['targetArtifactViewId'],
+    sourceEntityType: 'artifact' as const,
+    sourceEntityId: e.from as ProjectGraphSnapshot['relations'][number]['sourceEntityId'],
+    targetEntityType: 'artifact' as const,
+    targetEntityId: e.to as ProjectGraphSnapshot['relations'][number]['targetEntityId'],
     kind: e.kind,
-    createdAt: now,
-    updatedAt: now,
+    createdAt: now, updatedAt: now,
   }))
 
-  const checkpoints: ProjectGraphSnapshot['checkpoints'] = [{
-    id: `cp-${Date.now()}` as ProjectGraphSnapshot['checkpoints'][number]['id'],
-    projectId: projectId as ProjectGraphSnapshot['checkpoints'][number]['projectId'],
-    workspaceId: state.activeWorkspaceId as ProjectGraphSnapshot['checkpoints'][number]['workspaceId'],
-    artifactRevisionIds: [],
-    relatedRunIds: [],
-    canvasSnapshot: { camera: state.scopes[0]?.camera ?? { x: 0, y: 0, zoom: 1 } } as unknown as JsonValue,
-    createdAt: now,
-  }]
-
   return {
-    schemaVersion: 2,
-    project: { id: projectId as ProjectGraphSnapshot['project']['id'], name: 'PortaSplit', rootPath: 'disposable://portasplit', createdAt: now, updatedAt: now },
+    schemaVersion: 3,
+    graphVersion,
+    project: { id: projectId as ProjectGraphSnapshot['project']['id'], name: 'PortaSplit', rootPath: 'disposable://portasplit', graphVersion, createdAt: now, updatedAt: now },
+    scopes,
     workspaces,
     artifacts,
     artifactViews,
     relations,
     notes: [],
     artifactRevisions: [],
-    checkpoints,
+    checkpoints: [],
   }
 }
 
-function kindToArtifactKind(kind: CanvasNode['kind']): 'markdown' | 'image' | 'presentation' | 'pdf' | 'other' {
+function kindToArtifactKind(kind: string): string {
   if (kind === 'source' || kind === 'working') return 'markdown'
   if (kind === 'generated') return 'image'
   return 'other'

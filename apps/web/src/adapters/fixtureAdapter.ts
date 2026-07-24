@@ -16,11 +16,13 @@ function toContractWorkspace(workspace: UiWorkspace): WorkspaceContract {
   return {
     id: workspace.id as WorkspaceCommand['workspaceId'],
     projectId: fixtureProjectId,
+    scopeId: workspace.scopeId as WorkspaceContract['scopeId'],
     name: workspace.label,
     intent: workspace.intent,
     viewport: workspace.camera,
     focusedNodeIds: workspace.focusedNodeIds,
     visibleLayers: workspace.visibleLayers,
+    contextPolicy: workspace.contextPolicy ?? 'selection-only',
     updatedAt: now(),
   } as WorkspaceContract
 }

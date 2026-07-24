@@ -199,7 +199,7 @@ export function createLocalCoreClient(): LocalCoreClient {
         init: {
           method: 'PUT',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ disposable: true, snapshot }),
+          body: JSON.stringify({ snapshot }),
         },
         decode: decodeResult<ProjectGraphSnapshot>,
       })
