@@ -229,7 +229,7 @@ export function App() {
 
       // Save to Local Core via runtimeBridge
       const bridge = bridgeRef.current
-      bridge.saveProject(snapshot).then((result) => {
+      bridge.saveMutations(snapshot).then((result) => {
         if (result.status === 'saved') {
           setSaveStatus('saved')
           setDataSource('runtime')

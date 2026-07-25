@@ -1,4 +1,5 @@
-import type { GraphVersion, ProjectGraphSnapshot, Scope, WorkspaceContextPolicy } from '@local-creative-os/contracts'
+import type { GraphVersion, ProjectGraphSnapshot, Scope, WorkspaceContextPolicy, MutationBatch, Result } from '@local-creative-os/contracts'
+import type { Artifact, ArtifactView, Relation } from '@local-creative-os/domain'
 import type {
   Camera,
   CanvasEdge,
@@ -50,6 +51,7 @@ export class RuntimeBridge {
       const snapshot = call.result.value
       this.#lastSavedSnapshot = JSON.stringify(snapshot)
       const state = mapGraphToState(snapshot, this.projectId)
+      this.#graphVersion = Number(snapshot.graphVersion) || 1
       return { source: 'runtime', state }
     } catch (err) {
       return { source: 'none', state: null, error: err instanceof Error ? err.message : 'Unknown error' }
@@ -75,6 +77,44 @@ export class RuntimeBridge {
     }
   }
 
+  #graphVersion: number = 1
+  #saveQueue: Promise<SaveResult> = Promise.resolve({ status: 'idle' })
+
+  /** Runtime save — mutation ops, NOT mapStateToGraph. */
+  async saveMutations(state: PersistedPrototypeState): Promise<SaveResult> {
+    const ops = stateToOps(state, this.projectId)
+    return this.sendMutations(ops)
+  }
+
+  /** Low-level: send raw mutation batch with serialized queue + stale retry. */
+  async sendMutations(ops: MutationBatch['ops']): Promise<SaveResult> {
+    const task = this.#saveQueue.then(async () => {
+      try {
+        const batch: MutationBatch = {
+          baseVersion: this.#graphVersion as GraphVersion,
+          ops: [...ops],
+        }
+        const call = await this.client.applyMutations(batch, this.projectId)
+        if (!call.result.ok) {
+          if (call.result.error.code === 'STALE_GRAPH_VERSION') {
+            await this.loadProject()
+            const retryBatch = { ...batch, baseVersion: this.#graphVersion as GraphVersion }
+            const retry = await this.client.applyMutations(retryBatch, this.projectId)
+            if (!retry.result.ok) return { status: 'unsaved' as const, error: retry.result.error.message }
+          } else {
+            return { status: 'unsaved' as const, error: call.result.error.message }
+          }
+        }
+        return { status: 'saved' as const }
+      } catch (err) {
+        return { status: 'unsaved' as const, error: err instanceof Error ? err.message : 'Unknown error' }
+      }
+    })
+    this.#saveQueue = task.then(() => ({ status: 'idle' as const })) // chain continues
+    return task.then(result => result ?? { status: 'unsaved' as const, error: 'Queue cancelled' })
+  }
+
+  /** Full snapshot save — import/recovery/test ONLY. NOT for runtime edits. */
   async saveProject(state: PersistedPrototypeState): Promise<SaveResult> {
     try {
       const snapshot = mapStateToGraph(state, this.projectId)
@@ -268,3 +308,32 @@ function kindToArtifactKind(kind: string): string {
   if (kind === 'generated') return 'image'
   return 'other'
 }
+
+/** Build mutation ops from runtime state. Does NOT call mapStateToGraph. */
+function stateToOps(state: PersistedPrototypeState, projectId: string): MutationBatch['ops'] {
+  const now = new Date().toISOString()
+  const ops: { type: string; [key: string]: unknown }[] = []
+  const scopeId = state.activeScopeId || 'scope-root'
+
+  for (const s of state.scopes) {
+    ops.push({ type: 'upsert_scope', scope: { id: s.id, projectId, parentScopeId: s.parentScopeId ?? null, containerViewId: null, kind: s.kind || 'root', name: s.label, createdAt: now, updatedAt: now } })
+  }
+
+  for (const ws of state.workspaces) {
+    ops.push({ type: 'upsert_workspace', workspace: { id: ws.id, projectId, scopeId: ws.scopeId, name: ws.label, intent: ws.intent, viewport: { x: ws.camera.x, y: ws.camera.y, zoom: ws.camera.zoom }, focusedNodeIds: ws.focusedNodeIds, visibleLayers: ws.visibleLayers, contextPolicy: ws.contextPolicy ?? 'selection-only', updatedAt: now } })
+  }
+
+  const coreNodes = state.nodes.filter(n => n.kind !== 'process' && n.kind !== 'note' && n.kind !== 'decision')
+  for (const n of coreNodes) {
+    ops.push({ type: 'upsert_artifact', artifact: { id: n.id, projectId, title: n.title, kind: kindToArtifactKind(n.kind), localPath: 'disposable://' + n.id, availability: n.disabled ? 'missing' : n.draft ? 'stale' : 'available', createdAt: now, updatedAt: now } })
+    ops.push({ type: 'upsert_artifact_view', view: { id: n.id, artifactId: n.id, scopeId: n.scopeId ?? scopeId, referenceKind: 'primary', position: { x: n.x, y: n.y }, size: { width: n.width, height: n.height }, displayMode: n.displayMode === 'compact' ? 'compact' : 'card', collapsed: false } })
+  }
+
+  for (const e of state.edges) {
+    ops.push({ type: 'upsert_relation', relation: { id: e.id, projectId, sourceEntityType: 'artifact', sourceEntityId: e.from, targetEntityType: 'artifact', targetEntityId: e.to, kind: e.kind, createdAt: now, updatedAt: now } })
+  }
+
+  return ops as unknown as MutationBatch['ops']
+}
+
+// ==================== LocalCoreClient extension ====================

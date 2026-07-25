@@ -2,6 +2,7 @@ import type {
   ContractError,
   HealthStatus,
   MetadataStoreStatus,
+  MutationBatch,
   ProjectCatalogEntry,
   ProjectGraphSnapshot,
   Result,
@@ -36,6 +37,7 @@ export interface LocalCoreClient {
   validateProjectRoot(rootPath: string, signal?: AbortSignal): Promise<RuntimeCall<ValidatedProjectRoot>>
   metadataStatus(signal?: AbortSignal): Promise<RuntimeCall<MetadataStoreStatus>>
   projectGraph(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<ProjectGraphSnapshot>>
+  applyMutations(batch: MutationBatch, projectId: string, signal?: AbortSignal): Promise<RuntimeCall<{ appliedOps: number }>>
   saveProjectGraph(snapshot: ProjectGraphSnapshot, signal?: AbortSignal): Promise<RuntimeCall<ProjectGraphSnapshot>>
 }
 
@@ -202,6 +204,17 @@ export function createLocalCoreClient(): LocalCoreClient {
           body: JSON.stringify({ snapshot }),
         },
         decode: decodeResult<ProjectGraphSnapshot>,
+      })
+    },
+    applyMutations(batch, projectId, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/graph`, {
+        signal,
+        init: {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(batch),
+        },
+        decode: decodeResult<{ appliedOps: number }>,
       })
     },
   }
