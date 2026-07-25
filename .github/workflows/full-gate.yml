@@ -1,0 +1,61 @@
+name: Phase 2.5 Full Gate
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  integration:
+    runs-on: windows-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install
+        run: npm ci
+
+      - name: Build local-core
+        run: npx tsc -p apps/local-core/tsconfig.json
+
+      - name: Migration Tests
+        run: npx vitest run tests/integration/migration --reporter=verbose
+
+      - name: Integration Tests
+        run: npx vitest run tests/integration --reporter=verbose --exclude='**/migration/**'
+
+  browser-golden-path:
+    runs-on: windows-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install
+        run: npm ci
+
+      - name: Build local-core
+        run: npx tsc -p apps/local-core/tsconfig.json
+
+      - name: Start Local Core
+        run: Start-Process -NoNewWindow -FilePath "node" -ArgumentList "apps/local-core/dist/index.js"
+        shell: powershell
+
+      - name: Browser Golden Path
+        run: node scripts/phase25-golden-path.mjs
+        shell: powershell
+        timeout-minutes: 10

@@ -495,7 +495,7 @@ export class SqliteMetadataRepository {
 
   #upsertNote(value: Note): void {
     this.#database.prepare(`
-      INSERT INTO notes VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO notes VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET body=excluded.body, updated_at=excluded.updated_at
     `).run(value.id as SQLInputValue, value.projectId as SQLInputValue, JSON.stringify(value.anchor),
       (value.anchor.scope === 'artifact' ? (value.anchor as {artifactId: string}).artifactId : null) ?? null,

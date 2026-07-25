@@ -19,8 +19,13 @@
     "typecheck": "npm run typecheck --workspace @local-creative-os/web && npm run typecheck --workspace @local-creative-os/local-core && npm run typecheck --workspace @local-creative-os/domain && npm run typecheck --workspace @local-creative-os/contracts",
     "test": "npm run test --workspace @local-creative-os/web && npm run test --workspace @local-creative-os/local-core && npm run test --workspace @local-creative-os/domain && npm run test --workspace @local-creative-os/contracts",
     "test:report": "vitest run apps/web/tests apps/local-core/tests packages/domain/tests packages/contracts/tests --reporter=json --outputFile=public/dev-test-report.json",
+    "test:architecture": "vitest run tests/architecture --reporter=verbose",
+    "test:integration": "vitest run tests/integration --reporter=verbose",
+    "test:e2e": "node scripts/phase25-golden-path.mjs",
     "smoke": "npm run smoke --workspace @local-creative-os/web",
-    "check": "npm run lint && npm run typecheck && npm run test && npm run build && npm run smoke"
+    "check:fast": "npm run lint && npm run typecheck && npm run test && npm run test:architecture && npm run build",
+    "check:phase25": "npm run check:fast && npm run test:integration && npm run test:e2e",
+    "check": "npm run check:fast"
   },
   "dependencies": {
     "lucide-react": "^1.24.0",
