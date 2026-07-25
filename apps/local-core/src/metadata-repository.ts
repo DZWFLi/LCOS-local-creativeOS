@@ -292,9 +292,29 @@ export class SqliteMetadataRepository {
 
   // ==================== Mutation ====================
 
-  applyMutations(batch: MutationBatch): void {
+  applyMutations(batch: MutationBatch, fallbackProjectId?: string): void {
     this.#database.exec('BEGIN IMMEDIATE;')
     try {
+      const hasSemantic = batch.ops.some(isSemanticOp)
+      const hasBootstrap = batch.ops.length === 1 && (batch.ops[0] as MutationBatch['ops'][number]).type === 'bootstrap'
+
+      if (!hasBootstrap && batch.ops.length > 0) {
+        const pid = resolveProjectId(batch.ops) ?? fallbackProjectId
+        if (pid) {
+          const current = this.#database.prepare('SELECT graph_version FROM projects WHERE id = ?').get(pid as SQLInputValue) as Row | undefined
+          const cv = (current?.graph_version as number) ?? 0
+          if (Number(batch.baseVersion) !== cv && cv > 0) {
+            const err = new Error('Graph version is stale. Refresh and retry.') as unknown as Record<string, unknown>
+            err.code = 'STALE_GRAPH_VERSION'
+            err.currentVersion = cv
+            throw err
+          }
+          if (hasSemantic) {
+            this.#database.prepare('UPDATE projects SET graph_version = graph_version + 1 WHERE id = ?').run(pid as SQLInputValue)
+          }
+        }
+      }
+
       for (const op of batch.ops) {
         switch (op.type) {
           case 'bootstrap':
@@ -303,6 +323,10 @@ export class SqliteMetadataRepository {
           case 'move_artifact_view':
             this.#database.prepare(`UPDATE artifact_views SET position = json_set(position, '$.x', ?, '$.y', ?) WHERE id = ?`)
               .run(op.x as SQLInputValue, op.y as SQLInputValue, op.viewId as SQLInputValue)
+            break
+          case 'update_workspace_viewport':
+            this.#database.prepare(`UPDATE workspaces SET viewport = ?, updated_at = ? WHERE id = ?`)
+              .run(JSON.stringify(op.viewport) as SQLInputValue, new Date().toISOString(), op.workspaceId as SQLInputValue)
             break
           case 'upsert_workspace':
             this.#upsertWorkspace(op.workspace)
@@ -567,4 +591,27 @@ export class SqliteMetadataRepository {
   #checkpoint(row: Row): Checkpoint {
     return { id: row.id as CheckpointId, projectId: row.project_id as ProjectId, scopeId: (row.scope_id ?? '') as unknown as ScopeId, label: String(row.label ?? ''), snapshotJson: json<Checkpoint['snapshotJson']>(row.snapshot_json as SQLInputValue), createdAt: String(row.created_at) }
   }
+}
+
+// ==================== Module helpers ====================
+
+/** Presentation-only ops — do NOT advance graphVersion. */
+const PRESENTATION_OPS = new Set(['move_artifact_view', 'resize_artifact_view', 'update_workspace_viewport', 'delete_artifact_view', 'delete_relation'])
+
+function isSemanticOp(op: { type: string }): boolean {
+  return !PRESENTATION_OPS.has(op.type) && op.type !== 'bootstrap'
+}
+
+function resolveProjectId(ops: readonly { type: string; [key: string]: unknown }[]): string | null {
+  for (const op of ops) {
+    if (op.type === 'bootstrap' && op.snapshot) return String((op.snapshot as { project?: { id?: string } })?.project?.id ?? '')
+    // Direct projectId on operation-level payload
+    if (op.projectId) return String(op.projectId)
+    // Nested entity payloads
+    for (const key of ['artifact', 'workspace', 'scope', 'view', 'relation', 'note', 'checkpoint', 'revision'] as const) {
+      const entity = (op as Record<string, Record<string, unknown> | undefined>)[key]
+      if (entity?.projectId) return String(entity.projectId)
+    }
+  }
+  return null
 }

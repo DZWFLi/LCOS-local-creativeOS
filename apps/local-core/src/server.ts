@@ -4,6 +4,7 @@ import type {
   Artifact,
   ArtifactView,
   Checkpoint,
+  ContractError,
   MutationBatch,
   Note,
   Project,
@@ -85,7 +86,7 @@ function statusForError(code: string): number {
   if (code === 'PROJECT_ROOT_NOT_FOUND' || code === 'NOT_FOUND') return 404
   if (code === 'UNAVAILABLE') return 503
   if (code === 'ABORTED') return 499
-  if (code === 'INTERNAL') return 500
+  if (code === 'STALE_GRAPH_VERSION') return 409
   return 400
 }
 
@@ -235,11 +236,18 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
           return
         }
         const batch = input as unknown as MutationBatch
+        const projectId = decodeURIComponent(graphMatch[1] ?? '')
         try {
-          metadata.applyMutations(batch)
+          metadata.applyMutations(batch, projectId)
           sendJson(response, 200, { ok: true, value: { appliedOps: batch.ops.length } })
         } catch (error: unknown) {
-          sendJson(response, 400, failure('VALIDATION', error instanceof Error ? error.message : 'Mutations could not be applied.'))
+          const msg = error instanceof Error ? error.message : 'Mutations could not be applied.'
+          const code = (error instanceof Error && 'code' in error) ? String((error as unknown as Record<string, unknown>).code) : undefined
+          if (code === 'STALE_GRAPH_VERSION') {
+            sendJson(response, 409, { ok: false, error: { code: 'STALE_GRAPH_VERSION' as ContractError['code'], message: msg, retryable: true, origin: 'runtime' as const } })
+          } else {
+            sendJson(response, 400, failure('VALIDATION', msg))
+          }
         }
         return
       }
