@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type { CanvasEdge, CanvasNode } from '../model'
+import { useAppWorkingStore } from './appWorkingStore'
 
 export interface CanvasGraphSnapshot {
   nodes: CanvasNode[]
@@ -12,81 +13,60 @@ function resolve<T>(current: T, updater: StateUpdater<T>): T {
   return typeof updater === 'function' ? (updater as (value: T) => T)(current) : updater
 }
 
-function signature(snapshot: CanvasGraphSnapshot): string {
-  return JSON.stringify({
-    nodes: snapshot.nodes.map(({ previewUrl: _previewUrl, ...node }) => node),
-    edges: snapshot.edges,
-  })
-}
-
 export function useCanvasHistory(initial: CanvasGraphSnapshot) {
-  const [snapshot, setSnapshot] = useState<CanvasGraphSnapshot>(initial)
-  const snapshotRef = useRef(snapshot)
-  const committedRef = useRef(initial)
-  const committedSignatureRef = useRef(signature(initial))
-  const pastRef = useRef<CanvasGraphSnapshot[]>([])
-  const futureRef = useRef<CanvasGraphSnapshot[]>([])
+  if (!useAppWorkingStore.getState().canvasHydrated) {
+    useAppWorkingStore.getState().resetCanvasHistory(initial)
+  }
+  const nodes = useAppWorkingStore((state) => state.nodes)
+  const edges = useAppWorkingStore((state) => state.edges)
+  const setCanvasGraph = useAppWorkingStore((state) => state.setCanvasGraph)
+  const commitCanvasGraph = useAppWorkingStore((state) => state.commitCanvasGraph)
+  const undoCanvas = useAppWorkingStore((state) => state.undoCanvas)
+  const redoCanvas = useAppWorkingStore((state) => state.redoCanvas)
+  const resetCanvasHistory = useAppWorkingStore((state) => state.resetCanvasHistory)
+  const snapshot = useMemo(() => ({ nodes, edges }), [nodes, edges])
   const timerRef = useRef<number | null>(null)
   const restoringRef = useRef(false)
-
-  useEffect(() => { snapshotRef.current = snapshot }, [snapshot])
 
   useEffect(() => {
     if (restoringRef.current) {
       restoringRef.current = false
-      committedRef.current = snapshot
-      committedSignatureRef.current = signature(snapshot)
       return
     }
     if (timerRef.current !== null) window.clearTimeout(timerRef.current)
     timerRef.current = window.setTimeout(() => {
       timerRef.current = null
-      const nextSignature = signature(snapshot)
-      if (nextSignature === committedSignatureRef.current) return
-      pastRef.current = [...pastRef.current.slice(-79), committedRef.current]
-      committedRef.current = snapshot
-      committedSignatureRef.current = nextSignature
-      futureRef.current = []
+      commitCanvasGraph(snapshot)
     }, 180)
     return () => {
       if (timerRef.current !== null) window.clearTimeout(timerRef.current)
     }
-  }, [snapshot])
+  }, [commitCanvasGraph, snapshot])
 
   const setGraph = useCallback((updater: StateUpdater<CanvasGraphSnapshot>) => {
-    setSnapshot((current) => resolve(current, updater))
-  }, [])
+    const current = useAppWorkingStore.getState()
+    setCanvasGraph(resolve({ nodes: current.nodes, edges: current.edges }, updater))
+  }, [setCanvasGraph])
 
   const setNodes = useCallback((updater: StateUpdater<CanvasNode[]>) => {
-    setSnapshot((current) => ({ ...current, nodes: resolve(current.nodes, updater) }))
-  }, [])
+    const current = useAppWorkingStore.getState()
+    setCanvasGraph({ nodes: resolve(current.nodes, updater), edges: current.edges })
+  }, [setCanvasGraph])
 
   const setEdges = useCallback((updater: StateUpdater<CanvasEdge[]>) => {
-    setSnapshot((current) => ({ ...current, edges: resolve(current.edges, updater) }))
-  }, [])
+    const current = useAppWorkingStore.getState()
+    setCanvasGraph({ nodes: current.nodes, edges: resolve(current.edges, updater) })
+  }, [setCanvasGraph])
 
   const undo = useCallback((): boolean => {
     if (timerRef.current !== null) {
       window.clearTimeout(timerRef.current)
       timerRef.current = null
     }
-    const current = snapshotRef.current
-    const currentSignature = signature(current)
-    if (currentSignature !== committedSignatureRef.current) {
-      futureRef.current.push(current)
-      restoringRef.current = true
-      setSnapshot(committedRef.current)
-      return true
-    }
-    const previous = pastRef.current.pop()
-    if (!previous) return false
-    futureRef.current.push(committedRef.current)
-    committedRef.current = previous
-    committedSignatureRef.current = signature(previous)
-    restoringRef.current = true
-    setSnapshot(previous)
-    return true
-  }, [])
+    const restored = undoCanvas()
+    restoringRef.current = restored
+    return restored
+  }, [undoCanvas])
 
 
   const resetGraph = useCallback((next: CanvasGraphSnapshot) => {
@@ -94,33 +74,23 @@ export function useCanvasHistory(initial: CanvasGraphSnapshot) {
       window.clearTimeout(timerRef.current)
       timerRef.current = null
     }
-    pastRef.current = []
-    futureRef.current = []
-    committedRef.current = next
-    committedSignatureRef.current = signature(next)
-    snapshotRef.current = next
     restoringRef.current = true
-    setSnapshot(next)
-  }, [])
+    resetCanvasHistory(next)
+  }, [resetCanvasHistory])
 
   const redo = useCallback((): boolean => {
     if (timerRef.current !== null) {
       window.clearTimeout(timerRef.current)
       timerRef.current = null
     }
-    const next = futureRef.current.pop()
-    if (!next) return false
-    pastRef.current.push(committedRef.current)
-    committedRef.current = next
-    committedSignatureRef.current = signature(next)
-    restoringRef.current = true
-    setSnapshot(next)
-    return true
-  }, [])
+    const restored = redoCanvas()
+    restoringRef.current = restored
+    return restored
+  }, [redoCanvas])
 
   return {
-    nodes: snapshot.nodes,
-    edges: snapshot.edges,
+    nodes,
+    edges,
     setNodes,
     setEdges,
     setGraph,
