@@ -19,15 +19,16 @@ const now = () => new Date().toISOString()
 
 function fullSnapshot(overrides: Record<string, unknown> = {}) {
   return {
-    schemaVersion: 3, graphVersion: 1,
+    schemaVersion: 4, graphVersion: 1,
     project: { id: 'proj', name: 'Integration', rootPath: 'd://proj', graphVersion: 1, createdAt: now(), updatedAt: now() },
     scopes: [{ id: 's-root', projectId: 'proj', parentScopeId: null, containerViewId: null, kind: 'root', name: 'Root', createdAt: now(), updatedAt: now() }],
     workspaces: [{ id: 'ws-1', projectId: 'proj', scopeId: 's-root', name: 'Main', intent: null, viewport: { x: 0, y: 0, zoom: 1 }, focusedViewIds: [], visibleLayers: ['core', 'process'], contextPolicy: 'selection-only', updatedAt: now() }],
-    artifacts: [{ id: 'art-a', projectId: 'proj', title: 'Doc A', kind: 'markdown', localPath: 'd://a', availability: 'available', createdAt: now(), updatedAt: now() }],
+    artifacts: [{ id: 'art-a', projectId: 'proj', title: 'Doc A', kind: 'markdown', availability: 'available', createdAt: now(), updatedAt: now() }],
     artifactViews: [{ id: 'v-a1', artifactId: 'art-a', scopeId: 's-root', referenceKind: 'primary', position: { x: 100, y: 100 }, size: { width: 200, height: 150 }, displayMode: 'card', collapsed: false }],
     relations: [{ id: 'rel-1', projectId: 'proj', sourceEntityType: 'artifact', sourceEntityId: 'art-a', targetEntityType: 'artifact', targetEntityId: 'art-a', kind: 'reference', createdAt: now(), updatedAt: now() }],
     notes: [{ id: 'note-1', projectId: 'proj', anchor: { type: 'artifact', artifactId: 'art-a' }, body: 'A note', createdAt: now(), updatedAt: now() }],
     artifactRevisions: [],
+    fileRecords: [],
     checkpoints: [{ id: 'cp-1', projectId: 'proj', scopeId: 's-root', label: 'V1', snapshotJson: { nodes: [{ id: 'v-a1', x: 100, y: 100 }], camera: { x: 0, y: 0, zoom: 1 } }, createdAt: now() }],
     ...overrides,
   } as any
