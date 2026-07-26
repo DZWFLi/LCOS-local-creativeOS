@@ -1,0 +1,15 @@
+{
+  "browser": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.7922.34 Safari/537.36",
+  "samples": [
+    {
+      "nodeCount": 100,
+      "commitMs": 194.5,
+      "measuredAt": "2026-07-26T06:55:06.156Z"
+    },
+    {
+      "nodeCount": 300,
+      "commitMs": 360.6,
+      "measuredAt": "2026-07-26T06:55:07.122Z"
+    }
+  ]
+}

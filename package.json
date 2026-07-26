@@ -22,6 +22,10 @@
     "test:architecture": "vitest run tests/architecture --reporter=verbose",
     "test:integration": "vitest run tests/integration --reporter=verbose",
     "test:e2e": "npx playwright test --reporter=list",
+    "dev:spike:react-flow": "vite --config spikes/react-flow-phase3/vite.config.ts",
+    "test:spike:react-flow": "playwright test --config spikes/react-flow-phase3/playwright.config.ts --reporter=list",
+    "typecheck:spike:react-flow": "tsc -p spikes/react-flow-phase3/tsconfig.json",
+    "build:spike:react-flow": "vite build --config spikes/react-flow-phase3/vite.config.ts",
     "test:e2e:golden": "node scripts/phase25-golden-path.mjs",
     "smoke": "npm run smoke --workspace @local-creative-os/web",
     "check:fast": "npm run lint && npm run typecheck && npm run test && npm run test:architecture && npm run build",
@@ -29,6 +33,7 @@
     "check": "npm run check:fast"
   },
   "dependencies": {
+    "@xyflow/react": "12.11.2",
     "lucide-react": "^1.24.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
