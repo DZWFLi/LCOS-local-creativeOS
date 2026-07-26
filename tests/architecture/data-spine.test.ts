@@ -47,7 +47,7 @@ function minimalSnapshot(overrides: Partial<ProjectGraphSnapshot> = {}): Project
   return {
     schemaVersion: 3, graphVersion: 1 as ProjectGraphSnapshot['graphVersion'],
     project: makeProject(), scopes: [makeScope()], workspaces: [makeWorkspace()],
-    artifacts: [], artifactViews: [], relations: [], notes: [], artifactRevisions: [], checkpoints: [],
+    artifacts: [], artifactViews: [], relations: [], notes: [], artifactRevisions: [], fileRecords: [], checkpoints: [],
     ...overrides,
   } as ProjectGraphSnapshot
 }
@@ -174,7 +174,7 @@ describe('ARCH-012 Migration survives without delete', () => {
   const dir = mkdtempSync(join(tmpdir(), 'arch-012-'))
   afterAll(() => rmSync(dir, { recursive: true, force: true }))
 
-  it('creates fresh v3 database, migrates v1 fixture without data loss', () => {
+  it('creates fresh v4 database, migrates v1 fixture without data loss', () => {
     const dbPath = join(dir, 'fresh.sqlite')
     const repo = new SqliteMetadataRepository(dbPath)
     // Verify schema version is 3
@@ -182,7 +182,7 @@ describe('ARCH-012 Migration survives without delete', () => {
     repo.save(snap)
     const loaded = repo.get('test-proj')
     expect(loaded).toBeDefined()
-    expect(loaded!.schemaVersion).toBe(3)
+    expect(loaded!.schemaVersion).toBe(4)
     expect(loaded!.project.name).toBe('Test')
     repo.close()
   })

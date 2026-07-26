@@ -8,6 +8,8 @@ export { ExplicitProjectCatalog } from './project-catalog.js'
 export { validateProjectRoot } from './project-root.js'
 export { createLocalCoreServer, LOCAL_CORE_DEV_PORT } from './server.js'
 export { SqliteMetadataRepository } from './metadata-repository.js'
+export { FileRegistryService, TrustedFileSelectionRegistry } from './file-registry-service.js'
+export { guardTrustedFilePath } from './path-guard.js'
 
 async function main(): Promise<void> {
   const databasePath = process.env.LOCAL_CORE_DB_PATH

@@ -77,7 +77,6 @@ function snapshot(title = 'Brief', graphVersion = 1): ProjectGraphSnapshot {
       projectId: 'disposable-portasplit' as ProjectGraphSnapshot['project']['id'],
       title,
       kind: 'markdown',
-      localPath: 'disposable://brief',
       availability: 'available',
       createdAt: NOW,
       updatedAt: NOW,
@@ -94,6 +93,7 @@ function snapshot(title = 'Brief', graphVersion = 1): ProjectGraphSnapshot {
     }],
     relations: [],
     notes: [],
+    fileRecords: [],
     artifactRevisions: [],
     checkpoints: [],
   }

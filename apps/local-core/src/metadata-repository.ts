@@ -11,6 +11,8 @@ import type {
   ArtifactViewId,
   Checkpoint,
   CheckpointId,
+  FileRecord,
+  FileRecordId,
   GraphVersion,
   Note,
   NoteId,
@@ -57,9 +59,10 @@ export class SqliteMetadataRepository {
   #migrate(): void {
     const version = this.#database.prepare('PRAGMA user_version').get() as { user_version: number }
     if (version.user_version === 0) { this.#migrate_001(); return }
-    if (version.user_version === 1) { this.#migrate_002_from_v1(); return }
-    if (version.user_version === 2) { this.#migrate_003_from_v2(); return }
-    // v3 = current
+    if (version.user_version === 1) { this.#migrate_002_from_v1(); this.#migrate_004_from_v3(); return }
+    if (version.user_version === 2) { this.#migrate_003_from_v2(); this.#migrate_004_from_v3(); return }
+    if (version.user_version === 3) { this.#migrate_004_from_v3(); return }
+    // v4 = current
   }
 
   #migrate_001(): void {
@@ -104,6 +107,7 @@ export class SqliteMetadataRepository {
       );
       CREATE TABLE artifact_revisions (
         id TEXT PRIMARY KEY, artifact_id TEXT NOT NULL REFERENCES artifacts(id) ON DELETE CASCADE,
+        file_record_id TEXT NOT NULL REFERENCES file_records(id) ON DELETE RESTRICT,
         parent_revision_id TEXT, local_path TEXT NOT NULL, content_hash TEXT NOT NULL,
         source TEXT NOT NULL, run_id TEXT, status TEXT NOT NULL,
         created_at TEXT NOT NULL
@@ -118,7 +122,13 @@ export class SqliteMetadataRepository {
         scope_id TEXT NOT NULL, label TEXT NOT NULL DEFAULT '',
         snapshot_json TEXT NOT NULL, created_at TEXT NOT NULL
       );
-      PRAGMA user_version = 3;
+      CREATE TABLE file_records (
+        id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        observed_path TEXT NOT NULL, observed_hash TEXT NOT NULL,
+        size INTEGER NOT NULL, modified_at TEXT NOT NULL, mime_type TEXT NOT NULL,
+        availability TEXT NOT NULL, observed_at TEXT NOT NULL
+      );
+      PRAGMA user_version = 4;
       CREATE UNIQUE INDEX idx_revision_current
         ON artifact_revisions(artifact_id) WHERE status = 'current';
       COMMIT;
@@ -220,6 +230,33 @@ export class SqliteMetadataRepository {
     this.#database.exec(`PRAGMA user_version = 3`)
   }
 
+  #migrate_004_from_v3(): void {
+    const backup = this.databasePath + '.v3.bak'
+    this.#database.exec(`VACUUM INTO '${backup.replace(/\\/g, '\\\\')}'`)
+    this.#database.exec(`
+      BEGIN;
+      CREATE TABLE file_records (
+        id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        observed_path TEXT NOT NULL, observed_hash TEXT NOT NULL,
+        size INTEGER NOT NULL, modified_at TEXT NOT NULL, mime_type TEXT NOT NULL,
+        availability TEXT NOT NULL, observed_at TEXT NOT NULL
+      );
+      ALTER TABLE artifact_revisions ADD COLUMN file_record_id TEXT REFERENCES file_records(id) ON DELETE RESTRICT;
+      INSERT INTO file_records (
+        id, project_id, observed_path, observed_hash, size,
+        modified_at, mime_type, availability, observed_at
+      )
+      SELECT
+        'migrated-' || r.id, a.project_id, r.local_path, r.content_hash, 0,
+        r.created_at, 'application/octet-stream', 'unreadable', r.created_at
+      FROM artifact_revisions r
+      JOIN artifacts a ON a.id = r.artifact_id;
+      UPDATE artifact_revisions SET file_record_id = 'migrated-' || id WHERE file_record_id IS NULL;
+      PRAGMA user_version = 4;
+      COMMIT;
+    `)
+  }
+
   // ==================== Graph Save/Load ====================
 
   save(snapshot: ProjectGraphSnapshot): void {
@@ -238,6 +275,7 @@ export class SqliteMetadataRepository {
       this.#database.prepare('DELETE FROM artifact_views WHERE artifact_id IN (SELECT id FROM artifacts WHERE project_id = ?)').run(pid as SQLInputValue)
       this.#database.prepare('DELETE FROM artifact_revisions WHERE artifact_id IN (SELECT id FROM artifacts WHERE project_id = ?)').run(pid as SQLInputValue)
       this.#database.prepare('DELETE FROM artifacts WHERE project_id = ?').run(pid as SQLInputValue)
+      this.#database.prepare('DELETE FROM file_records WHERE project_id = ?').run(pid as SQLInputValue)
       this.#database.prepare('DELETE FROM workspaces WHERE project_id = ?').run(pid as SQLInputValue)
       this.#database.prepare('DELETE FROM scopes WHERE project_id = ?').run(pid as SQLInputValue)
 
@@ -246,6 +284,7 @@ export class SqliteMetadataRepository {
       for (const scope of snapshot.scopes) this.#upsertScope(scope, pid)
       for (const workspace of snapshot.workspaces) this.#upsertWorkspace(workspace)
       for (const artifact of snapshot.artifacts) this.#upsertArtifact(artifact)
+      for (const fileRecord of snapshot.fileRecords) this.#upsertFileRecord(fileRecord)
       for (const revision of snapshot.artifactRevisions) this.#upsertArtifactRevision(revision)
       for (const view of snapshot.artifactViews) this.#upsertArtifactView(view)
       for (const relation of snapshot.relations) this.#upsertRelation(relation)
@@ -267,6 +306,7 @@ export class SqliteMetadataRepository {
     const scopes = (this.#database.prepare('SELECT * FROM scopes WHERE project_id = ?').all(project.id as SQLInputValue) as Row[]).map((r) => this.#scope(r))
     const workspaces = (this.#database.prepare('SELECT * FROM workspaces WHERE project_id = ?').all(project.id as SQLInputValue) as Row[]).map((r) => this.#workspace(r))
     const artifacts = (this.#database.prepare('SELECT * FROM artifacts WHERE project_id = ?').all(project.id as SQLInputValue) as Row[]).map((r) => this.#artifact(r))
+    const fileRecords = (this.#database.prepare('SELECT * FROM file_records WHERE project_id = ?').all(project.id as SQLInputValue) as Row[]).map((r) => this.#fileRecord(r))
     const revisionRows = (this.#database.prepare('SELECT r.* FROM artifact_revisions r JOIN artifacts a ON r.artifact_id = a.id WHERE a.project_id = ?').all(project.id as SQLInputValue) as Row[])
     const artifactRevisions = revisionRows.map((r) => this.#artifactRevision(r))
     const viewRows = (this.#database.prepare('SELECT v.* FROM artifact_views v JOIN artifacts a ON v.artifact_id = a.id WHERE a.project_id = ?').all(project.id as SQLInputValue) as Row[])
@@ -276,12 +316,13 @@ export class SqliteMetadataRepository {
     const checkpoints = (this.#database.prepare('SELECT * FROM checkpoints WHERE project_id = ?').all(project.id as SQLInputValue) as Row[]).map((r) => this.#checkpoint(r))
 
     return {
-      schemaVersion: 3,
+      schemaVersion: 4,
       graphVersion: project.graphVersion as GraphVersion,
       project,
       scopes,
       workspaces,
       artifacts,
+      fileRecords,
       artifactViews,
       relations,
       artifactRevisions,
@@ -511,7 +552,50 @@ export class SqliteMetadataRepository {
     this.#upsertCheckpoint(value)
   }
 
-  get schemaVersion(): number { return 3 }
+  getFileRecords(projectId: string): FileRecord[] {
+    return (this.#database.prepare('SELECT * FROM file_records WHERE project_id = ?').all(projectId as SQLInputValue) as Row[])
+      .map((row) => this.#fileRecord(row))
+  }
+
+  getFileRecord(fileRecordId: string): FileRecord | undefined {
+    const row = this.#database.prepare('SELECT * FROM file_records WHERE id = ?').get(fileRecordId as SQLInputValue) as Row | undefined
+    return row === undefined ? undefined : this.#fileRecord(row)
+  }
+
+  upsertFileRecord(value: FileRecord): void { this.#upsertFileRecord(value) }
+
+  registerSource(
+    fileRecord: FileRecord,
+    artifact: Artifact,
+    revision: ArtifactRevision,
+  ): void {
+    if (String(fileRecord.projectId) !== String(artifact.projectId)
+      || String(revision.artifactId) !== String(artifact.id)
+      || String(revision.fileRecordId) !== String(fileRecord.id)
+      || String(artifact.currentRevisionId) !== String(revision.id)
+      || String(revision.contentHash) !== String(fileRecord.observedHash)
+      || revision.source !== 'import'
+      || revision.status !== 'current') {
+      throw new Error('Initial source registration invariants are invalid.')
+    }
+    if (this.getProject(String(artifact.projectId)) === undefined) {
+      throw new Error('Project not found.')
+    }
+    this.#database.exec('BEGIN IMMEDIATE;')
+    try {
+      this.#upsertFileRecord(fileRecord)
+      this.#upsertArtifact(artifact)
+      this.#upsertArtifactRevision(revision)
+      this.#database.prepare('UPDATE projects SET graph_version = graph_version + 1, updated_at = ? WHERE id = ?')
+        .run(artifact.updatedAt, artifact.projectId as SQLInputValue)
+      this.#database.exec('COMMIT;')
+    } catch (error: unknown) {
+      this.#database.exec('ROLLBACK;')
+      throw error
+    }
+  }
+
+  get schemaVersion(): number { return 4 }
 
   // ==================== Private helpers ====================
 
@@ -545,7 +629,7 @@ export class SqliteMetadataRepository {
     this.#database.prepare(`
       INSERT INTO artifacts VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET title=excluded.title, kind=excluded.kind, local_path=excluded.local_path, availability=excluded.availability, current_revision_id=excluded.current_revision_id, updated_at=excluded.updated_at
-    `).run(value.id as SQLInputValue, value.projectId as SQLInputValue, value.title, value.kind, value.localPath, value.availability, value.currentRevisionId as SQLInputValue ?? null, value.createdAt, value.updatedAt)
+    `).run(value.id as SQLInputValue, value.projectId as SQLInputValue, value.title, value.kind, '', value.availability, value.currentRevisionId as SQLInputValue ?? null, value.createdAt, value.updatedAt)
   }
 
   #upsertArtifactView(value: ArtifactView): void {
@@ -565,10 +649,39 @@ export class SqliteMetadataRepository {
   }
 
   #upsertArtifactRevision(value: ArtifactRevision): void {
+    const fileRecord = this.getFileRecord(String(value.fileRecordId))
+    if (fileRecord === undefined) throw new Error('ArtifactRevision requires an existing FileRecord.')
     this.#database.prepare(`
-      INSERT INTO artifact_revisions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO artifact_revisions (
+        id, artifact_id, parent_revision_id, local_path, content_hash,
+        source, run_id, status, created_at, file_record_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET status=excluded.status
-    `).run(value.id as SQLInputValue, value.artifactId as SQLInputValue, value.parentRevisionId as SQLInputValue ?? null, value.localPath, value.contentHash as SQLInputValue, value.source, value.runId as SQLInputValue ?? null, value.status, value.createdAt)
+    `).run(value.id as SQLInputValue, value.artifactId as SQLInputValue, value.parentRevisionId as SQLInputValue ?? null, fileRecord.observedPath, value.contentHash as SQLInputValue, value.source, value.runId as SQLInputValue ?? null, value.status, value.createdAt, value.fileRecordId as SQLInputValue)
+  }
+
+  #upsertFileRecord(value: FileRecord): void {
+    this.#database.prepare(`
+      INSERT INTO file_records VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        observed_path=excluded.observed_path,
+        observed_hash=excluded.observed_hash,
+        size=excluded.size,
+        modified_at=excluded.modified_at,
+        mime_type=excluded.mime_type,
+        availability=excluded.availability,
+        observed_at=excluded.observed_at
+    `).run(
+      value.id as SQLInputValue,
+      value.projectId as SQLInputValue,
+      value.observedPath,
+      value.observedHash as SQLInputValue,
+      value.size,
+      value.modifiedAt,
+      value.mimeType,
+      value.availability,
+      value.observedAt,
+    )
   }
 
   #upsertNote(value: Note): void {
@@ -614,7 +727,7 @@ export class SqliteMetadataRepository {
   }
 
   #artifact(row: Row): Artifact {
-    return { id: row.id as ArtifactId, projectId: row.project_id as ProjectId, title: String(row.title), kind: String(row.kind) as Artifact['kind'], localPath: String(row.local_path), availability: String(row.availability) as Artifact['availability'], ...(row.current_revision_id === null || row.current_revision_id === undefined ? {} : { currentRevisionId: row.current_revision_id as ArtifactRevisionId }), createdAt: String(row.created_at), updatedAt: String(row.updated_at) }
+    return { id: row.id as ArtifactId, projectId: row.project_id as ProjectId, title: String(row.title), kind: String(row.kind) as Artifact['kind'], availability: String(row.availability) as Artifact['availability'], ...(row.current_revision_id === null || row.current_revision_id === undefined ? {} : { currentRevisionId: row.current_revision_id as ArtifactRevisionId }), createdAt: String(row.created_at), updatedAt: String(row.updated_at) }
   }
 
   #artifactView(row: Row): ArtifactView {
@@ -626,7 +739,21 @@ export class SqliteMetadataRepository {
   }
 
   #artifactRevision(row: Row): ArtifactRevision {
-    return { id: row.id as ArtifactRevisionId, artifactId: row.artifact_id as ArtifactId, localPath: String(row.local_path), contentHash: String(row.content_hash) as ArtifactRevision['contentHash'], source: String(row.source) as ArtifactRevision['source'], status: String(row.status) as ArtifactRevision['status'], createdAt: String(row.created_at), ...(row.parent_revision_id ? { parentRevisionId: row.parent_revision_id as ArtifactRevisionId } : {}), ...(row.run_id ? { runId: row.run_id as ArtifactRevision['runId'] } : {}) } as ArtifactRevision
+    return { id: row.id as ArtifactRevisionId, artifactId: row.artifact_id as ArtifactId, fileRecordId: row.file_record_id as FileRecordId, contentHash: String(row.content_hash) as ArtifactRevision['contentHash'], source: String(row.source) as ArtifactRevision['source'], status: String(row.status) as ArtifactRevision['status'], createdAt: String(row.created_at), ...(row.parent_revision_id ? { parentRevisionId: row.parent_revision_id as ArtifactRevisionId } : {}), ...(row.run_id ? { runId: row.run_id as ArtifactRevision['runId'] } : {}) } as ArtifactRevision
+  }
+
+  #fileRecord(row: Row): FileRecord {
+    return {
+      id: row.id as FileRecordId,
+      projectId: row.project_id as ProjectId,
+      observedPath: String(row.observed_path),
+      observedHash: String(row.observed_hash) as FileRecord['observedHash'],
+      size: Number(row.size),
+      modifiedAt: String(row.modified_at),
+      mimeType: String(row.mime_type),
+      availability: String(row.availability) as FileRecord['availability'],
+      observedAt: String(row.observed_at),
+    }
   }
 
   #note(row: Row): Note {

@@ -33,8 +33,9 @@ function projectSnapshot(): ProjectGraphSnapshot {
   const scopeId = 'scope-root' as ProjectGraphSnapshot['scopes'][number]['id']
   const artifactId = 'artifact-source' as ProjectGraphSnapshot['artifacts'][number]['id']
   const revisionId = 'revision-initial' as ProjectGraphSnapshot['artifactRevisions'][number]['id']
+  const fileRecordId = 'file-source' as ProjectGraphSnapshot['fileRecords'][number]['id']
   return {
-    schemaVersion: 3,
+    schemaVersion: 4,
     graphVersion: 1 as GraphVersion,
     project: {
       id: projectId,
@@ -60,7 +61,6 @@ function projectSnapshot(): ProjectGraphSnapshot {
       projectId,
       title: 'Source',
       kind: 'markdown',
-      localPath: 'disposable://source',
       availability: 'available',
       currentRevisionId: revisionId,
       createdAt: now,
@@ -79,10 +79,21 @@ function projectSnapshot(): ProjectGraphSnapshot {
     }],
     relations: [],
     notes: [],
+    fileRecords: [{
+      id: fileRecordId,
+      projectId,
+      observedPath: 'disposable://source',
+      observedHash: 'frozen-hash' as ProjectGraphSnapshot['fileRecords'][number]['observedHash'],
+      size: 1,
+      modifiedAt: now,
+      mimeType: 'text/markdown',
+      availability: 'current',
+      observedAt: now,
+    }],
     artifactRevisions: [{
       id: revisionId,
       artifactId,
-      localPath: 'disposable://source',
+      fileRecordId,
       contentHash: 'frozen-hash' as ProjectGraphSnapshot['artifactRevisions'][number]['contentHash'],
       source: 'import',
       status: 'current',
@@ -99,7 +110,12 @@ afterEach(() => {
 })
 
 describe('Phase 3 architecture boundaries', () => {
-  it.todo('ARCH-P3-001 FileRecord is a distinct entity from Artifact')
+  it('ARCH-P3-001 FileRecord is a distinct entity from Artifact', () => {
+    const snapshot = projectSnapshot()
+    expect(snapshot.artifacts[0]).not.toHaveProperty('observedPath')
+    expect(snapshot.fileRecords[0]).not.toHaveProperty('currentRevisionId')
+    expect(snapshot.artifactRevisions[0]?.fileRecordId).toBe(snapshot.fileRecords[0]?.id)
+  })
 
   it('ARCH-P3-002 deleting ArtifactView preserves Artifact and Revision', () => {
     const directory = mkdtempSync(join(tmpdir(), 'arch-p3-'))
@@ -114,9 +130,18 @@ describe('Phase 3 architecture boundaries', () => {
     expect(restored?.artifactViews).toHaveLength(0)
     expect(restored?.artifacts.map((artifact) => artifact.id)).toEqual(['artifact-source'])
     expect(restored?.artifactRevisions.map((revision) => revision.id)).toEqual(['revision-initial'])
+    expect(restored?.fileRecords.map((fileRecord) => fileRecord.id)).toEqual(['file-source'])
   })
 
-  it.todo('ARCH-P3-003 source registration creates an Initial Revision')
+  it('ARCH-P3-003 source registration creates an Initial Revision', () => {
+    const snapshot = projectSnapshot()
+    const artifact = snapshot.artifacts[0]
+    const revision = snapshot.artifactRevisions[0]
+    expect(artifact?.currentRevisionId).toBe(revision?.id)
+    expect(revision?.source).toBe('import')
+    expect(revision?.status).toBe('current')
+    expect(revision?.fileRecordId).toBe(snapshot.fileRecords[0]?.id)
+  })
   it.todo('ARCH-P3-004 deleting Preview cache preserves Project Truth')
 
   it('ARCH-P3-005 browser production clients expose no arbitrary-path register/preview API', () => {

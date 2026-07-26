@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { SqliteMetadataRepository } from '../src/metadata-repository.js'
 
 const cleanup: string[] = []
-const SCHEMA_VERSION = 3
+const SCHEMA_VERSION = 4
 
 function disposableSnapshot(): ProjectGraphSnapshot {
   const now = '2026-07-24T12:00:00.000Z'
@@ -20,6 +20,7 @@ function disposableSnapshot(): ProjectGraphSnapshot {
   const firstViewId = 'view-brief' as ProjectGraphSnapshot['artifactViews'][number]['id']
   const secondViewId = 'view-board' as ProjectGraphSnapshot['artifactViews'][number]['id']
   const revisionId = 'rev-1' as ProjectGraphSnapshot['artifactRevisions'][number]['id']
+  const fileRecordId = 'file-brief' as ProjectGraphSnapshot['fileRecords'][number]['id']
   const noteId = 'note-1' as ProjectGraphSnapshot['notes'][number]['id']
   const checkpointId = 'checkpoint-1' as ProjectGraphSnapshot['checkpoints'][number]['id']
   return {
@@ -40,8 +41,8 @@ function disposableSnapshot(): ProjectGraphSnapshot {
       contextPolicy: 'selection-only',
     }],
     artifacts: [
-      { id: firstArtifactId, projectId, title: 'Brief', kind: 'markdown', localPath: 'disposable://brief', availability: 'available', createdAt: now, updatedAt: now },
-      { id: secondArtifactId, projectId, title: 'Board', kind: 'image', localPath: 'disposable://board', availability: 'available', createdAt: now, updatedAt: now },
+      { id: firstArtifactId, projectId, title: 'Brief', kind: 'markdown', availability: 'available', currentRevisionId: revisionId, createdAt: now, updatedAt: now },
+      { id: secondArtifactId, projectId, title: 'Board', kind: 'image', availability: 'available', createdAt: now, updatedAt: now },
     ],
     artifactViews: [
       { id: firstViewId, artifactId: firstArtifactId, scopeId, referenceKind: 'primary', position: { x: 10, y: 20 }, size: { width: 200, height: 140 }, displayMode: 'card', collapsed: false },
@@ -60,8 +61,19 @@ function disposableSnapshot(): ProjectGraphSnapshot {
     }],
     artifactRevisions: [{
       id: revisionId, artifactId: firstArtifactId,
-      localPath: 'disposable://brief', contentHash: 'abc123def' as ProjectGraphSnapshot['artifactRevisions'][number]['contentHash'],
+      fileRecordId, contentHash: 'abc123def' as ProjectGraphSnapshot['artifactRevisions'][number]['contentHash'],
       source: 'import', status: 'current', createdAt: now,
+    }],
+    fileRecords: [{
+      id: fileRecordId,
+      projectId,
+      observedPath: 'disposable://brief',
+      observedHash: 'abc123def' as ProjectGraphSnapshot['fileRecords'][number]['observedHash'],
+      size: 0,
+      modifiedAt: now,
+      mimeType: 'text/markdown',
+      availability: 'current',
+      observedAt: now,
     }],
     checkpoints: [{
       id: checkpointId, projectId, scopeId, label: 'Initial',
@@ -128,6 +140,67 @@ describe('SqliteMetadataRepository', () => {
     expect(() => new SqliteMetadataRepository(path)).toThrow()
     const { stat } = await import('node:fs/promises')
     await expect(stat(`${path}.bak`)).resolves.toMatchObject({ size: expect.any(Number) })
+  })
+
+  it('migrates v3 revisions to v4 FileRecords and preserves a backup', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'local-core-phase3-v3-'))
+    cleanup.push(directory)
+    const path = join(directory, 'metadata.sqlite')
+    const { DatabaseSync } = await import('node:sqlite')
+    const legacy = new DatabaseSync(path)
+    legacy.exec(`
+      CREATE TABLE projects (
+        id TEXT PRIMARY KEY, name TEXT NOT NULL, root_path TEXT NOT NULL,
+        graph_version INTEGER NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+      );
+      CREATE TABLE artifacts (
+        id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id),
+        title TEXT NOT NULL, kind TEXT NOT NULL, local_path TEXT NOT NULL,
+        availability TEXT NOT NULL, current_revision_id TEXT,
+        created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+      );
+      CREATE TABLE artifact_revisions (
+        id TEXT PRIMARY KEY, artifact_id TEXT NOT NULL REFERENCES artifacts(id),
+        parent_revision_id TEXT, local_path TEXT NOT NULL, content_hash TEXT NOT NULL,
+        source TEXT NOT NULL, run_id TEXT, status TEXT NOT NULL, created_at TEXT NOT NULL
+      );
+      INSERT INTO projects VALUES (
+        'disposable-v3', 'Legacy', 'disposable://v3', 1,
+        '2026-07-24T00:00:00.000Z', '2026-07-24T00:00:00.000Z'
+      );
+      INSERT INTO artifacts VALUES (
+        'artifact-v3', 'disposable-v3', 'Legacy source', 'markdown',
+        'disposable://legacy.md', 'available', 'revision-v3',
+        '2026-07-24T00:00:00.000Z', '2026-07-24T00:00:00.000Z'
+      );
+      INSERT INTO artifact_revisions VALUES (
+        'revision-v3', 'artifact-v3', NULL, 'disposable://legacy.md', 'legacy-hash',
+        'import', NULL, 'current', '2026-07-24T00:00:00.000Z'
+      );
+      PRAGMA user_version = 3;
+    `)
+    legacy.close()
+
+    const migrated = new SqliteMetadataRepository(path)
+    const revision = migrated.getArtifactRevision('revision-v3')
+    const record = migrated.getFileRecord('migrated-revision-v3')
+    migrated.close()
+    const { stat } = await import('node:fs/promises')
+
+    expect(revision).toMatchObject({
+      id: 'revision-v3',
+      fileRecordId: 'migrated-revision-v3',
+      contentHash: 'legacy-hash',
+      status: 'current',
+    })
+    expect(record).toMatchObject({
+      id: 'migrated-revision-v3',
+      projectId: 'disposable-v3',
+      observedPath: 'disposable://legacy.md',
+      observedHash: 'legacy-hash',
+      availability: 'unreadable',
+    })
+    await expect(stat(`${path}.v3.bak`)).resolves.toMatchObject({ size: expect.any(Number) })
   })
 
   it('deletes a view without deleting its artifact', async () => {
@@ -198,7 +271,7 @@ describe('SqliteMetadataRepository', () => {
     const revision = {
       id: 'rev-2' as typeof snap.artifactRevisions[0]['id'],
       artifactId: snap.artifacts[0].id,
-      localPath: 'disposable://brief-v2',
+      fileRecordId: snap.fileRecords[0].id,
       contentHash: 'def456abc' as typeof snap.artifactRevisions[0]['contentHash'],
       source: 'run',
       status: 'draft',

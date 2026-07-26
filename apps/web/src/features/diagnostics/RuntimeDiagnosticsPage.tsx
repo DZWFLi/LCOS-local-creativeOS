@@ -87,13 +87,13 @@ function disposablePortaSplitSnapshot(): ProjectGraphSnapshot {
       {
         id: 'disposable-artifact-brief' as ProjectGraphSnapshot['artifacts'][number]['id'],
         projectId,
-        title: 'PortaSplit Brief', kind: 'markdown', localPath: 'disposable://portasplit/brief.md',
+        title: 'PortaSplit Brief', kind: 'markdown',
         availability: 'available', createdAt: now, updatedAt: now,
       },
       {
         id: 'disposable-artifact-board' as ProjectGraphSnapshot['artifacts'][number]['id'],
         projectId,
-        title: 'Direction Board', kind: 'image', localPath: 'disposable://portasplit/board.png',
+        title: 'Direction Board', kind: 'image',
         availability: 'available', createdAt: now, updatedAt: now,
       },
     ],
@@ -121,6 +121,7 @@ function disposablePortaSplitSnapshot(): ProjectGraphSnapshot {
       kind: 'informs', createdAt: now, updatedAt: now,
     }],
     notes: [],
+    fileRecords: [],
     artifactRevisions: [],
     checkpoints: [],
   }

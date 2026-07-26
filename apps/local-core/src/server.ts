@@ -11,6 +11,7 @@ import type {
   ProjectGraphSnapshot,
   ProjectCatalog,
   Relation,
+  RegisterTrustedSourceInput,
   Workspace,
   ValidateProjectRootInput,
 } from '@local-creative-os/contracts'
@@ -20,6 +21,7 @@ import { getHealthStatus } from './health.js'
 import { ExplicitProjectCatalog } from './project-catalog.js'
 import { validateProjectRoot } from './project-root.js'
 import { SqliteMetadataRepository } from './metadata-repository.js'
+import { FileRegistryService } from './file-registry-service.js'
 
 const LOOPBACK_HOST = '127.0.0.1'
 const MAX_BODY_BYTES = 1 * 1024 * 1024 // 1 MiB
@@ -32,6 +34,7 @@ export interface LocalCoreServerOptions {
   readonly allowedRoot?: string
   readonly requestTimeoutMs?: number
   readonly metadataRepository?: SqliteMetadataRepository
+  readonly fileRegistryService?: FileRegistryService
 }
 
 export interface LocalCoreAddress {
@@ -119,6 +122,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
 
   const catalog = options.catalog ?? new ExplicitProjectCatalog([])
   const metadata = options.metadataRepository
+  const fileRegistry = options.fileRegistryService
   let server: Server | undefined
   let currentAddress: LocalCoreAddress | undefined
   let lifecycleSignal: AbortSignal | undefined
@@ -248,6 +252,39 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
           } else {
             sendJson(response, 400, failure('VALIDATION', msg))
           }
+        }
+        return
+      }
+
+      // Browser supplies only an opaque trusted selection ID, never a path.
+      const sourceMatch = /^\/projects\/([^/]+)\/sources$/.exec(pathname)
+      if (method === 'POST' && sourceMatch !== null) {
+        if (!requireMetadata(metadata, response)) return
+        if (fileRegistry === undefined) {
+          sendJson(response, 503, failure('UNAVAILABLE', 'Trusted file picker adapter is not configured.'))
+          return
+        }
+        let input: unknown
+        try { input = await readJsonBody(request, controller.signal) } catch {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Source registration body must be valid JSON.'))
+          return
+        }
+        if (!isRecord(input) || typeof input.selectionId !== 'string'
+          || ('path' in input) || ('absolutePath' in input) || ('rootPath' in input)
+          || (input.title !== undefined && typeof input.title !== 'string')) {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Source registration requires only selectionId and optional title.'))
+          return
+        }
+        const projectId = decodeURIComponent(sourceMatch[1] ?? '')
+        try {
+          const result = await fileRegistry.registerSource(
+            projectId as Project['id'],
+            input as unknown as RegisterTrustedSourceInput,
+            controller.signal,
+          )
+          sendJson(response, 201, { ok: true, value: result })
+        } catch (error: unknown) {
+          sendJson(response, 400, failure('VALIDATION', error instanceof Error ? error.message : 'Source registration failed.'))
         }
         return
       }
@@ -414,6 +451,21 @@ async function handleEntityRoute(
       return { status: 200, body: { ok: true, value: body } }
     }
     return undefined
+  }
+
+  // --- FileRecords (read-only by ID; paths are never accepted from Browser) ---
+  const fileListMatch = /^\/projects\/([^/]+)\/file-records$/.exec(pathname)
+  const fileOneMatch = /^\/file-records\/([^/]+)$/.exec(pathname)
+  if (fileListMatch !== null && method === 'GET') {
+    const projectId = decodeURIComponent(fileListMatch[1] ?? '')
+    return { status: 200, body: { ok: true, value: metadata.getFileRecords(projectId) } }
+  }
+  if (fileOneMatch !== null && method === 'GET') {
+    const fileRecordId = decodeURIComponent(fileOneMatch[1] ?? '')
+    const fileRecord = metadata.getFileRecord(fileRecordId)
+    return fileRecord === undefined
+      ? { status: 404, body: failure('NOT_FOUND', 'FileRecord not found.') }
+      : { status: 200, body: { ok: true, value: fileRecord } }
   }
 
   // --- ArtifactViews ---

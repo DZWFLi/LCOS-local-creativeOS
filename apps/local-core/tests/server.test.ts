@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import type { ProjectCatalog, ProjectGraphSnapshot } from '@local-creative-os/contracts'
 
+import { FileRegistryService, TrustedFileSelectionRegistry } from '../src/file-registry-service.js'
 import { SqliteMetadataRepository } from '../src/metadata-repository.js'
 import { ExplicitProjectCatalog } from '../src/project-catalog.js'
 import {
@@ -27,7 +28,7 @@ afterEach(async () => {
   }
 })
 
-function createMetadataRepository(): SqliteMetadataRepository {
+function createMetadataRepository(projectRoot = 'disposable://portasplit'): SqliteMetadataRepository {
   const directory = mkdtempSync(join(tmpdir(), 'local-core-server-'))
   temporaryDirectories.push(directory)
   const repository = new SqliteMetadataRepository(join(directory, 'metadata.sqlite'))
@@ -41,7 +42,7 @@ function createMetadataRepository(): SqliteMetadataRepository {
     project: {
       id: projectId,
       name: 'PortaSplit',
-      rootPath: 'disposable://portasplit',
+      rootPath: projectRoot,
       graphVersion: 1 as ProjectGraphSnapshot['graphVersion'],
       createdAt: now,
       updatedAt: now,
@@ -62,6 +63,7 @@ function createMetadataRepository(): SqliteMetadataRepository {
     relations: [],
     notes: [],
     artifactRevisions: [],
+    fileRecords: [],
     checkpoints: [],
   })
   return repository
@@ -226,6 +228,66 @@ describe('Local Core HTTP server', () => {
     await expect(duplicate.json()).resolves.toMatchObject({
       ok: false,
       error: { code: 'VALIDATION', message: expect.stringContaining('immutable') },
+    })
+  })
+
+  it.each(['path', 'absolutePath'])(
+    'rejects browser source registration containing %s',
+    async (pathField) => {
+      const metadataRepository = createMetadataRepository()
+      const fileRegistryService = new FileRegistryService(
+        metadataRepository,
+        new TrustedFileSelectionRegistry(),
+      )
+      const { baseUrl } = await startServer(createLocalCoreServer({
+        metadataRepository,
+        fileRegistryService,
+      }))
+      const response = await fetch(`${baseUrl}/projects/disposable-portasplit/sources`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          selectionId: 'opaque-selection',
+          [pathField]: 'C:\\untrusted\\source.md',
+        }),
+      })
+
+      expect(response.status).toBe(400)
+      await expect(response.json()).resolves.toMatchObject({
+        ok: false,
+        error: { code: 'INVALID_ARGUMENT' },
+      })
+    },
+  )
+
+  it('accepts browser source registration through selectionId only', async () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), 'local-core-http-source-'))
+    temporaryDirectories.push(projectRoot)
+    const sourcePath = join(projectRoot, 'source.md')
+    writeFileSync(sourcePath, '# trusted source', 'utf8')
+    const metadataRepository = createMetadataRepository(projectRoot)
+    const selections = new TrustedFileSelectionRegistry()
+    const fileRegistryService = new FileRegistryService(metadataRepository, selections)
+    const selection = selections.registerTrustedPath(sourcePath)
+    const { baseUrl } = await startServer(createLocalCoreServer({
+      metadataRepository,
+      fileRegistryService,
+    }))
+
+    const response = await fetch(`${baseUrl}/projects/disposable-portasplit/sources`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ selectionId: selection.id }),
+    })
+
+    expect(response.status).toBe(201)
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      value: {
+        fileRecord: { projectId: 'disposable-portasplit', observedPath: sourcePath },
+        artifact: { currentRevisionId: expect.any(String) },
+        revision: { source: 'import', status: 'current' },
+      },
     })
   })
 

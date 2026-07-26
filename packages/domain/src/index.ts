@@ -19,6 +19,7 @@ export type ArtifactId = Brand<string, 'ArtifactId'>
 export type ArtifactViewId = Brand<string, 'ArtifactViewId'>
 export type RelationId = Brand<string, 'RelationId'>
 export type ArtifactRevisionId = Brand<string, 'ArtifactRevisionId'>
+export type FileRecordId = Brand<string, 'FileRecordId'>
 export type NoteId = Brand<string, 'NoteId'>
 export type ContextSnapshotId = Brand<string, 'ContextSnapshotId'>
 export type CommandId = Brand<string, 'CommandId'>
@@ -96,7 +97,6 @@ export interface Artifact {
   readonly projectId: ProjectId
   readonly title: string
   readonly kind: ArtifactKind
-  readonly localPath: string
   readonly availability: ArtifactAvailability
   readonly currentRevisionId?: ArtifactRevisionId
   readonly createdAt: IsoDateTime
@@ -149,13 +149,29 @@ export type ArtifactRevisionStatus = 'draft' | 'current' | 'superseded'
 export interface ArtifactRevision {
   readonly id: ArtifactRevisionId
   readonly artifactId: ArtifactId
+  readonly fileRecordId: FileRecordId
   readonly parentRevisionId?: ArtifactRevisionId
-  readonly localPath: string
   readonly contentHash: ContentHash
   readonly source: ArtifactRevisionSource
   readonly runId?: RunId
   readonly status: ArtifactRevisionStatus
   readonly createdAt: IsoDateTime
+}
+
+// ==================== FileRecord ====================
+
+export type FileAvailability = 'current' | 'stale' | 'missing' | 'unreadable'
+
+export interface FileRecord {
+  readonly id: FileRecordId
+  readonly projectId: ProjectId
+  readonly observedPath: string
+  readonly observedHash: ContentHash
+  readonly size: number
+  readonly modifiedAt: IsoDateTime
+  readonly mimeType: string
+  readonly availability: FileAvailability
+  readonly observedAt: IsoDateTime
 }
 
 // ==================== Note ====================

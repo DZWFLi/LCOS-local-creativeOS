@@ -1,6 +1,6 @@
 # ADR: Phase 3 Canvas Engine Candidate
 
-- Status: Proposed — pending real LCOS spike
+- Status: Accepted for controlled adoption — production integration deferred
 - Scope: Phase 3 Stage 1–3
 - Decision owner: Local Creative OS
 - Evidence baseline:
@@ -8,18 +8,25 @@
   - `LCOS_OPEN_SOURCE_RESEARCH_CODE_2026-07-26.zip`
   - `Local_Creative_OS_OpenSource_Code_Audit_Dev_Feedback_v2.md`
 
-This ADR records the candidate architecture and its acceptance gate. It does not
-claim that the LCOS React Flow spike is complete or that React Flow has been
-selected for production.
+The isolated LCOS spike passed its acceptance gate. React Flow is selected as
+the Canvas-engine candidate behind a Web-only adapter; this does not authorize
+an immediate full replacement of the current renderer.
+
+Spike evidence:
+
+- Branch: `codex/phase3-react-flow-spike`
+- Commit: `f77edd93cc6463ca6c8f544c04758dfe7408308f`
+- Findings: `spikes/react-flow-phase3/SPIKE_FINDINGS.md` in the spike worktree
+- Typecheck/build PASS, Playwright 2/2 PASS, architecture 10/10 PASS
+- Controlled update sample: 100 Views 194.5 ms; 300 Views 360.6 ms
 
 ## Decision 1: Evaluate React Flow as a replaceable Canvas engine
 
 ### Decision
 
-Run a real LCOS spike before adopting React Flow. Keep the Canvas engine behind
-an adapter so the Domain and working-state model do not depend on
-`@xyflow/react`. Merge the dependency into the production path only if the
-spike gate passes.
+Adopt React Flow in controlled increments behind an adapter so the Domain and
+working-state model do not depend on `@xyflow/react`. Do not replace the
+production renderer until an in-app parity gate passes.
 
 The candidate mapping is:
 
@@ -62,9 +69,8 @@ performance in the current Web application. Only the spike can answer that.
 
 - Add no React Flow type or import to `packages/domain`.
 - Translate between `CanvasNodeVM` and renderer nodes at the adapter boundary.
-- Keep the current renderer available until the spike is accepted.
-- If rejected, merge only the ADR and reusable findings; do not merge an unused
-  dependency or spike-only production code.
+- Keep the current renderer available until in-app parity is accepted.
+- Add React Flow to the formal Web path only through a Web-only adapter.
 
 ### Tests / CI gate
 
@@ -176,15 +182,14 @@ changing those semantics.
 - Profile the candidate with LCOS node components and relations.
 - Do not redesign the App Shell, Workspace Dock, Inspector architecture, or
   Canvas visual language as part of this spike.
-- Record a final Adopt or Reject amendment after the spike.
+- Record production integration evidence before retiring the current renderer.
 
 ### Tests / CI gate
 
 - Exercise pan/zoom and node movement at 100–300 views.
 - Confirm single click, double click, selection, and Inspector behavior.
 - Confirm viewport restore comes only from `Workspace.viewport`.
-- Gate result must be recorded as evidence; until then this ADR remains
-  `Proposed`.
+- The isolated gate is PASS; production integration remains deferred.
 
 ## License boundary
 

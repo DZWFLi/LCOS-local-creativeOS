@@ -7,6 +7,8 @@ import type {
   ArtifactRevisionId,
   ArtifactView,
   ArtifactViewId,
+  FileRecord,
+  FileRecordId,
   Checkpoint,
   CheckpointId,
   Command,
@@ -96,6 +98,7 @@ export interface ProjectGraphSnapshot {
   readonly relations: readonly Relation[]
   readonly notes: readonly Note[]
   readonly artifactRevisions: readonly ArtifactRevision[]
+  readonly fileRecords: readonly FileRecord[]
   readonly checkpoints: readonly Checkpoint[]
 }
 
@@ -136,6 +139,30 @@ export interface MutationBatch {
 export interface MutationResult {
   readonly graphVersion: GraphVersion
   readonly appliedOps: number
+}
+
+// ==================== Trusted source registration ====================
+
+export type TrustedFileSelectionId = string & { readonly __brand: 'TrustedFileSelectionId' }
+
+export interface TrustedFileSelection {
+  readonly id: TrustedFileSelectionId
+  readonly displayName: string
+}
+
+export interface RegisterTrustedSourceInput {
+  readonly selectionId: TrustedFileSelectionId
+  readonly title?: string
+}
+
+export interface RegisterTrustedSourceResult {
+  readonly fileRecord: FileRecord
+  readonly artifact: Artifact
+  readonly revision: ArtifactRevision
+}
+
+export interface FileRecordRepository {
+  get(fileRecordId: FileRecordId): Promise<Result<FileRecord>>
 }
 
 // ==================== Legacy Save (deprecated, kept for bootstrap/import) ====================
@@ -229,6 +256,7 @@ export type {
   ArtifactRevision,
   ArtifactView,
   Checkpoint,
+  FileRecord,
   GraphVersion,
   Note,
   Project,

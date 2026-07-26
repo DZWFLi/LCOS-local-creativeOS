@@ -307,7 +307,6 @@ export function mapStateToGraph(state: PersistedPrototypeState, projectId: strin
     projectId: projectId as ProjectGraphSnapshot['artifacts'][number]['projectId'],
     title: n.title,
     kind: kindToArtifactKind(n.kind) as ProjectGraphSnapshot['artifacts'][number]['kind'],
-    localPath: `disposable://${n.id}`,
     availability: n.disabled ? 'missing' as const : n.draft ? 'stale' as const : 'available' as const,
     createdAt: now, updatedAt: now,
   }))
@@ -345,6 +344,7 @@ export function mapStateToGraph(state: PersistedPrototypeState, projectId: strin
     artifactViews,
     relations,
     notes: [],
+    fileRecords: [],
     artifactRevisions: [],
     checkpoints: [],
   }
@@ -420,7 +420,6 @@ export function diffStateToOps(
       projectId,
       title: n.title,
       kind: kindToArtifactKind(n.kind),
-      localPath: `disposable://${n.id}`,
       availability: n.disabled ? 'missing' : n.draft ? 'stale' : 'available',
       createdAt: now,
       updatedAt: now,
