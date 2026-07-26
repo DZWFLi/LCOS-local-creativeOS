@@ -292,16 +292,18 @@ export class SqliteMetadataRepository {
 
   // ==================== Mutation ====================
 
-  applyMutations(batch: MutationBatch, fallbackProjectId?: string): void {
+  applyMutations(batch: MutationBatch, fallbackProjectId?: string): GraphVersion {
+    if (batch.ops.length === 1 && batch.ops[0]?.type === 'bootstrap') {
+      this.save(batch.ops[0].snapshot)
+      return batch.ops[0].snapshot.graphVersion
+    }
+    const projectId = this.#resolveMutationProjectId(batch.ops, fallbackProjectId)
     this.#database.exec('BEGIN IMMEDIATE;')
     try {
       const hasSemantic = batch.ops.some(isSemanticOp)
-      const hasBootstrap = batch.ops.length === 1 && (batch.ops[0] as MutationBatch['ops'][number]).type === 'bootstrap'
-
-      if (!hasBootstrap && batch.ops.length > 0) {
-        const pid = resolveProjectId(batch.ops) ?? fallbackProjectId
-        if (pid) {
-          const current = this.#database.prepare('SELECT graph_version FROM projects WHERE id = ?').get(pid as SQLInputValue) as Row | undefined
+      if (batch.ops.length > 0) {
+        if (projectId) {
+          const current = this.#database.prepare('SELECT graph_version FROM projects WHERE id = ?').get(projectId as SQLInputValue) as Row | undefined
           const cv = (current?.graph_version as number) ?? 0
           if (Number(batch.baseVersion) !== cv && cv > 0) {
             const err = new Error('Graph version is stale. Refresh and retry.') as unknown as Record<string, unknown>
@@ -310,7 +312,7 @@ export class SqliteMetadataRepository {
             throw err
           }
           if (hasSemantic) {
-            this.#database.prepare('UPDATE projects SET graph_version = graph_version + 1 WHERE id = ?').run(pid as SQLInputValue)
+            this.#database.prepare('UPDATE projects SET graph_version = graph_version + 1 WHERE id = ?').run(projectId as SQLInputValue)
           }
         }
       }
@@ -318,18 +320,28 @@ export class SqliteMetadataRepository {
       for (const op of batch.ops) {
         switch (op.type) {
           case 'bootstrap':
-            this.save(op.snapshot)
-            break
+            throw new Error('Bootstrap must be the only operation in its batch.')
           case 'move_artifact_view':
             this.#database.prepare(`UPDATE artifact_views SET position = json_set(position, '$.x', ?, '$.y', ?) WHERE id = ?`)
               .run(op.x as SQLInputValue, op.y as SQLInputValue, op.viewId as SQLInputValue)
+            break
+          case 'resize_artifact_view':
+            this.#database.prepare('UPDATE artifact_views SET size = ? WHERE id = ?')
+              .run(JSON.stringify({ width: op.width, height: op.height }), op.viewId as SQLInputValue)
             break
           case 'update_workspace_viewport':
             this.#database.prepare(`UPDATE workspaces SET viewport = ?, updated_at = ? WHERE id = ?`)
               .run(JSON.stringify(op.viewport) as SQLInputValue, new Date().toISOString(), op.workspaceId as SQLInputValue)
             break
+          case 'update_workspace_presentation':
+            this.#database.prepare('UPDATE workspaces SET focused_node_ids = ?, visible_layers = ?, updated_at = ? WHERE id = ?')
+              .run(JSON.stringify(op.focusedViewIds), JSON.stringify(op.visibleLayers), new Date().toISOString(), op.workspaceId as SQLInputValue)
+            break
           case 'upsert_workspace':
             this.#upsertWorkspace(op.workspace)
+            break
+          case 'delete_workspace':
+            this.#database.prepare('DELETE FROM workspaces WHERE id = ?').run(op.workspaceId as SQLInputValue)
             break
           case 'upsert_scope':
             this.#upsertScope(op.scope, op.scope.projectId)
@@ -339,6 +351,10 @@ export class SqliteMetadataRepository {
             break
           case 'upsert_artifact_view':
             this.#upsertArtifactView(op.view)
+            break
+          case 'update_artifact_view_presentation':
+            this.#database.prepare('UPDATE artifact_views SET collapsed = ?, display_mode = ? WHERE id = ?')
+              .run(op.collapsed ? 1 : 0, op.displayMode, op.viewId as SQLInputValue)
             break
           case 'delete_artifact_view':
             this.#database.prepare('DELETE FROM artifact_views WHERE id = ?').run(op.viewId as SQLInputValue)
@@ -352,20 +368,53 @@ export class SqliteMetadataRepository {
           case 'upsert_note':
             this.#upsertNote(op.note)
             break
-          case 'create_checkpoint':
-            this.#upsertCheckpoint(op.checkpoint)
-            break
-          case 'upsert_artifact_revision':
-            this.#upsertArtifactRevision(op.revision)
-            break
         }
       }
 
       this.#database.exec('COMMIT;')
+      if (projectId === undefined) return 0 as GraphVersion
+      const row = this.#database.prepare('SELECT graph_version FROM projects WHERE id = ?').get(projectId as SQLInputValue) as Row | undefined
+      return ((row?.graph_version as number | undefined) ?? 0) as GraphVersion
     } catch (error: unknown) {
       this.#database.exec('ROLLBACK;')
       throw error
     }
+  }
+
+  #resolveMutationProjectId(
+    ops: MutationBatch['ops'],
+    fallbackProjectId?: string,
+  ): string | undefined {
+    const direct = resolveProjectId(ops)
+    if (direct !== null && direct !== '') return direct
+    if (fallbackProjectId !== undefined) return fallbackProjectId
+    for (const op of ops) {
+      if (op.type === 'move_artifact_view'
+        || op.type === 'resize_artifact_view'
+        || op.type === 'update_artifact_view_presentation'
+        || op.type === 'delete_artifact_view') {
+        const row = this.#database.prepare(`
+          SELECT a.project_id
+          FROM artifact_views v
+          JOIN artifacts a ON a.id = v.artifact_id
+          WHERE v.id = ?
+        `).get(op.viewId as SQLInputValue) as Row | undefined
+        if (typeof row?.project_id === 'string') return row.project_id
+      }
+      if (op.type === 'update_workspace_viewport'
+        || op.type === 'update_workspace_presentation'
+        || op.type === 'delete_workspace') {
+        const row = this.#database.prepare('SELECT project_id FROM workspaces WHERE id = ?')
+          .get(op.workspaceId as SQLInputValue) as Row | undefined
+        if (typeof row?.project_id === 'string') return row.project_id
+      }
+      if (op.type === 'delete_relation') {
+        const row = this.#database.prepare('SELECT project_id FROM relations WHERE id = ?')
+          .get(op.relationId as SQLInputValue) as Row | undefined
+        if (typeof row?.project_id === 'string') return row.project_id
+      }
+    }
+    return undefined
   }
 
   // ==================== Public CRUD (exposed for server routes) ====================
@@ -455,7 +504,12 @@ export class SqliteMetadataRepository {
     return rows.length ? this.#checkpoint(rows[0] as Row) : undefined
   }
 
-  upsertCheckpoint(value: Checkpoint): void { this.#upsertCheckpoint(value) }
+  createCheckpoint(value: Checkpoint): void {
+    if (this.getCheckpoint(String(value.id)) !== undefined) {
+      throw new Error('Checkpoint is immutable and already exists.')
+    }
+    this.#upsertCheckpoint(value)
+  }
 
   get schemaVersion(): number { return 3 }
 
@@ -464,7 +518,7 @@ export class SqliteMetadataRepository {
   #upsertProject(value: Project): void {
     this.#database.prepare(`
       INSERT INTO projects VALUES (?, ?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET name=excluded.name, graph_version=graph_version+1, updated_at=excluded.updated_at
+      ON CONFLICT(id) DO UPDATE SET name=excluded.name, root_path=excluded.root_path, graph_version=excluded.graph_version, updated_at=excluded.updated_at
     `).run(value.id as SQLInputValue, value.name, value.rootPath, value.graphVersion as unknown as number, value.createdAt, value.updatedAt)
   }
 
@@ -478,11 +532,11 @@ export class SqliteMetadataRepository {
   #upsertWorkspace(value: Workspace): void {
     this.#database.prepare(`
       INSERT INTO workspaces VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET name=excluded.name, viewport=excluded.viewport, visible_layers=excluded.visible_layers, context_policy=excluded.context_policy, updated_at=excluded.updated_at
+      ON CONFLICT(id) DO UPDATE SET name=excluded.name, intent=excluded.intent, scope_id=excluded.scope_id, viewport=excluded.viewport, focused_node_ids=excluded.focused_node_ids, visible_layers=excluded.visible_layers, context_policy=excluded.context_policy, updated_at=excluded.updated_at
     `).run(
       value.id as SQLInputValue, value.projectId as SQLInputValue, value.scopeId as SQLInputValue,
       value.name, value.intent, JSON.stringify(value.viewport),
-      JSON.stringify(value.focusedNodeIds), JSON.stringify(value.visibleLayers),
+      JSON.stringify(value.focusedViewIds), JSON.stringify(value.visibleLayers),
       value.contextPolicy, value.updatedAt,
     )
   }
@@ -490,14 +544,14 @@ export class SqliteMetadataRepository {
   #upsertArtifact(value: Artifact): void {
     this.#database.prepare(`
       INSERT INTO artifacts VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET title=excluded.title, availability=excluded.availability, current_revision_id=excluded.current_revision_id, updated_at=excluded.updated_at
+      ON CONFLICT(id) DO UPDATE SET title=excluded.title, kind=excluded.kind, local_path=excluded.local_path, availability=excluded.availability, current_revision_id=excluded.current_revision_id, updated_at=excluded.updated_at
     `).run(value.id as SQLInputValue, value.projectId as SQLInputValue, value.title, value.kind, value.localPath, value.availability, value.currentRevisionId as SQLInputValue ?? null, value.createdAt, value.updatedAt)
   }
 
   #upsertArtifactView(value: ArtifactView): void {
     this.#database.prepare(`
       INSERT INTO artifact_views VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET position=excluded.position, size=excluded.size, display_mode=excluded.display_mode
+      ON CONFLICT(id) DO UPDATE SET artifact_id=excluded.artifact_id, scope_id=excluded.scope_id, revision_id=excluded.revision_id, reference_kind=excluded.reference_kind, position=excluded.position, size=excluded.size, display_mode=excluded.display_mode, collapsed=excluded.collapsed
     `).run(value.id as SQLInputValue, value.artifactId as SQLInputValue, value.scopeId as SQLInputValue, value.revisionId as SQLInputValue ?? null,
       value.referenceKind, JSON.stringify(value.position), JSON.stringify(value.size),
       value.displayMode, value.collapsed ? 1 : 0)
@@ -506,7 +560,7 @@ export class SqliteMetadataRepository {
   #upsertRelation(value: Relation): void {
     this.#database.prepare(`
       INSERT INTO relations VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET kind=excluded.kind, updated_at=excluded.updated_at
+      ON CONFLICT(id) DO UPDATE SET source_entity_type=excluded.source_entity_type, source_entity_id=excluded.source_entity_id, target_entity_type=excluded.target_entity_type, target_entity_id=excluded.target_entity_id, kind=excluded.kind, updated_at=excluded.updated_at
     `).run(value.id as SQLInputValue, value.projectId as SQLInputValue, value.sourceEntityType, value.sourceEntityId, value.targetEntityType, value.targetEntityId, value.kind, value.createdAt, value.updatedAt)
   }
 
@@ -520,11 +574,11 @@ export class SqliteMetadataRepository {
   #upsertNote(value: Note): void {
     this.#database.prepare(`
       INSERT INTO notes VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET body=excluded.body, updated_at=excluded.updated_at
+      ON CONFLICT(id) DO UPDATE SET anchor_scope=excluded.anchor_scope, artifact_id=excluded.artifact_id, artifact_view_id=excluded.artifact_view_id, page_index=excluded.page_index, body=excluded.body, updated_at=excluded.updated_at
     `).run(value.id as SQLInputValue, value.projectId as SQLInputValue, JSON.stringify(value.anchor),
-      (value.anchor.scope === 'artifact' ? (value.anchor as {artifactId: string}).artifactId : null) ?? null,
-      (value.anchor.scope === 'artifact_view' ? (value.anchor as {artifactViewId: string}).artifactViewId : null) ?? null,
-      (value.anchor.scope === 'page' ? (value.anchor as {pageIndex: number}).pageIndex : null) ?? null,
+      (value.anchor.type === 'artifact' ? value.anchor.artifactId : value.anchor.type === 'page' ? value.anchor.revisionId : null) ?? null,
+      (value.anchor.type === 'artifact_view' ? value.anchor.viewId : null) ?? null,
+      (value.anchor.type === 'page' ? value.anchor.pageIndex : null) ?? null,
       value.body, value.createdAt, value.updatedAt)
   }
 
@@ -552,11 +606,11 @@ export class SqliteMetadataRepository {
     const name = String(row.name)
     const intent = row.intent ? String(row.intent) as Workspace['intent'] : null
     const viewport = json<Workspace['viewport']>(row.viewport as SQLInputValue)
-    const focusedNodeIds = json<string[]>((row.focused_node_ids ?? '[]') as SQLInputValue)
+    const focusedViewIds = json<Workspace['focusedViewIds']>((row.focused_node_ids ?? '[]') as SQLInputValue)
     const visibleLayers = json<string[]>((row.visible_layers ?? '["core","process"]') as SQLInputValue)
     const contextPolicy = (String(row.context_policy ?? 'selection-only')) as Workspace['contextPolicy']
     const updatedAt = String(row.updated_at)
-    return { id, projectId, scopeId, name, intent, viewport, focusedNodeIds, visibleLayers, contextPolicy, updatedAt }
+    return { id, projectId, scopeId, name, intent, viewport, focusedViewIds, visibleLayers, contextPolicy, updatedAt }
   }
 
   #artifact(row: Row): Artifact {
@@ -576,15 +630,7 @@ export class SqliteMetadataRepository {
   }
 
   #note(row: Row): Note {
-    const anchorScope = String(row.anchor_scope)
-    let anchor: Note['anchor']
-    if (anchorScope === 'artifact_view') {
-      anchor = { scope: 'artifact_view', artifactId: row.artifact_id as ArtifactId, artifactViewId: row.artifact_view_id as ArtifactViewId }
-    } else if (anchorScope === 'page') {
-      anchor = { scope: 'page', artifactId: row.artifact_id as ArtifactId, pageIndex: (row.page_index as number) ?? 0 }
-    } else {
-      anchor = { scope: 'artifact', artifactId: (row.artifact_id ?? '') as ArtifactId }
-    }
+    const anchor = json<Note['anchor']>(row.anchor_scope as SQLInputValue)
     return { id: row.id as NoteId, projectId: row.project_id as ProjectId, anchor, body: String(row.body), createdAt: String(row.created_at), updatedAt: String(row.updated_at) }
   }
 
@@ -596,7 +642,14 @@ export class SqliteMetadataRepository {
 // ==================== Module helpers ====================
 
 /** Presentation-only ops — do NOT advance graphVersion. */
-const PRESENTATION_OPS = new Set(['move_artifact_view', 'resize_artifact_view', 'update_workspace_viewport', 'delete_artifact_view', 'delete_relation'])
+const PRESENTATION_OPS = new Set([
+  'move_artifact_view',
+  'resize_artifact_view',
+  'update_workspace_viewport',
+  'update_workspace_presentation',
+  'update_artifact_view_presentation',
+  'delete_artifact_view',
+])
 
 function isSemanticOp(op: { type: string }): boolean {
   return !PRESENTATION_OPS.has(op.type) && op.type !== 'bootstrap'
@@ -608,7 +661,7 @@ function resolveProjectId(ops: readonly { type: string; [key: string]: unknown }
     // Direct projectId on operation-level payload
     if (op.projectId) return String(op.projectId)
     // Nested entity payloads
-    for (const key of ['artifact', 'workspace', 'scope', 'view', 'relation', 'note', 'checkpoint', 'revision'] as const) {
+    for (const key of ['artifact', 'workspace', 'scope', 'view', 'relation', 'note'] as const) {
       const entity = (op as Record<string, Record<string, unknown> | undefined>)[key]
       if (entity?.projectId) return String(entity.projectId)
     }

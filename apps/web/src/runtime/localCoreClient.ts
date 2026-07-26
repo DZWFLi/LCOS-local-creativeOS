@@ -3,6 +3,7 @@ import type {
   HealthStatus,
   MetadataStoreStatus,
   MutationBatch,
+  MutationResult,
   ProjectCatalogEntry,
   ProjectGraphSnapshot,
   Result,
@@ -37,7 +38,7 @@ export interface LocalCoreClient {
   validateProjectRoot(rootPath: string, signal?: AbortSignal): Promise<RuntimeCall<ValidatedProjectRoot>>
   metadataStatus(signal?: AbortSignal): Promise<RuntimeCall<MetadataStoreStatus>>
   projectGraph(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<ProjectGraphSnapshot>>
-  applyMutations(batch: MutationBatch, projectId: string, signal?: AbortSignal): Promise<RuntimeCall<{ appliedOps: number }>>
+  applyMutations(batch: MutationBatch, projectId: string, signal?: AbortSignal): Promise<RuntimeCall<MutationResult>>
   saveProjectGraph(snapshot: ProjectGraphSnapshot, signal?: AbortSignal): Promise<RuntimeCall<ProjectGraphSnapshot>>
 }
 
@@ -214,7 +215,7 @@ export function createLocalCoreClient(): LocalCoreClient {
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify(batch),
         },
-        decode: decodeResult<{ appliedOps: number }>,
+        decode: decodeResult<MutationResult>,
       })
     },
   }

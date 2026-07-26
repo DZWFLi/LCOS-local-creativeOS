@@ -18,7 +18,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
 const HOST = '127.0.0.1'
-const PORT = 43121
+const PORT = Number(process.env.LOCAL_CORE_TEST_PORT ?? 43121)
 
 // ==================== Helpers ====================
 
@@ -65,7 +65,7 @@ function makeSnapshot() {
       { id: 'scope-root', projectId: 'golden-proj', parentScopeId: null, containerViewId: null, kind: 'root', name: 'Root Scope', createdAt: now(), updatedAt: now() },
       { id: 'scope-child', projectId: 'golden-proj', parentScopeId: 'scope-root', containerViewId: 'view-brief', kind: 'collection', name: 'Sub-scope', createdAt: now(), updatedAt: now() },
     ],
-    workspaces: [{ id: 'ws-main', projectId: 'golden-proj', scopeId: 'scope-root', name: 'Main Workspace', intent: 'build', viewport: { x: 100, y: 200, zoom: 1.5 }, focusedNodeIds: [], visibleLayers: ['core', 'process'], contextPolicy: 'selection-only', updatedAt: now() }],
+    workspaces: [{ id: 'ws-main', projectId: 'golden-proj', scopeId: 'scope-root', name: 'Main Workspace', intent: 'build', viewport: { x: 100, y: 200, zoom: 1.5 }, focusedViewIds: [], visibleLayers: ['core', 'process'], contextPolicy: 'selection-only', updatedAt: now() }],
     artifacts: [
       { id: 'art-brief', projectId: 'golden-proj', title: 'Golden Brief', kind: 'markdown', localPath: 'disposable://golden-brief', availability: 'available', createdAt: now(), updatedAt: now() },
     ],
@@ -77,7 +77,7 @@ function makeSnapshot() {
       { id: 'rel-brief-board', projectId: 'golden-proj', sourceEntityType: 'artifact', sourceEntityId: 'art-brief', targetEntityType: 'artifact', targetEntityId: 'art-brief', kind: 'reference', createdAt: now(), updatedAt: now() },
     ],
     notes: [
-      { id: 'note-1', projectId: 'golden-proj', anchor: { scope: 'artifact', artifactId: 'art-brief' }, body: 'This is a golden path note.', createdAt: now(), updatedAt: now() },
+      { id: 'note-1', projectId: 'golden-proj', anchor: { type: 'artifact', artifactId: 'art-brief' }, body: 'This is a golden path note.', createdAt: now(), updatedAt: now() },
     ],
     artifactRevisions: [],
     checkpoints: [

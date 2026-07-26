@@ -365,7 +365,7 @@ export function App() {
     setWorkspaces((current) => current.map((workspace) => workspace.id === workspaceId ? { ...workspace, camera, updatedAt: now } : workspace))
     setWorkspaceId(id)
     setScopeId(next.scopeId)
-    const focusNodes = nodes.filter((node) => (node.scopeId ?? 'scope-root') === next.scopeId && next.focusedNodeIds.includes(node.id))
+    const focusNodes = nodes.filter((node) => (node.scopeId ?? 'scope-root') === next.scopeId && next.focusedViewIds.includes(node.id))
     const focusBounds = getSelectionBounds(focusNodes, focusNodes.map((node) => node.id))
     const viewport = document.querySelector<HTMLElement>('[data-testid="canvas"]')?.getBoundingClientRect()
     setCamera(focusBounds ? fitBounds(focusBounds, viewport?.width ?? 1000, viewport?.height ?? 820, 82, safeInsets) : next.camera)
@@ -410,7 +410,7 @@ export function App() {
 
   const saveCurrentView = useCallback((id: string) => {
     const now = new Date().toISOString()
-    setWorkspaces((current) => current.map((workspace) => workspace.id === id ? { ...workspace, scopeId, camera, focusedNodeIds: selectedIds.length ? selectedIds : workspace.focusedNodeIds, updatedAt: now } : workspace))
+    setWorkspaces((current) => current.map((workspace) => workspace.id === id ? { ...workspace, scopeId, camera, focusedViewIds: selectedIds.length ? selectedIds : workspace.focusedViewIds, updatedAt: now } : workspace))
     setNotice('当前画布位置和焦点已保存到工作视角')
   }, [camera, scopeId, selectedIds])
 
@@ -421,7 +421,7 @@ export function App() {
       setNotice('工作视角名称与意图已更新')
     } else {
       const next = createWorkspaceRecord({ id: createId('workspace'), label, intent, camera, visibleLayers, now })
-      const v06Workspace: Workspace = { ...next, scopeId, focusedNodeIds: selectedIds, contextPolicy: 'workspace-related' }
+      const v06Workspace: Workspace = { ...next, scopeId, focusedViewIds: selectedIds, contextPolicy: 'workspace-related' }
       setWorkspaces((current) => [...current, v06Workspace])
       setWorkspaceId(v06Workspace.id)
       setNotice(`${label} 已创建`)
@@ -432,7 +432,7 @@ export function App() {
   const duplicateWorkspace = useCallback((id: string) => {
     const result = duplicateWorkspaceRecord(workspaces, id, createId('workspace'), new Date().toISOString())
     if (!result.duplicate) return
-    const duplicate: Workspace = { ...result.duplicate, scopeId: result.duplicate.scopeId ?? scopeId, focusedNodeIds: [...(result.duplicate.focusedNodeIds ?? [])], contextPolicy: result.duplicate.contextPolicy ?? 'workspace-related' }
+    const duplicate: Workspace = { ...result.duplicate, scopeId: result.duplicate.scopeId ?? scopeId, focusedViewIds: [...(result.duplicate.focusedViewIds ?? [])], contextPolicy: result.duplicate.contextPolicy ?? 'workspace-related' }
     setWorkspaces(result.workspaces.map((workspace) => workspace.id === duplicate.id ? duplicate : workspace))
     setWorkspaceId(duplicate.id)
     setScopeId(duplicate.scopeId)
@@ -503,7 +503,7 @@ export function App() {
       nextEdges = removed.edges
     })
     setScopes(nextScopes)
-    if (removedScopeIds.size) setWorkspaces((current) => current.map((workspace) => removedScopeIds.has(workspace.scopeId) ? { ...workspace, scopeId, camera, focusedNodeIds: [] } : workspace))
+    if (removedScopeIds.size) setWorkspaces((current) => current.map((workspace) => removedScopeIds.has(workspace.scopeId) ? { ...workspace, scopeId, camera, focusedViewIds: [] } : workspace))
     setGraph({ nodes: nextNodes, edges: nextEdges })
     clearSelection(); setNotice(`已删除 ${idSet.size} 个视图${scopeRoots.length ? '及其子画布' : ''} · Ctrl/Cmd+Z 可恢复`)
   }, [camera, clearSelection, edges, nodes, scopeId, scopes, setGraph])

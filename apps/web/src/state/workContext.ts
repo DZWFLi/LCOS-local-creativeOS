@@ -24,7 +24,7 @@ export function inferTargetContext(
   const inScope = nodes.filter((node) => (node.scopeId ?? 'scope-root') === scopeId)
   const selected = selectedIds.map((id) => nodes.find((node) => node.id === id)).filter((node): node is CanvasNode => Boolean(node))
   const editable = selected.filter(canBeTarget)
-  const workspaceFocused = workspace.focusedNodeIds.map((id) => nodes.find((node) => node.id === id)).filter((node): node is CanvasNode => Boolean(node))
+  const workspaceFocused = workspace.focusedViewIds.map((id) => nodes.find((node) => node.id === id)).filter((node): node is CanvasNode => Boolean(node))
   const current = inScope.find((node) => node.current) ?? inScope.find((node) => node.kind === 'working') ?? nodes.find((node) => node.current)
 
   if (editable.length === 1) {

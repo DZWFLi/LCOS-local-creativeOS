@@ -69,7 +69,8 @@ export interface Workspace {
   scopeId: string
   camera: Camera
   visibleLayers: NodeLayer[]
-  focusedNodeIds: string[]
+  /** ArtifactView ids focused by this semantic viewport. */
+  focusedViewIds: string[]
   contextPolicy: 'workspace-related' | 'selection-only'
   createdAt: string
   updatedAt: string

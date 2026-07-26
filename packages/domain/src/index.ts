@@ -80,7 +80,7 @@ export interface Workspace {
   readonly name: string
   readonly intent: WorkspaceIntent
   readonly viewport: WorkspaceViewport
-  readonly focusedNodeIds: readonly string[] // artifact_view IDs currently focused
+  readonly focusedViewIds: readonly ArtifactViewId[]
   readonly visibleLayers: readonly string[]
   readonly contextPolicy: WorkspaceContextPolicy
   readonly updatedAt: IsoDateTime
@@ -161,9 +161,11 @@ export interface ArtifactRevision {
 // ==================== Note ====================
 
 export type NoteAnchor =
-  | { readonly scope: 'artifact'; readonly artifactId: ArtifactId }
-  | { readonly scope: 'artifact_view'; readonly artifactId: ArtifactId; readonly artifactViewId: ArtifactViewId }
-  | { readonly scope: 'page'; readonly artifactId: ArtifactId; readonly pageIndex: number }
+  | { readonly type: 'project' }
+  | { readonly type: 'scope'; readonly scopeId: ScopeId }
+  | { readonly type: 'artifact'; readonly artifactId: ArtifactId }
+  | { readonly type: 'artifact_view'; readonly viewId: ArtifactViewId }
+  | { readonly type: 'page'; readonly revisionId: ArtifactRevisionId; readonly pageIndex: number }
 
 export interface Note {
   readonly id: NoteId

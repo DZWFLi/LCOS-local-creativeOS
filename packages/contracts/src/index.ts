@@ -106,6 +106,18 @@ export type MutationOperation =
   | { readonly type: 'move_artifact_view'; readonly viewId: ArtifactViewId; readonly x: number; readonly y: number }
   | { readonly type: 'resize_artifact_view'; readonly viewId: ArtifactViewId; readonly width: number; readonly height: number }
   | { readonly type: 'update_workspace_viewport'; readonly workspaceId: WorkspaceId; readonly viewport: WorkspaceViewport }
+  | {
+      readonly type: 'update_workspace_presentation'
+      readonly workspaceId: WorkspaceId
+      readonly focusedViewIds: readonly ArtifactViewId[]
+      readonly visibleLayers: Workspace['visibleLayers']
+    }
+  | {
+      readonly type: 'update_artifact_view_presentation'
+      readonly viewId: ArtifactViewId
+      readonly collapsed: ArtifactView['collapsed']
+      readonly displayMode: ArtifactView['displayMode']
+    }
   | { readonly type: 'upsert_workspace'; readonly workspace: Workspace }
   | { readonly type: 'delete_workspace'; readonly workspaceId: WorkspaceId }
   | { readonly type: 'upsert_scope'; readonly scope: Scope }
@@ -115,8 +127,6 @@ export type MutationOperation =
   | { readonly type: 'upsert_relation'; readonly relation: Relation }
   | { readonly type: 'delete_relation'; readonly relationId: RelationId }
   | { readonly type: 'upsert_note'; readonly note: Note }
-  | { readonly type: 'create_checkpoint'; readonly checkpoint: Checkpoint }
-  | { readonly type: 'upsert_artifact_revision'; readonly revision: ArtifactRevision }
 
 export interface MutationBatch {
   readonly baseVersion: GraphVersion

@@ -31,7 +31,7 @@ export function createBlankProjectState(project: ProjectPackage, railWidth = 350
     nodes: [],
     edges: [],
     scopes: [{ id: rootScopeId, label: '项目主画布', kind: 'root', parentScopeId: null, camera: { x: 160, y: 90, zoom: 1 }, layoutMode: 'manual', updatedAt: now }],
-    workspaces: [{ id: workspaceId, label: '项目现场', intent: null, scopeId: rootScopeId, camera: { x: 160, y: 90, zoom: 1 }, visibleLayers: ['core', 'process'], focusedNodeIds: [], contextPolicy: 'workspace-related', createdAt: now, updatedAt: now }],
+    workspaces: [{ id: workspaceId, label: '项目现场', intent: null, scopeId: rootScopeId, camera: { x: 160, y: 90, zoom: 1 }, visibleLayers: ['core', 'process'], focusedViewIds: [], contextPolicy: 'workspace-related', createdAt: now, updatedAt: now }],
     activeWorkspaceId: workspaceId,
     activeScopeId: rootScopeId,
     workRail: { pinned: true, collapsed: false, width: railWidth },
@@ -68,9 +68,9 @@ function huaxinState(railWidth: number): PersistedPrototypeState {
     { id: delivery, label: 'Nigeria 与生活场景参考', kind: 'context', parentScopeId: root, containerNodeId: 'hx-reference', camera: { x: 210, y: 110, zoom: 1 }, layoutMode: 'semantic', updatedAt: now },
   ]
   const workspaces: Workspace[] = [
-    { id: 'hx-understand', label: '客户反馈与价值观', intent: 'understand', scopeId: root, camera: { x: 174, y: 54, zoom: 1.02 }, visibleLayers: ['core', 'process'], focusedNodeIds: ['hx-brief', 'hx-feedback', 'hx-working'], contextPolicy: 'workspace-related', createdAt: now, updatedAt: now },
-    { id: 'hx-explore', label: '系列海报方向', intent: 'explore', scopeId: root, camera: { x: 48, y: 42, zoom: .95 }, visibleLayers: ['core', 'process'], focusedNodeIds: ['hx-reference', 'hx-working', 'hx-generated'], contextPolicy: 'workspace-related', createdAt: now, updatedAt: now },
-    { id: 'hx-decide', label: '手册交付确认', intent: 'decide', scopeId: root, camera: { x: -90, y: -20, zoom: 1 }, visibleLayers: ['core', 'process'], focusedNodeIds: ['hx-generated', 'hx-decision'], contextPolicy: 'workspace-related', createdAt: now, updatedAt: now },
+    { id: 'hx-understand', label: '客户反馈与价值观', intent: 'understand', scopeId: root, camera: { x: 174, y: 54, zoom: 1.02 }, visibleLayers: ['core', 'process'], focusedViewIds: ['hx-brief', 'hx-feedback', 'hx-working'], contextPolicy: 'workspace-related', createdAt: now, updatedAt: now },
+    { id: 'hx-explore', label: '系列海报方向', intent: 'explore', scopeId: root, camera: { x: 48, y: 42, zoom: .95 }, visibleLayers: ['core', 'process'], focusedViewIds: ['hx-reference', 'hx-working', 'hx-generated'], contextPolicy: 'workspace-related', createdAt: now, updatedAt: now },
+    { id: 'hx-decide', label: '手册交付确认', intent: 'decide', scopeId: root, camera: { x: -90, y: -20, zoom: 1 }, visibleLayers: ['core', 'process'], focusedViewIds: ['hx-generated', 'hx-decision'], contextPolicy: 'workspace-related', createdAt: now, updatedAt: now },
   ]
   return { version: 9, projectId: 'project-huaxin', nodes, edges, scopes, workspaces, activeWorkspaceId: workspaces[0].id, activeScopeId: root, workRail: { pinned: true, collapsed: false, width: railWidth } }
 }

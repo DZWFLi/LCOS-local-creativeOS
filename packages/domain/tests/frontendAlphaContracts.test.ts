@@ -1,10 +1,16 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, expectTypeOf, it } from 'vitest'
 import {
   isTerminalRunStatus,
   resolveArtifactReturnPlacement,
+  type ArtifactId,
+  type ArtifactRevisionId,
+  type ArtifactViewId,
   type Command,
+  type NoteAnchor,
   type Run,
   type RunStatus,
+  type ScopeId,
+  type Workspace,
 } from '../src/index'
 
 const command = {
@@ -50,5 +56,28 @@ describe('Frontend Alpha domain contract', () => {
   it('keeps preview source explicit between fixture and runtime', () => {
     const preview = { artifactId: 'artifact-1', state: 'ready', kind: 'thumbnail', origin: 'fixture' } as const
     expect(preview.origin).toBe('fixture')
+  })
+
+  it('uses ArtifactView identity for workspace focus', () => {
+    expectTypeOf<Workspace['focusedViewIds']>().toEqualTypeOf<readonly ArtifactViewId[]>()
+    expectTypeOf<keyof Workspace>().not.toEqualTypeOf<'focusedNodeIds'>()
+  })
+
+  it('uses one discriminated NoteAnchor union without nullable anchor fields', () => {
+    const anchors: readonly NoteAnchor[] = [
+      { type: 'project' },
+      { type: 'scope', scopeId: 'scope-1' as ScopeId },
+      { type: 'artifact', artifactId: 'artifact-1' as ArtifactId },
+      { type: 'artifact_view', viewId: 'view-1' as ArtifactViewId },
+      { type: 'page', revisionId: 'revision-1' as ArtifactRevisionId, pageIndex: 0 },
+    ]
+
+    expect(anchors.map((anchor) => anchor.type)).toEqual([
+      'project',
+      'scope',
+      'artifact',
+      'artifact_view',
+      'page',
+    ])
   })
 })

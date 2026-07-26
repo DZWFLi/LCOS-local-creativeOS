@@ -1,4 +1,5 @@
 import type { ExecutionRuntimeContract, PreviewContract, Result, WorkspaceQueryContract } from '@local-creative-os/contracts'
+import type { ArtifactViewId } from '@local-creative-os/domain'
 import { fixtureWorkspaces } from '../fixtures'
 import type { Camera, Workspace as UiWorkspace } from '../model'
 
@@ -20,7 +21,7 @@ function toContractWorkspace(workspace: UiWorkspace): WorkspaceContract {
     name: workspace.label,
     intent: workspace.intent,
     viewport: workspace.camera,
-    focusedNodeIds: workspace.focusedNodeIds,
+    focusedViewIds: workspace.focusedViewIds.map((id) => id as ArtifactViewId),
     visibleLayers: workspace.visibleLayers,
     contextPolicy: workspace.contextPolicy ?? 'selection-only',
     updatedAt: now(),
@@ -42,7 +43,7 @@ export interface FrontendAdapter {
 }
 
 export function toUiWorkspace(workspace: WorkspaceContract): UiWorkspace {
-  return { id: String(workspace.id), label: workspace.name, intent: workspace.intent, scopeId: 'scope-root', camera: workspace.viewport, visibleLayers: workspace.visibleLayers.filter((layer): layer is 'core' | 'process' => layer === 'core' || layer === 'process'), focusedNodeIds: workspace.focusedNodeIds.map(String), contextPolicy: 'workspace-related', createdAt: workspace.updatedAt, updatedAt: workspace.updatedAt }
+  return { id: String(workspace.id), label: workspace.name, intent: workspace.intent, scopeId: 'scope-root', camera: workspace.viewport, visibleLayers: workspace.visibleLayers.filter((layer): layer is 'core' | 'process' => layer === 'core' || layer === 'process'), focusedViewIds: workspace.focusedViewIds.map(String), contextPolicy: 'workspace-related', createdAt: workspace.updatedAt, updatedAt: workspace.updatedAt }
 }
 
 function createFixtureWorkspaceAdapter(): FrontendAdapter['workspace'] {

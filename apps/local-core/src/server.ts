@@ -238,8 +238,8 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
         const batch = input as unknown as MutationBatch
         const projectId = decodeURIComponent(graphMatch[1] ?? '')
         try {
-          metadata.applyMutations(batch, projectId)
-          sendJson(response, 200, { ok: true, value: { appliedOps: batch.ops.length } })
+          const graphVersion = metadata.applyMutations(batch, projectId)
+          sendJson(response, 200, { ok: true, value: { appliedOps: batch.ops.length, graphVersion } })
         } catch (error: unknown) {
           const msg = error instanceof Error ? error.message : 'Mutations could not be applied.'
           const code = (error instanceof Error && 'code' in error) ? String((error as unknown as Record<string, unknown>).code) : undefined
@@ -477,7 +477,10 @@ async function handleEntityRoute(
     }
     if (method === 'POST') {
       const body = await readJsonBody(request, signal)
-      metadata.upsertNote(body as Note)
+      if (!isNote(body) || String(body.projectId) !== projectId) {
+        return { status: 400, body: failure('INVALID_ARGUMENT', 'Note or NoteAnchor is invalid.') }
+      }
+      metadata.upsertNote(body)
       return { status: 200, body: { ok: true, value: body } }
     }
     return undefined
@@ -490,7 +493,10 @@ async function handleEntityRoute(
     }
     if (method === 'PUT') {
       const body = await readJsonBody(request, signal)
-      metadata.upsertNote(body as Note)
+      if (!isNote(body) || String(body.id) !== noteId) {
+        return { status: 400, body: failure('INVALID_ARGUMENT', 'Note or NoteAnchor is invalid.') }
+      }
+      metadata.upsertNote(body)
       return { status: 200, body: { ok: true, value: body } }
     }
     if (method === 'DELETE') {
@@ -526,8 +532,15 @@ async function handleEntityRoute(
     }
     if (method === 'POST') {
       const body = await readJsonBody(request, signal)
-      metadata.upsertCheckpoint(body as Checkpoint)
-      return { status: 200, body: { ok: true, value: body } }
+      if (!isCheckpoint(body) || String(body.projectId) !== projectId) {
+        return { status: 400, body: failure('INVALID_ARGUMENT', 'Checkpoint command is invalid.') }
+      }
+      try {
+        metadata.createCheckpoint(body)
+        return { status: 201, body: { ok: true, value: body } }
+      } catch (error: unknown) {
+        return { status: 409, body: failure('VALIDATION', error instanceof Error ? error.message : 'Checkpoint could not be created.') }
+      }
     }
     return undefined
   }
@@ -541,4 +554,41 @@ async function handleEntityRoute(
   }
 
   return undefined
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function isNote(value: unknown): value is Note {
+  if (!isRecord(value) || typeof value.id !== 'string' || typeof value.projectId !== 'string'
+    || typeof value.body !== 'string' || typeof value.createdAt !== 'string' || typeof value.updatedAt !== 'string'
+    || !isRecord(value.anchor) || typeof value.anchor.type !== 'string') return false
+  const anchor = value.anchor
+  switch (anchor.type) {
+    case 'project':
+      return true
+    case 'scope':
+      return typeof anchor.scopeId === 'string'
+    case 'artifact':
+      return typeof anchor.artifactId === 'string'
+    case 'artifact_view':
+      return typeof anchor.viewId === 'string'
+    case 'page':
+      return typeof anchor.revisionId === 'string'
+        && Number.isInteger(anchor.pageIndex)
+        && (anchor.pageIndex as number) >= 0
+    default:
+      return false
+  }
+}
+
+function isCheckpoint(value: unknown): value is Checkpoint {
+  return isRecord(value)
+    && typeof value.id === 'string'
+    && typeof value.projectId === 'string'
+    && typeof value.scopeId === 'string'
+    && typeof value.label === 'string'
+    && typeof value.createdAt === 'string'
+    && 'snapshotJson' in value
 }

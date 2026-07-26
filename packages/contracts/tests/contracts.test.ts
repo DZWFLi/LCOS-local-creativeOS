@@ -9,6 +9,7 @@ import type {
   PreviewContract,
   ProjectContract,
   Result,
+  MutationOperation,
   ValidateProjectRootInput,
   ValidatedProjectRoot,
   WorkspaceQueryContract,
@@ -20,6 +21,26 @@ describe('Frontend Alpha contract boundaries', () => {
     expectTypeOf<ContextContract>().not.toEqualTypeOf<ExecutionRuntimeContract>()
     expectTypeOf<WorkspaceQueryContract>().not.toEqualTypeOf<PreviewContract>()
     expectTypeOf<Result<string>>().toMatchTypeOf<Result<unknown>>()
+  })
+})
+
+describe('Phase 2.5 lifecycle mutation boundary', () => {
+  it('does not expose revision or checkpoint lifecycle as generic mutations', () => {
+    expectTypeOf<Extract<MutationOperation, { type: 'create_checkpoint' }>>().toEqualTypeOf<never>()
+    expectTypeOf<Extract<MutationOperation, { type: 'upsert_checkpoint' }>>().toEqualTypeOf<never>()
+    expectTypeOf<Extract<MutationOperation, { type: 'upsert_artifact_revision' }>>().toEqualTypeOf<never>()
+  })
+
+  it('exposes focused presentation updates without generic entity upserts', () => {
+    type WorkspacePresentation = Extract<MutationOperation, { type: 'update_workspace_presentation' }>
+    type ArtifactViewPresentation = Extract<MutationOperation, { type: 'update_artifact_view_presentation' }>
+
+    expectTypeOf<WorkspacePresentation>().toHaveProperty('workspaceId')
+    expectTypeOf<WorkspacePresentation>().toHaveProperty('focusedViewIds')
+    expectTypeOf<WorkspacePresentation>().toHaveProperty('visibleLayers')
+    expectTypeOf<ArtifactViewPresentation>().toHaveProperty('viewId')
+    expectTypeOf<ArtifactViewPresentation>().toHaveProperty('collapsed')
+    expectTypeOf<ArtifactViewPresentation>().toHaveProperty('displayMode')
   })
 })
 

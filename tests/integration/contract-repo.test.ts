@@ -22,11 +22,11 @@ function fullSnapshot(overrides: Record<string, unknown> = {}) {
     schemaVersion: 3, graphVersion: 1,
     project: { id: 'proj', name: 'Integration', rootPath: 'd://proj', graphVersion: 1, createdAt: now(), updatedAt: now() },
     scopes: [{ id: 's-root', projectId: 'proj', parentScopeId: null, containerViewId: null, kind: 'root', name: 'Root', createdAt: now(), updatedAt: now() }],
-    workspaces: [{ id: 'ws-1', projectId: 'proj', scopeId: 's-root', name: 'Main', intent: null, viewport: { x: 0, y: 0, zoom: 1 }, focusedNodeIds: [], visibleLayers: ['core', 'process'], contextPolicy: 'selection-only', updatedAt: now() }],
+    workspaces: [{ id: 'ws-1', projectId: 'proj', scopeId: 's-root', name: 'Main', intent: null, viewport: { x: 0, y: 0, zoom: 1 }, focusedViewIds: [], visibleLayers: ['core', 'process'], contextPolicy: 'selection-only', updatedAt: now() }],
     artifacts: [{ id: 'art-a', projectId: 'proj', title: 'Doc A', kind: 'markdown', localPath: 'd://a', availability: 'available', createdAt: now(), updatedAt: now() }],
     artifactViews: [{ id: 'v-a1', artifactId: 'art-a', scopeId: 's-root', referenceKind: 'primary', position: { x: 100, y: 100 }, size: { width: 200, height: 150 }, displayMode: 'card', collapsed: false }],
     relations: [{ id: 'rel-1', projectId: 'proj', sourceEntityType: 'artifact', sourceEntityId: 'art-a', targetEntityType: 'artifact', targetEntityId: 'art-a', kind: 'reference', createdAt: now(), updatedAt: now() }],
-    notes: [{ id: 'note-1', projectId: 'proj', anchor: { scope: 'artifact', artifactId: 'art-a' }, body: 'A note', createdAt: now(), updatedAt: now() }],
+    notes: [{ id: 'note-1', projectId: 'proj', anchor: { type: 'artifact', artifactId: 'art-a' }, body: 'A note', createdAt: now(), updatedAt: now() }],
     artifactRevisions: [],
     checkpoints: [{ id: 'cp-1', projectId: 'proj', scopeId: 's-root', label: 'V1', snapshotJson: { nodes: [{ id: 'v-a1', x: 100, y: 100 }], camera: { x: 0, y: 0, zoom: 1 } }, createdAt: now() }],
     ...overrides,
@@ -87,16 +87,11 @@ describe('INT-002 409 Stale Version', () => {
     repo.applyMutations({ baseVersion: 1, ops: [{ type: 'upsert_artifact', artifact: { id: 'art-b', projectId: 'proj', title: 'Doc B', kind: 'markdown', localPath: 'd://b', availability: 'available', createdAt: now(), updatedAt: now() } }] })
 
     const afterMutation = repo.get('proj')!
-    // In Phase 3: version should change and stale writes rejected
-    // Alpha: version increments checked, stale writes not rejected
     const vAfter = Number(afterMutation.graphVersion)
-    expect(vAfter).toBeGreaterThanOrEqual(1)
+    expect(vAfter).toBe(2)
 
-    // Stale version write — currently accepted in Alpha, Phase 3 should throw
     const attempt = () => repo.applyMutations({ baseVersion: 1, ops: [{ type: 'move_artifact_view', viewId: 'v-a1', x: 999, y: 888 }] })
-    // In Phase 3 this should throw STALE_GRAPH_VERSION
-    // For now, verify it doesn't crash
-    expect(() => attempt()).not.toThrow()
+    expect(attempt).toThrowError(/stale/i)
     repo.close()
   })
 })

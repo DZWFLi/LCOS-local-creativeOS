@@ -22,6 +22,7 @@ import type {
   ValidatedProjectRoot,
   WorkspaceContextPolicy,
 } from '@local-creative-os/contracts'
+import type { ArtifactViewId } from '@local-creative-os/domain'
 
 import {
   createLocalCoreClient,
@@ -74,7 +75,10 @@ function disposablePortaSplitSnapshot(): ProjectGraphSnapshot {
       name: 'Main Canvas',
       intent: 'build',
       viewport: { x: 128, y: 72, zoom: 0.92 },
-      focusedNodeIds: ['disposable-view-brief', 'disposable-view-board'],
+      focusedViewIds: [
+        'disposable-view-brief' as ArtifactViewId,
+        'disposable-view-board' as ArtifactViewId,
+      ],
       visibleLayers: ['core'],
       contextPolicy: 'selection-only' as WorkspaceContextPolicy,
       updatedAt: now,

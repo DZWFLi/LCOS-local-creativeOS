@@ -1,6 +1,6 @@
 import type { Camera, NodeLayer, Workspace, WorkspaceIntent } from '../model'
 
-export function createWorkspaceRecord(input: { id: string; label: string; intent: WorkspaceIntent; camera: Camera; visibleLayers: NodeLayer[]; now: string; scopeId?: string; focusedNodeIds?: string[] }): Workspace {
+export function createWorkspaceRecord(input: { id: string; label: string; intent: WorkspaceIntent; camera: Camera; visibleLayers: NodeLayer[]; now: string; scopeId?: string; focusedViewIds?: string[] }): Workspace {
   return {
     id: input.id,
     label: input.label.trim(),
@@ -8,21 +8,21 @@ export function createWorkspaceRecord(input: { id: string; label: string; intent
     scopeId: input.scopeId ?? 'scope-root',
     camera: { ...input.camera },
     visibleLayers: [...input.visibleLayers],
-    focusedNodeIds: [...(input.focusedNodeIds ?? [])],
+    focusedViewIds: [...(input.focusedViewIds ?? [])],
     contextPolicy: 'workspace-related',
     createdAt: input.now,
     updatedAt: input.now,
   }
 }
 
-export function updateWorkspaceRecord(workspaces: Workspace[], id: string, patch: Partial<Pick<Workspace, 'label' | 'intent' | 'scopeId' | 'camera' | 'visibleLayers' | 'focusedNodeIds' | 'contextPolicy'>>, now: string): Workspace[] {
+export function updateWorkspaceRecord(workspaces: Workspace[], id: string, patch: Partial<Pick<Workspace, 'label' | 'intent' | 'scopeId' | 'camera' | 'visibleLayers' | 'focusedViewIds' | 'contextPolicy'>>, now: string): Workspace[] {
   return workspaces.map((workspace) => workspace.id === id ? {
     ...workspace,
     ...patch,
     label: patch.label?.trim() || workspace.label,
     camera: patch.camera ? { ...patch.camera } : workspace.camera,
     visibleLayers: patch.visibleLayers ? [...patch.visibleLayers] : workspace.visibleLayers,
-    focusedNodeIds: patch.focusedNodeIds ? [...patch.focusedNodeIds] : workspace.focusedNodeIds,
+    focusedViewIds: patch.focusedViewIds ? [...patch.focusedViewIds] : workspace.focusedViewIds,
     updatedAt: now,
   } : workspace)
 }
@@ -37,7 +37,7 @@ export function duplicateWorkspaceRecord(workspaces: Workspace[], id: string, ne
     label: `${source.label} 副本`,
     camera: { ...source.camera, x: source.camera.x + 24, y: source.camera.y + 24 },
     visibleLayers: [...source.visibleLayers],
-    focusedNodeIds: [...source.focusedNodeIds],
+    focusedViewIds: [...source.focusedViewIds],
     createdAt: now,
     updatedAt: now,
   }

@@ -1,9 +1,13 @@
+import { mkdtempSync, rmSync } from 'node:fs'
 import { createServer } from 'node:net'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 import { afterEach, describe, expect, it } from 'vitest'
 
-import type { ProjectCatalog } from '@local-creative-os/contracts'
+import type { ProjectCatalog, ProjectGraphSnapshot } from '@local-creative-os/contracts'
 
+import { SqliteMetadataRepository } from '../src/metadata-repository.js'
 import { ExplicitProjectCatalog } from '../src/project-catalog.js'
 import {
   createLocalCoreServer,
@@ -12,10 +16,56 @@ import {
 } from '../src/server.js'
 
 const activeServers: LocalCoreServer[] = []
+const activeRepositories: SqliteMetadataRepository[] = []
+const temporaryDirectories: string[] = []
 
 afterEach(async () => {
   await Promise.all(activeServers.splice(0).map((server) => server.close()))
+  for (const repository of activeRepositories.splice(0)) repository.close()
+  for (const directory of temporaryDirectories.splice(0)) {
+    rmSync(directory, { recursive: true, force: true })
+  }
 })
+
+function createMetadataRepository(): SqliteMetadataRepository {
+  const directory = mkdtempSync(join(tmpdir(), 'local-core-server-'))
+  temporaryDirectories.push(directory)
+  const repository = new SqliteMetadataRepository(join(directory, 'metadata.sqlite'))
+  activeRepositories.push(repository)
+  const now = '2026-07-26T00:00:00.000Z'
+  const projectId = 'disposable-portasplit' as ProjectGraphSnapshot['project']['id']
+  const scopeId = 'scope-root' as ProjectGraphSnapshot['scopes'][number]['id']
+  repository.save({
+    schemaVersion: 3,
+    graphVersion: 1 as ProjectGraphSnapshot['graphVersion'],
+    project: {
+      id: projectId,
+      name: 'PortaSplit',
+      rootPath: 'disposable://portasplit',
+      graphVersion: 1 as ProjectGraphSnapshot['graphVersion'],
+      createdAt: now,
+      updatedAt: now,
+    },
+    scopes: [{
+      id: scopeId,
+      projectId,
+      parentScopeId: null,
+      containerViewId: null,
+      kind: 'root',
+      name: 'Root',
+      createdAt: now,
+      updatedAt: now,
+    }],
+    workspaces: [],
+    artifacts: [],
+    artifactViews: [],
+    relations: [],
+    notes: [],
+    artifactRevisions: [],
+    checkpoints: [],
+  })
+  return repository
+}
 
 async function startServer(server = createLocalCoreServer()): Promise<{
   server: LocalCoreServer
@@ -59,7 +109,7 @@ describe('Local Core HTTP server', () => {
   })
 
   it('serves only the explicitly injected project catalog', async () => {
-    const entry = { id: 'p1', name: 'PortaSplit', rootPath: 'E:\\PortaSplit' }
+    const entry = { id: 'p1', name: 'PortaSplit', rootPath: 'E:\\PortaSplit', graphVersion: 1 }
     const catalog = new ExplicitProjectCatalog([entry])
     const { baseUrl } = await startServer(createLocalCoreServer({ catalog }))
     const response = await fetch(`${baseUrl}/projects`)
@@ -80,6 +130,102 @@ describe('Local Core HTTP server', () => {
     await expect(response.json()).resolves.toMatchObject({
       ok: false,
       error: { code: 'INVALID_ARGUMENT' },
+    })
+  })
+
+  it.each([
+    {
+      label: 'POST legacy scope discriminator',
+      method: 'POST',
+      path: '/projects/disposable-portasplit/notes',
+      anchor: { scope: 'project' },
+    },
+    {
+      label: 'PUT legacy scope discriminator',
+      method: 'PUT',
+      path: '/projects/disposable-portasplit/notes/note-1',
+      anchor: { scope: 'artifact', artifactId: 'artifact-1' },
+    },
+    {
+      label: 'POST page anchor without revisionId',
+      method: 'POST',
+      path: '/projects/disposable-portasplit/notes',
+      anchor: { type: 'page', pageIndex: 0 },
+    },
+    {
+      label: 'PUT page anchor with negative pageIndex',
+      method: 'PUT',
+      path: '/projects/disposable-portasplit/notes/note-1',
+      anchor: { type: 'page', revisionId: 'revision-1', pageIndex: -1 },
+    },
+  ])('rejects invalid Note anchor: $label', async ({ method, path, anchor }) => {
+    const metadataRepository = createMetadataRepository()
+    const { baseUrl } = await startServer(createLocalCoreServer({ metadataRepository }))
+    const response = await fetch(`${baseUrl}${path}`, {
+      method,
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        id: 'note-1',
+        projectId: 'disposable-portasplit',
+        anchor,
+        body: 'Review note',
+        createdAt: '2026-07-26T00:00:00.000Z',
+        updatedAt: '2026-07-26T00:00:00.000Z',
+      }),
+    })
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'INVALID_ARGUMENT' },
+    })
+  })
+
+  it('accepts a Note using the new discriminated union anchor', async () => {
+    const metadataRepository = createMetadataRepository()
+    const { baseUrl } = await startServer(createLocalCoreServer({ metadataRepository }))
+    const note = {
+      id: 'note-scope',
+      projectId: 'disposable-portasplit',
+      anchor: { type: 'scope', scopeId: 'scope-root' },
+      body: 'Scope review',
+      createdAt: '2026-07-26T00:00:00.000Z',
+      updatedAt: '2026-07-26T00:00:00.000Z',
+    }
+    const response = await fetch(`${baseUrl}/projects/disposable-portasplit/notes`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(note),
+    })
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({ ok: true, value: note })
+  })
+
+  it('returns 409 when an immutable checkpoint id is posted twice', async () => {
+    const metadataRepository = createMetadataRepository()
+    const { baseUrl } = await startServer(createLocalCoreServer({ metadataRepository }))
+    const checkpoint = {
+      id: 'checkpoint-1',
+      projectId: 'disposable-portasplit',
+      scopeId: 'scope-root',
+      label: 'Review',
+      snapshotJson: { graphVersion: 1 },
+      createdAt: '2026-07-26T00:00:00.000Z',
+    }
+    const url = `${baseUrl}/projects/disposable-portasplit/checkpoints`
+    const request = () => fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(checkpoint),
+    })
+
+    expect((await request()).status).toBe(201)
+    const duplicate = await request()
+    expect(duplicate.status).toBe(409)
+    await expect(duplicate.json()).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'VALIDATION', message: expect.stringContaining('immutable') },
     })
   })
 

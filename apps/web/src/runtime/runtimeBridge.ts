@@ -1,7 +1,5 @@
-import type { GraphVersion, ProjectGraphSnapshot, Scope, WorkspaceContextPolicy, MutationBatch, Result } from '@local-creative-os/contracts'
-import type { Artifact, ArtifactView, Relation } from '@local-creative-os/domain'
+import type { GraphVersion, ProjectGraphSnapshot, Scope, WorkspaceContextPolicy, MutationBatch } from '@local-creative-os/contracts'
 import type {
-  Camera,
   CanvasEdge,
   CanvasNode,
   CanvasScope,
@@ -36,6 +34,7 @@ export class RuntimeBridge {
   readonly client: LocalCoreClient
   readonly projectId: string
   #lastSavedSnapshot: string | null = null
+  #acknowledgedState: PersistedPrototypeState | null = null
 
   constructor(projectId: string, client?: LocalCoreClient) {
     this.projectId = projectId
@@ -52,6 +51,7 @@ export class RuntimeBridge {
       this.#lastSavedSnapshot = JSON.stringify(snapshot)
       const state = mapGraphToState(snapshot, this.projectId)
       this.#graphVersion = Number(snapshot.graphVersion) || 1
+      this.#acknowledgedState = cloneState(state)
       return { source: 'runtime', state }
     } catch (err) {
       return { source: 'none', state: null, error: err instanceof Error ? err.message : 'Unknown error' }
@@ -78,40 +78,85 @@ export class RuntimeBridge {
   }
 
   #graphVersion: number = 1
-  #saveQueue: Promise<SaveResult> = Promise.resolve({ status: 'idle' })
+  #saveQueue: Promise<void> = Promise.resolve()
+  #pendingBatches = 0
+  #lastAcknowledgedSequence = 0
+  #nextSequence = 0
 
-  /** Runtime save — mutation ops, NOT mapStateToGraph. */
-  async saveMutations(state: PersistedPrototypeState): Promise<SaveResult> {
-    const ops = stateToOps(state, this.projectId)
-    return this.sendMutations(ops)
+  get pendingMutationCount(): number {
+    return this.#pendingBatches
   }
 
-  /** Low-level: send raw mutation batch with serialized queue + stale retry. */
-  async sendMutations(ops: MutationBatch['ops']): Promise<SaveResult> {
+  /** Runtime save — compute action-level deltas at execution time. */
+  async saveMutations(state: PersistedPrototypeState): Promise<SaveResult> {
+    const desiredState = cloneState(state)
+    const sequence = ++this.#nextSequence
+    this.#pendingBatches += 1
     const task = this.#saveQueue.then(async () => {
-      try {
-        const batch: MutationBatch = {
-          baseVersion: this.#graphVersion as GraphVersion,
-          ops: [...ops],
-        }
-        const call = await this.client.applyMutations(batch, this.projectId)
-        if (!call.result.ok) {
-          if (call.result.error.code === 'STALE_GRAPH_VERSION') {
-            await this.loadProject()
-            const retryBatch = { ...batch, baseVersion: this.#graphVersion as GraphVersion }
-            const retry = await this.client.applyMutations(retryBatch, this.projectId)
-            if (!retry.result.ok) return { status: 'unsaved' as const, error: retry.result.error.message }
-          } else {
-            return { status: 'unsaved' as const, error: call.result.error.message }
-          }
-        }
-        return { status: 'saved' as const }
-      } catch (err) {
-        return { status: 'unsaved' as const, error: err instanceof Error ? err.message : 'Unknown error' }
+      if (sequence <= this.#lastAcknowledgedSequence) {
+        return { status: 'unsaved' as const, error: 'A stale save response was discarded.' }
       }
+      if (this.#acknowledgedState === null) {
+        return { status: 'unsaved' as const, error: 'Project must be loaded or bootstrapped before runtime mutations.' }
+      }
+      const ops = diffStateToOps(this.#acknowledgedState, desiredState, this.projectId)
+      if (ops.length === 0) {
+        this.#lastAcknowledgedSequence = sequence
+        this.#acknowledgedState = desiredState
+        return { status: 'saved' as const }
+      }
+      const result = await this.#executeMutations(ops)
+      if (result.status === 'saved') {
+        this.#lastAcknowledgedSequence = sequence
+        this.#acknowledgedState = desiredState
+      }
+      return result
     })
-    this.#saveQueue = task.then(() => ({ status: 'idle' as const })) // chain continues
-    return task.then(result => result ?? { status: 'unsaved' as const, error: 'Queue cancelled' })
+    this.#saveQueue = task.then(
+      () => { this.#pendingBatches -= 1 },
+      () => { this.#pendingBatches -= 1 },
+    )
+    return task
+  }
+
+  /** Low-level raw operation path, serialized behind state saves. */
+  async sendMutations(ops: MutationBatch['ops']): Promise<SaveResult> {
+    const sequence = ++this.#nextSequence
+    this.#pendingBatches += 1
+    const task = this.#saveQueue.then(async () => {
+      const result = await this.#executeMutations(ops)
+      if (result.status === 'saved') {
+        this.#lastAcknowledgedSequence = sequence
+        this.#acknowledgedState = null
+      }
+      return result
+    })
+    this.#saveQueue = task.then(
+      () => { this.#pendingBatches -= 1 },
+      () => { this.#pendingBatches -= 1 },
+    )
+    return task
+  }
+
+  async #executeMutations(ops: MutationBatch['ops']): Promise<SaveResult> {
+    try {
+      const batch: MutationBatch = {
+        baseVersion: this.#graphVersion as GraphVersion,
+        ops: [...ops],
+      }
+      const call = await this.client.applyMutations(batch, this.projectId)
+      if (!call.result.ok) {
+        if (call.result.error.code === 'STALE_GRAPH_VERSION') {
+          await this.loadProject()
+          return { status: 'unsaved', error: 'Project changed in Local Core. Runtime state was reloaded; retry the edit.' }
+        }
+        return { status: 'unsaved', error: call.result.error.message }
+      }
+      this.#graphVersion = Number(call.result.value.graphVersion)
+      return { status: 'saved' }
+    } catch (err) {
+      return { status: 'unsaved', error: err instanceof Error ? err.message : 'Unknown error' }
+    }
   }
 
   /** Full snapshot save — import/recovery/test ONLY. NOT for runtime edits. */
@@ -127,6 +172,8 @@ export class RuntimeBridge {
         return { status: 'unsaved', error: call.result.error.message }
       }
       this.#lastSavedSnapshot = snapshotJson
+      this.#graphVersion = Number(call.result.value.graphVersion) || 1
+      this.#acknowledgedState = cloneState(state)
       return { status: 'saved' }
     } catch (err) {
       return { status: 'unsaved', error: err instanceof Error ? err.message : 'Unknown error' }
@@ -184,7 +231,7 @@ export function mapGraphToState(graph: ProjectGraphSnapshot, projectId: string):
     scopeId: String(ws.scopeId),
     camera: { x: ws.viewport.x, y: ws.viewport.y, zoom: ws.viewport.zoom },
     visibleLayers: (ws.visibleLayers as Workspace['visibleLayers']) ?? ['core', 'process'],
-    focusedNodeIds: ws.focusedNodeIds as string[],
+    focusedViewIds: ws.focusedViewIds.map(String),
     contextPolicy: (ws.contextPolicy ?? 'selection-only') as Workspace['contextPolicy'],
     createdAt: ws.updatedAt, updatedAt: ws.updatedAt,
   }))
@@ -218,7 +265,7 @@ function defaultWorkspace(): Workspace {
   return {
     id: 'workspace-main', label: 'Main', intent: null, scopeId: 'scope-root',
     camera: { x: 0, y: 0, zoom: 1 }, visibleLayers: ['core', 'process'],
-    focusedNodeIds: [], contextPolicy: 'selection-only',
+    focusedViewIds: [], contextPolicy: 'selection-only',
     createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
   }
 }
@@ -247,7 +294,7 @@ export function mapStateToGraph(state: PersistedPrototypeState, projectId: strin
     scopeId: ws.scopeId as ProjectGraphSnapshot['workspaces'][number]['scopeId'],
     name: ws.label, intent: ws.intent,
     viewport: { x: ws.camera.x, y: ws.camera.y, zoom: ws.camera.zoom },
-    focusedNodeIds: ws.focusedNodeIds,
+    focusedViewIds: ws.focusedViewIds as unknown as ProjectGraphSnapshot['workspaces'][number]['focusedViewIds'],
     visibleLayers: ws.visibleLayers,
     contextPolicy: (ws.contextPolicy ?? 'selection-only') as WorkspaceContextPolicy,
     updatedAt: now,
@@ -309,31 +356,134 @@ function kindToArtifactKind(kind: string): string {
   return 'other'
 }
 
-/** Build mutation ops from runtime state. Does NOT call mapStateToGraph. */
-function stateToOps(state: PersistedPrototypeState, projectId: string): MutationBatch['ops'] {
+/** Build action-level mutations by comparing the last acknowledged state. */
+export function diffStateToOps(
+  previous: PersistedPrototypeState,
+  state: PersistedPrototypeState,
+  projectId: string,
+): MutationBatch['ops'] {
   const now = new Date().toISOString()
   const ops: { type: string; [key: string]: unknown }[] = []
   const scopeId = state.activeScopeId || 'scope-root'
+  const previousScopes = new Map(previous.scopes.map((scope) => [scope.id, scope]))
+  const previousWorkspaces = new Map(previous.workspaces.map((workspace) => [workspace.id, workspace]))
+  const previousNodes = new Map(previous.nodes.map((node) => [node.id, node]))
+  const previousEdges = new Map(previous.edges.map((edge) => [edge.id, edge]))
 
   for (const s of state.scopes) {
-    ops.push({ type: 'upsert_scope', scope: { id: s.id, projectId, parentScopeId: s.parentScopeId ?? null, containerViewId: null, kind: s.kind || 'root', name: s.label, createdAt: now, updatedAt: now } })
+    const before = previousScopes.get(s.id)
+    if (before === undefined || before.label !== s.label || before.kind !== s.kind || before.parentScopeId !== s.parentScopeId) {
+      ops.push({ type: 'upsert_scope', scope: { id: s.id, projectId, parentScopeId: s.parentScopeId ?? null, containerViewId: null, kind: s.kind || 'root', name: s.label, createdAt: now, updatedAt: now } })
+    }
   }
 
   for (const ws of state.workspaces) {
-    ops.push({ type: 'upsert_workspace', workspace: { id: ws.id, projectId, scopeId: ws.scopeId, name: ws.label, intent: ws.intent, viewport: { x: ws.camera.x, y: ws.camera.y, zoom: ws.camera.zoom }, focusedNodeIds: ws.focusedNodeIds, visibleLayers: ws.visibleLayers, contextPolicy: ws.contextPolicy ?? 'selection-only', updatedAt: now } })
+    const before = previousWorkspaces.get(ws.id)
+    const workspace = {
+      id: ws.id,
+      projectId,
+      scopeId: ws.scopeId,
+      name: ws.label,
+      intent: ws.intent,
+      viewport: { x: ws.camera.x, y: ws.camera.y, zoom: ws.camera.zoom },
+      focusedViewIds: ws.focusedViewIds,
+      visibleLayers: ws.visibleLayers,
+      contextPolicy: ws.contextPolicy ?? 'selection-only',
+      updatedAt: now,
+    }
+    if (before === undefined
+      || before.label !== ws.label
+      || before.intent !== ws.intent
+      || before.scopeId !== ws.scopeId
+      || before.contextPolicy !== ws.contextPolicy) {
+      ops.push({ type: 'upsert_workspace', workspace })
+      continue
+    }
+    if (!sameValue(before.camera, ws.camera)) {
+      ops.push({ type: 'update_workspace_viewport', workspaceId: ws.id, viewport: workspace.viewport })
+    }
+    if (!sameValue(before.focusedViewIds, ws.focusedViewIds) || !sameValue(before.visibleLayers, ws.visibleLayers)) {
+      ops.push({
+        type: 'update_workspace_presentation',
+        workspaceId: ws.id,
+        focusedViewIds: ws.focusedViewIds,
+        visibleLayers: ws.visibleLayers,
+      })
+    }
   }
 
   const coreNodes = state.nodes.filter(n => n.kind !== 'process' && n.kind !== 'note' && n.kind !== 'decision')
   for (const n of coreNodes) {
-    ops.push({ type: 'upsert_artifact', artifact: { id: n.id, projectId, title: n.title, kind: kindToArtifactKind(n.kind), localPath: 'disposable://' + n.id, availability: n.disabled ? 'missing' : n.draft ? 'stale' : 'available', createdAt: now, updatedAt: now } })
-    ops.push({ type: 'upsert_artifact_view', view: { id: n.id, artifactId: n.id, scopeId: n.scopeId ?? scopeId, referenceKind: 'primary', position: { x: n.x, y: n.y }, size: { width: n.width, height: n.height }, displayMode: n.displayMode === 'compact' ? 'compact' : 'card', collapsed: false } })
+    const before = previousNodes.get(n.id)
+    const artifact = {
+      id: n.id,
+      projectId,
+      title: n.title,
+      kind: kindToArtifactKind(n.kind),
+      localPath: `disposable://${n.id}`,
+      availability: n.disabled ? 'missing' : n.draft ? 'stale' : 'available',
+      createdAt: now,
+      updatedAt: now,
+    }
+    const view = {
+      id: n.id,
+      artifactId: n.id,
+      scopeId: n.scopeId ?? scopeId,
+      referenceKind: 'primary',
+      position: { x: n.x, y: n.y },
+      size: { width: n.width, height: n.height },
+      displayMode: n.displayMode === 'compact' ? 'compact' : 'card',
+      collapsed: false,
+    }
+    if (before === undefined) {
+      ops.push({ type: 'upsert_artifact', artifact })
+      ops.push({ type: 'upsert_artifact_view', view })
+      continue
+    }
+    if (before.title !== n.title || before.kind !== n.kind || before.disabled !== n.disabled || before.draft !== n.draft) {
+      ops.push({ type: 'upsert_artifact', artifact })
+    }
+    if ((before.scopeId ?? previous.activeScopeId) !== view.scopeId) {
+      ops.push({ type: 'upsert_artifact_view', view })
+      continue
+    }
+    if (before.x !== n.x || before.y !== n.y) {
+      ops.push({ type: 'move_artifact_view', viewId: n.id, x: n.x, y: n.y })
+    }
+    if (before.width !== n.width || before.height !== n.height) {
+      ops.push({ type: 'resize_artifact_view', viewId: n.id, width: n.width, height: n.height })
+    }
+    if (before.displayMode !== n.displayMode) {
+      ops.push({ type: 'update_artifact_view_presentation', viewId: n.id, collapsed: false, displayMode: view.displayMode })
+    }
+  }
+  const coreNodeIds = new Set(coreNodes.map((node) => node.id))
+  for (const node of previous.nodes) {
+    if (node.kind !== 'process' && node.kind !== 'note' && node.kind !== 'decision' && !coreNodeIds.has(node.id)) {
+      ops.push({ type: 'delete_artifact_view', viewId: node.id })
+    }
   }
 
   for (const e of state.edges) {
-    ops.push({ type: 'upsert_relation', relation: { id: e.id, projectId, sourceEntityType: 'artifact', sourceEntityId: e.from, targetEntityType: 'artifact', targetEntityId: e.to, kind: e.kind, createdAt: now, updatedAt: now } })
+    const before = previousEdges.get(e.id)
+    if (before === undefined || before.from !== e.from || before.to !== e.to || before.kind !== e.kind) {
+      ops.push({ type: 'upsert_relation', relation: { id: e.id, projectId, sourceEntityType: 'artifact', sourceEntityId: e.from, targetEntityType: 'artifact', targetEntityId: e.to, kind: e.kind, createdAt: now, updatedAt: now } })
+    }
+  }
+  const edgeIds = new Set(state.edges.map((edge) => edge.id))
+  for (const edge of previous.edges) {
+    if (!edgeIds.has(edge.id)) ops.push({ type: 'delete_relation', relationId: edge.id, projectId })
   }
 
   return ops as unknown as MutationBatch['ops']
+}
+
+function sameValue(left: unknown, right: unknown): boolean {
+  return JSON.stringify(left) === JSON.stringify(right)
+}
+
+function cloneState(state: PersistedPrototypeState): PersistedPrototypeState {
+  return structuredClone(state)
 }
 
 // ==================== LocalCoreClient extension ====================

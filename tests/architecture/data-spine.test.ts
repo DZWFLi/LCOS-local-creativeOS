@@ -28,7 +28,7 @@ function makeScope(id = 's-root', projId = 'test-proj'): Scope {
 }
 
 function makeWorkspace(id = 'ws-1', scopeId = 's-root'): Workspace {
-  return { id: id as Workspace['id'], projectId: 'test-proj' as Workspace['projectId'], scopeId: scopeId as Workspace['scopeId'], name: 'Main', intent: null, viewport: { x: 0, y: 0, zoom: 1 }, focusedNodeIds: [], visibleLayers: ['core', 'process'], contextPolicy: 'selection-only', updatedAt: now() }
+  return { id: id as Workspace['id'], projectId: 'test-proj' as Workspace['projectId'], scopeId: scopeId as Workspace['scopeId'], name: 'Main', intent: null, viewport: { x: 0, y: 0, zoom: 1 }, focusedViewIds: [], visibleLayers: ['core', 'process'], contextPolicy: 'selection-only', updatedAt: now() }
 }
 
 function makeArtifact(id = 'art-a', title = 'Artifact A'): Artifact {

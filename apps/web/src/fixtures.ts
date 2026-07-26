@@ -15,10 +15,10 @@ export const fixtureScopes: CanvasScope[] = [
 ]
 
 export const fixtureWorkspaces: Workspace[] = [
-  { id: 'understand', label: '客户原始需求', intent: 'understand', scopeId: ROOT_SCOPE, camera: { x: 214, y: 62, zoom: 1.08 }, visibleLayers: ['core', 'process'], focusedNodeIds: ['brief', 'feedback', 'proposal'], contextPolicy: 'workspace-related', createdAt, updatedAt: createdAt },
-  { id: 'explore', label: 'Thinker 创意探索', intent: 'explore', scopeId: ROOT_SCOPE, camera: { x: 58, y: 48, zoom: .96 }, visibleLayers: ['core', 'process'], focusedNodeIds: ['reference', 'proposal', 'generated'], contextPolicy: 'workspace-related', createdAt, updatedAt: createdAt },
-  { id: 'build', label: '15 秒脚本与分镜', intent: 'build', scopeId: ROOT_SCOPE, camera: { x: -105, y: -25, zoom: 1 }, visibleLayers: ['core', 'process'], focusedNodeIds: ['proposal', 'run-042', 'generated'], contextPolicy: 'workspace-related', createdAt, updatedAt: createdAt },
-  { id: 'decide', label: '第二轮客户反馈', intent: 'decide', scopeId: ROOT_SCOPE, camera: { x: -235, y: -115, zoom: 1.04 }, visibleLayers: ['core', 'process'], focusedNodeIds: ['feedback', 'generated', 'checkpoint'], contextPolicy: 'workspace-related', createdAt, updatedAt: createdAt },
+  { id: 'understand', label: '客户原始需求', intent: 'understand', scopeId: ROOT_SCOPE, camera: { x: 214, y: 62, zoom: 1.08 }, visibleLayers: ['core', 'process'], focusedViewIds: ['brief', 'feedback', 'proposal'], contextPolicy: 'workspace-related', createdAt, updatedAt: createdAt },
+  { id: 'explore', label: 'Thinker 创意探索', intent: 'explore', scopeId: ROOT_SCOPE, camera: { x: 58, y: 48, zoom: .96 }, visibleLayers: ['core', 'process'], focusedViewIds: ['reference', 'proposal', 'generated'], contextPolicy: 'workspace-related', createdAt, updatedAt: createdAt },
+  { id: 'build', label: '15 秒脚本与分镜', intent: 'build', scopeId: ROOT_SCOPE, camera: { x: -105, y: -25, zoom: 1 }, visibleLayers: ['core', 'process'], focusedViewIds: ['proposal', 'run-042', 'generated'], contextPolicy: 'workspace-related', createdAt, updatedAt: createdAt },
+  { id: 'decide', label: '第二轮客户反馈', intent: 'decide', scopeId: ROOT_SCOPE, camera: { x: -235, y: -115, zoom: 1.04 }, visibleLayers: ['core', 'process'], focusedViewIds: ['feedback', 'generated', 'checkpoint'], contextPolicy: 'workspace-related', createdAt, updatedAt: createdAt },
 ]
 
 export const fixtureNodes: CanvasNode[] = [

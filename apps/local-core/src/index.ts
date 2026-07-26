@@ -12,8 +12,13 @@ export { SqliteMetadataRepository } from './metadata-repository.js'
 async function main(): Promise<void> {
   const databasePath = process.env.LOCAL_CORE_DB_PATH
     ?? fileURLToPath(new URL('../.data/phase2.sqlite', import.meta.url))
+  const testPort = process.env.LOCAL_CORE_TEST_PORT
+  const port = testPort === undefined ? LOCAL_CORE_DEV_PORT : Number(testPort)
+  if (!Number.isInteger(port) || port <= 0 || port > 65_535) {
+    throw new Error('LOCAL_CORE_TEST_PORT must be a valid TCP port.')
+  }
   const metadataRepository = new SqliteMetadataRepository(databasePath, { disposableOnly: false })
-  const server = createLocalCoreServer({ port: LOCAL_CORE_DEV_PORT, metadataRepository })
+  const server = createLocalCoreServer({ port, metadataRepository })
   const address = await server.start()
   process.stdout.write(`Local Core Phase 2 listening on http://${address.host}:${address.port}\n`)
 

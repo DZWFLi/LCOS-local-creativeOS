@@ -4,7 +4,7 @@ const snap = {
   schemaVersion:3, graphVersion:1,
   project:{id:'project-portasplit',name:'PortaSplit',rootPath:'disposable://portasplit',graphVersion:1,createdAt:'2026-07-24',updatedAt:'2026-07-24'},
   scopes:[{id:'scope-root',projectId:'project-portasplit',parentScopeId:null,containerViewId:null,kind:'root',name:'Root',createdAt:'2026-07-24',updatedAt:'2026-07-24'}],
-  workspaces:[{id:'ws-main',projectId:'project-portasplit',scopeId:'scope-root',name:'Main',intent:null,viewport:{x:100,y:200,zoom:1.5},focusedNodeIds:[],visibleLayers:['core','process'],contextPolicy:'selection-only',updatedAt:'2026-07-24'}],
+  workspaces:[{id:'ws-main',projectId:'project-portasplit',scopeId:'scope-root',name:'Main',intent:null,viewport:{x:100,y:200,zoom:1.5},focusedViewIds:[],visibleLayers:['core','process'],contextPolicy:'selection-only',updatedAt:'2026-07-24'}],
   artifacts:[{id:'art-brief',projectId:'project-portasplit',title:'Brief',kind:'markdown',localPath:'disposable://brief',availability:'available',createdAt:'2026-07-24',updatedAt:'2026-07-24'}],
   artifactViews:[{id:'view-brief',artifactId:'art-brief',scopeId:'scope-root',referenceKind:'primary',position:{x:50,y:50},size:{width:200,height:150},displayMode:'card',collapsed:false}],
   relations:[{id:'rel-1',projectId:'project-portasplit',sourceEntityType:'artifact',sourceEntityId:'art-brief',targetEntityType:'artifact',targetEntityId:'art-brief',kind:'reference',createdAt:'2026-07-24',updatedAt:'2026-07-24'}],

@@ -8,7 +8,7 @@ describe('ExplicitProjectCatalog', () => {
   })
 
   it('returns defensive copies of explicitly injected entries', async () => {
-    const entry = { id: 'project-1', name: 'PortaSplit', rootPath: 'C:\\projects\\portasplit' }
+    const entry = { id: 'project-1', name: 'PortaSplit', rootPath: 'C:\\projects\\portasplit', graphVersion: 1 }
     const catalog = new ExplicitProjectCatalog([entry])
     const result = await catalog.list()
 
