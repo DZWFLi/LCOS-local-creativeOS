@@ -1,0 +1,165 @@
+import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { extname, join, relative, resolve } from 'node:path'
+
+import type { GraphVersion, ProjectGraphSnapshot } from '@local-creative-os/contracts'
+import { afterEach, describe, expect, it } from 'vitest'
+
+import { SqliteMetadataRepository } from '../../apps/local-core/src/metadata-repository'
+
+const REPOSITORY_ROOT = resolve(import.meta.dirname, '../..')
+const temporaryDirectories: string[] = []
+
+function sourceFiles(root: string): string[] {
+  if (!statSync(root).isDirectory()) return []
+  return readdirSync(root, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(root, entry.name)
+    if (entry.isDirectory()) {
+      if (entry.name === 'dist' || entry.name === 'node_modules' || entry.name === 'tests') return []
+      return sourceFiles(path)
+    }
+    return ['.ts', '.tsx', '.js', '.mjs'].includes(extname(entry.name)) ? [path] : []
+  })
+}
+
+function productionSources(...roots: string[]): Array<{ path: string; text: string }> {
+  return roots.flatMap((root) => sourceFiles(resolve(REPOSITORY_ROOT, root)))
+    .map((path) => ({ path: relative(REPOSITORY_ROOT, path), text: readFileSync(path, 'utf8') }))
+}
+
+function projectSnapshot(): ProjectGraphSnapshot {
+  const now = '2026-07-26T00:00:00.000Z'
+  const projectId = 'disposable-arch-p3' as ProjectGraphSnapshot['project']['id']
+  const scopeId = 'scope-root' as ProjectGraphSnapshot['scopes'][number]['id']
+  const artifactId = 'artifact-source' as ProjectGraphSnapshot['artifacts'][number]['id']
+  const revisionId = 'revision-initial' as ProjectGraphSnapshot['artifactRevisions'][number]['id']
+  return {
+    schemaVersion: 3,
+    graphVersion: 1 as GraphVersion,
+    project: {
+      id: projectId,
+      name: 'Architecture Fixture',
+      rootPath: 'disposable://arch-p3',
+      graphVersion: 1 as GraphVersion,
+      createdAt: now,
+      updatedAt: now,
+    },
+    scopes: [{
+      id: scopeId,
+      projectId,
+      parentScopeId: null,
+      containerViewId: null,
+      kind: 'root',
+      name: 'Root',
+      createdAt: now,
+      updatedAt: now,
+    }],
+    workspaces: [],
+    artifacts: [{
+      id: artifactId,
+      projectId,
+      title: 'Source',
+      kind: 'markdown',
+      localPath: 'disposable://source',
+      availability: 'available',
+      currentRevisionId: revisionId,
+      createdAt: now,
+      updatedAt: now,
+    }],
+    artifactViews: [{
+      id: 'view-source' as ProjectGraphSnapshot['artifactViews'][number]['id'],
+      artifactId,
+      scopeId,
+      revisionId,
+      referenceKind: 'primary',
+      position: { x: 0, y: 0 },
+      size: { width: 200, height: 140 },
+      displayMode: 'card',
+      collapsed: false,
+    }],
+    relations: [],
+    notes: [],
+    artifactRevisions: [{
+      id: revisionId,
+      artifactId,
+      localPath: 'disposable://source',
+      contentHash: 'frozen-hash' as ProjectGraphSnapshot['artifactRevisions'][number]['contentHash'],
+      source: 'import',
+      status: 'current',
+      createdAt: now,
+    }],
+    checkpoints: [],
+  }
+}
+
+afterEach(() => {
+  for (const directory of temporaryDirectories.splice(0)) {
+    rmSync(directory, { recursive: true, force: true })
+  }
+})
+
+describe('Phase 3 architecture boundaries', () => {
+  it.todo('ARCH-P3-001 FileRecord is a distinct entity from Artifact')
+
+  it('ARCH-P3-002 deleting ArtifactView preserves Artifact and Revision', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'arch-p3-'))
+    temporaryDirectories.push(directory)
+    const repository = new SqliteMetadataRepository(join(directory, 'metadata.sqlite'))
+    repository.save(projectSnapshot())
+
+    repository.deleteArtifactView('view-source')
+    const restored = repository.get('disposable-arch-p3')
+    repository.close()
+
+    expect(restored?.artifactViews).toHaveLength(0)
+    expect(restored?.artifacts.map((artifact) => artifact.id)).toEqual(['artifact-source'])
+    expect(restored?.artifactRevisions.map((revision) => revision.id)).toEqual(['revision-initial'])
+  })
+
+  it.todo('ARCH-P3-003 source registration creates an Initial Revision')
+  it.todo('ARCH-P3-004 deleting Preview cache preserves Project Truth')
+
+  it('ARCH-P3-005 browser production clients expose no arbitrary-path register/preview API', () => {
+    const browserRuntime = productionSources('apps/web/src/runtime')
+    const forbidden = browserRuntime.filter(({ text }) =>
+      /\/preview\?path\b/i.test(text)
+      || /\/register(?:-file|\/file)?[^'"\n]*\bpath\b/i.test(text)
+      || /\b(?:registerFile|requestPreview)\s*\(\s*(?:absolutePath|path)\b/.test(text),
+    )
+    expect(forbidden.map(({ path }) => path)).toEqual([])
+  })
+
+  it.todo('ARCH-P3-006 external observation does not automatically create Revision')
+  it.todo('ARCH-P3-007 Preview jobs do not change semanticGraphVersion')
+  it.todo('ARCH-P3-008 identical source hash, renderer/version, and profile reuse cache')
+  it.todo('ARCH-P3-009 renderer version changes produce a cache miss')
+  it.todo('ARCH-P3-010 worker crash or cancellation cannot publish ready PreviewRecord')
+  it.todo('ARCH-P3-011 unsupported formats cannot report successful Preview')
+
+  it('ARCH-P3-012 ReactFlow.toObject is absent from production persistence paths', () => {
+    const persistenceSources = productionSources(
+      'apps/web/src/runtime',
+      'apps/web/src/state',
+      'apps/local-core/src',
+      'packages/contracts/src',
+      'packages/domain/src',
+    )
+    const offenders = persistenceSources.filter(({ text }) => /\.toObject\s*\(/.test(text))
+    expect(offenders.map(({ path }) => path)).toEqual([])
+  })
+
+  it('ARCH-P3-013 Domain does not import @xyflow/react', () => {
+    const domainSources = productionSources('packages/domain/src')
+    const offenders = domainSources.filter(({ text }) =>
+      /(?:from\s*|import\s*\()['"]@xyflow\/react['"]/.test(text),
+    )
+    expect(offenders.map(({ path }) => path)).toEqual([])
+  })
+
+  it('ARCH-P3-014 production code does not import research-only source trees', () => {
+    const formalSources = productionSources('apps', 'packages', 'scripts')
+    const forbiddenImport = /(?:from\s*|import\s*\(|require\s*\()['"][^'"]*(?:research-only|LCOS-open-source-research|OS项目文档)[^'"]*['"]/i
+    const offenders = formalSources.filter(({ text }) => forbiddenImport.test(text))
+    expect(offenders.map(({ path }) => path)).toEqual([])
+  })
+})
