@@ -184,7 +184,7 @@ describe('RuntimeBridge mutation serialization', () => {
     expect(applyMutations).toHaveBeenCalledTimes(1)
   })
 
-  it('maps move, viewport, and focus changes only to presentation operations', () => {
+  it('maps move and focus changes to presentation operations but ignores camera navigation', () => {
     const before = state()
     const after = structuredClone(before)
     after.nodes[0].x = 88
@@ -194,10 +194,10 @@ describe('RuntimeBridge mutation serialization', () => {
 
     const ops = diffStateToOps(before, after, 'disposable-portasplit')
     expect(ops.map((op) => op.type)).toEqual([
-      'update_workspace_viewport',
       'update_workspace_presentation',
       'move_artifact_view',
     ])
+    expect(ops.some((op) => op.type === 'update_workspace_viewport')).toBe(false)
     expect(ops.some((op) => op.type.startsWith('upsert_'))).toBe(false)
   })
 

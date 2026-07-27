@@ -81,8 +81,8 @@ export function CanvasMiniMap({ nodes, workspaceFrames, camera, setCamera, colla
 
   if (collapsed) return <section className="minimap minimap-collapsed"><button aria-label="展开小地图" onClick={() => onCollapsedChange(false)}><Maximize2 size={13} /></button></section>
 
-  return <section className="minimap" data-testid="project-minimap" data-node-count={nodes.length}>
-    <div className="map-label">项目地图 <span>全部内容 <button className="map-collapse" aria-label="收起小地图" onClick={() => onCollapsedChange(true)}>−</button></span></div>
+  return <section className="minimap" data-testid="project-minimap" data-node-count={nodes.length} data-frame-count={workspaceFrames.length}>
+    <div className="map-label">当前画布地图 <span>{nodes.length} 个视图 <button className="map-collapse" aria-label="收起小地图" onClick={() => onCollapsedChange(true)}>−</button></span></div>
     <div ref={mapRef} className="map" data-testid="minimap-map"
       onPointerDown={(event) => {
         const rect = event.currentTarget.getBoundingClientRect()
@@ -112,8 +112,8 @@ export function CanvasMiniMap({ nodes, workspaceFrames, camera, setCamera, colla
         drag.current = null
         if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
       }}>
-      {workspaceFrames.map((frame) => <span key={frame.workspaceId} className={frame.active ? 'map-workspace active' : 'map-workspace'} style={{ left: worldToMapX(frame.bounds.x), top: worldToMapY(frame.bounds.y), width: frame.bounds.width * transform.scale, height: frame.bounds.height * transform.scale }} />)}
-      {nodes.map((node) => <i key={node.id} data-minimap-node-id={node.id} style={{ left: worldToMapX(node.x), top: worldToMapY(node.y), width: Math.max(3, node.width * transform.scale), height: Math.max(2, node.height * transform.scale) }} />)}
+      {workspaceFrames.map((frame) => <span key={frame.workspaceId} data-minimap-workspace-frame={frame.workspaceId} className={frame.active ? 'map-workspace active' : 'map-workspace'} style={{ left: worldToMapX(frame.bounds.x), top: worldToMapY(frame.bounds.y), width: frame.bounds.width * transform.scale, height: frame.bounds.height * transform.scale }} />)}
+      {nodes.map((node) => <i key={node.id} data-minimap-node-id={node.id} data-minimap-view-id={node.id} data-minimap-artifact-id={node.artifactId ?? ''} data-minimap-scope-id={node.scopeId ?? 'scope-root'} data-minimap-visible="true" title={`${node.id} / ${node.scopeId ?? 'scope-root'}`} style={{ left: worldToMapX(node.x), top: worldToMapY(node.y), width: Math.max(3, node.width * transform.scale), height: Math.max(2, node.height * transform.scale) }} />)}
       <b data-camera-rect="true" data-testid="minimap-camera-rect" style={{ left: worldToMapX(viewWorld.x), top: worldToMapY(viewWorld.y), width: viewWorld.width * transform.scale, height: viewWorld.height * transform.scale }} />
     </div>
     <div className="map-controls"><button aria-label="缩小画布" onClick={() => setCamera((current) => ({ ...current, zoom: Math.max(.35, current.zoom - .1) }))}><Minus size={13} /></button><span>{Math.round(camera.zoom * 100)}%</span><button aria-label="放大画布" onClick={() => setCamera((current) => ({ ...current, zoom: Math.min(1.8, current.zoom + .1) }))}><Plus size={13} /></button><button aria-label="适配全部内容" onClick={fitContent}><Maximize2 size={12} /></button></div>

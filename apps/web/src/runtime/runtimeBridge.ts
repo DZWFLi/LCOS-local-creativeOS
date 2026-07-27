@@ -404,9 +404,6 @@ export function diffStateToOps(
       ops.push({ type: 'upsert_workspace', workspace })
       continue
     }
-    if (!sameValue(before.camera, ws.camera)) {
-      ops.push({ type: 'update_workspace_viewport', workspaceId: ws.id, viewport: workspace.viewport })
-    }
     if (!sameValue(before.focusedViewIds, ws.focusedViewIds) || !sameValue(before.visibleLayers, ws.visibleLayers)) {
       ops.push({
         type: 'update_workspace_presentation',

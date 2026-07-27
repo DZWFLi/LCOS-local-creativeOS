@@ -30,7 +30,7 @@ check('project mutation save effect does not reference camera', semanticSaveEffe
 check('presentation interaction suppresses live autosave', app.includes('presentationInteractionRef.current') && app.includes('setPresentationCommit'))
 
 check('CanvasWorld alone carries camera scale', canvas.includes('data-testid="canvas-world"') && canvas.includes('scale(${camera.zoom})'))
-check('Canvas HUD lives outside CanvasWorld', app.includes('className="canvas-hud"') && app.includes('<CanvasMiniMap nodes={nodes}'))
+check('Canvas HUD lives outside CanvasWorld', app.includes('className="canvas-hud"') && app.includes('<CanvasMiniMap nodes={scopeNodes}'))
 check('node resize has live dimensions and end commit', canvas.includes('resizeCandidate.current') && canvas.includes("finishPresentationInteraction('node-resize')"))
 check('workspace group drag has one end commit', canvas.includes('workspaceDrag.current') && canvas.includes("finishPresentationInteraction('workspace-group-move')"))
 check('workspace group drag does not rewrite membership', !frames.includes('workspaceIds:') && frames.includes('moveWorkspaceMembers'))
@@ -40,7 +40,8 @@ check('workspace activation does not set camera', (() => {
   const end = app.indexOf('const locateWorkspace', start)
   return start >= 0 && end > start && !app.slice(start, end).includes('setCamera(')
 })())
-check('minimap is built from full project nodes', app.includes('<CanvasMiniMap nodes={nodes}') && minimap.includes('nodes.map((node) =>'))
+check('minimap is built from active scope nodes', app.includes('<CanvasMiniMap nodes={scopeNodes}') && minimap.includes('data-minimap-scope-id'))
+check('workspace frames render only when active', app.includes('activeWorkspaceFrames') && app.includes('workspaceId ? workspaceFrames.filter'))
 check('minimap has camera viewport rectangle', minimap.includes('data-testid="minimap-camera-rect"') && minimap.includes('viewWorld'))
 check('minimap navigation changes only camera locally', minimap.includes('setCamera') && !minimap.includes('savePrototypeState') && !minimap.includes('semanticGraphVersion'))
 check('workspace frames derive from membership rather than camera', frames.includes('workspaceMemberIds') && !/workspace\.camera/.test(frames))

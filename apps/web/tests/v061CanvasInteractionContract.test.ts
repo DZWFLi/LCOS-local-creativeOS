@@ -26,12 +26,20 @@ describe('v0.6.1 canvas interaction architecture', () => {
     expect(app).toContain('className="canvas-hud"')
   })
 
-  it('supports resize, workspace frame drag and project-wide minimap nodes', () => {
+  it('supports resize, workspace frame drag and active-scope minimap nodes', () => {
     expect(canvas).toContain('className="resize-handle"')
     expect(canvas).toContain('workspace-frame-header')
-    expect(app).toContain('<CanvasMiniMap nodes={nodes}')
+    expect(app).toContain('<CanvasMiniMap nodes={scopeNodes}')
+    expect(app).toContain('activeWorkspaceFrames')
     expect(minimap).toContain('data-camera-rect="true"')
     expect(minimap).toContain('data-minimap-node-id')
+    expect(minimap).toContain('data-minimap-scope-id')
+  })
+
+  it('keeps camera navigation out of project mutation paths', () => {
+    expect(app).not.toContain('const persistedWorkspaces = workspaces.map((workspace) => workspace.id === workspaceId ? { ...workspace, camera')
+    expect(app).not.toContain('activeWorkspaceId: workspaceId')
+    expect(app).toContain('activeWorkspaceId: null')
   })
 
   it('does not introduce React Flow persistence into domain', () => {
