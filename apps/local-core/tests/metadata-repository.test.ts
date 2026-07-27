@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import type { Checkpoint, Note, ProjectGraphSnapshot } from '@local-creative-os/contracts'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { SqliteMetadataRepository } from '../src/metadata-repository.js'
+import { MetadataForeignKeyConstraintError, SqliteMetadataRepository } from '../src/metadata-repository.js'
 
 const cleanup: string[] = []
 const SCHEMA_VERSION = 4
@@ -225,6 +225,79 @@ describe('SqliteMetadataRepository', () => {
       ...value,
       project: { ...value.project, id: 'real-project' as typeof value.project.id },
     })).toThrow('Only disposable')
+    repository.close()
+  })
+
+  it('reports the missing Project FK before a runtime mutation inserts an Artifact', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'local-core-phase3-fk-'))
+    cleanup.push(directory)
+    const repository = new SqliteMetadataRepository(join(directory, 'metadata.sqlite'))
+
+    const write = () => repository.applyMutations({
+      baseVersion: 1 as ProjectGraphSnapshot['graphVersion'],
+      ops: [{
+        type: 'upsert_artifact',
+        artifact: {
+          id: 'artifact-orphan' as ProjectGraphSnapshot['artifacts'][number]['id'],
+          projectId: 'project-portasplit' as ProjectGraphSnapshot['project']['id'],
+          title: 'Orphan',
+          kind: 'markdown',
+          availability: 'available',
+          createdAt: '2026-07-24T12:00:00.000Z',
+          updatedAt: '2026-07-24T12:00:00.000Z',
+        },
+      }],
+    })
+
+    expect(write).toThrow(MetadataForeignKeyConstraintError)
+    try { write() } catch (error) {
+      expect(error).toBeInstanceOf(MetadataForeignKeyConstraintError)
+      const context = (error as MetadataForeignKeyConstraintError).context
+      expect(context).toMatchObject({
+        operationType: 'upsert_artifact',
+        entityId: 'artifact-orphan',
+        table: 'artifacts',
+        statement: 'INSERT INTO artifacts',
+        foreignKeyColumn: 'project_id',
+        referencedTable: 'projects',
+        referencedId: 'project-portasplit',
+        foreignKeyCheck: [],
+      })
+    }
+    repository.close()
+  })
+
+  it('reports the Phase 3 v4 missing FileRecord FK before saving an ArtifactRevision', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'local-core-phase3-fk-'))
+    cleanup.push(directory)
+    const repository = new SqliteMetadataRepository(join(directory, 'metadata.sqlite'))
+    const snap = disposableSnapshot()
+    const broken = {
+      ...snap,
+      fileRecords: [],
+      artifactRevisions: [{
+        ...snap.artifactRevisions[0],
+        fileRecordId: 'file-missing' as ProjectGraphSnapshot['artifactRevisions'][number]['fileRecordId'],
+      }],
+    }
+
+    const write = () => repository.save(broken)
+
+    expect(write).toThrow(MetadataForeignKeyConstraintError)
+    try { write() } catch (error) {
+      expect(error).toBeInstanceOf(MetadataForeignKeyConstraintError)
+      const context = (error as MetadataForeignKeyConstraintError).context
+      expect(context).toMatchObject({
+        operationType: 'save_artifact_revision',
+        entityId: 'rev-1',
+        table: 'artifact_revisions',
+        statement: 'INSERT INTO artifact_revisions',
+        foreignKeyColumn: 'file_record_id',
+        referencedTable: 'file_records',
+        referencedId: 'file-missing',
+        foreignKeyCheck: [],
+      })
+    }
     repository.close()
   })
 

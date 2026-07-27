@@ -28,6 +28,34 @@ import type {
 import type { MutationBatch, ProjectGraphSnapshot } from '@local-creative-os/contracts'
 
 type Row = Record<string, SQLInputValue | undefined>
+type ForeignKeyCheckRow = {
+  readonly table: string
+  readonly rowid: number
+  readonly parent: string
+  readonly fkid: number
+}
+
+export interface MetadataForeignKeyContext {
+  readonly operationType: string
+  readonly entityId: string
+  readonly table: string
+  readonly statement: string
+  readonly foreignKeyColumn: string
+  readonly referencedTable: string
+  readonly referencedId: string
+  readonly foreignKeyCheck: readonly ForeignKeyCheckRow[]
+}
+
+export class MetadataForeignKeyConstraintError extends Error {
+  readonly context: MetadataForeignKeyContext
+
+  constructor(context: MetadataForeignKeyContext, cause?: unknown) {
+    super(`${context.operationType} ${context.entityId} violates ${context.table}.${context.foreignKeyColumn} -> ${context.referencedTable}.id (${context.referencedId})`)
+    this.name = 'MetadataForeignKeyConstraintError'
+    this.context = context
+    this.cause = cause
+  }
+}
 
 function json<T>(value: SQLInputValue): T {
   if (typeof value !== 'string') return JSON.parse('null') as unknown as T
@@ -53,6 +81,15 @@ export class SqliteMetadataRepository {
   }
 
   close(): void { this.#database.close() }
+
+  foreignKeyCheck(): readonly ForeignKeyCheckRow[] {
+    return (this.#database.prepare('PRAGMA foreign_key_check').all() as Row[]).map((row) => ({
+      table: String(row.table),
+      rowid: Number(row.rowid),
+      parent: String(row.parent),
+      fkid: Number(row.fkid),
+    }))
+  }
 
   // ==================== Migration ====================
 
@@ -265,6 +302,7 @@ export class SqliteMetadataRepository {
         throw new Error('Only disposable projects are accepted.')
       }
     }
+    this.#validateSnapshotReferences(snapshot)
     this.#database.exec('BEGIN IMMEDIATE;')
     try {
       const pid = snapshot.project.id
@@ -341,6 +379,7 @@ export class SqliteMetadataRepository {
     const projectId = this.#resolveMutationProjectId(batch.ops, fallbackProjectId)
     this.#database.exec('BEGIN IMMEDIATE;')
     try {
+      this.#assertMutationProjectExists(projectId, batch.ops)
       const hasSemantic = batch.ops.some(isSemanticOp)
       if (batch.ops.length > 0) {
         if (projectId) {
@@ -456,6 +495,92 @@ export class SqliteMetadataRepository {
       }
     }
     return undefined
+  }
+
+  #assertMutationProjectExists(
+    projectId: string | undefined,
+    ops: MutationBatch['ops'],
+  ): void {
+    if (projectId === undefined) return
+    if (ops.length === 1 && ops[0]?.type === 'bootstrap') return
+    const project = this.#database.prepare('SELECT id FROM projects WHERE id = ?').get(projectId as SQLInputValue) as Row | undefined
+    if (project !== undefined) return
+    const op = ops[0]
+    throw new MetadataForeignKeyConstraintError({
+      operationType: op?.type ?? 'mutation_batch',
+      entityId: entityIdForOperation(op),
+      table: tableForOperation(op),
+      statement: statementForOperation(op),
+      foreignKeyColumn: 'project_id',
+      referencedTable: 'projects',
+      referencedId: projectId,
+      foreignKeyCheck: this.foreignKeyCheck(),
+    })
+  }
+
+  #validateSnapshotReferences(snapshot: ProjectGraphSnapshot): void {
+    const projectId = String(snapshot.project.id)
+    const scopeIds = new Set(snapshot.scopes.map((scope) => String(scope.id)))
+    const artifactIds = new Set(snapshot.artifacts.map((artifact) => String(artifact.id)))
+    const revisionIds = new Set(snapshot.artifactRevisions.map((revision) => String(revision.id)))
+    const fileRecordIds = new Set(snapshot.fileRecords.map((fileRecord) => String(fileRecord.id)))
+
+    for (const workspace of snapshot.workspaces) {
+      if (!scopeIds.has(String(workspace.scopeId))) {
+        this.#throwReferenceError('save_workspace', String(workspace.id), 'workspaces', 'INSERT INTO workspaces', 'scope_id', 'scopes', String(workspace.scopeId))
+      }
+    }
+    for (const artifact of snapshot.artifacts) {
+      if (String(artifact.projectId) !== projectId) {
+        this.#throwReferenceError('save_artifact', String(artifact.id), 'artifacts', 'INSERT INTO artifacts', 'project_id', 'projects', String(artifact.projectId))
+      }
+      if (artifact.currentRevisionId !== undefined && !revisionIds.has(String(artifact.currentRevisionId))) {
+        this.#throwReferenceError('save_artifact', String(artifact.id), 'artifacts', 'INSERT INTO artifacts', 'current_revision_id', 'artifact_revisions', String(artifact.currentRevisionId))
+      }
+    }
+    for (const view of snapshot.artifactViews) {
+      if (!artifactIds.has(String(view.artifactId))) {
+        this.#throwReferenceError('save_artifact_view', String(view.id), 'artifact_views', 'INSERT INTO artifact_views', 'artifact_id', 'artifacts', String(view.artifactId))
+      }
+      if (!scopeIds.has(String(view.scopeId))) {
+        this.#throwReferenceError('save_artifact_view', String(view.id), 'artifact_views', 'INSERT INTO artifact_views', 'scope_id', 'scopes', String(view.scopeId))
+      }
+      if (view.revisionId !== undefined && !revisionIds.has(String(view.revisionId))) {
+        this.#throwReferenceError('save_artifact_view', String(view.id), 'artifact_views', 'INSERT INTO artifact_views', 'revision_id', 'artifact_revisions', String(view.revisionId))
+      }
+    }
+    for (const revision of snapshot.artifactRevisions) {
+      if (!artifactIds.has(String(revision.artifactId))) {
+        this.#throwReferenceError('save_artifact_revision', String(revision.id), 'artifact_revisions', 'INSERT INTO artifact_revisions', 'artifact_id', 'artifacts', String(revision.artifactId))
+      }
+      if (!fileRecordIds.has(String(revision.fileRecordId))) {
+        this.#throwReferenceError('save_artifact_revision', String(revision.id), 'artifact_revisions', 'INSERT INTO artifact_revisions', 'file_record_id', 'file_records', String(revision.fileRecordId))
+      }
+      if (revision.parentRevisionId !== undefined && !revisionIds.has(String(revision.parentRevisionId))) {
+        this.#throwReferenceError('save_artifact_revision', String(revision.id), 'artifact_revisions', 'INSERT INTO artifact_revisions', 'parent_revision_id', 'artifact_revisions', String(revision.parentRevisionId))
+      }
+    }
+  }
+
+  #throwReferenceError(
+    operationType: string,
+    entityId: string,
+    table: string,
+    statement: string,
+    foreignKeyColumn: string,
+    referencedTable: string,
+    referencedId: string,
+  ): never {
+    throw new MetadataForeignKeyConstraintError({
+      operationType,
+      entityId,
+      table,
+      statement,
+      foreignKeyColumn,
+      referencedTable,
+      referencedId,
+      foreignKeyCheck: this.foreignKeyCheck(),
+    })
   }
 
   // ==================== Public CRUD (exposed for server routes) ====================
@@ -614,31 +739,55 @@ export class SqliteMetadataRepository {
   }
 
   #upsertWorkspace(value: Workspace): void {
-    this.#database.prepare(`
+    this.#runStatement({
+      operationType: 'upsert_workspace',
+      entityId: String(value.id),
+      table: 'workspaces',
+      statement: 'INSERT INTO workspaces',
+      foreignKeyColumn: 'project_id',
+      referencedTable: 'projects',
+      referencedId: String(value.projectId),
+    }, `
       INSERT INTO workspaces VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET name=excluded.name, intent=excluded.intent, scope_id=excluded.scope_id, viewport=excluded.viewport, focused_node_ids=excluded.focused_node_ids, visible_layers=excluded.visible_layers, context_policy=excluded.context_policy, updated_at=excluded.updated_at
-    `).run(
+    `, [
       value.id as SQLInputValue, value.projectId as SQLInputValue, value.scopeId as SQLInputValue,
       value.name, value.intent, JSON.stringify(value.viewport),
       JSON.stringify(value.focusedViewIds), JSON.stringify(value.visibleLayers),
       value.contextPolicy, value.updatedAt,
-    )
+    ])
   }
 
   #upsertArtifact(value: Artifact): void {
-    this.#database.prepare(`
+    this.#runStatement({
+      operationType: 'upsert_artifact',
+      entityId: String(value.id),
+      table: 'artifacts',
+      statement: 'INSERT INTO artifacts',
+      foreignKeyColumn: 'project_id',
+      referencedTable: 'projects',
+      referencedId: String(value.projectId),
+    }, `
       INSERT INTO artifacts VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET title=excluded.title, kind=excluded.kind, local_path=excluded.local_path, availability=excluded.availability, current_revision_id=excluded.current_revision_id, updated_at=excluded.updated_at
-    `).run(value.id as SQLInputValue, value.projectId as SQLInputValue, value.title, value.kind, '', value.availability, value.currentRevisionId as SQLInputValue ?? null, value.createdAt, value.updatedAt)
+    `, [value.id as SQLInputValue, value.projectId as SQLInputValue, value.title, value.kind, '', value.availability, value.currentRevisionId as SQLInputValue ?? null, value.createdAt, value.updatedAt])
   }
 
   #upsertArtifactView(value: ArtifactView): void {
-    this.#database.prepare(`
+    this.#runStatement({
+      operationType: 'upsert_artifact_view',
+      entityId: String(value.id),
+      table: 'artifact_views',
+      statement: 'INSERT INTO artifact_views',
+      foreignKeyColumn: 'artifact_id',
+      referencedTable: 'artifacts',
+      referencedId: String(value.artifactId),
+    }, `
       INSERT INTO artifact_views VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET artifact_id=excluded.artifact_id, scope_id=excluded.scope_id, revision_id=excluded.revision_id, reference_kind=excluded.reference_kind, position=excluded.position, size=excluded.size, display_mode=excluded.display_mode, collapsed=excluded.collapsed
-    `).run(value.id as SQLInputValue, value.artifactId as SQLInputValue, value.scopeId as SQLInputValue, value.revisionId as SQLInputValue ?? null,
+    `, [value.id as SQLInputValue, value.artifactId as SQLInputValue, value.scopeId as SQLInputValue, value.revisionId as SQLInputValue ?? null,
       value.referenceKind, JSON.stringify(value.position), JSON.stringify(value.size),
-      value.displayMode, value.collapsed ? 1 : 0)
+      value.displayMode, value.collapsed ? 1 : 0])
   }
 
   #upsertRelation(value: Relation): void {
@@ -650,18 +799,45 @@ export class SqliteMetadataRepository {
 
   #upsertArtifactRevision(value: ArtifactRevision): void {
     const fileRecord = this.getFileRecord(String(value.fileRecordId))
-    if (fileRecord === undefined) throw new Error('ArtifactRevision requires an existing FileRecord.')
-    this.#database.prepare(`
+    if (fileRecord === undefined) {
+      throw new MetadataForeignKeyConstraintError({
+        operationType: 'upsert_artifact_revision',
+        entityId: String(value.id),
+        table: 'artifact_revisions',
+        statement: 'INSERT INTO artifact_revisions',
+        foreignKeyColumn: 'file_record_id',
+        referencedTable: 'file_records',
+        referencedId: String(value.fileRecordId),
+        foreignKeyCheck: this.foreignKeyCheck(),
+      })
+    }
+    this.#runStatement({
+      operationType: 'upsert_artifact_revision',
+      entityId: String(value.id),
+      table: 'artifact_revisions',
+      statement: 'INSERT INTO artifact_revisions',
+      foreignKeyColumn: 'artifact_id',
+      referencedTable: 'artifacts',
+      referencedId: String(value.artifactId),
+    }, `
       INSERT INTO artifact_revisions (
         id, artifact_id, parent_revision_id, local_path, content_hash,
         source, run_id, status, created_at, file_record_id
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET status=excluded.status
-    `).run(value.id as SQLInputValue, value.artifactId as SQLInputValue, value.parentRevisionId as SQLInputValue ?? null, fileRecord.observedPath, value.contentHash as SQLInputValue, value.source, value.runId as SQLInputValue ?? null, value.status, value.createdAt, value.fileRecordId as SQLInputValue)
+    `, [value.id as SQLInputValue, value.artifactId as SQLInputValue, value.parentRevisionId as SQLInputValue ?? null, fileRecord.observedPath, value.contentHash as SQLInputValue, value.source, value.runId as SQLInputValue ?? null, value.status, value.createdAt, value.fileRecordId as SQLInputValue])
   }
 
   #upsertFileRecord(value: FileRecord): void {
-    this.#database.prepare(`
+    this.#runStatement({
+      operationType: 'upsert_file_record',
+      entityId: String(value.id),
+      table: 'file_records',
+      statement: 'INSERT INTO file_records',
+      foreignKeyColumn: 'project_id',
+      referencedTable: 'projects',
+      referencedId: String(value.projectId),
+    }, `
       INSERT INTO file_records VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         observed_path=excluded.observed_path,
@@ -671,7 +847,7 @@ export class SqliteMetadataRepository {
         mime_type=excluded.mime_type,
         availability=excluded.availability,
         observed_at=excluded.observed_at
-    `).run(
+    `, [
       value.id as SQLInputValue,
       value.projectId as SQLInputValue,
       value.observedPath,
@@ -681,7 +857,7 @@ export class SqliteMetadataRepository {
       value.mimeType,
       value.availability,
       value.observedAt,
-    )
+    ])
   }
 
   #upsertNote(value: Note): void {
@@ -700,6 +876,24 @@ export class SqliteMetadataRepository {
       INSERT INTO checkpoints VALUES (?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO NOTHING
     `).run(value.id as SQLInputValue, value.projectId as SQLInputValue, value.scopeId as SQLInputValue, value.label, JSON.stringify(value.snapshotJson), value.createdAt)
+  }
+
+  #runStatement(
+    context: Omit<MetadataForeignKeyContext, 'foreignKeyCheck'>,
+    sql: string,
+    values: readonly SQLInputValue[],
+  ): void {
+    try {
+      this.#database.prepare(sql).run(...values)
+    } catch (error: unknown) {
+      if (error instanceof Error && error.message.includes('FOREIGN KEY constraint failed')) {
+        throw new MetadataForeignKeyConstraintError({
+          ...context,
+          foreignKeyCheck: this.foreignKeyCheck(),
+        }, error)
+      }
+      throw error
+    }
   }
 
   // ==================== Row → Entity ====================
@@ -794,4 +988,37 @@ function resolveProjectId(ops: readonly { type: string; [key: string]: unknown }
     }
   }
   return null
+}
+
+function entityIdForOperation(op: MutationBatch['ops'][number] | undefined): string {
+  if (op === undefined) return 'unknown'
+  if ('artifact' in op) return String(op.artifact.id)
+  if ('view' in op) return String(op.view.id)
+  if ('workspace' in op) return String(op.workspace.id)
+  if ('scope' in op) return String(op.scope.id)
+  if ('relation' in op) return String(op.relation.id)
+  if ('note' in op) return String(op.note.id)
+  if ('viewId' in op) return String(op.viewId)
+  if ('workspaceId' in op) return String(op.workspaceId)
+  if ('relationId' in op) return String(op.relationId)
+  return op.type
+}
+
+function tableForOperation(op: MutationBatch['ops'][number] | undefined): string {
+  if (op === undefined) return 'unknown'
+  if (op.type.includes('workspace')) return 'workspaces'
+  if (op.type.includes('scope')) return 'scopes'
+  if (op.type.includes('artifact_view')) return 'artifact_views'
+  if (op.type.includes('artifact')) return 'artifacts'
+  if (op.type.includes('relation')) return 'relations'
+  if (op.type.includes('note')) return 'notes'
+  return 'unknown'
+}
+
+function statementForOperation(op: MutationBatch['ops'][number] | undefined): string {
+  if (op === undefined) return 'mutation'
+  if (op.type.startsWith('upsert_')) return `INSERT INTO ${tableForOperation(op)}`
+  if (op.type.startsWith('delete_')) return `DELETE FROM ${tableForOperation(op)}`
+  if (op.type.startsWith('update_') || op.type.startsWith('move_') || op.type.startsWith('resize_')) return `UPDATE ${tableForOperation(op)}`
+  return op.type
 }

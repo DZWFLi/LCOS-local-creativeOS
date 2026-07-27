@@ -20,7 +20,7 @@ import { failure } from './errors.js'
 import { getHealthStatus } from './health.js'
 import { ExplicitProjectCatalog } from './project-catalog.js'
 import { validateProjectRoot } from './project-root.js'
-import { SqliteMetadataRepository } from './metadata-repository.js'
+import { MetadataForeignKeyConstraintError, SqliteMetadataRepository } from './metadata-repository.js'
 import { FileRegistryService } from './file-registry-service.js'
 
 const LOOPBACK_HOST = '127.0.0.1'
@@ -54,6 +54,26 @@ function sendJson(response: ServerResponse, statusCode: number, value: unknown):
     'cache-control': 'no-store',
   })
   response.end(JSON.stringify(value))
+}
+
+function formatMetadataError(error: unknown, fallback: string): string {
+  if (error instanceof MetadataForeignKeyConstraintError) {
+    const context = error.context
+    const fkCheck = context.foreignKeyCheck
+      .map((row) => `${row.table}:${row.rowid}->${row.parent}#${row.fkid}`)
+      .join(',') || 'none'
+    return [
+      error.message,
+      `operation=${context.operationType}`,
+      `entity=${context.entityId}`,
+      `table=${context.table}`,
+      `field=${context.foreignKeyColumn}`,
+      `referenced=${context.referencedTable}:${context.referencedId}`,
+      `statement=${context.statement}`,
+      `foreign_key_check=${fkCheck}`,
+    ].join(' | ')
+  }
+  return error instanceof Error ? error.message : fallback
 }
 
 async function readJsonBody(request: IncomingMessage, signal: AbortSignal): Promise<unknown> {
@@ -224,7 +244,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
           metadata.save(saveInput.snapshot)
           sendJson(response, 200, { ok: true, value: metadata.get(projectId) })
         } catch (error: unknown) {
-          sendJson(response, 400, failure('VALIDATION', error instanceof Error ? error.message : 'Metadata could not be saved.'))
+          sendJson(response, 400, failure('VALIDATION', formatMetadataError(error, 'Metadata could not be saved.')))
         }
         return
       }
@@ -245,7 +265,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
           const graphVersion = metadata.applyMutations(batch, projectId)
           sendJson(response, 200, { ok: true, value: { appliedOps: batch.ops.length, graphVersion } })
         } catch (error: unknown) {
-          const msg = error instanceof Error ? error.message : 'Mutations could not be applied.'
+          const msg = formatMetadataError(error, 'Mutations could not be applied.')
           const code = (error instanceof Error && 'code' in error) ? String((error as unknown as Record<string, unknown>).code) : undefined
           if (code === 'STALE_GRAPH_VERSION') {
             sendJson(response, 409, { ok: false, error: { code: 'STALE_GRAPH_VERSION' as ContractError['code'], message: msg, retryable: true, origin: 'runtime' as const } })

@@ -12,7 +12,7 @@ import { describe, it, expect, afterAll, beforeAll } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { SqliteMetadataRepository } from '../../apps/local-core/src/metadata-repository'
+import { MetadataForeignKeyConstraintError, SqliteMetadataRepository } from '../../apps/local-core/src/metadata-repository'
 import type { ArtifactView } from '../../packages/domain/src'
 
 const now = () => new Date().toISOString()
@@ -147,6 +147,43 @@ describe('INT-007 Scope parent/container recovery', () => {
     expect(child!.parentScopeId).toBe('s-root')
     expect(child!.containerViewId).toBe('v-a1')
     expect(child!.kind).toBe('collection')
+    repo.close()
+  })
+})
+
+describe('INT-008 Runtime mutation FK diagnostics', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'int-008-'))
+  afterAll(() => rmSync(dir, { recursive: true, force: true }))
+
+  it('rejects artifact mutation for a missing Project with operation-level FK context', () => {
+    const repo = new SqliteMetadataRepository(join(dir, 'test.sqlite'))
+
+    const write = () => repo.applyMutations({
+      baseVersion: 1,
+      ops: [{
+        type: 'upsert_artifact',
+        artifact: {
+          id: 'artifact-orphan',
+          projectId: 'project-portasplit',
+          title: 'Orphan',
+          kind: 'markdown',
+          availability: 'available',
+          createdAt: now(),
+          updatedAt: now(),
+        },
+      }],
+    } as any)
+
+    expect(write).toThrow(MetadataForeignKeyConstraintError)
+    try { write() } catch (error) {
+      const context = (error as MetadataForeignKeyConstraintError).context
+      expect(context.operationType).toBe('upsert_artifact')
+      expect(context.table).toBe('artifacts')
+      expect(context.foreignKeyColumn).toBe('project_id')
+      expect(context.referencedTable).toBe('projects')
+      expect(context.referencedId).toBe('project-portasplit')
+      expect(context.foreignKeyCheck).toEqual([])
+    }
     repo.close()
   })
 })

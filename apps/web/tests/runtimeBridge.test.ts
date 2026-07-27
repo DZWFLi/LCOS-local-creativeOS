@@ -165,6 +165,25 @@ describe('RuntimeBridge mutation serialization', () => {
     expect(bridge.pendingMutationCount).toBe(0)
   })
 
+  it('bootstraps the project snapshot before the first runtime mutation save', async () => {
+    const applyMutations = vi.fn(async (batch: MutationBatch) => call({ graphVersion: 2 as GraphVersion, appliedOps: batch.ops.length }))
+    const saveProjectGraph = vi.fn(async (value: ProjectGraphSnapshot) => call({ ...value, graphVersion: 1 as GraphVersion }))
+    const bridge = new RuntimeBridge('disposable-portasplit', mockClient({ applyMutations, saveProjectGraph }))
+
+    await expect(bridge.saveMutations(state('First runtime save'))).resolves.toEqual({ status: 'saved' })
+
+    expect(saveProjectGraph).toHaveBeenCalledTimes(1)
+    expect(saveProjectGraph.mock.calls[0][0]).toMatchObject({
+      project: { id: 'disposable-portasplit' },
+      artifacts: [expect.objectContaining({ id: 'brief', title: 'First runtime save' })],
+      artifactViews: [expect.objectContaining({ id: 'brief', artifactId: 'brief' })],
+    })
+    expect(applyMutations).not.toHaveBeenCalled()
+
+    await expect(bridge.saveMutations(state('Second runtime save'))).resolves.toEqual({ status: 'saved' })
+    expect(applyMutations).toHaveBeenCalledTimes(1)
+  })
+
   it('maps move, viewport, and focus changes only to presentation operations', () => {
     const before = state()
     const after = structuredClone(before)

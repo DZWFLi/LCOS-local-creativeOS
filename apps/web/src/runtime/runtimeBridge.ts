@@ -97,7 +97,10 @@ export class RuntimeBridge {
         return { status: 'unsaved' as const, error: 'A stale save response was discarded.' }
       }
       if (this.#acknowledgedState === null) {
-        return { status: 'unsaved' as const, error: 'Project must be loaded or bootstrapped before runtime mutations.' }
+        const bootstrap = await this.#bootstrapProject(desiredState)
+        if (bootstrap.status !== 'saved') return bootstrap
+        this.#lastAcknowledgedSequence = sequence
+        return { status: 'saved' as const }
       }
       const ops = diffStateToOps(this.#acknowledgedState, desiredState, this.projectId)
       if (ops.length === 0) {
@@ -159,22 +162,26 @@ export class RuntimeBridge {
     }
   }
 
+  async #bootstrapProject(state: PersistedPrototypeState): Promise<SaveResult> {
+    const snapshot = mapStateToGraph(state, this.projectId)
+    const call = await this.client.saveProjectGraph(snapshot)
+    if (!call.result.ok) {
+      return { status: 'unsaved', error: call.result.error.message }
+    }
+    this.#lastSavedSnapshot = JSON.stringify(call.result.value)
+    this.#graphVersion = Number(call.result.value.graphVersion) || 1
+    this.#acknowledgedState = cloneState(state)
+    return { status: 'saved' }
+  }
+
   /** Full snapshot save — import/recovery/test ONLY. NOT for runtime edits. */
   async saveProject(state: PersistedPrototypeState): Promise<SaveResult> {
     try {
-      const snapshot = mapStateToGraph(state, this.projectId)
-      const snapshotJson = JSON.stringify(snapshot)
+      const snapshotJson = JSON.stringify(mapStateToGraph(state, this.projectId))
       if (snapshotJson === this.#lastSavedSnapshot) {
         return { status: 'saved' }
       }
-      const call = await this.client.saveProjectGraph(snapshot)
-      if (!call.result.ok) {
-        return { status: 'unsaved', error: call.result.error.message }
-      }
-      this.#lastSavedSnapshot = snapshotJson
-      this.#graphVersion = Number(call.result.value.graphVersion) || 1
-      this.#acknowledgedState = cloneState(state)
-      return { status: 'saved' }
+      return await this.#bootstrapProject(state)
     } catch (err) {
       return { status: 'unsaved', error: err instanceof Error ? err.message : 'Unknown error' }
     }
