@@ -15,6 +15,7 @@ import type {
   Workspace,
   ValidateProjectRootInput,
 } from '@local-creative-os/contracts'
+import type { FileRecordId } from '@local-creative-os/domain'
 
 import { failure } from './errors.js'
 import { getHealthStatus } from './health.js'
@@ -22,6 +23,7 @@ import { ExplicitProjectCatalog } from './project-catalog.js'
 import { validateProjectRoot } from './project-root.js'
 import { MetadataForeignKeyConstraintError, SqliteMetadataRepository } from './metadata-repository.js'
 import { FileRegistryService } from './file-registry-service.js'
+import { FileObservationService } from './file-observation-service.js'
 
 const LOOPBACK_HOST = '127.0.0.1'
 const MAX_BODY_BYTES = 1 * 1024 * 1024 // 1 MiB
@@ -35,6 +37,7 @@ export interface LocalCoreServerOptions {
   readonly requestTimeoutMs?: number
   readonly metadataRepository?: SqliteMetadataRepository
   readonly fileRegistryService?: FileRegistryService
+  readonly fileObservationService?: FileObservationService
 }
 
 export interface LocalCoreAddress {
@@ -143,6 +146,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
   const catalog = options.catalog ?? new ExplicitProjectCatalog([])
   const metadata = options.metadataRepository
   const fileRegistry = options.fileRegistryService
+  const fileObservation = options.fileObservationService ?? (metadata === undefined ? undefined : new FileObservationService(metadata))
   let server: Server | undefined
   let currentAddress: LocalCoreAddress | undefined
   let lifecycleSignal: AbortSignal | undefined
@@ -311,7 +315,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
 
       // ==================== Individual CRUD routes ====================
 
-      const entityResult = await handleEntityRoute(method, pathname, metadata, request, controller.signal)
+      const entityResult = await handleEntityRoute(method, pathname, metadata, fileObservation, request, controller.signal)
       if (entityResult !== undefined) {
         sendJson(response, entityResult.status, entityResult.body)
         return
@@ -405,6 +409,7 @@ async function handleEntityRoute(
   method: string,
   pathname: string,
   metadata: SqliteMetadataRepository | undefined,
+  fileObservation: FileObservationService | undefined,
   request: IncomingMessage,
   signal: AbortSignal,
 ): Promise<RouteResult> {
@@ -473,9 +478,10 @@ async function handleEntityRoute(
     return undefined
   }
 
-  // --- FileRecords (read-only by ID; paths are never accepted from Browser) ---
+  // --- FileRecords (read-only by ID; refresh accepts only opaque FileRecord IDs; paths are never accepted from Browser) ---
   const fileListMatch = /^\/projects\/([^/]+)\/file-records$/.exec(pathname)
   const fileOneMatch = /^\/file-records\/([^/]+)$/.exec(pathname)
+  const fileRefreshMatch = /^\/file-records\/([^/]+)\/refresh$/.exec(pathname)
   if (fileListMatch !== null && method === 'GET') {
     const projectId = decodeURIComponent(fileListMatch[1] ?? '')
     return { status: 200, body: { ok: true, value: metadata.getFileRecords(projectId) } }
@@ -486,6 +492,17 @@ async function handleEntityRoute(
     return fileRecord === undefined
       ? { status: 404, body: failure('NOT_FOUND', 'FileRecord not found.') }
       : { status: 200, body: { ok: true, value: fileRecord } }
+  }
+  if (fileRefreshMatch !== null && method === 'POST') {
+    if (fileObservation === undefined) return { status: 503, body: failure('UNAVAILABLE', 'File Observation Service is not configured.') }
+    const fileRecordId = decodeURIComponent(fileRefreshMatch[1] ?? '') as FileRecordId
+    try {
+      const result = await fileObservation.refresh(fileRecordId, signal)
+      return { status: 200, body: { ok: true, value: result } }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'File observation failed.'
+      return { status: message === 'FileRecord not found.' ? 404 : 400, body: failure(message === 'FileRecord not found.' ? 'NOT_FOUND' : 'VALIDATION', message) }
+    }
   }
 
   // --- ArtifactViews ---

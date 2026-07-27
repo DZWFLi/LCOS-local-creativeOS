@@ -42,7 +42,7 @@ function artifactKindFor(path: string): Artifact['kind'] {
   return 'other'
 }
 
-async function sha256(path: string, signal?: AbortSignal): Promise<string> {
+export async function hashFileSha256(path: string, signal?: AbortSignal): Promise<string> {
   const hash = createHash('sha256')
   const stream = createReadStream(path)
   const abort = () => stream.destroy(new DOMException('Hashing aborted.', 'AbortError'))
@@ -103,7 +103,7 @@ export class FileRegistryService {
       projectRoot: project.rootPath,
       allowExternalSource: this.options.allowExternalSource ?? false,
     })
-    const observedHash = await sha256(guarded.realPath, signal)
+    const observedHash = await hashFileSha256(guarded.realPath, signal)
     const now = new Date().toISOString()
     const fileRecordId = randomUUID() as FileRecord['id']
     const artifactId = randomUUID() as Artifact['id']

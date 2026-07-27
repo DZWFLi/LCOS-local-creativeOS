@@ -291,6 +291,44 @@ describe('Local Core HTTP server', () => {
     })
   })
 
+  it('refreshes FileRecord observation through an opaque FileRecord id only', async () => {
+    const projectRoot = mkdtempSync(join(tmpdir(), 'local-core-http-observe-'))
+    temporaryDirectories.push(projectRoot)
+    const sourcePath = join(projectRoot, 'source.md')
+    writeFileSync(sourcePath, '# trusted source', 'utf8')
+    const metadataRepository = createMetadataRepository(projectRoot)
+    const selections = new TrustedFileSelectionRegistry()
+    const fileRegistryService = new FileRegistryService(metadataRepository, selections)
+    const selection = selections.registerTrustedPath(sourcePath)
+    const { baseUrl } = await startServer(createLocalCoreServer({
+      metadataRepository,
+      fileRegistryService,
+    }))
+    const registered = await fetch(`${baseUrl}/projects/disposable-portasplit/sources`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ selectionId: selection.id }),
+    }).then((response) => response.json())
+    writeFileSync(sourcePath, '# changed outside LCOS', 'utf8')
+
+    const response = await fetch(`${baseUrl}/file-records/${registered.value.fileRecord.id}/refresh`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ignoredPath: 'C:\\must-not-be-read-from-browser.md' }),
+    })
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      value: {
+        fileRecord: { availability: 'stale' },
+        artifact: { availability: 'stale' },
+        revisionCreated: false,
+      },
+    })
+    expect(metadataRepository.getArtifactRevisions(registered.value.artifact.id)).toHaveLength(1)
+  })
+
   it('validates a project root through the HTTP boundary', async () => {
     const { baseUrl } = await startServer()
     const response = await fetch(`${baseUrl}/project-roots/validate`, {

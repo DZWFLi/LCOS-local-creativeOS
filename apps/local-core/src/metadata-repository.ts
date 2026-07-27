@@ -689,6 +689,18 @@ export class SqliteMetadataRepository {
 
   upsertFileRecord(value: FileRecord): void { this.#upsertFileRecord(value) }
 
+  updateFileObservation(fileRecord: FileRecord, artifact?: Artifact): void {
+    this.#database.exec('BEGIN IMMEDIATE;')
+    try {
+      this.#upsertFileRecord(fileRecord)
+      if (artifact !== undefined) this.#upsertArtifact(artifact)
+      this.#database.exec('COMMIT;')
+    } catch (error: unknown) {
+      this.#database.exec('ROLLBACK;')
+      throw error
+    }
+  }
+
   registerSource(
     fileRecord: FileRecord,
     artifact: Artifact,

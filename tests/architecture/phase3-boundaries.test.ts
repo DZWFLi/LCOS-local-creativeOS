@@ -1,4 +1,4 @@
-import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { extname, join, relative, resolve } from 'node:path'
 
@@ -6,6 +6,8 @@ import type { GraphVersion, ProjectGraphSnapshot } from '@local-creative-os/cont
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { SqliteMetadataRepository } from '../../apps/local-core/src/metadata-repository'
+import { FileObservationService } from '../../apps/local-core/src/file-observation-service'
+import { FileRegistryService, TrustedFileSelectionRegistry } from '../../apps/local-core/src/file-registry-service'
 
 const REPOSITORY_ROOT = resolve(import.meta.dirname, '../..')
 const temporaryDirectories: string[] = []
@@ -154,7 +156,37 @@ describe('Phase 3 architecture boundaries', () => {
     expect(forbidden.map(({ path }) => path)).toEqual([])
   })
 
-  it.todo('ARCH-P3-006 external observation does not automatically create Revision')
+  it('ARCH-P3-006 external observation does not automatically create Revision', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'arch-p3-observation-'))
+    temporaryDirectories.push(directory)
+    const sourcePath = join(directory, 'source.md')
+    writeFileSync(sourcePath, '# original\n', 'utf8')
+    const repository = new SqliteMetadataRepository(join(directory, 'metadata.sqlite'), { disposableOnly: true })
+    const snapshot = projectSnapshot()
+    repository.save({
+      ...snapshot,
+      project: { ...snapshot.project, rootPath: directory },
+      artifacts: [],
+      artifactViews: [],
+      artifactRevisions: [],
+      fileRecords: [],
+    })
+    const selections = new TrustedFileSelectionRegistry()
+    const registered = await new FileRegistryService(repository, selections).registerSource(
+      snapshot.project.id,
+      { selectionId: selections.registerTrustedPath(sourcePath).id },
+    )
+    const beforeRevisionIds = repository.getArtifactRevisions(String(registered.artifact.id)).map((revision) => revision.id)
+    writeFileSync(sourcePath, '# externally changed\n', 'utf8')
+
+    const result = await new FileObservationService(repository).refresh(registered.fileRecord.id)
+    const afterRevisionIds = repository.getArtifactRevisions(String(registered.artifact.id)).map((revision) => revision.id)
+    repository.close()
+
+    expect(result.fileRecord.availability).toBe('stale')
+    expect(result.revisionCreated).toBe(false)
+    expect(afterRevisionIds).toEqual(beforeRevisionIds)
+  })
   it.todo('ARCH-P3-007 Preview jobs do not change semanticGraphVersion')
   it.todo('ARCH-P3-008 identical source hash, renderer/version, and profile reuse cache')
   it.todo('ARCH-P3-009 renderer version changes produce a cache miss')
