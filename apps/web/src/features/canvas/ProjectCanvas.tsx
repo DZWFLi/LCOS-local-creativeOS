@@ -36,6 +36,8 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
   const dragging = useRef(false)
   const dragPoint = useRef<{ x: number; y: number } | null>(null)
   const dragFrame = useRef<number | null>(null)
+  const autoPanFrame = useRef<number | null>(null)
+  const autoPanPointer = useRef<{ x: number; y: number } | null>(null)
   const wheelFrame = useRef<number | null>(null)
   const wheelPan = useRef({ x: 0, y: 0 })
   const wheelZoom = useRef<{ deltaY: number; anchorX: number; anchorY: number } | null>(null)
@@ -66,6 +68,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
 
   useEffect(() => () => {
     if (dragFrame.current !== null) cancelAnimationFrame(dragFrame.current)
+    if (autoPanFrame.current !== null) cancelAnimationFrame(autoPanFrame.current)
     if (wheelFrame.current !== null) cancelAnimationFrame(wheelFrame.current)
   }, [])
   useEffect(() => {
@@ -85,6 +88,10 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
       cancelAnimationFrame(dragFrame.current)
       dragFrame.current = null
     }
+    if (autoPanFrame.current !== null) {
+      cancelAnimationFrame(autoPanFrame.current)
+      autoPanFrame.current = null
+    }
     if (wheelFrame.current !== null) {
       cancelAnimationFrame(wheelFrame.current)
       wheelFrame.current = null
@@ -100,6 +107,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
     resizeCandidate.current = null
     workspaceDrag.current = null
     dragPoint.current = null
+    autoPanPointer.current = null
     dragging.current = false
     marquee.current = null
     link.current = null
@@ -130,6 +138,63 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
         ? current.map((node) => { const member = candidate.group.find((item) => item.id === node.id); return member ? { ...node, x: point.x + member.dx, y: point.y + member.dy } : node })
         : current.map((node) => node.id === candidate.id ? { ...node, x: point.x, y: point.y } : node))
     })
+  }
+  const autoPanBounds = (rect: DOMRect) => {
+    const dock = document.querySelector<HTMLElement>('[data-testid="workspace-dock"]')?.getBoundingClientRect()
+    const rail = document.querySelector<HTMLElement>('[data-testid="work-rail"]')?.getBoundingClientRect()
+    return {
+      left: Math.max(rect.left, dock ? dock.right + 10 : rect.left),
+      right: Math.min(rect.right, rail ? rail.left - 10 : rect.right),
+      top: rect.top,
+      bottom: rect.bottom,
+    }
+  }
+  const stopAutoPan = () => {
+    autoPanPointer.current = null
+    if (autoPanFrame.current !== null) {
+      cancelAnimationFrame(autoPanFrame.current)
+      autoPanFrame.current = null
+    }
+  }
+  const updateWorkspaceDragMembers = (item: WorkspaceDragCandidate, cameraDeltaX = 0, cameraDeltaY = 0) => {
+    const dx = (autoPanPointer.current ? autoPanPointer.current.x - item.startX : 0) / camera.zoom - cameraDeltaX / camera.zoom
+    const dy = (autoPanPointer.current ? autoPanPointer.current.y - item.startY : 0) / camera.zoom - cameraDeltaY / camera.zoom
+    const starts = new Map(item.members.map((member) => [member.id, member]))
+    setNodes((current) => current.map((node) => { const start = starts.get(node.id); return start ? { ...node, x: start.x + dx, y: start.y + dy } : node }))
+  }
+  const scheduleAutoPan = (pointer: { x: number; y: number }) => {
+    autoPanPointer.current = pointer
+    if (autoPanFrame.current !== null) return
+    const tick = () => {
+      autoPanFrame.current = null
+      const currentPointer = autoPanPointer.current
+      const rect = canvasRef.current?.getBoundingClientRect()
+      const active = Boolean(currentPointer && (dragging.current || workspaceDrag.current))
+      if (!currentPointer || !rect || !active) {
+        stopAutoPan()
+        return
+      }
+      const bounds = autoPanBounds(rect)
+      const edge = 96
+      const maxStep = 18
+      const strength = (distance: number) => Math.min(1, Math.max(0, (edge - distance) / edge))
+      const left = strength(currentPointer.x - bounds.left)
+      const right = strength(bounds.right - currentPointer.x)
+      const top = strength(currentPointer.y - bounds.top)
+      const bottom = strength(bounds.bottom - currentPointer.y)
+      const cameraDeltaX = (left - right) * maxStep
+      const cameraDeltaY = (top - bottom) * maxStep
+      if (cameraDeltaX || cameraDeltaY) {
+        setCamera((current) => ({ ...current, x: current.x + cameraDeltaX, y: current.y + cameraDeltaY }))
+        if (dragCandidate.current && dragPoint.current) {
+          dragPoint.current = { x: dragPoint.current.x - cameraDeltaX / camera.zoom, y: dragPoint.current.y - cameraDeltaY / camera.zoom }
+          scheduleDraggedNode()
+        }
+        if (workspaceDrag.current) updateWorkspaceDragMembers(workspaceDrag.current, cameraDeltaX, cameraDeltaY)
+      }
+      autoPanFrame.current = requestAnimationFrame(tick)
+    }
+    autoPanFrame.current = requestAnimationFrame(tick)
   }
   const scheduleWheel = () => {
     if (wheelFrame.current !== null) return
@@ -195,6 +260,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
     resizeCandidate.current = null
     workspaceDrag.current = null
     dragPoint.current = null
+    stopAutoPan()
     dragging.current = false
     setPanning(false)
     setDraggingId(null)
@@ -282,10 +348,9 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
     if (workspaceDrag.current) {
       const item = workspaceDrag.current
       item.moved = item.moved || Math.hypot(event.clientX - item.startX, event.clientY - item.startY) > 2
-      const dx = (event.clientX - item.startX) / camera.zoom
-      const dy = (event.clientY - item.startY) / camera.zoom
-      const starts = new Map(item.members.map((member) => [member.id, member]))
-      setNodes((current) => current.map((node) => { const start = starts.get(node.id); return start ? { ...node, x: start.x + dx, y: start.y + dy } : node }))
+      autoPanPointer.current = { x: event.clientX, y: event.clientY }
+      updateWorkspaceDragMembers(item)
+      scheduleAutoPan({ x: event.clientX, y: event.clientY })
       return
     }
     if (pan.current) {
@@ -312,6 +377,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
         const point = toWorld(event.clientX, event.clientY, rect)
         dragPoint.current = { x: point.x - candidate.offsetX, y: point.y - candidate.offsetY }
         scheduleDraggedNode()
+        scheduleAutoPan({ x: event.clientX, y: event.clientY })
       }
     }
     if (link.current) {
