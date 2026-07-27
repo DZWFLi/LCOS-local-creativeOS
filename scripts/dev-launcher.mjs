@@ -273,7 +273,7 @@ function printStatus() {
   console.log(`Working tree: ${info.status ? 'dirty' : 'clean'}`)
   if (info.status) console.log(info.status)
   console.log(`State file: ${existsSync(STATE_FILE) ? STATE_FILE : '(none)'}`)
-  console.log(`Recorded PIDs: ${state ? JSON.stringify({ corePid: state.corePid, webPid: state.webPid, browserPid: state.browserPid }) : '(none)'}`)
+  console.log(`Recorded PIDs: ${state ? JSON.stringify({ launcherPid: state.launcherPid, corePid: state.corePid, webPid: state.webPid, browserPid: state.browserPid }) : '(none)'}`)
   console.log('Ports:')
   for (const port of [WEB_PORT, CORE_PORT]) {
     const owner = owners.find((item) => Number(item.LocalPort) === port)
@@ -320,7 +320,7 @@ async function open() {
   assertPortsFreeOrOwned()
   const core = spawnLogged('dev:local-core', 'local-core')
   const web = spawnLogged('dev:web', 'web')
-  const state = { cwd: process.cwd(), version, branch: info.branch, commit: info.commit, startedAt: new Date().toISOString(), corePid: core.pid, webPid: web.pid, browserPid: null }
+  const state = { cwd: process.cwd(), version, branch: info.branch, commit: info.commit, startedAt: new Date().toISOString(), launcherPid: process.pid, corePid: core.pid, webPid: web.pid, browserPid: null }
   writeState(state)
   try {
     await waitForHttp(CORE_HEALTH_URL, 30_000)

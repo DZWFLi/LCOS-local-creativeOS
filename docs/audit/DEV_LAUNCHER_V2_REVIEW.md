@@ -8,6 +8,7 @@ Date: 2026-07-27
 - Added `npm run dev:target`.
 - Updated `scripts/dev-launcher.mjs` to validate target path and branch.
 - Updated managed-process detection so child node processes of recorded npm PIDs are treated as LCOS-owned.
+- Runtime state now records `launcherPid`, `corePid`, `webPid`, and `browserPid`.
 - Added a thin repository CMD entry at `scripts/open-lcos-dev.cmd`.
 - Added an exceptional stop helper at `scripts/stop-lcos-dev.cmd`.
 
