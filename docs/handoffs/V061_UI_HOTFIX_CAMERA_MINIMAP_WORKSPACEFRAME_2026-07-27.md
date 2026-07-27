@@ -102,14 +102,14 @@ Fix:
 
 - Added a native non-passive capture `wheel` listener scoped to `[data-testid="creative-os-app"]` to prevent browser page zoom for `Ctrl/Meta + wheel`.
 - Kept Canvas `Ctrl/Meta + wheel` as Canvas camera zoom.
-- Changed the minimap fit action into an explicit labeled `定位内容` button.
+- Kept the minimap fit action as a compact icon button with `aria-label` / hover title `定位内容`.
 
 Verification:
 
 ```text
 npm run typecheck --workspace @local-creative-os/web
 npm run check:v061-static
-Browser: Ctrl+wheel kept browser scale at 1, kept tabbar/dock/rail/HUD/minimap rects stable, changed canvas zoom 0.94 -> 1.55, and showed 定位内容.
+Browser: Ctrl+wheel kept browser scale at 1, kept tabbar/dock/rail/HUD/minimap rects stable, changed canvas zoom 0.94 -> 1.55, and exposed the minimap locate action.
 ```
 
 ## Not Done
