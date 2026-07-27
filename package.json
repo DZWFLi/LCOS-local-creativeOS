@@ -15,6 +15,7 @@
     "dev:open": "node scripts/dev-launcher.mjs open",
     "dev:stop": "node scripts/dev-launcher.mjs stop",
     "dev:status": "node scripts/dev-launcher.mjs status",
+    "dev:target": "node scripts/dev-launcher.mjs target",
     "check:v061-static": "node scripts/validate-v061-static.mjs",
     "check:local-core": "npm run check --workspace @local-creative-os/local-core",
     "build": "npm run build --workspace @local-creative-os/web",

@@ -12,6 +12,7 @@ const STATE_FILE = join(RUNTIME_DIR, 'dev-launcher-state.json')
 const LEGACY_DEV_STACK_PID_FILE = join(RUNTIME_DIR, 'dev-stack.pid')
 const PROFILE_DIR = join(RUNTIME_DIR, 'browser-profile')
 const LOG_DIR = join(RUNTIME_DIR, 'logs')
+const TARGET_FILE = join(process.cwd(), '.dev-launcher', 'target.json')
 
 const command = process.argv[2] ?? 'status'
 
@@ -113,6 +114,48 @@ function ownedPidsFromState() {
   return pids.filter((pid) => Number.isInteger(pid))
 }
 
+function descendantPids(rootPids) {
+  const roots = new Set(rootPids.filter((pid) => Number.isInteger(pid)))
+  if (roots.size === 0 || process.platform !== 'win32') return []
+  const result = run('powershell.exe', ['-NoProfile', '-Command', [
+    'Get-CimInstance Win32_Process |',
+    'Select-Object ProcessId,ParentProcessId |',
+    'ConvertTo-Json -Compress',
+  ].join(' ')])
+  const raw = result.stdout.trim()
+  if (!raw) return []
+  let rows = []
+  try {
+    const parsed = JSON.parse(raw)
+    rows = Array.isArray(parsed) ? parsed : [parsed]
+  } catch {
+    return []
+  }
+  const childrenByParent = new Map()
+  for (const row of rows) {
+    const parent = Number(row.ParentProcessId)
+    const pid = Number(row.ProcessId)
+    if (!Number.isInteger(parent) || !Number.isInteger(pid)) continue
+    const list = childrenByParent.get(parent) ?? []
+    list.push(pid)
+    childrenByParent.set(parent, list)
+  }
+  const all = new Set()
+  const stack = [...roots]
+  while (stack.length) {
+    const pid = stack.pop()
+    if (!Number.isInteger(pid) || all.has(pid)) continue
+    all.add(pid)
+    for (const child of childrenByParent.get(pid) ?? []) stack.push(child)
+  }
+  return [...all]
+}
+
+function ownedPidSet() {
+  const roots = ownedPidsFromState()
+  return new Set([...roots, ...descendantPids(roots)])
+}
+
 function stopOwned({ quiet = false } = {}) {
   const pids = ownedPidsFromState()
   for (const pid of pids) killTree(pid)
@@ -124,7 +167,7 @@ function stopOwned({ quiet = false } = {}) {
 function assertPortsFreeOrOwned() {
   const owners = portOwners()
   if (owners.length === 0) return
-  const owned = new Set(ownedPidsFromState())
+  const owned = ownedPidSet()
   const foreign = owners.filter((owner) => !owned.has(Number(owner.OwningProcess)))
   if (foreign.length > 0) {
     console.error('Port conflict: refusing to kill non-LCOS processes.')
@@ -217,7 +260,14 @@ function printStatus() {
   const version = packageVersion()
   const owners = portOwners()
   const state = readJson(STATE_FILE)
+  const target = readJson(TARGET_FILE)
   console.log(`Local Creative OS v${version}`)
+  if (target) {
+    console.log(`Target version: ${target.version ?? '(unspecified)'}`)
+    console.log(`Target worktree: ${target.repoPath ?? process.cwd()}`)
+    console.log(`Expected branch: ${target.expectedBranch ?? '(unspecified)'}`)
+    if (target.lastTestedCommit) console.log(`Last tested commit: ${target.lastTestedCommit}`)
+  }
   console.log(`Branch: ${info.branch}`)
   console.log(`Commit: ${info.commit}`)
   console.log(`Working tree: ${info.status ? 'dirty' : 'clean'}`)
@@ -231,6 +281,27 @@ function printStatus() {
   }
 }
 
+function assertTarget(info) {
+  const target = readJson(TARGET_FILE)
+  if (!target) return
+  const expectedPath = target.repoPath ? target.repoPath.toLowerCase() : null
+  if (expectedPath && process.cwd().toLowerCase() !== expectedPath) {
+    console.error('Refusing to start from unexpected target worktree.')
+    console.error(`Expected: ${target.repoPath}`)
+    console.error(`Actual:   ${process.cwd()}`)
+    process.exit(1)
+  }
+  if (target.expectedBranch && info.branch !== target.expectedBranch) {
+    console.error('Refusing to start from unexpected branch.')
+    console.error(`Expected: ${target.expectedBranch}`)
+    console.error(`Actual:   ${info.branch}`)
+    process.exit(1)
+  }
+  if (target.lastTestedCommit && target.lastTestedCommit !== info.commit) {
+    console.log(`NEW BUILD: ${target.lastTestedCommit} -> ${info.commit}`)
+  }
+}
+
 async function open() {
   ensureRuntimeDir()
   const info = gitInfo()
@@ -239,6 +310,7 @@ async function open() {
   console.log(`Branch: ${info.branch}`)
   console.log(`Commit: ${info.commit}`)
   console.log(`Working tree: ${info.status ? 'dirty' : 'clean'}`)
+  assertTarget(info)
   if (info.status) {
     console.error('Refusing to start from a dirty worktree.')
     console.error(info.status)
@@ -280,7 +352,12 @@ async function open() {
 if (command === 'open') await open()
 else if (command === 'stop') stopOwned()
 else if (command === 'status') printStatus()
+else if (command === 'target') {
+  const info = gitInfo()
+  assertTarget(info)
+  printStatus()
+}
 else {
-  console.error('Usage: npm run dev:open | dev:stop | dev:status')
+  console.error('Usage: npm run dev:open | dev:stop | dev:status | dev:target')
   process.exit(1)
 }
