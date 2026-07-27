@@ -34,6 +34,9 @@ import './runtime-diagnostics.css'
 
 const client = createLocalCoreClient()
 const REFRESH_INTERVAL_MS = 5_000
+const DEV_VERSION = import.meta.env.VITE_LCOS_VERSION
+const DEV_BRANCH = import.meta.env.VITE_LCOS_BRANCH
+const DEV_COMMIT = import.meta.env.VITE_LCOS_COMMIT
 
 interface DiagnosticsSnapshot {
   readonly health?: RuntimeCall<HealthStatus>
@@ -267,6 +270,9 @@ export function RuntimeDiagnosticsPage() {
     </header>
 
     <section className="diagnostics-origin-strip" aria-label="Data source status">
+      <span>Dev build</span><span className="diagnostics-source source-dev">v{DEV_VERSION}</span>
+      <span className="diagnostics-dev-ref">{DEV_BRANCH}</span>
+      <span className="diagnostics-dev-ref">{DEV_COMMIT}</span>
       <span>Canvas data</span><SourceBadge origin="fixture" />
       <span>Diagnostics data</span><SourceBadge origin="runtime" />
       <small>正式 Canvas 仍未迁移；下方 disposable 项目来自 SQLite Runtime。</small>
