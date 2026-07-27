@@ -2,7 +2,7 @@
 chcp 65001 >nul
 setlocal
 
-set "LCOS_REPO=E:\Codex 项目\OS开发\.worktrees\phase3-stage1-4"
+set "LCOS_REPO=%~dp0.."
 
 if not exist "%LCOS_REPO%\package.json" (
   echo [LCOS] Repository not found:

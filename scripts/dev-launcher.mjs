@@ -284,8 +284,9 @@ function printStatus() {
 function assertTarget(info) {
   const target = readJson(TARGET_FILE)
   if (!target) return
-  const expectedPath = target.repoPath ? target.repoPath.toLowerCase() : null
-  if (expectedPath && process.cwd().toLowerCase() !== expectedPath) {
+  const normalizePath = (value) => value.replaceAll('\\', '/').replace(/\/+$/, '').toLowerCase()
+  const expectedPath = target.repoPath ? normalizePath(target.repoPath) : null
+  if (expectedPath && normalizePath(process.cwd()) !== expectedPath) {
     console.error('Refusing to start from unexpected target worktree.')
     console.error(`Expected: ${target.repoPath}`)
     console.error(`Actual:   ${process.cwd()}`)
