@@ -26,6 +26,16 @@ describe('v0.6.1 canvas interaction architecture', () => {
     expect(app).toContain('className="canvas-hud"')
   })
 
+  it('keeps anchor create menu outside the transformed CanvasWorld', () => {
+    const worldIndex = canvas.indexOf('data-testid="canvas-world"')
+    const worldEndIndex = canvas.indexOf('{marqueeRect &&', worldIndex)
+    const menuIndex = canvas.indexOf('data-testid="anchor-create-menu"', worldIndex)
+    expect(worldIndex).toBeGreaterThan(-1)
+    expect(menuIndex).toBeGreaterThan(worldIndex)
+    expect(menuIndex).toBeLessThan(worldEndIndex)
+    expect(canvas.slice(worldIndex, menuIndex)).toContain('</div>')
+  })
+
   it('supports resize, workspace frame drag and active-scope minimap nodes', () => {
     expect(canvas).toContain('className="resize-handle"')
     expect(canvas).toContain('workspace-frame-header')
