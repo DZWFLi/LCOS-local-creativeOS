@@ -13,6 +13,7 @@ dist-ssr
 *.local
 .vite-dev*.log
 .workbuddy/
+.worktrees/
 public/dev-test-report.json
 apps/local-core/.data/
 # Disposable artifact from an early Phase 2 Lite cwd-path validation.
