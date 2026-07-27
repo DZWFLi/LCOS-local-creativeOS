@@ -12,6 +12,7 @@ dist
 dist-ssr
 *.local
 .vite-dev*.log
+.codex-runtime/
 .workbuddy/
 public/dev-test-report.json
 apps/local-core/.data/
