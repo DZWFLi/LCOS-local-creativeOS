@@ -24,6 +24,6 @@ describe('v0.5.3 surface calibration guards', () => {
     expect(surface).toContain('.compact-workspace-rail')
     expect(surface).toContain('.pending-return-zone')
     expect(surface).toContain('.density-options')
-    expect(surface).not.toContain('.resize-handle')
+    expect(surface).toContain('.app-shell.v061 .canvas-node .resize-handle')
   })
 })

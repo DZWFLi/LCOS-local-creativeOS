@@ -67,9 +67,8 @@ export interface Workspace {
   label: string
   intent: WorkspaceIntent
   scopeId: string
-  camera: Camera
+  camera: Camera // legacy v0.6 viewport field; v0.6.1 navigation no longer reads or continuously writes it
   visibleLayers: NodeLayer[]
-  /** ArtifactView ids focused by this semantic viewport. */
   focusedViewIds: string[]
   contextPolicy: 'workspace-related' | 'selection-only'
   createdAt: string
@@ -108,14 +107,29 @@ export interface ProjectPackage {
   rootScopeId?: string
 }
 
+export interface ProjectNavigationState {
+  projectId: string
+  camera: Camera
+  updatedAt: string
+}
+
+export interface WorkspaceFrameVM {
+  workspaceId: string
+  label: string
+  scopeId: string
+  memberViewIds: string[]
+  bounds: { x: number; y: number; width: number; height: number }
+  active: boolean
+}
+
 export interface PersistedPrototypeState {
-  version: 9
+  version: number
   projectId: string
   nodes: CanvasNode[]
   edges: CanvasEdge[]
   workspaces: Workspace[]
   scopes: CanvasScope[]
-  activeWorkspaceId: string
+  activeWorkspaceId: string | null
   activeScopeId: string
   workRail: WorkRailPreferences
 }

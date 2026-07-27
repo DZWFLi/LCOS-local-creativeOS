@@ -254,15 +254,13 @@ export function mapGraphToState(graph: ProjectGraphSnapshot, projectId: string):
     : workspaces.map((ws) => ({ id: 'scope-root', label: ws.label, kind: 'root' as const, parentScopeId: null, camera: ws.camera }))
 
   const defaultCamera = scopes[0]?.camera ?? { x: 0, y: 0, zoom: 1 }
-  const firstWkid = workspaces[0]?.id ?? 'workspace-main'
-
   const workRail: WorkRailPreferences = { pinned: true, collapsed: false, width: 350 }
 
   return {
-    version: 9, projectId, nodes, edges,
+    version: 10, projectId, nodes, edges,
     workspaces: workspaces.length > 0 ? workspaces : [defaultWorkspace()],
     scopes: scopes.length > 0 ? scopes : [{ id: 'scope-root', label: 'Root', kind: 'root', parentScopeId: null, camera: defaultCamera }],
-    activeWorkspaceId: firstWkid,
+    activeWorkspaceId: null,
     activeScopeId: scopes[0]?.id ?? 'scope-root',
     workRail,
   }

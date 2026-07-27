@@ -1,7 +1,7 @@
 {
   "name": "local-creative-os",
   "private": true,
-  "version": "0.6.0",
+  "version": "0.6.1",
   "type": "module",
   "workspaces": [
     "apps/*",
@@ -12,6 +12,7 @@
     "dev:web": "npm run dev --workspace @local-creative-os/web",
     "dev:local-core": "npm run dev --workspace @local-creative-os/local-core",
     "dev:stack": "node scripts/dev-stack.mjs",
+    "check:v061-static": "node scripts/validate-v061-static.mjs",
     "check:local-core": "npm run check --workspace @local-creative-os/local-core",
     "build": "npm run build --workspace @local-creative-os/web",
     "lint": "npm run lint --workspace @local-creative-os/web && npm run lint --workspace @local-creative-os/local-core && npm run lint --workspace @local-creative-os/domain && npm run lint --workspace @local-creative-os/contracts",

@@ -3038,3 +3038,143 @@ body,
 
 .v06-breadcrumbs button[aria-current="page"] { color: var(--v06-text); font-weight: 760; cursor: default; }
 .v06-breadcrumbs button:disabled { opacity: 1; }
+
+/* -------------------------------------------------------------------------- */
+/* v0.6.1 · spatial workspaces, screen-space HUD, resize and project minimap  */
+/* -------------------------------------------------------------------------- */
+
+.app-shell.v061 .canvas-hud {
+  position: absolute;
+  z-index: 24;
+  inset: 0 var(--work-rail-width) 0 0;
+  pointer-events: none;
+}
+.app-shell.v061 .canvas-hud .minimap { pointer-events: auto; }
+.app-shell.v061 .canvas-world { transform-origin: 0 0; }
+
+.app-shell.v061 .workspace-row { gap: 3px; }
+.app-shell.v061 .workspace-locate {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  color: rgba(29,45,60,.48);
+  background: transparent;
+}
+.app-shell.v061 .workspace-locate:hover,
+.app-shell.v061 .workspace-locate:focus-visible {
+  color: #7047d8;
+  background: rgba(112,71,216,.07);
+}
+.app-shell.v061 .workspace.overview.active {
+  color: #1d2d3c;
+  font-weight: 760;
+  border-color: rgba(69,91,112,.12);
+  background: rgba(255,255,255,.92);
+  box-shadow: 0 5px 14px rgba(29,45,60,.055), inset 0 1px 0 #fff;
+}
+
+.app-shell.v061 .workspace-frame {
+  position: absolute;
+  z-index: 0;
+  border: 1px solid rgba(69,91,112,.13);
+  border-radius: 24px;
+  background: rgba(255,255,255,.055);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.28);
+  pointer-events: none;
+  transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+.app-shell.v061 .workspace-frame.active {
+  border-color: rgba(112,71,216,.34);
+  background: rgba(112,71,216,.032);
+  box-shadow: 0 0 0 3px rgba(112,71,216,.055), inset 0 0 0 1px rgba(255,255,255,.6);
+}
+.app-shell.v061 .workspace-frame.dragging { transition: none; }
+.app-shell.v061 .workspace-frame-header {
+  position: absolute;
+  left: 14px;
+  top: 10px;
+  min-height: 25px;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 9px;
+  border: 1px solid rgba(69,91,112,.10);
+  border-radius: 9px;
+  color: rgba(29,45,60,.58);
+  background: rgba(255,255,255,.94);
+  box-shadow: 0 4px 12px rgba(29,45,60,.055);
+  font-size: 9px;
+  font-weight: 760;
+  cursor: grab;
+  pointer-events: auto;
+  user-select: none;
+}
+.app-shell.v061 .workspace-frame-header:active { cursor: grabbing; }
+.app-shell.v061 .workspace-frame-header b {
+  color: rgba(29,45,60,.38);
+  font-size: 8px;
+  font-weight: 650;
+}
+.app-shell.v061 .workspace-frame.active .workspace-frame-header {
+  color: #6842cb;
+  border-color: rgba(112,71,216,.20);
+  background: rgba(250,248,255,.97);
+}
+.app-shell.v061 .canvas-node.workspace-active-member > .artifact-visual,
+.app-shell.v061 .canvas-node.workspace-active-member > .context-visual,
+.app-shell.v061 .canvas-node.workspace-active-member > .process-visual,
+.app-shell.v061 .canvas-node.workspace-active-member > .decision-visual,
+.app-shell.v061 .canvas-node.workspace-active-member > .note-visual {
+  box-shadow: 0 14px 34px rgba(29,45,60,.09), 0 0 0 2px rgba(112,71,216,.10), inset 0 1px 0 #fff;
+}
+
+.app-shell.v061 .canvas-node .resize-handle {
+  z-index: 18;
+  width: 18px;
+  height: 18px;
+  right: 5px;
+  bottom: 5px;
+  opacity: .74;
+}
+.app-shell.v061 .canvas-node.resizing .resize-handle { opacity: 1; }
+.app-shell.v061 .canvas-node .node-preview-slot,
+.app-shell.v061 .canvas-node .preview-surface { min-width: 0; min-height: 0; }
+.app-shell.v061 .canvas-node .node-preview-slot img,
+.app-shell.v061 .canvas-node .preview-surface img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.app-shell.v061 .map-workspace {
+  position: absolute;
+  z-index: 0;
+  border: 1px solid rgba(112,71,216,.15);
+  border-radius: 3px;
+  background: rgba(112,71,216,.025);
+  pointer-events: none;
+}
+.app-shell.v061 .map-workspace.active {
+  border-color: rgba(112,71,216,.46);
+  background: rgba(112,71,216,.06);
+}
+.app-shell.v061 .map i { z-index: 1; }
+.app-shell.v061 .map b[data-camera-rect="true"] {
+  z-index: 3;
+  min-width: 8px;
+  min-height: 6px;
+  cursor: grab;
+  pointer-events: auto;
+}
+.app-shell.v061 .map b[data-camera-rect="true"]:active { cursor: grabbing; }
+
+@media (prefers-reduced-motion: reduce) {
+  .app-shell.v061 .workspace-frame { transition: none; }
+}
+
+@media (max-width: 1366px) {
+  .app-shell.v061 .minimap { transform: none; }
+}
