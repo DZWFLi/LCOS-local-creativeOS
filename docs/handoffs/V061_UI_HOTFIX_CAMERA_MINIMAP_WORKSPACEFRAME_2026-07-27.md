@@ -66,7 +66,30 @@ Build: PASS
 
 ## Browser Verification
 
-Pending after commit, because `dev:open` intentionally refuses dirty worktrees.
+Verified after commit `134f3bd` with `npm run dev:open` against `http://127.0.0.1:5173/`.
+
+```text
+statusBefore: saved
+statusAfterCamera: saved
+zoomIn: 0.9276986844325562
+zoomOut: 0.35
+sceneScopeId: scope-root
+sceneWorkspaceId: understand
+overviewCanvasFrames: 0
+overviewMiniFrames: 0
+activeCanvasFrames: 1
+activeMiniFrames: 1
+minimapNodeScopes: [scope-root]
+uiRectsStable: true
+```
+
+Browser assertions:
+
+- Camera zoom did not change `tabbar`, `workspace-dock`, `work-rail`, `canvas-hud`, or `project-minimap` client rects.
+- Camera zoom did not move save status into `saving`.
+- Project Overview rendered 0 canvas workspace frames and 0 minimap workspace frames.
+- Active workspace rendered 1 canvas workspace frame and 1 minimap workspace frame.
+- Minimap nodes all matched the active scene scope.
 
 ## Not Done
 
