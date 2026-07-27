@@ -32,4 +32,8 @@ describe('canvas geometry', () => {
     expect((300 - next.y) / next.zoom).toBeCloseTo(250)
     expect(next.zoom).toBeGreaterThan(camera.zoom)
   })
+  it('allows zooming out to the 1 percent overview floor', () => {
+    const next = applyWheelGesture({ x: 0, y: 0, zoom: .02 }, { deltaX: 0, deltaY: 1000, zoom: true, anchorX: 400, anchorY: 300 })
+    expect(next.zoom).toBe(.01)
+  })
 })

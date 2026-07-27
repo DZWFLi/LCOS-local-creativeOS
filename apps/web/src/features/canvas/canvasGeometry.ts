@@ -9,7 +9,7 @@ const NO_INSETS: SafeInsets = { left: 0, right: 0, top: 0, bottom: 0 }
 
 export function applyWheelGesture(camera: Camera, gesture: WheelGesture): Camera {
   if (!gesture.zoom) return { ...camera, x: camera.x - gesture.deltaX * TOUCHPAD_PAN_SENSITIVITY, y: camera.y - gesture.deltaY * TOUCHPAD_PAN_SENSITIVITY }
-  const zoom = Math.max(.38, Math.min(1.55, camera.zoom * Math.exp(-gesture.deltaY * .01)))
+  const zoom = Math.max(.01, Math.min(1.55, camera.zoom * Math.exp(-gesture.deltaY * .01)))
   const worldX = (gesture.anchorX - camera.x) / camera.zoom
   const worldY = (gesture.anchorY - camera.y) / camera.zoom
   return { x: gesture.anchorX - worldX * zoom, y: gesture.anchorY - worldY * zoom, zoom }
@@ -28,7 +28,7 @@ export function getSelectionBounds(nodes: CanvasNode[], selectedIds: string[]): 
 export function fitBounds(bounds: Bounds, viewportWidth: number, viewportHeight: number, padding = 74, insets: SafeInsets = NO_INSETS): Camera {
   const availableWidth = Math.max(1, viewportWidth - insets.left - insets.right)
   const availableHeight = Math.max(1, viewportHeight - insets.top - insets.bottom)
-  const zoom = Math.max(.38, Math.min(1.55, Math.min((availableWidth - padding * 2) / Math.max(1, bounds.width), (availableHeight - padding * 2) / Math.max(1, bounds.height))))
+  const zoom = Math.max(.01, Math.min(1.55, Math.min((availableWidth - padding * 2) / Math.max(1, bounds.width), (availableHeight - padding * 2) / Math.max(1, bounds.height))))
   return {
     x: insets.left + availableWidth / 2 - (bounds.x + bounds.width / 2) * zoom,
     y: insets.top + availableHeight / 2 - (bounds.y + bounds.height / 2) * zoom,
