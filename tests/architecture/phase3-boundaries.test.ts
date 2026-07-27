@@ -1,4 +1,4 @@
-import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { extname, join, relative, resolve } from 'node:path'
 
@@ -8,6 +8,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { SqliteMetadataRepository } from '../../apps/local-core/src/metadata-repository'
 import { FileObservationService } from '../../apps/local-core/src/file-observation-service'
 import { FileRegistryService, TrustedFileSelectionRegistry } from '../../apps/local-core/src/file-registry-service'
+import { PreviewCacheService } from '../../apps/local-core/src/preview-cache-service'
+import { RendererRegistry } from '../../apps/local-core/src/renderer-registry'
 
 const REPOSITORY_ROOT = resolve(import.meta.dirname, '../..')
 const temporaryDirectories: string[] = []
@@ -37,7 +39,7 @@ function projectSnapshot(): ProjectGraphSnapshot {
   const revisionId = 'revision-initial' as ProjectGraphSnapshot['artifactRevisions'][number]['id']
   const fileRecordId = 'file-source' as ProjectGraphSnapshot['fileRecords'][number]['id']
   return {
-    schemaVersion: 4,
+    schemaVersion: 5,
     graphVersion: 1 as GraphVersion,
     project: {
       id: projectId,
@@ -144,7 +146,38 @@ describe('Phase 3 architecture boundaries', () => {
     expect(revision?.status).toBe('current')
     expect(revision?.fileRecordId).toBe(snapshot.fileRecords[0]?.id)
   })
-  it.todo('ARCH-P3-004 deleting Preview cache preserves Project Truth')
+  it('ARCH-P3-004 deleting Preview cache preserves Project Truth', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'arch-p3-preview-'))
+    temporaryDirectories.push(directory)
+    const sourcePath = join(directory, 'source.md')
+    writeFileSync(sourcePath, '# source\n', 'utf8')
+    const repository = new SqliteMetadataRepository(join(directory, 'metadata.sqlite'), { disposableOnly: true })
+    const snapshot = projectSnapshot()
+    repository.save({
+      ...snapshot,
+      project: { ...snapshot.project, rootPath: directory },
+      artifacts: [],
+      artifactViews: [],
+      artifactRevisions: [],
+      fileRecords: [],
+    })
+    const selections = new TrustedFileSelectionRegistry()
+    const registered = await new FileRegistryService(repository, selections).registerSource(
+      snapshot.project.id,
+      { selectionId: selections.registerTrustedPath(sourcePath).id },
+    )
+    const before = repository.get(String(snapshot.project.id))
+    const preview = await new PreviewCacheService(repository, { cacheRoot: join(directory, 'cache') })
+      .publishReadyPreview(registered.revision.id, 'thumbnail', Buffer.from('preview'))
+
+    await new PreviewCacheService(repository, { cacheRoot: join(directory, 'cache') }).deleteCacheFile(preview)
+    repository.deletePreviewRecords(String(snapshot.project.id))
+    const after = repository.get(String(snapshot.project.id))
+    repository.close()
+
+    expect(existsSync(preview.cachePath)).toBe(false)
+    expect(after).toEqual(before)
+  })
 
   it('ARCH-P3-005 browser production clients expose no arbitrary-path register/preview API', () => {
     const browserRuntime = productionSources('apps/web/src/runtime')
@@ -187,11 +220,87 @@ describe('Phase 3 architecture boundaries', () => {
     expect(result.revisionCreated).toBe(false)
     expect(afterRevisionIds).toEqual(beforeRevisionIds)
   })
-  it.todo('ARCH-P3-007 Preview jobs do not change semanticGraphVersion')
-  it.todo('ARCH-P3-008 identical source hash, renderer/version, and profile reuse cache')
-  it.todo('ARCH-P3-009 renderer version changes produce a cache miss')
+  it('ARCH-P3-007 Preview jobs do not change semanticGraphVersion', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'arch-p3-preview-version-'))
+    temporaryDirectories.push(directory)
+    const sourcePath = join(directory, 'source.md')
+    writeFileSync(sourcePath, '# source\n', 'utf8')
+    const repository = new SqliteMetadataRepository(join(directory, 'metadata.sqlite'), { disposableOnly: true })
+    const snapshot = projectSnapshot()
+    repository.save({ ...snapshot, project: { ...snapshot.project, rootPath: directory }, artifacts: [], artifactViews: [], artifactRevisions: [], fileRecords: [] })
+    const selections = new TrustedFileSelectionRegistry()
+    const registered = await new FileRegistryService(repository, selections).registerSource(snapshot.project.id, { selectionId: selections.registerTrustedPath(sourcePath).id })
+    const beforeGraphVersion = repository.get(String(snapshot.project.id))?.graphVersion
+
+    await new PreviewCacheService(repository, { cacheRoot: join(directory, 'cache') })
+      .publishReadyPreview(registered.revision.id, 'thumbnail', Buffer.from('preview'))
+    const afterGraphVersion = repository.get(String(snapshot.project.id))?.graphVersion
+    repository.close()
+
+    expect(afterGraphVersion).toBe(beforeGraphVersion)
+  })
+  it('ARCH-P3-008 identical source hash, renderer/version, and profile reuse cache', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'arch-p3-preview-reuse-'))
+    temporaryDirectories.push(directory)
+    const sourcePath = join(directory, 'source.md')
+    writeFileSync(sourcePath, '# source\n', 'utf8')
+    const repository = new SqliteMetadataRepository(join(directory, 'metadata.sqlite'), { disposableOnly: true })
+    const snapshot = projectSnapshot()
+    repository.save({ ...snapshot, project: { ...snapshot.project, rootPath: directory }, artifacts: [], artifactViews: [], artifactRevisions: [], fileRecords: [] })
+    const selections = new TrustedFileSelectionRegistry()
+    const registered = await new FileRegistryService(repository, selections).registerSource(snapshot.project.id, { selectionId: selections.registerTrustedPath(sourcePath).id })
+    const service = new PreviewCacheService(repository, { cacheRoot: join(directory, 'cache') })
+
+    const first = await service.publishReadyPreview(registered.revision.id, 'thumbnail', Buffer.from('one'))
+    const second = await service.publishReadyPreview(registered.revision.id, 'thumbnail', Buffer.from('two'))
+    repository.close()
+
+    expect(second.cacheKey).toBe(first.cacheKey)
+    expect(second.id).toBe(first.id)
+  })
+
+  it('ARCH-P3-009 renderer version changes produce a cache miss', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'arch-p3-preview-miss-'))
+    temporaryDirectories.push(directory)
+    const sourcePath = join(directory, 'source.md')
+    writeFileSync(sourcePath, '# source\n', 'utf8')
+    const repository = new SqliteMetadataRepository(join(directory, 'metadata.sqlite'), { disposableOnly: true })
+    const snapshot = projectSnapshot()
+    repository.save({ ...snapshot, project: { ...snapshot.project, rootPath: directory }, artifacts: [], artifactViews: [], artifactRevisions: [], fileRecords: [] })
+    const selections = new TrustedFileSelectionRegistry()
+    const registered = await new FileRegistryService(repository, selections).registerSource(snapshot.project.id, { selectionId: selections.registerTrustedPath(sourcePath).id })
+    const cacheRoot = join(directory, 'cache')
+    const first = await new PreviewCacheService(repository, {
+      cacheRoot,
+      rendererRegistry: new RendererRegistry([{ id: 'markdown', version: '1', supportedMimeTypes: ['text/markdown'], previewProfiles: ['thumbnail'], outputMimeType: 'text/plain' }]),
+    }).publishReadyPreview(registered.revision.id, 'thumbnail', Buffer.from('one'))
+    const second = await new PreviewCacheService(repository, {
+      cacheRoot,
+      rendererRegistry: new RendererRegistry([{ id: 'markdown', version: '2', supportedMimeTypes: ['text/markdown'], previewProfiles: ['thumbnail'], outputMimeType: 'text/plain' }]),
+    }).publishReadyPreview(registered.revision.id, 'thumbnail', Buffer.from('two'))
+    repository.close()
+
+    expect(second.cacheKey).not.toBe(first.cacheKey)
+  })
   it.todo('ARCH-P3-010 worker crash or cancellation cannot publish ready PreviewRecord')
-  it.todo('ARCH-P3-011 unsupported formats cannot report successful Preview')
+  it('ARCH-P3-011 unsupported formats cannot report successful Preview', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'arch-p3-preview-unsupported-'))
+    temporaryDirectories.push(directory)
+    const sourcePath = join(directory, 'source.bin')
+    writeFileSync(sourcePath, 'binary-ish', 'utf8')
+    const repository = new SqliteMetadataRepository(join(directory, 'metadata.sqlite'), { disposableOnly: true })
+    const snapshot = projectSnapshot()
+    repository.save({ ...snapshot, project: { ...snapshot.project, rootPath: directory }, artifacts: [], artifactViews: [], artifactRevisions: [], fileRecords: [] })
+    const selections = new TrustedFileSelectionRegistry()
+    const registered = await new FileRegistryService(repository, selections).registerSource(snapshot.project.id, { selectionId: selections.registerTrustedPath(sourcePath).id })
+
+    const record = await new PreviewCacheService(repository, { cacheRoot: join(directory, 'cache') })
+      .publishReadyPreview(registered.revision.id, 'thumbnail', Buffer.from('ignored'))
+    repository.close()
+
+    expect(record.status).toBe('unsupported')
+    expect(record.status).not.toBe('ready')
+  })
 
   it('ARCH-P3-012 ReactFlow.toObject is absent from production persistence paths', () => {
     const persistenceSources = productionSources(

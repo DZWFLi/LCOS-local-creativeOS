@@ -18,6 +18,8 @@ import type {
   NoteId,
   Project,
   ProjectId,
+  PreviewRecord,
+  PreviewRecordId,
   Relation,
   RelationId,
   Scope,
@@ -96,10 +98,11 @@ export class SqliteMetadataRepository {
   #migrate(): void {
     const version = this.#database.prepare('PRAGMA user_version').get() as { user_version: number }
     if (version.user_version === 0) { this.#migrate_001(); return }
-    if (version.user_version === 1) { this.#migrate_002_from_v1(); this.#migrate_004_from_v3(); return }
-    if (version.user_version === 2) { this.#migrate_003_from_v2(); this.#migrate_004_from_v3(); return }
-    if (version.user_version === 3) { this.#migrate_004_from_v3(); return }
-    // v4 = current
+    if (version.user_version === 1) { this.#migrate_002_from_v1(); this.#migrate_004_from_v3(); this.#migrate_005_from_v4(); return }
+    if (version.user_version === 2) { this.#migrate_003_from_v2(); this.#migrate_004_from_v3(); this.#migrate_005_from_v4(); return }
+    if (version.user_version === 3) { this.#migrate_004_from_v3(); this.#migrate_005_from_v4(); return }
+    if (version.user_version === 4) { this.#migrate_005_from_v4(); return }
+    // v5 = current
   }
 
   #migrate_001(): void {
@@ -165,7 +168,15 @@ export class SqliteMetadataRepository {
         size INTEGER NOT NULL, modified_at TEXT NOT NULL, mime_type TEXT NOT NULL,
         availability TEXT NOT NULL, observed_at TEXT NOT NULL
       );
-      PRAGMA user_version = 4;
+      CREATE TABLE preview_records (
+        id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        revision_id TEXT NOT NULL REFERENCES artifact_revisions(id) ON DELETE CASCADE,
+        source_content_hash TEXT NOT NULL, renderer_id TEXT NOT NULL, renderer_version TEXT NOT NULL,
+        preview_profile TEXT NOT NULL, cache_key TEXT NOT NULL UNIQUE, cache_path TEXT NOT NULL,
+        mime_type TEXT NOT NULL, size INTEGER NOT NULL, status TEXT NOT NULL,
+        error_message TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+      );
+      PRAGMA user_version = 5;
       CREATE UNIQUE INDEX idx_revision_current
         ON artifact_revisions(artifact_id) WHERE status = 'current';
       COMMIT;
@@ -294,6 +305,22 @@ export class SqliteMetadataRepository {
     `)
   }
 
+  #migrate_005_from_v4(): void {
+    this.#database.exec(`
+      BEGIN;
+      CREATE TABLE IF NOT EXISTS preview_records (
+        id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        revision_id TEXT NOT NULL REFERENCES artifact_revisions(id) ON DELETE CASCADE,
+        source_content_hash TEXT NOT NULL, renderer_id TEXT NOT NULL, renderer_version TEXT NOT NULL,
+        preview_profile TEXT NOT NULL, cache_key TEXT NOT NULL UNIQUE, cache_path TEXT NOT NULL,
+        mime_type TEXT NOT NULL, size INTEGER NOT NULL, status TEXT NOT NULL,
+        error_message TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+      );
+      PRAGMA user_version = 5;
+      COMMIT;
+    `)
+  }
+
   // ==================== Graph Save/Load ====================
 
   save(snapshot: ProjectGraphSnapshot): void {
@@ -311,6 +338,7 @@ export class SqliteMetadataRepository {
       this.#database.prepare('DELETE FROM notes WHERE project_id = ?').run(pid as SQLInputValue)
       this.#database.prepare('DELETE FROM relations WHERE project_id = ?').run(pid as SQLInputValue)
       this.#database.prepare('DELETE FROM artifact_views WHERE artifact_id IN (SELECT id FROM artifacts WHERE project_id = ?)').run(pid as SQLInputValue)
+      this.#database.prepare('DELETE FROM preview_records WHERE project_id = ?').run(pid as SQLInputValue)
       this.#database.prepare('DELETE FROM artifact_revisions WHERE artifact_id IN (SELECT id FROM artifacts WHERE project_id = ?)').run(pid as SQLInputValue)
       this.#database.prepare('DELETE FROM artifacts WHERE project_id = ?').run(pid as SQLInputValue)
       this.#database.prepare('DELETE FROM file_records WHERE project_id = ?').run(pid as SQLInputValue)
@@ -354,7 +382,7 @@ export class SqliteMetadataRepository {
     const checkpoints = (this.#database.prepare('SELECT * FROM checkpoints WHERE project_id = ?').all(project.id as SQLInputValue) as Row[]).map((r) => this.#checkpoint(r))
 
     return {
-      schemaVersion: 4,
+      schemaVersion: 5,
       graphVersion: project.graphVersion as GraphVersion,
       project,
       scopes,
@@ -689,6 +717,22 @@ export class SqliteMetadataRepository {
 
   upsertFileRecord(value: FileRecord): void { this.#upsertFileRecord(value) }
 
+  getPreviewRecords(projectId: string): PreviewRecord[] {
+    return (this.#database.prepare('SELECT * FROM preview_records WHERE project_id = ?').all(projectId as SQLInputValue) as Row[])
+      .map((row) => this.#previewRecord(row))
+  }
+
+  getPreviewRecordByCacheKey(cacheKey: string): PreviewRecord | undefined {
+    const row = this.#database.prepare('SELECT * FROM preview_records WHERE cache_key = ?').get(cacheKey) as Row | undefined
+    return row === undefined ? undefined : this.#previewRecord(row)
+  }
+
+  upsertPreviewRecord(value: PreviewRecord): void { this.#upsertPreviewRecord(value) }
+
+  deletePreviewRecords(projectId: string): void {
+    this.#database.prepare('DELETE FROM preview_records WHERE project_id = ?').run(projectId as SQLInputValue)
+  }
+
   updateFileObservation(fileRecord: FileRecord, artifact?: Artifact): void {
     this.#database.exec('BEGIN IMMEDIATE;')
     try {
@@ -732,7 +776,7 @@ export class SqliteMetadataRepository {
     }
   }
 
-  get schemaVersion(): number { return 4 }
+  get schemaVersion(): number { return 5 }
 
   // ==================== Private helpers ====================
 
@@ -872,6 +916,48 @@ export class SqliteMetadataRepository {
     ])
   }
 
+  #upsertPreviewRecord(value: PreviewRecord): void {
+    this.#runStatement({
+      operationType: 'upsert_preview_record',
+      entityId: String(value.id),
+      table: 'preview_records',
+      statement: 'INSERT INTO preview_records',
+      foreignKeyColumn: 'revision_id',
+      referencedTable: 'artifact_revisions',
+      referencedId: String(value.revisionId),
+    }, `
+      INSERT INTO preview_records VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        source_content_hash=excluded.source_content_hash,
+        renderer_id=excluded.renderer_id,
+        renderer_version=excluded.renderer_version,
+        preview_profile=excluded.preview_profile,
+        cache_key=excluded.cache_key,
+        cache_path=excluded.cache_path,
+        mime_type=excluded.mime_type,
+        size=excluded.size,
+        status=excluded.status,
+        error_message=excluded.error_message,
+        updated_at=excluded.updated_at
+    `, [
+      value.id as SQLInputValue,
+      value.projectId as SQLInputValue,
+      value.revisionId as SQLInputValue,
+      value.sourceContentHash as SQLInputValue,
+      value.rendererId,
+      value.rendererVersion,
+      value.previewProfile,
+      value.cacheKey,
+      value.cachePath,
+      value.mimeType,
+      value.size,
+      value.status,
+      value.errorMessage ?? null,
+      value.createdAt,
+      value.updatedAt,
+    ])
+  }
+
   #upsertNote(value: Note): void {
     this.#database.prepare(`
       INSERT INTO notes VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -959,6 +1045,26 @@ export class SqliteMetadataRepository {
       mimeType: String(row.mime_type),
       availability: String(row.availability) as FileRecord['availability'],
       observedAt: String(row.observed_at),
+    }
+  }
+
+  #previewRecord(row: Row): PreviewRecord {
+    return {
+      id: row.id as PreviewRecordId,
+      projectId: row.project_id as ProjectId,
+      revisionId: row.revision_id as ArtifactRevisionId,
+      sourceContentHash: String(row.source_content_hash) as PreviewRecord['sourceContentHash'],
+      rendererId: String(row.renderer_id),
+      rendererVersion: String(row.renderer_version),
+      previewProfile: String(row.preview_profile),
+      cacheKey: String(row.cache_key),
+      cachePath: String(row.cache_path),
+      mimeType: String(row.mime_type),
+      size: Number(row.size),
+      status: String(row.status) as PreviewRecord['status'],
+      ...(row.error_message ? { errorMessage: String(row.error_message) } : {}),
+      createdAt: String(row.created_at),
+      updatedAt: String(row.updated_at),
     }
   }
 

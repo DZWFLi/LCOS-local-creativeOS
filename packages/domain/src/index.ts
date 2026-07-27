@@ -28,6 +28,7 @@ export type RunId = Brand<string, 'RunId'>
 export type RunEventId = Brand<string, 'RunEventId'>
 export type ArtifactReturnId = Brand<string, 'ArtifactReturnId'>
 export type CheckpointId = Brand<string, 'CheckpointId'>
+export type PreviewRecordId = Brand<string, 'PreviewRecordId'>
 export type ContentHash = Brand<string, 'ContentHash'>
 
 export type IsoDateTime = string
@@ -210,6 +211,7 @@ export interface Checkpoint {
 
 export type PreviewState = 'idle' | 'loading' | 'ready' | 'error'
 export type PreviewKind = 'thumbnail' | 'page' | 'original'
+export type PreviewRecordStatus = 'ready' | 'failed' | 'unsupported'
 
 export interface PreviewResult {
   readonly artifactId: ArtifactId
@@ -220,6 +222,24 @@ export interface PreviewResult {
   readonly pageIndex?: number
   readonly pageCount?: number
   readonly errorMessage?: string
+}
+
+export interface PreviewRecord {
+  readonly id: PreviewRecordId
+  readonly projectId: ProjectId
+  readonly revisionId: ArtifactRevisionId
+  readonly sourceContentHash: ContentHash
+  readonly rendererId: string
+  readonly rendererVersion: string
+  readonly previewProfile: string
+  readonly cacheKey: string
+  readonly cachePath: string
+  readonly mimeType: string
+  readonly size: number
+  readonly status: PreviewRecordStatus
+  readonly errorMessage?: string
+  readonly createdAt: IsoDateTime
+  readonly updatedAt: IsoDateTime
 }
 
 // ==================== Run (preserved, Phase 5) ====================

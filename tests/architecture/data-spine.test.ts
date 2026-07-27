@@ -182,7 +182,7 @@ describe('ARCH-012 Migration survives without delete', () => {
     repo.save(snap)
     const loaded = repo.get('test-proj')
     expect(loaded).toBeDefined()
-    expect(loaded!.schemaVersion).toBe(4)
+    expect(loaded!.schemaVersion).toBe(5)
     expect(loaded!.project.name).toBe('Test')
     repo.close()
   })

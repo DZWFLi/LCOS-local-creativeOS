@@ -24,7 +24,7 @@ function createFixture() {
   const now = '2026-07-27T00:00:00.000Z'
   const projectId = 'disposable-file-observation' as ProjectGraphSnapshot['project']['id']
   repository.save({
-    schemaVersion: 4,
+    schemaVersion: 5,
     graphVersion: 1 as GraphVersion,
     project: { id: projectId, name: 'File Observation', rootPath: directory, graphVersion: 1 as GraphVersion, createdAt: now, updatedAt: now },
     scopes: [],
