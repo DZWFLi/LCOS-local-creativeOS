@@ -156,6 +156,17 @@ export function App() {
     bottom: miniMapCollapsed ? 72 : 164,
   }), [dockCollapsed, miniMapCollapsed])
 
+  useEffect(() => {
+    const preventBrowserZoom = (event: WheelEvent) => {
+      if (!event.ctrlKey && !event.metaKey) return
+      const target = event.target as HTMLElement | null
+      if (!target?.closest?.('[data-testid="creative-os-app"]')) return
+      event.preventDefault()
+    }
+    window.addEventListener('wheel', preventBrowserZoom, { capture: true, passive: false })
+    return () => window.removeEventListener('wheel', preventBrowserZoom, { capture: true })
+  }, [])
+
   useEffect(() => { if (!notice) return; const timer = window.setTimeout(() => setNotice(''), 2600); return () => window.clearTimeout(timer) }, [notice])
   useEffect(() => () => {
     objectUrls.current.forEach((url) => URL.revokeObjectURL(url))

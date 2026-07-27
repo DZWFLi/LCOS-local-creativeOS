@@ -91,6 +91,27 @@ Browser assertions:
 - Active workspace rendered 1 canvas workspace frame and 1 minimap workspace frame.
 - Minimap nodes all matched the active scene scope.
 
+## Follow-up Hotfix: Ctrl Wheel and Locate Content
+
+Root cause:
+
+- Chrome/Edge browser-level `Ctrl + wheel` zoom was not blocked at the app shell capture layer, so depending on event target and browser handling the UI chrome could visually scale with the page instead of only moving the Canvas camera.
+- Minimap fit-to-content was only an icon button styled as the last map control; in the v0.6.1 compact minimap it was easy to miss and could appear absent.
+
+Fix:
+
+- Added a native non-passive capture `wheel` listener scoped to `[data-testid="creative-os-app"]` to prevent browser page zoom for `Ctrl/Meta + wheel`.
+- Kept Canvas `Ctrl/Meta + wheel` as Canvas camera zoom.
+- Changed the minimap fit action into an explicit labeled `定位内容` button.
+
+Verification:
+
+```text
+npm run typecheck --workspace @local-creative-os/web
+npm run check:v061-static
+Browser: Ctrl+wheel kept browser scale at 1, kept tabbar/dock/rail/HUD/minimap rects stable, changed canvas zoom 0.94 -> 1.55, and showed 定位内容.
+```
+
 ## Not Done
 
 - No schema/migration.
