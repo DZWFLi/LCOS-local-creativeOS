@@ -71,15 +71,22 @@ function PreviewArtwork({ node, density }: { node: CanvasNode; density: NodeDisp
   const fileKind = getFileKind(node)
   if (fileKind === 'ppt') return <div className={`preview-art ppt ${node.kind}`}>
     <div className="slide-copy">
-      <div className="ppt-kicker">PORTASPLIT</div>
-      <div className="ppt-title">{node.kind === 'generated' ? 'Thinker V7' : node.kind === 'working' ? 'Thinker V6' : '品牌简报'}</div>
-      <div className="ppt-subtitle">{node.kind === 'generated' ? '更直接的产品利益点' : '静坐于心 自在于形'}</div>
+      <div className="ppt-kicker">{node.fileType ?? 'RUNTIME SOURCE'}</div>
+      <div className="ppt-title">{node.title}</div>
+      <div className="ppt-subtitle">{node.subtitle || previewStatusCopy(node)}</div>
     </div>
     <div className="slide-scene" aria-hidden="true"><i className="scene-window" /><i className="scene-statue" /><i className="scene-product" /></div>
     <div className="ppt-strip"><i /><i /><i /></div>
   </div>
   if (fileKind === 'image') return <div className="preview-art reference-image"><div className="reference-sun" /><div className="reference-horizon" /><div className="reference-object" /></div>
-  return <div className="preview-art document"><span>客户反馈摘要</span><b>利益点更直接，保留品牌蓝，不改封面。</b><i /><i /></div>
+  return <div className="preview-art document"><span>{node.fileType ?? 'Document'}</span><b>{node.title}</b><i /><i /></div>
+}
+
+function previewStatusCopy(node: CanvasNode): string {
+  if (node.previewStatus === 'ready') return 'Preview ready'
+  if (node.previewStatus === 'failed') return 'Preview failed'
+  if (node.previewStatus === 'unsupported') return 'Preview unsupported'
+  return 'Preview not generated'
 }
 
 function ContextVisual({ node, density, onDetails }: { node: CanvasNode; density: NodeDisplayMode; onDetails: () => void }) {
