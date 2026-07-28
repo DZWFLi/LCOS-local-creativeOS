@@ -26,7 +26,8 @@ No new Domain type is required for the current MVP.
 | Relationships | Existing Relation records | Implemented |
 | Workspace placement | Existing ArtifactView records | Implemented |
 | Identity display | Work Rail Runtime identity panel | Implemented |
-| Real content preview | Preview worker/API path | Not implemented |
+| Preview status visibility | Read-only PreviewRecord API + Work Rail status | Implemented |
+| Real content preview | Preview worker/rendering path | Not implemented |
 
 ## What this proves
 
@@ -41,15 +42,13 @@ It does not yet prove:
 - external file observation;
 - artifact return from execution.
 
-## Next safe improvement
+## Preview status rule
 
-Stage 4 can add a read-only preview/status panel that uses existing metadata and clearly says whether preview is:
+The UI may show whether a PreviewRecord is:
 
 - available;
-- pending;
 - unsupported;
 - failed;
 - not yet generated.
 
 Do not fake rendered file contents as Preview cache output.
-

@@ -6,6 +6,7 @@ import type {
   MutationResult,
   ProjectCatalogEntry,
   ProjectGraphSnapshot,
+  PreviewRecord,
   Result,
   ValidatedProjectRoot,
 } from '@local-creative-os/contracts'
@@ -38,6 +39,7 @@ export interface LocalCoreClient {
   validateProjectRoot(rootPath: string, signal?: AbortSignal): Promise<RuntimeCall<ValidatedProjectRoot>>
   metadataStatus(signal?: AbortSignal): Promise<RuntimeCall<MetadataStoreStatus>>
   projectGraph(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<ProjectGraphSnapshot>>
+  previewRecords(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<readonly PreviewRecord[]>>
   applyMutations(batch: MutationBatch, projectId: string, signal?: AbortSignal): Promise<RuntimeCall<MutationResult>>
   saveProjectGraph(snapshot: ProjectGraphSnapshot, signal?: AbortSignal): Promise<RuntimeCall<ProjectGraphSnapshot>>
 }
@@ -194,6 +196,12 @@ export function createLocalCoreClient(): LocalCoreClient {
       return request(`/projects/${encodeURIComponent(projectId)}/graph`, {
         signal,
         decode: decodeResult<ProjectGraphSnapshot>,
+      })
+    },
+    previewRecords(projectId, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/preview-records`, {
+        signal,
+        decode: decodeResult<readonly PreviewRecord[]>,
       })
     },
     saveProjectGraph(snapshot, signal) {

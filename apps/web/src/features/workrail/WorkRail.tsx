@@ -191,6 +191,20 @@ function SelectionState({ node, focus, relationNodes, detailPanel, inference, al
         {node.observedPath && <div><dt>Path</dt><dd title={node.observedPath}>{node.observedPath}</dd></div>}
       </dl>
     </section>}
+    {node.revisionId && <section className={`preview-status preview-${node.previewStatus ?? 'not-generated'}`} data-testid="preview-status">
+      <header><GitCompareArrows size={14} /><h4>Preview status</h4><span>{node.previewStatus ?? 'not-generated'}</span></header>
+      <p>{node.previewStatus === 'ready'
+        ? 'Preview cache record is available for this revision.'
+        : node.previewStatus === 'failed'
+          ? node.previewError ?? 'Preview generation failed.'
+          : node.previewStatus === 'unsupported'
+            ? 'No renderer supports this revision/profile yet.'
+            : 'No PreviewRecord exists yet. This is expected before renderer workers are connected.'}</p>
+      {(node.previewProfile || node.previewRenderer) && <dl>
+        {node.previewProfile && <div><dt>Profile</dt><dd>{node.previewProfile}</dd></div>}
+        {node.previewRenderer && <div><dt>Renderer</dt><dd>{node.previewRenderer}</dd></div>}
+      </dl>}
+    </section>}
     <section className="selection-note"><label><MessageSquareText size={14} />备注</label><textarea defaultValue={node.id === 'feedback' ? '利益点需要更直接，保留品牌蓝，不改封面。' : ''} placeholder="记录判断，系统会自动关联到当前文件或页面" /></section>
     <div className="selection-actions"><button onClick={() => onFocusPreview(focus ? null : node.id)}><Maximize2 size={14} />{focus ? '退出大预览' : '大预览'}</button><button onClick={() => onOpenNative(node)}>在本地打开</button><button onClick={() => onTogglePositionLock(node.id)}>{node.positionLocked ? <PinOff size={14} /> : <Pin size={14} />}{node.positionLocked ? '允许自动排列' : '固定位置'}</button></div>
     <div className="selection-links"><button onClick={() => onDetailPanel('relations')}><Link2 size={14} />关联 {relationNodes.length}<ChevronRight size={14} /></button><button onClick={() => onDetailPanel('context')}><Layers3 size={14} />本次参考 {inference.contextIds.length}<ChevronRight size={14} /></button></div>

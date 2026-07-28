@@ -611,6 +611,13 @@ async function handleEntityRoute(
     return undefined
   }
 
+  // --- PreviewRecords ---
+  const previewListMatch = /^\/projects\/([^/]+)\/preview-records$/.exec(pathname)
+  if (previewListMatch !== null && method === 'GET') {
+    const projectId = decodeURIComponent(previewListMatch[1] ?? '')
+    return { status: 200, body: { ok: true, value: metadata.getPreviewRecords(projectId) } }
+  }
+
   // --- Checkpoints ---
   const cpListMatch = /^\/projects\/([^/]+)\/checkpoints$/.exec(pathname)
   const cpOneMatch = /^\/projects\/([^/]+)\/checkpoints\/([^/]+)$/.exec(pathname)

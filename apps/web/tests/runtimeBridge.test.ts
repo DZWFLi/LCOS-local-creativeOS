@@ -118,6 +118,7 @@ function mockClient(overrides: Partial<LocalCoreClient> = {}): LocalCoreClient {
     validateProjectRoot: unavailable,
     metadataStatus: unavailable,
     projectGraph: vi.fn(async () => call(snapshot())),
+    previewRecords: vi.fn(async () => call([])),
     applyMutations: unavailable,
     saveProjectGraph: unavailable,
     ...overrides,
@@ -163,6 +164,48 @@ describe('RuntimeBridge mutation serialization', () => {
       contentHash: 'abcdef1234567890',
       observedPath: 'E:/sample/brief.md',
       followsCurrentRevision: true,
+      previewStatus: 'not-generated',
+    })
+  })
+
+  it('projects Runtime PreviewRecord status onto Canvas nodes', () => {
+    const graph = snapshot()
+    const currentRevisionId = 'revision-brief-initial' as ProjectGraphSnapshot['artifactRevisions'][number]['id']
+    const fileRecordId = 'file-brief' as ProjectGraphSnapshot['fileRecords'][number]['id']
+    const state = mapGraphToState({
+      ...graph,
+      artifacts: [{ ...graph.artifacts[0], currentRevisionId }],
+      artifactViews: [{ ...graph.artifactViews[0], revisionId: currentRevisionId }],
+      artifactRevisions: [{
+        id: currentRevisionId,
+        artifactId: graph.artifacts[0].id,
+        fileRecordId,
+        contentHash: 'abcdef1234567890' as ProjectGraphSnapshot['artifactRevisions'][number]['contentHash'],
+        source: 'import',
+        status: 'current',
+        createdAt: NOW,
+      }],
+    }, 'disposable-portasplit', [{
+      id: 'preview-brief' as never,
+      projectId: graph.project.id,
+      revisionId: currentRevisionId,
+      sourceContentHash: 'abcdef1234567890' as never,
+      rendererId: 'markdown-preview',
+      rendererVersion: '0.1.0',
+      previewProfile: 'card',
+      cacheKey: 'preview:key',
+      cachePath: 'cache/preview.html',
+      mimeType: 'text/html',
+      size: 321,
+      status: 'ready',
+      createdAt: NOW,
+      updatedAt: NOW,
+    }])
+
+    expect(state.nodes[0]).toMatchObject({
+      previewStatus: 'ready',
+      previewProfile: 'card',
+      previewRenderer: 'markdown-preview@0.1.0',
     })
   })
 

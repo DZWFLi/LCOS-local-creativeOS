@@ -22,12 +22,12 @@ describe('dev-only Runtime Diagnostics integration', () => {
     expect(vite).not.toContain('0.0.0.0')
   })
 
-  it('labels Fixture and Runtime as distinct sources', () => {
+  it('keeps diagnostics Runtime-only without fixture fallback', () => {
     const diagnostics = read('apps/web/src/features/diagnostics/RuntimeDiagnosticsPage.tsx')
 
-    expect(diagnostics).toContain('<SourceBadge origin="fixture" />')
     expect(diagnostics).toContain('<SourceBadge origin="runtime" />')
     expect(diagnostics).toContain('Diagnostics never falls back to Fixture')
+    expect(diagnostics).toContain('pickDiagnosticsProjectId')
   })
 
   it('keeps the structured report viewer read-only', () => {

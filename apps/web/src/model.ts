@@ -5,6 +5,7 @@ export type WorkspaceIntent = 'understand' | 'explore' | 'build' | 'decide' | nu
 export type RunStatus = 'queued' | 'running' | 'waiting_input' | 'review' | 'completed' | 'failed'
 export type ArtifactReviewStatus = 'idle' | 'pending' | 'accepted'
 export type ScopeKind = 'root' | 'collection' | 'context' | 'delivery'
+export type PreviewAvailability = 'not-generated' | 'ready' | 'failed' | 'unsupported'
 
 export interface CanvasNode {
   id: string
@@ -28,6 +29,10 @@ export interface CanvasNode {
   contentHash?: string
   observedPath?: string
   followsCurrentRevision?: boolean
+  previewStatus?: PreviewAvailability
+  previewProfile?: string
+  previewRenderer?: string
+  previewError?: string
   viewOf?: string
   error?: boolean
   disabled?: boolean

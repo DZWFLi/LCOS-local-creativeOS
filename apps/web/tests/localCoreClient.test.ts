@@ -119,4 +119,38 @@ describe('Local Core browser client', () => {
       },
     })
   })
+
+  it('reads preview records through a read-only project route', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({
+      ok: true,
+      value: [{
+        id: 'preview-1',
+        projectId: 'project-1',
+        revisionId: 'revision-1',
+        sourceContentHash: 'hash-1',
+        rendererId: 'markdown-preview',
+        rendererVersion: '0.1.0',
+        previewProfile: 'card',
+        cacheKey: 'preview:key',
+        cachePath: 'cache/preview.html',
+        mimeType: 'text/html',
+        size: 42,
+        status: 'ready',
+        createdAt: '2026-07-28T00:00:00.000Z',
+        updatedAt: '2026-07-28T00:00:00.000Z',
+      }],
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await createLocalCoreClient().previewRecords('project-1')
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/local-core/v1/projects/project-1/preview-records',
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    )
+    expect(result.result).toMatchObject({
+      ok: true,
+      value: [{ id: 'preview-1', status: 'ready' }],
+    })
+  })
 })

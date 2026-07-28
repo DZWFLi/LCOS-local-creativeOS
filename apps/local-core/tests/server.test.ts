@@ -231,6 +231,87 @@ describe('Local Core HTTP server', () => {
     })
   })
 
+  it('serves preview records through a read-only project route', async () => {
+    const metadataRepository = createMetadataRepository()
+    const now = '2026-07-26T00:00:00.000Z'
+    const projectId = 'disposable-portasplit' as ProjectGraphSnapshot['project']['id']
+    const artifactId = 'artifact-brief' as ProjectGraphSnapshot['artifacts'][number]['id']
+    const fileRecordId = 'file-brief' as ProjectGraphSnapshot['fileRecords'][number]['id']
+    const revisionId = 'revision-brief' as ProjectGraphSnapshot['artifactRevisions'][number]['id']
+    metadataRepository.save({
+      schemaVersion: 5,
+      graphVersion: 1 as ProjectGraphSnapshot['graphVersion'],
+      project: {
+        id: projectId,
+        name: 'PortaSplit',
+        rootPath: 'disposable://portasplit',
+        graphVersion: 1 as ProjectGraphSnapshot['graphVersion'],
+        createdAt: now,
+        updatedAt: now,
+      },
+      scopes: [],
+      workspaces: [],
+      artifacts: [{
+        id: artifactId,
+        projectId,
+        title: 'Brief',
+        kind: 'markdown',
+        availability: 'available',
+        currentRevisionId: revisionId,
+        createdAt: now,
+        updatedAt: now,
+      }],
+      artifactViews: [],
+      relations: [],
+      notes: [],
+      fileRecords: [{
+        id: fileRecordId,
+        projectId,
+        observedPath: 'E:/sample/brief.md',
+        observedHash: 'hash-brief' as ProjectGraphSnapshot['fileRecords'][number]['observedHash'],
+        size: 42,
+        modifiedAt: now,
+        mimeType: 'text/markdown',
+        availability: 'current',
+        observedAt: now,
+      }],
+      artifactRevisions: [{
+        id: revisionId,
+        artifactId,
+        fileRecordId,
+        contentHash: 'hash-brief' as ProjectGraphSnapshot['artifactRevisions'][number]['contentHash'],
+        source: 'import',
+        status: 'current',
+        createdAt: now,
+      }],
+      checkpoints: [],
+    })
+    metadataRepository.upsertPreviewRecord({
+      id: 'preview-brief' as never,
+      projectId,
+      revisionId,
+      sourceContentHash: 'hash-brief' as never,
+      rendererId: 'markdown-preview',
+      rendererVersion: '0.1.0',
+      previewProfile: 'card',
+      cacheKey: 'preview:brief',
+      cachePath: 'cache/brief.html',
+      mimeType: 'text/html',
+      size: 100,
+      status: 'ready',
+      createdAt: now,
+      updatedAt: now,
+    })
+    const { baseUrl } = await startServer(createLocalCoreServer({ metadataRepository }))
+    const response = await fetch(`${baseUrl}/projects/disposable-portasplit/preview-records`)
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      value: [{ id: 'preview-brief', revisionId: 'revision-brief', status: 'ready' }],
+    })
+  })
+
   it.each(['path', 'absolutePath'])(
     'rejects browser source registration containing %s',
     async (pathField) => {

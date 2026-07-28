@@ -1,4 +1,4 @@
-import type { GraphVersion, ProjectGraphSnapshot, Scope, WorkspaceContextPolicy, MutationBatch } from '@local-creative-os/contracts'
+import type { GraphVersion, PreviewRecord, ProjectGraphSnapshot, Scope, WorkspaceContextPolicy, MutationBatch } from '@local-creative-os/contracts'
 import type {
   CanvasEdge,
   CanvasNode,
@@ -48,8 +48,9 @@ export class RuntimeBridge {
         return { source: 'none', state: null, error: call.result.error.message }
       }
       const snapshot = call.result.value
+      const previews = await this.#loadPreviewRecords()
       this.#lastSavedSnapshot = JSON.stringify(snapshot)
-      const state = mapGraphToState(snapshot, this.projectId)
+      const state = mapGraphToState(snapshot, this.projectId, previews)
       this.#graphVersion = Number(snapshot.graphVersion) || 1
       this.#acknowledgedState = cloneState(state)
       return { source: 'runtime', state }
@@ -193,6 +194,15 @@ export class RuntimeBridge {
       return call.result.ok
     } catch { return false }
   }
+
+  async #loadPreviewRecords(): Promise<readonly PreviewRecord[]> {
+    try {
+      const call = await this.client.previewRecords(this.projectId)
+      return call.result.ok ? call.result.value : []
+    } catch {
+      return []
+    }
+  }
 }
 
 // ==================== GraphSnapshot → AppState ====================
@@ -201,16 +211,18 @@ const KIND_TO_NODE: Record<string, CanvasNode['kind']> = {
   markdown: 'source', image: 'source', presentation: 'source', pdf: 'source', other: 'context',
 }
 
-export function mapGraphToState(graph: ProjectGraphSnapshot, projectId: string): PersistedPrototypeState {
+export function mapGraphToState(graph: ProjectGraphSnapshot, projectId: string, previewRecords: readonly PreviewRecord[] = []): PersistedPrototypeState {
   const artifactById = new Map(graph.artifacts.map((a) => [a.id, a]))
   const revisionById = new Map(graph.artifactRevisions.map((revision) => [revision.id, revision]))
   const fileRecordById = new Map(graph.fileRecords.map((fileRecord) => [fileRecord.id, fileRecord]))
+  const previewByRevisionId = new Map(previewRecords.map((preview) => [preview.revisionId, preview]))
 
   const nodes: CanvasNode[] = graph.artifactViews.map((view) => {
     const artifact = artifactById.get(view.artifactId)
     const revisionId = view.revisionId ?? artifact?.currentRevisionId
     const revision = revisionId === undefined ? undefined : revisionById.get(revisionId)
     const fileRecord = revision === undefined ? undefined : fileRecordById.get(revision.fileRecordId)
+    const preview = revisionId === undefined ? undefined : previewByRevisionId.get(revisionId)
     const isStale = artifact?.availability === 'stale'
     const isMissing = artifact?.availability === 'missing'
     return {
@@ -229,6 +241,10 @@ export function mapGraphToState(graph: ProjectGraphSnapshot, projectId: string):
       contentHash: revision === undefined ? undefined : String(revision.contentHash),
       observedPath: fileRecord?.observedPath,
       followsCurrentRevision: artifact?.currentRevisionId !== undefined && revisionId === artifact.currentRevisionId,
+      previewStatus: preview?.status ?? 'not-generated',
+      previewProfile: preview?.previewProfile,
+      previewRenderer: preview === undefined ? undefined : `${preview.rendererId}@${preview.rendererVersion}`,
+      previewError: preview?.errorMessage,
       scopeId: String(view.scopeId),
     }
   })
