@@ -2,6 +2,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import { createLocalCoreServer, LOCAL_CORE_DEV_PORT } from './server.js'
 import { SqliteMetadataRepository } from './metadata-repository.js'
+import { ensureMvpSampleProject } from './mvp-sample-project.js'
 
 export { getHealthStatus } from './health.js'
 export { ExplicitProjectCatalog } from './project-catalog.js'
@@ -12,6 +13,7 @@ export { FileRegistryService, TrustedFileSelectionRegistry } from './file-regist
 export { guardTrustedFilePath } from './path-guard.js'
 export { RendererRegistry, DEFAULT_RENDERERS } from './renderer-registry.js'
 export { PreviewCacheService } from './preview-cache-service.js'
+export { ensureMvpSampleProject, createMvpSampleSnapshot, MVP_SAMPLE_PROJECT_ID } from './mvp-sample-project.js'
 
 async function main(): Promise<void> {
   const databasePath = process.env.LOCAL_CORE_DB_PATH
@@ -22,6 +24,11 @@ async function main(): Promise<void> {
     throw new Error('LOCAL_CORE_TEST_PORT must be a valid TCP port.')
   }
   const metadataRepository = new SqliteMetadataRepository(databasePath, { disposableOnly: false })
+  if (process.env.LOCAL_CORE_DISABLE_MVP_SAMPLE !== '1') {
+    const sampleRoot = process.env.LOCAL_CORE_MVP_SAMPLE_ROOT
+      ?? fileURLToPath(new URL('../.data/mvp-sample-project', import.meta.url))
+    ensureMvpSampleProject(metadataRepository, sampleRoot)
+  }
   const server = createLocalCoreServer({ port, metadataRepository })
   const address = await server.start()
   process.stdout.write(`Local Core Phase 2 listening on http://${address.host}:${address.port}\n`)

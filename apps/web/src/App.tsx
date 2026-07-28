@@ -30,7 +30,8 @@ import { inferTargetContext, moveBetweenTargetAndContext, setPrimaryTarget } fro
 import { createBlankProjectState, defaultProjectCatalog, fixtureStateForProject } from './state/projectFixtures'
 import { createChildScopeFromSelection, removeScopeTree } from './state/canvasScopes'
 
-const DEFAULT_PROJECT_ID = 'project-portasplit'
+const MVP_SAMPLE_PROJECT_ID = 'disposable-mvp-sample'
+const DEFAULT_PROJECT_ID = MVP_SAMPLE_PROJECT_ID
 
 function defaultRailWidth(viewport = typeof window === 'undefined' ? 1440 : window.innerWidth): number {
   if (viewport >= 1600) return 390
@@ -182,7 +183,17 @@ export function App() {
         setBootMode('offline')
         return
       }
-      bridge.loadProject().then((result) => {
+      bridge.loadCatalog().then((catalog) => {
+        const runtimeProjects = catalog.projects
+        const runtimeProjectId = runtimeProjects.find((project) => project.id === MVP_SAMPLE_PROJECT_ID)?.id ?? runtimeProjects[0]?.id ?? activeProjectId
+        if (runtimeProjects.length > 0) {
+          setProjects(runtimeProjects)
+          setOpenProjectIds([runtimeProjectId])
+          setActiveProjectId(runtimeProjectId)
+          bridgeRef.current = new RuntimeBridge(runtimeProjectId)
+        }
+        return bridgeRef.current.loadProject()
+      }).then((result) => {
         if (result.source === 'runtime' && result.state) {
           resetGraph({ nodes: result.state.nodes, edges: result.state.edges })
           setWorkspaces(result.state.workspaces)
@@ -194,7 +205,7 @@ export function App() {
           setWorkRail(result.state.workRail)
           setDataSource('runtime')
           setBootMode('runtime')
-          setNotice('已从 Local Core 恢复项目 · 默认项目总览')
+          setNotice('已打开 Runtime MVP Sample · 默认项目总览')
         } else {
           setBootMode('offline')
           setNotice('Local Core 暂无项目数据，当前为 Demo 模式')
