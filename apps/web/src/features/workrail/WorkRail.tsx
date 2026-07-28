@@ -57,6 +57,7 @@ interface Props {
   onContinueModify: () => void
   onOpenNative: (node: CanvasNode) => void
   onTogglePositionLock: (nodeId: string) => void
+  onGeneratePreview: (node: CanvasNode) => void
   onShowRun: () => void
 }
 type DetailPanel = 'none' | 'relations' | 'context'
@@ -113,7 +114,7 @@ export function WorkRail(props: Props) {
             : mode === 'multi-selection'
               ? <MultiSelectionState nodes={props.selectedNodes} inference={props.inference} allNodes={props.nodes} onSelectTarget={props.onSelectTarget} onMoveRole={props.onMoveRole} />
               : mode === 'selection' && primary
-                ? <SelectionState node={primary} focus={Boolean(props.focusNode)} relationNodes={props.relationNodes} detailPanel={detailPanel} inference={props.inference} allNodes={props.nodes} activeRun={props.activeRun} onDetailPanel={setDetailPanel} onToggleContext={props.onToggleContext} onFocusPreview={props.onFocusPreview} onEnterScope={props.onEnterScope} onOpenNative={props.onOpenNative} onTogglePositionLock={props.onTogglePositionLock} />
+                ? <SelectionState node={primary} focus={Boolean(props.focusNode)} relationNodes={props.relationNodes} detailPanel={detailPanel} inference={props.inference} allNodes={props.nodes} activeRun={props.activeRun} onDetailPanel={setDetailPanel} onToggleContext={props.onToggleContext} onFocusPreview={props.onFocusPreview} onEnterScope={props.onEnterScope} onOpenNative={props.onOpenNative} onTogglePositionLock={props.onTogglePositionLock} onGeneratePreview={props.onGeneratePreview} />
                 : mode === 'completed' && props.activeRun
                   ? <CompletedState run={props.activeRun} nodes={props.nodes} />
                   : <WorkspaceSummary workspace={props.workspace} scope={props.scope} nodes={props.nodes} />}
@@ -158,7 +159,7 @@ function WorkspaceSummary({ workspace, scope, nodes }: { workspace: Workspace; s
   </div>
 }
 
-function SelectionState({ node, focus, relationNodes, detailPanel, inference, allNodes, activeRun, onDetailPanel, onToggleContext, onFocusPreview, onEnterScope, onOpenNative, onTogglePositionLock }: {
+function SelectionState({ node, focus, relationNodes, detailPanel, inference, allNodes, activeRun, onDetailPanel, onToggleContext, onFocusPreview, onEnterScope, onOpenNative, onTogglePositionLock, onGeneratePreview }: {
   node: CanvasNode
   focus: boolean
   relationNodes: CanvasNode[]
@@ -172,6 +173,7 @@ function SelectionState({ node, focus, relationNodes, detailPanel, inference, al
   onEnterScope: (scopeId: string) => void
   onOpenNative: (node: CanvasNode) => void
   onTogglePositionLock: (nodeId: string) => void
+  onGeneratePreview: (node: CanvasNode) => void
 }) {
   const inContext = inference.contextIds.includes(node.id)
   if (detailPanel === 'relations') return <RelationsDetail node={node} relations={relationNodes} onBack={() => onDetailPanel('none')} />
@@ -204,6 +206,7 @@ function SelectionState({ node, focus, relationNodes, detailPanel, inference, al
         {node.previewProfile && <div><dt>Profile</dt><dd>{node.previewProfile}</dd></div>}
         {node.previewRenderer && <div><dt>Renderer</dt><dd>{node.previewRenderer}</dd></div>}
       </dl>}
+      {node.previewStatus !== 'ready' && <button className="preview-generate-action" type="button" onClick={() => onGeneratePreview(node)}>生成 Preview</button>}
     </section>}
     <section className="selection-note"><label><MessageSquareText size={14} />备注</label><textarea defaultValue={node.id === 'feedback' ? '利益点需要更直接，保留品牌蓝，不改封面。' : ''} placeholder="记录判断，系统会自动关联到当前文件或页面" /></section>
     <div className="selection-actions"><button onClick={() => onFocusPreview(focus ? null : node.id)}><Maximize2 size={14} />{focus ? '退出大预览' : '大预览'}</button><button onClick={() => onOpenNative(node)}>在本地打开</button><button onClick={() => onTogglePositionLock(node.id)}>{node.positionLocked ? <PinOff size={14} /> : <Pin size={14} />}{node.positionLocked ? '允许自动排列' : '固定位置'}</button></div>

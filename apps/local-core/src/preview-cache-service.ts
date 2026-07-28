@@ -114,6 +114,40 @@ export class PreviewCacheService {
     return record
   }
 
+  recordFailed(revisionId: ArtifactRevisionId, previewProfile: string, message: string): PreviewRecord {
+    const context = this.#resolveContext(revisionId)
+    const renderer = this.#rendererRegistry.select(context.fileRecord, previewProfile)
+    const rendererId = renderer?.id ?? 'unresolved'
+    const rendererVersion = renderer?.version ?? '1'
+    const cacheKey = this.computeCacheKey({
+      sourceContentHash: context.revision.contentHash,
+      rendererId,
+      rendererVersion,
+      previewProfile,
+    })
+    const existing = this.#repository.getPreviewRecordByCacheKey(cacheKey)
+    const now = new Date().toISOString()
+    const record: PreviewRecord = {
+      id: (existing?.id ?? randomUUID()) as PreviewRecord['id'],
+      projectId: context.artifact.projectId,
+      revisionId,
+      sourceContentHash: context.revision.contentHash,
+      rendererId,
+      rendererVersion,
+      previewProfile,
+      cacheKey,
+      cachePath: '',
+      mimeType: renderer?.outputMimeType ?? 'application/octet-stream',
+      size: 0,
+      status: 'failed',
+      errorMessage: message,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+    }
+    this.#repository.upsertPreviewRecord(record)
+    return record
+  }
+
   async deleteCacheFile(record: PreviewRecord): Promise<void> {
     if (!record.cachePath) return
     const target = resolve(record.cachePath)

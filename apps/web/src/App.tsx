@@ -681,6 +681,28 @@ export function App() {
     setNotice(node?.positionLocked ? '已允许自动排列移动此对象' : '已固定位置，自动排列会避开此对象')
   }, [nodes, setNodes])
 
+  const generatePreview = useCallback((node: CanvasNode) => {
+    if (bootMode !== 'runtime' || !node.revisionId) {
+      setNotice('只有 Runtime Revision 可以生成 Preview')
+      return
+    }
+    setNotice(`正在生成 ${node.title} 的 Preview…`)
+    bridgeRef.current.generatePreview(node.revisionId, 'thumbnail').then((result) => {
+      if (result.state === null) {
+        setNotice(`Preview 生成失败：${result.error ?? '未知错误'}`)
+        return
+      }
+      projectStateCacheRef.current.set(activeProjectId, result.state)
+      resetGraph({ nodes: result.state.nodes, edges: result.state.edges })
+      setWorkspaces(result.state.workspaces)
+      setScopes(result.state.scopes)
+      setWorkRail(result.state.workRail)
+      setSelectedIds([node.id])
+      const nextNode = result.state.nodes.find((item) => item.id === node.id)
+      setNotice(nextNode?.previewStatus === 'ready' ? 'Preview 已生成' : `Preview 状态：${nextNode?.previewStatus ?? 'unknown'}`)
+    })
+  }, [activeProjectId, bootMode, resetGraph])
+
   const dropFiles = useCallback((files: File[], x: number, y: number) => {
     const created: CanvasNode[] = files.map((file, index) => {
       const previewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined
@@ -906,7 +928,7 @@ export function App() {
       <WorkspaceDock workspaces={workspaces} activeId={workspaceId} collapsed={dockCollapsed} onCollapsedChange={setDockCollapsed} onOverview={activateOverview} onChange={changeWorkspace} onLocate={locateWorkspace} onAddWorkspace={() => setWorkspaceEditor({ mode: 'create' })} onEditWorkspace={(id) => setWorkspaceEditor({ mode: 'edit', id })} onDuplicateWorkspace={duplicateWorkspace} onDeleteWorkspace={deleteWorkspace} onMoveWorkspace={moveWorkspace} visibleLayers={visibleLayers} onToggleLayer={toggleLayer} onOpenCreate={() => setCreateDialogOpen(true)} onArrangeCanvas={previewScopeLayout} runStatus={activeRun?.status ?? null} />
       <ProjectCanvas nodes={visibleNodes} setNodes={setNodes} edges={visibleEdges} setEdges={setEdges} camera={camera} setCamera={setCamera} selectedId={selectedId} selectedIds={selectedIds} selectedEdgeId={selectedEdgeId} setSelectedEdgeId={setSelectedEdgeId} pendingId={activeRun?.pendingArtifactId ?? null} runId={activeRun?.id ?? 'RUN-043'} runStatus={activeRun?.status ?? null} spaceHeld={spaceHeld} locked={createDialogOpen || runConfirmOpen || scopeCreateOpen} layoutPreview={layoutPreview} workspaceFrames={activeWorkspaceFrames} workspaceMemberNodes={scopeNodes} activeWorkspaceId={workspaceId} onWorkspaceActivate={changeWorkspace} onPresentationInteractionChange={handlePresentationInteractionChange} onPresentationCommit={handlePresentationCommit} onSelect={selectNode} onClearSelection={clearSelection} onMarqueeSelect={selectMarquee} onSelectEdge={selectEdge} onDoubleClick={handleDoubleClick} onDetails={showNodeDetails} onCreateNodeFromAnchor={createNodeFromAnchor} onFilesDropped={dropFiles} onArrangeSelection={arrangeSelection} onCopySelection={copySelectedViews} onDuplicateSelection={duplicateSelectedViews} onCreateScopeFromSelection={() => selectedIds.length ? setScopeCreateOpen(true) : setNotice('先选择要整理进子画布的对象')} onDeleteSelection={deleteSelectedViews} onPointerWorldChange={rememberCanvasPoint} />
       <div className="canvas-hud" data-testid="canvas-hud"><CanvasMiniMap nodes={scopeNodes} workspaceFrames={activeWorkspaceFrames} camera={camera} setCamera={setCamera} collapsed={miniMapCollapsed} onCollapsedChange={setMiniMapCollapsed} safeInsets={safeInsets} /></div>
-      <WorkRail workspace={effectiveWorkspace} scope={activeScope} nodes={nodes} selectedNodes={selectedNodes} focusNode={focusNode} relationNodes={relationNodes} inference={inference} activeRun={activeRun} pendingNode={pendingNode} collapsed={workRail.collapsed} width={effectiveRailWidth} composerText={composerText} composerRef={composerRef} composerFocusRequest={composerFocusRequest} onRequestComposerFocus={requestComposerFocus} onCollapse={() => setWorkRail((current) => ({ ...current, collapsed: true }))} onExpand={() => setWorkRail((current) => ({ ...current, collapsed: false }))} onComposerChange={setComposerText} onSend={requestRun} onSelectTarget={selectPrimaryTarget} onToggleContext={toggleContext} onMoveRole={moveRole} onFocusPreview={setFocusPreviewId} onEnterScope={enterScope} onContinue={continueRun} onAccept={acceptRun} onRetry={retryRun} onContinueModify={continueModify} onOpenNative={openNative} onTogglePositionLock={togglePositionLock} onShowRun={clearSelection} />
+      <WorkRail workspace={effectiveWorkspace} scope={activeScope} nodes={nodes} selectedNodes={selectedNodes} focusNode={focusNode} relationNodes={relationNodes} inference={inference} activeRun={activeRun} pendingNode={pendingNode} collapsed={workRail.collapsed} width={effectiveRailWidth} composerText={composerText} composerRef={composerRef} composerFocusRequest={composerFocusRequest} onRequestComposerFocus={requestComposerFocus} onCollapse={() => setWorkRail((current) => ({ ...current, collapsed: true }))} onExpand={() => setWorkRail((current) => ({ ...current, collapsed: false }))} onComposerChange={setComposerText} onSend={requestRun} onSelectTarget={selectPrimaryTarget} onToggleContext={toggleContext} onMoveRole={moveRole} onFocusPreview={setFocusPreviewId} onEnterScope={enterScope} onContinue={continueRun} onAccept={acceptRun} onRetry={retryRun} onContinueModify={continueModify} onOpenNative={openNative} onTogglePositionLock={togglePositionLock} onGeneratePreview={generatePreview} onShowRun={clearSelection} />
       {activeRun && <button className={`run-pill ${activeRun.status}`} onClick={() => { clearSelection(); setWorkRail((current) => ({ ...current, collapsed: false })) }}><Play size={13} /> {activeRun.id} · {runStatusLabel[activeRun.status]}</button>}
       {checkpoint && <div className="checkpoint"><Check size={15} /> 已形成稳定修改集 <button onClick={() => { setCheckpoint(false); setNotice('检查点已创建') }}>创建检查点</button><button className="quiet" onClick={() => setCheckpoint(false)}>稍后</button></div>}
       <nav className="scene-title v06-breadcrumbs" aria-label="画布层级">{scopePath.map((scope, index) => {

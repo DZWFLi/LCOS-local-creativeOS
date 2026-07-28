@@ -1,21 +1,21 @@
 # ADR — MVP Stage 5 Preview Worker Plan
 
 Date: 2026-07-28
-Status: Proposed
+Status: Accepted / Implemented for TXT, Markdown and Image MVP
 Branch: `codex/mvp-fast-build`
 Base: `b6b06f6 feat(mvp): show preview record status`
 
 ## Decision
 
-Stage 5 should introduce preview generation only through a bounded Local Core worker boundary.
+Stage 5 introduces preview generation only through a bounded Local Core worker boundary.
 
-The first implementation should support:
+The first implementation supports:
 
 - TXT preview
 - Markdown preview as escaped/plain text or safe generated HTML/text, with no script execution
 - Image preview by copying or normalizing only from already registered FileRecord paths
 
-It should not include PDF preview, Bridge integration, Watcher-triggered jobs, user-file writes, schema migration, or browser-triggered shell.
+It does not include PDF preview, Bridge integration, Watcher-triggered jobs, user-file writes, schema migration, or browser-triggered shell.
 
 ## Why this ADR exists
 
@@ -212,4 +212,3 @@ Because Preview is cache-only:
 - No external network.
 - No shell.
 - No new dependency without approval.
-

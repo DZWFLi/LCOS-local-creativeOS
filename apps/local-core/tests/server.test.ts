@@ -312,6 +312,52 @@ describe('Local Core HTTP server', () => {
     })
   })
 
+  it('generates a preview through revision id and profile only', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'local-core-server-preview-'))
+    temporaryDirectories.push(directory)
+    const sourcePath = join(directory, 'source.md')
+    writeFileSync(sourcePath, '# Runtime preview\n', 'utf8')
+    const metadataRepository = createMetadataRepository(directory)
+    const selections = new TrustedFileSelectionRegistry()
+    const fileRegistryService = new FileRegistryService(metadataRepository, selections)
+    const registered = await fileRegistryService.registerSource(
+      'disposable-portasplit' as ProjectGraphSnapshot['project']['id'],
+      { selectionId: selections.registerTrustedPath(sourcePath).id },
+    )
+    const { baseUrl } = await startServer(createLocalCoreServer({
+      metadataRepository,
+      fileRegistryService,
+      previewCacheRoot: join(directory, 'preview-cache'),
+    }))
+    const response = await fetch(`${baseUrl}/projects/disposable-portasplit/previews`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ revisionId: registered.revision.id, previewProfile: 'thumbnail' }),
+    })
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      value: { reused: false, record: { revisionId: registered.revision.id, status: 'ready' } },
+    })
+  })
+
+  it('rejects preview generation requests containing browser-supplied paths', async () => {
+    const metadataRepository = createMetadataRepository()
+    const { baseUrl } = await startServer(createLocalCoreServer({ metadataRepository }))
+    const response = await fetch(`${baseUrl}/projects/disposable-portasplit/previews`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ revisionId: 'revision-1', previewProfile: 'thumbnail', path: 'C:\\unsafe.md' }),
+    })
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'INVALID_ARGUMENT' },
+    })
+  })
+
   it.each(['path', 'absolutePath'])(
     'rejects browser source registration containing %s',
     async (pathField) => {

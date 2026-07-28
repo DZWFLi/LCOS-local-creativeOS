@@ -15,7 +15,7 @@ import type {
   Workspace,
   ValidateProjectRootInput,
 } from '@local-creative-os/contracts'
-import type { FileRecordId } from '@local-creative-os/domain'
+import type { ArtifactRevisionId, FileRecordId, ProjectId } from '@local-creative-os/domain'
 
 import { failure } from './errors.js'
 import { getHealthStatus } from './health.js'
@@ -24,6 +24,8 @@ import { validateProjectRoot } from './project-root.js'
 import { MetadataForeignKeyConstraintError, SqliteMetadataRepository } from './metadata-repository.js'
 import { FileRegistryService } from './file-registry-service.js'
 import { FileObservationService } from './file-observation-service.js'
+import { PreviewCacheService } from './preview-cache-service.js'
+import { PreviewWorkerService } from './preview-worker-service.js'
 
 const LOOPBACK_HOST = '127.0.0.1'
 const MAX_BODY_BYTES = 1 * 1024 * 1024 // 1 MiB
@@ -38,6 +40,8 @@ export interface LocalCoreServerOptions {
   readonly metadataRepository?: SqliteMetadataRepository
   readonly fileRegistryService?: FileRegistryService
   readonly fileObservationService?: FileObservationService
+  readonly previewWorkerService?: PreviewWorkerService
+  readonly previewCacheRoot?: string
 }
 
 export interface LocalCoreAddress {
@@ -147,6 +151,12 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
   const metadata = options.metadataRepository
   const fileRegistry = options.fileRegistryService
   const fileObservation = options.fileObservationService ?? (metadata === undefined ? undefined : new FileObservationService(metadata))
+  const previewWorker = options.previewWorkerService
+    ?? (metadata === undefined ? undefined : new PreviewWorkerService(metadata, {
+      cacheService: new PreviewCacheService(metadata, {
+        cacheRoot: options.previewCacheRoot ?? `${metadata.databasePath}.preview-cache`,
+      }),
+    }))
   let server: Server | undefined
   let currentAddress: LocalCoreAddress | undefined
   let lifecycleSignal: AbortSignal | undefined
@@ -315,7 +325,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
 
       // ==================== Individual CRUD routes ====================
 
-      const entityResult = await handleEntityRoute(method, pathname, metadata, fileObservation, request, controller.signal)
+      const entityResult = await handleEntityRoute(method, pathname, metadata, fileObservation, previewWorker, request, controller.signal)
       if (entityResult !== undefined) {
         sendJson(response, entityResult.status, entityResult.body)
         return
@@ -410,6 +420,7 @@ async function handleEntityRoute(
   pathname: string,
   metadata: SqliteMetadataRepository | undefined,
   fileObservation: FileObservationService | undefined,
+  previewWorker: PreviewWorkerService | undefined,
   request: IncomingMessage,
   signal: AbortSignal,
 ): Promise<RouteResult> {
@@ -616,6 +627,31 @@ async function handleEntityRoute(
   if (previewListMatch !== null && method === 'GET') {
     const projectId = decodeURIComponent(previewListMatch[1] ?? '')
     return { status: 200, body: { ok: true, value: metadata.getPreviewRecords(projectId) } }
+  }
+  const previewGenerateMatch = /^\/projects\/([^/]+)\/previews$/.exec(pathname)
+  if (previewGenerateMatch !== null && method === 'POST') {
+    if (previewWorker === undefined) return { status: 503, body: failure('UNAVAILABLE', 'Preview worker is not configured.') }
+    const projectId = decodeURIComponent(previewGenerateMatch[1] ?? '')
+    const body = await readJsonBody(request, signal)
+    if (!isRecord(body) || typeof body.revisionId !== 'string' || typeof body.previewProfile !== 'string'
+      || 'path' in body || 'absolutePath' in body) {
+      return { status: 400, body: failure('INVALID_ARGUMENT', 'Preview generation requires revisionId and previewProfile only.') }
+    }
+    try {
+      const value = await previewWorker.generate({
+        projectId: projectId as ProjectId,
+        revisionId: body.revisionId as ArtifactRevisionId,
+        previewProfile: body.previewProfile,
+        signal,
+      })
+      return { status: 200, body: { ok: true, value } }
+    } catch (error: unknown) {
+      const aborted = error instanceof DOMException && error.name === 'AbortError'
+      return {
+        status: aborted ? 499 : 404,
+        body: failure(aborted ? 'ABORTED' : 'NOT_FOUND', error instanceof Error ? error.message : 'Preview generation failed.'),
+      }
+    }
   }
 
   // --- Checkpoints ---

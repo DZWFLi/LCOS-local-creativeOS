@@ -8,7 +8,9 @@ No Run / SSE / waiting_input / Artifact Return loop exists in this MVP branch.
 
 ### Preview is not yet real rendering
 
-PreviewRecord and renderer registry infrastructure exist, but the MVP branch does not yet provide worker-backed MD/TXT/Image/PDF preview rendering through Web.
+PreviewRecord and renderer registry infrastructure exist. The MVP branch now provides worker-backed TXT / MD / Image preview generation through Local Core.
+
+PDF preview is still not implemented.
 
 Stage 5 ADR exists at:
 
@@ -16,7 +18,13 @@ Stage 5 ADR exists at:
 docs/architecture/ADR_MVP_STAGE5_PREVIEW_WORKER_PLAN.md
 ```
 
-Real Preview worker implementation still requires explicit approval.
+The implemented worker still has MVP limits:
+
+- no PDF;
+- no external network;
+- no browser path input;
+- no shell;
+- no Watcher-triggered preview.
 
 ### Watcher is not enabled
 

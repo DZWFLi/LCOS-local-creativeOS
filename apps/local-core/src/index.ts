@@ -13,6 +13,7 @@ export { FileRegistryService, TrustedFileSelectionRegistry } from './file-regist
 export { guardTrustedFilePath } from './path-guard.js'
 export { RendererRegistry, DEFAULT_RENDERERS } from './renderer-registry.js'
 export { PreviewCacheService } from './preview-cache-service.js'
+export { PreviewWorkerService } from './preview-worker-service.js'
 export { ensureMvpSampleProject, createMvpSampleSnapshot, MVP_SAMPLE_PROJECT_ID } from './mvp-sample-project.js'
 
 async function main(): Promise<void> {

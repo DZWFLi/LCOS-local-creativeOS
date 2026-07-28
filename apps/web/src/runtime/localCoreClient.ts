@@ -33,6 +33,11 @@ export interface StructuredTestReport {
   readonly testResults?: readonly unknown[]
 }
 
+export interface GeneratePreviewResult {
+  readonly record: PreviewRecord
+  readonly reused: boolean
+}
+
 export interface LocalCoreClient {
   health(signal?: AbortSignal): Promise<RuntimeCall<HealthStatus>>
   catalog(signal?: AbortSignal): Promise<RuntimeCall<readonly ProjectCatalogEntry[]>>
@@ -40,6 +45,7 @@ export interface LocalCoreClient {
   metadataStatus(signal?: AbortSignal): Promise<RuntimeCall<MetadataStoreStatus>>
   projectGraph(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<ProjectGraphSnapshot>>
   previewRecords(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<readonly PreviewRecord[]>>
+  generatePreview(projectId: string, revisionId: string, previewProfile: string, signal?: AbortSignal): Promise<RuntimeCall<GeneratePreviewResult>>
   applyMutations(batch: MutationBatch, projectId: string, signal?: AbortSignal): Promise<RuntimeCall<MutationResult>>
   saveProjectGraph(snapshot: ProjectGraphSnapshot, signal?: AbortSignal): Promise<RuntimeCall<ProjectGraphSnapshot>>
 }
@@ -202,6 +208,17 @@ export function createLocalCoreClient(): LocalCoreClient {
       return request(`/projects/${encodeURIComponent(projectId)}/preview-records`, {
         signal,
         decode: decodeResult<readonly PreviewRecord[]>,
+      })
+    },
+    generatePreview(projectId, revisionId, previewProfile, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/previews`, {
+        signal,
+        init: {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ revisionId, previewProfile }),
+        },
+        decode: decodeResult<GeneratePreviewResult>,
       })
     },
     saveProjectGraph(snapshot, signal) {

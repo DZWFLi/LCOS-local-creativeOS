@@ -30,6 +30,11 @@ export interface SaveResult {
   readonly error?: string
 }
 
+export interface PreviewGenerateResult {
+  readonly state: PersistedPrototypeState | null
+  readonly error?: string
+}
+
 export class RuntimeBridge {
   readonly client: LocalCoreClient
   readonly projectId: string
@@ -201,6 +206,17 @@ export class RuntimeBridge {
       return call.result.ok ? call.result.value : []
     } catch {
       return []
+    }
+  }
+
+  async generatePreview(revisionId: string, previewProfile = 'thumbnail'): Promise<PreviewGenerateResult> {
+    try {
+      const generated = await this.client.generatePreview(this.projectId, revisionId, previewProfile)
+      if (!generated.result.ok) return { state: null, error: generated.result.error.message }
+      const loaded = await this.loadProject()
+      return loaded.state === null ? { state: null, error: loaded.error } : { state: loaded.state }
+    } catch (err) {
+      return { state: null, error: err instanceof Error ? err.message : 'Preview generation failed.' }
     }
   }
 }

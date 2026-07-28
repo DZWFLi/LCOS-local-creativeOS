@@ -9,6 +9,7 @@ import { SqliteMetadataRepository } from '../../apps/local-core/src/metadata-rep
 import { FileObservationService } from '../../apps/local-core/src/file-observation-service'
 import { FileRegistryService, TrustedFileSelectionRegistry } from '../../apps/local-core/src/file-registry-service'
 import { PreviewCacheService } from '../../apps/local-core/src/preview-cache-service'
+import { PreviewWorkerService } from '../../apps/local-core/src/preview-worker-service'
 import { RendererRegistry } from '../../apps/local-core/src/renderer-registry'
 
 const REPOSITORY_ROOT = resolve(import.meta.dirname, '../..')
@@ -282,7 +283,32 @@ describe('Phase 3 architecture boundaries', () => {
 
     expect(second.cacheKey).not.toBe(first.cacheKey)
   })
-  it.todo('ARCH-P3-010 worker crash or cancellation cannot publish ready PreviewRecord')
+  it('ARCH-P3-010 worker crash or cancellation cannot publish ready PreviewRecord', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'arch-p3-preview-abort-'))
+    temporaryDirectories.push(directory)
+    const sourcePath = join(directory, 'source.md')
+    writeFileSync(sourcePath, '# source\n', 'utf8')
+    const repository = new SqliteMetadataRepository(join(directory, 'metadata.sqlite'), { disposableOnly: true })
+    const snapshot = projectSnapshot()
+    repository.save({ ...snapshot, project: { ...snapshot.project, rootPath: directory }, artifacts: [], artifactViews: [], artifactRevisions: [], fileRecords: [] })
+    const selections = new TrustedFileSelectionRegistry()
+    const registered = await new FileRegistryService(repository, selections).registerSource(snapshot.project.id, { selectionId: selections.registerTrustedPath(sourcePath).id })
+    const controller = new AbortController()
+    controller.abort()
+
+    await expect(new PreviewWorkerService(repository, {
+      cacheService: new PreviewCacheService(repository, { cacheRoot: join(directory, 'cache') }),
+    }).generate({
+      projectId: snapshot.project.id,
+      revisionId: registered.revision.id,
+      previewProfile: 'thumbnail',
+      signal: controller.signal,
+    })).rejects.toThrow()
+    const records = repository.getPreviewRecords(String(snapshot.project.id))
+    repository.close()
+
+    expect(records.some((record) => record.status === 'ready')).toBe(false)
+  })
   it('ARCH-P3-011 unsupported formats cannot report successful Preview', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'arch-p3-preview-unsupported-'))
     temporaryDirectories.push(directory)

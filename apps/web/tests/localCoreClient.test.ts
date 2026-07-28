@@ -153,4 +153,41 @@ describe('Local Core browser client', () => {
       value: [{ id: 'preview-1', status: 'ready' }],
     })
   })
+
+  it('requests preview generation with revision id and profile only', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({
+      ok: true,
+      value: {
+        reused: false,
+        record: {
+          id: 'preview-1',
+          projectId: 'project-1',
+          revisionId: 'revision-1',
+          sourceContentHash: 'hash-1',
+          rendererId: 'markdown',
+          rendererVersion: '1',
+          previewProfile: 'thumbnail',
+          cacheKey: 'key',
+          cachePath: 'cache/file.preview',
+          mimeType: 'text/plain',
+          size: 10,
+          status: 'ready',
+          createdAt: '2026-07-28T00:00:00.000Z',
+          updatedAt: '2026-07-28T00:00:00.000Z',
+        },
+      },
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await createLocalCoreClient().generatePreview('project-1', 'revision-1', 'thumbnail')
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/local-core/v1/projects/project-1/previews',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ revisionId: 'revision-1', previewProfile: 'thumbnail' }),
+      }),
+    )
+    expect(result.result).toMatchObject({ ok: true, value: { reused: false, record: { status: 'ready' } } })
+  })
 })
