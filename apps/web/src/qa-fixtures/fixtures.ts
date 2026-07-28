@@ -1,4 +1,4 @@
-import type { CanvasEdge, CanvasNode, CanvasScope, ProjectPackage, Workspace } from './model'
+import type { CanvasEdge, CanvasNode, CanvasScope, ProjectPackage, Workspace } from '../model'
 
 const createdAt = '2026-07-21T00:00:00.000Z'
 const ROOT_SCOPE = 'scope-root'

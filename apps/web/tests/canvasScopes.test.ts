@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fixtureEdges, fixtureNodes } from '../src/fixtures'
+import { fixtureEdges, fixtureNodes } from '../src/qa-fixtures/fixtures'
 import { createChildScopeFromSelection, removeScopeTree } from '../src/state/canvasScopes'
 
 let counter = 0

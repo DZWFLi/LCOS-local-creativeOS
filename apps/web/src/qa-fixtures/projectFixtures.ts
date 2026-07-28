@@ -1,4 +1,4 @@
-import { fixtureEdges, fixtureNodes, fixtureProjects, fixtureScopes, fixtureWorkspaces } from '../fixtures'
+import { fixtureEdges, fixtureNodes, fixtureProjects, fixtureScopes, fixtureWorkspaces } from './fixtures'
 import type { CanvasEdge, CanvasNode, CanvasScope, PersistedPrototypeState, ProjectPackage, Workspace } from '../model'
 
 const now = '2026-07-22T00:00:00.000Z'

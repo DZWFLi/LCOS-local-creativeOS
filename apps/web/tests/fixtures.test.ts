@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fixtureEdges, fixtureNodes, fixtureScopes, fixtureWorkspaces } from '../src/fixtures'
+import { fixtureEdges, fixtureNodes, fixtureScopes, fixtureWorkspaces } from '../src/qa-fixtures/fixtures'
 
 describe('Alpha fixture graph', () => {
   it('keeps one Canvas fixture with all six node families', () => {

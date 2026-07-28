@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createFixtureFrontendAdapter, fixtureProjectId } from '../src/adapters/fixtureAdapter'
+import { createFixtureFrontendAdapter, fixtureProjectId } from '../src/qa-fixtures/fixtureAdapter'
 
 describe('frontend adapter boundary', () => {
   it('serves WorkspaceQuery from an explicit fixture origin', async () => {

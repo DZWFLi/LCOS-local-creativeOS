@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { Check, Cloud, Command, Layers3, Play, X } from 'lucide-react'
-import { makePerformanceFixture } from './fixtures'
+import { makePerformanceFixture } from './qa-fixtures/fixtures'
 import type { ActiveRun, Camera, CanvasNode, CanvasScope, NodeDisplayMode, NodeLayer, PersistedPrototypeState, ProjectPackage, ScopeKind, TargetContextInference, WorkRailPreferences, Workspace, WorkspaceIntent } from './model'
 import { nodeMeta, runStatusLabel } from './model'
 import { ProjectCanvas } from './features/canvas/ProjectCanvas'
@@ -27,7 +27,7 @@ import { arrangeSelectedNodes } from './features/canvas/selectionLayout'
 import { copyCanvasSelection, pasteCanvasNodes, pasteRelationTemplate, type CanvasClipboardPayload } from './state/canvasClipboard'
 import { useCanvasHistory } from './state/useCanvasHistory'
 import { inferTargetContext, moveBetweenTargetAndContext, setPrimaryTarget } from './state/workContext'
-import { createBlankProjectState, defaultProjectCatalog, fixtureStateForProject } from './state/projectFixtures'
+import { createBlankProjectState, defaultProjectCatalog, fixtureStateForProject } from './qa-fixtures/projectFixtures'
 import { createChildScopeFromSelection, removeScopeTree } from './state/canvasScopes'
 
 const MVP_SAMPLE_PROJECT_ID = 'disposable-mvp-sample'
@@ -55,8 +55,9 @@ function createId(prefix: string): string {
 }
 
 export function App() {
-  const queryState = typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('state') ?? ''
-  const perfCount = typeof window === 'undefined' ? 0 : Number(new URLSearchParams(window.location.search).get('perf') ?? 0)
+  const qaSearchParams = typeof window === 'undefined' || !import.meta.env.DEV ? null : new URLSearchParams(window.location.search)
+  const queryState = qaSearchParams?.get('state') ?? ''
+  const perfCount = Number(qaSearchParams?.get('perf') ?? 0)
   const performanceFixture = perfCount >= 80 ? makePerformanceFixture(Math.min(300, perfCount)) : null
   const initialProjectId = queryState === 'project-huaxin' ? 'project-huaxin' : DEFAULT_PROJECT_ID
   const initial = useMemo(() => initialPrototype(initialProjectId, performanceFixture), [performanceFixture])

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fixtureNodes, fixtureWorkspaces } from '../src/fixtures'
+import { fixtureNodes, fixtureWorkspaces } from '../src/qa-fixtures/fixtures'
 import { inferTargetContext, moveBetweenTargetAndContext, setPrimaryTarget } from '../src/state/workContext'
 
 const workspace = fixtureWorkspaces[1]

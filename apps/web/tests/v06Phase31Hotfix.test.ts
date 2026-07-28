@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { fixtureEdges, fixtureNodes } from '../src/fixtures'
+import { fixtureEdges, fixtureNodes } from '../src/qa-fixtures/fixtures'
 import { createChildScopeFromSelection } from '../src/state/canvasScopes'
 
 const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8')
