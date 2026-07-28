@@ -79,6 +79,7 @@ function makeSnapshot() {
     notes: [
       { id: 'note-1', projectId: 'golden-proj', anchor: { type: 'artifact', artifactId: 'art-brief' }, body: 'This is a golden path note.', createdAt: now(), updatedAt: now() },
     ],
+    fileRecords: [],
     artifactRevisions: [],
     checkpoints: [
       { id: 'cp-golden', projectId: 'golden-proj', scopeId: 'scope-root', label: 'Golden Snapshot', snapshotJson: { state: 'initial', nodes: [{ id: 'view-brief', x: 120, y: 180 }] }, createdAt: now() },

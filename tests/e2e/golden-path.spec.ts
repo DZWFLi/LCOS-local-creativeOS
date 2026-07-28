@@ -7,29 +7,39 @@ import { test, expect } from '@playwright/test'
 import { spawn } from 'node:child_process'
 import { rmSync } from 'node:fs'
 import path from 'node:path'
-import http from 'node:http'
 
-const ROOT = path.resolve(import.meta.dirname, '..')
+const ROOT = path.resolve(import.meta.dirname, '..', '..')
 const PORT_LC = 43121
 const PORT_WEB = 5173
 const NOW = new Date().toISOString()
 
 function waitForServer(port: number, timeout = 15000): Promise<boolean> {
-  return new Promise((resolve) => {
-    const start = Date.now()
-    const poll = () => {
-      http.get(`http://127.0.0.1:${port}/health`, (res) => {
-        resolve(res.statusCode === 200)
-      }).on('error', () => {
-        if (Date.now() - start > timeout) resolve(false)
-        else setTimeout(poll, 500)
-      })
+  const started = Date.now()
+  const poll = async (): Promise<boolean> => {
+    try {
+      const response = await fetch(`http://127.0.0.1:${port}/health`, { cache: 'no-store' })
+      if (response.ok) return true
+    } catch {
+      // Server may be between shutdown and restart; keep polling until timeout.
     }
-    poll()
-  })
+    if (Date.now() - started > timeout) return false
+    await new Promise((resolve) => setTimeout(resolve, 500))
+    return poll()
+  }
+  return poll()
 }
 
 let localCoreProcess: ReturnType<typeof spawn> | null = null
+
+async function stopLocalCore(): Promise<void> {
+  if (localCoreProcess === null) return
+  const processToStop = localCoreProcess
+  localCoreProcess = null
+  if (processToStop.exitCode !== null || processToStop.signalCode !== null) return
+  const exited = new Promise<void>((resolve) => processToStop.once('exit', () => resolve()))
+  processToStop.kill()
+  await exited
+}
 
 test.beforeAll(async () => {
   rmSync(path.join(ROOT, 'apps', 'local-core', '.data', 'phase2.sqlite'), { force: true })
@@ -38,14 +48,16 @@ test.beforeAll(async () => {
   if (!ok) throw new Error('Local Core did not start')
 
   // Seed project via HTTP
-  const seedBody = JSON.stringify({ snapshot: { schemaVersion: 3, graphVersion: 1, project: { id: 'project-portasplit', name: 'PortaSplit', rootPath: 'disposable://portasplit', graphVersion: 1, createdAt: NOW, updatedAt: NOW }, scopes: [{ id: 'scope-root', projectId: 'project-portasplit', parentScopeId: null, containerViewId: null, kind: 'root', name: 'Root', createdAt: NOW, updatedAt: NOW }], workspaces: [{ id: 'workspace-main', projectId: 'project-portasplit', scopeId: 'scope-root', name: 'Main', intent: 'build', viewport: { x: 0, y: 0, zoom: 1 }, focusedViewIds: [], visibleLayers: ['core', 'process'], contextPolicy: 'selection-only', updatedAt: NOW }], artifacts: [], artifactViews: [], relations: [], notes: [], artifactRevisions: [], checkpoints: [] } })
-  await new Promise<void>((resolve) => {
-    const req = http.request({ hostname: '127.0.0.1', port: PORT_LC, path: '/projects/project-portasplit/graph', method: 'PUT', headers: { 'Content-Type': 'application/json' } }, () => resolve())
-    req.write(seedBody); req.end()
+  const seedBody = JSON.stringify({ snapshot: { schemaVersion: 3, graphVersion: 1, project: { id: 'project-portasplit', name: 'PortaSplit', rootPath: 'disposable://portasplit', graphVersion: 1, createdAt: NOW, updatedAt: NOW }, scopes: [{ id: 'scope-root', projectId: 'project-portasplit', parentScopeId: null, containerViewId: null, kind: 'root', name: 'Root', createdAt: NOW, updatedAt: NOW }], workspaces: [{ id: 'workspace-main', projectId: 'project-portasplit', scopeId: 'scope-root', name: 'Main', intent: 'build', viewport: { x: 0, y: 0, zoom: 1 }, focusedViewIds: [], visibleLayers: ['core', 'process'], contextPolicy: 'selection-only', updatedAt: NOW }], artifacts: [], artifactViews: [], relations: [], notes: [], fileRecords: [], artifactRevisions: [], checkpoints: [] } })
+  const seedResponse = await fetch(`http://127.0.0.1:${PORT_LC}/projects/project-portasplit/graph`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: seedBody,
   })
+  expect(seedResponse.ok).toBe(true)
 })
 
-test.afterAll(() => localCoreProcess?.kill())
+test.afterAll(async () => { await stopLocalCore() })
 
 test('Browser loads Runtime data from SQLite via Proxy', async ({ page }) => {
   await page.goto(`http://127.0.0.1:${PORT_WEB}`, { waitUntil: 'networkidle' })
@@ -73,8 +85,7 @@ test('Mutation save verified via Node HTTP golden path script', async () => {
 
 test('Restart Local Core → reload page → data persists', async ({ page }) => {
   // Kill and restart
-  localCoreProcess?.kill()
-  await new Promise(r => setTimeout(r, 1000))
+  await stopLocalCore()
   localCoreProcess = spawn('node', ['apps/local-core/dist/index.js'], { cwd: ROOT, stdio: 'ignore' })
   const ok = await waitForServer(PORT_LC)
   expect(ok).toBe(true)
