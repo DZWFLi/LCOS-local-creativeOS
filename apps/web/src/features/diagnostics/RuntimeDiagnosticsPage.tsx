@@ -20,9 +20,7 @@ import type {
   ProjectGraphSnapshot,
   Result,
   ValidatedProjectRoot,
-  WorkspaceContextPolicy,
 } from '@local-creative-os/contracts'
-import type { ArtifactViewId } from '@local-creative-os/domain'
 
 import {
   createLocalCoreClient,
@@ -47,87 +45,10 @@ interface DiagnosticsSnapshot {
   readonly refreshedAt?: string
 }
 
-const DISPOSABLE_PROJECT_ID = 'disposable-portasplit-phase2-lite'
+const MVP_SAMPLE_PROJECT_ID = 'disposable-mvp-sample'
 
-function disposablePortaSplitSnapshot(): ProjectGraphSnapshot {
-  const now = new Date().toISOString()
-  const projectId = DISPOSABLE_PROJECT_ID as ProjectGraphSnapshot['project']['id']
-  return {
-    schemaVersion: 3,
-    graphVersion: 1 as ProjectGraphSnapshot['graphVersion'],
-    project: {
-      id: projectId,
-      name: 'PortaSplit · Phase 2.5',
-      rootPath: 'disposable://portasplit-phase2-lite',
-      graphVersion: 1 as ProjectGraphSnapshot['project']['graphVersion'],
-      createdAt: now, updatedAt: now,
-    },
-    scopes: [{
-      id: 'disposable-scope-root' as ProjectGraphSnapshot['scopes'][number]['id'],
-      projectId,
-      parentScopeId: null,
-      containerViewId: null,
-      kind: 'root',
-      name: 'Root',
-      createdAt: now, updatedAt: now,
-    }],
-    workspaces: [{
-      id: 'disposable-workspace-main' as ProjectGraphSnapshot['workspaces'][number]['id'],
-      projectId,
-      scopeId: 'disposable-scope-root' as ProjectGraphSnapshot['workspaces'][number]['scopeId'],
-      name: 'Main Canvas',
-      intent: 'build',
-      viewport: { x: 128, y: 72, zoom: 0.92 },
-      focusedViewIds: [
-        'disposable-view-brief' as ArtifactViewId,
-        'disposable-view-board' as ArtifactViewId,
-      ],
-      visibleLayers: ['core'],
-      contextPolicy: 'selection-only' as WorkspaceContextPolicy,
-      updatedAt: now,
-    }],
-    artifacts: [
-      {
-        id: 'disposable-artifact-brief' as ProjectGraphSnapshot['artifacts'][number]['id'],
-        projectId,
-        title: 'PortaSplit Brief', kind: 'markdown',
-        availability: 'available', createdAt: now, updatedAt: now,
-      },
-      {
-        id: 'disposable-artifact-board' as ProjectGraphSnapshot['artifacts'][number]['id'],
-        projectId,
-        title: 'Direction Board', kind: 'image',
-        availability: 'available', createdAt: now, updatedAt: now,
-      },
-    ],
-    artifactViews: [
-      {
-        id: 'disposable-view-brief' as ProjectGraphSnapshot['artifactViews'][number]['id'],
-        artifactId: 'disposable-artifact-brief' as ProjectGraphSnapshot['artifacts'][number]['id'],
-        scopeId: 'disposable-scope-root' as ProjectGraphSnapshot['artifactViews'][number]['scopeId'],
-        referenceKind: 'primary', position: { x: 120, y: 180 },
-        size: { width: 280, height: 180 }, displayMode: 'card', collapsed: false,
-      },
-      {
-        id: 'disposable-view-board' as ProjectGraphSnapshot['artifactViews'][number]['id'],
-        artifactId: 'disposable-artifact-board' as ProjectGraphSnapshot['artifacts'][number]['id'],
-        scopeId: 'disposable-scope-root' as ProjectGraphSnapshot['artifactViews'][number]['scopeId'],
-        referenceKind: 'primary', position: { x: 520, y: 210 },
-        size: { width: 320, height: 220 }, displayMode: 'thumbnail', collapsed: false,
-      },
-    ],
-    relations: [{
-      id: 'disposable-relation-brief-board' as ProjectGraphSnapshot['relations'][number]['id'],
-      projectId: DISPOSABLE_PROJECT_ID as ProjectGraphSnapshot['project']['id'],
-      sourceEntityType: 'artifact', sourceEntityId: 'disposable-artifact-brief',
-      targetEntityType: 'artifact', targetEntityId: 'disposable-artifact-board',
-      kind: 'informs', createdAt: now, updatedAt: now,
-    }],
-    notes: [],
-    fileRecords: [],
-    artifactRevisions: [],
-    checkpoints: [],
-  }
+function pickDiagnosticsProjectId(catalog: readonly ProjectCatalogEntry[]): string | undefined {
+  return catalog.find((project) => project.id === MVP_SAMPLE_PROJECT_ID)?.id ?? catalog[0]?.id
 }
 
 function ErrorCode({ result }: { readonly result: Result<unknown> | undefined }) {
@@ -171,13 +92,14 @@ export function RuntimeDiagnosticsPage() {
 
   const refresh = useCallback(async (signal?: AbortSignal) => {
     setRefreshing(true)
-    const [health, catalog, report, metadata, graph] = await Promise.all([
+    const [health, catalog, report, metadata] = await Promise.all([
       client.health(signal),
       client.catalog(signal),
       loadStructuredTestReport(signal),
       client.metadataStatus(signal),
-      client.projectGraph(DISPOSABLE_PROJECT_ID, signal),
     ])
+    const projectId = catalog.result.ok ? pickDiagnosticsProjectId(catalog.result.value) : undefined
+    const graph = projectId ? await client.projectGraph(projectId, signal) : undefined
     if (signal?.aborted) return
     setSnapshot({
       health,
@@ -245,17 +167,12 @@ export function RuntimeDiagnosticsPage() {
     setValidatingRoot(false)
   }
 
-  const saveDisposable = async () => {
-    await client.saveProjectGraph(disposablePortaSplitSnapshot())
-    await refresh()
-  }
-
   return <main className="runtime-diagnostics" data-testid="runtime-diagnostics">
     <header className="diagnostics-header">
       <div>
         <p className="diagnostics-kicker">Local Creative OS · Development</p>
         <h1>Runtime Diagnostics</h1>
-        <p>检查浏览器、Vite Proxy 与 Local Core，并仅允许写入明确标记的 disposable Phase 2 Lite 元数据。</p>
+        <p>检查浏览器、Vite Proxy 与 Local Core，并读取当前 Runtime Project Graph。</p>
       </div>
       <div className="diagnostics-header-actions">
         <span className={`online-state ${online ? 'is-online' : 'is-offline'}`}>
@@ -273,9 +190,9 @@ export function RuntimeDiagnosticsPage() {
       <span>Dev build</span><span className="diagnostics-source source-dev">v{DEV_VERSION}</span>
       <span className="diagnostics-dev-ref">{DEV_BRANCH}</span>
       <span className="diagnostics-dev-ref">{DEV_COMMIT}</span>
-      <span>Canvas data</span><SourceBadge origin="fixture" />
+      <span>Canvas data</span><SourceBadge origin="runtime" />
       <span>Diagnostics data</span><SourceBadge origin="runtime" />
-      <small>正式 Canvas 仍未迁移；下方 disposable 项目来自 SQLite Runtime。</small>
+      <small>优先读取 MVP Sample；若不存在，则读取 Runtime Catalog 的第一个项目。</small>
     </section>
 
     <div className="diagnostics-grid">
@@ -357,7 +274,7 @@ export function RuntimeDiagnosticsPage() {
       </section>
 
       <section className="diagnostics-panel catalog-panel">
-        <div className="panel-heading"><Database size={18} /><h2>Phase 2 Lite Metadata</h2><SourceBadge origin="runtime" /></div>
+        <div className="panel-heading"><Database size={18} /><h2>Runtime Project Metadata</h2><SourceBadge origin="runtime" /></div>
         <ErrorCode result={snapshot.metadata?.result} />
         <ErrorCode result={snapshot.graph?.result} />
         {metadata && <dl className="health-grid">
@@ -373,9 +290,7 @@ export function RuntimeDiagnosticsPage() {
             <strong>{graph.artifacts.find((artifact) => artifact.id === view.artifactId)?.title}</strong>
             <span>x {view.position.x} · y {view.position.y} · {view.size.width}×{view.size.height}</span>
           </li>)}</ul>
-        </div> : <button type="button" onClick={() => void saveDisposable()}>
-          Create disposable PortaSplit metadata
-        </button>}
+        </div> : <div className="catalog-empty">No Runtime project graph available from the current catalog.</div>}
       </section>
     </div>
   </main>
