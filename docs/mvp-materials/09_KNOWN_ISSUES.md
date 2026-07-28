@@ -10,6 +10,14 @@ No Run / SSE / waiting_input / Artifact Return loop exists in this MVP branch.
 
 PreviewRecord and renderer registry infrastructure exist, but the MVP branch does not yet provide worker-backed MD/TXT/Image/PDF preview rendering through Web.
 
+Stage 5 ADR exists at:
+
+```text
+docs/architecture/ADR_MVP_STAGE5_PREVIEW_WORKER_PLAN.md
+```
+
+Real Preview worker implementation still requires explicit approval.
+
 ### Watcher is not enabled
 
 File observation is manual API-level infrastructure only. No filesystem watcher and no automatic ArtifactRevision creation are enabled.
@@ -43,4 +51,3 @@ Frontend Fixture / Demo paths remain for tests, diagnostics, and fallback. UI mu
 - Automatic Revision.
 - Browser-triggered shell.
 - Non-loopback Local Core binding.
-

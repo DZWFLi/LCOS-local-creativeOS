@@ -27,7 +27,7 @@ No new Domain type is required for the current MVP.
 | Workspace placement | Existing ArtifactView records | Implemented |
 | Identity display | Work Rail Runtime identity panel | Implemented |
 | Preview status visibility | Read-only PreviewRecord API + Work Rail status | Implemented |
-| Real content preview | Preview worker/rendering path | Not implemented |
+| Real content preview | Preview worker/rendering path | ADR proposed |
 
 ## What this proves
 
@@ -52,3 +52,9 @@ The UI may show whether a PreviewRecord is:
 - not yet generated.
 
 Do not fake rendered file contents as Preview cache output.
+
+Implementation must follow:
+
+```text
+docs/architecture/ADR_MVP_STAGE5_PREVIEW_WORKER_PLAN.md
+```
