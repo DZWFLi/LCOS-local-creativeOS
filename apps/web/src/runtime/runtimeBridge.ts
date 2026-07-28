@@ -203,21 +203,32 @@ const KIND_TO_NODE: Record<string, CanvasNode['kind']> = {
 
 export function mapGraphToState(graph: ProjectGraphSnapshot, projectId: string): PersistedPrototypeState {
   const artifactById = new Map(graph.artifacts.map((a) => [a.id, a]))
+  const revisionById = new Map(graph.artifactRevisions.map((revision) => [revision.id, revision]))
+  const fileRecordById = new Map(graph.fileRecords.map((fileRecord) => [fileRecord.id, fileRecord]))
 
   const nodes: CanvasNode[] = graph.artifactViews.map((view) => {
     const artifact = artifactById.get(view.artifactId)
+    const revisionId = view.revisionId ?? artifact?.currentRevisionId
+    const revision = revisionId === undefined ? undefined : revisionById.get(revisionId)
+    const fileRecord = revision === undefined ? undefined : fileRecordById.get(revision.fileRecordId)
     const isStale = artifact?.availability === 'stale'
     const isMissing = artifact?.availability === 'missing'
     return {
       id: String(view.id),
       kind: artifact ? (KIND_TO_NODE[artifact.kind] ?? 'context') : 'context',
       title: artifact?.title ?? String(view.id),
-      subtitle: artifact?.kind ?? '',
+      subtitle: artifact?.kind ? `${artifact.kind}${fileRecord ? ' · Runtime source' : ''}` : '',
       x: view.position.x, y: view.position.y,
       width: view.size.width, height: view.size.height,
       displayMode: view.displayMode === 'compact' ? 'compact' as const : 'standard' as const,
       draft: isStale, current: !isStale, disabled: isMissing,
       fileType: artifact?.kind,
+      artifactId: artifact === undefined ? undefined : String(artifact.id),
+      revisionId: revisionId === undefined ? undefined : String(revisionId),
+      fileRecordId: revision === undefined ? undefined : String(revision.fileRecordId),
+      contentHash: revision === undefined ? undefined : String(revision.contentHash),
+      observedPath: fileRecord?.observedPath,
+      followsCurrentRevision: artifact?.currentRevisionId !== undefined && revisionId === artifact.currentRevisionId,
       scopeId: String(view.scopeId),
     }
   })

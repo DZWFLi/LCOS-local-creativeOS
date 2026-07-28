@@ -24,6 +24,9 @@ export interface CanvasNode {
   previewUrl?: string
   artifactId?: string
   revisionId?: string
+  fileRecordId?: string
+  contentHash?: string
+  observedPath?: string
   followsCurrentRevision?: boolean
   viewOf?: string
   error?: boolean

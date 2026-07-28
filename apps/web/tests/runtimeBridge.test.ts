@@ -8,7 +8,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import type { PersistedPrototypeState } from '../src/model'
 import type { LocalCoreClient, RuntimeCall } from '../src/runtime/localCoreClient'
-import { diffStateToOps, RuntimeBridge } from '../src/runtime/runtimeBridge'
+import { diffStateToOps, mapGraphToState, RuntimeBridge } from '../src/runtime/runtimeBridge'
 
 const NOW = '2026-07-26T00:00:00.000Z'
 
@@ -125,6 +125,47 @@ function mockClient(overrides: Partial<LocalCoreClient> = {}): LocalCoreClient {
 }
 
 describe('RuntimeBridge mutation serialization', () => {
+  it('projects Runtime ArtifactRevision and FileRecord identity onto Canvas nodes', () => {
+    const graph = snapshot()
+    const currentRevisionId = 'revision-brief-initial' as ProjectGraphSnapshot['artifactRevisions'][number]['id']
+    const fileRecordId = 'file-brief' as ProjectGraphSnapshot['fileRecords'][number]['id']
+    const state = mapGraphToState({
+      ...graph,
+      artifacts: [{ ...graph.artifacts[0], currentRevisionId }],
+      artifactViews: [{ ...graph.artifactViews[0], revisionId: currentRevisionId }],
+      artifactRevisions: [{
+        id: currentRevisionId,
+        artifactId: graph.artifacts[0].id,
+        fileRecordId,
+        contentHash: 'abcdef1234567890' as ProjectGraphSnapshot['artifactRevisions'][number]['contentHash'],
+        source: 'import',
+        status: 'current',
+        createdAt: NOW,
+      }],
+      fileRecords: [{
+        id: fileRecordId,
+        projectId: graph.project.id,
+        observedPath: 'E:/sample/brief.md',
+        observedHash: 'abcdef1234567890' as ProjectGraphSnapshot['fileRecords'][number]['observedHash'],
+        size: 123,
+        modifiedAt: NOW,
+        mimeType: 'text/markdown',
+        availability: 'current',
+        observedAt: NOW,
+      }],
+    }, 'disposable-portasplit')
+
+    expect(state.nodes[0]).toMatchObject({
+      id: 'brief',
+      artifactId: 'brief',
+      revisionId: currentRevisionId,
+      fileRecordId,
+      contentHash: 'abcdef1234567890',
+      observedPath: 'E:/sample/brief.md',
+      followsCurrentRevision: true,
+    })
+  })
+
   it('executes slow A before B and acknowledges B as the final state/version', async () => {
     let releaseA!: () => void
     const aGate = new Promise<void>((resolve) => { releaseA = resolve })

@@ -182,6 +182,15 @@ function SelectionState({ node, focus, relationNodes, detailPanel, inference, al
     {acceptedHere && <div className="accepted-result-banner"><Check size={15} /><span><b>已接受为当前版本</b><small>{activeRun.id} 的修改已归位，可继续输入下一轮调整。</small></span></div>}
     <PreviewSurface node={node} />
     <div className="selection-title"><div><small>{nodeMeta[node.kind].label}</small><h3>{node.title}</h3><p>{node.subtitle}</p></div>{node.opensScopeId && <button onClick={() => onEnterScope(node.opensScopeId!)}><FolderOpen size={15} />进入集合</button>}</div>
+    {(node.revisionId || node.fileRecordId) && <section className="runtime-identity" data-testid="runtime-identity">
+      <header><FileText size={14} /><h4>Runtime identity</h4><span>{node.followsCurrentRevision ? 'Current' : 'Pinned'}</span></header>
+      <dl>
+        {node.revisionId && <div><dt>Revision</dt><dd>{node.revisionId}</dd></div>}
+        {node.fileRecordId && <div><dt>FileRecord</dt><dd>{node.fileRecordId}</dd></div>}
+        {node.contentHash && <div><dt>Hash</dt><dd>{node.contentHash.slice(0, 12)}</dd></div>}
+        {node.observedPath && <div><dt>Path</dt><dd title={node.observedPath}>{node.observedPath}</dd></div>}
+      </dl>
+    </section>}
     <section className="selection-note"><label><MessageSquareText size={14} />备注</label><textarea defaultValue={node.id === 'feedback' ? '利益点需要更直接，保留品牌蓝，不改封面。' : ''} placeholder="记录判断，系统会自动关联到当前文件或页面" /></section>
     <div className="selection-actions"><button onClick={() => onFocusPreview(focus ? null : node.id)}><Maximize2 size={14} />{focus ? '退出大预览' : '大预览'}</button><button onClick={() => onOpenNative(node)}>在本地打开</button><button onClick={() => onTogglePositionLock(node.id)}>{node.positionLocked ? <PinOff size={14} /> : <Pin size={14} />}{node.positionLocked ? '允许自动排列' : '固定位置'}</button></div>
     <div className="selection-links"><button onClick={() => onDetailPanel('relations')}><Link2 size={14} />关联 {relationNodes.length}<ChevronRight size={14} /></button><button onClick={() => onDetailPanel('context')}><Layers3 size={14} />本次参考 {inference.contextIds.length}<ChevronRight size={14} /></button></div>
