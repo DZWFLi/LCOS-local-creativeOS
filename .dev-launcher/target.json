@@ -1,5 +1,6 @@
 {
   "version": "v0.6.1",
-  "repoPath": "E:/Codex 项目/OS开发/.worktrees/phase3-stage1-4",
-  "expectedBranch": "feature/phase3-stage1-4"
+  "repoPath": "E:/Codex 项目/OS开发/.worktrees/mvp-fast-build",
+  "expectedBranch": "codex/mvp-fast-build",
+  "lastTestedCommit": "b66c46e"
 }
