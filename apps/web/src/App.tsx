@@ -708,9 +708,21 @@ export function App() {
     const created: CanvasNode[] = files.map((file, index) => {
       const previewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined
       if (previewUrl) objectUrls.current.add(previewUrl)
-      return { id: createId('file'), artifactId: createId('artifact'), kind: 'source', title: file.name, subtitle: previewUrl ? '本地图片 · 临时预览' : '本地文件 · 等待本地核心服务预览', x: x + index * 28, y: y + index * 28, ...nodeDimensions('source', 'standard'), displayMode: 'standard', fileType: file.type || 'unknown', fileSize: file.size, previewUrl, scopeId, editable: /\.(pptx?|md|docx?)$/i.test(file.name) }
+      const textPreview = isTextPreviewFile(file)
+      const fileType = file.type || inferFileType(file.name)
+      return { id: createId('file'), artifactId: createId('artifact'), kind: 'source', title: file.name, subtitle: previewUrl ? '本地图片 · 临时预览' : textPreview ? '本地文本 · 临时预览' : '本地文件 · 等待本地核心服务预览', x: x + index * 28, y: y + index * 28, ...nodeDimensions('source', 'standard'), displayMode: 'standard', fileType, fileSize: file.size, previewUrl, previewDataUrl: previewUrl, previewMimeType: fileType, scopeId, editable: /\.(pptx?|md|docx?|txt)$/i.test(file.name) }
     })
     setNodes((current) => [...current, ...created]); setSelectedIds(created.map((node) => node.id)); setNotice(`已加入 ${created.length} 个本地文件引用，不上传、不移动原文件`)
+    for (const [index, file] of files.entries()) {
+      if (!isTextPreviewFile(file)) continue
+      const nodeId = created[index]?.id
+      if (nodeId === undefined) continue
+      file.text().then((text) => {
+        setNodes((current) => current.map((node) => node.id === nodeId ? { ...node, previewText: text.slice(0, 64 * 1024) } : node))
+      }).catch(() => {
+        setNodes((current) => current.map((node) => node.id === nodeId ? { ...node, previewError: 'Local text preview failed.' } : node))
+      })
+    }
   }, [scopeId, setNodes])
 
   const startRunFrom = useCallback((command: string, targetIds: string[], contextIds: string[]) => {
@@ -960,4 +972,22 @@ function buildScopePath(scopes: CanvasScope[], scope: CanvasScope): CanvasScope[
     current = parent
   }
   return result
+}
+
+function isTextPreviewFile(file: File): boolean {
+  return file.type.startsWith('text/')
+    || /\.(md|markdown|txt|log|json|csv|tsv|yaml|yml)$/i.test(file.name)
+}
+
+function inferFileType(fileName: string): string {
+  if (/\.(md|markdown)$/i.test(fileName)) return 'text/markdown'
+  if (/\.txt$/i.test(fileName)) return 'text/plain'
+  if (/\.json$/i.test(fileName)) return 'application/json'
+  if (/\.csv$/i.test(fileName)) return 'text/csv'
+  if (/\.docx$/i.test(fileName)) return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  if (/\.pdf$/i.test(fileName)) return 'application/pdf'
+  if (/\.svg$/i.test(fileName)) return 'image/svg+xml'
+  if (/\.avif$/i.test(fileName)) return 'image/avif'
+  if (/\.bmp$/i.test(fileName)) return 'image/bmp'
+  return 'unknown'
 }

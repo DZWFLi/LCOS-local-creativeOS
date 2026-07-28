@@ -727,6 +727,11 @@ export class SqliteMetadataRepository {
     return row === undefined ? undefined : this.#previewRecord(row)
   }
 
+  getPreviewRecord(previewRecordId: string): PreviewRecord | undefined {
+    const row = this.#database.prepare('SELECT * FROM preview_records WHERE id = ?').get(previewRecordId as SQLInputValue) as Row | undefined
+    return row === undefined ? undefined : this.#previewRecord(row)
+  }
+
   upsertPreviewRecord(value: PreviewRecord): void { this.#upsertPreviewRecord(value) }
 
   deletePreviewRecords(projectId: string): void {

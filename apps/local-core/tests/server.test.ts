@@ -271,7 +271,7 @@ describe('Local Core HTTP server', () => {
         observedHash: 'hash-brief' as ProjectGraphSnapshot['fileRecords'][number]['observedHash'],
         size: 42,
         modifiedAt: now,
-        mimeType: 'text/markdown',
+        mimeType: 'text/plain',
         availability: 'current',
         observedAt: now,
       }],
@@ -312,7 +312,7 @@ describe('Local Core HTTP server', () => {
     })
   })
 
-  it('generates a preview through revision id and profile only', async () => {
+  it('generates a preview through revision id and profile only, then serves cached content by PreviewRecord id', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'local-core-server-preview-'))
     temporaryDirectories.push(directory)
     const sourcePath = join(directory, 'source.md')
@@ -336,9 +336,23 @@ describe('Local Core HTTP server', () => {
     })
 
     expect(response.status).toBe(200)
-    await expect(response.json()).resolves.toMatchObject({
+    const body = await response.json()
+    expect(body).toMatchObject({
       ok: true,
       value: { reused: false, record: { revisionId: registered.revision.id, status: 'ready' } },
+    })
+    const previewRecordId = body.value.record.id
+    const content = await fetch(`${baseUrl}/projects/disposable-portasplit/preview-records/${previewRecordId}/content`)
+
+    expect(content.status).toBe(200)
+    await expect(content.json()).resolves.toMatchObject({
+      ok: true,
+      value: {
+        previewRecordId,
+        mimeType: 'text/plain',
+        encoding: 'base64',
+        data: Buffer.from('# Runtime preview\n').toString('base64'),
+      },
     })
   })
 

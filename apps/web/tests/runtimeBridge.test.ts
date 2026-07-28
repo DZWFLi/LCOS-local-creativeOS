@@ -119,6 +119,7 @@ function mockClient(overrides: Partial<LocalCoreClient> = {}): LocalCoreClient {
     metadataStatus: unavailable,
     projectGraph: vi.fn(async () => call(snapshot())),
     previewRecords: vi.fn(async () => call([])),
+    previewContent: unavailable,
     generatePreview: unavailable,
     applyMutations: unavailable,
     saveProjectGraph: unavailable,
@@ -207,6 +208,55 @@ describe('RuntimeBridge mutation serialization', () => {
       previewStatus: 'ready',
       previewProfile: 'card',
       previewRenderer: 'markdown-preview@0.1.0',
+    })
+  })
+
+  it('projects ready text PreviewRecord content onto Canvas nodes', () => {
+    const graph = snapshot()
+    const currentRevisionId = 'revision-brief-initial' as ProjectGraphSnapshot['artifactRevisions'][number]['id']
+    const fileRecordId = 'file-brief' as ProjectGraphSnapshot['fileRecords'][number]['id']
+    const previewId = 'preview-brief' as never
+    const state = mapGraphToState({
+      ...graph,
+      artifacts: [{ ...graph.artifacts[0], currentRevisionId }],
+      artifactViews: [{ ...graph.artifactViews[0], revisionId: currentRevisionId }],
+      artifactRevisions: [{
+        id: currentRevisionId,
+        artifactId: graph.artifacts[0].id,
+        fileRecordId,
+        contentHash: 'abcdef1234567890' as ProjectGraphSnapshot['artifactRevisions'][number]['contentHash'],
+        source: 'import',
+        status: 'current',
+        createdAt: NOW,
+      }],
+    }, 'disposable-portasplit', [{
+      id: previewId,
+      projectId: graph.project.id,
+      revisionId: currentRevisionId,
+      sourceContentHash: 'abcdef1234567890' as never,
+      rendererId: 'markdown',
+      rendererVersion: '0.1.0',
+      previewProfile: 'thumbnail',
+      cacheKey: 'preview:key',
+      cachePath: 'cache/preview.md',
+      mimeType: 'text/markdown',
+      size: 21,
+      status: 'ready',
+      createdAt: NOW,
+      updatedAt: NOW,
+    }], new Map([[String(previewId), {
+      previewRecordId: String(previewId),
+      mimeType: 'text/markdown',
+      size: 21,
+      encoding: 'base64',
+      data: Buffer.from('# Real markdown preview').toString('base64'),
+    }]]))
+
+    expect(state.nodes[0]).toMatchObject({
+      previewStatus: 'ready',
+      previewMimeType: 'text/markdown',
+      previewText: '# Real markdown preview',
+      previewDataUrl: expect.stringContaining('data:text/markdown;base64,'),
     })
   })
 

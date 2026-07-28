@@ -67,7 +67,7 @@ function ArtifactVisual({ node, density, pending, onDetails }: Pick<Props, 'node
 
 function PreviewArtwork({ node, density }: { node: CanvasNode; density: NodeDisplayMode }) {
   if (density === 'compact') return <div className="preview-art compact"><FileImage size={20} /><span>{getFileKind(node).toUpperCase()}</span></div>
-  if (node.previewUrl) return <div className="preview-art image"><img src={node.previewUrl} alt="" /></div>
+  if (node.previewUrl) return <div className="preview-art image"><img src={node.previewUrl} alt="" draggable={false} onDragStart={(event) => event.preventDefault()} /></div>
   const fileKind = getFileKind(node)
   if (fileKind === 'ppt') return <div className={`preview-art ppt ${node.kind}`}>
     <div className="slide-copy">
@@ -127,6 +127,6 @@ function NoteVisual({ node, density, onDetails }: { node: CanvasNode; density: N
 function getFileKind(node: CanvasNode): 'ppt' | 'image' | 'md' {
   const name = node.title.toLowerCase()
   if (name.endsWith('.ppt') || name.endsWith('.pptx') || node.pageCount) return 'ppt'
-  if (name.match(/\.(jpg|jpeg|png|webp|gif)$/) || node.previewUrl) return 'image'
+  if (name.match(/\.(jpg|jpeg|png|webp|gif|bmp|svg|avif)$/) || node.fileType?.startsWith('image/') || node.previewUrl) return 'image'
   return 'md'
 }

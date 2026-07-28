@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 
 import type {
@@ -627,6 +628,36 @@ async function handleEntityRoute(
   if (previewListMatch !== null && method === 'GET') {
     const projectId = decodeURIComponent(previewListMatch[1] ?? '')
     return { status: 200, body: { ok: true, value: metadata.getPreviewRecords(projectId) } }
+  }
+  const previewContentMatch = /^\/projects\/([^/]+)\/preview-records\/([^/]+)\/content$/.exec(pathname)
+  if (previewContentMatch !== null && method === 'GET') {
+    const projectId = decodeURIComponent(previewContentMatch[1] ?? '')
+    const previewRecordId = decodeURIComponent(previewContentMatch[2] ?? '')
+    const record = metadata.getPreviewRecord(previewRecordId)
+    if (record === undefined || String(record.projectId) !== projectId) {
+      return { status: 404, body: failure('NOT_FOUND', 'PreviewRecord not found.') }
+    }
+    if (record.status !== 'ready' || record.cachePath === '') {
+      return { status: 409, body: failure('UNAVAILABLE', 'PreviewRecord content is not ready.') }
+    }
+    try {
+      const bytes = await readFile(record.cachePath)
+      return {
+        status: 200,
+        body: {
+          ok: true,
+          value: {
+            previewRecordId: record.id,
+            mimeType: record.mimeType,
+            size: bytes.byteLength,
+            encoding: 'base64',
+            data: bytes.toString('base64'),
+          },
+        },
+      }
+    } catch (error: unknown) {
+      return { status: 404, body: failure('NOT_FOUND', error instanceof Error ? error.message : 'Preview cache file not found.') }
+    }
   }
   const previewGenerateMatch = /^\/projects\/([^/]+)\/previews$/.exec(pathname)
   if (previewGenerateMatch !== null && method === 'POST') {

@@ -8,7 +8,7 @@ import type {
   WorkRailPreferences,
   Workspace,
 } from '../model'
-import { createLocalCoreClient, type LocalCoreClient } from './localCoreClient'
+import { createLocalCoreClient, type LocalCoreClient, type PreviewContentResult } from './localCoreClient'
 
 export type DataSource = 'runtime' | 'none'
 export type SaveStatus = 'idle' | 'saving' | 'saved' | 'unsaved'
@@ -54,8 +54,9 @@ export class RuntimeBridge {
       }
       const snapshot = call.result.value
       const previews = await this.#loadPreviewRecords()
+      const previewContents = await this.#loadPreviewContents(previews)
       this.#lastSavedSnapshot = JSON.stringify(snapshot)
-      const state = mapGraphToState(snapshot, this.projectId, previews)
+      const state = mapGraphToState(snapshot, this.projectId, previews, previewContents)
       this.#graphVersion = Number(snapshot.graphVersion) || 1
       this.#acknowledgedState = cloneState(state)
       return { source: 'runtime', state }
@@ -209,6 +210,19 @@ export class RuntimeBridge {
     }
   }
 
+  async #loadPreviewContents(previews: readonly PreviewRecord[]): Promise<ReadonlyMap<string, PreviewContentResult>> {
+    const readyPreviews = previews.filter((preview) => preview.status === 'ready')
+    const entries = await Promise.all(readyPreviews.map(async (preview) => {
+      try {
+        const call = await this.client.previewContent(this.projectId, String(preview.id))
+        return call.result.ok ? [String(preview.id), call.result.value] as const : null
+      } catch {
+        return null
+      }
+    }))
+    return new Map(entries.filter((entry): entry is readonly [string, PreviewContentResult] => entry !== null))
+  }
+
   async generatePreview(revisionId: string, previewProfile = 'thumbnail'): Promise<PreviewGenerateResult> {
     try {
       const generated = await this.client.generatePreview(this.projectId, revisionId, previewProfile)
@@ -227,7 +241,12 @@ const KIND_TO_NODE: Record<string, CanvasNode['kind']> = {
   markdown: 'source', image: 'source', presentation: 'source', pdf: 'source', other: 'context',
 }
 
-export function mapGraphToState(graph: ProjectGraphSnapshot, projectId: string, previewRecords: readonly PreviewRecord[] = []): PersistedPrototypeState {
+export function mapGraphToState(
+  graph: ProjectGraphSnapshot,
+  projectId: string,
+  previewRecords: readonly PreviewRecord[] = [],
+  previewContents: ReadonlyMap<string, PreviewContentResult> = new Map(),
+): PersistedPrototypeState {
   const artifactById = new Map(graph.artifacts.map((a) => [a.id, a]))
   const revisionById = new Map(graph.artifactRevisions.map((revision) => [revision.id, revision]))
   const fileRecordById = new Map(graph.fileRecords.map((fileRecord) => [fileRecord.id, fileRecord]))
@@ -239,6 +258,7 @@ export function mapGraphToState(graph: ProjectGraphSnapshot, projectId: string, 
     const revision = revisionId === undefined ? undefined : revisionById.get(revisionId)
     const fileRecord = revision === undefined ? undefined : fileRecordById.get(revision.fileRecordId)
     const preview = revisionId === undefined ? undefined : previewByRevisionId.get(revisionId)
+    const previewContent = preview === undefined ? undefined : previewContents.get(String(preview.id))
     const isStale = artifact?.availability === 'stale'
     const isMissing = artifact?.availability === 'missing'
     return {
@@ -261,6 +281,9 @@ export function mapGraphToState(graph: ProjectGraphSnapshot, projectId: string, 
       previewProfile: preview?.previewProfile,
       previewRenderer: preview === undefined ? undefined : `${preview.rendererId}@${preview.rendererVersion}`,
       previewError: preview?.errorMessage,
+      previewMimeType: preview?.mimeType,
+      previewDataUrl: previewContent === undefined ? undefined : `data:${previewContent.mimeType};base64,${previewContent.data}`,
+      previewText: previewContent === undefined || !previewContent.mimeType.startsWith('text/') ? undefined : decodeBase64Text(previewContent.data),
       scopeId: String(view.scopeId),
     }
   })
@@ -315,6 +338,16 @@ function defaultWorkspace(): Workspace {
     camera: { x: 0, y: 0, zoom: 1 }, visibleLayers: ['core', 'process'],
     focusedViewIds: [], contextPolicy: 'selection-only',
     createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+  }
+}
+
+function decodeBase64Text(value: string): string | undefined {
+  try {
+    const binary = atob(value)
+    const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0))
+    return new TextDecoder('utf-8').decode(bytes)
+  } catch {
+    return undefined
   }
 }
 

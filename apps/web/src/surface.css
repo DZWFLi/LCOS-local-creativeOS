@@ -255,6 +255,10 @@
 .preview-page-visual i:nth-child(1) { width: 54px; height: 54px; right: 16px; top: 14px; }
 .preview-page-visual i:nth-child(2) { width: 85px; height: 10px; left: 17px; bottom: 24px; }
 .preview-page-visual i:nth-child(3) { width: 44px; height: 44px; left: 20px; top: 32px; background: linear-gradient(135deg,#8ba9ff,#a45ee9,#ef8b82); }
+.preview-page.image-preview { display: grid; place-items: center; padding: 0; background: #f6f8fa; }
+.preview-page-image { width: 100%; height: 100%; min-height: 255px; object-fit: contain; }
+.preview-page.text-preview { padding: 18px; background: #fbfcfd; }
+.preview-page-text { max-height: 320px; margin: 0; overflow: auto; color: rgba(23,40,59,.78); font: 11px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre-wrap; }
 .diff-outline { position: absolute; right: 17px; top: 29px; width: 41%; height: 151px; border: 2px solid rgba(117,83,238,.48); border-radius: 20px; box-shadow: 0 0 0 5px rgba(117,83,238,.06); }
 .preview-surface footer { min-height: 34px; display: flex; align-items: center; gap: 6px; padding: 0 12px; color: var(--v05-faint); font-size: 9.5px; background: rgba(255,255,255,.75); }
 .preview-note { display: grid; gap: 7px; }

@@ -33,6 +33,9 @@ export interface CanvasNode {
   previewProfile?: string
   previewRenderer?: string
   previewError?: string
+  previewMimeType?: string
+  previewDataUrl?: string
+  previewText?: string
   viewOf?: string
   error?: boolean
   disabled?: boolean

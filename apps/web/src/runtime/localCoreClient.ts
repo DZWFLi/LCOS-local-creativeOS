@@ -38,6 +38,14 @@ export interface GeneratePreviewResult {
   readonly reused: boolean
 }
 
+export interface PreviewContentResult {
+  readonly previewRecordId: string
+  readonly mimeType: string
+  readonly size: number
+  readonly encoding: 'base64'
+  readonly data: string
+}
+
 export interface LocalCoreClient {
   health(signal?: AbortSignal): Promise<RuntimeCall<HealthStatus>>
   catalog(signal?: AbortSignal): Promise<RuntimeCall<readonly ProjectCatalogEntry[]>>
@@ -45,6 +53,7 @@ export interface LocalCoreClient {
   metadataStatus(signal?: AbortSignal): Promise<RuntimeCall<MetadataStoreStatus>>
   projectGraph(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<ProjectGraphSnapshot>>
   previewRecords(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<readonly PreviewRecord[]>>
+  previewContent(projectId: string, previewRecordId: string, signal?: AbortSignal): Promise<RuntimeCall<PreviewContentResult>>
   generatePreview(projectId: string, revisionId: string, previewProfile: string, signal?: AbortSignal): Promise<RuntimeCall<GeneratePreviewResult>>
   applyMutations(batch: MutationBatch, projectId: string, signal?: AbortSignal): Promise<RuntimeCall<MutationResult>>
   saveProjectGraph(snapshot: ProjectGraphSnapshot, signal?: AbortSignal): Promise<RuntimeCall<ProjectGraphSnapshot>>
@@ -208,6 +217,13 @@ export function createLocalCoreClient(): LocalCoreClient {
       return request(`/projects/${encodeURIComponent(projectId)}/preview-records`, {
         signal,
         decode: decodeResult<readonly PreviewRecord[]>,
+      })
+    },
+    previewContent(projectId, previewRecordId, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/preview-records/${encodeURIComponent(previewRecordId)}/content`, {
+        signal,
+        timeoutMs: 5_000,
+        decode: decodeResult<PreviewContentResult>,
       })
     },
     generatePreview(projectId, revisionId, previewProfile, signal) {
