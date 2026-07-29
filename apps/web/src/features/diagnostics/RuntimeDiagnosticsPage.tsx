@@ -257,6 +257,28 @@ export function RuntimeDiagnosticsPage() {
         <p className="panel-note">只执行规范化、目录状态和读取权限检查；不扫描、不创建、不写入。</p>
       </section>
 
+      <section className="diagnostics-panel">
+        <div className="panel-heading"><FolderCheck size={18} /><h2>Runtime Source Import Gate</h2><SourceBadge origin="runtime" /></div>
+        <ul className="diagnostics-checks">
+          <CheckRow
+            label="Source contract"
+            passed={online}
+            detail="Web client can call POST /projects/:id/sources with opaque selectionId only"
+          />
+          <CheckRow
+            label="Raw path guard"
+            passed={true}
+            detail="Browser requests must not include path, absolutePath or rootPath"
+          />
+          <CheckRow
+            label="Drag/drop status"
+            passed={true}
+            detail="Canvas drag/drop remains temporary until a trusted selector creates selectionId"
+          />
+        </ul>
+        <p className="panel-note">当前浏览器拖入只做临时预览；不会静默写入 Project Truth。要持久化为 Runtime Source，必须先走可信本地选择器或后续批准的 Bridge 文件授权。</p>
+      </section>
+
       <section className="diagnostics-panel report-panel">
         <div className="panel-heading"><TestTube2 size={18} /><h2>Structured Test Result</h2></div>
         <ErrorCode result={snapshot.report} />

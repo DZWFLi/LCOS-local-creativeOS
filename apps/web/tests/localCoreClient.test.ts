@@ -190,4 +190,62 @@ describe('Local Core browser client', () => {
     )
     expect(result.result).toMatchObject({ ok: true, value: { reused: false, record: { status: 'ready' } } })
   })
+
+  it('registers Runtime Sources through opaque selection ids only', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({
+      ok: true,
+      value: {
+        fileRecord: {
+          id: 'file-1',
+          projectId: 'project-1',
+          observedPath: 'E:\\Projects\\Sample\\brief.md',
+          observedHash: 'hash-1',
+          size: 128,
+          modifiedAt: '2026-07-28T00:00:00.000Z',
+          mimeType: 'text/markdown',
+          availability: 'current',
+          observedAt: '2026-07-28T00:00:00.000Z',
+        },
+        artifact: {
+          id: 'artifact-1',
+          projectId: 'project-1',
+          title: 'Brief',
+          kind: 'markdown',
+          availability: 'available',
+          currentRevisionId: 'revision-1',
+          createdAt: '2026-07-28T00:00:00.000Z',
+          updatedAt: '2026-07-28T00:00:00.000Z',
+        },
+        revision: {
+          id: 'revision-1',
+          artifactId: 'artifact-1',
+          fileRecordId: 'file-1',
+          contentHash: 'hash-1',
+          source: 'import',
+          status: 'current',
+          createdAt: '2026-07-28T00:00:00.000Z',
+        },
+      },
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await createLocalCoreClient().registerTrustedSource('project-1', {
+      selectionId: 'opaque-selection' as never,
+      title: 'Brief',
+    })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/local-core/v1/projects/project-1/sources',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ selectionId: 'opaque-selection', title: 'Brief' }),
+      }),
+    )
+    const calls = fetchMock.mock.calls as unknown as [string, RequestInit][]
+    expect(JSON.parse(String(calls[0][1].body))).not.toHaveProperty('path')
+    expect(result.result).toMatchObject({
+      ok: true,
+      value: { fileRecord: { id: 'file-1' }, artifact: { id: 'artifact-1' }, revision: { id: 'revision-1' } },
+    })
+  })
 })

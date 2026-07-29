@@ -7,6 +7,8 @@ import type {
   ProjectCatalogEntry,
   ProjectGraphSnapshot,
   PreviewRecord,
+  RegisterTrustedSourceInput,
+  RegisterTrustedSourceResult,
   Result,
   ValidatedProjectRoot,
 } from '@local-creative-os/contracts'
@@ -55,6 +57,7 @@ export interface LocalCoreClient {
   previewRecords(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<readonly PreviewRecord[]>>
   previewContent(projectId: string, previewRecordId: string, signal?: AbortSignal): Promise<RuntimeCall<PreviewContentResult>>
   generatePreview(projectId: string, revisionId: string, previewProfile: string, signal?: AbortSignal): Promise<RuntimeCall<GeneratePreviewResult>>
+  registerTrustedSource(projectId: string, input: RegisterTrustedSourceInput, signal?: AbortSignal): Promise<RuntimeCall<RegisterTrustedSourceResult>>
   applyMutations(batch: MutationBatch, projectId: string, signal?: AbortSignal): Promise<RuntimeCall<MutationResult>>
   saveProjectGraph(snapshot: ProjectGraphSnapshot, signal?: AbortSignal): Promise<RuntimeCall<ProjectGraphSnapshot>>
 }
@@ -235,6 +238,17 @@ export function createLocalCoreClient(): LocalCoreClient {
           body: JSON.stringify({ revisionId, previewProfile }),
         },
         decode: decodeResult<GeneratePreviewResult>,
+      })
+    },
+    registerTrustedSource(projectId, input, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/sources`, {
+        signal,
+        init: {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(input),
+        },
+        decode: decodeResult<RegisterTrustedSourceResult>,
       })
     },
     saveProjectGraph(snapshot, signal) {

@@ -710,9 +710,9 @@ export function App() {
       if (previewUrl) objectUrls.current.add(previewUrl)
       const textPreview = isTextPreviewFile(file)
       const fileType = file.type || inferFileType(file.name)
-      return { id: createId('file'), artifactId: createId('artifact'), kind: 'source', title: file.name, subtitle: previewUrl ? '本地图片 · 临时预览' : textPreview ? '本地文本 · 临时预览' : '本地文件 · 等待本地核心服务预览', x: x + index * 28, y: y + index * 28, ...nodeDimensions('source', 'standard'), displayMode: 'standard', fileType, fileSize: file.size, previewUrl, previewDataUrl: previewUrl, previewMimeType: fileType, scopeId, editable: /\.(pptx?|md|docx?|txt)$/i.test(file.name) }
+      return { id: createId('file'), artifactId: createId('artifact'), kind: 'source', title: file.name, subtitle: previewUrl ? '本地图片 · 临时预览，刷新后不保存' : textPreview ? '本地文本 · 临时预览，刷新后不保存' : '本地文件 · 临时占位，等待可信导入', x: x + index * 28, y: y + index * 28, ...nodeDimensions('source', 'standard'), displayMode: 'standard', fileType, fileSize: file.size, previewUrl, previewDataUrl: previewUrl, previewMimeType: fileType, scopeId, editable: /\.(pptx?|md|docx?|txt)$/i.test(file.name) }
     })
-    setNodes((current) => [...current, ...created]); setSelectedIds(created.map((node) => node.id)); setNotice(`已加入 ${created.length} 个本地文件引用，不上传、不移动原文件`)
+    setNodes((current) => [...current, ...created]); setSelectedIds(created.map((node) => node.id)); setNotice(`已临时预览 ${created.length} 个文件；刷新/重启不会保存，需可信导入后才会成为 Runtime Source`)
     for (const [index, file] of files.entries()) {
       if (!isTextPreviewFile(file)) continue
       const nodeId = created[index]?.id

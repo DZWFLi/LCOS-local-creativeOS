@@ -121,6 +121,7 @@ function mockClient(overrides: Partial<LocalCoreClient> = {}): LocalCoreClient {
     previewRecords: vi.fn(async () => call([])),
     previewContent: unavailable,
     generatePreview: unavailable,
+    registerTrustedSource: unavailable,
     applyMutations: unavailable,
     saveProjectGraph: unavailable,
     ...overrides,
