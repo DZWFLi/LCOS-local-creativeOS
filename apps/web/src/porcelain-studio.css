@@ -1,0 +1,2035 @@
+@charset "UTF-8";
+
+/*
+  Local Creative OS — Porcelain Studio 2.0
+  ------------------------------------------------------------
+  Mature product-polish layer. It intentionally loads after the historical
+  stylesheets and changes presentation only: no domain, runtime or interaction
+  contract is altered here.
+*/
+
+.app-shell.porcelain-studio-v2 {
+  /* Typography */
+  --ps-font-ui: Inter, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --ps-text-strong: #182431;
+  --ps-text: rgba(24, 36, 49, .80);
+  --ps-text-muted: rgba(24, 36, 49, .56);
+  --ps-text-faint: rgba(24, 36, 49, .38);
+  --ps-text-disabled: rgba(24, 36, 49, .28);
+
+  /* Foundation surfaces */
+  --ps-canvas: #f4f4f1;
+  --ps-surface-0: #f7f7f4;
+  --ps-surface-1: #fafaf8;
+  --ps-surface-2: #ffffff;
+  --ps-surface-3: #f0f1ee;
+  --ps-surface-inset: #f3f4f1;
+  --ps-border-soft: rgba(24, 36, 49, .070);
+  --ps-border: rgba(24, 36, 49, .105);
+  --ps-border-strong: rgba(24, 36, 49, .17);
+
+  /* Interaction */
+  --ps-accent: #7055c7;
+  --ps-accent-rgb: 112, 85, 199;
+  --ps-accent-hover: #6247b8;
+  --ps-accent-soft: rgba(112, 85, 199, .095);
+  --ps-accent-softer: rgba(112, 85, 199, .055);
+  --ps-focus: rgba(112, 85, 199, .42);
+
+  /* Semantic families */
+  --ps-source: #6687b8;
+  --ps-source-rgb: 102, 135, 184;
+  --ps-working: #496fae;
+  --ps-working-rgb: 73, 111, 174;
+  --ps-generated: #7556c9;
+  --ps-generated-rgb: 117, 86, 201;
+  --ps-context: #4d9084;
+  --ps-context-rgb: 77, 144, 132;
+  --ps-process: #6f7d89;
+  --ps-process-rgb: 111, 125, 137;
+  --ps-decision: #aa7b3e;
+  --ps-decision-rgb: 170, 123, 62;
+  --ps-note: #b45f54;
+  --ps-note-rgb: 180, 95, 84;
+  --ps-success: #4d8f73;
+  --ps-success-rgb: 77, 143, 115;
+  --ps-warning: #b8793e;
+  --ps-warning-rgb: 184, 121, 62;
+  --ps-danger: #b85852;
+  --ps-danger-rgb: 184, 88, 82;
+
+  /* Geometry */
+  --ps-radius-control: 8px;
+  --ps-radius-row: 10px;
+  --ps-radius-card: 14px;
+  --ps-radius-popover: 15px;
+  --ps-radius-modal: 18px;
+
+  /* Elevation */
+  --ps-shadow-0: none;
+  --ps-shadow-1: 0 1px 2px rgba(19, 29, 39, .035), 0 4px 12px rgba(19, 29, 39, .035);
+  --ps-shadow-2: 0 2px 4px rgba(19, 29, 39, .035), 0 9px 24px rgba(19, 29, 39, .060);
+  --ps-shadow-3: 0 4px 10px rgba(19, 29, 39, .045), 0 16px 38px rgba(19, 29, 39, .085);
+  --ps-shadow-4: 0 7px 18px rgba(19, 29, 39, .055), 0 26px 64px rgba(19, 29, 39, .115);
+  --ps-shadow-node: 0 1px 2px rgba(19, 29, 39, .032), 0 8px 22px rgba(19, 29, 39, .068), inset 0 1px 0 rgba(255,255,255,.96);
+  --ps-shadow-node-hover: 0 2px 4px rgba(19, 29, 39, .04), 0 12px 30px rgba(19, 29, 39, .09), inset 0 1px 0 rgba(255,255,255,.98);
+
+  /* Motion */
+  --ps-ease-out: cubic-bezier(.23, 1, .32, 1);
+  --ps-ease-standard: cubic-bezier(.2, .8, .2, 1);
+
+  font-family: var(--ps-font-ui);
+  color: var(--ps-text-strong);
+  background: #eeefec;
+  font-feature-settings: "kern" 1, "liga" 1;
+  text-rendering: geometricPrecision;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Global chrome and typography                                               */
+/* -------------------------------------------------------------------------- */
+
+.app-shell.porcelain-studio-v2 button,
+.app-shell.porcelain-studio-v2 input,
+.app-shell.porcelain-studio-v2 textarea,
+.app-shell.porcelain-studio-v2 select {
+  font-family: var(--ps-font-ui);
+}
+
+.app-shell.porcelain-studio-v2 button:focus-visible,
+.app-shell.porcelain-studio-v2 input:focus-visible,
+.app-shell.porcelain-studio-v2 textarea:focus-visible,
+.app-shell.porcelain-studio-v2 select:focus-visible {
+  outline: 2px solid var(--ps-focus);
+  outline-offset: 2px;
+}
+
+.app-shell.porcelain-studio-v2 .v07-topbar {
+  height: 44px;
+  padding: 0 10px;
+  gap: 8px;
+  color: var(--ps-text);
+  background: rgba(251, 251, 249, .985);
+  border-bottom: 1px solid var(--ps-border-soft);
+  box-shadow: 0 1px 0 rgba(255,255,255,.92), 0 5px 18px rgba(19,29,39,.035);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.app-shell.porcelain-studio-v2 .v07-brand {
+  min-width: 174px;
+  gap: 8px;
+  padding: 0 9px;
+  color: var(--ps-text-strong);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -.018em;
+}
+
+.app-shell.porcelain-studio-v2 .v07-brand svg {
+  color: var(--ps-accent);
+  stroke-width: 1.8;
+}
+
+.app-shell.porcelain-studio-v2 .v07-project-tabs {
+  gap: 4px;
+}
+
+.app-shell.porcelain-studio-v2 .v07-project-tab {
+  min-height: 30px;
+  padding: 2px 4px 2px 10px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  color: var(--ps-text-muted);
+  background: transparent;
+  box-shadow: none;
+}
+
+.app-shell.porcelain-studio-v2 .v07-project-tab > button:first-child {
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: -.006em;
+}
+
+.app-shell.porcelain-studio-v2 .v07-project-tab:hover {
+  color: var(--ps-text);
+  background: rgba(24,36,49,.035);
+}
+
+.app-shell.porcelain-studio-v2 .v07-project-tab.active {
+  color: var(--ps-text-strong);
+  background: var(--ps-surface-2);
+  border-color: var(--ps-border);
+  box-shadow: var(--ps-shadow-1), inset 0 1px 0 #fff;
+}
+
+.app-shell.porcelain-studio-v2 .v07-project-tab.active::after {
+  left: 14px;
+  right: 14px;
+  bottom: -7px;
+  height: 2px;
+  background: var(--ps-accent);
+  box-shadow: 0 0 8px rgba(var(--ps-accent-rgb), .18);
+}
+
+.app-shell.porcelain-studio-v2 .v07-project-tab > button:last-child,
+.app-shell.porcelain-studio-v2 .v07-add-project,
+.app-shell.porcelain-studio-v2 .v07-topbar-status > button {
+  border-radius: var(--ps-radius-control);
+}
+
+.app-shell.porcelain-studio-v2 .v07-add-project {
+  width: 27px;
+  height: 27px;
+  color: var(--ps-text-muted);
+  background: var(--ps-surface-3);
+  border: 1px solid var(--ps-border-soft);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.94);
+  font-size: 16px;
+  font-weight: 400;
+}
+
+.app-shell.porcelain-studio-v2 .v07-add-project:hover {
+  color: var(--ps-text-strong);
+  background: #fff;
+  border-color: var(--ps-border);
+}
+
+.app-shell.porcelain-studio-v2 .v07-scope-path {
+  color: var(--ps-text-faint);
+}
+
+.app-shell.porcelain-studio-v2 .v07-scope-path button {
+  color: var(--ps-text-muted);
+  font-size: 10.5px;
+  font-weight: 500;
+}
+
+.app-shell.porcelain-studio-v2 .v07-scope-path span:last-child button {
+  color: var(--ps-text);
+  font-weight: 600;
+}
+
+.app-shell.porcelain-studio-v2 .v07-topbar-status {
+  gap: 5px;
+  font-size: 9.5px;
+}
+
+.app-shell.porcelain-studio-v2 .v07-topbar-status > * {
+  min-height: 27px;
+  padding: 0 8px;
+  border-radius: var(--ps-radius-control);
+  color: var(--ps-text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+}
+
+.app-shell.porcelain-studio-v2 .v07-topbar-status > button:hover,
+.app-shell.porcelain-studio-v2 .v07-topbar-status > button.active {
+  color: var(--ps-accent);
+  background: var(--ps-accent-softer);
+  border-color: rgba(var(--ps-accent-rgb), .10);
+}
+
+.app-shell.porcelain-studio-v2 .v07-save-status.saved {
+  color: rgba(var(--ps-success-rgb), .90);
+}
+
+.app-shell.porcelain-studio-v2 .v07-save-status.saving {
+  color: rgba(var(--ps-warning-rgb), .92);
+}
+
+.app-shell.porcelain-studio-v2 .v07-save-status.unsaved {
+  color: rgba(var(--ps-danger-rgb), .92);
+}
+
+.app-shell.porcelain-studio-v2 .v07-activity-status {
+  font-weight: 600;
+}
+
+.app-shell.porcelain-studio-v2 .v07-activity-status.status-running,
+.app-shell.porcelain-studio-v2 .v07-activity-status.status-queued {
+  color: var(--ps-accent);
+  background: var(--ps-accent-softer);
+}
+
+.app-shell.porcelain-studio-v2 .v07-activity-status.status-review,
+.app-shell.porcelain-studio-v2 .v07-activity-status.status-waiting_input {
+  color: var(--ps-warning);
+  background: rgba(var(--ps-warning-rgb), .07);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Canvas atmosphere                                                          */
+/* -------------------------------------------------------------------------- */
+
+.app-shell.porcelain-studio-v2 .scene {
+  top: 44px;
+  height: calc(100dvh - 44px);
+  background:
+    radial-gradient(ellipse 44% 32% at 60% 20%, rgba(var(--workspace-glow-rgb), .045), transparent 72%),
+    radial-gradient(circle at 50% 46%, transparent 45%, rgba(20,29,39,.020) 100%),
+    radial-gradient(rgba(26, 36, 46, .050) .55px, transparent .62px),
+    var(--ps-canvas);
+  background-size: auto, auto, 24px 24px, auto;
+}
+
+.app-shell.porcelain-studio-v2 .canvas {
+  background: transparent;
+}
+
+.app-shell.porcelain-studio-v2 .scene-title {
+  color: var(--ps-text-muted);
+  font-size: 10.5px;
+  font-weight: 500;
+}
+
+.app-shell.porcelain-studio-v2 .lod-badge {
+  padding: 5px 8px;
+  border-radius: 8px;
+  color: var(--ps-text-faint);
+  background: rgba(250,250,248,.86);
+  border: 1px solid var(--ps-border-soft);
+  box-shadow: var(--ps-shadow-1);
+  font-size: 9px;
+  backdrop-filter: none;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Workspace rail and frames                                                  */
+/* -------------------------------------------------------------------------- */
+
+.app-shell.porcelain-studio-v2 .workspace-dock.collapsed.compact-workspace-rail {
+  width: 48px !important;
+  min-width: 48px;
+  padding: 6px 5px;
+  gap: 4px;
+  border-radius: 16px;
+  color: var(--ps-text-muted);
+  background: rgba(252,252,250,.99);
+  border: 1px solid var(--ps-border);
+  box-shadow: var(--ps-shadow-2), inset 0 1px 0 rgba(255,255,255,.96);
+  backdrop-filter: none;
+}
+
+.app-shell.porcelain-studio-v2 .workspace-dock.collapsed .dock-expand,
+.app-shell.porcelain-studio-v2 .workspace-dock.collapsed .collapsed-overview,
+.app-shell.porcelain-studio-v2 .workspace-dock.collapsed .capability-launcher {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  color: var(--ps-text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  box-shadow: none;
+}
+
+.app-shell.porcelain-studio-v2 .workspace-dock.collapsed .dock-expand:hover,
+.app-shell.porcelain-studio-v2 .workspace-dock.collapsed .collapsed-overview:hover,
+.app-shell.porcelain-studio-v2 .workspace-dock.collapsed .capability-launcher:hover {
+  color: var(--ps-text-strong);
+  background: rgba(24,36,49,.045);
+  border-color: rgba(24,36,49,.04);
+}
+
+.app-shell.porcelain-studio-v2 .workspace-dock.collapsed .capability-launcher.active,
+.app-shell.porcelain-studio-v2 .workspace-dock.collapsed .collapsed-overview.active {
+  color: var(--ps-accent);
+  background: var(--ps-accent-soft);
+  border-color: rgba(var(--ps-accent-rgb), .13);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.72);
+}
+
+.app-shell.porcelain-studio-v2 .compact-workspace-dot {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: transparent;
+  border: 1px solid transparent;
+}
+
+.app-shell.porcelain-studio-v2 .compact-workspace-dot:hover {
+  background: rgba(24,36,49,.035);
+}
+
+.app-shell.porcelain-studio-v2 .compact-workspace-dot.active {
+  background: rgba(var(--workspace-glow-rgb), .075);
+  border-color: rgba(var(--workspace-glow-rgb), .13);
+}
+
+.app-shell.porcelain-studio-v2 .intent-swatch {
+  width: 7px;
+  height: 7px;
+  box-shadow: 0 0 0 3px rgba(255,255,255,.92);
+}
+
+.app-shell.porcelain-studio-v2 .compact-active-rail {
+  left: -6px;
+  width: 2px;
+  border-radius: 2px;
+  background: rgb(var(--workspace-glow-rgb));
+  box-shadow: 0 0 7px rgba(var(--workspace-glow-rgb), .28);
+}
+
+.app-shell.porcelain-studio-v2 .workspace-frame {
+  border: 1px solid rgba(var(--workspace-glow-rgb), .15);
+  border-radius: 17px;
+  background: rgba(var(--workspace-glow-rgb), .020);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.44), 0 18px 55px rgba(var(--workspace-glow-rgb), .035);
+}
+
+.app-shell.porcelain-studio-v2 .workspace-frame.active {
+  border-color: rgba(var(--workspace-glow-rgb), .34);
+  background: rgba(var(--workspace-glow-rgb), .030);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.55), 0 0 0 3px rgba(var(--workspace-glow-rgb), .045), 0 20px 60px rgba(var(--workspace-glow-rgb), .055);
+}
+
+.app-shell.porcelain-studio-v2 .workspace-frame-header {
+  height: 24px;
+  padding: 0 7px;
+  border-radius: 8px;
+  color: rgba(var(--workspace-glow-rgb), .90);
+  background: rgba(251,251,249,.92);
+  border: 1px solid rgba(var(--workspace-glow-rgb), .15);
+  box-shadow: var(--ps-shadow-1);
+  font-size: 9px;
+  font-weight: 600;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Capability launcher                                                        */
+/* -------------------------------------------------------------------------- */
+
+.app-shell.porcelain-studio-v2 .capability-popover {
+  width: 260px;
+  max-height: min(530px, 72vh);
+  border-radius: var(--ps-radius-popover);
+  color: var(--ps-text-strong);
+  background: rgba(252,252,250,.995);
+  border: 1px solid var(--ps-border);
+  box-shadow: var(--ps-shadow-4), inset 0 1px 0 rgba(255,255,255,.96);
+  backdrop-filter: none;
+  animation: ps-popover-in 150ms var(--ps-ease-out);
+}
+
+.app-shell.porcelain-studio-v2 .capability-popover > header {
+  padding: 12px 12px 9px;
+  border-bottom: 1px solid var(--ps-border-soft);
+}
+
+.app-shell.porcelain-studio-v2 .capability-popover > header small,
+.app-shell.porcelain-studio-v2 .capability-body h3 {
+  color: var(--ps-text-faint);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: .055em;
+  text-transform: uppercase;
+}
+
+.app-shell.porcelain-studio-v2 .capability-popover > header h2 {
+  margin-top: 2px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -.014em;
+}
+
+.app-shell.porcelain-studio-v2 .icon-button {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  color: var(--ps-text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+}
+
+.app-shell.porcelain-studio-v2 .icon-button:hover {
+  color: var(--ps-text-strong);
+  background: rgba(24,36,49,.045);
+  border-color: rgba(24,36,49,.045);
+}
+
+.app-shell.porcelain-studio-v2 .capability-search {
+  margin: 9px 10px 5px;
+  min-height: 34px;
+  border-radius: 10px;
+  color: var(--ps-text-muted);
+  background: var(--ps-surface-inset);
+  border: 1px solid var(--ps-border-soft);
+  box-shadow: inset 0 1px 2px rgba(19,29,39,.025), inset 0 1px 0 rgba(255,255,255,.82);
+}
+
+.app-shell.porcelain-studio-v2 .capability-search:focus-within {
+  color: var(--ps-accent);
+  border-color: rgba(var(--ps-accent-rgb), .25);
+  box-shadow: 0 0 0 3px rgba(var(--ps-accent-rgb), .07);
+}
+
+.app-shell.porcelain-studio-v2 .capability-search input {
+  color: var(--ps-text);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.app-shell.porcelain-studio-v2 .capability-search input::placeholder {
+  color: var(--ps-text-faint);
+}
+
+.app-shell.porcelain-studio-v2 .capability-body {
+  padding: 6px 8px 10px;
+}
+
+.app-shell.porcelain-studio-v2 .capability-body section {
+  padding: 7px 2px 4px;
+}
+
+.app-shell.porcelain-studio-v2 .capability-card,
+.app-shell.porcelain-studio-v2 .capability-row,
+.app-shell.porcelain-studio-v2 .capability-asset {
+  color: var(--ps-text);
+  background: transparent;
+  border: 1px solid transparent;
+  box-shadow: none;
+}
+
+.app-shell.porcelain-studio-v2 .capability-card {
+  min-height: 54px;
+  padding: 9px;
+  border-radius: 11px;
+}
+
+.app-shell.porcelain-studio-v2 .capability-row {
+  min-height: 43px;
+  padding: 7px 9px;
+  border-radius: 10px;
+}
+
+.app-shell.porcelain-studio-v2 .capability-asset {
+  min-height: 36px;
+  padding: 5px 8px;
+  border-radius: 9px;
+}
+
+.app-shell.porcelain-studio-v2 .capability-card:hover,
+.app-shell.porcelain-studio-v2 .capability-row:hover,
+.app-shell.porcelain-studio-v2 .capability-asset:hover {
+  color: var(--ps-text-strong);
+  background: rgba(24,36,49,.038);
+  border-color: rgba(24,36,49,.045);
+}
+
+.app-shell.porcelain-studio-v2 .capability-card svg,
+.app-shell.porcelain-studio-v2 .capability-row svg {
+  color: var(--ps-accent);
+  stroke-width: 1.75;
+}
+
+.app-shell.porcelain-studio-v2 .capability-card b,
+.app-shell.porcelain-studio-v2 .capability-row b,
+.app-shell.porcelain-studio-v2 .capability-asset b {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: -.006em;
+}
+
+.app-shell.porcelain-studio-v2 .capability-card small,
+.app-shell.porcelain-studio-v2 .capability-row small,
+.app-shell.porcelain-studio-v2 .capability-asset small {
+  color: var(--ps-text-faint);
+  font-size: 9.5px;
+  font-weight: 400;
+}
+
+.app-shell.porcelain-studio-v2 .capability-card:disabled,
+.app-shell.porcelain-studio-v2 .capability-row:disabled {
+  opacity: .38;
+  filter: saturate(.55);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Canvas nodes: shared porcelain material                                    */
+/* -------------------------------------------------------------------------- */
+
+.app-shell.porcelain-studio-v2 .canvas-node {
+  --ps-node-rgb: var(--ps-source-rgb);
+  --ps-node-color: var(--ps-source);
+  border: 0 !important;
+  border-radius: var(--ps-radius-card);
+  background: transparent !important;
+  box-shadow: none !important;
+  filter: none;
+  transition: filter 120ms ease, opacity 120ms ease;
+}
+
+.app-shell.porcelain-studio-v2 .canvas-node.source { --ps-node-rgb: var(--ps-source-rgb); --ps-node-color: var(--ps-source); }
+.app-shell.porcelain-studio-v2 .canvas-node.working { --ps-node-rgb: var(--ps-working-rgb); --ps-node-color: var(--ps-working); }
+.app-shell.porcelain-studio-v2 .canvas-node.generated { --ps-node-rgb: var(--ps-generated-rgb); --ps-node-color: var(--ps-generated); }
+.app-shell.porcelain-studio-v2 .canvas-node.context { --ps-node-rgb: var(--ps-context-rgb); --ps-node-color: var(--ps-context); }
+.app-shell.porcelain-studio-v2 .canvas-node.process { --ps-node-rgb: var(--ps-process-rgb); --ps-node-color: var(--ps-process); }
+.app-shell.porcelain-studio-v2 .canvas-node.decision { --ps-node-rgb: var(--ps-decision-rgb); --ps-node-color: var(--ps-decision); }
+.app-shell.porcelain-studio-v2 .canvas-node.note { --ps-node-rgb: var(--ps-note-rgb); --ps-node-color: var(--ps-note); }
+
+.app-shell.porcelain-studio-v2 .canvas-node::before,
+.app-shell.porcelain-studio-v2 .canvas-node::after {
+  display: none !important;
+}
+
+.app-shell.porcelain-studio-v2 .canvas-node > .artifact-visual,
+.app-shell.porcelain-studio-v2 .canvas-node > .context-visual,
+.app-shell.porcelain-studio-v2 .canvas-node > .process-visual,
+.app-shell.porcelain-studio-v2 .canvas-node > .decision-visual,
+.app-shell.porcelain-studio-v2 .canvas-node > .note-visual {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border: 1px solid var(--ps-border);
+  border-radius: var(--ps-radius-card);
+  color: var(--ps-text-strong);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.99), rgba(249,250,248,.985)),
+    var(--ps-surface-2);
+  box-shadow: var(--ps-shadow-node);
+  isolation: isolate;
+  transition: border-color 120ms ease, box-shadow 140ms ease, background-color 120ms ease;
+}
+
+.app-shell.porcelain-studio-v2 .canvas-node > .artifact-visual::before,
+.app-shell.porcelain-studio-v2 .canvas-node > .context-visual::before,
+.app-shell.porcelain-studio-v2 .canvas-node > .process-visual::before,
+.app-shell.porcelain-studio-v2 .canvas-node > .decision-visual::before,
+.app-shell.porcelain-studio-v2 .canvas-node > .note-visual::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  inset: 0 0 auto;
+  height: 2px;
+  background: linear-gradient(90deg, transparent 4%, rgba(var(--ps-node-rgb), .70) 26%, rgba(var(--ps-node-rgb), .32) 74%, transparent 96%);
+  opacity: .76;
+  pointer-events: none;
+}
+
+.app-shell.porcelain-studio-v2 .canvas-node > .artifact-visual::after,
+.app-shell.porcelain-studio-v2 .canvas-node > .context-visual::after,
+.app-shell.porcelain-studio-v2 .canvas-node > .process-visual::after,
+.app-shell.porcelain-studio-v2 .canvas-node > .decision-visual::after,
+.app-shell.porcelain-studio-v2 .canvas-node > .note-visual::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  width: 62%;
+  height: 46%;
+  right: -14%;
+  top: -24%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(var(--ps-node-rgb), .075), transparent 70%);
+  pointer-events: none;
+}
+
+.app-shell.porcelain-studio-v2 .canvas-node:hover > .artifact-visual,
+.app-shell.porcelain-studio-v2 .canvas-node:hover > .context-visual,
+.app-shell.porcelain-studio-v2 .canvas-node:hover > .process-visual,
+.app-shell.porcelain-studio-v2 .canvas-node:hover > .decision-visual,
+.app-shell.porcelain-studio-v2 .canvas-node:hover > .note-visual {
+  border-color: rgba(var(--ps-node-rgb), .20);
+  box-shadow: var(--ps-shadow-node-hover), 0 0 24px rgba(var(--ps-node-rgb), .045);
+}
+
+.app-shell.porcelain-studio-v2 .canvas-node.selected > .artifact-visual,
+.app-shell.porcelain-studio-v2 .canvas-node.selected > .context-visual,
+.app-shell.porcelain-studio-v2 .canvas-node.selected > .process-visual,
+.app-shell.porcelain-studio-v2 .canvas-node.selected > .decision-visual,
+.app-shell.porcelain-studio-v2 .canvas-node.selected > .note-visual {
+  border-color: rgba(var(--ps-accent-rgb), .50);
+  box-shadow:
+    0 0 0 2px rgba(255,255,255,.92),
+    0 0 0 4px rgba(var(--ps-accent-rgb), .23),
+    0 10px 30px rgba(19,29,39,.10),
+    0 0 30px rgba(var(--ps-node-rgb), .070);
+}
+
+.app-shell.porcelain-studio-v2 .canvas-node.multi-selected > .artifact-visual,
+.app-shell.porcelain-studio-v2 .canvas-node.multi-selected > .context-visual,
+.app-shell.porcelain-studio-v2 .canvas-node.multi-selected > .process-visual,
+.app-shell.porcelain-studio-v2 .canvas-node.multi-selected > .decision-visual,
+.app-shell.porcelain-studio-v2 .canvas-node.multi-selected > .note-visual {
+  border-color: rgba(var(--ps-accent-rgb), .34);
+  box-shadow: 0 0 0 3px rgba(var(--ps-accent-rgb), .12), var(--ps-shadow-node);
+}
+
+.app-shell.porcelain-studio-v2 .canvas-node.workspace-active-member:not(.selected) > * {
+  border-color: rgba(var(--workspace-glow-rgb), .22);
+  box-shadow: var(--ps-shadow-node), 0 0 18px rgba(var(--workspace-glow-rgb), .045);
+}
+
+.app-shell.porcelain-studio-v2 .canvas-node.pending > * {
+  border-color: rgba(var(--ps-generated-rgb), .32);
+  box-shadow: var(--ps-shadow-node), 0 0 0 3px rgba(var(--ps-generated-rgb), .075), 0 0 34px rgba(var(--ps-generated-rgb), .09);
+}
+
+.app-shell.porcelain-studio-v2 .canvas-node.error > * {
+  border-color: rgba(var(--ps-danger-rgb), .52);
+  box-shadow: var(--ps-shadow-node), 0 0 0 3px rgba(var(--ps-danger-rgb), .09);
+}
+
+.app-shell.porcelain-studio-v2 .canvas-node.disabled {
+  opacity: .45;
+  filter: saturate(.45);
+}
+
+.app-shell.porcelain-studio-v2 .canvas-node.dragging > *,
+.app-shell.porcelain-studio-v2 .canvas-node.resizing > * {
+  box-shadow: 0 12px 34px rgba(19,29,39,.12), 0 0 0 2px rgba(var(--ps-accent-rgb), .16) !important;
+  transition: none !important;
+}
+
+/* Content anatomy */
+.app-shell.porcelain-studio-v2 .artifact-visual {
+  grid-template-rows: 22px minmax(52px, 1fr) auto;
+  gap: 8px;
+  padding: 12px;
+}
+
+.app-shell.porcelain-studio-v2 .artifact-topline {
+  position: relative;
+  z-index: 1;
+  align-items: center;
+}
+
+.app-shell.porcelain-studio-v2 .artifact-kind,
+.app-shell.porcelain-studio-v2 .artifact-format {
+  color: var(--ps-text-faint);
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: .025em;
+}
+
+.app-shell.porcelain-studio-v2 .artifact-kind i {
+  width: 5px;
+  height: 5px;
+  box-shadow: 0 0 0 3px rgba(var(--ps-node-rgb), .075);
+}
+
+.app-shell.porcelain-studio-v2 .artifact-format svg {
+  opacity: .68;
+  stroke-width: 1.65;
+}
+
+.app-shell.porcelain-studio-v2 .preview-art {
+  position: relative;
+  z-index: 1;
+  min-height: 52px;
+  border: 1px solid rgba(24,36,49,.060);
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(246,247,245,.94), rgba(241,242,239,.78));
+  box-shadow: inset 0 1px 2px rgba(19,29,39,.025), inset 0 1px 0 rgba(255,255,255,.88);
+}
+
+.app-shell.porcelain-studio-v2 .preview-art.image img {
+  filter: saturate(.94) contrast(.985);
+}
+
+.app-shell.porcelain-studio-v2 .preview-art.document span,
+.app-shell.porcelain-studio-v2 .ppt-kicker {
+  color: var(--ps-text-faint);
+  font-size: 7.5px;
+  font-weight: 600;
+  letter-spacing: .045em;
+}
+
+.app-shell.porcelain-studio-v2 .preview-art.document b,
+.app-shell.porcelain-studio-v2 .ppt-title {
+  color: var(--ps-text);
+  font-size: 9px;
+  font-weight: 600;
+}
+
+.app-shell.porcelain-studio-v2 .artifact-copy {
+  position: relative;
+  z-index: 1;
+  gap: 2px;
+}
+
+.app-shell.porcelain-studio-v2 .artifact-copy strong {
+  color: var(--ps-text-strong);
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.28;
+  letter-spacing: -.012em;
+}
+
+.app-shell.porcelain-studio-v2 .artifact-copy > span {
+  color: var(--ps-text-muted);
+  font-size: 9.5px;
+  font-weight: 400;
+  line-height: 1.35;
+}
+
+.app-shell.porcelain-studio-v2 .artifact-expanded-meta {
+  margin-top: 5px;
+  gap: 6px 10px;
+  color: var(--ps-text-faint);
+  font-size: 8.5px;
+}
+
+.app-shell.porcelain-studio-v2 .artifact-provenance {
+  color: var(--ps-text-faint);
+  font-size: 8.5px;
+  font-weight: 500;
+}
+
+.app-shell.porcelain-studio-v2 .artifact-statuses {
+  z-index: 2;
+  gap: 4px;
+}
+
+.app-shell.porcelain-studio-v2 .status-chip {
+  min-height: 17px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: .015em;
+  box-shadow: none;
+}
+
+.app-shell.porcelain-studio-v2 .status-chip.current {
+  color: #34715a;
+  background: rgba(var(--ps-success-rgb), .085);
+  border-color: rgba(var(--ps-success-rgb), .14);
+}
+
+.app-shell.porcelain-studio-v2 .status-chip.draft {
+  color: #654bb2;
+  background: rgba(var(--ps-generated-rgb), .08);
+  border-color: rgba(var(--ps-generated-rgb), .14);
+}
+
+.app-shell.porcelain-studio-v2 .status-chip.danger {
+  color: var(--ps-danger);
+  background: rgba(var(--ps-danger-rgb), .08);
+  border-color: rgba(var(--ps-danger-rgb), .14);
+}
+
+.app-shell.porcelain-studio-v2 .status-chip.locked {
+  color: #8b632e;
+  background: rgba(var(--ps-decision-rgb), .085);
+  border-color: rgba(var(--ps-decision-rgb), .14);
+}
+
+.app-shell.porcelain-studio-v2 .iridescent-token {
+  width: 18px;
+  height: 18px;
+  color: var(--ps-generated);
+  background: linear-gradient(145deg, #fff, rgba(var(--ps-generated-rgb), .09));
+  border: 1px solid rgba(var(--ps-generated-rgb), .15);
+  box-shadow: 0 3px 8px rgba(var(--ps-generated-rgb), .09), inset 0 1px 0 #fff;
+}
+
+.app-shell.porcelain-studio-v2 .generated-material-glint,
+.app-shell.porcelain-studio-v2 .decision-material-glint,
+.app-shell.porcelain-studio-v2 .decision-icon-chrome {
+  opacity: .24;
+  animation: none !important;
+}
+
+/* Semantic non-artifact nodes */
+.app-shell.porcelain-studio-v2 .context-visual {
+  grid-template-rows: auto auto 1fr auto;
+  gap: 7px;
+  padding: 13px;
+}
+
+.app-shell.porcelain-studio-v2 .context-visual header > span {
+  color: var(--ps-context);
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: .045em;
+  text-transform: none;
+}
+
+.app-shell.porcelain-studio-v2 .context-visual strong {
+  color: var(--ps-text-strong);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -.01em;
+}
+
+.app-shell.porcelain-studio-v2 .context-stack i {
+  background: rgba(var(--ps-context-rgb), .065);
+  border-color: rgba(var(--ps-context-rgb), .10);
+}
+
+.app-shell.porcelain-studio-v2 .context-visual footer,
+.app-shell.porcelain-studio-v2 .context-summary {
+  color: var(--ps-text-faint);
+  font-size: 9px;
+}
+
+.app-shell.porcelain-studio-v2 .process-visual,
+.app-shell.porcelain-studio-v2 .decision-visual,
+.app-shell.porcelain-studio-v2 .note-visual {
+  gap: 10px;
+  padding: 12px 13px;
+}
+
+.app-shell.porcelain-studio-v2 .process-icon,
+.app-shell.porcelain-studio-v2 .decision-icon,
+.app-shell.porcelain-studio-v2 .note-visual > svg {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  color: var(--ps-node-color);
+  background: rgba(var(--ps-node-rgb), .075);
+  border: 1px solid rgba(var(--ps-node-rgb), .10);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.76);
+}
+
+.app-shell.porcelain-studio-v2 .note-visual > svg {
+  padding: 6px;
+}
+
+.app-shell.porcelain-studio-v2 .process-visual small,
+.app-shell.porcelain-studio-v2 .decision-visual small,
+.app-shell.porcelain-studio-v2 .note-visual small {
+  color: var(--ps-text-faint);
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: .035em;
+  text-transform: none;
+}
+
+.app-shell.porcelain-studio-v2 .process-visual strong,
+.app-shell.porcelain-studio-v2 .decision-visual strong,
+.app-shell.porcelain-studio-v2 .note-visual strong {
+  color: var(--ps-text-strong);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: -.008em;
+}
+
+.app-shell.porcelain-studio-v2 .process-visual span:not(.process-icon),
+.app-shell.porcelain-studio-v2 .decision-visual span:not(.decision-icon):not(.status-chip):not(.decision-material-glint),
+.app-shell.porcelain-studio-v2 .note-visual span {
+  color: var(--ps-text-muted);
+  font-size: 9.5px;
+}
+
+.app-shell.porcelain-studio-v2 .process-visual em,
+.app-shell.porcelain-studio-v2 .decision-visual em,
+.app-shell.porcelain-studio-v2 .note-visual em {
+  color: var(--ps-text-faint);
+  font-size: 8.5px;
+  font-style: normal;
+}
+
+.app-shell.porcelain-studio-v2 .process-visual.status-running .process-icon {
+  color: var(--ps-accent);
+  background: var(--ps-accent-soft);
+  border-color: rgba(var(--ps-accent-rgb), .16);
+  box-shadow: 0 0 0 4px rgba(var(--ps-accent-rgb), .05), inset 0 1px 0 rgba(255,255,255,.78);
+}
+
+.app-shell.porcelain-studio-v2 .process-visual.status-waiting_input .process-icon {
+  color: var(--ps-warning);
+  background: rgba(var(--ps-warning-rgb), .08);
+  border-color: rgba(var(--ps-warning-rgb), .14);
+}
+
+.app-shell.porcelain-studio-v2 .process-visual.status-completed .process-icon {
+  color: var(--ps-success);
+  background: rgba(var(--ps-success-rgb), .08);
+  border-color: rgba(var(--ps-success-rgb), .14);
+}
+
+/* Direct manipulation chrome */
+.app-shell.porcelain-studio-v2 .node-context-toolbar {
+  height: 32px;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 10px;
+  color: var(--ps-text);
+  background: rgba(252,252,250,.995);
+  border: 1px solid var(--ps-border);
+  box-shadow: var(--ps-shadow-3), inset 0 1px 0 rgba(255,255,255,.98);
+  backdrop-filter: none;
+  animation: ps-toolbar-in 90ms var(--ps-ease-out);
+}
+
+.app-shell.porcelain-studio-v2 .node-context-toolbar button {
+  height: 25px;
+  padding: 0 7px;
+  border-radius: 7px;
+  color: var(--ps-text-muted);
+  font-size: 9.5px;
+  font-weight: 500;
+}
+
+.app-shell.porcelain-studio-v2 .node-context-toolbar button:hover {
+  color: var(--ps-text-strong);
+  background: rgba(24,36,49,.045);
+}
+
+.app-shell.porcelain-studio-v2 .node-context-toolbar button.primary {
+  color: #fff;
+  background: var(--ps-accent);
+  box-shadow: 0 4px 10px rgba(var(--ps-accent-rgb), .19), inset 0 1px 0 rgba(255,255,255,.18);
+}
+
+.app-shell.porcelain-studio-v2 .node-context-toolbar button.primary:hover {
+  background: var(--ps-accent-hover);
+}
+
+.app-shell.porcelain-studio-v2 .node-details {
+  width: 20px;
+  height: 20px;
+  top: 7px;
+  right: 7px;
+  border-radius: 7px;
+  opacity: .34;
+  color: var(--ps-text-muted);
+  background: rgba(252,252,250,.94);
+  border: 1px solid rgba(24,36,49,.075);
+  box-shadow: 0 2px 7px rgba(19,29,39,.065), inset 0 1px 0 rgba(255,255,255,.96);
+}
+
+.app-shell.porcelain-studio-v2 .canvas-node:hover .node-details,
+.app-shell.porcelain-studio-v2 .canvas-node.selected .node-details {
+  opacity: .88;
+}
+
+.app-shell.porcelain-studio-v2 .node-details:hover {
+  color: var(--ps-accent);
+  background: #fff;
+  border-color: rgba(var(--ps-accent-rgb), .16);
+  box-shadow: 0 3px 9px rgba(19,29,39,.08), 0 0 0 3px rgba(var(--ps-accent-rgb), .055);
+}
+
+.app-shell.porcelain-studio-v2 .anchor {
+  width: 9px;
+  height: 9px;
+  border: 2px solid #fff;
+  background: var(--ps-node-color);
+  box-shadow: 0 0 0 1px rgba(var(--ps-node-rgb), .40), 0 2px 5px rgba(19,29,39,.10);
+}
+
+.app-shell.porcelain-studio-v2 .resize-handle {
+  width: 10px;
+  height: 10px;
+  border-radius: 4px;
+  background: #fff;
+  border: 1px solid rgba(var(--ps-accent-rgb), .55);
+  box-shadow: 0 2px 7px rgba(19,29,39,.12);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Edges and canvas selection                                                 */
+/* -------------------------------------------------------------------------- */
+
+.app-shell.porcelain-studio-v2 .edge {
+  stroke: rgba(84, 98, 111, .32);
+  stroke-width: 1.35px;
+  filter: none;
+  transition: stroke 100ms ease, opacity 100ms ease, stroke-width 100ms ease;
+}
+
+.app-shell.porcelain-studio-v2 .edge.reference {
+  stroke: rgba(var(--ps-source-rgb), .30);
+  stroke-dasharray: 4 7;
+}
+
+.app-shell.porcelain-studio-v2 .edge.feedback {
+  stroke: rgba(var(--ps-note-rgb), .32);
+  stroke-dasharray: 2 6;
+}
+
+.app-shell.porcelain-studio-v2 .edge.generate {
+  stroke: rgba(var(--ps-generated-rgb), .38);
+}
+
+.app-shell.porcelain-studio-v2 .edge.modify {
+  stroke: rgba(var(--ps-working-rgb), .40);
+}
+
+.app-shell.porcelain-studio-v2 .edge.focused,
+.app-shell.porcelain-studio-v2 .edge.selected {
+  stroke: rgba(var(--ps-accent-rgb), .82);
+  stroke-width: 2px;
+  stroke-dasharray: none;
+  animation: none !important;
+  filter: drop-shadow(0 0 3px rgba(var(--ps-accent-rgb), .15));
+}
+
+.app-shell.porcelain-studio-v2 .edge.active {
+  stroke: rgba(var(--ps-accent-rgb), .86);
+  stroke-width: 1.8px;
+  stroke-dasharray: 7 10;
+  animation: ps-active-edge-flow 1.3s linear infinite !important;
+  filter: drop-shadow(0 0 4px rgba(var(--ps-accent-rgb), .16));
+}
+
+.app-shell.porcelain-studio-v2 .edge.temporary {
+  stroke: rgba(var(--ps-accent-rgb), .60);
+  stroke-dasharray: 5 7;
+}
+
+.app-shell.porcelain-studio-v2 .selection-bounds {
+  border: 1px solid rgba(var(--ps-accent-rgb), .30);
+  border-radius: 16px;
+  background: rgba(var(--ps-accent-rgb), .018);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.32);
+}
+
+.app-shell.porcelain-studio-v2 .selection-toolbar {
+  gap: 2px;
+  padding: 3px;
+  border-radius: 10px;
+  background: rgba(252,252,250,.995);
+  border: 1px solid var(--ps-border);
+  box-shadow: var(--ps-shadow-3);
+}
+
+.app-shell.porcelain-studio-v2 .selection-toolbar > span {
+  padding: 0 7px;
+  color: var(--ps-text-muted);
+  font-size: 9.5px;
+  font-weight: 500;
+}
+
+.app-shell.porcelain-studio-v2 .selection-toolbar button {
+  min-height: 25px;
+  padding: 0 7px;
+  border-radius: 7px;
+  color: var(--ps-text-muted);
+  font-size: 9.5px;
+  font-weight: 500;
+}
+
+.app-shell.porcelain-studio-v2 .selection-toolbar button:hover {
+  color: var(--ps-text-strong);
+  background: rgba(24,36,49,.045);
+}
+
+.app-shell.porcelain-studio-v2 .selection-toolbar button.danger:hover {
+  color: var(--ps-danger);
+  background: rgba(var(--ps-danger-rgb), .07);
+}
+
+.app-shell.porcelain-studio-v2 .pending-return-zone {
+  border: 1px dashed rgba(var(--ps-generated-rgb), .28);
+  border-radius: 18px;
+  background: rgba(var(--ps-generated-rgb), .025);
+  box-shadow: inset 0 0 42px rgba(var(--ps-generated-rgb), .025);
+}
+
+.app-shell.porcelain-studio-v2 .pending-return-zone > span {
+  color: var(--ps-generated);
+  background: rgba(252,252,250,.92);
+  border: 1px solid rgba(var(--ps-generated-rgb), .13);
+  border-radius: 8px;
+  font-size: 9px;
+  font-weight: 600;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Node information popover                                                   */
+/* -------------------------------------------------------------------------- */
+
+.app-shell.porcelain-studio-v2 ~ .node-info-popover,
+.node-info-popover {
+  width: 276px;
+  max-height: 390px;
+  border-radius: var(--ps-radius-popover, 15px);
+  color: #182431;
+  background: rgba(252,252,250,.997);
+  border: 1px solid rgba(24,36,49,.105);
+  box-shadow: 0 7px 18px rgba(19,29,39,.055), 0 26px 64px rgba(19,29,39,.115), inset 0 1px 0 rgba(255,255,255,.96);
+  backdrop-filter: none;
+  animation: ps-popover-in 140ms cubic-bezier(.23,1,.32,1);
+}
+
+.node-info-popover > header {
+  padding: 11px 12px 9px;
+  border-bottom: 1px solid rgba(24,36,49,.065);
+}
+
+.node-info-popover header small {
+  color: rgba(24,36,49,.40);
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: .045em;
+}
+
+.node-info-popover h3 {
+  margin: 2px 0 0;
+  color: #182431;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: -.012em;
+}
+
+.node-info-popover dl {
+  padding: 6px 12px;
+}
+
+.node-info-popover dl > div {
+  min-height: 31px;
+  grid-template-columns: 88px minmax(0, 1fr);
+  border-bottom-color: rgba(24,36,49,.050);
+}
+
+.node-info-popover dt {
+  color: rgba(24,36,49,.46);
+  font-size: 9px;
+  font-weight: 500;
+}
+
+.node-info-popover dd {
+  color: rgba(24,36,49,.78);
+  font-size: 9.8px;
+  font-weight: 500;
+}
+
+.node-info-actions {
+  gap: 5px;
+  padding: 8px 10px;
+}
+
+.node-info-actions button {
+  min-height: 29px;
+  border-radius: 8px;
+  color: rgba(24,36,49,.68);
+  background: #fff;
+  border: 1px solid rgba(24,36,49,.09);
+  box-shadow: 0 1px 2px rgba(19,29,39,.025);
+  font-size: 9.5px;
+  font-weight: 500;
+}
+
+.node-info-actions button:hover {
+  color: #182431;
+  border-color: rgba(24,36,49,.14);
+  box-shadow: 0 3px 8px rgba(19,29,39,.055);
+}
+
+.node-info-popover footer {
+  color: rgba(24,36,49,.40);
+  font-size: 8.5px;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Minimap                                                                    */
+/* -------------------------------------------------------------------------- */
+
+.app-shell.porcelain-studio-v2 .minimap {
+  padding: 9px;
+  border-radius: 15px;
+  color: var(--ps-text-muted);
+  background: rgba(252,252,250,.985);
+  border: 1px solid var(--ps-border);
+  box-shadow: var(--ps-shadow-2), inset 0 1px 0 rgba(255,255,255,.96);
+  backdrop-filter: none;
+}
+
+.app-shell.porcelain-studio-v2 .map-label {
+  color: var(--ps-text-muted);
+  font-size: 9px;
+  font-weight: 600;
+}
+
+.app-shell.porcelain-studio-v2 .map-label span {
+  color: var(--ps-text-faint);
+  font-weight: 500;
+}
+
+.app-shell.porcelain-studio-v2 .map {
+  border: 1px solid var(--ps-border-soft);
+  border-radius: 10px;
+  background: #f1f2ef;
+  box-shadow: inset 0 1px 3px rgba(19,29,39,.04), inset 0 1px 0 rgba(255,255,255,.74);
+}
+
+.app-shell.porcelain-studio-v2 .map i {
+  border-radius: 2px;
+  background: rgba(82,96,110,.44);
+}
+
+.app-shell.porcelain-studio-v2 .map b {
+  border: 1px solid rgba(var(--ps-accent-rgb), .44);
+  background: rgba(var(--ps-accent-rgb), .045);
+  box-shadow: 0 0 0 1px rgba(255,255,255,.52);
+}
+
+.app-shell.porcelain-studio-v2 .map-workspace.active {
+  border-color: rgba(var(--workspace-glow-rgb), .46);
+  background: rgba(var(--workspace-glow-rgb), .055);
+}
+
+.app-shell.porcelain-studio-v2 .map-controls {
+  gap: 3px;
+}
+
+.app-shell.porcelain-studio-v2 .map-controls button {
+  width: 27px;
+  height: 27px;
+  border-radius: 8px;
+  color: var(--ps-text-muted);
+  background: var(--ps-surface-3);
+  border: 1px solid var(--ps-border-soft);
+}
+
+.app-shell.porcelain-studio-v2 .map-controls button:hover {
+  color: var(--ps-text-strong);
+  background: #fff;
+  border-color: var(--ps-border);
+}
+
+.app-shell.porcelain-studio-v2 .map-controls .map-zoom-value {
+  width: auto;
+  min-width: 40px;
+  color: var(--ps-text);
+  font-size: 9.5px;
+  font-weight: 600;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Work rail                                                                  */
+/* -------------------------------------------------------------------------- */
+
+.app-shell.porcelain-studio-v2 .work-rail {
+  color: var(--ps-text-strong);
+  background: rgba(252,252,250,.995);
+  border-left: 1px solid var(--ps-border);
+  box-shadow: -7px 0 18px rgba(19,29,39,.035), -26px 0 64px rgba(19,29,39,.075);
+  backdrop-filter: none;
+}
+
+.app-shell.porcelain-studio-v2 .work-rail.compact {
+  gap: 6px;
+  padding: 7px 5px;
+  background: rgba(252,252,250,.99);
+  border-left-color: var(--ps-border-soft);
+  box-shadow: -7px 0 18px rgba(19,29,39,.035);
+}
+
+.app-shell.porcelain-studio-v2 .work-rail.compact button {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  color: var(--ps-text-muted);
+  background: rgba(24,36,49,.035);
+  border: 1px solid transparent;
+}
+
+.app-shell.porcelain-studio-v2 .work-rail.compact button:hover {
+  color: var(--ps-text-strong);
+  background: rgba(24,36,49,.055);
+  border-color: rgba(24,36,49,.05);
+}
+
+.app-shell.porcelain-studio-v2 .work-rail.compact .compact-compose {
+  color: #fff;
+  background: var(--ps-accent);
+  border-color: rgba(var(--ps-accent-rgb), .30);
+  box-shadow: 0 5px 12px rgba(var(--ps-accent-rgb), .22), inset 0 1px 0 rgba(255,255,255,.16);
+}
+
+.app-shell.porcelain-studio-v2 .work-rail.compact .compact-run.status-running,
+.app-shell.porcelain-studio-v2 .work-rail.compact .compact-run.status-queued {
+  color: var(--ps-accent);
+  background: var(--ps-accent-soft);
+}
+
+.app-shell.porcelain-studio-v2 .work-rail.compact .compact-run.status-review,
+.app-shell.porcelain-studio-v2 .work-rail.compact .compact-run.status-waiting_input {
+  color: var(--ps-warning);
+  background: rgba(var(--ps-warning-rgb), .08);
+}
+
+.app-shell.porcelain-studio-v2 .work-rail-header {
+  min-height: 52px;
+  padding: 9px 11px;
+  border-bottom: 1px solid var(--ps-border-soft);
+  background: rgba(252,252,250,.995);
+}
+
+.app-shell.porcelain-studio-v2 .work-rail-focus-dot {
+  width: 7px;
+  height: 7px;
+  background: var(--ps-accent);
+  box-shadow: 0 0 0 4px rgba(var(--ps-accent-rgb), .075), 0 0 12px rgba(var(--ps-accent-rgb), .13);
+}
+
+.app-shell.porcelain-studio-v2 .work-rail-header span {
+  color: var(--ps-text-faint);
+  font-size: 8.5px;
+  font-weight: 500;
+  letter-spacing: .035em;
+}
+
+.app-shell.porcelain-studio-v2 .work-rail-header h2 {
+  margin-top: 1px;
+  color: var(--ps-text-strong);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -.012em;
+}
+
+.app-shell.porcelain-studio-v2 .work-rail-header > button {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  color: var(--ps-text-muted);
+}
+
+.app-shell.porcelain-studio-v2 .work-rail-header > button:hover {
+  color: var(--ps-text-strong);
+  background: rgba(24,36,49,.045);
+}
+
+.app-shell.porcelain-studio-v2 .work-rail-body {
+  background: var(--ps-surface-2);
+}
+
+.app-shell.porcelain-studio-v2 .rail-section {
+  gap: 10px;
+  padding: 12px;
+}
+
+.app-shell.porcelain-studio-v2 .rail-section h3 {
+  color: var(--ps-text-strong);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.28;
+  letter-spacing: -.012em;
+}
+
+.app-shell.porcelain-studio-v2 .rail-section h4 {
+  color: var(--ps-text-muted);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: .035em;
+  text-transform: none;
+}
+
+.app-shell.porcelain-studio-v2 .rail-section p,
+.app-shell.porcelain-studio-v2 .rail-section li {
+  color: var(--ps-text-muted);
+  font-size: 10px;
+  line-height: 1.52;
+}
+
+.app-shell.porcelain-studio-v2 .rail-idle {
+  min-height: 150px;
+}
+
+.app-shell.porcelain-studio-v2 .rail-idle kbd,
+.app-shell.porcelain-studio-v2 .composer-footer kbd {
+  padding: 2px 5px;
+  border-radius: 5px;
+  color: var(--ps-text-muted);
+  background: var(--ps-surface-3);
+  border: 1px solid var(--ps-border-soft);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.84);
+  font-size: 8px;
+}
+
+.app-shell.porcelain-studio-v2 .run-hero,
+.app-shell.porcelain-studio-v2 .waiting-hero,
+.app-shell.porcelain-studio-v2 .review-heading,
+.app-shell.porcelain-studio-v2 .completed-hero {
+  border-radius: 13px;
+  background: var(--ps-surface-1);
+  border: 1px solid var(--ps-border-soft);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.84);
+}
+
+.app-shell.porcelain-studio-v2 .run-hero > span,
+.app-shell.porcelain-studio-v2 .waiting-hero > svg,
+.app-shell.porcelain-studio-v2 .review-heading > svg,
+.app-shell.porcelain-studio-v2 .completed-hero > svg {
+  color: var(--ps-accent);
+}
+
+.app-shell.porcelain-studio-v2 .run-hero.status-running,
+.app-shell.porcelain-studio-v2 .run-hero.status-queued {
+  background: linear-gradient(145deg, #fff, rgba(var(--ps-accent-rgb), .045));
+  border-color: rgba(var(--ps-accent-rgb), .13);
+}
+
+.app-shell.porcelain-studio-v2 .waiting-hero {
+  background: linear-gradient(145deg, #fff, rgba(var(--ps-warning-rgb), .045));
+  border-color: rgba(var(--ps-warning-rgb), .13);
+}
+
+.app-shell.porcelain-studio-v2 .waiting-hero > svg {
+  color: var(--ps-warning);
+}
+
+.app-shell.porcelain-studio-v2 .waiting-option {
+  min-height: 50px;
+  padding: 9px 10px;
+  border-radius: 11px;
+  color: var(--ps-text);
+  background: #fff;
+  border: 1px solid var(--ps-border);
+  box-shadow: var(--ps-shadow-1);
+}
+
+.app-shell.porcelain-studio-v2 .waiting-option:hover {
+  border-color: rgba(var(--ps-accent-rgb), .22);
+  box-shadow: var(--ps-shadow-2);
+}
+
+.app-shell.porcelain-studio-v2 .waiting-option.recommended {
+  border-color: rgba(var(--ps-accent-rgb), .22);
+  background: linear-gradient(145deg, #fff, rgba(var(--ps-accent-rgb), .045));
+}
+
+.app-shell.porcelain-studio-v2 .review-previews {
+  gap: 7px;
+}
+
+.app-shell.porcelain-studio-v2 .review-summary,
+.app-shell.porcelain-studio-v2 .changed-files,
+.app-shell.porcelain-studio-v2 .run-targets {
+  border-radius: 11px;
+  background: var(--ps-surface-1);
+  border: 1px solid var(--ps-border-soft);
+}
+
+.app-shell.porcelain-studio-v2 .rail-primary,
+.app-shell.porcelain-studio-v2 .rail-secondary {
+  min-height: 34px;
+  border-radius: 9px;
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.app-shell.porcelain-studio-v2 .rail-primary {
+  color: #fff;
+  background: var(--ps-accent);
+  border: 1px solid rgba(var(--ps-accent-rgb), .35);
+  box-shadow: 0 5px 13px rgba(var(--ps-accent-rgb), .20), inset 0 1px 0 rgba(255,255,255,.16);
+}
+
+.app-shell.porcelain-studio-v2 .rail-primary:hover {
+  background: var(--ps-accent-hover);
+}
+
+.app-shell.porcelain-studio-v2 .rail-secondary {
+  color: var(--ps-text);
+  background: #fff;
+  border: 1px solid var(--ps-border);
+  box-shadow: var(--ps-shadow-1);
+}
+
+.app-shell.porcelain-studio-v2 .rail-secondary:hover {
+  color: var(--ps-text-strong);
+  border-color: var(--ps-border-strong);
+  box-shadow: var(--ps-shadow-2);
+}
+
+.app-shell.porcelain-studio-v2 .rail-secondary.danger {
+  color: var(--ps-danger);
+  background: rgba(var(--ps-danger-rgb), .035);
+  border-color: rgba(var(--ps-danger-rgb), .14);
+  box-shadow: none;
+}
+
+.app-shell.porcelain-studio-v2 .work-rail-composer {
+  padding: 8px 10px 10px;
+  background: rgba(252,252,250,.995);
+  border-top: 1px solid var(--ps-border-soft);
+}
+
+.app-shell.porcelain-studio-v2 .composer-context-line {
+  gap: 7px;
+  color: var(--ps-text-faint);
+  font-size: 8.5px;
+  font-weight: 500;
+}
+
+.app-shell.porcelain-studio-v2 .composer-box {
+  margin-top: 7px;
+  border-radius: 13px;
+  background: #fff;
+  border: 1px solid var(--ps-border);
+  box-shadow: inset 0 1px 2px rgba(19,29,39,.025), 0 5px 16px rgba(19,29,39,.045);
+}
+
+.app-shell.porcelain-studio-v2 .composer-box:focus-within {
+  border-color: rgba(var(--ps-accent-rgb), .28);
+  box-shadow: inset 0 1px 2px rgba(19,29,39,.02), 0 0 0 3px rgba(var(--ps-accent-rgb), .065), 0 7px 20px rgba(19,29,39,.055);
+}
+
+.app-shell.porcelain-studio-v2 .composer-box textarea {
+  min-height: 66px;
+  color: var(--ps-text-strong);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.48;
+}
+
+.app-shell.porcelain-studio-v2 .composer-box textarea::placeholder {
+  color: var(--ps-text-faint);
+}
+
+.app-shell.porcelain-studio-v2 .composer-box > button {
+  width: 31px;
+  height: 31px;
+  margin: 6px;
+  border-radius: 9px;
+  color: #fff;
+  background: var(--ps-accent);
+  box-shadow: 0 4px 10px rgba(var(--ps-accent-rgb), .20), inset 0 1px 0 rgba(255,255,255,.17);
+}
+
+.app-shell.porcelain-studio-v2 .composer-box > button:hover:not(:disabled) {
+  background: var(--ps-accent-hover);
+}
+
+.app-shell.porcelain-studio-v2 .composer-box > button:disabled {
+  color: var(--ps-text-disabled);
+  background: var(--ps-surface-3);
+  box-shadow: none;
+}
+
+.app-shell.porcelain-studio-v2 .composer-footer {
+  color: var(--ps-text-faint);
+  font-size: 8.5px;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Dialogs and form controls                                                  */
+/* -------------------------------------------------------------------------- */
+
+.app-shell.porcelain-studio-v2 .modal-backdrop,
+.app-shell.porcelain-studio-v2 .confirm-backdrop,
+.app-shell.porcelain-studio-v2 .handoff-backdrop,
+.app-shell.porcelain-studio-v2 .canvas-create-layer,
+.app-shell.porcelain-studio-v2 .project-create-layer,
+.app-shell.porcelain-studio-v2 .run-confirm-layer,
+.app-shell.porcelain-studio-v2 .scope-create-layer {
+  background: rgba(23,30,38,.18);
+  backdrop-filter: blur(8px) saturate(.92);
+  -webkit-backdrop-filter: blur(8px) saturate(.92);
+}
+
+.app-shell.porcelain-studio-v2 .link-reference-dialog,
+.app-shell.porcelain-studio-v2 .confirm-dialog,
+.app-shell.porcelain-studio-v2 .handoff-dialog,
+.app-shell.porcelain-studio-v2 .canvas-create-dialog,
+.app-shell.porcelain-studio-v2 .project-create-dialog,
+.app-shell.porcelain-studio-v2 .run-confirm-dialog,
+.app-shell.porcelain-studio-v2 .scope-create-dialog,
+.app-shell.porcelain-studio-v2 .workspace-dialog {
+  color: var(--ps-text-strong);
+  background: rgba(252,252,250,.997);
+  border: 1px solid var(--ps-border);
+  border-radius: var(--ps-radius-modal);
+  box-shadow: var(--ps-shadow-4), inset 0 1px 0 rgba(255,255,255,.96);
+}
+
+.app-shell.porcelain-studio-v2 input,
+.app-shell.porcelain-studio-v2 textarea,
+.app-shell.porcelain-studio-v2 select {
+  color: var(--ps-text-strong);
+}
+
+.app-shell.porcelain-studio-v2 .project-create-body input,
+.app-shell.porcelain-studio-v2 .scope-name-field input,
+.app-shell.porcelain-studio-v2 .link-reference-dialog input,
+.app-shell.porcelain-studio-v2 .link-reference-dialog textarea,
+.app-shell.porcelain-studio-v2 .run-confirm-command textarea {
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid var(--ps-border);
+  box-shadow: inset 0 1px 2px rgba(19,29,39,.025);
+}
+
+.app-shell.porcelain-studio-v2 .project-create-body input:focus,
+.app-shell.porcelain-studio-v2 .scope-name-field input:focus,
+.app-shell.porcelain-studio-v2 .link-reference-dialog input:focus,
+.app-shell.porcelain-studio-v2 .link-reference-dialog textarea:focus,
+.app-shell.porcelain-studio-v2 .run-confirm-command textarea:focus {
+  border-color: rgba(var(--ps-accent-rgb), .28);
+  box-shadow: 0 0 0 3px rgba(var(--ps-accent-rgb), .065);
+}
+
+.app-shell.porcelain-studio-v2 button.primary,
+.app-shell.porcelain-studio-v2 .primary-action,
+.app-shell.porcelain-studio-v2 .run-confirm-dialog .primary {
+  color: #fff;
+  background: var(--ps-accent);
+  border: 1px solid rgba(var(--ps-accent-rgb), .34);
+  box-shadow: 0 5px 13px rgba(var(--ps-accent-rgb), .20), inset 0 1px 0 rgba(255,255,255,.16);
+}
+
+.app-shell.porcelain-studio-v2 button.primary:hover:not(:disabled),
+.app-shell.porcelain-studio-v2 .primary-action:hover:not(:disabled),
+.app-shell.porcelain-studio-v2 .run-confirm-dialog .primary:hover:not(:disabled) {
+  background: var(--ps-accent-hover);
+}
+
+.app-shell.porcelain-studio-v2 button.secondary,
+.app-shell.porcelain-studio-v2 .secondary-action,
+.app-shell.porcelain-studio-v2 button.quiet {
+  color: var(--ps-text);
+  background: #fff;
+  border: 1px solid var(--ps-border);
+  box-shadow: var(--ps-shadow-1);
+}
+
+.app-shell.porcelain-studio-v2 .danger-action {
+  color: #fff;
+  background: var(--ps-danger);
+  border: 1px solid rgba(var(--ps-danger-rgb), .35);
+  box-shadow: 0 5px 13px rgba(var(--ps-danger-rgb), .18);
+}
+
+/* Run confirmation */
+.app-shell.porcelain-studio-v2 .run-confirm-heading-icon {
+  color: var(--ps-accent);
+  background: var(--ps-accent-soft);
+  border: 1px solid rgba(var(--ps-accent-rgb), .13);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.78);
+}
+
+.app-shell.porcelain-studio-v2 .run-confirm-block,
+.app-shell.porcelain-studio-v2 .run-confirm-advanced {
+  border-radius: 12px;
+  background: var(--ps-surface-1);
+  border: 1px solid var(--ps-border-soft);
+}
+
+.app-shell.porcelain-studio-v2 .run-confirm-primary-target,
+.app-shell.porcelain-studio-v2 .run-confirm-target-question button,
+.app-shell.porcelain-studio-v2 .run-confirm-context-chips span {
+  border-radius: 9px;
+  background: #fff;
+  border-color: var(--ps-border);
+  box-shadow: var(--ps-shadow-1);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Project drive                                                              */
+/* -------------------------------------------------------------------------- */
+
+.project-drive {
+  font-family: var(--ps-font-ui, Inter, system-ui, sans-serif);
+  color: #182431;
+  background:
+    radial-gradient(ellipse at 82% 2%, rgba(112,85,199,.055), transparent 32%),
+    #f3f4f1;
+}
+
+.project-drive-header {
+  background: rgba(251,251,249,.97);
+  border-bottom: 1px solid rgba(24,36,49,.075);
+  box-shadow: 0 1px 0 rgba(255,255,255,.92), 0 5px 18px rgba(19,29,39,.035);
+}
+
+.project-drive-brand {
+  color: #182431;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .055em;
+}
+
+.project-drive-brand svg {
+  color: #7055c7;
+}
+
+.drive-create {
+  min-height: 32px;
+  padding: 0 11px;
+  border-radius: 9px;
+  color: #fff;
+  background: #7055c7;
+  border: 1px solid rgba(112,85,199,.34);
+  box-shadow: 0 5px 13px rgba(112,85,199,.20), inset 0 1px 0 rgba(255,255,255,.16);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.project-drive-hero > span,
+.drive-section-title span {
+  color: rgba(24,36,49,.42);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: .055em;
+}
+
+.project-drive-hero h1 {
+  color: #182431;
+  font-size: clamp(28px, 3vw, 44px);
+  font-weight: 600;
+  letter-spacing: -.035em;
+}
+
+.project-drive-hero p {
+  color: rgba(24,36,49,.56);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.drive-search {
+  border-radius: 12px;
+  color: rgba(24,36,49,.50);
+  background: rgba(255,255,255,.86);
+  border: 1px solid rgba(24,36,49,.09);
+  box-shadow: inset 0 1px 2px rgba(19,29,39,.025), 0 7px 20px rgba(19,29,39,.04);
+}
+
+.drive-search:focus-within {
+  border-color: rgba(112,85,199,.26);
+  box-shadow: 0 0 0 3px rgba(112,85,199,.065), 0 7px 20px rgba(19,29,39,.05);
+}
+
+.project-folder {
+  border-radius: 15px;
+  color: rgba(24,36,49,.80);
+  background: rgba(255,255,255,.94);
+  border: 1px solid rgba(24,36,49,.085);
+  box-shadow: 0 1px 2px rgba(19,29,39,.032), 0 8px 22px rgba(19,29,39,.055), inset 0 1px 0 rgba(255,255,255,.96);
+}
+
+.project-folder:hover {
+  border-color: rgba(112,85,199,.18);
+  box-shadow: 0 2px 4px rgba(19,29,39,.04), 0 15px 36px rgba(19,29,39,.08), 0 0 26px rgba(112,85,199,.035);
+}
+
+.project-folder-icon {
+  color: #7055c7;
+  background: rgba(112,85,199,.075);
+  border: 1px solid rgba(112,85,199,.11);
+}
+
+.project-folder strong {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -.01em;
+}
+
+.project-folder small,
+.project-folder footer {
+  color: rgba(24,36,49,.47);
+  font-size: 9.5px;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Motion and press feedback                                                  */
+/* -------------------------------------------------------------------------- */
+
+.app-shell.porcelain-studio-v2 .pressable {
+  transition:
+    transform 90ms var(--ps-ease-out),
+    color 110ms ease,
+    background-color 110ms ease,
+    border-color 110ms ease,
+    box-shadow 130ms ease,
+    opacity 110ms ease;
+}
+
+.app-shell.porcelain-studio-v2 .pressable:active:not(:disabled) {
+  transform: scale(.975);
+}
+
+@keyframes ps-popover-in {
+  from { opacity: 0; transform: translateY(-2px) scale(.982); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes ps-toolbar-in {
+  from { opacity: 0; transform: translateY(calc(-100% + 2px)) scale(var(--node-toolbar-scale)); }
+  to { opacity: 1; transform: translateY(-100%) scale(var(--node-toolbar-scale)); }
+}
+
+@keyframes ps-active-edge-flow {
+  to { stroke-dashoffset: -17; }
+}
+
+@media (max-width: 1366px) {
+  .app-shell.porcelain-studio-v2 .capability-popover { width: 250px; }
+  .app-shell.porcelain-studio-v2 .v07-brand { min-width: 150px; }
+  .app-shell.porcelain-studio-v2 .v07-project-tab > button:first-child { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-shell.porcelain-studio-v2 *,
+  .node-info-popover {
+    scroll-behavior: auto !important;
+  }
+  .app-shell.porcelain-studio-v2 .pressable,
+  .app-shell.porcelain-studio-v2 .capability-popover,
+  .app-shell.porcelain-studio-v2 .node-context-toolbar,
+  .app-shell.porcelain-studio-v2 .edge,
+  .node-info-popover {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* Expanded workspace rail */
+.app-shell.porcelain-studio-v2 .workspace-dock:not(.collapsed) {
+  width: 198px;
+  padding: 8px;
+  border-radius: 16px;
+  color: var(--ps-text);
+  background: rgba(252,252,250,.995);
+  border: 1px solid var(--ps-border);
+  box-shadow: var(--ps-shadow-3), inset 0 1px 0 rgba(255,255,255,.96);
+  backdrop-filter: none;
+}
+
+.app-shell.porcelain-studio-v2 .capability-launcher-wide {
+  min-height: 32px;
+  gap: 7px;
+  padding: 0 9px;
+  border-radius: 9px;
+  color: var(--ps-accent);
+  background: var(--ps-accent-softer);
+  border: 1px solid rgba(var(--ps-accent-rgb), .11);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.app-shell.porcelain-studio-v2 .capability-launcher-wide:hover {
+  background: var(--ps-accent-soft);
+  border-color: rgba(var(--ps-accent-rgb), .17);
+}
+
+.app-shell.porcelain-studio-v2 .dock-label {
+  min-height: 28px;
+  padding: 0 4px 0 6px;
+  color: var(--ps-text-faint);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: .04em;
+}
+
+.app-shell.porcelain-studio-v2 .dock-label-actions button,
+.app-shell.porcelain-studio-v2 .workspace-locate,
+.app-shell.porcelain-studio-v2 .workspace-more {
+  width: 25px;
+  height: 25px;
+  border-radius: 7px;
+  color: var(--ps-text-faint);
+  background: transparent;
+}
+
+.app-shell.porcelain-studio-v2 .dock-label-actions button:hover,
+.app-shell.porcelain-studio-v2 .workspace-locate:hover,
+.app-shell.porcelain-studio-v2 .workspace-more:hover {
+  color: var(--ps-text-strong);
+  background: rgba(24,36,49,.045);
+}
+
+.app-shell.porcelain-studio-v2 .workspace-row {
+  gap: 2px;
+  border-radius: 10px;
+}
+
+.app-shell.porcelain-studio-v2 .workspace {
+  min-height: 32px;
+  border-radius: 9px;
+  color: var(--ps-text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  font-size: 10.5px;
+  font-weight: 500;
+}
+
+.app-shell.porcelain-studio-v2 .workspace:hover {
+  color: var(--ps-text);
+  background: rgba(24,36,49,.035);
+}
+
+.app-shell.porcelain-studio-v2 .workspace.active {
+  color: var(--ps-text-strong);
+  background: rgba(var(--workspace-glow-rgb), .07);
+  border-color: rgba(var(--workspace-glow-rgb), .12);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.58);
+}
+
+.app-shell.porcelain-studio-v2 .workspace.overview i {
+  background: var(--ps-accent);
+  box-shadow: 0 0 0 3px rgba(var(--ps-accent-rgb), .07);
+}
+
+.app-shell.porcelain-studio-v2 .workspace small {
+  color: var(--ps-text-faint);
+  font-size: 8.5px;
+  font-weight: 500;
+}
+
+.app-shell.porcelain-studio-v2 .workspace-menu {
+  min-width: 166px;
+  padding: 5px;
+  border-radius: 11px;
+  color: var(--ps-text);
+  background: rgba(252,252,250,.997);
+  border: 1px solid var(--ps-border);
+  box-shadow: var(--ps-shadow-3);
+  backdrop-filter: none;
+}
+
+.app-shell.porcelain-studio-v2 .workspace-menu button {
+  min-height: 30px;
+  gap: 7px;
+  padding: 0 8px;
+  border-radius: 7px;
+  color: var(--ps-text-muted);
+  font-size: 9.5px;
+  font-weight: 500;
+}
+
+.app-shell.porcelain-studio-v2 .workspace-menu button:hover {
+  color: var(--ps-text-strong);
+  background: rgba(24,36,49,.045);
+}
+
+.app-shell.porcelain-studio-v2 .workspace-menu button.danger:hover {
+  color: var(--ps-danger);
+  background: rgba(var(--ps-danger-rgb), .07);
+}
+
+.app-shell.porcelain-studio-v2 .workspace-menu .menu-rule {
+  background: var(--ps-border-soft);
+}
+
+/* Optional agent context overlay */
+.app-shell.porcelain-studio-v2 .agent-context-surface {
+  width: 260px;
+  padding: 10px;
+  border-radius: 14px;
+  color: var(--ps-text-strong);
+  background: rgba(252,252,250,.995);
+  border: 1px solid var(--ps-border);
+  box-shadow: var(--ps-shadow-3);
+  backdrop-filter: none;
+}
+
+.app-shell.porcelain-studio-v2 .agent-context-surface strong {
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.app-shell.porcelain-studio-v2 .agent-context-surface small,
+.app-shell.porcelain-studio-v2 .agent-context-surface dt,
+.app-shell.porcelain-studio-v2 .agent-context-surface p {
+  color: var(--ps-text-faint);
+}
+
+.app-shell.porcelain-studio-v2 .agent-context-surface code {
+  color: var(--ps-accent);
+  background: var(--ps-accent-softer);
+}
+
+.app-shell.porcelain-studio-v2 .agent-context-surface ul {
+  background: var(--ps-surface-inset);
+}

@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "1",
+  "runId": "run-create-demo",
+  "manifestId": "manifest-create-demo",
+  "inputFiles": [
+    {
+      "entityId": "artifact-script-source",
+      "absolutePath": "C:\\LCOS\\project\\imports\\brief.md",
+      "readOnly": true
+    }
+  ],
+  "outputRoot": "C:\\LCOS\\runs\\run-create-demo\\outputs",
+  "contextFilePath": "C:\\LCOS\\runs\\run-create-demo\\context-manifest.json"
+}

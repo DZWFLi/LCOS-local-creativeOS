@@ -1,0 +1,32 @@
+{
+  "contractVersion": "bridge-task-v1",
+  "lcosRunId": "run-revise-demo",
+  "idempotencyKey": "run-revise-demo",
+  "requestFingerprint": "replace-with-canonical-request-hash",
+  "manifestId": "manifest-revise-demo",
+  "manifestHash": "replace-with-manifest-hash",
+  "outputIntent": "revise",
+  "instructions": "修改当前脚本，但只写入隔离输出，不覆盖源文件。",
+  "provider": "workbuddy",
+  "taskType": "creative_run",
+  "runtimeInputPackPath": "C:\\LCOS\\runs\\run-revise-demo\\runtime-input-pack.json",
+  "outputRoot": "C:\\LCOS\\runs\\run-revise-demo\\outputs",
+  "expectedOutputs": [
+    {
+      "outputId": "revised-script",
+      "role": "revised_script",
+      "action": "modified",
+      "absolutePath": "C:\\LCOS\\runs\\run-revise-demo\\outputs\\script-revised.md",
+      "mediaType": "text/markdown",
+      "required": true
+    }
+  ],
+  "outputPolicy": {
+    "allowZeroFiles": false,
+    "allowAdditionalFiles": false,
+    "maxFiles": 1
+  },
+  "timeoutSeconds": 900,
+  "reportMode": "short",
+  "metadata": {}
+}

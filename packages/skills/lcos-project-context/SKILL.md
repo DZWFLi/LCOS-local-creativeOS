@@ -1,0 +1,184 @@
+---
+name: lcos-project-context
+description: Read Local Creative OS Project Truth and ActiveContext, open its visual canvas, and execute a pulled Light Bridge task without bypassing Artifact Return.
+---
+
+# LCOS Project Context
+
+Use this skill when a task is bound to a Local Creative OS project.
+
+## 1. Architecture boundary
+
+```
+LCOS Canvas / Project Truth  ←→  Local Core (127.0.0.1:43121)
+Local Core                   ←→  Light Bridge (127.0.0.1:43122)
+Light Bridge                 ←→  Agent (claim / start / submit)
+
+Project MCP: read-only Project Truth, ActiveContext, ContextManifest, Runs
+Bridge MCP:  task lifecycle (claim / start / get / submit / cancel)
+```
+
+**Boundary rules**
+
+- Light Bridge owns task lifecycle (status, provider, result). Never replicate its state machine inside a Project tool or Skill.
+- Local Core owns Project Truth (Artifact, Revision, Current pointer). Bridge `task_id` is an external mapping, NOT an LCOS `runId`.
+- The stdio LCOS MCP (`tools/lcos-agent/mcp-server.mjs`) is a thin proxy: every bridge tool is one `fetch()` to Light Bridge REST. No queuing, no retry loops, no SQLite access.
+- Light Bridge's own `/mcp` endpoint (9 tools including `claim_task` / `start_task` / `submit_result`) is an alternative for agents that prefer direct MCP; the LCOS MCP delegates through the REST API for clarity and auditability.
+
+## 2. Call order for a full execution
+
+### Read phase (all agents)
+
+1. `list_lcos_projects` — only when the project is unknown.
+2. `get_lcos_active_context` — read the latest stable Canvas selection and resolved artifacts before interpreting the user's current visual selection.
+3. `get_lcos_project` — read identities and relationships; do not infer Project Truth from screenshots alone.
+4. `build_lcos_context_manifest` — freeze an immutable ContextManifest from Project Truth **immediately before** creating or executing a Run.
+
+### Execute phase (WorkBuddy / Codex as Agent)
+
+```text
+claim_lcos_task(provider, worker_id)
+→ inspect TaskEnvelope and RuntimeInputPack
+→ get_lcos_task(task_id)   // re-read if needed
+→ start_lcos_task(task_id, worker_id)
+→ execute within outputRoot only
+→ submit_lcos_result(task_id, resultEnvelope)
+```
+
+### Bridge only — do NOT call from Local Core
+
+- `claim_lcos_task` — call from MCP, NOT from Local Core HTTP routes
+- `start_lcos_task` — call from MCP, NOT from Local Core HTTP routes
+- `submit_lcos_result` — call from MCP, NOT from Local Core HTTP routes
+
+These MCP tools are thin `bridgeRequest()` delegates. Do not reimplement any state machine logic (queues, timeouts, dead-letter, worker affinity) in the agent or the MCP proxy.
+
+## 3. OutputIntent
+
+Bridge V1 tasks carry an `output_intent`:
+
+| Intent   | Meaning                                              |
+|----------|------------------------------------------------------|
+| `create` | Agent produces a new artifact from scratch           |
+| `revise` | Agent modifies an existing artifact (draft output)   |
+| `analyze`| Agent produces analysis/report without file changes  |
+
+MVP V1 uses `revise` as the primary intent. Output is written to `outputRoot` (set by the TaskEnvelope), never overwriting source files directly. The task's `output_policy` further constrains where and how outputs may land.
+
+## 4. changed_files
+
+Every `submit_lcos_result` must include `changed_files` — a structured array:
+
+```json
+{
+  "changed_files": [
+    {
+      "path": "absolute path",
+      "action": "created | modified | deleted",
+      "contentHash": "optional sha256"
+    }
+  ]
+}
+```
+
+- Paths must be absolute.
+- Only the files produced by this Run should appear.
+- Source input files MUST NOT be reported as changed.
+- Light Bridge validates paths against the task's `outputRoot` and `output_policy`.
+
+## 5. Draft / Pending / Accept / Reject / Retry lifecycle
+
+```
+Agent submit → providerStatus: "review"
+→ Local Core ingests result
+→ creates Pending ArtifactReturn + Draft Revision
+→ User Accept → Draft → Current, old Current → Superseded
+→ User Reject → Draft preserved as Evidence, ArtifactReturn → rejected
+→ User Retry  → new Canonical Run (with retryOfRunId), new RuntimeDispatch
+```
+
+- Execution complete ≠ user accepted.
+- Accept is the only path to update Current.
+- Reject preserves evidence, never updates Current.
+- Retry creates a NEW Run (old Run stays finalized).
+
+## 6. Agent Browser
+
+`open_lcos(projectId)` returns:
+
+```
+http://127.0.0.1:5173/?agent=1&project=<projectId>
+```
+
+- This page shares the SAME Canvas as the main LCOS UI.
+- The Agent Context Surface projects Workspace, Selection, and Context version from the MCP.
+- No second Canvas or tldraw instance is created.
+
+## 7. Feishu link context
+
+- In-app "Add Link" saves a Feishu URL as a `.link.md` Artifact (URL, title, resource type, purpose, user-authored summary).
+- When explicitly selected into Context, it freezes into the ContextManifest.
+- LCOS does NOT scrape private Feishu page contents without an authenticated browser/tool.
+- Do NOT claim private page contents were read unless an authorized tool actually opened them.
+
+## 8. Safety rules
+
+- **Never modify source files.** All agent output goes to `outputRoot` or staging paths.
+- **Never auto-Accept.** The agent returns `providerStatus: "review"`; only the user Accepts.
+- **Never write outside outputRoot.** Light Bridge validates paths.
+- **One task at a time.** Never claim a second task while one is running.
+- **Read ActiveContext before acting.** Selection may have changed since task creation.
+- **ContextManifest is immutable per Run.** A selection change after Run creation does not silently alter that Run's manifest.
+- **Cancel is honoured.** If `cancel_requested_at` is set, stop execution and report status as `cancelled` (not `review`).
+- **Bridge Task is execution truth, not LCOS Artifact Truth.** returned files remain Pending until Local Core processes them.
+- **Loopback only.** All MCP tools enforce `127.0.0.1` / `localhost` / `[::1]` in client.mjs.
+- **No direct SQLite.** Neither the MCP proxy nor the agent touches SQLite directly.
+
+## 9. Testing
+
+Each execution should verify:
+
+- `claim_lcos_task` returns a valid TaskEnvelope with `outputRoot`
+- `start_lcos_task` flips status to `running`
+- `submit_lcos_result` with a valid ResultEnvelope returns `ok: true`
+- `get_lcos_task` reflects the latest status
+- `cancel_lcos_task` marks the task `cancelled`
+- The Light Bridge canary (`npm run bridge -- canary`) passes
+- The LCOS MCP smoke (`initialize` + `tools/list` �� 14 tools) passes
+
+## 10. Example: full WorkBuddy agent flow
+
+```text
+// 1. Claim a pull task
+claim_lcos_task("workbuddy", "buddy-local")
+→ { task: { task_id: "...", lcos_run_id: "...", status: "assigned", ... } }
+
+// 2. Read context (already in context or via MCP)
+get_lcos_active_context("disposable-mvp-sample")
+get_lcos_project("disposable-mvp-sample")
+
+// 3. Start execution
+start_lcos_task("task_xxx", "buddy-local")
+→ { task: { status: "running", ... } }
+
+// 4. Execute — write only inside outputRoot
+
+// 5. Submit result
+submit_lcos_result("task_xxx", {
+  contractVersion: "bridge-result-v1",
+  taskId: "task_xxx",
+  lcosRunId: "run-yyy",
+  providerStatus: "review",
+  summary: "Created revised script with closure sentence added.",
+  changedFiles: [
+    { path: "E:\\...\\staging\\script-draft.md", action: "created" }
+  ],
+  warnings: [],
+  suggestedNextActions: ["review_draft"]
+})
+→ { ok: true, task: { status: "running", provider_status: "review", ... } }
+
+// 6. Verify
+get_lcos_task("task_xxx")
+→ { task: { provider_status: "review", result: { ... }, ... } }
+```

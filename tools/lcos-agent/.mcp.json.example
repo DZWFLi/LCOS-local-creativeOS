@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "local-creative-os": {
+      "command": "node",
+      "args": ["tools/lcos-agent/mcp-server.mjs"],
+      "env": {
+        "LCOS_CORE_URL": "http://127.0.0.1:43121",
+        "LCOS_BRIDGE_URL": "http://127.0.0.1:43122"
+      }
+    }
+  }
+}
