@@ -3,6 +3,8 @@
 > 读者：Codex（接管方）
 > 作者：WorkBuddy（Buddy）
 > 结论先行：**Porcelain Studio 2.0 视觉层未完整接入当前 worktree。`porcelain-studio.css` 文件存在但从未被引用；App.tsx / main.tsx / model.ts 均为旧版内容。UI 实际停留在 v0.7.1（旧视觉），不是 Porcelain。**
+>
+> **UPDATE（17:35）：Buddy 已二次修复，Porcelain Studio 2.0 完整接线成功。最终 commit `2d6f27b`。见第 7 节。**
 
 ---
 
@@ -12,10 +14,10 @@
 |----|-----|
 | 输入包 | `C:\Users\1\Desktop\OS开发\LCOS_MVP_UI_Porcelain_Studio_2.0_20260730.zip` |
 | 包声明版本 | web 0.7.3 / root 0.7.3 |
-| 当前 worktree 版本 | web 0.7.1 / root 0.6.1 |
-| 最终 commit | `cd51c7f`（自称含 porcelain，实际未接线） |
-| 当前 porcelain 状态 | `porcelain-studio.css` 存在且被 git 跟踪，但 0 处引用 |
-| 根因 | worktree 重建时 robocopy 用 `/XO`（exclude older）跳过备份中时间戳较旧的文件，导致 App.tsx / main.tsx / model.ts 未被 porcelain 版本覆盖 |
+| 当前 worktree 版本 | web 0.7.3 / root 0.7.3（修复后） |
+| 最终 commit | `2d6f27b`（Porcelain 完整接线） |
+| 当前 porcelain 状态 | `porcelain-studio.css` 被 main.tsx 引用、App.tsx 带 `porcelain-studio-v2` 类、nodeMeta 七色匹配 PS tokens |
+| 首次事故根因 | worktree 重建时 robocopy 用 `/XO`（exclude older）跳过备份中时间戳较旧的文件，导致 App.tsx / main.tsx / model.ts 未被 porcelain 版本覆盖 |
 
 ---
 
@@ -140,3 +142,47 @@ package.json                                # 0.7.3
 ---
 
 _WorkBuddy 2026-07-31 17:20 生成，如实记录_
+
+---
+
+## 7. 二次修复（Buddy，17:35）—— 已成功
+
+### 关键认知修正
+- **porcelain 包 = 完整最新源码 + 视觉层**（不只是 26 个视觉文件）
+- 包的 runtime/state/tests 本身就是匹配的整套源码（含 `updateActiveContext`、`ActiveContextProjection` 等最新 API）
+- git HEAD 里的 runtime/state 反而是被 `/XO` 跳过的新文件缺失版本
+- 正确做法：**整个 `apps/web/src` + `apps/web/tests` 用包内版本强制覆盖（/IS /IT）**，再补 package.json 版本号
+
+### 修复步骤
+1. `robocopy porcelain/apps/web/src → worktree/apps/web/src /E /IS /IT`
+2. `robocopy porcelain/apps/web/tests → worktree/apps/web/tests /E /IS /IT`
+3. 覆盖 `apps/web/package.json` + `package.json`（0.7.3）
+
+### 接线验证（全绿）
+| 检查点 | 结果 |
+|--------|------|
+| `grep porcelain-studio-v2 App.tsx` | ✓ 1 处 |
+| `grep porcelain main.tsx` | ✓ `import './porcelain-studio.css'` |
+| `nodeMeta` 七色匹配 PS tokens（#6687B8/#496FAE/#7556C9/#4D9084/#6F7D89/#AA7B3E/#B45F54） | ✓ |
+| `porcelain-studio.css` 60KB | ✓ |
+| 版本 0.7.3（root + web） | ✓ |
+
+### 质量链（全绿）
+| 阶段 | 结果 |
+|------|------|
+| web typecheck | 0 error |
+| web test | 28 files / 113 tests PASS |
+| web build | PASS（CSS 235KB 含 porcelain） |
+| local-core typecheck | 0 error |
+| 运行时验证 | Core :43121 health 200 / Web :5173 200，Vite 实际服务 porcelain-studio.css，VITE_LCOS_VERSION=0.7.3 |
+
+### 最终 commit
+```
+2d6f27b feat: Porcelain Studio 2.0 完整接线（修复此前 /XO 导致的接线丢失）
+```
+
+### 经验（必须固化）
+1. robocopy 从备份/包目录→worktree，必须用 `/IS /IT`（含相同/旧文件），**禁止 `/XO`**
+2. UI 包接入时：质量链通过 ≠ 接线成功，必须验证接线点（grep 类名/import/颜色 token）
+3. 视觉接入验证必须做浏览器级验证（Vite 实际服务 CSS、VERSION 常量），不能只看 vitest
+4. porcelain 包是完整源码基线，不是补丁——整体覆盖而不是挑选文件
