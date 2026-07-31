@@ -6,6 +6,8 @@ import type {
   ArtifactView,
   Checkpoint,
   ContractError,
+  BuildContextManifestV0Input,
+  AcceptArtifactReturnInput,
   MutationBatch,
   Note,
   Project,
@@ -16,7 +18,7 @@ import type {
   Workspace,
   ValidateProjectRootInput,
 } from '@local-creative-os/contracts'
-import type { ArtifactRevisionId, FileRecordId, ProjectId } from '@local-creative-os/domain'
+import type { ArtifactReturnId, ArtifactRevisionId, FileRecordId, ProjectId, RunId } from '@local-creative-os/domain'
 
 import { failure } from './errors.js'
 import { getHealthStatus } from './health.js'
@@ -27,9 +29,19 @@ import { FileRegistryService } from './file-registry-service.js'
 import { FileObservationService } from './file-observation-service.js'
 import { PreviewCacheService } from './preview-cache-service.js'
 import { PreviewWorkerService } from './preview-worker-service.js'
+import { ImportCopyConflictError, ImportCopyService } from './import-copy-service.js'
+import { ContextManifestService } from './context-manifest-service.js'
+import { RuntimeReviewService } from './runtime-review-service.js'
+import {
+  RuntimeApplicationService,
+  type CreateRuntimeRunInput,
+} from './runtime-application-service.js'
+import { ActiveContextStore, type ActiveContextInput } from './active-context-store.js'
 
 const LOOPBACK_HOST = '127.0.0.1'
 const MAX_BODY_BYTES = 1 * 1024 * 1024 // 1 MiB
+const MAX_IMPORT_BODY_BYTES = 26 * 1024 * 1024 // 25 MiB file + multipart overhead
+const FORBIDDEN_BROWSER_PATH_FIELDS = new Set(['path', 'absolutePath', 'targetPath', 'observedPath', 'rootPath'])
 export const LOCAL_CORE_DEV_PORT = 43121
 
 export interface LocalCoreServerOptions {
@@ -42,7 +54,12 @@ export interface LocalCoreServerOptions {
   readonly fileRegistryService?: FileRegistryService
   readonly fileObservationService?: FileObservationService
   readonly previewWorkerService?: PreviewWorkerService
+  readonly importCopyService?: ImportCopyService
+  readonly contextManifestService?: ContextManifestService
+  readonly runtimeReviewService?: RuntimeReviewService
+  readonly runtimeApplicationService?: RuntimeApplicationService
   readonly previewCacheRoot?: string
+  readonly activeContextStore?: ActiveContextStore
 }
 
 export interface LocalCoreAddress {
@@ -85,16 +102,58 @@ function formatMetadataError(error: unknown, fallback: string): string {
 }
 
 async function readJsonBody(request: IncomingMessage, signal: AbortSignal): Promise<unknown> {
+  return JSON.parse((await readRawBody(request, signal, MAX_BODY_BYTES)).toString('utf8'))
+}
+
+async function readRawBody(request: IncomingMessage, signal: AbortSignal, maxBytes: number): Promise<Buffer> {
   const chunks: Buffer[] = []
   let size = 0
   for await (const chunk of request) {
     if (signal.aborted) throw new DOMException('Request aborted', 'AbortError')
     const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
     size += buffer.length
-    if (size > MAX_BODY_BYTES) throw new RangeError('Request body is too large')
+    if (size > maxBytes) throw new RangeError('Request body is too large')
     chunks.push(buffer)
   }
-  return JSON.parse(Buffer.concat(chunks).toString('utf8'))
+  return Buffer.concat(chunks)
+}
+
+interface MultipartFilePart {
+  readonly fileName: string
+  readonly contentType: string
+  readonly bytes: Buffer
+}
+
+interface MultipartImportBody {
+  readonly fields: Record<string, string>
+  readonly file: MultipartFilePart
+}
+
+function parseMultipartImport(contentType: string | undefined, body: Buffer): MultipartImportBody {
+  const boundary = /boundary=([^;]+)/i.exec(contentType ?? '')?.[1]?.replace(/^"|"$/g, '')
+  if (!boundary) throw new Error('Multipart boundary is required.')
+  const raw = body.toString('latin1')
+  const parts = raw.split(`--${boundary}`).slice(1, -1)
+  const fields: Record<string, string> = {}
+  let file: MultipartFilePart | undefined
+  for (const part of parts) {
+    const normalized = part.replace(/^\r\n/, '').replace(/\r\n$/, '')
+    const separator = normalized.indexOf('\r\n\r\n')
+    if (separator < 0) continue
+    const headerText = normalized.slice(0, separator)
+    const contentText = normalized.slice(separator + 4)
+    const name = /name="([^"]+)"/i.exec(headerText)?.[1]
+    if (!name) continue
+    const fileName = /filename="([^"]*)"/i.exec(headerText)?.[1]
+    if (fileName !== undefined) {
+      const contentTypeHeader = /content-type:\s*([^\r\n]+)/i.exec(headerText)?.[1]?.trim() ?? 'application/octet-stream'
+      file = { fileName, contentType: contentTypeHeader, bytes: Buffer.from(contentText, 'latin1') }
+    } else {
+      fields[name] = Buffer.from(contentText, 'latin1').toString('utf8')
+    }
+  }
+  if (file === undefined) throw new Error('Multipart import requires file.')
+  return { fields, file }
 }
 
 async function withAbort<Value>(operation: Promise<Value>, signal: AbortSignal): Promise<Value> {
@@ -152,6 +211,11 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
   const metadata = options.metadataRepository
   const fileRegistry = options.fileRegistryService
   const fileObservation = options.fileObservationService ?? (metadata === undefined ? undefined : new FileObservationService(metadata))
+  const importCopy = options.importCopyService ?? (metadata === undefined ? undefined : new ImportCopyService(metadata))
+  const contextManifest = options.contextManifestService ?? (metadata === undefined ? undefined : new ContextManifestService(metadata))
+  const runtimeReview = options.runtimeReviewService ?? (metadata === undefined ? undefined : new RuntimeReviewService(metadata))
+  const runtimeApplication = options.runtimeApplicationService
+  const activeContext = options.activeContextStore ?? new ActiveContextStore()
   const previewWorker = options.previewWorkerService
     ?? (metadata === undefined ? undefined : new PreviewWorkerService(metadata, {
       cacheService: new PreviewCacheService(metadata, {
@@ -291,6 +355,219 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
         return
       }
 
+      const activeContextMatch = /^\/projects\/([^/]+)\/active-context$/.exec(pathname)
+      if ((method === 'GET' || method === 'PUT') && activeContextMatch !== null) {
+        if (!requireMetadata(metadata, response)) return
+        const projectId = decodeURIComponent(activeContextMatch[1] ?? '')
+        if (!requireProject(projectId, metadata, response)) return
+        const graph = metadata.get(projectId)
+        if (graph === undefined) {
+          sendJson(response, 404, failure('NOT_FOUND', 'Project graph not found.'))
+          return
+        }
+        if (method === 'GET') {
+          sendJson(response, 200, { ok: true, value: activeContext.get(projectId, graph) })
+          return
+        }
+        let input: unknown
+        try { input = await readJsonBody(request, controller.signal) } catch {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Active Context body must be valid JSON.'))
+          return
+        }
+        if (!isRecord(input)
+          || typeof input.scopeId !== 'string'
+          || (input.workspaceId !== undefined && typeof input.workspaceId !== 'string')
+          || !isStringArray(input.selectedViewIds)
+          || !isStringArray(input.pinnedContextIds)
+          || !isStringArray(input.excludedContextIds)
+          || Object.keys(input).some((key) => !['workspaceId', 'scopeId', 'selectedViewIds', 'pinnedContextIds', 'excludedContextIds'].includes(key))) {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Active Context requires scopeId and string ID arrays.'))
+          return
+        }
+        sendJson(response, 200, {
+          ok: true,
+          value: activeContext.update(projectId, graph, input as unknown as ActiveContextInput),
+        })
+        return
+      }
+
+      const manifestMatch = /^\/projects\/([^/]+)\/context-manifests\/v0$/.exec(pathname)
+      if (method === 'POST' && manifestMatch !== null) {
+        if (!requireMetadata(metadata, response)) return
+        if (contextManifest === undefined) {
+          sendJson(response, 503, failure('UNAVAILABLE', 'Context Manifest service is not configured.'))
+          return
+        }
+        let input: unknown
+        try { input = await readJsonBody(request, controller.signal) } catch {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Context Manifest body must be valid JSON.'))
+          return
+        }
+        if (!isRecord(input)
+          || Object.keys(input).some((key) => !['targetArtifactId', 'contextArtifactIds', 'requestedOutput'].includes(key))
+          || (input.targetArtifactId !== undefined && typeof input.targetArtifactId !== 'string')
+          || (input.contextArtifactIds !== undefined && !isStringArray(input.contextArtifactIds))
+          || (input.requestedOutput !== undefined && (typeof input.requestedOutput !== 'string' || input.requestedOutput.length > 2_000))) {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Context Manifest accepts optional targetArtifactId, contextArtifactIds and requestedOutput.'))
+          return
+        }
+        const projectId = decodeURIComponent(manifestMatch[1] ?? '')
+        try {
+          const manifest = await contextManifest.build(projectId as ProjectId, input as BuildContextManifestV0Input)
+          sendJson(response, 200, { ok: true, value: manifest })
+        } catch (error: unknown) {
+          sendJson(response, 400, failure('VALIDATION', error instanceof Error ? error.message : 'Context Manifest could not be built.'))
+        }
+        return
+      }
+
+      const runReviewMatch = /^\/runs\/([^/]+)\/review$/.exec(pathname)
+      if (method === 'GET' && runReviewMatch !== null) {
+        if (runtimeReview === undefined) {
+          sendJson(response, 503, failure('UNAVAILABLE', 'Runtime Review service is not configured.'))
+          return
+        }
+        try {
+          sendJson(response, 200, {
+            ok: true,
+            value: runtimeReview.getRunReview(decodeURIComponent(runReviewMatch[1] ?? '') as RunId),
+          })
+        } catch (error: unknown) {
+          sendJson(response, 404, failure('NOT_FOUND', error instanceof Error ? error.message : 'Run review not found.'))
+        }
+        return
+      }
+
+      const createRunMatch = /^\/projects\/([^/]+)\/runs$/.exec(pathname)
+      if (method === 'GET' && createRunMatch !== null) {
+        if (runtimeApplication === undefined) {
+          sendJson(response, 503, failure('UNAVAILABLE', 'Runtime execution service is not configured.'))
+          return
+        }
+        const projectId = decodeURIComponent(createRunMatch[1] ?? '') as ProjectId
+        if (!requireMetadata(metadata, response) || requireProject(String(projectId), metadata, response) === undefined) return
+        const requestedLimit = Number(url.searchParams.get('limit') ?? 20)
+        const limit = Number.isInteger(requestedLimit) ? requestedLimit : 20
+        sendJson(response, 200, { ok: true, value: runtimeApplication.getProjectReviews(projectId, limit) })
+        return
+      }
+      if (method === 'POST' && createRunMatch !== null) {
+        if (runtimeApplication === undefined) {
+          sendJson(response, 503, failure('UNAVAILABLE', 'Runtime execution service is not configured.'))
+          return
+        }
+        const projectId = decodeURIComponent(createRunMatch[1] ?? '') as ProjectId
+        if (!requireMetadata(metadata, response) || requireProject(String(projectId), metadata, response) === undefined) return
+        try {
+          const input = await readJsonBody(request, controller.signal)
+          if (!isRecord(input)
+            || typeof input.instruction !== 'string'
+            || typeof input.targetArtifactId !== 'string'
+            || (input.contextArtifactIds !== undefined && !isStringArray(input.contextArtifactIds))
+            || (input.workspaceId !== undefined && typeof input.workspaceId !== 'string')
+            || Object.keys(input).some((key) => !['instruction', 'targetArtifactId', 'contextArtifactIds', 'workspaceId'].includes(key))) {
+            sendJson(response, 400, failure('INVALID_ARGUMENT', 'Run requires instruction, targetArtifactId and optional contextArtifactIds/workspaceId.'))
+            return
+          }
+          sendJson(response, 201, {
+            ok: true,
+            value: await runtimeApplication.create(projectId, input as unknown as CreateRuntimeRunInput),
+          })
+        } catch (error: unknown) {
+          sendJson(response, 409, failure('CONFLICT', error instanceof Error ? error.message : 'Run could not be created.'))
+        }
+        return
+      }
+
+      const runtimeActionMatch = /^\/runs\/([^/]+)\/(dispatch|recover|sync)$/.exec(pathname)
+      if (method === 'POST' && runtimeActionMatch !== null) {
+        if (runtimeApplication === undefined) {
+          sendJson(response, 503, failure('UNAVAILABLE', 'Runtime execution service is not configured.'))
+          return
+        }
+        const runId = decodeURIComponent(runtimeActionMatch[1] ?? '') as RunId
+        const action = runtimeActionMatch[2]
+        try {
+          const value = action === 'dispatch'
+            ? await runtimeApplication.dispatch(runId)
+            : action === 'recover'
+              ? await runtimeApplication.recover(runId)
+              : await runtimeApplication.sync(runId)
+          sendJson(response, 200, { ok: true, value })
+        } catch (error: unknown) {
+          sendJson(response, 409, failure('CONFLICT', error instanceof Error ? error.message : 'Runtime action conflicted.'))
+        }
+        return
+      }
+
+      const finalizeRunMatch = /^\/runs\/([^/]+)\/finalize$/.exec(pathname)
+      if (method === 'POST' && finalizeRunMatch !== null) {
+        if (runtimeApplication === undefined) {
+          sendJson(response, 503, failure('UNAVAILABLE', 'Runtime execution service is not configured.'))
+          return
+        }
+        const runId = decodeURIComponent(finalizeRunMatch[1] ?? '') as RunId
+        try {
+          const input = await readJsonBody(request, controller.signal)
+          if (!isRecord(input)
+            || !['completed', 'retrying'].includes(String(input.decision))
+            || (input.comment !== undefined && typeof input.comment !== 'string')
+            || Object.keys(input).some((key) => !['decision', 'comment'].includes(key))) {
+            sendJson(response, 400, failure('INVALID_ARGUMENT', 'Finalize requires completed or retrying decision.'))
+            return
+          }
+          sendJson(response, 200, {
+            ok: true,
+            value: await runtimeApplication.finalize(
+              runId,
+              input.decision as 'completed' | 'retrying',
+              typeof input.comment === 'string' ? input.comment : undefined,
+            ),
+          })
+        } catch (error: unknown) {
+          sendJson(response, 409, failure('CONFLICT', error instanceof Error ? error.message : 'Runtime finalize conflicted.'))
+        }
+        return
+      }
+
+      const acceptReturnMatch = /^\/artifact-returns\/([^/]+)\/accept$/.exec(pathname)
+      const rejectReturnMatch = /^\/artifact-returns\/([^/]+)\/reject$/.exec(pathname)
+      const retryReturnMatch = /^\/artifact-returns\/([^/]+)\/retry$/.exec(pathname)
+      if (method === 'POST' && (acceptReturnMatch !== null || rejectReturnMatch !== null || retryReturnMatch !== null)) {
+        if (runtimeReview === undefined) {
+          sendJson(response, 503, failure('UNAVAILABLE', 'Runtime Review service is not configured.'))
+          return
+        }
+        const returnId = decodeURIComponent(
+          acceptReturnMatch?.[1] ?? rejectReturnMatch?.[1] ?? retryReturnMatch?.[1] ?? '',
+        ) as ArtifactReturnId
+        try {
+          if (acceptReturnMatch !== null) {
+            const input = await readJsonBody(request, controller.signal)
+            if (!isRecord(input) || typeof input.expectedBaseRevisionId !== 'string'
+              || Object.keys(input).some((key) => key !== 'expectedBaseRevisionId')) {
+              sendJson(response, 400, failure('INVALID_ARGUMENT', 'Accept requires only expectedBaseRevisionId.'))
+              return
+            }
+            sendJson(response, 200, { ok: true, value: runtimeReview.accept(returnId, input as unknown as AcceptArtifactReturnInput) })
+          } else if (rejectReturnMatch !== null) {
+            sendJson(response, 200, { ok: true, value: runtimeReview.reject(returnId) })
+          } else {
+            const raw = await readRawBody(request, controller.signal, MAX_BODY_BYTES)
+            const input = raw.length === 0 ? {} : JSON.parse(raw.toString('utf8')) as unknown
+            if (!isRecord(input) || (input.instruction !== undefined && typeof input.instruction !== 'string')
+              || Object.keys(input).some((key) => key !== 'instruction')) {
+              sendJson(response, 400, failure('INVALID_ARGUMENT', 'Retry accepts only optional instruction.'))
+              return
+            }
+            sendJson(response, 201, { ok: true, value: runtimeReview.retry(returnId, input) })
+          }
+        } catch (error: unknown) {
+          sendJson(response, 409, failure('CONFLICT', error instanceof Error ? error.message : 'Runtime review decision conflicted.'))
+        }
+        return
+      }
+
       // Browser supplies only an opaque trusted selection ID, never a path.
       const sourceMatch = /^\/projects\/([^/]+)\/sources$/.exec(pathname)
       if (method === 'POST' && sourceMatch !== null) {
@@ -320,6 +597,44 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
           sendJson(response, 201, { ok: true, value: result })
         } catch (error: unknown) {
           sendJson(response, 400, failure('VALIDATION', error instanceof Error ? error.message : 'Source registration failed.'))
+        }
+        return
+      }
+
+      const importMatch = /^\/projects\/([^/]+)\/imports$/.exec(pathname)
+      if (method === 'POST' && importMatch !== null) {
+        if (!requireMetadata(metadata, response)) return
+        if (importCopy === undefined) {
+          sendJson(response, 503, failure('UNAVAILABLE', 'Import Copy service is not configured.'))
+          return
+        }
+        try {
+          const body = await readRawBody(request, controller.signal, MAX_IMPORT_BODY_BYTES)
+          const multipart = parseMultipartImport(request.headers['content-type'], body)
+          const projectId = decodeURIComponent(importMatch[1] ?? '')
+          const x = Number(multipart.fields['position.x'])
+          const y = Number(multipart.fields['position.y'])
+          const forbiddenPathField = Object.keys(multipart.fields).find((field) => FORBIDDEN_BROWSER_PATH_FIELDS.has(field))
+          if (forbiddenPathField !== undefined) {
+            sendJson(response, 400, failure('INVALID_ARGUMENT', `Import Copy does not accept browser supplied path field: ${forbiddenPathField}.`))
+            return
+          }
+          if (!multipart.fields.importRequestId || !multipart.fields.scopeId || !Number.isFinite(x) || !Number.isFinite(y)) {
+            sendJson(response, 400, failure('INVALID_ARGUMENT', 'Import Copy requires importRequestId, scopeId, position.x, position.y and file.'))
+            return
+          }
+          const result = await importCopy.importCopy(projectId as ProjectId, {
+            importRequestId: multipart.fields.importRequestId,
+            scopeId: multipart.fields.scopeId,
+            position: { x, y },
+            fileName: multipart.file.fileName,
+            contentType: multipart.file.contentType,
+            bytes: multipart.file.bytes,
+          })
+          sendJson(response, result.reused ? 200 : 201, { ok: true, value: result })
+        } catch (error: unknown) {
+          const status = error instanceof RangeError ? 413 : error instanceof ImportCopyConflictError ? 409 : 400
+          sendJson(response, status, failure(error instanceof ImportCopyConflictError ? 'CONFLICT' : 'VALIDATION', error instanceof Error ? error.message : 'Import Copy failed.'))
         }
         return
       }
@@ -494,6 +809,7 @@ async function handleEntityRoute(
   const fileListMatch = /^\/projects\/([^/]+)\/file-records$/.exec(pathname)
   const fileOneMatch = /^\/file-records\/([^/]+)$/.exec(pathname)
   const fileRefreshMatch = /^\/file-records\/([^/]+)\/refresh$/.exec(pathname)
+  const fileAdoptMatch = /^\/file-records\/([^/]+)\/adopt$/.exec(pathname)
   if (fileListMatch !== null && method === 'GET') {
     const projectId = decodeURIComponent(fileListMatch[1] ?? '')
     return { status: 200, body: { ok: true, value: metadata.getFileRecords(projectId) } }
@@ -514,6 +830,18 @@ async function handleEntityRoute(
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'File observation failed.'
       return { status: message === 'FileRecord not found.' ? 404 : 400, body: failure(message === 'FileRecord not found.' ? 'NOT_FOUND' : 'VALIDATION', message) }
+    }
+  }
+  if (fileAdoptMatch !== null && method === 'POST') {
+    if (fileObservation === undefined) return { status: 503, body: failure('UNAVAILABLE', 'File Observation Service is not configured.') }
+    const fileRecordId = decodeURIComponent(fileAdoptMatch[1] ?? '') as FileRecordId
+    try {
+      const result = await fileObservation.adopt(fileRecordId, signal)
+      return { status: 201, body: { ok: true, value: result } }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'External change adoption failed.'
+      const notFound = message === 'FileRecord not found.' || message === 'Current Artifact Revision not found.'
+      return { status: notFound ? 404 : 409, body: failure(notFound ? 'NOT_FOUND' : 'CONFLICT', message) }
     }
   }
 
@@ -721,6 +1049,10 @@ async function handleEntityRoute(
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string')
 }
 
 function isNote(value: unknown): value is Note {

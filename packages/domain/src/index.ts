@@ -27,6 +27,9 @@ export type ConversationId = Brand<string, 'ConversationId'>
 export type RunId = Brand<string, 'RunId'>
 export type RunEventId = Brand<string, 'RunEventId'>
 export type ArtifactReturnId = Brand<string, 'ArtifactReturnId'>
+export type ContextManifestId = Brand<string, 'ContextManifestId'>
+export type RuntimeDispatchId = Brand<string, 'RuntimeDispatchId'>
+export type RuntimeBindingId = Brand<string, 'RuntimeBindingId'>
 export type CheckpointId = Brand<string, 'CheckpointId'>
 export type PreviewRecordId = Brand<string, 'PreviewRecordId'>
 export type ContentHash = Brand<string, 'ContentHash'>
@@ -281,18 +284,69 @@ export interface Conversation {
   readonly createdAt: IsoDateTime
 }
 
-export type RunStatus = 'queued' | 'running' | 'waiting_input' | 'review' | 'completed' | 'failed' | 'cancelled'
-export type RunExecutor = 'codex'
+export const LCOS_RUN_STATUSES = [
+  'created',
+  'queued',
+  'running',
+  'waiting_input',
+  'completed',
+  'failed',
+  'cancelled',
+] as const
+export type RunStatus = typeof LCOS_RUN_STATUSES[number]
+export type RuntimeProvider = 'workbuddy'
 
 export interface Run {
   readonly id: RunId
   readonly projectId: ProjectId
-  readonly conversationId: ConversationId
-  readonly commandId: CommandId
-  readonly contextSnapshotId: ContextSnapshotId
-  readonly executor: RunExecutor
-  readonly externalThreadId?: string
+  readonly workspaceId?: WorkspaceId
+  readonly targetArtifactId: ArtifactId
+  readonly targetRevisionId: ArtifactRevisionId
+  readonly contextManifestId: ContextManifestId
+  readonly retryOfRunId?: RunId
+  readonly provider: RuntimeProvider
   readonly status: RunStatus
+  readonly instruction: string
+  readonly resultSummary?: string
+  readonly shortSummary?: string
+  readonly errorCode?: string
+  readonly errorMessage?: string
+  readonly createdAt: IsoDateTime
+  readonly updatedAt: IsoDateTime
+  readonly completedAt?: IsoDateTime
+}
+
+export const RUNTIME_DISPATCH_STATUSES = [
+  'planned',
+  'dispatching',
+  'bound',
+  'failed',
+  'recovery_required',
+] as const
+export type RuntimeDispatchStatus = typeof RUNTIME_DISPATCH_STATUSES[number]
+
+export interface RuntimeDispatch {
+  readonly id: RuntimeDispatchId
+  readonly runId: RunId
+  readonly provider: RuntimeProvider
+  readonly idempotencyKey: string
+  readonly status: RuntimeDispatchStatus
+  readonly attemptCount: number
+  readonly lastErrorCode?: string
+  readonly lastErrorMessage?: string
+  readonly createdAt: IsoDateTime
+  readonly updatedAt: IsoDateTime
+}
+
+export interface RuntimeBinding {
+  readonly id: RuntimeBindingId
+  readonly runId: RunId
+  readonly provider: RuntimeProvider
+  readonly externalTaskId?: string
+  readonly externalSessionId?: string
+  readonly providerStatus?: string
+  readonly lastSyncedAt?: IsoDateTime
+  readonly finalizePending: boolean
   readonly createdAt: IsoDateTime
   readonly updatedAt: IsoDateTime
 }
@@ -325,19 +379,27 @@ export interface ChangedFile {
   readonly afterHash?: ContentHash
 }
 
-export type ArtifactReturnDisposition = 'pending_return' | 'new_revision' | 'new_artifact' | 'conflict'
+export const ARTIFACT_RETURN_STATUSES = [
+  'pending_review',
+  'adopted',
+  'rejected',
+] as const
+export type ArtifactReturnStatus = typeof ARTIFACT_RETURN_STATUSES[number]
+export type ArtifactReturnAction = 'created'
 
 export interface ArtifactReturn {
   readonly id: ArtifactReturnId
   readonly runId: RunId
-  readonly artifactId?: ArtifactId
-  readonly targetArtifactId?: ArtifactId
-  readonly targetRevisionId?: ArtifactRevisionId
-  readonly localPath: string
+  readonly targetArtifactId: ArtifactId
+  readonly baseRevisionId: ArtifactRevisionId
+  readonly returnedFileId: FileRecordId
   readonly contentHash: ContentHash
-  readonly title: string
-  readonly disposition: ArtifactReturnDisposition
+  readonly canonicalPath: string
+  readonly action: ArtifactReturnAction
+  readonly status: ArtifactReturnStatus
+  readonly draftRevisionId?: ArtifactRevisionId
   readonly createdAt: IsoDateTime
+  readonly updatedAt: IsoDateTime
 }
 
 export type ArtifactReturnPlacement =

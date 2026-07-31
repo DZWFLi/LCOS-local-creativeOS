@@ -3,6 +3,12 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { createLocalCoreServer, LOCAL_CORE_DEV_PORT } from './server.js'
 import { SqliteMetadataRepository } from './metadata-repository.js'
 import { ensureMvpSampleProject } from './mvp-sample-project.js'
+import { ContextManifestService } from './context-manifest-service.js'
+import { McpBridgeRuntimeClient } from './bridge-mcp-client.js'
+import { RuntimeAdapterService } from './runtime-adapter.js'
+import { RuntimeApplicationService } from './runtime-application-service.js'
+import { RuntimeResultIngestionService } from './runtime-result-ingestion.js'
+import { RuntimeReviewService } from './runtime-review-service.js'
 
 export { getHealthStatus } from './health.js'
 export { ExplicitProjectCatalog } from './project-catalog.js'
@@ -10,6 +16,31 @@ export { validateProjectRoot } from './project-root.js'
 export { createLocalCoreServer, LOCAL_CORE_DEV_PORT } from './server.js'
 export { SqliteMetadataRepository } from './metadata-repository.js'
 export { FileRegistryService, TrustedFileSelectionRegistry } from './file-registry-service.js'
+export { ImportCopyService } from './import-copy-service.js'
+export { ContextManifestService } from './context-manifest-service.js'
+export {
+  createTaskRequestFingerprint,
+  RuntimeAdapterError,
+  RuntimeAdapterService,
+} from './runtime-adapter.js'
+export { McpBridgeRuntimeClient } from './bridge-mcp-client.js'
+export { RuntimeResultIngestionService } from './runtime-result-ingestion.js'
+export { RuntimeReviewService } from './runtime-review-service.js'
+export { RuntimeApplicationService } from './runtime-application-service.js'
+export type { CreateRuntimeRunInput, RuntimeRunActionResult } from './runtime-application-service.js'
+export type {
+  IngestedRuntimeResult,
+  RuntimeResultRepository,
+} from './runtime-result-ingestion.js'
+export type {
+  BridgeRuntimePort,
+  BridgeResultEnvelopeV0,
+  BridgeTaskEnvelopeV0,
+  BridgeTaskEnvelopeV1,
+  BridgeTaskIdentity,
+  RuntimeInputPackV0,
+  RuntimeProviderError,
+} from './runtime-adapter.js'
 export { guardTrustedFilePath } from './path-guard.js'
 export { RendererRegistry, DEFAULT_RENDERERS } from './renderer-registry.js'
 export { PreviewCacheService } from './preview-cache-service.js'
@@ -30,7 +61,28 @@ async function main(): Promise<void> {
       ?? fileURLToPath(new URL('../.data/mvp-sample-project', import.meta.url))
     ensureMvpSampleProject(metadataRepository, sampleRoot)
   }
-  const server = createLocalCoreServer({ port, metadataRepository })
+  const bridge = new McpBridgeRuntimeClient(
+    process.env.LOCAL_CORE_BRIDGE_MCP_URL ?? 'http://127.0.0.1:43122/mcp',
+    fetch,
+    process.env.LOCAL_CORE_BRIDGE_SESSION_ID,
+    parseBridgeContractMode(process.env.LOCAL_CORE_BRIDGE_CONTRACT_MODE),
+  )
+  const bridgeProjectId = process.env.LOCAL_CORE_BRIDGE_PROJECT_ID ?? 'mvp-fast-build'
+  const runtimeReviewService = new RuntimeReviewService(metadataRepository)
+  const runtimeAdapter = new RuntimeAdapterService(metadataRepository, bridge, bridgeProjectId)
+  const runtimeApplicationService = new RuntimeApplicationService(
+    metadataRepository,
+    new ContextManifestService(metadataRepository),
+    runtimeAdapter,
+    new RuntimeResultIngestionService(metadataRepository, bridge),
+    runtimeReviewService,
+  )
+  const server = createLocalCoreServer({
+    port,
+    metadataRepository,
+    runtimeReviewService,
+    runtimeApplicationService,
+  })
   const address = await server.start()
   process.stdout.write(`Local Core Phase 2 listening on http://${address.host}:${address.port}\n`)
 
@@ -42,6 +94,12 @@ async function main(): Promise<void> {
   }
   process.once('SIGINT', shutdown)
   process.once('SIGTERM', shutdown)
+}
+
+function parseBridgeContractMode(value: string | undefined): 'auto' | 'canonical' | 'legacy' {
+  if (value === undefined || value === '' || value === 'auto') return 'auto'
+  if (value === 'canonical' || value === 'legacy') return value
+  throw new Error('LOCAL_CORE_BRIDGE_CONTRACT_MODE must be auto, canonical, or legacy.')
 }
 
 const entryUrl = process.argv[1] === undefined ? undefined : pathToFileURL(process.argv[1]).href

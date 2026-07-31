@@ -1,6 +1,7 @@
+import { randomUUID } from 'node:crypto'
 import { stat } from 'node:fs/promises'
 
-import type { Artifact, ContentHash, FileRecord, FileRecordId } from '@local-creative-os/domain'
+import type { Artifact, ArtifactRevision, ArtifactView, ContentHash, FileRecord, FileRecordId } from '@local-creative-os/domain'
 
 import { hashFileSha256 } from './file-registry-service.js'
 import { SqliteMetadataRepository } from './metadata-repository.js'
@@ -14,6 +15,14 @@ export interface FileObservationResult {
   readonly currentRevisionHash?: ContentHash
   readonly changed: boolean
   readonly revisionCreated: false
+}
+
+export interface AdoptExternalChangeResult {
+  readonly fileRecord: FileRecord
+  readonly artifact: Artifact
+  readonly previousRevision: ArtifactRevision
+  readonly revision: ArtifactRevision
+  readonly updatedViews: readonly ArtifactView[]
 }
 
 function artifactAvailabilityFor(fileAvailability: FileRecord['availability']): Artifact['availability'] {
@@ -71,6 +80,62 @@ export class FileObservationService {
       revisionCreated: false,
       ...(nextArtifact === undefined ? {} : { artifact: nextArtifact }),
       ...(currentRevision?.contentHash === undefined ? {} : { currentRevisionHash: currentRevision.contentHash }),
+    }
+  }
+
+  async adopt(fileRecordId: FileRecordId, signal?: AbortSignal): Promise<AdoptExternalChangeResult> {
+    const observed = this.repository.getFileRecord(String(fileRecordId))
+    if (observed === undefined) throw new Error('FileRecord not found.')
+    if (observed.availability !== 'stale') throw new Error('Only a stale FileRecord can be adopted.')
+    const artifact = this.#artifactForCurrentFileRecord(observed)
+    if (artifact?.currentRevisionId === undefined) throw new Error('Current Artifact Revision not found.')
+    const currentRevision = this.repository.getArtifactRevision(String(artifact.currentRevisionId))
+    if (currentRevision === undefined) throw new Error('Current Artifact Revision not found.')
+    const info = await stat(observed.observedPath)
+    if (!info.isFile()) throw new Error('Observed source is not a readable file.')
+    const verifiedHash = await hashFileSha256(observed.observedPath, signal) as ContentHash
+    if (verifiedHash !== observed.observedHash
+      || info.size !== observed.size
+      || info.mtime.toISOString() !== observed.modifiedAt) {
+      throw new Error('Observed source changed again. Refresh before adopting.')
+    }
+    const now = new Date().toISOString()
+    const nextFileRecord: FileRecord = {
+      ...observed,
+      id: randomUUID() as FileRecord['id'],
+      availability: 'current',
+      observedAt: now,
+    }
+    const previousRevision: ArtifactRevision = {
+      ...currentRevision,
+      status: 'superseded',
+    }
+    const revision: ArtifactRevision = {
+      id: randomUUID() as ArtifactRevision['id'],
+      artifactId: artifact.id,
+      fileRecordId: nextFileRecord.id,
+      parentRevisionId: currentRevision.id,
+      contentHash: nextFileRecord.observedHash,
+      source: 'external',
+      status: 'current',
+      createdAt: now,
+    }
+    const nextArtifact: Artifact = {
+      ...artifact,
+      currentRevisionId: revision.id,
+      availability: 'available',
+      updatedAt: now,
+    }
+    const updatedViews = this.repository.getArtifactViews(String(artifact.projectId))
+      .filter((view) => String(view.artifactId) === String(artifact.id) && String(view.revisionId) === String(currentRevision.id))
+      .map((view) => ({ ...view, revisionId: revision.id }))
+    this.repository.adoptExternalChange(previousRevision, nextFileRecord, revision, nextArtifact, updatedViews)
+    return {
+      fileRecord: nextFileRecord,
+      artifact: nextArtifact,
+      previousRevision,
+      revision,
+      updatedViews,
     }
   }
 

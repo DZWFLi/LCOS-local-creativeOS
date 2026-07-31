@@ -1,10 +1,13 @@
 import { mkdirSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { dirname, resolve } from 'node:path'
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite'
 
 import type {
   Artifact,
   ArtifactId,
+  ArtifactReturn,
+  ArtifactReturnId,
   ArtifactRevision,
   ArtifactRevisionId,
   ArtifactView,
@@ -14,6 +17,10 @@ import type {
   FileRecord,
   FileRecordId,
   GraphVersion,
+  Run,
+  RunId,
+  RuntimeBinding,
+  RuntimeDispatch,
   Note,
   NoteId,
   Project,
@@ -27,7 +34,14 @@ import type {
   Workspace,
   WorkspaceId,
 } from '@local-creative-os/domain'
-import type { MutationBatch, ProjectGraphSnapshot } from '@local-creative-os/contracts'
+import type {
+  AcceptArtifactReturnResult,
+  MutationBatch,
+  PersistedContextManifestV0,
+  ProjectGraphSnapshot,
+  RejectArtifactReturnResult,
+  RetryRunResult,
+} from '@local-creative-os/contracts'
 
 type Row = Record<string, SQLInputValue | undefined>
 type ForeignKeyCheckRow = {
@@ -64,6 +78,46 @@ function json<T>(value: SQLInputValue): T {
   try { return JSON.parse(value) as T } catch { return JSON.parse('null') as unknown as T }
 }
 
+export class RuntimeLifecycleConflictError extends Error {
+  readonly code = 'RUNTIME_LIFECYCLE_CONFLICT'
+}
+
+const FORBIDDEN_MANIFEST_KEYS = new Set([
+  'provider',
+  'bridgeTaskId',
+  'externalTaskId',
+  'externalSessionId',
+  'runtimeRoot',
+  'stagingPath',
+  'mcpUrl',
+])
+
+function assertCanonicalManifest(manifest: PersistedContextManifestV0): void {
+  if (manifest.schemaVersion !== 0) throw new Error('ContextManifest schemaVersion must be 0.')
+  const expectedHash = createHash('sha256').update(manifest.canonicalJson, 'utf8').digest('hex')
+  if (manifest.manifestHash !== expectedHash) throw new Error('ContextManifest hash does not match canonical JSON.')
+  let parsed: unknown
+  try { parsed = JSON.parse(manifest.canonicalJson) } catch { throw new Error('ContextManifest canonical JSON is invalid.') }
+  const visit = (value: unknown): void => {
+    if (typeof value === 'string') {
+      if (/^[A-Za-z]:[\\/]/.test(value) || value.startsWith('/') || value.startsWith('\\\\')) {
+        throw new Error('ContextManifest cannot contain absolute paths.')
+      }
+      return
+    }
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item)
+      return
+    }
+    if (typeof value !== 'object' || value === null) return
+    for (const [key, nested] of Object.entries(value)) {
+      if (FORBIDDEN_MANIFEST_KEYS.has(key)) throw new Error(`ContextManifest cannot contain ${key}.`)
+      visit(nested)
+    }
+  }
+  visit(parsed)
+}
+
 export interface MetadataRepositoryOptions {
   readonly disposableOnly?: boolean
 }
@@ -98,11 +152,12 @@ export class SqliteMetadataRepository {
   #migrate(): void {
     const version = this.#database.prepare('PRAGMA user_version').get() as { user_version: number }
     if (version.user_version === 0) { this.#migrate_001(); return }
-    if (version.user_version === 1) { this.#migrate_002_from_v1(); this.#migrate_004_from_v3(); this.#migrate_005_from_v4(); return }
-    if (version.user_version === 2) { this.#migrate_003_from_v2(); this.#migrate_004_from_v3(); this.#migrate_005_from_v4(); return }
-    if (version.user_version === 3) { this.#migrate_004_from_v3(); this.#migrate_005_from_v4(); return }
-    if (version.user_version === 4) { this.#migrate_005_from_v4(); return }
-    // v5 = current
+    if (version.user_version === 1) { this.#migrate_002_from_v1(); this.#migrate_004_from_v3(); this.#migrate_005_from_v4(); this.#migrate_006_from_v5(); return }
+    if (version.user_version === 2) { this.#migrate_003_from_v2(); this.#migrate_004_from_v3(); this.#migrate_005_from_v4(); this.#migrate_006_from_v5(); return }
+    if (version.user_version === 3) { this.#migrate_004_from_v3(); this.#migrate_005_from_v4(); this.#migrate_006_from_v5(); return }
+    if (version.user_version === 4) { this.#migrate_005_from_v4(); this.#migrate_006_from_v5(); return }
+    if (version.user_version === 5) { this.#migrate_006_from_v5(); return }
+    // v6 = current
   }
 
   #migrate_001(): void {
@@ -176,7 +231,80 @@ export class SqliteMetadataRepository {
         mime_type TEXT NOT NULL, size INTEGER NOT NULL, status TEXT NOT NULL,
         error_message TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
       );
-      PRAGMA user_version = 5;
+      CREATE TABLE context_manifests (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        schema_version INTEGER NOT NULL CHECK (schema_version = 0),
+        target_artifact_id TEXT REFERENCES artifacts(id) ON DELETE RESTRICT,
+        target_revision_id TEXT REFERENCES artifact_revisions(id) ON DELETE RESTRICT,
+        canonical_json TEXT NOT NULL,
+        manifest_hash TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        UNIQUE(project_id, manifest_hash)
+      );
+      CREATE TABLE runs (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        workspace_id TEXT REFERENCES workspaces(id) ON DELETE SET NULL,
+        target_artifact_id TEXT NOT NULL REFERENCES artifacts(id) ON DELETE RESTRICT,
+        target_revision_id TEXT NOT NULL REFERENCES artifact_revisions(id) ON DELETE RESTRICT,
+        context_manifest_id TEXT NOT NULL REFERENCES context_manifests(id) ON DELETE RESTRICT,
+        retry_of_run_id TEXT REFERENCES runs(id) ON DELETE RESTRICT,
+        provider TEXT NOT NULL CHECK (provider = 'workbuddy'),
+        status TEXT NOT NULL CHECK (status IN ('created','queued','running','waiting_input','completed','failed','cancelled')),
+        instruction TEXT NOT NULL,
+        result_summary TEXT,
+        short_summary TEXT,
+        error_code TEXT,
+        error_message TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        completed_at TEXT
+      );
+      CREATE TABLE runtime_dispatches (
+        id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL UNIQUE REFERENCES runs(id) ON DELETE CASCADE,
+        provider TEXT NOT NULL CHECK (provider = 'workbuddy'),
+        idempotency_key TEXT NOT NULL UNIQUE,
+        status TEXT NOT NULL CHECK (status IN ('planned','dispatching','bound','failed','recovery_required')),
+        attempt_count INTEGER NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),
+        last_error_code TEXT,
+        last_error_message TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE TABLE runtime_bindings (
+        id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL UNIQUE REFERENCES runs(id) ON DELETE CASCADE,
+        provider TEXT NOT NULL CHECK (provider = 'workbuddy'),
+        external_task_id TEXT,
+        external_session_id TEXT,
+        provider_status TEXT,
+        last_synced_at TEXT,
+        finalize_pending INTEGER NOT NULL DEFAULT 0 CHECK (finalize_pending IN (0, 1)),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(provider, external_task_id)
+      );
+      CREATE TABLE artifact_returns (
+        id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+        target_artifact_id TEXT NOT NULL REFERENCES artifacts(id) ON DELETE RESTRICT,
+        base_revision_id TEXT NOT NULL REFERENCES artifact_revisions(id) ON DELETE RESTRICT,
+        returned_file_id TEXT NOT NULL REFERENCES file_records(id) ON DELETE RESTRICT,
+        content_hash TEXT NOT NULL,
+        canonical_path TEXT NOT NULL,
+        action TEXT NOT NULL CHECK (action = 'created'),
+        status TEXT NOT NULL CHECK (status IN ('pending_review','adopted','rejected')),
+        draft_revision_id TEXT REFERENCES artifact_revisions(id) ON DELETE RESTRICT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(run_id, canonical_path, content_hash, action)
+      );
+      CREATE INDEX idx_runs_project_status ON runs(project_id, status);
+      CREATE INDEX idx_runtime_dispatches_status ON runtime_dispatches(status);
+      CREATE INDEX idx_runtime_bindings_provider_status ON runtime_bindings(provider, provider_status);
+      PRAGMA user_version = 6;
       CREATE UNIQUE INDEX idx_revision_current
         ON artifact_revisions(artifact_id) WHERE status = 'current';
       COMMIT;
@@ -321,6 +449,89 @@ export class SqliteMetadataRepository {
     `)
   }
 
+  #migrate_006_from_v5(): void {
+    const backup = this.databasePath + '.v5.bak'
+    this.#database.exec(`VACUUM INTO '${backup.replace(/\\/g, '\\\\')}'`)
+    this.#database.exec(`
+      BEGIN;
+      CREATE TABLE context_manifests (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        schema_version INTEGER NOT NULL CHECK (schema_version = 0),
+        target_artifact_id TEXT REFERENCES artifacts(id) ON DELETE RESTRICT,
+        target_revision_id TEXT REFERENCES artifact_revisions(id) ON DELETE RESTRICT,
+        canonical_json TEXT NOT NULL,
+        manifest_hash TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        UNIQUE(project_id, manifest_hash)
+      );
+      CREATE TABLE runs (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        workspace_id TEXT REFERENCES workspaces(id) ON DELETE SET NULL,
+        target_artifact_id TEXT NOT NULL REFERENCES artifacts(id) ON DELETE RESTRICT,
+        target_revision_id TEXT NOT NULL REFERENCES artifact_revisions(id) ON DELETE RESTRICT,
+        context_manifest_id TEXT NOT NULL REFERENCES context_manifests(id) ON DELETE RESTRICT,
+        retry_of_run_id TEXT REFERENCES runs(id) ON DELETE RESTRICT,
+        provider TEXT NOT NULL CHECK (provider = 'workbuddy'),
+        status TEXT NOT NULL CHECK (status IN ('created','queued','running','waiting_input','completed','failed','cancelled')),
+        instruction TEXT NOT NULL,
+        result_summary TEXT,
+        short_summary TEXT,
+        error_code TEXT,
+        error_message TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        completed_at TEXT
+      );
+      CREATE TABLE runtime_dispatches (
+        id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL UNIQUE REFERENCES runs(id) ON DELETE CASCADE,
+        provider TEXT NOT NULL CHECK (provider = 'workbuddy'),
+        idempotency_key TEXT NOT NULL UNIQUE,
+        status TEXT NOT NULL CHECK (status IN ('planned','dispatching','bound','failed','recovery_required')),
+        attempt_count INTEGER NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),
+        last_error_code TEXT,
+        last_error_message TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE TABLE runtime_bindings (
+        id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL UNIQUE REFERENCES runs(id) ON DELETE CASCADE,
+        provider TEXT NOT NULL CHECK (provider = 'workbuddy'),
+        external_task_id TEXT,
+        external_session_id TEXT,
+        provider_status TEXT,
+        last_synced_at TEXT,
+        finalize_pending INTEGER NOT NULL DEFAULT 0 CHECK (finalize_pending IN (0, 1)),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(provider, external_task_id)
+      );
+      CREATE TABLE artifact_returns (
+        id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+        target_artifact_id TEXT NOT NULL REFERENCES artifacts(id) ON DELETE RESTRICT,
+        base_revision_id TEXT NOT NULL REFERENCES artifact_revisions(id) ON DELETE RESTRICT,
+        returned_file_id TEXT NOT NULL REFERENCES file_records(id) ON DELETE RESTRICT,
+        content_hash TEXT NOT NULL,
+        canonical_path TEXT NOT NULL,
+        action TEXT NOT NULL CHECK (action = 'created'),
+        status TEXT NOT NULL CHECK (status IN ('pending_review','adopted','rejected')),
+        draft_revision_id TEXT REFERENCES artifact_revisions(id) ON DELETE RESTRICT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(run_id, canonical_path, content_hash, action)
+      );
+      CREATE INDEX idx_runs_project_status ON runs(project_id, status);
+      CREATE INDEX idx_runtime_dispatches_status ON runtime_dispatches(status);
+      CREATE INDEX idx_runtime_bindings_provider_status ON runtime_bindings(provider, provider_status);
+      PRAGMA user_version = 6;
+      COMMIT;
+    `)
+  }
+
   // ==================== Graph Save/Load ====================
 
   save(snapshot: ProjectGraphSnapshot): void {
@@ -330,6 +541,7 @@ export class SqliteMetadataRepository {
       }
     }
     this.#validateSnapshotReferences(snapshot)
+    for (const artifact of snapshot.artifacts) this.#assertArtifactCurrentRevisionUnchanged(artifact)
     this.#database.exec('BEGIN IMMEDIATE;')
     try {
       const pid = snapshot.project.id
@@ -382,7 +594,7 @@ export class SqliteMetadataRepository {
     const checkpoints = (this.#database.prepare('SELECT * FROM checkpoints WHERE project_id = ?').all(project.id as SQLInputValue) as Row[]).map((r) => this.#checkpoint(r))
 
     return {
-      schemaVersion: 5,
+      schemaVersion: 6,
       graphVersion: project.graphVersion as GraphVersion,
       project,
       scopes,
@@ -455,6 +667,7 @@ export class SqliteMetadataRepository {
             this.#upsertScope(op.scope, op.scope.projectId)
             break
           case 'upsert_artifact':
+            this.#assertArtifactCurrentRevisionUnchanged(op.artifact)
             this.#upsertArtifact(op.artifact)
             break
           case 'upsert_artifact_view':
@@ -642,7 +855,10 @@ export class SqliteMetadataRepository {
     return rows.length ? this.#artifact(rows[0] as Row) : undefined
   }
 
-  upsertArtifact(value: Artifact): void { this.#upsertArtifact(value) }
+  upsertArtifact(value: Artifact): void {
+    this.#assertArtifactCurrentRevisionUnchanged(value)
+    this.#upsertArtifact(value)
+  }
 
   getArtifactViews(artifactId: string): ArtifactView[] {
     return (this.#database.prepare('SELECT * FROM artifact_views WHERE artifact_id = ?').all(artifactId as SQLInputValue) as Row[]).map((r) => this.#artifactView(r))
@@ -781,7 +997,568 @@ export class SqliteMetadataRepository {
     }
   }
 
-  get schemaVersion(): number { return 5 }
+  adoptExternalChange(
+    previousRevision: ArtifactRevision,
+    nextFileRecord: FileRecord,
+    nextRevision: ArtifactRevision,
+    artifact: Artifact,
+    views: readonly ArtifactView[],
+  ): void {
+    if (String(previousRevision.artifactId) !== String(artifact.id)
+      || String(nextRevision.artifactId) !== String(artifact.id)
+      || String(nextRevision.fileRecordId) !== String(nextFileRecord.id)
+      || String(nextFileRecord.projectId) !== String(artifact.projectId)
+      || String(nextRevision.parentRevisionId) !== String(previousRevision.id)
+      || String(nextRevision.contentHash) !== String(nextFileRecord.observedHash)
+      || nextRevision.source !== 'external'
+      || nextRevision.status !== 'current'
+      || previousRevision.status !== 'superseded'
+      || String(artifact.currentRevisionId) !== String(nextRevision.id)) {
+      throw new Error('External change adoption invariants are invalid.')
+    }
+    this.#database.exec('BEGIN IMMEDIATE;')
+    try {
+      this.#upsertFileRecord(nextFileRecord)
+      this.#upsertArtifactRevision(previousRevision)
+      this.#upsertArtifactRevision(nextRevision)
+      this.#upsertArtifact(artifact)
+      for (const view of views) this.#upsertArtifactView(view)
+      this.#database.prepare('UPDATE projects SET graph_version = graph_version + 1, updated_at = ? WHERE id = ?')
+        .run(artifact.updatedAt, artifact.projectId as SQLInputValue)
+      this.#database.exec('COMMIT;')
+    } catch (error: unknown) {
+      this.#database.exec('ROLLBACK;')
+      throw error
+    }
+  }
+
+  registerImportedSource(
+    fileRecord: FileRecord,
+    artifact: Artifact,
+    revision: ArtifactRevision,
+    view: ArtifactView,
+  ): void {
+    if (String(fileRecord.projectId) !== String(artifact.projectId)
+      || String(revision.artifactId) !== String(artifact.id)
+      || String(revision.fileRecordId) !== String(fileRecord.id)
+      || String(view.artifactId) !== String(artifact.id)
+      || String(view.revisionId) !== String(revision.id)
+      || String(artifact.currentRevisionId) !== String(revision.id)
+      || String(revision.contentHash) !== String(fileRecord.observedHash)
+      || revision.source !== 'import'
+      || revision.status !== 'current') {
+      throw new Error('Import Copy invariants are invalid.')
+    }
+    if (this.getProject(String(artifact.projectId)) === undefined) {
+      throw new Error('Project not found.')
+    }
+    this.#database.exec('BEGIN IMMEDIATE;')
+    try {
+      this.#upsertFileRecord(fileRecord)
+      this.#upsertArtifact(artifact)
+      this.#upsertArtifactRevision(revision)
+      this.#upsertArtifactView(view)
+      this.#database.prepare('UPDATE projects SET graph_version = graph_version + 1, updated_at = ? WHERE id = ?')
+        .run(artifact.updatedAt, artifact.projectId as SQLInputValue)
+      this.#database.exec('COMMIT;')
+    } catch (error: unknown) {
+      this.#database.exec('ROLLBACK;')
+      throw error
+    }
+  }
+
+  createContextManifest(value: PersistedContextManifestV0): PersistedContextManifestV0 {
+    assertCanonicalManifest(value)
+    const existing = this.getContextManifest(value.id)
+    if (existing !== undefined) {
+      if (existing.canonicalJson !== value.canonicalJson
+        || existing.manifestHash !== value.manifestHash
+        || String(existing.projectId) !== String(value.projectId)) {
+        throw new Error('ContextManifest is immutable and conflicts with the stored value.')
+      }
+      return existing
+    }
+    this.#database.prepare(`
+      INSERT INTO context_manifests (
+        id, project_id, schema_version, target_artifact_id, target_revision_id,
+        canonical_json, manifest_hash, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      value.id as SQLInputValue,
+      value.projectId as SQLInputValue,
+      value.schemaVersion,
+      value.targetArtifactId as SQLInputValue ?? null,
+      value.targetRevisionId as SQLInputValue ?? null,
+      value.canonicalJson,
+      value.manifestHash,
+      value.createdAt,
+    )
+    return value
+  }
+
+  getContextManifest(manifestId: PersistedContextManifestV0['id']): PersistedContextManifestV0 | undefined {
+    const row = this.#database.prepare('SELECT * FROM context_manifests WHERE id = ?').get(manifestId as SQLInputValue) as Row | undefined
+    if (row === undefined) return undefined
+    return {
+      id: String(row.id) as PersistedContextManifestV0['id'],
+      projectId: String(row.project_id) as PersistedContextManifestV0['projectId'],
+      schemaVersion: Number(row.schema_version) as 0,
+      ...(row.target_artifact_id ? { targetArtifactId: String(row.target_artifact_id) as ArtifactId } : {}),
+      ...(row.target_revision_id ? { targetRevisionId: String(row.target_revision_id) as ArtifactRevisionId } : {}),
+      canonicalJson: String(row.canonical_json),
+      manifestHash: String(row.manifest_hash),
+      createdAt: String(row.created_at),
+    }
+  }
+
+  createRunWithDispatch(run: Run, dispatch: RuntimeDispatch): void {
+    if (String(dispatch.runId) !== String(run.id)) throw new Error('RuntimeDispatch must belong to the Run.')
+    if (dispatch.idempotencyKey !== String(run.id)) throw new Error('RuntimeDispatch idempotencyKey must equal runId.')
+    this.#database.exec('BEGIN IMMEDIATE;')
+    try {
+      this.#database.prepare(`
+        INSERT INTO runs (
+          id, project_id, workspace_id, target_artifact_id, target_revision_id,
+          context_manifest_id, retry_of_run_id, provider, status, instruction,
+          result_summary, short_summary, error_code, error_message,
+          created_at, updated_at, completed_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        run.id as SQLInputValue,
+        run.projectId as SQLInputValue,
+        run.workspaceId as SQLInputValue ?? null,
+        run.targetArtifactId as SQLInputValue,
+        run.targetRevisionId as SQLInputValue,
+        run.contextManifestId as SQLInputValue,
+        run.retryOfRunId as SQLInputValue ?? null,
+        run.provider,
+        run.status,
+        run.instruction,
+        run.resultSummary ?? null,
+        run.shortSummary ?? null,
+        run.errorCode ?? null,
+        run.errorMessage ?? null,
+        run.createdAt,
+        run.updatedAt,
+        run.completedAt ?? null,
+      )
+      this.#database.prepare(`
+        INSERT INTO runtime_dispatches (
+          id, run_id, provider, idempotency_key, status, attempt_count,
+          last_error_code, last_error_message, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        dispatch.id as SQLInputValue,
+        dispatch.runId as SQLInputValue,
+        dispatch.provider,
+        dispatch.idempotencyKey,
+        dispatch.status,
+        dispatch.attemptCount,
+        dispatch.lastErrorCode ?? null,
+        dispatch.lastErrorMessage ?? null,
+        dispatch.createdAt,
+        dispatch.updatedAt,
+      )
+      this.#database.exec('COMMIT;')
+    } catch (error: unknown) {
+      this.#database.exec('ROLLBACK;')
+      throw error
+    }
+  }
+
+  getRun(runId: RunId): Run | undefined {
+    const row = this.#database.prepare('SELECT * FROM runs WHERE id = ?').get(runId as SQLInputValue) as Row | undefined
+    return row === undefined ? undefined : this.#runFromRow(row)
+  }
+
+  getProjectRuns(projectId: ProjectId, limit = 20): readonly Run[] {
+    const safeLimit = Math.max(1, Math.min(100, Math.trunc(limit)))
+    const rows = this.#database.prepare(
+      'SELECT * FROM runs WHERE project_id = ? ORDER BY created_at DESC, id DESC LIMIT ?',
+    ).all(projectId as SQLInputValue, safeLimit) as Row[]
+    return rows.map((row) => this.#runFromRow(row))
+  }
+
+  #runFromRow(row: Row): Run {
+    return {
+      id: String(row.id) as Run['id'],
+      projectId: String(row.project_id) as Run['projectId'],
+      ...(row.workspace_id ? { workspaceId: String(row.workspace_id) as WorkspaceId } : {}),
+      targetArtifactId: String(row.target_artifact_id) as Run['targetArtifactId'],
+      targetRevisionId: String(row.target_revision_id) as Run['targetRevisionId'],
+      contextManifestId: String(row.context_manifest_id) as Run['contextManifestId'],
+      ...(row.retry_of_run_id ? { retryOfRunId: String(row.retry_of_run_id) as RunId } : {}),
+      provider: String(row.provider) as Run['provider'],
+      status: String(row.status) as Run['status'],
+      instruction: String(row.instruction),
+      ...(row.result_summary ? { resultSummary: String(row.result_summary) } : {}),
+      ...(row.short_summary ? { shortSummary: String(row.short_summary) } : {}),
+      ...(row.error_code ? { errorCode: String(row.error_code) } : {}),
+      ...(row.error_message ? { errorMessage: String(row.error_message) } : {}),
+      createdAt: String(row.created_at),
+      updatedAt: String(row.updated_at),
+      ...(row.completed_at ? { completedAt: String(row.completed_at) } : {}),
+    }
+  }
+
+  getRuntimeDispatch(runId: RunId): RuntimeDispatch | undefined {
+    const row = this.#database.prepare('SELECT * FROM runtime_dispatches WHERE run_id = ?').get(runId as SQLInputValue) as Row | undefined
+    if (row === undefined) return undefined
+    return {
+      id: String(row.id) as RuntimeDispatch['id'],
+      runId: String(row.run_id) as RuntimeDispatch['runId'],
+      provider: String(row.provider) as RuntimeDispatch['provider'],
+      idempotencyKey: String(row.idempotency_key),
+      status: String(row.status) as RuntimeDispatch['status'],
+      attemptCount: Number(row.attempt_count),
+      ...(row.last_error_code ? { lastErrorCode: String(row.last_error_code) } : {}),
+      ...(row.last_error_message ? { lastErrorMessage: String(row.last_error_message) } : {}),
+      createdAt: String(row.created_at),
+      updatedAt: String(row.updated_at),
+    }
+  }
+
+  updateRuntimeDispatch(value: RuntimeDispatch): RuntimeDispatch {
+    const result = this.#database.prepare(`
+      UPDATE runtime_dispatches SET
+        status = ?, attempt_count = ?, last_error_code = ?,
+        last_error_message = ?, updated_at = ?
+      WHERE id = ? AND run_id = ? AND provider = ? AND idempotency_key = ?
+    `).run(
+      value.status,
+      value.attemptCount,
+      value.lastErrorCode ?? null,
+      value.lastErrorMessage ?? null,
+      value.updatedAt,
+      value.id as SQLInputValue,
+      value.runId as SQLInputValue,
+      value.provider,
+      value.idempotencyKey,
+    )
+    if (result.changes !== 1) throw new Error('RuntimeDispatch identity cannot be changed.')
+    return value
+  }
+
+  createRuntimeBinding(value: RuntimeBinding): RuntimeBinding {
+    this.#database.prepare(`
+      INSERT INTO runtime_bindings (
+        id, run_id, provider, external_task_id, external_session_id,
+        provider_status, last_synced_at, finalize_pending, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      value.id as SQLInputValue,
+      value.runId as SQLInputValue,
+      value.provider,
+      value.externalTaskId ?? null,
+      value.externalSessionId ?? null,
+      value.providerStatus ?? null,
+      value.lastSyncedAt ?? null,
+      value.finalizePending ? 1 : 0,
+      value.createdAt,
+      value.updatedAt,
+    )
+    return value
+  }
+
+  getRuntimeBinding(runId: RunId): RuntimeBinding | undefined {
+    const row = this.#database.prepare('SELECT * FROM runtime_bindings WHERE run_id = ?').get(runId as SQLInputValue) as Row | undefined
+    if (row === undefined) return undefined
+    return {
+      id: String(row.id) as RuntimeBinding['id'],
+      runId: String(row.run_id) as RuntimeBinding['runId'],
+      provider: String(row.provider) as RuntimeBinding['provider'],
+      ...(row.external_task_id ? { externalTaskId: String(row.external_task_id) } : {}),
+      ...(row.external_session_id ? { externalSessionId: String(row.external_session_id) } : {}),
+      ...(row.provider_status ? { providerStatus: String(row.provider_status) } : {}),
+      ...(row.last_synced_at ? { lastSyncedAt: String(row.last_synced_at) } : {}),
+      finalizePending: Number(row.finalize_pending) === 1,
+      createdAt: String(row.created_at),
+      updatedAt: String(row.updated_at),
+    }
+  }
+
+  updateRuntimeBinding(value: RuntimeBinding): RuntimeBinding {
+    const result = this.#database.prepare(`
+      UPDATE runtime_bindings SET
+        external_session_id = ?, provider_status = ?, last_synced_at = ?,
+        finalize_pending = ?, updated_at = ?
+      WHERE id = ? AND run_id = ? AND provider = ? AND external_task_id = ?
+    `).run(
+      value.externalSessionId ?? null,
+      value.providerStatus ?? null,
+      value.lastSyncedAt ?? null,
+      value.finalizePending ? 1 : 0,
+      value.updatedAt,
+      value.id as SQLInputValue,
+      value.runId as SQLInputValue,
+      value.provider,
+      value.externalTaskId ?? null,
+    )
+    if (result.changes !== 1) throw new Error('RuntimeBinding identity cannot be changed.')
+    return value
+  }
+
+  updateRunStatus(runId: RunId, status: Run['status'], updatedAt: string): Run {
+    const result = this.#database.prepare(
+      'UPDATE runs SET status = ?, updated_at = ? WHERE id = ?',
+    ).run(status, updatedAt, runId as SQLInputValue)
+    if (result.changes !== 1) throw new Error('Run not found.')
+    const run = this.getRun(runId)
+    if (run === undefined) throw new Error('Run not found after update.')
+    return run
+  }
+
+  createArtifactReturn(value: ArtifactReturn): ArtifactReturn {
+    this.#database.prepare(`
+      INSERT INTO artifact_returns (
+        id, run_id, target_artifact_id, base_revision_id, returned_file_id,
+        content_hash, canonical_path, action, status, draft_revision_id,
+        created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      value.id as SQLInputValue,
+      value.runId as SQLInputValue,
+      value.targetArtifactId as SQLInputValue,
+      value.baseRevisionId as SQLInputValue,
+      value.returnedFileId as SQLInputValue,
+      value.contentHash as SQLInputValue,
+      value.canonicalPath,
+      value.action,
+      value.status,
+      value.draftRevisionId as SQLInputValue ?? null,
+      value.createdAt,
+      value.updatedAt,
+    )
+    return value
+  }
+
+  createRuntimeDraft(
+    fileRecord: FileRecord,
+    revision: ArtifactRevision,
+    artifactReturn: ArtifactReturn,
+  ): ArtifactReturn {
+    if (
+      String(fileRecord.id) !== String(artifactReturn.returnedFileId)
+      || String(revision.id) !== String(artifactReturn.draftRevisionId)
+      || String(revision.fileRecordId) !== String(fileRecord.id)
+      || String(revision.artifactId) !== String(artifactReturn.targetArtifactId)
+      || String(revision.parentRevisionId) !== String(artifactReturn.baseRevisionId)
+      || String(revision.runId) !== String(artifactReturn.runId)
+      || String(revision.contentHash) !== String(artifactReturn.contentHash)
+      || String(fileRecord.observedHash) !== String(artifactReturn.contentHash)
+      || revision.source !== 'run'
+      || revision.status !== 'draft'
+      || artifactReturn.status !== 'pending_review'
+    ) {
+      throw new Error('Runtime Draft invariants are invalid.')
+    }
+    const existing = this.getArtifactReturnByIdentity(
+      artifactReturn.runId,
+      artifactReturn.canonicalPath,
+      String(artifactReturn.contentHash),
+      artifactReturn.action,
+    )
+    if (existing !== undefined) return existing
+    this.#database.exec('BEGIN IMMEDIATE;')
+    try {
+      this.#upsertFileRecord(fileRecord)
+      this.#upsertArtifactRevision(revision)
+      this.createArtifactReturn(artifactReturn)
+      this.#database.exec('COMMIT;')
+      return artifactReturn
+    } catch (error: unknown) {
+      this.#database.exec('ROLLBACK;')
+      const replay = this.getArtifactReturnByIdentity(
+        artifactReturn.runId,
+        artifactReturn.canonicalPath,
+        String(artifactReturn.contentHash),
+        artifactReturn.action,
+      )
+      if (replay !== undefined) return replay
+      throw error
+    }
+  }
+
+  getArtifactReturn(returnId: ArtifactReturnId): ArtifactReturn | undefined {
+    const row = this.#database.prepare('SELECT * FROM artifact_returns WHERE id = ?').get(returnId as SQLInputValue) as Row | undefined
+    if (row === undefined) return undefined
+    return {
+      id: String(row.id) as ArtifactReturn['id'],
+      runId: String(row.run_id) as ArtifactReturn['runId'],
+      targetArtifactId: String(row.target_artifact_id) as ArtifactReturn['targetArtifactId'],
+      baseRevisionId: String(row.base_revision_id) as ArtifactReturn['baseRevisionId'],
+      returnedFileId: String(row.returned_file_id) as ArtifactReturn['returnedFileId'],
+      contentHash: String(row.content_hash) as ArtifactReturn['contentHash'],
+      canonicalPath: String(row.canonical_path),
+      action: String(row.action) as ArtifactReturn['action'],
+      status: String(row.status) as ArtifactReturn['status'],
+      ...(row.draft_revision_id ? { draftRevisionId: String(row.draft_revision_id) as ArtifactRevisionId } : {}),
+      createdAt: String(row.created_at),
+      updatedAt: String(row.updated_at),
+    }
+  }
+
+  getArtifactReturnByIdentity(
+    runId: RunId,
+    canonicalPath: string,
+    contentHash: string,
+    action: ArtifactReturn['action'],
+  ): ArtifactReturn | undefined {
+    const row = this.#database.prepare(`
+      SELECT id FROM artifact_returns
+      WHERE run_id = ? AND canonical_path = ? AND content_hash = ? AND action = ?
+    `).get(runId as SQLInputValue, canonicalPath, contentHash, action) as Row | undefined
+    return row === undefined ? undefined : this.getArtifactReturn(String(row.id) as ArtifactReturnId)
+  }
+
+  getArtifactReturns(runId: RunId): readonly ArtifactReturn[] {
+    return (this.#database.prepare(
+      'SELECT id FROM artifact_returns WHERE run_id = ? ORDER BY created_at, id',
+    ).all(runId as SQLInputValue) as Row[])
+      .map((row) => this.getArtifactReturn(String(row.id) as ArtifactReturnId))
+      .filter((value): value is ArtifactReturn => value !== undefined)
+  }
+
+  acceptArtifactReturn(
+    returnId: ArtifactReturnId,
+    expectedBaseRevisionId: ArtifactRevisionId,
+    updatedAt: string,
+  ): AcceptArtifactReturnResult {
+    this.#database.exec('BEGIN IMMEDIATE;')
+    try {
+      const artifactReturn = this.getArtifactReturn(returnId)
+      if (artifactReturn === undefined) throw new RuntimeLifecycleConflictError('ArtifactReturn not found.')
+      if (artifactReturn.status !== 'pending_review') throw new RuntimeLifecycleConflictError('ArtifactReturn is no longer pending review.')
+      if (String(artifactReturn.baseRevisionId) !== String(expectedBaseRevisionId)) {
+        throw new RuntimeLifecycleConflictError('Accept base revision does not match the Return base revision.')
+      }
+      if (artifactReturn.draftRevisionId === undefined) throw new RuntimeLifecycleConflictError('ArtifactReturn has no Draft Revision.')
+      const artifact = this.getArtifact(String(artifactReturn.targetArtifactId))
+      const previousRevision = this.getArtifactRevision(String(artifactReturn.baseRevisionId))
+      const draftRevision = this.getArtifactRevision(String(artifactReturn.draftRevisionId))
+      const run = this.getRun(artifactReturn.runId)
+      if (artifact === undefined || previousRevision === undefined || draftRevision === undefined || run === undefined) {
+        throw new RuntimeLifecycleConflictError('Accept lifecycle evidence is incomplete.')
+      }
+      if (String(artifact.currentRevisionId) !== String(expectedBaseRevisionId)) {
+        throw new RuntimeLifecycleConflictError('Artifact Current changed after this Run started.')
+      }
+      if (previousRevision.status !== 'current' || draftRevision.status !== 'draft'
+        || String(draftRevision.parentRevisionId) !== String(expectedBaseRevisionId)
+        || String(draftRevision.runId) !== String(run.id)) {
+        throw new RuntimeLifecycleConflictError('Accept lifecycle invariants are invalid.')
+      }
+      this.#database.prepare('UPDATE artifact_revisions SET status = ? WHERE id = ? AND status = ?')
+        .run('superseded', previousRevision.id as SQLInputValue, 'current')
+      this.#database.prepare('UPDATE artifact_revisions SET status = ? WHERE id = ? AND status = ?')
+        .run('current', draftRevision.id as SQLInputValue, 'draft')
+      this.#database.prepare(
+        'UPDATE artifacts SET current_revision_id = ?, updated_at = ? WHERE id = ? AND current_revision_id = ?',
+      ).run(draftRevision.id as SQLInputValue, updatedAt, artifact.id as SQLInputValue, expectedBaseRevisionId as SQLInputValue)
+      this.#database.prepare('UPDATE artifact_returns SET status = ?, updated_at = ? WHERE id = ? AND status = ?')
+        .run('adopted', updatedAt, returnId as SQLInputValue, 'pending_review')
+      this.#database.prepare(
+        'UPDATE runs SET status = ?, updated_at = ?, completed_at = ? WHERE id = ?',
+      ).run('completed', updatedAt, updatedAt, run.id as SQLInputValue)
+      this.#database.prepare(
+        'UPDATE runtime_bindings SET finalize_pending = 1, updated_at = ? WHERE run_id = ?',
+      ).run(updatedAt, run.id as SQLInputValue)
+      this.#database.prepare(
+        'UPDATE projects SET graph_version = graph_version + 1, updated_at = ? WHERE id = ?',
+      ).run(updatedAt, run.projectId as SQLInputValue)
+      const result = {
+        artifactReturn: this.getArtifactReturn(returnId)!,
+        currentRevision: this.getArtifactRevision(String(draftRevision.id))!,
+        previousRevision: this.getArtifactRevision(String(previousRevision.id))!,
+        run: this.getRun(run.id)!,
+      }
+      this.#database.exec('COMMIT;')
+      return result
+    } catch (error: unknown) {
+      this.#database.exec('ROLLBACK;')
+      throw error
+    }
+  }
+
+  rejectArtifactReturn(returnId: ArtifactReturnId, updatedAt: string): RejectArtifactReturnResult {
+    this.#database.exec('BEGIN IMMEDIATE;')
+    try {
+      const artifactReturn = this.getArtifactReturn(returnId)
+      if (artifactReturn === undefined) throw new RuntimeLifecycleConflictError('ArtifactReturn not found.')
+      if (artifactReturn.status !== 'pending_review') throw new RuntimeLifecycleConflictError('ArtifactReturn is no longer pending review.')
+      if (artifactReturn.draftRevisionId === undefined) throw new RuntimeLifecycleConflictError('ArtifactReturn has no Draft Revision.')
+      const draftRevision = this.getArtifactRevision(String(artifactReturn.draftRevisionId))
+      const run = this.getRun(artifactReturn.runId)
+      if (draftRevision === undefined || run === undefined || draftRevision.status !== 'draft') {
+        throw new RuntimeLifecycleConflictError('Reject lifecycle evidence is incomplete.')
+      }
+      this.#database.prepare('UPDATE artifact_returns SET status = ?, updated_at = ? WHERE id = ? AND status = ?')
+        .run('rejected', updatedAt, returnId as SQLInputValue, 'pending_review')
+      this.#database.prepare(
+        'UPDATE runs SET status = ?, updated_at = ?, completed_at = ? WHERE id = ?',
+      ).run('completed', updatedAt, updatedAt, run.id as SQLInputValue)
+      this.#database.prepare(
+        'UPDATE runtime_bindings SET finalize_pending = 1, updated_at = ? WHERE run_id = ?',
+      ).run(updatedAt, run.id as SQLInputValue)
+      const result = {
+        artifactReturn: this.getArtifactReturn(returnId)!,
+        draftRevision,
+        run: this.getRun(run.id)!,
+      }
+      this.#database.exec('COMMIT;')
+      return result
+    } catch (error: unknown) {
+      this.#database.exec('ROLLBACK;')
+      throw error
+    }
+  }
+
+  retryArtifactReturn(
+    returnId: ArtifactReturnId,
+    run: Run,
+    dispatch: RuntimeDispatch,
+    updatedAt: string,
+  ): RetryRunResult {
+    this.#database.exec('BEGIN IMMEDIATE;')
+    try {
+      const artifactReturn = this.getArtifactReturn(returnId)
+      const previousRun = artifactReturn === undefined ? undefined : this.getRun(artifactReturn.runId)
+      if (artifactReturn === undefined || previousRun === undefined) throw new RuntimeLifecycleConflictError('Retry lifecycle evidence is incomplete.')
+      if (artifactReturn.status !== 'pending_review') throw new RuntimeLifecycleConflictError('ArtifactReturn is no longer pending review.')
+      if (String(run.retryOfRunId) !== String(previousRun.id)
+        || String(run.projectId) !== String(previousRun.projectId)
+        || String(run.targetArtifactId) !== String(previousRun.targetArtifactId)
+        || String(run.targetRevisionId) !== String(previousRun.targetRevisionId)
+        || String(run.contextManifestId) !== String(previousRun.contextManifestId)
+        || String(dispatch.runId) !== String(run.id)
+        || dispatch.idempotencyKey !== String(run.id)) {
+        throw new RuntimeLifecycleConflictError('Retry Run identity is invalid.')
+      }
+      this.#database.prepare('UPDATE artifact_returns SET status = ?, updated_at = ? WHERE id = ? AND status = ?')
+        .run('rejected', updatedAt, returnId as SQLInputValue, 'pending_review')
+      this.#database.prepare(
+        'UPDATE runs SET status = ?, updated_at = ?, completed_at = ? WHERE id = ?',
+      ).run('completed', updatedAt, updatedAt, previousRun.id as SQLInputValue)
+      this.#database.prepare(
+        'UPDATE runtime_bindings SET finalize_pending = 1, updated_at = ? WHERE run_id = ?',
+      ).run(updatedAt, previousRun.id as SQLInputValue)
+      this.#insertRun(run)
+      this.#insertRuntimeDispatch(dispatch)
+      const result = {
+        previousRun: this.getRun(previousRun.id)!,
+        previousReturn: this.getArtifactReturn(returnId)!,
+        run: this.getRun(run.id)!,
+        dispatch: this.getRuntimeDispatch(run.id)!,
+      }
+      this.#database.exec('COMMIT;')
+      return result
+    } catch (error: unknown) {
+      this.#database.exec('ROLLBACK;')
+      throw error
+    }
+  }
+
+  get schemaVersion(): number { return 6 }
 
   // ==================== Private helpers ====================
 
@@ -832,6 +1609,45 @@ export class SqliteMetadataRepository {
       INSERT INTO artifacts VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET title=excluded.title, kind=excluded.kind, local_path=excluded.local_path, availability=excluded.availability, current_revision_id=excluded.current_revision_id, updated_at=excluded.updated_at
     `, [value.id as SQLInputValue, value.projectId as SQLInputValue, value.title, value.kind, '', value.availability, value.currentRevisionId as SQLInputValue ?? null, value.createdAt, value.updatedAt])
+  }
+
+  #assertArtifactCurrentRevisionUnchanged(value: Artifact): void {
+    const existing = this.getArtifact(String(value.id))
+    if (existing !== undefined
+      && String(existing.currentRevisionId ?? '') !== String(value.currentRevisionId ?? '')) {
+      throw new RuntimeLifecycleConflictError('currentRevisionId may only change through an explicit Revision lifecycle.')
+    }
+  }
+
+  #insertRun(run: Run): void {
+    this.#database.prepare(`
+      INSERT INTO runs (
+        id, project_id, workspace_id, target_artifact_id, target_revision_id,
+        context_manifest_id, retry_of_run_id, provider, status, instruction,
+        result_summary, short_summary, error_code, error_message,
+        created_at, updated_at, completed_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      run.id as SQLInputValue, run.projectId as SQLInputValue, run.workspaceId as SQLInputValue ?? null,
+      run.targetArtifactId as SQLInputValue, run.targetRevisionId as SQLInputValue,
+      run.contextManifestId as SQLInputValue, run.retryOfRunId as SQLInputValue ?? null,
+      run.provider, run.status, run.instruction, run.resultSummary ?? null, run.shortSummary ?? null,
+      run.errorCode ?? null, run.errorMessage ?? null, run.createdAt, run.updatedAt, run.completedAt ?? null,
+    )
+  }
+
+  #insertRuntimeDispatch(dispatch: RuntimeDispatch): void {
+    this.#database.prepare(`
+      INSERT INTO runtime_dispatches (
+        id, run_id, provider, idempotency_key, status, attempt_count,
+        last_error_code, last_error_message, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      dispatch.id as SQLInputValue, dispatch.runId as SQLInputValue, dispatch.provider,
+      dispatch.idempotencyKey, dispatch.status, dispatch.attemptCount,
+      dispatch.lastErrorCode ?? null, dispatch.lastErrorMessage ?? null,
+      dispatch.createdAt, dispatch.updatedAt,
+    )
   }
 
   #upsertArtifactView(value: ArtifactView): void {

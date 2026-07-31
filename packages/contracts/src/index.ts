@@ -3,6 +3,7 @@ import type {
   ArtifactId,
   ArtifactReturn,
   ArtifactReturnId,
+  ArtifactReturnStatus,
   ArtifactRevision,
   ArtifactRevisionId,
   ArtifactView,
@@ -15,6 +16,7 @@ import type {
   CommandId,
   ContextSnapshot,
   ContextSnapshotId,
+  ContextManifestId,
   GraphVersion,
   Note,
   Project,
@@ -25,6 +27,8 @@ import type {
   Run,
   RunEvent,
   RunId,
+  RuntimeBinding,
+  RuntimeDispatch,
   Relation,
   RelationId,
   Scope,
@@ -101,6 +105,148 @@ export interface ProjectGraphSnapshot {
   readonly artifactRevisions: readonly ArtifactRevision[]
   readonly fileRecords: readonly FileRecord[]
   readonly checkpoints: readonly Checkpoint[]
+}
+
+// ==================== Context Manifest V0 ====================
+
+export interface ContextManifestArtifactRefV0 {
+  readonly artifactId: string
+  readonly revisionId: string
+  readonly title: string
+  readonly kind: Artifact['kind']
+  readonly mimeType: string
+  readonly contentHash: string
+  readonly availability: Artifact['availability']
+}
+
+export interface ContextManifestFeedbackV0 {
+  readonly sourceArtifactId?: string
+  readonly sourceNoteId?: string
+  readonly title: string
+  readonly body: string
+  readonly state: 'open' | 'resolved' | 'ignored'
+}
+
+export interface ContextManifestOrderedItemV0 {
+  readonly role: 'target' | 'feedback' | 'reference' | 'decision' | 'context'
+  readonly identity: string
+  readonly title: string
+  readonly content?: string
+  readonly contentHash?: string
+}
+
+export interface ContextManifestV0 {
+  readonly id: ContextManifestId
+  readonly schemaVersion: 0
+  readonly createdAt: string
+  readonly manifestHash: string
+  readonly builderVersion: string
+  readonly project: {
+    readonly id: string
+    readonly name: string
+    readonly graphVersion: number
+  }
+  readonly target: ContextManifestArtifactRefV0 | null
+  readonly currentRevision: ContextManifestArtifactRefV0 | null
+  readonly feedback: readonly ContextManifestFeedbackV0[]
+  readonly lockedElements: readonly string[]
+  readonly references: readonly ContextManifestArtifactRefV0[]
+  readonly requestedOutput: string
+  readonly orderedItems: readonly ContextManifestOrderedItemV0[]
+  readonly truncationMetadata: {
+    readonly maxItemCharacters: number
+    readonly truncatedItemIds: readonly string[]
+  }
+  readonly renderedManifestHash: string
+  readonly renderedMarkdown: string
+}
+
+export interface BuildContextManifestV0Input {
+  readonly targetArtifactId?: string
+  readonly contextArtifactIds?: readonly string[]
+  readonly requestedOutput?: string
+}
+
+export interface PersistedContextManifestV0 {
+  readonly id: ContextManifestId
+  readonly projectId: ProjectId
+  readonly schemaVersion: 0
+  readonly targetArtifactId?: ArtifactId
+  readonly targetRevisionId?: ArtifactRevisionId
+  readonly canonicalJson: string
+  readonly manifestHash: string
+  readonly createdAt: string
+}
+
+export interface RuntimePersistenceContract {
+  createContextManifest(manifest: PersistedContextManifestV0): PersistedContextManifestV0
+  getContextManifest(manifestId: ContextManifestId): PersistedContextManifestV0 | undefined
+  createRunWithDispatch(run: Run, dispatch: RuntimeDispatch): void
+  getRun(runId: RunId): Run | undefined
+  getProjectRuns(projectId: ProjectId, limit?: number): readonly Run[]
+  getRuntimeDispatch(runId: RunId): RuntimeDispatch | undefined
+  updateRuntimeDispatch(dispatch: RuntimeDispatch): RuntimeDispatch
+  createRuntimeBinding(binding: RuntimeBinding): RuntimeBinding
+  getRuntimeBinding(runId: RunId): RuntimeBinding | undefined
+  updateRuntimeBinding(binding: RuntimeBinding): RuntimeBinding
+  updateRunStatus(runId: RunId, status: Run['status'], updatedAt: string): Run
+  createRuntimeDraft(
+    fileRecord: FileRecord,
+    revision: ArtifactRevision,
+    artifactReturn: ArtifactReturn,
+  ): ArtifactReturn
+  createArtifactReturn(value: ArtifactReturn): ArtifactReturn
+  getArtifactReturn(returnId: ArtifactReturnId): ArtifactReturn | undefined
+  getArtifactReturnByIdentity(
+    runId: RunId,
+    canonicalPath: string,
+    contentHash: string,
+    action: ArtifactReturn['action'],
+  ): ArtifactReturn | undefined
+  getArtifactReturns(runId: RunId): readonly ArtifactReturn[]
+}
+
+export interface RunReview {
+  readonly run: Run
+  readonly dispatch: RuntimeDispatch
+  readonly binding?: RuntimeBinding
+  readonly returns: readonly ArtifactReturn[]
+  readonly draftRevisions: readonly ArtifactRevision[]
+  readonly presentationPhase: 'created' | 'queued' | 'running' | 'waiting_input' | 'review' | 'completed' | 'failed' | 'cancelled'
+  readonly capabilities: {
+    readonly schemaVersion: 1
+    readonly accept: { readonly enabled: boolean; readonly reason?: string }
+    readonly reject: { readonly enabled: boolean; readonly reason?: string }
+    readonly retry: { readonly enabled: boolean; readonly reason?: string }
+  }
+}
+
+export interface AcceptArtifactReturnInput {
+  readonly expectedBaseRevisionId: ArtifactRevisionId
+}
+
+export interface AcceptArtifactReturnResult {
+  readonly artifactReturn: ArtifactReturn
+  readonly currentRevision: ArtifactRevision
+  readonly previousRevision: ArtifactRevision
+  readonly run: Run
+}
+
+export interface RejectArtifactReturnResult {
+  readonly artifactReturn: ArtifactReturn
+  readonly draftRevision: ArtifactRevision
+  readonly run: Run
+}
+
+export interface RetryRunInput {
+  readonly instruction?: string
+}
+
+export interface RetryRunResult {
+  readonly previousRun: Run
+  readonly previousReturn: ArtifactReturn
+  readonly run: Run
+  readonly dispatch: RuntimeDispatch
 }
 
 // ==================== Mutation ====================
@@ -232,8 +378,8 @@ export interface ArtifactContract {
   getArtifactView(viewId: ArtifactViewId): Promise<ContractResult<ArtifactView>>
   createView(view: ArtifactView): Promise<ContractResult<ArtifactView>>
   getRevision(revisionId: ArtifactRevisionId): Promise<ContractResult<ArtifactRevision>>
-  acceptReturn(returnId: ArtifactReturnId): Promise<ContractResult<ArtifactRevision>>
-  rejectReturn(returnId: ArtifactReturnId): Promise<ContractResult<void>>
+  acceptReturn(returnId: ArtifactReturnId, input: AcceptArtifactReturnInput): Promise<ContractResult<AcceptArtifactReturnResult>>
+  rejectReturn(returnId: ArtifactReturnId): Promise<ContractResult<RejectArtifactReturnResult>>
 }
 
 export interface ContextContract {
@@ -251,10 +397,18 @@ export interface ExecutionRuntimeContract {
   getReturns(runId: RunId): Promise<ContractResult<readonly ArtifactReturn[]>>
 }
 
+export interface RuntimeReviewContract {
+  getRunReview(runId: RunId): Promise<ContractResult<RunReview>>
+  acceptReturn(returnId: ArtifactReturnId, input: AcceptArtifactReturnInput): Promise<ContractResult<AcceptArtifactReturnResult>>
+  rejectReturn(returnId: ArtifactReturnId): Promise<ContractResult<RejectArtifactReturnResult>>
+  retryReturn(returnId: ArtifactReturnId, input?: RetryRunInput): Promise<ContractResult<RetryRunResult>>
+}
+
 // Re-exports
 export type {
   Artifact,
   ArtifactRevision,
+  ArtifactReturnStatus,
   ArtifactView,
   Checkpoint,
   FileRecord,
@@ -263,6 +417,8 @@ export type {
   PreviewRecord,
   Project,
   Relation,
+  RuntimeBinding,
+  RuntimeDispatch,
   Scope,
   Workspace,
   WorkspaceContextPolicy,

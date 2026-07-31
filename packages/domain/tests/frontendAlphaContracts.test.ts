@@ -49,7 +49,7 @@ describe('Frontend Alpha domain contract', () => {
   })
 
   it('marks only completed, failed, and cancelled runs terminal', () => {
-    const statuses: readonly RunStatus[] = ['queued', 'running', 'waiting_input', 'review', 'completed', 'failed', 'cancelled']
+    const statuses: readonly RunStatus[] = ['created', 'queued', 'running', 'waiting_input', 'completed', 'failed', 'cancelled']
     expect(statuses.filter(isTerminalRunStatus)).toEqual(['completed', 'failed', 'cancelled'])
   })
 

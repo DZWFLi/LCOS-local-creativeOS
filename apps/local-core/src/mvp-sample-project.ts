@@ -241,7 +241,7 @@ export function createMvpSampleSnapshot(sampleRoot: string, createdAt = now()): 
     createdAt,
   }
   return {
-    schemaVersion: 5,
+    schemaVersion: 6,
     graphVersion: 1 as ProjectGraphSnapshot['graphVersion'],
     project,
     scopes: [scope],

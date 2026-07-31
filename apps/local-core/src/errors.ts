@@ -4,6 +4,7 @@ export type LocalCoreErrorCode =
   | 'NOT_FOUND'
   | 'UNAVAILABLE'
   | 'VALIDATION'
+  | 'CONFLICT'
   | 'INVALID_ARGUMENT'
   | 'PROJECT_ROOT_NOT_FOUND'
   | 'PROJECT_ROOT_NOT_DIRECTORY'
