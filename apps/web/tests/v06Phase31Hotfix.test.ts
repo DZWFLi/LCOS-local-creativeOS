@@ -6,6 +6,7 @@ import { createChildScopeFromSelection } from '../src/state/canvasScopes'
 const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8')
 const surface = readFileSync(new URL('../src/surface.css', import.meta.url), 'utf8')
 const canvas = readFileSync(new URL('../src/features/canvas/ProjectCanvas.tsx', import.meta.url), 'utf8')
+const topbar = readFileSync(new URL('../src/features/shell/V07TopBar.tsx', import.meta.url), 'utf8')
 
 let counter = 0
 const createId = (prefix: string) => `${prefix}-${++counter}`
@@ -25,9 +26,9 @@ describe('v0.6 phase 3.1 navigation and shortcut hotfix', () => {
   })
 
   it('exposes a discoverable close control for every project tab', () => {
-    expect(app).toContain('className="project-tab-close"')
-    expect(app).toContain('aria-label={`关闭项目 ${project.label}`}')
-    expect(app).toContain('closeProjectTab(projectId)')
+    expect(topbar).toContain('aria-label={`关闭 ${project.label}`}')
+    expect(topbar).toContain('props.onCloseProject(id)')
+    expect(app).toContain('onCloseProject={closeProjectTab}')
   })
 
   it('copies all internal relationships in the normal child-scope creation selection', () => {

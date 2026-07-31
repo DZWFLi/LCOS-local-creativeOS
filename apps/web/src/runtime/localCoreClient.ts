@@ -1,5 +1,8 @@
 import type {
+  AcceptArtifactReturnInput,
+  AcceptArtifactReturnResult,
   ContractError,
+  ContextManifestV0,
   HealthStatus,
   MetadataStoreStatus,
   MutationBatch,
@@ -7,9 +10,11 @@ import type {
   ProjectCatalogEntry,
   ProjectGraphSnapshot,
   PreviewRecord,
-  RegisterTrustedSourceInput,
-  RegisterTrustedSourceResult,
+  RejectArtifactReturnResult,
   Result,
+  RetryRunInput,
+  RetryRunResult,
+  RunReview,
   ValidatedProjectRoot,
 } from '@local-creative-os/contracts'
 
@@ -48,16 +53,102 @@ export interface PreviewContentResult {
   readonly data: string
 }
 
+export interface ImportCopyResult {
+  readonly fileRecord: ProjectGraphSnapshot['fileRecords'][number]
+  readonly artifact: ProjectGraphSnapshot['artifacts'][number]
+  readonly revision: ProjectGraphSnapshot['artifactRevisions'][number]
+  readonly view: ProjectGraphSnapshot['artifactViews'][number]
+  readonly reused: boolean
+}
+
+export interface FileObservationResult {
+  readonly fileRecord: ProjectGraphSnapshot['fileRecords'][number]
+  readonly artifact?: ProjectGraphSnapshot['artifacts'][number]
+  readonly previousAvailability: ProjectGraphSnapshot['fileRecords'][number]['availability']
+  readonly changed: boolean
+  readonly revisionCreated: false
+}
+
+export interface AdoptExternalChangeResult {
+  readonly fileRecord: ProjectGraphSnapshot['fileRecords'][number]
+  readonly artifact: ProjectGraphSnapshot['artifacts'][number]
+  readonly previousRevision: ProjectGraphSnapshot['artifactRevisions'][number]
+  readonly revision: ProjectGraphSnapshot['artifactRevisions'][number]
+  readonly updatedViews: readonly ProjectGraphSnapshot['artifactViews'][number][]
+}
+
+export interface CreateRuntimeRunInput {
+  readonly instruction: string
+  readonly targetArtifactId: string
+  readonly contextArtifactIds?: readonly string[]
+  readonly workspaceId?: string
+}
+
+export interface RuntimeRunActionResult {
+  readonly review: RunReview
+  readonly providerError?: {
+    readonly code: string
+    readonly message: string
+    readonly retryable: boolean
+    readonly provider: 'workbuddy'
+  }
+}
+
+export interface ActiveContextProjection {
+  readonly projectId: string
+  readonly workspaceId?: string
+  readonly scopeId: string
+  readonly selectedViewIds: readonly string[]
+  readonly pinnedContextIds: readonly string[]
+  readonly excludedContextIds: readonly string[]
+  readonly version: number
+  readonly updatedAt: string
+  readonly selectedArtifacts: readonly {
+    readonly viewId: string
+    readonly artifactId: string
+    readonly title: string
+    readonly kind: string
+    readonly revisionId?: string
+  }[]
+  readonly contextArtifacts: readonly {
+    readonly viewId: string
+    readonly artifactId: string
+    readonly title: string
+    readonly kind: string
+    readonly revisionId?: string
+  }[]
+}
+
 export interface LocalCoreClient {
   health(signal?: AbortSignal): Promise<RuntimeCall<HealthStatus>>
   catalog(signal?: AbortSignal): Promise<RuntimeCall<readonly ProjectCatalogEntry[]>>
   validateProjectRoot(rootPath: string, signal?: AbortSignal): Promise<RuntimeCall<ValidatedProjectRoot>>
   metadataStatus(signal?: AbortSignal): Promise<RuntimeCall<MetadataStoreStatus>>
   projectGraph(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<ProjectGraphSnapshot>>
+  updateActiveContext(projectId: string, input: {
+    readonly workspaceId?: string
+    readonly scopeId: string
+    readonly selectedViewIds: readonly string[]
+    readonly pinnedContextIds: readonly string[]
+    readonly excludedContextIds: readonly string[]
+  }, signal?: AbortSignal): Promise<RuntimeCall<ActiveContextProjection>>
   previewRecords(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<readonly PreviewRecord[]>>
   previewContent(projectId: string, previewRecordId: string, signal?: AbortSignal): Promise<RuntimeCall<PreviewContentResult>>
   generatePreview(projectId: string, revisionId: string, previewProfile: string, signal?: AbortSignal): Promise<RuntimeCall<GeneratePreviewResult>>
-  registerTrustedSource(projectId: string, input: RegisterTrustedSourceInput, signal?: AbortSignal): Promise<RuntimeCall<RegisterTrustedSourceResult>>
+  importCopy(projectId: string, input: { readonly file: File; readonly importRequestId: string; readonly scopeId: string; readonly x: number; readonly y: number }, signal?: AbortSignal): Promise<RuntimeCall<ImportCopyResult>>
+  buildContextManifest(projectId: string, input?: { readonly targetArtifactId?: string; readonly contextArtifactIds?: readonly string[]; readonly requestedOutput?: string }, signal?: AbortSignal): Promise<RuntimeCall<ContextManifestV0>>
+  createRuntimeRun(projectId: string, input: CreateRuntimeRunInput, signal?: AbortSignal): Promise<RuntimeCall<RuntimeRunActionResult>>
+  projectRunReviews(projectId: string, limit?: number, signal?: AbortSignal): Promise<RuntimeCall<readonly RunReview[]>>
+  dispatchRuntimeRun(runId: string, signal?: AbortSignal): Promise<RuntimeCall<RuntimeRunActionResult>>
+  recoverRuntimeRun(runId: string, signal?: AbortSignal): Promise<RuntimeCall<RuntimeRunActionResult>>
+  syncRuntimeRun(runId: string, signal?: AbortSignal): Promise<RuntimeCall<RuntimeRunActionResult>>
+  finalizeRuntimeRun(runId: string, decision: 'completed' | 'retrying', comment?: string, signal?: AbortSignal): Promise<RuntimeCall<RuntimeRunActionResult>>
+  getRunReview(runId: string, signal?: AbortSignal): Promise<RuntimeCall<RunReview>>
+  acceptArtifactReturn(returnId: string, input: AcceptArtifactReturnInput, signal?: AbortSignal): Promise<RuntimeCall<AcceptArtifactReturnResult>>
+  rejectArtifactReturn(returnId: string, signal?: AbortSignal): Promise<RuntimeCall<RejectArtifactReturnResult>>
+  retryArtifactReturn(returnId: string, input?: RetryRunInput, signal?: AbortSignal): Promise<RuntimeCall<RetryRunResult>>
+  refreshFileRecord(fileRecordId: string, signal?: AbortSignal): Promise<RuntimeCall<FileObservationResult>>
+  adoptExternalChange(fileRecordId: string, signal?: AbortSignal): Promise<RuntimeCall<AdoptExternalChangeResult>>
   applyMutations(batch: MutationBatch, projectId: string, signal?: AbortSignal): Promise<RuntimeCall<MutationResult>>
   saveProjectGraph(snapshot: ProjectGraphSnapshot, signal?: AbortSignal): Promise<RuntimeCall<ProjectGraphSnapshot>>
 }
@@ -240,15 +331,147 @@ export function createLocalCoreClient(): LocalCoreClient {
         decode: decodeResult<GeneratePreviewResult>,
       })
     },
-    registerTrustedSource(projectId, input, signal) {
-      return request(`/projects/${encodeURIComponent(projectId)}/sources`, {
+    updateActiveContext(projectId, input, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/active-context`, {
+        signal,
+        init: {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(input),
+        },
+        decode: decodeResult<ActiveContextProjection>,
+      })
+    },
+    importCopy(projectId, input, signal) {
+      const body = new FormData()
+      body.set('file', input.file)
+      body.set('importRequestId', input.importRequestId)
+      body.set('scopeId', input.scopeId)
+      body.set('position.x', String(input.x))
+      body.set('position.y', String(input.y))
+      body.set('sourceKind', 'import_copy')
+      return request(`/projects/${encodeURIComponent(projectId)}/imports`, {
+        signal,
+        timeoutMs: 30_000,
+        init: {
+          method: 'POST',
+          body,
+        },
+        decode: decodeResult<ImportCopyResult>,
+      })
+    },
+    buildContextManifest(projectId, input = {}, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/context-manifests/v0`, {
         signal,
         init: {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify(input),
         },
-        decode: decodeResult<RegisterTrustedSourceResult>,
+        decode: decodeResult<ContextManifestV0>,
+      })
+    },
+    createRuntimeRun(projectId, input, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/runs`, {
+        signal,
+        timeoutMs: 15_000,
+        init: {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(input),
+        },
+        decode: decodeResult<RuntimeRunActionResult>,
+      })
+    },
+    projectRunReviews(projectId, limit = 20, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/runs?limit=${encodeURIComponent(String(limit))}`, {
+        signal,
+        decode: decodeResult<readonly RunReview[]>,
+      })
+    },
+    dispatchRuntimeRun(runId, signal) {
+      return request(`/runs/${encodeURIComponent(runId)}/dispatch`, {
+        signal,
+        timeoutMs: 15_000,
+        init: { method: 'POST' },
+        decode: decodeResult<RuntimeRunActionResult>,
+      })
+    },
+    recoverRuntimeRun(runId, signal) {
+      return request(`/runs/${encodeURIComponent(runId)}/recover`, {
+        signal,
+        timeoutMs: 15_000,
+        init: { method: 'POST' },
+        decode: decodeResult<RuntimeRunActionResult>,
+      })
+    },
+    syncRuntimeRun(runId, signal) {
+      return request(`/runs/${encodeURIComponent(runId)}/sync`, {
+        signal,
+        timeoutMs: 15_000,
+        init: { method: 'POST' },
+        decode: decodeResult<RuntimeRunActionResult>,
+      })
+    },
+    finalizeRuntimeRun(runId, decision, comment, signal) {
+      return request(`/runs/${encodeURIComponent(runId)}/finalize`, {
+        signal,
+        timeoutMs: 15_000,
+        init: {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ decision, ...(comment === undefined ? {} : { comment }) }),
+        },
+        decode: decodeResult<RuntimeRunActionResult>,
+      })
+    },
+    getRunReview(runId, signal) {
+      return request(`/runs/${encodeURIComponent(runId)}/review`, {
+        signal,
+        decode: decodeResult<RunReview>,
+      })
+    },
+    acceptArtifactReturn(returnId, input, signal) {
+      return request(`/artifact-returns/${encodeURIComponent(returnId)}/accept`, {
+        signal,
+        init: {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(input),
+        },
+        decode: decodeResult<AcceptArtifactReturnResult>,
+      })
+    },
+    rejectArtifactReturn(returnId, signal) {
+      return request(`/artifact-returns/${encodeURIComponent(returnId)}/reject`, {
+        signal,
+        init: { method: 'POST' },
+        decode: decodeResult<RejectArtifactReturnResult>,
+      })
+    },
+    retryArtifactReturn(returnId, input = {}, signal) {
+      return request(`/artifact-returns/${encodeURIComponent(returnId)}/retry`, {
+        signal,
+        init: {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(input),
+        },
+        decode: decodeResult<RetryRunResult>,
+      })
+    },
+    refreshFileRecord(fileRecordId, signal) {
+      return request(`/file-records/${encodeURIComponent(fileRecordId)}/refresh`, {
+        signal,
+        init: { method: 'POST' },
+        decode: decodeResult<FileObservationResult>,
+      })
+    },
+    adoptExternalChange(fileRecordId, signal) {
+      return request(`/file-records/${encodeURIComponent(fileRecordId)}/adopt`, {
+        signal,
+        init: { method: 'POST' },
+        decode: decodeResult<AdoptExternalChangeResult>,
       })
     },
     saveProjectGraph(snapshot, signal) {

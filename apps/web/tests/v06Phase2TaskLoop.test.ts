@@ -39,6 +39,6 @@ describe('v0.6 phase 2 intuitive task loop contract', () => {
     expect(app).toContain("kind: 'working'")
     expect(app).toContain("reviewStatus: 'accepted'")
     expect(app).toContain("activeRun.status === 'completed' ? 'compact' : 'standard'")
-    expect(rail).toContain('已接受为当前版本')
+    expect(rail).toContain('已成为当前版本')
   })
 })

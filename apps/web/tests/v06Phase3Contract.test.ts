@@ -5,10 +5,11 @@ const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8')
 const drive = readFileSync(new URL('../src/features/project/ProjectDrive.tsx', import.meta.url), 'utf8')
 const scopeDialog = readFileSync(new URL('../src/features/create/ScopeCreateDialog.tsx', import.meta.url), 'utf8')
 const canvas = readFileSync(new URL('../src/features/canvas/ProjectCanvas.tsx', import.meta.url), 'utf8')
+const topbar = readFileSync(new URL('../src/features/shell/V07TopBar.tsx', import.meta.url), 'utf8')
 
 describe('v0.6 phase 3 UI contract', () => {
   it('opens independent Project Packages through Project Drive and tabs', () => {
-    expect(app).toContain('openProjectIds.map')
+    expect(topbar).toContain('props.openProjectIds.map')
     expect(app).toContain('applyProjectState')
     expect(app).toContain('resetGraph')
     expect(drive).toContain('项目磁盘')
@@ -26,6 +27,6 @@ describe('v0.6 phase 3 UI contract', () => {
     expect(app).toContain('buildScopePath')
     expect(app).toContain('positionLocked')
     expect(app).toContain('layoutMode: \'semantic\'')
-    expect(app).toContain('onTogglePositionLock={togglePositionLock}')
+    expect(canvas).toContain('data-position-locked={node.positionLocked || undefined}')
   })
 })

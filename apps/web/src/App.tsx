@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
-import { Check, Cloud, Command, Layers3, Play, X } from 'lucide-react'
+import { Check, Command, Play } from 'lucide-react'
+import type { ContextManifestV0, RunReview } from '@local-creative-os/contracts'
 import { makePerformanceFixture } from './qa-fixtures/fixtures'
 import type { ActiveRun, Camera, CanvasNode, CanvasScope, NodeDisplayMode, NodeLayer, PersistedPrototypeState, ProjectPackage, ScopeKind, TargetContextInference, WorkRailPreferences, Workspace, WorkspaceIntent } from './model'
 import { nodeMeta, runStatusLabel } from './model'
@@ -15,6 +16,12 @@ import { CreateContentDialog } from './features/create/CreateContentDialog'
 import { RunConfirmDialog } from './features/create/RunConfirmDialog'
 import { ScopeCreateDialog } from './features/create/ScopeCreateDialog'
 import { ProjectCreateDialog } from './features/create/ProjectCreateDialog'
+import { HandoffDialog } from './features/handoff/HandoffDialog'
+import { V07TopBar } from './features/shell/V07TopBar'
+import { CapabilityPopover } from './features/shell/CapabilityPopover'
+import { NodeInfoPopover } from './features/canvas/NodeInfoPopover'
+import { LinkReferenceDialog } from './features/create/LinkReferenceDialog'
+import { capabilitiesFor, createLinkReferenceDocument, type LinkReferenceInput } from './runtime/v07UiContracts'
 import { clearPrototypeState, loadProjectCatalog, loadPrototypeState, saveProjectCatalog, savePrototypeState } from './state/prototypeStorage'
 import { clearProjectNavigationState, loadProjectNavigationState, saveProjectNavigationState } from './state/projectNavigation'
 import { buildWorkspaceFrames } from './state/workspaceFrames'
@@ -29,6 +36,7 @@ import { useCanvasHistory } from './state/useCanvasHistory'
 import { inferTargetContext, moveBetweenTargetAndContext, setPrimaryTarget } from './state/workContext'
 import { createBlankProjectState, defaultProjectCatalog, fixtureStateForProject } from './qa-fixtures/projectFixtures'
 import { createChildScopeFromSelection, removeScopeTree } from './state/canvasScopes'
+import type { ActiveContextProjection } from './runtime/localCoreClient'
 
 const MVP_SAMPLE_PROJECT_ID = 'disposable-mvp-sample'
 const DEFAULT_PROJECT_ID = MVP_SAMPLE_PROJECT_ID
@@ -37,6 +45,11 @@ function defaultRailWidth(viewport = typeof window === 'undefined' ? 1440 : wind
   if (viewport >= 1600) return 390
   if (viewport >= 1440) return 350
   return 312
+}
+
+
+function normalizeRailPreferences(value: WorkRailPreferences): WorkRailPreferences {
+  return { ...value, collapsed: true, width: 312 }
 }
 
 function initialPrototype(projectId: string, performanceFixture: ReturnType<typeof makePerformanceFixture> | null): PersistedPrototypeState {
@@ -54,12 +67,26 @@ function createId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
 }
 
+function runtimePresentationStatus(review: RunReview): ActiveRun['status'] {
+  if (review.dispatch.status === 'recovery_required' || review.dispatch.status === 'failed') return 'failed'
+  if (review.presentationPhase === 'created' || review.presentationPhase === 'queued') return 'queued'
+  if (review.presentationPhase === 'cancelled') return 'failed'
+  return review.presentationPhase
+}
+
+function fileNameFromPath(path: string): string {
+  return path.split(/[\\/]/).filter(Boolean).at(-1) ?? path
+}
+
 export function App() {
+  const launchSearchParams = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search)
+  const agentMode = launchSearchParams?.get('agent') === '1'
   const qaSearchParams = typeof window === 'undefined' || !import.meta.env.DEV ? null : new URLSearchParams(window.location.search)
   const queryState = qaSearchParams?.get('state') ?? ''
   const perfCount = Number(qaSearchParams?.get('perf') ?? 0)
   const performanceFixture = perfCount >= 80 ? makePerformanceFixture(Math.min(300, perfCount)) : null
-  const initialProjectId = queryState === 'project-huaxin' ? 'project-huaxin' : DEFAULT_PROJECT_ID
+  const requestedProjectId = launchSearchParams?.get('project')
+  const initialProjectId = requestedProjectId || (queryState === 'project-huaxin' ? 'project-huaxin' : DEFAULT_PROJECT_ID)
   const initial = useMemo(() => initialPrototype(initialProjectId, performanceFixture), [performanceFixture])
   const { nodes, edges, setNodes, setEdges, setGraph, undo, redo, resetGraph } = useCanvasHistory({ nodes: initial.nodes, edges: initial.edges })
 
@@ -74,7 +101,7 @@ export function App() {
   const [camera, setCamera] = useState<Camera>(() => loadProjectNavigationState(initialProjectId)?.camera ?? initial.scopes.find((scope) => scope.kind === 'root')?.camera ?? { x: 120, y: 72, zoom: 1 })
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null)
-  const [focusPreviewId, setFocusPreviewId] = useState<string | null>(null)
+  const [nodeInfoId, setNodeInfoId] = useState<string | null>(null)
   const [pinnedContextIds, setPinnedContextIds] = useState<string[]>(['brief', 'feedback', 'reference'])
   const [excludedContextIds, setExcludedContextIds] = useState<string[]>([])
   const [manualInference, setManualInference] = useState<TargetContextInference | null>(null)
@@ -85,8 +112,8 @@ export function App() {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved')
   const [dataSource, setDataSource] = useState<DataSource>('none')
   const [bootMode, setBootMode] = useState<'loading' | 'runtime' | 'offline'>('loading')
-  const [workRail, setWorkRail] = useState<WorkRailPreferences>(initial.workRail)
-  const [dockCollapsed, setDockCollapsed] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 1366)
+  const [workRail, setWorkRail] = useState<WorkRailPreferences>(() => normalizeRailPreferences(initial.workRail))
+  const [dockCollapsed, setDockCollapsed] = useState(true)
   const [miniMapCollapsed, setMiniMapCollapsed] = useState(false)
   const [composerText, setComposerText] = useState(() => queryState === 'confirm' ? '根据第二轮客户反馈调整构图，拉开产品与雕像距离，优化人物比例，保留 0–6 秒缓慢拉镜和三句字幕。' : '')
   const [confirmWorkspaceId, setConfirmWorkspaceId] = useState<string | null>(null)
@@ -100,6 +127,14 @@ export function App() {
   const [composerFocusRequest, setComposerFocusRequest] = useState(0)
   const [presentationCommit, setPresentationCommit] = useState(0)
   const [overviewLayers, setOverviewLayers] = useState<NodeLayer[]>(['core', 'process'])
+  const [handoffOpen, setHandoffOpen] = useState(false)
+  const [handoffLoading, setHandoffLoading] = useState(false)
+  const [handoffManifest, setHandoffManifest] = useState<ContextManifestV0 | null>(null)
+  const [handoffError, setHandoffError] = useState<string | undefined>()
+  const [capabilityOpen, setCapabilityOpen] = useState(false)
+  const [linkDialogOpen, setLinkDialogOpen] = useState(false)
+  const [activeContextProjection, setActiveContextProjection] = useState<ActiveContextProjection | null>(null)
+  const [activeContextError, setActiveContextError] = useState<string | null>(null)
 
   const objectUrls = useRef<Set<string>>(new Set())
   const clipboardRef = useRef<CanvasClipboardPayload | null>(null)
@@ -113,6 +148,8 @@ export function App() {
   const presentationInteractionRef = useRef(false)
   const cameraRef = useRef(camera)
   const activeProjectIdRef = useRef(activeProjectId)
+  const restoredRunProjectRef = useRef<string | null>(null)
+  const runtimeSyncBusyRef = useRef(false)
 
   const activeProject = projects.find((project) => project.id === activeProjectId) ?? projects[0]
   const activeWorkspace = workspaceId ? workspaces.find((workspace) => workspace.id === workspaceId) ?? null : null
@@ -132,15 +169,18 @@ export function App() {
   const effectiveWorkspace = activeWorkspace ?? overviewWorkspace
   const selectedNodes = selectedIds.map((id) => nodes.find((node) => node.id === id)).filter((node): node is CanvasNode => Boolean(node))
   const selectedId = selectedIds.at(-1) ?? null
-  const focusNode = focusPreviewId ? nodes.find((node) => node.id === focusPreviewId) ?? null : null
+  const nodeInfoNode = nodeInfoId ? nodes.find((node) => node.id === nodeInfoId) ?? null : null
   const visibleLayers: NodeLayer[] = activeWorkspace ? (activeWorkspace.visibleLayers.length ? activeWorkspace.visibleLayers : ['core', 'process']) : overviewLayers
   const scopeNodes = useMemo(() => nodes.filter((node) => (node.scopeId ?? 'scope-root') === scopeId), [nodes, scopeId])
+  const scopeWorkspaces = useMemo(() => workspaces.filter((workspace) => workspace.scopeId === scopeId), [scopeId, workspaces])
   const visibleNodes = useMemo(() => scopeNodes.filter((node) => visibleLayers.includes(nodeMeta[node.kind].layer)), [scopeNodes, visibleLayers])
   const visibleNodeIds = useMemo(() => new Set(visibleNodes.map((node) => node.id)), [visibleNodes])
   const visibleEdges = useMemo(() => edges.filter((edge) => visibleNodeIds.has(edge.from) && visibleNodeIds.has(edge.to)), [edges, visibleNodeIds])
   const workspaceFrames = useMemo(() => buildWorkspaceFrames(workspaces, scopeNodes, workspaceId, scopeId), [scopeId, scopeNodes, workspaceId, workspaces])
   const activeWorkspaceFrames = useMemo(() => workspaceId ? workspaceFrames.filter((frame) => frame.workspaceId === workspaceId) : [], [workspaceFrames, workspaceId])
   const relationNodes = useMemo(() => selectedId ? edges.filter((edge) => edge.from === selectedId || edge.to === selectedId).map((edge) => nodes.find((node) => node.id === (edge.from === selectedId ? edge.to : edge.from))).filter((node): node is CanvasNode => Boolean(node)) : [], [edges, nodes, selectedId])
+  const nodeInfoRelationCount = useMemo(() => nodeInfoId ? edges.filter((edge) => edge.from === nodeInfoId || edge.to === nodeInfoId).length : 0, [edges, nodeInfoId])
+  const capabilities = useMemo(() => capabilitiesFor(dataSource), [dataSource])
 
   const baseInference = useMemo(() => inferTargetContext(nodes, selectedIds, effectiveWorkspace, scopeId, pinnedContextIds), [effectiveWorkspace, nodes, pinnedContextIds, scopeId, selectedIds])
   const inference = useMemo(() => {
@@ -149,10 +189,10 @@ export function App() {
   }, [baseInference, excludedContextIds, manualInference])
   const pendingNode = activeRun?.pendingArtifactId ? nodes.find((node) => node.id === activeRun.pendingArtifactId) ?? null : null
   const compareExpanded = activeRun?.status === 'review' && Boolean(pendingNode)
-  const effectiveRailWidth = workRail.collapsed ? 56 : compareExpanded ? Math.min(600, Math.max(520, typeof window === 'undefined' ? 560 : window.innerWidth * .4)) : workRail.width
+  const effectiveRailWidth = workRail.collapsed ? 48 : compareExpanded ? Math.min(520, Math.max(460, typeof window === 'undefined' ? 480 : window.innerWidth * .34)) : 312
   const sceneStyle = useMemo(() => ({ '--work-rail-width': `${effectiveRailWidth}px` } as CSSProperties), [effectiveRailWidth])
   const safeInsets = useMemo(() => ({
-    left: dockCollapsed ? 76 : 230,
+    left: dockCollapsed ? 66 : 204,
     right: 28,
     top: 58,
     bottom: miniMapCollapsed ? 72 : 164,
@@ -176,6 +216,31 @@ export function App() {
     if (runConfirmFrameRef.current !== null) window.cancelAnimationFrame(runConfirmFrameRef.current)
   }, [])
   useEffect(() => { setManualInference(null) }, [scopeId, selectedIds.join(',')])
+
+  useEffect(() => {
+    if (bootMode !== 'runtime') return
+    const controller = new AbortController()
+    const timeout = window.setTimeout(() => {
+      void bridgeRef.current.client.updateActiveContext(activeProjectId, {
+        ...(workspaceId === null ? {} : { workspaceId }),
+        scopeId,
+        selectedViewIds: selectedIds,
+        pinnedContextIds,
+        excludedContextIds,
+      }, controller.signal).then((call) => {
+        if (call.result.ok) {
+          setActiveContextProjection(call.result.value)
+          setActiveContextError(null)
+        } else {
+          setActiveContextError(call.result.error.message)
+        }
+      })
+    }, 150)
+    return () => {
+      window.clearTimeout(timeout)
+      controller.abort()
+    }
+  }, [activeProjectId, bootMode, excludedContextIds, pinnedContextIds, scopeId, selectedIds, workspaceId])
   useEffect(() => {
     const bridge = bridgeRef.current
     bridge.isAvailable().then((available) => {
@@ -186,7 +251,10 @@ export function App() {
       }
       bridge.loadCatalog().then((catalog) => {
         const runtimeProjects = catalog.projects
-        const runtimeProjectId = runtimeProjects.find((project) => project.id === MVP_SAMPLE_PROJECT_ID)?.id ?? runtimeProjects[0]?.id ?? activeProjectId
+        const runtimeProjectId = runtimeProjects.find((project) => project.id === initialProjectId)?.id
+          ?? runtimeProjects.find((project) => project.id === MVP_SAMPLE_PROJECT_ID)?.id
+          ?? runtimeProjects[0]?.id
+          ?? activeProjectId
         if (runtimeProjects.length > 0) {
           setProjects(runtimeProjects)
           setOpenProjectIds([runtimeProjectId])
@@ -203,7 +271,7 @@ export function App() {
           const rootScope = result.state.scopes.find((scope) => scope.kind === 'root') ?? result.state.scopes[0]
           setScopeId(rootScope?.id ?? result.state.activeScopeId)
           setCamera(loadProjectNavigationState(activeProjectId)?.camera ?? rootScope?.camera ?? camera)
-          setWorkRail(result.state.workRail)
+          setWorkRail(normalizeRailPreferences(result.state.workRail))
           setDataSource('runtime')
           setBootMode('runtime')
           setNotice('已打开 Runtime MVP Sample · 默认项目总览')
@@ -332,6 +400,7 @@ export function App() {
         ...nodeDimensions('process', displayMode),
       }
     }))
+    if (activeRun.runtime) return
     if (activeRun.status === 'queued') {
       const timer = window.setTimeout(() => setActiveRun((run) => run?.id === activeRun.id ? { ...run, status: 'running' } : run), 650)
       return () => window.clearTimeout(timer)
@@ -346,7 +415,7 @@ export function App() {
     }
   }, [activeRun?.id, activeRun?.inputResolved, activeRun?.pendingArtifactId, activeRun?.status])
 
-  const clearSelection = useCallback(() => { setSelectedIds([]); setSelectedEdgeId(null); setFocusPreviewId(null) }, [])
+  const clearSelection = useCallback(() => { setSelectedIds([]); setSelectedEdgeId(null); setNodeInfoId(null) }, [])
 
   const captureProjectState = useCallback((): PersistedPrototypeState => ({
     version: 10,
@@ -368,11 +437,11 @@ export function App() {
     const rootScope = state.scopes.find((scope) => scope.kind === 'root') ?? state.scopes[0]
     setScopeId(rootScope.id)
     setCamera(loadProjectNavigationState(projectId)?.camera ?? rootScope.camera)
-    setWorkRail(state.workRail)
+    setWorkRail(normalizeRailPreferences(state.workRail))
     setActiveProjectId(projectId)
     setSelectedIds([])
     setSelectedEdgeId(null)
-    setFocusPreviewId(null)
+    setNodeInfoId(null)
     setPinnedContextIds([])
     setExcludedContextIds([])
     setManualInference(null)
@@ -418,51 +487,45 @@ export function App() {
   const selectNode = useCallback((id: string, additive = false) => {
     setSelectedEdgeId(null)
     setSelectedIds((current) => additive ? current.includes(id) ? current.filter((item) => item !== id) : [...current, id] : [id])
-    setFocusPreviewId(null)
+    if (!additive) setNodeInfoId(null)
   }, [])
   const selectMarquee = useCallback((ids: string[], additive: boolean) => {
     setSelectedEdgeId(null)
     setSelectedIds((current) => additive ? Array.from(new Set([...current, ...ids])) : ids)
-    setFocusPreviewId(null)
+    setNodeInfoId(null)
   }, [])
-  const selectEdge = useCallback((id: string | null) => { setSelectedEdgeId(id); if (id) { setSelectedIds([]); setFocusPreviewId(null) } }, [])
+  const selectEdge = useCallback((id: string | null) => { setSelectedEdgeId(id); if (id) { setSelectedIds([]); setNodeInfoId(null) } }, [])
 
   const activateOverview = useCallback(() => {
-    const root = scopes.find((scope) => scope.kind === 'root') ?? scopes[0]
     setWorkspaceId(null)
-    if (root) setScopeId(root.id)
     setLayoutPreview(null)
-    setNotice('项目总览 · Camera 保持当前视角')
-  }, [scopes])
+    setNotice('当前画布总览 · Scope 与 Camera 保持不变')
+  }, [])
 
   const changeWorkspace = useCallback((id: string) => {
-    const next = workspaces.find((workspace) => workspace.id === id)
-    if (!next) return
+    const next = workspaces.find((workspace) => workspace.id === id && workspace.scopeId === scopeId)
+    if (!next) { setNotice('这个工作空间不属于当前画布'); return }
     setWorkspaceId(id)
-    if (next.scopeId !== scopeId) setScopeId(next.scopeId)
     setLayoutPreview(null)
-    setNotice(`已激活工作空间「${next.label}」· Camera 未改变`)
+    setNotice(`已激活工作空间「${next.label}」· Scope 与 Camera 未改变`)
   }, [scopeId, workspaces])
 
   const locateWorkspace = useCallback((id: string) => {
-    const next = workspaces.find((workspace) => workspace.id === id)
-    if (!next) return
-    const targetScopeId = next.scopeId
-    const frames = buildWorkspaceFrames(workspaces, nodes.filter((node) => (node.scopeId ?? 'scope-root') === targetScopeId), workspaceId, targetScopeId)
+    const next = workspaces.find((workspace) => workspace.id === id && workspace.scopeId === scopeId)
+    if (!next) { setNotice('只能定位当前画布中的工作空间'); return }
+    const frames = buildWorkspaceFrames(workspaces, scopeNodes, workspaceId, scopeId)
     const frame = frames.find((item) => item.workspaceId === id)
     if (!frame) { setNotice('这个工作空间暂时没有可定位的成员'); return }
-    if (targetScopeId !== scopeId) setScopeId(targetScopeId)
     const viewport = document.querySelector<HTMLElement>('[data-testid="canvas"]')?.getBoundingClientRect()
     setCamera(fitBounds(frame.bounds, viewport?.width ?? 1000, viewport?.height ?? 820, 70, safeInsets))
     setNotice(`已定位 ${next.label} · 仅改变 Camera`)
-  }, [nodes, safeInsets, scopeId, workspaceId, workspaces])
+  }, [safeInsets, scopeId, scopeNodes, workspaceId, workspaces])
 
   const enterScope = useCallback((nextScopeId: string) => {
     if (nextScopeId === scopeId) return
     const next = scopes.find((scope) => scope.id === nextScopeId)
     if (!next) { setNotice('目标画布不存在或已被删除'); return }
-    const matchingWorkspace = workspaces.find((workspace) => workspace.scopeId === nextScopeId)
-    setWorkspaceId(matchingWorkspace?.id ?? null)
+    setWorkspaceId(null)
     setScopeId(nextScopeId)
     const nextNodes = nodes.filter((node) => (node.scopeId ?? 'scope-root') === nextScopeId)
     const bounds = getSelectionBounds(nextNodes, nextNodes.map((node) => node.id))
@@ -505,7 +568,6 @@ export function App() {
     setWorkspaces(result.workspaces.map((workspace) => workspace.id === duplicate.id ? duplicate : workspace))
     setNodes((current) => current.map((node) => node.workspaceIds?.includes(id) ? { ...node, workspaceIds: Array.from(new Set([...(node.workspaceIds ?? []), duplicate.id])) } : node))
     setWorkspaceId(duplicate.id)
-    setScopeId(duplicate.scopeId)
     setNotice('工作空间已复制，Camera 保持不变')
   }, [scopeId, setNodes, workspaces])
 
@@ -671,7 +733,7 @@ export function App() {
     setCamera(result.scope.camera)
     setSelectedIds(result.views.map((node) => node.id))
     setSelectedEdgeId(null)
-    setFocusPreviewId(null)
+    setNodeInfoId(null)
     setLayoutPreview(null)
     setNotice(`已创建子画布「${label}」· ${result.views.length} 个视图 · ${result.edges.length} 条内部关系`)
   }, [edges, nodes, scopeId, selectedIds, setGraph])
@@ -693,16 +755,59 @@ export function App() {
         setNotice(`Preview 生成失败：${result.error ?? '未知错误'}`)
         return
       }
-      projectStateCacheRef.current.set(activeProjectId, result.state)
-      resetGraph({ nodes: result.state.nodes, edges: result.state.edges })
-      setWorkspaces(result.state.workspaces)
-      setScopes(result.state.scopes)
-      setWorkRail(result.state.workRail)
+      const nextState = result.state
+      projectStateCacheRef.current.set(activeProjectId, nextState)
+      resetGraph({ nodes: nextState.nodes, edges: nextState.edges })
+      setWorkspaces(nextState.workspaces)
+      setScopes(nextState.scopes)
+      setWorkRail((current) => ({ ...nextState.workRail, collapsed: current.collapsed, width: 312 }))
       setSelectedIds([node.id])
-      const nextNode = result.state.nodes.find((item) => item.id === node.id)
+      const nextNode = nextState.nodes.find((item) => item.id === node.id)
       setNotice(nextNode?.previewStatus === 'ready' ? 'Preview 已生成' : `Preview 状态：${nextNode?.previewStatus ?? 'unknown'}`)
     })
   }, [activeProjectId, bootMode, resetGraph])
+
+  const applyReloadedRuntimeState = useCallback((state: PersistedPrototypeState, selectedNodeId: string) => {
+    projectStateCacheRef.current.set(activeProjectId, state)
+    resetGraph({ nodes: state.nodes, edges: state.edges })
+    setWorkspaces(state.workspaces)
+    setScopes(state.scopes)
+    setWorkRail((current) => ({ ...state.workRail, collapsed: current.collapsed, width: 312 }))
+    setSelectedIds([selectedNodeId])
+  }, [activeProjectId, resetGraph])
+
+  const refreshSource = useCallback((node: CanvasNode) => {
+    if (bootMode !== 'runtime' || !node.fileRecordId) {
+      setNotice('只有 Runtime FileRecord 可以刷新')
+      return
+    }
+    setNotice(`正在刷新 ${node.title}…`)
+    bridgeRef.current.refreshFileRecord(node.fileRecordId).then((result) => {
+      if (result.state === null) {
+        setNotice(`刷新失败：${result.error ?? '未知错误'}`)
+        return
+      }
+      applyReloadedRuntimeState(result.state, node.id)
+      const refreshed = result.state.nodes.find((item) => item.id === node.id)
+      setNotice(`文件状态：${refreshed?.fileAvailability ?? 'unknown'}`)
+    })
+  }, [applyReloadedRuntimeState, bootMode])
+
+  const adoptExternalChange = useCallback((node: CanvasNode) => {
+    if (bootMode !== 'runtime' || !node.fileRecordId || node.fileAvailability !== 'stale') {
+      setNotice('只有已刷新的 stale 文件可以采纳')
+      return
+    }
+    setNotice(`正在将 ${node.title} 的外部变化登记为新 Revision…`)
+    bridgeRef.current.adoptExternalChange(node.fileRecordId).then((result) => {
+      if (result.state === null) {
+        setNotice(`采纳失败：${result.error ?? '未知错误'}`)
+        return
+      }
+      applyReloadedRuntimeState(result.state, node.id)
+      setNotice('外部变化已登记为新的 Current Revision')
+    })
+  }, [applyReloadedRuntimeState, bootMode])
 
   const dropFiles = useCallback((files: File[], x: number, y: number) => {
     const created: CanvasNode[] = files.map((file, index) => {
@@ -710,9 +815,10 @@ export function App() {
       if (previewUrl) objectUrls.current.add(previewUrl)
       const textPreview = isTextPreviewFile(file)
       const fileType = file.type || inferFileType(file.name)
-      return { id: createId('file'), artifactId: createId('artifact'), kind: 'source', title: file.name, subtitle: previewUrl ? '本地图片 · 临时预览，刷新后不保存' : textPreview ? '本地文本 · 临时预览，刷新后不保存' : '本地文件 · 临时占位，等待可信导入', x: x + index * 28, y: y + index * 28, ...nodeDimensions('source', 'standard'), displayMode: 'standard', fileType, fileSize: file.size, previewUrl, previewDataUrl: previewUrl, previewMimeType: fileType, scopeId, editable: /\.(pptx?|md|docx?|txt)$/i.test(file.name) }
+      const runtimeState = bootMode === 'runtime' ? 'importing' : 'temporary'
+      return { id: createId('file'), artifactId: createId('artifact'), kind: 'source', title: file.name, subtitle: runtimeState === 'importing' ? 'Importing…' : previewUrl ? '本地图片 · 临时预览' : textPreview ? '本地文本 · 临时预览' : '本地文件 · 等待本地核心服务预览', x: x + index * 28, y: y + index * 28, ...nodeDimensions('source', 'standard'), displayMode: 'standard', fileType, fileSize: file.size, previewUrl, previewDataUrl: previewUrl, previewMimeType: fileType, scopeId, runtimeState, editable: /\.(pptx?|md|docx?|txt)$/i.test(file.name) }
     })
-    setNodes((current) => [...current, ...created]); setSelectedIds(created.map((node) => node.id)); setNotice(`已临时预览 ${created.length} 个文件；刷新/重启不会保存，需可信导入后才会成为 Runtime Source`)
+    setNodes((current) => [...current, ...created]); setSelectedIds(created.map((node) => node.id)); setNotice(bootMode === 'runtime' ? `正在导入 ${created.length} 个文件到 Project imports…` : `已加入 ${created.length} 个本地文件引用，不上传、不移动原文件`)
     for (const [index, file] of files.entries()) {
       if (!isTextPreviewFile(file)) continue
       const nodeId = created[index]?.id
@@ -723,13 +829,249 @@ export function App() {
         setNodes((current) => current.map((node) => node.id === nodeId ? { ...node, previewError: 'Local text preview failed.' } : node))
       })
     }
-  }, [scopeId, setNodes])
+    if (bootMode !== 'runtime') return
+    for (const [index, file] of files.entries()) {
+      const temporaryNode = created[index]
+      if (temporaryNode === undefined) continue
+      const importRequestId = `${Date.now()}-${index}-${Math.random().toString(36).slice(2, 10)}`
+      bridgeRef.current.importCopy({
+        file,
+        importRequestId,
+        scopeId,
+        x: x + index * 28,
+        y: y + index * 28,
+      }).then((result) => {
+        if (result.state === null) {
+          setNodes((current) => current.map((node) => node.id === temporaryNode.id ? { ...node, subtitle: 'Import failed', runtimeState: 'failed', error: true, previewError: result.error ?? 'Import Copy failed.' } : node))
+          setNotice(`导入失败：${result.error ?? file.name}`)
+          return
+        }
+        const nextState = result.state
+        projectStateCacheRef.current.set(activeProjectId, nextState)
+        resetGraph({ nodes: nextState.nodes, edges: nextState.edges })
+        setWorkspaces(nextState.workspaces)
+        setScopes(nextState.scopes)
+        setWorkRail((current) => ({ ...nextState.workRail, collapsed: current.collapsed, width: 312 }))
+        if (result.importedViewId !== undefined) setSelectedIds([result.importedViewId])
+        if (result.importedRevisionId !== undefined) void bridgeRef.current.generatePreview(result.importedRevisionId, 'thumbnail').then((previewResult) => {
+          if (previewResult.state === null) return
+          const previewState = previewResult.state
+          projectStateCacheRef.current.set(activeProjectId, previewState)
+          resetGraph({ nodes: previewState.nodes, edges: previewState.edges })
+          setWorkspaces(previewState.workspaces)
+          setScopes(previewState.scopes)
+          setWorkRail((current) => ({ ...previewState.workRail, collapsed: current.collapsed, width: 312 }))
+          if (result.importedViewId !== undefined) setSelectedIds([result.importedViewId])
+        })
+        setNotice(`已导入 ${file.name} 到 Project imports`)
+      }).catch((error: unknown) => {
+        setNodes((current) => current.map((node) => node.id === temporaryNode.id ? { ...node, subtitle: 'Import failed', runtimeState: 'failed', error: true, previewError: error instanceof Error ? error.message : 'Import Copy failed.' } : node))
+      })
+    }
+  }, [activeProjectId, bootMode, resetGraph, scopeId, setNodes])
+
+  const createLinkReference = useCallback((input: LinkReferenceInput) => {
+    const document = createLinkReferenceDocument(input)
+    const file = new File([document.markdown], document.fileName, { type: 'text/markdown' })
+    const point = lastCanvasPointRef.current ?? { x: 180, y: 160 }
+    dropFiles([file], point.x, point.y)
+    setLinkDialogOpen(false)
+    setCapabilityOpen(true)
+  }, [dropFiles])
+
+  const applyRuntimeReview = useCallback((review: RunReview, current: ActiveRun, providerError?: string) => {
+    const pendingReturn = review.returns.find((item) => item.status === 'pending_review')
+    const draftRevision = pendingReturn?.draftRevisionId === undefined
+      ? undefined
+      : review.draftRevisions.find((item) => String(item.id) === String(pendingReturn.draftRevisionId))
+    let pendingArtifactId = current.pendingArtifactId
+    let changedFiles = current.changedFiles
+    if (pendingReturn !== undefined && draftRevision !== undefined) {
+      pendingArtifactId = `runtime-return-view-${String(pendingReturn.id)}`
+      changedFiles = [fileNameFromPath(pendingReturn.canonicalPath)]
+      const target = nodes.find((node) => node.id === current.targetIds[0])
+      const dimensions = nodeDimensions('generated', 'standard')
+      const position = target === undefined
+        ? { x: 520, y: 560 }
+        : findPendingReturnPosition(nodes, target, dimensions)
+      const returnedNode: CanvasNode = {
+        id: pendingArtifactId,
+        artifactId: String(pendingReturn.targetArtifactId),
+        revisionId: String(draftRevision.id),
+        followsCurrentRevision: false,
+        kind: 'generated',
+        title: changedFiles[0] ?? 'Runtime Draft',
+        subtitle: 'Runtime Draft · 等待 Accept / Reject / Retry',
+        ...position,
+        ...dimensions,
+        displayMode: 'standard',
+        draft: true,
+        scopeId: target?.scopeId ?? scopeId,
+        editable: true,
+        parentRunId: String(review.run.id),
+        revisionOf: String(review.run.targetRevisionId),
+        resultGroupId: String(review.run.id),
+        runtimeTransient: true,
+      }
+      setGraph((graph) => {
+        const withoutOldReturn = graph.nodes.filter((node) =>
+          !(node.runtimeTransient && node.parentRunId === String(review.run.id)),
+        )
+        const returnEdgeId = `runtime-return-edge-${String(pendingReturn.id)}`
+        const targetEdgeId = `runtime-target-edge-${String(pendingReturn.id)}`
+        return {
+          nodes: [...withoutOldReturn, returnedNode],
+          edges: [
+            ...graph.edges.filter((edge) => edge.id !== returnEdgeId && edge.id !== targetEdgeId),
+            { id: returnEdgeId, from: current.processNodeId, to: returnedNode.id, kind: 'generate', active: true },
+            ...(target === undefined ? [] : [{ id: targetEdgeId, from: target.id, to: returnedNode.id, kind: 'modify' as const }]),
+          ],
+        }
+      })
+      setSelectedIds([pendingArtifactId])
+      setWorkRail((value) => ({ ...value, collapsed: false }))
+    }
+    setActiveRun({
+      ...current,
+      id: String(review.run.id),
+      status: providerError ? 'failed' : runtimePresentationStatus(review),
+      runtime: true,
+      pendingArtifactId,
+      runtimeReturnId: pendingReturn === undefined ? current.runtimeReturnId : String(pendingReturn.id),
+      baseRevisionId: pendingReturn === undefined ? current.baseRevisionId : String(pendingReturn.baseRevisionId),
+      reviewStatus: pendingReturn === undefined ? current.reviewStatus : 'pending',
+      changedFiles,
+      providerError,
+    })
+  }, [nodes, scopeId, setGraph])
+
+  useEffect(() => {
+    if (bootMode !== 'runtime' || activeRun !== null || restoredRunProjectRef.current === activeProjectId) return
+    restoredRunProjectRef.current = activeProjectId
+    void bridgeRef.current.client.projectRunReviews(activeProjectId, 10).then((call) => {
+      if (!call.result.ok) return
+      const review = call.result.value.find((item) =>
+        !['completed', 'cancelled'].includes(item.presentationPhase)
+        || item.returns.some((artifactReturn) => artifactReturn.status === 'pending_review'),
+      )
+      if (review === undefined) return
+      const target = nodes.find((node) => node.artifactId === String(review.run.targetArtifactId))
+      if (target === undefined) return
+      const id = String(review.run.id)
+      const processNodeId = `runtime-run-view-${id}`
+      const dimensions = nodeDimensions('process', 'standard')
+      setGraph((graph) => graph.nodes.some((node) => node.id === processNodeId) ? graph : {
+        nodes: [...graph.nodes, {
+          id: processNodeId,
+          kind: 'process',
+          title: `${id} · ${review.run.instruction.slice(0, 22)}`,
+          subtitle: '从 Runtime 恢复',
+          x: target.x + 24,
+          y: target.y + target.height + 54,
+          ...dimensions,
+          displayMode: 'standard',
+          scopeId: target.scopeId ?? scopeId,
+          runStatus: runtimePresentationStatus(review),
+          commandText: review.run.instruction,
+          parentRunId: id,
+          runtimeTransient: true,
+        }],
+        edges: [...graph.edges, {
+          id: `runtime-target-run-edge-${id}`,
+          from: target.id,
+          to: processNodeId,
+          kind: 'modify',
+        }],
+      })
+      applyRuntimeReview(review, {
+        id,
+        status: runtimePresentationStatus(review),
+        command: review.run.instruction,
+        targetIds: [target.id],
+        contextIds: [],
+        processNodeId,
+        contextSnapshotId: String(review.run.contextManifestId),
+        reviewStatus: 'idle',
+        changedFiles: [],
+        createdAt: String(review.run.createdAt),
+        runtime: true,
+      }, review.dispatch.lastErrorMessage)
+      setNotice(`已恢复 Runtime Run：${id}`)
+    })
+  }, [activeProjectId, activeRun, applyRuntimeReview, bootMode, nodes, scopeId, setGraph])
 
   const startRunFrom = useCallback((command: string, targetIds: string[], contextIds: string[]) => {
     if (!command.trim() || !targetIds.length) return
+    const target = nodes.find((node) => node.id === targetIds[0])
+    if (bootMode === 'runtime') {
+      if (target?.artifactId === undefined || target.revisionId === undefined) {
+        setNotice('真实 Run 需要已持久化且具有 Current Revision 的目标')
+        return
+      }
+      setNotice('正在冻结 ContextManifest 并创建真实 Run…')
+      void bridgeRef.current.client.createRuntimeRun(activeProjectId, {
+        instruction: command,
+        targetArtifactId: target.artifactId,
+        contextArtifactIds: [...new Set(contextIds
+          .map((contextId) => nodes.find((node) => node.id === contextId)?.artifactId)
+          .filter((artifactId): artifactId is string => artifactId !== undefined && artifactId !== target.artifactId))],
+        ...(workspaceId === null ? {} : { workspaceId }),
+      }).then((call) => {
+        if (!call.result.ok) {
+          setNotice(`Run 创建失败：${call.result.error.message}`)
+          return
+        }
+        const { review, providerError } = call.result.value
+        const id = String(review.run.id)
+        const processNodeId = `runtime-run-view-${id}`
+        const dimensions = nodeDimensions('process', 'standard')
+        const process: CanvasNode = {
+          id: processNodeId,
+          kind: 'process',
+          title: `${id} · ${command.slice(0, 22)}`,
+          subtitle: providerError ? `派发待恢复 · ${providerError.code}` : '真实 Runtime Run',
+          x: target.x + 24,
+          y: target.y + target.height + 54,
+          ...dimensions,
+          displayMode: 'standard',
+          scopeId,
+          runStatus: providerError ? 'failed' : runtimePresentationStatus(review),
+          commandText: command,
+          parentRunId: id,
+          runtimeTransient: true,
+        }
+        const runEdges = [
+          ...targetIds.map((targetId) => ({ id: createId('edge'), from: targetId, to: processNodeId, kind: 'modify' as const })),
+          ...contextIds.map((contextId) => ({ id: createId('edge'), from: contextId, to: processNodeId, kind: 'reference' as const })),
+        ]
+        setGraph((graph) => ({ nodes: [...graph.nodes, process], edges: [...graph.edges, ...runEdges] }))
+        const runtimeRun: ActiveRun = {
+          id,
+          status: providerError ? 'failed' : runtimePresentationStatus(review),
+          command,
+          targetIds,
+          contextIds,
+          processNodeId,
+          contextSnapshotId: String(review.run.contextManifestId),
+          reviewStatus: 'idle',
+          changedFiles: [],
+          createdAt: String(review.run.createdAt),
+          runtime: true,
+          providerError: providerError?.message,
+        }
+        setSelectedIds([])
+        setNodeInfoId(null)
+        setComposerText('')
+        setCheckpoint(false)
+        applyRuntimeReview(review, runtimeRun, providerError?.message)
+        setNotice(providerError
+          ? `Run 已保存，但 Bridge 派发需要恢复：${providerError.message}`
+          : `真实 Run 已派发：${id}`)
+      })
+      return
+    }
     runCounterRef.current += 1
     const id = `RUN-${String(runCounterRef.current).padStart(3, '0')}`
-    const target = nodes.find((node) => node.id === targetIds[0])
     const processNodeId = createId('run')
     const dimensions = nodeDimensions('process', 'standard')
     const process: CanvasNode = { id: processNodeId, kind: 'process', title: `${id} · ${command.slice(0, 22)}`, subtitle: '排队中 · 正在冻结上下文', x: target ? target.x + 24 : 460, y: target ? target.y + target.height + 54 : 560, ...dimensions, displayMode: 'standard', scopeId, runStatus: 'queued', commandText: command, parentRunId: id }
@@ -739,12 +1081,12 @@ export function App() {
     ]
     setGraph((current) => ({ nodes: [...current.nodes, process], edges: [...current.edges, ...runEdges] }))
     setSelectedIds([])
-    setFocusPreviewId(null)
+    setNodeInfoId(null)
     setActiveRun({ id, status: 'queued', command, targetIds, contextIds, processNodeId, commandId: createId('command'), contextSnapshotId: createId('context-snapshot'), reviewStatus: 'idle', inputResolved: false, changedFiles: [], createdAt: new Date().toISOString() })
     setComposerText('')
     setCheckpoint(false)
     setNotice('参考快照、指令和执行记录已自动保存')
-  }, [nodes, scopeId, setGraph])
+  }, [activeProjectId, applyRuntimeReview, bootMode, nodes, scopeId, setGraph, workspaceId])
 
   const requestComposerFocus = useCallback(() => {
     setWorkRail((current) => ({ ...current, collapsed: false }))
@@ -797,12 +1139,73 @@ export function App() {
   }, [nodes, safeInsets, scopeId, setGraph])
 
   const continueRun = useCallback((answer: '35%' | '30%') => {
+    if (activeRun?.runtime) {
+      setNotice('当前 MVP Runtime 不伪造 waiting_input；请使用 Retry 补充新指令')
+      return
+    }
     setActiveRun((run) => run ? { ...run, status: 'running', inputResolved: true, command: `${run.command}（已确认使用 ${answer}）` } : run)
     setNotice(`已确认 ${answer}，继续同一任务`)
-  }, [])
+  }, [activeRun?.runtime])
+
+  const syncRuntimeRun = useCallback(() => {
+    if (!activeRun?.runtime || runtimeSyncBusyRef.current) return
+    runtimeSyncBusyRef.current = true
+    setNotice(`正在同步 ${activeRun.id}…`)
+    void bridgeRef.current.client.syncRuntimeRun(activeRun.id).then((call) => {
+      if (!call.result.ok) {
+        setNotice(`同步失败：${call.result.error.message}`)
+        return
+      }
+      applyRuntimeReview(call.result.value.review, activeRun, call.result.value.providerError?.message)
+      setNotice(call.result.value.review.presentationPhase === 'review'
+        ? '结果已摄取为 Draft，等待你的决定'
+        : call.result.value.providerError?.message ?? `状态：${call.result.value.review.presentationPhase}`)
+    }).finally(() => { runtimeSyncBusyRef.current = false })
+  }, [activeRun, applyRuntimeReview])
+
+  useEffect(() => {
+    if (!activeRun?.runtime || !['queued', 'running'].includes(activeRun.status)) return
+    const timer = window.setInterval(syncRuntimeRun, 3_000)
+    return () => window.clearInterval(timer)
+  }, [activeRun?.id, activeRun?.runtime, activeRun?.status, syncRuntimeRun])
 
   const acceptRun = useCallback(() => {
     if (!activeRun?.pendingArtifactId || !pendingNode) return
+    if (activeRun.runtime) {
+      if (activeRun.runtimeReturnId === undefined || activeRun.baseRevisionId === undefined) {
+        setNotice('Runtime Return 身份不完整，不能 Accept')
+        return
+      }
+      setNotice('正在以 CAS 接受 Draft Revision…')
+      void bridgeRef.current.client.acceptArtifactReturn(activeRun.runtimeReturnId, {
+        expectedBaseRevisionId: activeRun.baseRevisionId as never,
+      }).then(async (call) => {
+        if (!call.result.ok) {
+          setNotice(`Accept 失败：${call.result.error.message}`)
+          return
+        }
+        const finalized = await bridgeRef.current.client.finalizeRuntimeRun(
+          activeRun.id,
+          'completed',
+          'Artifact Return accepted in LCOS.',
+        )
+        void bridgeRef.current.loadProject().then((loaded) => {
+          if (loaded.state !== null) applyReloadedRuntimeState(loaded.state, activeRun.targetIds[0] ?? '')
+          setActiveRun((run) => run === null ? null : {
+            ...run,
+            status: 'completed',
+            reviewStatus: 'accepted',
+            pendingArtifactId: undefined,
+            providerError: undefined,
+          })
+          setCheckpoint(true)
+          setNotice(finalized.result.ok && finalized.result.value.providerError === undefined
+            ? 'Draft 已成为 Current Revision，Bridge Review 已完成'
+            : 'Draft 已成为 Current；Bridge finalize 将在后续恢复')
+        })
+      })
+      return
+    }
     const acceptedArtifactId = pendingNode.artifactId
     const acceptedRevisionId = pendingNode.revisionId
     const targetIds = new Set(activeRun.targetIds)
@@ -830,16 +1233,49 @@ export function App() {
       edges: current.edges.map((edge) => edge.from === activeRun.processNodeId ? { ...edge, active: false } : edge),
     }))
     setSelectedIds([activeRun.pendingArtifactId])
-    setFocusPreviewId(null)
+    setNodeInfoId(null)
     setActiveRun((run) => run ? { ...run, status: 'completed', reviewStatus: 'accepted' } : run)
     setCheckpoint(true)
     setNotice('已接受为当前版本，相关视图已同步')
-  }, [activeRun, pendingNode, setGraph])
+  }, [activeRun, applyReloadedRuntimeState, pendingNode, setGraph])
+
+  const rejectRun = useCallback(() => {
+    if (!activeRun?.runtime || activeRun.runtimeReturnId === undefined) {
+      setNotice('当前没有可拒绝的 Runtime Return')
+      return
+    }
+    setNotice('正在拒绝此 Draft…')
+    void bridgeRef.current.client.rejectArtifactReturn(activeRun.runtimeReturnId).then(async (call) => {
+      if (!call.result.ok) {
+        setNotice(`Reject 失败：${call.result.error.message}`)
+        return
+      }
+      setGraph((graph) => ({
+        nodes: graph.nodes.filter((node) => node.id !== activeRun.pendingArtifactId),
+        edges: graph.edges.filter((edge) => edge.to !== activeRun.pendingArtifactId),
+      }))
+      setActiveRun((run) => run === null ? null : {
+        ...run,
+        status: 'completed',
+        reviewStatus: 'idle',
+        pendingArtifactId: undefined,
+        providerError: undefined,
+      })
+      const finalized = await bridgeRef.current.client.finalizeRuntimeRun(
+        activeRun.id,
+        'completed',
+        'Artifact Return rejected in LCOS; Current Revision unchanged.',
+      )
+      setNotice(finalized.result.ok && finalized.result.value.providerError === undefined
+        ? 'Draft 已拒绝；Current 未改变，Bridge Review 已完成'
+        : 'Draft 已拒绝；Bridge finalize 将在后续恢复')
+    })
+  }, [activeRun, setGraph])
 
   const continueModify = useCallback(() => {
     if (!activeRun?.pendingArtifactId || !pendingNode) return
     setSelectedIds([pendingNode.id])
-    setFocusPreviewId(null)
+    setNodeInfoId(null)
     setComposerText('继续修改：')
     setNotice('返回结果已设为本轮修改目标，请直接补充下一步要求')
     requestComposerFocus()
@@ -847,9 +1283,66 @@ export function App() {
 
   const retryRun = useCallback(() => {
     if (!activeRun) return
+    if (activeRun.runtime) {
+      if (activeRun.runtimeReturnId === undefined) {
+        void bridgeRef.current.client.dispatchRuntimeRun(activeRun.id).then((call) => {
+          if (!call.result.ok) {
+            setNotice(`恢复失败：${call.result.error.message}`)
+            return
+          }
+          applyRuntimeReview(call.result.value.review, activeRun, call.result.value.providerError?.message)
+          setNotice(call.result.value.providerError?.message ?? 'Runtime Dispatch 已恢复')
+        })
+        return
+      }
+      setNotice('正在创建 Retry Run…')
+      void bridgeRef.current.client.retryArtifactReturn(activeRun.runtimeReturnId, {
+        instruction: composerText.trim() || activeRun.command,
+      }).then(async (retryCall) => {
+        if (!retryCall.result.ok) {
+          setNotice(`Retry 失败：${retryCall.result.error.message}`)
+          return
+        }
+        const newRun = retryCall.result.value.run
+        const finalized = await bridgeRef.current.client.finalizeRuntimeRun(
+          activeRun.id,
+          'retrying',
+          `Superseded by ${String(newRun.id)}.`,
+        )
+        const dispatchCall = await bridgeRef.current.client.dispatchRuntimeRun(String(newRun.id))
+        if (!dispatchCall.result.ok) {
+          setNotice(`Retry 已保存，但派发失败：${dispatchCall.result.error.message}`)
+          return
+        }
+        setGraph((graph) => ({
+          nodes: graph.nodes.filter((node) => node.id !== activeRun.pendingArtifactId),
+          edges: graph.edges.filter((edge) => edge.to !== activeRun.pendingArtifactId),
+        }))
+        const next: ActiveRun = {
+          ...activeRun,
+          id: String(newRun.id),
+          status: dispatchCall.result.value.providerError ? 'failed' : runtimePresentationStatus(dispatchCall.result.value.review),
+          command: String(newRun.instruction),
+          pendingArtifactId: undefined,
+          runtimeReturnId: undefined,
+          baseRevisionId: undefined,
+          reviewStatus: 'idle',
+          changedFiles: [],
+          createdAt: String(newRun.createdAt),
+          providerError: dispatchCall.result.value.providerError?.message,
+        }
+        applyRuntimeReview(dispatchCall.result.value.review, next, dispatchCall.result.value.providerError?.message)
+        setComposerText('')
+        setNotice(dispatchCall.result.value.providerError?.message
+          ?? (finalized.result.ok && finalized.result.value.providerError === undefined
+            ? `Retry Run 已派发：${String(newRun.id)}`
+            : `Retry Run 已派发；旧 Bridge Review 待恢复：${String(newRun.id)}`))
+      })
+      return
+    }
     startRunFrom(activeRun.command.replace(/（已确认.*?）/, ''), activeRun.targetIds, activeRun.contextIds)
     setNotice('已沿用原指令与上下文重新执行')
-  }, [activeRun, startRunFrom])
+  }, [activeRun, applyRuntimeReview, composerText, setGraph, startRunFrom])
 
   const toggleContext = useCallback((id: string) => {
     if (inference.contextIds.includes(id)) {
@@ -865,15 +1358,51 @@ export function App() {
   const moveRole = useCallback((id: string, role: 'target' | 'context') => setManualInference(moveBetweenTargetAndContext(inference, id, role, nodes)), [inference, nodes])
   const openNative = useCallback((node: CanvasNode) => setNotice(`将由本地核心服务打开 ${node.title}`), [])
 
+  const openHandoff = useCallback(async () => {
+    if (dataSource !== 'runtime') {
+      setNotice('Handoff 只从 Runtime Project Truth 构建')
+      return
+    }
+    setHandoffOpen(true)
+    setHandoffLoading(true)
+    setHandoffError(undefined)
+    const selectedTarget = selectedNodes.length === 1 ? selectedNodes[0]?.artifactId : undefined
+    const result = await bridgeRef.current.buildContextManifest({
+      ...(selectedTarget ? { targetArtifactId: selectedTarget } : {}),
+      requestedOutput: 'Markdown Script Revision',
+    })
+    setHandoffManifest(result.manifest)
+    setHandoffError(result.error)
+    setHandoffLoading(false)
+  }, [dataSource, selectedNodes])
+
+  const copyHandoff = useCallback(async () => {
+    if (!handoffManifest) return
+    await navigator.clipboard.writeText(handoffManifest.renderedMarkdown)
+    setNotice('Context Manifest Markdown 已复制')
+  }, [handoffManifest])
+
+  const downloadHandoff = useCallback(() => {
+    if (!handoffManifest) return
+    const url = URL.createObjectURL(new Blob([handoffManifest.renderedMarkdown], { type: 'text/markdown;charset=utf-8' }))
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `${activeProjectId}-context-manifest-v0.md`
+    anchor.click()
+    window.setTimeout(() => URL.revokeObjectURL(url), 0)
+    setNotice('Handoff Markdown 已下载')
+  }, [activeProjectId, handoffManifest])
+
   const handleDoubleClick = useCallback((id: string) => {
     const node = nodes.find((item) => item.id === id)
     if (!node) return
     selectNode(id)
     if (node.opensScopeId) enterScope(node.opensScopeId)
-    else setFocusPreviewId(id)
   }, [enterScope, nodes, selectNode])
 
-  const showNodeDetails = useCallback((id: string) => { selectNode(id) }, [selectNode])
+  const showNodeDetails = useCallback((id: string) => {
+    setNodeInfoId(id)
+  }, [])
   const copySelectedViews = useCallback(() => { copySelection() }, [copySelection])
   const duplicateSelectedViews = useCallback(() => { duplicateSelection() }, [duplicateSelection])
   const deleteSelectedViews = useCallback(() => { deleteNodes(selectedIds) }, [deleteNodes, selectedIds])
@@ -900,8 +1429,7 @@ export function App() {
       if (modifier && event.shiftKey && key === 'l') { event.preventDefault(); arrangeSelection(); return }
       if (modifier && key === 'o' && selectedNodes.length === 1) { event.preventDefault(); openNative(selectedNodes[0]); return }
       if (event.code === 'Space') { event.preventDefault(); setSpaceHeld(true); return }
-      if (event.key === 'Escape') { if (focusPreviewId) setFocusPreviewId(null); else if (layoutPreview) setLayoutPreview(null); else clearSelection(); return }
-      if (event.key === 'Enter' && selectedId) { setFocusPreviewId(selectedId); return }
+      if (event.key === 'Escape') { if (capabilityOpen) setCapabilityOpen(false); else if (nodeInfoId) setNodeInfoId(null); else if (layoutPreview) setLayoutPreview(null); else clearSelection(); return }
       if (key === 'c') { event.preventDefault(); requestComposerFocus(); return }
       if (event.key === 'Delete' || event.key === 'Backspace') {
         if (selectedIds.length) { deleteNodes(selectedIds); return }
@@ -911,7 +1439,7 @@ export function App() {
     const release = (event: KeyboardEvent) => { if (event.code === 'Space') setSpaceHeld(false) }
     window.addEventListener('keydown', handler); window.addEventListener('keyup', release)
     return () => { window.removeEventListener('keydown', handler); window.removeEventListener('keyup', release) }
-  }, [arrangeSelection, clearSelection, copySelection, createDialogOpen, deleteNodes, duplicateSelection, focusPreviewId, layoutPreview, openNative, pasteClipboard, projectCreateOpen, redo, requestComposerFocus, requestRun, runConfirmOpen, scopeCreateOpen, selectedEdgeId, selectedId, selectedIds, selectedNodes, setEdges, undo])
+  }, [arrangeSelection, clearSelection, copySelection, createDialogOpen, deleteNodes, duplicateSelection, capabilityOpen, nodeInfoId, layoutPreview, openNative, pasteClipboard, projectCreateOpen, redo, requestComposerFocus, requestRun, runConfirmOpen, scopeCreateOpen, selectedEdgeId, selectedId, selectedIds, selectedNodes, setEdges, undo])
 
   if (!projectOpen) return <>
     <ProjectDrive projects={projects} openProjectIds={openProjectIds} onOpen={openProject} onCreate={() => setProjectCreateOpen(true)} />
@@ -922,26 +1450,22 @@ export function App() {
   const nodeToRename = renameNodeId ? nodes.find((node) => node.id === renameNodeId) : undefined
   const scopePath = buildScopePath(scopes, activeScope)
 
-  return <main className="app-shell v05 v051 v052 v053 v056 v0561 v06 v06-phase2 v06-phase3 v061" data-testid="creative-os-app">
-    <header className="tabbar">
-      <button className="brand" onClick={() => setProjectOpen(false)} title="返回项目磁盘"><Layers3 size={16} /> Local Creative OS</button>
-      <div className="tabs" role="tablist" aria-label="已打开项目">{openProjectIds.map((projectId) => {
-        const project = projects.find((item) => item.id === projectId)
-        if (!project) return null
-        const active = projectId === activeProjectId
-        return <div key={projectId} role="presentation" className={active ? 'project-tab active' : 'project-tab'} data-testid={`project-tab-${projectId}`}>
-          <button className="project-tab-open" role="tab" aria-selected={active} title={project.localPath} onClick={() => openProject(projectId)}><span>{project.label}</span></button>
-          <button className="project-tab-close" aria-label={`关闭项目 ${project.label}`} title={`关闭 ${project.label}`} onClick={() => closeProjectTab(projectId)}><X size={13} /></button>
-        </div>
-      })}<button className="add-tab chrome-control" aria-label="新建或打开项目" onClick={() => setProjectOpen(false)}><span>+</span></button></div>
-      <button className="new-run-button" onClick={requestComposerFocus}><Play size={13} />告诉 AI</button>
-      <button data-testid="save-status" data-save-status={saveStatus} className={`runtime-badge ${saveStatus}`} onClick={() => setNotice(dataSource === 'runtime' ? '当前项目数据由 Local Core Runtime 提供' : 'Local Core 离线，当前为本地 Demo 状态')}><Cloud size={13} /> {saveStatus === 'saving' ? '正在保存…' : saveStatus === 'unsaved' ? '保存失败' : '已全部保存'} <span>{dataSource === 'runtime' ? 'Runtime' : 'Demo'}</span></button>
-    </header>
+  return <main className="app-shell v05 v051 v052 v053 v056 v0561 v06 v06-phase2 v06-phase3 v061 v07 v071 porcelain-studio-v2" data-testid="creative-os-app">
+    <V07TopBar projects={projects} openProjectIds={openProjectIds} activeProjectId={activeProjectId} scopePath={scopePath} saveStatus={saveStatus} runStatus={activeRun?.status ?? null} workRailCollapsed={workRail.collapsed} onOpenDrive={() => setProjectOpen(false)} onOpenProject={openProject} onCloseProject={closeProjectTab} onOpenScope={enterScope} onToggleWorkRail={() => setWorkRail((current) => ({ ...current, collapsed: !current.collapsed }))} />
     <section className={`scene intent-${effectiveWorkspace.intent ?? 'blank'}`} style={sceneStyle} data-project-id={activeProjectId} data-scope-id={scopeId} data-workspace-id={workspaceId ?? 'project-overview'} data-workspace-intent={effectiveWorkspace.intent ?? 'blank'}>
-      <WorkspaceDock workspaces={workspaces} activeId={workspaceId} collapsed={dockCollapsed} onCollapsedChange={setDockCollapsed} onOverview={activateOverview} onChange={changeWorkspace} onLocate={locateWorkspace} onAddWorkspace={() => setWorkspaceEditor({ mode: 'create' })} onEditWorkspace={(id) => setWorkspaceEditor({ mode: 'edit', id })} onDuplicateWorkspace={duplicateWorkspace} onDeleteWorkspace={deleteWorkspace} onMoveWorkspace={moveWorkspace} visibleLayers={visibleLayers} onToggleLayer={toggleLayer} onOpenCreate={() => setCreateDialogOpen(true)} onArrangeCanvas={previewScopeLayout} runStatus={activeRun?.status ?? null} />
-      <ProjectCanvas nodes={visibleNodes} setNodes={setNodes} edges={visibleEdges} setEdges={setEdges} camera={camera} setCamera={setCamera} selectedId={selectedId} selectedIds={selectedIds} selectedEdgeId={selectedEdgeId} setSelectedEdgeId={setSelectedEdgeId} pendingId={activeRun?.pendingArtifactId ?? null} runId={activeRun?.id ?? 'RUN-043'} runStatus={activeRun?.status ?? null} spaceHeld={spaceHeld} locked={createDialogOpen || runConfirmOpen || scopeCreateOpen} layoutPreview={layoutPreview} workspaceFrames={activeWorkspaceFrames} workspaceMemberNodes={scopeNodes} activeWorkspaceId={workspaceId} onWorkspaceActivate={changeWorkspace} onPresentationInteractionChange={handlePresentationInteractionChange} onPresentationCommit={handlePresentationCommit} onSelect={selectNode} onClearSelection={clearSelection} onMarqueeSelect={selectMarquee} onSelectEdge={selectEdge} onDoubleClick={handleDoubleClick} onDetails={showNodeDetails} onCreateNodeFromAnchor={createNodeFromAnchor} onFilesDropped={dropFiles} onArrangeSelection={arrangeSelection} onCopySelection={copySelectedViews} onDuplicateSelection={duplicateSelectedViews} onCreateScopeFromSelection={() => selectedIds.length ? setScopeCreateOpen(true) : setNotice('先选择要整理进子画布的对象')} onDeleteSelection={deleteSelectedViews} onPointerWorldChange={rememberCanvasPoint} />
+      {capabilityOpen && <CapabilityPopover capabilities={capabilities} nodes={scopeNodes} onClose={() => setCapabilityOpen(false)} onImport={(files) => { const point = lastCanvasPointRef.current ?? { x: 180, y: 160 }; dropFiles(files, point.x, point.y); setCapabilityOpen(false) }} onCreateObject={() => { setCapabilityOpen(false); setCreateDialogOpen(true) }} onAddLink={() => { setCapabilityOpen(false); setLinkDialogOpen(true) }} onHandoff={() => { setCapabilityOpen(false); void openHandoff() }} onOpenComposer={() => { setCapabilityOpen(false); requestComposerFocus() }} onSelectNode={(id) => { selectNode(id); setCapabilityOpen(false) }} />}
+      <WorkspaceDock workspaces={scopeWorkspaces} activeId={workspaceId} collapsed={dockCollapsed} onCollapsedChange={setDockCollapsed} capabilitiesOpen={capabilityOpen} onOpenCapabilities={() => setCapabilityOpen((value) => !value)} onOverview={activateOverview} onChange={changeWorkspace} onLocate={locateWorkspace} onAddWorkspace={() => setWorkspaceEditor({ mode: 'create' })} onEditWorkspace={(id) => setWorkspaceEditor({ mode: 'edit', id })} onDuplicateWorkspace={duplicateWorkspace} onDeleteWorkspace={deleteWorkspace} onMoveWorkspace={moveWorkspace} runStatus={activeRun?.status ?? null} />
+      <ProjectCanvas nodes={visibleNodes} setNodes={setNodes} edges={visibleEdges} setEdges={setEdges} camera={camera} setCamera={setCamera} selectedId={selectedId} selectedIds={selectedIds} selectedEdgeId={selectedEdgeId} setSelectedEdgeId={setSelectedEdgeId} pendingId={activeRun?.pendingArtifactId ?? null} runId={activeRun?.id ?? 'RUN-043'} runStatus={activeRun?.status ?? null} spaceHeld={spaceHeld} locked={createDialogOpen || runConfirmOpen || scopeCreateOpen} layoutPreview={layoutPreview} workspaceFrames={activeWorkspaceFrames} workspaceMemberNodes={scopeNodes} activeWorkspaceId={workspaceId} onWorkspaceActivate={changeWorkspace} onPresentationInteractionChange={handlePresentationInteractionChange} onPresentationCommit={handlePresentationCommit} onSelect={selectNode} onClearSelection={clearSelection} onMarqueeSelect={selectMarquee} onSelectEdge={selectEdge} onDoubleClick={handleDoubleClick} onDetails={showNodeDetails} onRequestAi={requestComposerFocus} onCreateNodeFromAnchor={createNodeFromAnchor} onFilesDropped={dropFiles} onArrangeSelection={arrangeSelection} onCopySelection={copySelectedViews} onDuplicateSelection={duplicateSelectedViews} onCreateScopeFromSelection={() => selectedIds.length ? setScopeCreateOpen(true) : setNotice('先选择要整理进子画布的对象')} onDeleteSelection={deleteSelectedViews} onPointerWorldChange={rememberCanvasPoint} />
       <div className="canvas-hud" data-testid="canvas-hud"><CanvasMiniMap nodes={scopeNodes} workspaceFrames={activeWorkspaceFrames} camera={camera} setCamera={setCamera} collapsed={miniMapCollapsed} onCollapsedChange={setMiniMapCollapsed} safeInsets={safeInsets} /></div>
-      <WorkRail workspace={effectiveWorkspace} scope={activeScope} nodes={nodes} selectedNodes={selectedNodes} focusNode={focusNode} relationNodes={relationNodes} inference={inference} activeRun={activeRun} pendingNode={pendingNode} collapsed={workRail.collapsed} width={effectiveRailWidth} composerText={composerText} composerRef={composerRef} composerFocusRequest={composerFocusRequest} onRequestComposerFocus={requestComposerFocus} onCollapse={() => setWorkRail((current) => ({ ...current, collapsed: true }))} onExpand={() => setWorkRail((current) => ({ ...current, collapsed: false }))} onComposerChange={setComposerText} onSend={requestRun} onSelectTarget={selectPrimaryTarget} onToggleContext={toggleContext} onMoveRole={moveRole} onFocusPreview={setFocusPreviewId} onEnterScope={enterScope} onContinue={continueRun} onAccept={acceptRun} onRetry={retryRun} onContinueModify={continueModify} onOpenNative={openNative} onTogglePositionLock={togglePositionLock} onGeneratePreview={generatePreview} onShowRun={clearSelection} />
+      <WorkRail workspace={effectiveWorkspace} nodes={nodes} inference={inference} activeRun={activeRun} pendingNode={pendingNode} collapsed={workRail.collapsed} width={effectiveRailWidth} composerText={composerText} composerRef={composerRef} composerFocusRequest={composerFocusRequest} onRequestComposerFocus={requestComposerFocus} onCollapse={() => setWorkRail((current) => ({ ...current, collapsed: true }))} onExpand={() => setWorkRail((current) => ({ ...current, collapsed: false }))} onComposerChange={setComposerText} onSend={requestRun} onContinue={continueRun} onAccept={acceptRun} onReject={rejectRun} onRetry={retryRun} onSyncRun={syncRuntimeRun} onContinueModify={continueModify} onShowRun={clearSelection} />
+      {agentMode && <AgentContextSurface
+        projectLabel={activeProject.label}
+        workspaceLabel={effectiveWorkspace.label}
+        projection={activeContextProjection}
+        selectedNodes={selectedNodes}
+        error={activeContextError}
+      />}
+      {nodeInfoNode && <NodeInfoPopover node={nodeInfoNode} camera={camera} relationCount={nodeInfoRelationCount} onClose={() => setNodeInfoId(null)} onRelations={() => { selectNode(nodeInfoNode.id); setNodeInfoId(null); setNotice(`${nodeInfoRelationCount} 个关联已在画布中高亮`) }} />}
       {activeRun && <button className={`run-pill ${activeRun.status}`} onClick={() => { clearSelection(); setWorkRail((current) => ({ ...current, collapsed: false })) }}><Play size={13} /> {activeRun.id} · {runStatusLabel[activeRun.status]}</button>}
       {checkpoint && <div className="checkpoint"><Check size={15} /> 已形成稳定修改集 <button onClick={() => { setCheckpoint(false); setNotice('检查点已创建') }}>创建检查点</button><button className="quiet" onClick={() => setCheckpoint(false)}>稍后</button></div>}
       <nav className="scene-title v06-breadcrumbs" aria-label="画布层级">{scopePath.map((scope, index) => {
@@ -951,15 +1475,49 @@ export function App() {
       {!selectedIds.length && !activeRun && <div className="shortcut-hint"><Command size={12} /> 单击内容 · C 输入指令 · Ctrl/Cmd+Enter 执行</div>}
       {layoutPreview && <div className="layout-preview-banner"><span>预览自动布局 · 只移动当前子画布中的视图</span><button onClick={applyLayout}>应用</button><button onClick={() => setLayoutPreview(null)}>取消</button></div>}
       {notice && <div data-testid="toast" className="notice" role="status" aria-live="polite">{notice}</div>}
-      <ScopeCreateDialog open={scopeCreateOpen} selectedCount={selectedIds.length} leftInset={safeInsets.left} rightInset={effectiveRailWidth} onCancel={() => setScopeCreateOpen(false)} onCreate={createScopeFromSelection} />
-      <RunConfirmDialog open={runConfirmOpen} command={composerText} nodes={nodes} inference={inference} leftInset={safeInsets.left} rightInset={effectiveRailWidth} onCommandChange={setComposerText} onSelectTarget={selectPrimaryTarget} onCancel={() => setRunConfirmOpen(false)} onConfirm={confirmRun} />
-      <CreateContentDialog open={createDialogOpen} leftInset={safeInsets.left} rightInset={effectiveRailWidth} onCancel={() => setCreateDialogOpen(false)} onCreate={createContentFromDialog} />
+      <ScopeCreateDialog open={scopeCreateOpen} selectedCount={selectedIds.length} leftInset={safeInsets.left} rightInset={24} onCancel={() => setScopeCreateOpen(false)} onCreate={createScopeFromSelection} />
+      <RunConfirmDialog open={runConfirmOpen} command={composerText} nodes={nodes} inference={inference} leftInset={safeInsets.left} rightInset={24} onCommandChange={setComposerText} onSelectTarget={selectPrimaryTarget} onCancel={() => setRunConfirmOpen(false)} onConfirm={confirmRun} />
+      <CreateContentDialog open={createDialogOpen} leftInset={safeInsets.left} rightInset={24} onCancel={() => setCreateDialogOpen(false)} onCreate={createContentFromDialog} />
       {workspaceEditor && <WorkspaceDialog mode={workspaceEditor.mode} workspace={editorWorkspace} currentCamera={camera} onCancel={() => setWorkspaceEditor(null)} onSave={saveWorkspaceEditor} />}
       {nodeToRename && <InlineNodeRename node={nodeToRename} camera={camera} onCancel={() => setRenameNodeId(null)} onSave={(value) => renameNodeTitle(nodeToRename.id, value)} />}
       {confirmWorkspaceId && <ConfirmDialog title="删除这个工作空间？" description="只删除工作空间定义，不删除内容、节点、本地文件或 Camera。" onCancel={() => setConfirmWorkspaceId(null)} onConfirm={confirmDeleteWorkspace} />}
+      <HandoffDialog open={handoffOpen} loading={handoffLoading} manifest={handoffManifest} error={handoffError} onClose={() => setHandoffOpen(false)} onCopy={() => { void copyHandoff() }} onDownload={downloadHandoff} />
+      <LinkReferenceDialog open={linkDialogOpen} onClose={() => setLinkDialogOpen(false)} onCreate={createLinkReference} />
       <button className="prototype-reset" onClick={() => { clearPrototypeState(activeProjectId); clearProjectNavigationState(activeProjectId); window.location.reload() }}>重置演示数据</button>
     </section>
   </main>
+}
+
+function AgentContextSurface({
+  projectLabel,
+  workspaceLabel,
+  projection,
+  selectedNodes,
+  error,
+}: {
+  readonly projectLabel: string
+  readonly workspaceLabel: string
+  readonly projection: ActiveContextProjection | null
+  readonly selectedNodes: readonly CanvasNode[]
+  readonly error: string | null
+}) {
+  return <aside className="agent-context-surface" data-testid="agent-context-surface" aria-label="Agent visual context">
+    <header>
+      <span className={`agent-context-live ${error ? 'error' : ''}`} />
+      <div><strong>Agent Context</strong><small>{error ? 'Local Core unavailable' : 'Live from Canvas'}</small></div>
+      <code>v{projection?.version ?? 0}</code>
+    </header>
+    <dl>
+      <div><dt>Project</dt><dd>{projectLabel}</dd></div>
+      <div><dt>Workspace</dt><dd>{workspaceLabel}</dd></div>
+      <div><dt>Selection</dt><dd>{selectedNodes.length || 'None'}</dd></div>
+      <div><dt>Context</dt><dd>{projection?.contextArtifacts.length ?? 0}</dd></div>
+    </dl>
+    {selectedNodes.length > 0
+      ? <ul>{selectedNodes.slice(0, 5).map((node) => <li key={node.id}><span className={`agent-kind kind-${node.kind}`} />{node.title}</li>)}</ul>
+      : <p>在画布中选择内容，Agent 将通过 LCOS MCP 读取同一份 Active Context。</p>}
+    {error && <p className="agent-context-error">{error}</p>}
+  </aside>
 }
 
 function buildScopePath(scopes: CanvasScope[], scope: CanvasScope): CanvasScope[] {

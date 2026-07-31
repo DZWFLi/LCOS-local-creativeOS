@@ -14,7 +14,7 @@ describe('v0.6 centered run confirmation and Canvas lock', () => {
     expect(app).toContain('setRunConfirmOpen(true)')
     expect(app).toContain('<RunConfirmDialog')
     expect(app).toContain('onConfirm={confirmRun}')
-    expect(dialog).toContain('把这次修改交给 Codex')
+    expect(dialog).toContain('把这次修改交给 WorkBuddy')
     expect(dialog).toContain('你想怎么修改')
     expect(dialog).toContain('修改目标')
     expect(dialog).toContain('参考内容')
@@ -55,7 +55,7 @@ describe('v0.6 centered run confirmation and Canvas lock', () => {
   })
 
   it('keeps advanced execution details collapsed by default', () => {
-    expect(dialog).toContain('执行方式：Codex · 保存为新版本')
+    expect(dialog).toContain('执行方式：WorkBuddy · 保存为新版本')
     expect(dialog).toContain('advancedOpen &&')
     expect(dialog).not.toContain('Context Pack')
     expect(dialog).not.toContain('Execution Router')

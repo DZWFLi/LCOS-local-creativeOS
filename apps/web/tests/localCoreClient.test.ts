@@ -191,61 +191,69 @@ describe('Local Core browser client', () => {
     expect(result.result).toMatchObject({ ok: true, value: { reused: false, record: { status: 'ready' } } })
   })
 
-  it('registers Runtime Sources through opaque selection ids only', async () => {
+  it('imports dropped files through multipart Import Copy without browser paths', async () => {
     const fetchMock = vi.fn(async () => jsonResponse({
       ok: true,
       value: {
-        fileRecord: {
-          id: 'file-1',
-          projectId: 'project-1',
-          observedPath: 'E:\\Projects\\Sample\\brief.md',
-          observedHash: 'hash-1',
-          size: 128,
-          modifiedAt: '2026-07-28T00:00:00.000Z',
-          mimeType: 'text/markdown',
-          availability: 'current',
-          observedAt: '2026-07-28T00:00:00.000Z',
-        },
-        artifact: {
-          id: 'artifact-1',
-          projectId: 'project-1',
-          title: 'Brief',
-          kind: 'markdown',
-          availability: 'available',
-          currentRevisionId: 'revision-1',
-          createdAt: '2026-07-28T00:00:00.000Z',
-          updatedAt: '2026-07-28T00:00:00.000Z',
-        },
-        revision: {
-          id: 'revision-1',
-          artifactId: 'artifact-1',
-          fileRecordId: 'file-1',
-          contentHash: 'hash-1',
-          source: 'import',
-          status: 'current',
-          createdAt: '2026-07-28T00:00:00.000Z',
-        },
+        reused: false,
+        fileRecord: { id: 'file-1', observedPath: 'E:\\Project\\imports\\brief.md' },
+        artifact: { id: 'artifact-1', title: 'brief.md' },
+        revision: { id: 'revision-1' },
+        view: { id: 'view-1' },
       },
     }))
     vi.stubGlobal('fetch', fetchMock)
 
-    const result = await createLocalCoreClient().registerTrustedSource('project-1', {
-      selectionId: 'opaque-selection' as never,
-      title: 'Brief',
+    const result = await createLocalCoreClient().importCopy('project-1', {
+      file: new File(['# Brief'], 'brief.md', { type: 'text/markdown' }),
+      importRequestId: 'drop-1',
+      scopeId: 'scope-root',
+      x: 10,
+      y: 20,
     })
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      '/api/local-core/v1/projects/project-1/sources',
-      expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify({ selectionId: 'opaque-selection', title: 'Brief' }),
-      }),
-    )
     const calls = fetchMock.mock.calls as unknown as [string, RequestInit][]
-    expect(JSON.parse(String(calls[0][1].body))).not.toHaveProperty('path')
-    expect(result.result).toMatchObject({
+    const [, init] = calls[0]
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/local-core/v1/projects/project-1/imports',
+      expect.objectContaining({ method: 'POST', body: expect.any(FormData) }),
+    )
+    const body = init.body as FormData
+    expect(body.get('importRequestId')).toBe('drop-1')
+    expect(body.get('scopeId')).toBe('scope-root')
+    expect(body.get('position.x')).toBe('10')
+    expect(body.get('absolutePath')).toBeNull()
+    expect(result.result).toMatchObject({ ok: true, value: { view: { id: 'view-1' } } })
+  })
+
+  it('uses canonical Runtime Review routes without translating provider status into UI state', async () => {
+    const fetchMock = vi.fn(async (path: string, _init?: RequestInit) => jsonResponse({
       ok: true,
-      value: { fileRecord: { id: 'file-1' }, artifact: { id: 'artifact-1' }, revision: { id: 'revision-1' } },
-    })
+      value: path.endsWith('/review')
+        ? { presentationPhase: 'review', returns: [], draftRevisions: [] }
+        : { artifactReturn: { id: 'return-1' }, run: { id: 'run-1' } },
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+    const client = createLocalCoreClient()
+
+    await client.getRunReview('run/1')
+    await client.acceptArtifactReturn('return/1', { expectedBaseRevisionId: 'revision-1' as never })
+    await client.rejectArtifactReturn('return/1')
+    await client.retryArtifactReturn('return/1', { instruction: 'Keep the title.' })
+
+    expect(fetchMock.mock.calls.map(([path]) => path)).toEqual([
+      '/api/local-core/v1/runs/run%2F1/review',
+      '/api/local-core/v1/artifact-returns/return%2F1/accept',
+      '/api/local-core/v1/artifact-returns/return%2F1/reject',
+      '/api/local-core/v1/artifact-returns/return%2F1/retry',
+    ])
+    expect(fetchMock.mock.calls[1]?.[1]).toEqual(expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({ expectedBaseRevisionId: 'revision-1' }),
+    }))
+    expect(fetchMock.mock.calls[3]?.[1]).toEqual(expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({ instruction: 'Keep the title.' }),
+    }))
   })
 })

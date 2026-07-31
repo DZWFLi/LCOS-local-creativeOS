@@ -1,18 +1,28 @@
 import type { Camera, CanvasNode, NodeDisplayMode } from '../../model'
 
 export interface Bounds { x: number; y: number; width: number; height: number }
-export interface WheelGesture { deltaX: number; deltaY: number; zoom: boolean; anchorX: number; anchorY: number }
+export interface WheelGesture { deltaX: number; deltaY: number; zoom: boolean; anchorX: number; anchorY: number; precision?: boolean }
 export interface SafeInsets { left: number; right: number; top: number; bottom: number }
 
 const TOUCHPAD_PAN_SENSITIVITY = 0.5
+const WHEEL_ZOOM_SENSITIVITY = 0.0035
+const PRECISION_ZOOM_MULTIPLIER = 0.35
+export const MIN_CANVAS_ZOOM = 0.25
+export const MAX_CANVAS_ZOOM = 2
+export const CANVAS_ZOOM_STEP = 0.05
 const NO_INSETS: SafeInsets = { left: 0, right: 0, top: 0, bottom: 0 }
+
+export function zoomCameraAt(camera: Camera, zoom: number, anchorX: number, anchorY: number): Camera {
+  const nextZoom = Math.max(MIN_CANVAS_ZOOM, Math.min(MAX_CANVAS_ZOOM, zoom))
+  const worldX = (anchorX - camera.x) / camera.zoom
+  const worldY = (anchorY - camera.y) / camera.zoom
+  return { x: anchorX - worldX * nextZoom, y: anchorY - worldY * nextZoom, zoom: nextZoom }
+}
 
 export function applyWheelGesture(camera: Camera, gesture: WheelGesture): Camera {
   if (!gesture.zoom) return { ...camera, x: camera.x - gesture.deltaX * TOUCHPAD_PAN_SENSITIVITY, y: camera.y - gesture.deltaY * TOUCHPAD_PAN_SENSITIVITY }
-  const zoom = Math.max(.01, Math.min(1.55, camera.zoom * Math.exp(-gesture.deltaY * .01)))
-  const worldX = (gesture.anchorX - camera.x) / camera.zoom
-  const worldY = (gesture.anchorY - camera.y) / camera.zoom
-  return { x: gesture.anchorX - worldX * zoom, y: gesture.anchorY - worldY * zoom, zoom }
+  const sensitivity = WHEEL_ZOOM_SENSITIVITY * (gesture.precision ? PRECISION_ZOOM_MULTIPLIER : 1)
+  return zoomCameraAt(camera, camera.zoom * Math.exp(-gesture.deltaY * sensitivity), gesture.anchorX, gesture.anchorY)
 }
 
 export function getSelectionBounds(nodes: CanvasNode[], selectedIds: string[]): Bounds | null {
@@ -28,7 +38,7 @@ export function getSelectionBounds(nodes: CanvasNode[], selectedIds: string[]): 
 export function fitBounds(bounds: Bounds, viewportWidth: number, viewportHeight: number, padding = 74, insets: SafeInsets = NO_INSETS): Camera {
   const availableWidth = Math.max(1, viewportWidth - insets.left - insets.right)
   const availableHeight = Math.max(1, viewportHeight - insets.top - insets.bottom)
-  const zoom = Math.max(.01, Math.min(1.55, Math.min((availableWidth - padding * 2) / Math.max(1, bounds.width), (availableHeight - padding * 2) / Math.max(1, bounds.height))))
+  const zoom = Math.max(MIN_CANVAS_ZOOM, Math.min(MAX_CANVAS_ZOOM, Math.min((availableWidth - padding * 2) / Math.max(1, bounds.width), (availableHeight - padding * 2) / Math.max(1, bounds.height))))
   return {
     x: insets.left + availableWidth / 2 - (bounds.x + bounds.width / 2) * zoom,
     y: insets.top + availableHeight / 2 - (bounds.y + bounds.height / 2) * zoom,

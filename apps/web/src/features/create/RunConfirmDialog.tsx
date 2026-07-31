@@ -126,7 +126,7 @@ export function RunConfirmDialog({
           <div className="run-confirm-heading-icon"><Sparkles size={18} /></div>
           <div>
             <span>发送前确认</span>
-            <h2 id={titleId}>把这次修改交给 Codex</h2>
+            <h2 id={titleId}>把这次修改交给 WorkBuddy</h2>
           </div>
           <button type="button" aria-label="关闭" onClick={onCancel}><X size={17} /></button>
         </header>
@@ -165,10 +165,10 @@ export function RunConfirmDialog({
           </section>
 
           <button className="run-confirm-advanced-toggle" type="button" aria-expanded={advancedOpen} onClick={() => setAdvancedOpen((current) => !current)}>
-            <span>执行方式：Codex · 保存为新版本</span><ChevronDown size={15} />
+            <span>执行方式：WorkBuddy · 保存为新版本</span><ChevronDown size={15} />
           </button>
           {advancedOpen && <section className="run-confirm-advanced">
-            <div><span>执行器</span><b>Codex</b></div>
+            <div><span>执行器</span><b>WorkBuddy</b></div>
             <div><span>结果处理</span><b>保存为新版本</b></div>
             <p>Alpha 接入后，这里只在需要切换执行器或输出方式时展开。</p>
           </section>}

@@ -1,17 +1,18 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
-import { Copy, CopyPlus, FolderTree, Grip, LayoutGrid, Link2, Trash2 } from 'lucide-react'
+import { Copy, CopyPlus, FolderTree, Grip, LayoutGrid, Trash2 } from 'lucide-react'
 import type { Camera, CanvasEdge, CanvasNode, NodeDisplayMode, RunStatus, WorkspaceFrameVM } from '../../model'
 import { applyWheelGesture, getSelectionBounds, nodeDensity } from './canvasGeometry'
 import { getPendingZoneBounds } from './canvasLayout'
 import type { LayoutPreviewItem } from './scopeLayout'
 import { CanvasNodeVisual } from './CanvasNodeVisual'
+import { NodeContextToolbar } from './NodeContextToolbar'
 
 interface Props {
   nodes: CanvasNode[]; setNodes: (nodes: CanvasNode[] | ((current: CanvasNode[]) => CanvasNode[])) => void
   edges: CanvasEdge[]; setEdges: (edges: CanvasEdge[] | ((current: CanvasEdge[]) => CanvasEdge[])) => void
   camera: Camera; setCamera: (camera: Camera | ((current: Camera) => Camera)) => void
   selectedId: string | null; selectedIds: string[]; selectedEdgeId: string | null; setSelectedEdgeId: (id: string | null) => void; pendingId: string | null; runId: string; runStatus: RunStatus | null; spaceHeld: boolean; locked?: boolean
-  onSelect: (id: string, additive?: boolean) => void; onClearSelection: () => void; onMarqueeSelect: (ids: string[], additive: boolean) => void; onSelectEdge: (id: string | null) => void; onDoubleClick: (id: string) => void; onDetails: (id: string) => void
+  onSelect: (id: string, additive?: boolean) => void; onClearSelection: () => void; onMarqueeSelect: (ids: string[], additive: boolean) => void; onSelectEdge: (id: string | null) => void; onDoubleClick: (id: string) => void; onDetails: (id: string) => void; onRequestAi: () => void
   layoutPreview?: LayoutPreviewItem[] | null
   workspaceFrames?: WorkspaceFrameVM[]
   workspaceMemberNodes?: CanvasNode[]
@@ -27,7 +28,7 @@ type DragCandidate = { id: string; startX: number; startY: number; offsetX: numb
 type ResizeCandidate = { id: string; startX: number; startY: number; width: number; height: number; moved: boolean }
 type WorkspaceDragCandidate = { workspaceId: string; startX: number; startY: number; members: Array<{ id: string; x: number; y: number }>; moved: boolean }
 
-export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edges, setEdges, camera, setCamera, selectedId, selectedIds, selectedEdgeId, setSelectedEdgeId, pendingId, runId, runStatus, spaceHeld, locked = false, layoutPreview, workspaceFrames = [], workspaceMemberNodes = nodes, activeWorkspaceId = null, onWorkspaceActivate, onPresentationInteractionChange, onPresentationCommit, onSelect, onClearSelection, onMarqueeSelect, onSelectEdge, onDoubleClick, onDetails, onCreateNodeFromAnchor, onFilesDropped, onArrangeSelection, onCopySelection, onDuplicateSelection, onCreateScopeFromSelection, onDeleteSelection, onPointerWorldChange }: Props) {
+export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edges, setEdges, camera, setCamera, selectedId, selectedIds, selectedEdgeId, setSelectedEdgeId, pendingId, runId, runStatus, spaceHeld, locked = false, layoutPreview, workspaceFrames = [], workspaceMemberNodes = nodes, activeWorkspaceId = null, onWorkspaceActivate, onPresentationInteractionChange, onPresentationCommit, onSelect, onClearSelection, onMarqueeSelect, onSelectEdge, onDoubleClick, onDetails, onRequestAi, onCreateNodeFromAnchor, onFilesDropped, onArrangeSelection, onCopySelection, onDuplicateSelection, onCreateScopeFromSelection, onDeleteSelection, onPointerWorldChange }: Props) {
   const canvasRef = useRef<HTMLDivElement | null>(null)
   const pan = useRef<{ x: number; y: number; camera: Camera } | null>(null)
   const dragCandidate = useRef<DragCandidate | null>(null)
@@ -40,7 +41,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
   const autoPanPointer = useRef<{ x: number; y: number } | null>(null)
   const wheelFrame = useRef<number | null>(null)
   const wheelPan = useRef({ x: 0, y: 0 })
-  const wheelZoom = useRef<{ deltaY: number; anchorX: number; anchorY: number } | null>(null)
+  const wheelZoom = useRef<{ deltaY: number; anchorX: number; anchorY: number; precision: boolean } | null>(null)
   const suppressClick = useRef<string | null>(null)
   const lastNodePress = useRef<{ id: string; time: number; x: number; y: number } | null>(null)
   const link = useRef<{ from: string } | null>(null)
@@ -206,7 +207,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
       wheelZoom.current = null
       setCamera((current) => {
         let next = applyWheelGesture(current, { deltaX: panDelta.x, deltaY: panDelta.y, zoom: false, anchorX: 0, anchorY: 0 })
-        if (zoomGesture) next = applyWheelGesture(next, { deltaX: 0, deltaY: zoomGesture.deltaY, zoom: true, anchorX: zoomGesture.anchorX, anchorY: zoomGesture.anchorY })
+        if (zoomGesture) next = applyWheelGesture(next, { deltaX: 0, deltaY: zoomGesture.deltaY, zoom: true, anchorX: zoomGesture.anchorX, anchorY: zoomGesture.anchorY, precision: zoomGesture.precision })
         return next
       })
     })
@@ -392,7 +393,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
     const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? rect.height : 1
     if (event.ctrlKey || event.metaKey) {
       const current = wheelZoom.current
-      wheelZoom.current = { deltaY: (current?.deltaY ?? 0) + event.deltaY * unit, anchorX: event.clientX - rect.left, anchorY: event.clientY - rect.top }
+      wheelZoom.current = { deltaY: (current?.deltaY ?? 0) + event.deltaY * unit, anchorX: event.clientX - rect.left, anchorY: event.clientY - rect.top, precision: event.shiftKey }
     } else {
       wheelPan.current = { x: wheelPan.current.x + event.deltaX * unit, y: wheelPan.current.y + event.deltaY * unit }
     }
@@ -438,7 +439,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
           <button type="button" className="danger" aria-label="删除所选" title="删除所选" onClick={(event) => { event.stopPropagation(); onDeleteSelection() }}><Trash2 size={13} /></button>
         </div>
       </div>}
-      {renderNodes.map((node) => <CanvasCard key={node.id} node={node} density={nodeDensity(node, lod)} runId={runId} runStatus={runStatus} selected={selectedIds.includes(node.id)} multiSelected={selectedIds.length > 1 && selectedIds.includes(node.id)} linkMode={linkModeId === node.id} pending={pendingId === node.id} dragging={draggingId === node.id} resizing={resizingId === node.id} workspaceMember={Boolean(activeWorkspaceId && workspaceFrames.find((frame) => frame.workspaceId === activeWorkspaceId)?.memberViewIds.includes(node.id))} onToggleLinkMode={() => setLinkModeId((current) => current === node.id ? null : node.id)} onDetails={onDetails} onPointerDown={(event) => {
+      {renderNodes.map((node) => <CanvasCard key={node.id} node={node} density={nodeDensity(node, lod)} zoom={camera.zoom} showDetails={camera.zoom > .2 && lod !== 'overview'} runId={runId} runStatus={runStatus} selected={selectedIds.includes(node.id)} multiSelected={selectedIds.length > 1 && selectedIds.includes(node.id)} linkMode={linkModeId === node.id} pending={pendingId === node.id} dragging={draggingId === node.id} resizing={resizingId === node.id} workspaceMember={Boolean(activeWorkspaceId && workspaceFrames.find((frame) => frame.workspaceId === activeWorkspaceId)?.memberViewIds.includes(node.id))} onRequestAi={onRequestAi} onDuplicateSelection={onDuplicateSelection} onToggleLinkMode={() => setLinkModeId((current) => current === node.id ? null : node.id)} onDetails={onDetails} onPointerDown={(event) => {
         if (event.button !== 0) return
         event.stopPropagation()
         const now = performance.now()
@@ -504,15 +505,15 @@ function TemporaryEdge({ from, to }: { from: CanvasNode; to: { x: number; y: num
   return <path className="edge temporary" d={`M ${x1} ${y1} C ${x1 + 80} ${y1}, ${to.x - 80} ${to.y}, ${to.x} ${to.y}`} />
 }
 
-function CanvasCard({ node, density, runId, runStatus, selected, multiSelected, linkMode, pending, dragging, resizing, workspaceMember, onToggleLinkMode, onDetails, onPointerDown, onClick, onResizeStart, onLinkStart }: {
-  node: CanvasNode; density: NodeDisplayMode; runId: string; runStatus: RunStatus | null; selected: boolean; multiSelected: boolean; linkMode: boolean; pending: boolean; dragging: boolean; resizing: boolean; workspaceMember: boolean
-  onToggleLinkMode: () => void; onDetails: (id: string) => void; onPointerDown: (event: React.PointerEvent<HTMLDivElement>) => void; onClick: (additive?: boolean) => void; onResizeStart: (event: React.PointerEvent<HTMLButtonElement>) => void; onLinkStart: (event: React.PointerEvent<HTMLButtonElement>) => void
+function CanvasCard({ node, density, zoom, showDetails, runId, runStatus, selected, multiSelected, linkMode, pending, dragging, resizing, workspaceMember, onRequestAi, onDuplicateSelection, onToggleLinkMode, onDetails, onPointerDown, onClick, onResizeStart, onLinkStart }: {
+  node: CanvasNode; density: NodeDisplayMode; zoom: number; showDetails: boolean; runId: string; runStatus: RunStatus | null; selected: boolean; multiSelected: boolean; linkMode: boolean; pending: boolean; dragging: boolean; resizing: boolean; workspaceMember: boolean
+  onRequestAi: () => void; onDuplicateSelection: () => void; onToggleLinkMode: () => void; onDetails: (id: string) => void; onPointerDown: (event: React.PointerEvent<HTMLDivElement>) => void; onClick: (additive?: boolean) => void; onResizeStart: (event: React.PointerEvent<HTMLButtonElement>) => void; onLinkStart: (event: React.PointerEvent<HTMLButtonElement>) => void
 }) {
-  return <div data-node-id={node.id} data-artifact-id={node.artifactId} data-revision-id={node.revisionId} data-file-record-id={node.fileRecordId} data-current-revision={node.followsCurrentRevision || undefined} data-preview-status={node.previewStatus} data-view-of={node.viewOf} data-scope-id={node.scopeId} data-position-locked={node.positionLocked || undefined} data-testid={`canvas-node-${node.id}`} role="button" tabIndex={0} aria-disabled={node.disabled || undefined} className={`canvas-node node-family-${node.kind} density-${density} ${node.kind} ${selected ? 'selected' : ''} ${multiSelected ? 'multi-selected' : ''} ${linkMode ? 'link-mode' : ''} ${pending ? 'pending' : ''} ${dragging ? 'dragging' : ''} ${resizing ? 'resizing' : ''} ${workspaceMember ? 'workspace-active-member' : ''} ${node.error ? 'error' : ''} ${node.disabled ? 'disabled' : ''} ${node.positionLocked ? 'position-locked' : ''}`} style={{ left: node.x, top: node.y, width: node.width, height: node.height } as React.CSSProperties} onPointerDown={(event) => { if (!node.disabled) onPointerDown(event) }} onClick={(event) => { event.stopPropagation(); if (!node.disabled) onClick(event.shiftKey) }}>
-    <button className={`relation-trigger ${selected && !multiSelected ? 'visible' : ''} ${linkMode ? 'active' : ''}`} aria-label="建立关系" title="建立关系" aria-hidden={!selected || multiSelected} tabIndex={selected && !multiSelected ? 0 : -1} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); if (selected && !multiSelected) onToggleLinkMode() }}><Link2 size={12} />关联</button>
+  return <div data-node-id={node.id} data-node-kind={node.kind} data-node-current={node.current || undefined} data-node-draft={node.draft || undefined} data-node-runtime={node.runtimeState} data-run-status={node.runStatus} data-artifact-id={node.artifactId} data-revision-id={node.revisionId} data-file-record-id={node.fileRecordId} data-current-revision={node.followsCurrentRevision || undefined} data-preview-status={node.previewStatus} data-view-of={node.viewOf} data-scope-id={node.scopeId} data-position-locked={node.positionLocked || undefined} data-testid={`canvas-node-${node.id}`} role="button" tabIndex={0} aria-disabled={node.disabled || undefined} className={`canvas-node node-family-${node.kind} density-${density} ${node.kind} ${selected ? 'selected' : ''} ${multiSelected ? 'multi-selected' : ''} ${linkMode ? 'link-mode' : ''} ${pending ? 'pending' : ''} ${dragging ? 'dragging' : ''} ${resizing ? 'resizing' : ''} ${workspaceMember ? 'workspace-active-member' : ''} ${node.error ? 'error' : ''} ${node.disabled ? 'disabled' : ''} ${node.positionLocked ? 'position-locked' : ''}`} style={{ left: node.x, top: node.y, width: node.width, height: node.height, '--node-ui-scale': String(1 / Math.max(.2, zoom)) } as React.CSSProperties} onPointerDown={(event) => { if (!node.disabled) onPointerDown(event) }} onClick={(event) => { event.stopPropagation(); if (!node.disabled) onClick(event.shiftKey) }}>
+    {selected && !multiSelected && <NodeContextToolbar zoom={zoom} onAi={onRequestAi} onRelation={onToggleLinkMode} onDuplicate={onDuplicateSelection} />}
     <button data-testid={`anchor-in-${node.id}`} className="anchor anchor-in" aria-label={`连接到 ${node.title}`} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()} />
     <button data-testid={`anchor-out-${node.id}`} className="anchor anchor-out" aria-label={`从 ${node.title} 建立连接`} onPointerDown={onLinkStart} onClick={(event) => event.stopPropagation()} />
     {selected && !multiSelected && <button data-testid={`resize-${node.id}`} className="resize-handle" aria-label={`调整 ${node.title} 大小`} title="拖动调整卡片大小" onPointerDown={onResizeStart} onClick={(event) => event.stopPropagation()} />}
-    <CanvasNodeVisual node={node} density={density} runId={runId} runStatus={runStatus} pending={pending} onDetails={() => onDetails(node.id)} />
+    <CanvasNodeVisual node={node} density={density} runId={runId} runStatus={runStatus} pending={pending} showDetails={showDetails} onDetails={() => onDetails(node.id)} />
   </div>
 }

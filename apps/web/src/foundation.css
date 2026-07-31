@@ -1549,6 +1549,7 @@ body { color: var(--ink); }
   border-color: rgba(45,61,80,.055);
 }
 .map-controls button { width: 32px; height: 32px; border-radius: 11px; background: #fff; }
+.map-controls .map-zoom-value { width: 100%; min-width: 42px; padding: 0 6px; font-size: 9px; font-variant-numeric: tabular-nums; }
 .map-controls button:last-of-type {
   background: var(--chrome);
   border-color: rgba(48,59,70,.17);

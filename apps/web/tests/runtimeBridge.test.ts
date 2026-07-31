@@ -118,10 +118,24 @@ function mockClient(overrides: Partial<LocalCoreClient> = {}): LocalCoreClient {
     validateProjectRoot: unavailable,
     metadataStatus: unavailable,
     projectGraph: vi.fn(async () => call(snapshot())),
+    updateActiveContext: unavailable,
     previewRecords: vi.fn(async () => call([])),
     previewContent: unavailable,
     generatePreview: unavailable,
-    registerTrustedSource: unavailable,
+    importCopy: unavailable,
+    buildContextManifest: unavailable,
+    createRuntimeRun: unavailable,
+    projectRunReviews: unavailable,
+    dispatchRuntimeRun: unavailable,
+    recoverRuntimeRun: unavailable,
+    syncRuntimeRun: unavailable,
+    finalizeRuntimeRun: unavailable,
+    getRunReview: unavailable,
+    acceptArtifactReturn: unavailable,
+    rejectArtifactReturn: unavailable,
+    retryArtifactReturn: unavailable,
+    refreshFileRecord: unavailable,
+    adoptExternalChange: unavailable,
     applyMutations: unavailable,
     saveProjectGraph: unavailable,
     ...overrides,
@@ -168,6 +182,63 @@ describe('RuntimeBridge mutation serialization', () => {
       observedPath: 'E:/sample/brief.md',
       followsCurrentRevision: true,
       previewStatus: 'not-generated',
+    })
+  })
+
+  it('projects legacy orphan scope IDs onto the canonical Runtime root', () => {
+    const graph = snapshot()
+    const rootId = 'scope-mvp-root' as ProjectGraphSnapshot['scopes'][number]['id']
+    const state = mapGraphToState({
+      ...graph,
+      scopes: [{ ...graph.scopes[0]!, id: rootId }],
+      artifactViews: [{ ...graph.artifactViews[0]!, scopeId: 'scope-root' as ProjectGraphSnapshot['artifactViews'][number]['scopeId'] }],
+      workspaces: [{ ...graph.workspaces[0]!, scopeId: 'scope-root' as ProjectGraphSnapshot['workspaces'][number]['scopeId'] }],
+    }, 'disposable-portasplit')
+
+    expect(state.activeScopeId).toBe(rootId)
+    expect(state.nodes[0]?.scopeId).toBe(rootId)
+    expect(state.workspaces[0]?.scopeId).toBe(rootId)
+  })
+
+  it('makes primary Views follow Current while explicit additional Views stay pinned', () => {
+    const graph = snapshot()
+    const artifact = graph.artifacts[0]!
+    const oldRevision = {
+      id: 'revision-old' as ProjectGraphSnapshot['artifactRevisions'][number]['id'],
+      artifactId: artifact.id,
+      fileRecordId: 'file-old' as ProjectGraphSnapshot['fileRecords'][number]['id'],
+      contentHash: 'oldhash' as ProjectGraphSnapshot['artifactRevisions'][number]['contentHash'],
+      source: 'import' as const,
+      status: 'superseded' as const,
+      createdAt: NOW,
+    }
+    const currentRevision = {
+      ...oldRevision,
+      id: 'revision-current' as ProjectGraphSnapshot['artifactRevisions'][number]['id'],
+      fileRecordId: 'file-current' as ProjectGraphSnapshot['fileRecords'][number]['id'],
+      contentHash: 'currenthash' as ProjectGraphSnapshot['artifactRevisions'][number]['contentHash'],
+      status: 'current' as const,
+    }
+    const primary = { ...graph.artifactViews[0]!, revisionId: oldRevision.id, referenceKind: 'primary' as const }
+    const pinned = {
+      ...primary,
+      id: 'view-pinned' as ProjectGraphSnapshot['artifactViews'][number]['id'],
+      referenceKind: 'explicit_additional' as const,
+    }
+    const state = mapGraphToState({
+      ...graph,
+      artifacts: [{ ...artifact, currentRevisionId: currentRevision.id }],
+      artifactViews: [primary, pinned],
+      artifactRevisions: [oldRevision, currentRevision],
+    }, 'disposable-portasplit')
+
+    expect(state.nodes.find((node) => node.id === String(primary.id))).toMatchObject({
+      revisionId: currentRevision.id,
+      followsCurrentRevision: true,
+    })
+    expect(state.nodes.find((node) => node.id === String(pinned.id))).toMatchObject({
+      revisionId: oldRevision.id,
+      followsCurrentRevision: false,
     })
   })
 

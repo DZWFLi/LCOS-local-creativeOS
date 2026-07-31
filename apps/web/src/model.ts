@@ -6,6 +6,7 @@ export type RunStatus = 'queued' | 'running' | 'waiting_input' | 'review' | 'com
 export type ArtifactReviewStatus = 'idle' | 'pending' | 'accepted'
 export type ScopeKind = 'root' | 'collection' | 'context' | 'delivery'
 export type PreviewAvailability = 'not-generated' | 'ready' | 'failed' | 'unsupported'
+export type RuntimeImportState = 'temporary' | 'importing' | 'persisted' | 'failed'
 
 export interface CanvasNode {
   id: string
@@ -26,6 +27,7 @@ export interface CanvasNode {
   artifactId?: string
   revisionId?: string
   fileRecordId?: string
+  fileAvailability?: 'current' | 'stale' | 'missing' | 'unreadable'
   contentHash?: string
   observedPath?: string
   followsCurrentRevision?: boolean
@@ -50,6 +52,8 @@ export interface CanvasNode {
   runStatus?: RunStatus
   commandText?: string
   positionLocked?: boolean
+  runtimeState?: RuntimeImportState
+  runtimeTransient?: boolean
 }
 
 export interface CanvasEdge {
@@ -107,6 +111,10 @@ export interface ActiveRun {
   inputResolved?: boolean
   changedFiles: string[]
   createdAt: string
+  runtime?: boolean
+  runtimeReturnId?: string
+  baseRevisionId?: string
+  providerError?: string
 }
 
 export interface ProjectPackage {
@@ -153,13 +161,13 @@ export interface TargetContextInference {
 }
 
 export const nodeMeta: Record<NodeKind, { label: string; accent: string; shape: string; layer: NodeLayer }> = {
-  source: { label: '内容', accent: '#4f91d5', shape: '●', layer: 'core' },
-  working: { label: '当前内容', accent: '#357fe8', shape: '◆', layer: 'core' },
-  generated: { label: 'AI 结果', accent: '#7b46e8', shape: '✦', layer: 'core' },
-  context: { label: '内容集合', accent: '#2aa99f', shape: '◇', layer: 'core' },
-  process: { label: '执行记录', accent: '#637384', shape: '→', layer: 'process' },
-  decision: { label: '确认记录', accent: '#c08318', shape: '✓', layer: 'process' },
-  note: { label: '备注', accent: '#c9634f', shape: '✎', layer: 'process' },
+  source: { label: '内容', accent: '#6687B8', shape: '●', layer: 'core' },
+  working: { label: '当前内容', accent: '#496FAE', shape: '◆', layer: 'core' },
+  generated: { label: 'AI 结果', accent: '#7556C9', shape: '✦', layer: 'core' },
+  context: { label: '内容集合', accent: '#4D9084', shape: '◇', layer: 'core' },
+  process: { label: '执行记录', accent: '#6F7D89', shape: '→', layer: 'process' },
+  decision: { label: '确认记录', accent: '#AA7B3E', shape: '✓', layer: 'process' },
+  note: { label: '备注', accent: '#B45F54', shape: '✎', layer: 'process' },
 }
 
 export const runStatusLabel: Record<RunStatus, string> = {

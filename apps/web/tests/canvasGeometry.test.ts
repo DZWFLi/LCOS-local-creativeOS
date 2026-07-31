@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyWheelGesture, fitBounds, getSelectionBounds, nodeDensity, nodeDimensions, revealNode } from '../src/features/canvas/canvasGeometry'
+import { applyWheelGesture, fitBounds, getSelectionBounds, nodeDensity, nodeDimensions, revealNode, zoomCameraAt } from '../src/features/canvas/canvasGeometry'
 import type { CanvasNode } from '../src/model'
 
 const nodes: CanvasNode[] = [
@@ -32,8 +32,21 @@ describe('canvas geometry', () => {
     expect((300 - next.y) / next.zoom).toBeCloseTo(250)
     expect(next.zoom).toBeGreaterThan(camera.zoom)
   })
-  it('allows zooming out to the 1 percent overview floor', () => {
+  it('uses a slower precision curve when Shift is held', () => {
+    const camera = { x: 100, y: 50, zoom: 1 }
+    const normal = applyWheelGesture(camera, { deltaX: 0, deltaY: -20, zoom: true, anchorX: 400, anchorY: 300 })
+    const precision = applyWheelGesture(camera, { deltaX: 0, deltaY: -20, zoom: true, anchorX: 400, anchorY: 300, precision: true })
+    expect(precision.zoom).toBeGreaterThan(camera.zoom)
+    expect(precision.zoom).toBeLessThan(normal.zoom)
+  })
+  it('clamps zoom to the 25 percent overview floor', () => {
     const next = applyWheelGesture({ x: 0, y: 0, zoom: .02 }, { deltaX: 0, deltaY: 1000, zoom: true, anchorX: 400, anchorY: 300 })
-    expect(next.zoom).toBe(.01)
+    expect(next.zoom).toBe(.25)
+  })
+  it('steps or resets around an explicit viewport anchor', () => {
+    const next = zoomCameraAt({ x: 100, y: 50, zoom: 1 }, 1.05, 500, 350)
+    expect(next.zoom).toBe(1.05)
+    expect((500 - next.x) / next.zoom).toBeCloseTo(400)
+    expect((350 - next.y) / next.zoom).toBeCloseTo(300)
   })
 })

@@ -4,13 +4,15 @@ import { describe, expect, it } from 'vitest'
 describe('v0.6 simplified content creation contract', () => {
   const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8')
   const dock = readFileSync(new URL('../src/features/workspace/WorkspaceDock.tsx', import.meta.url), 'utf8')
+  const capabilityPopover = readFileSync(new URL('../src/features/shell/CapabilityPopover.tsx', import.meta.url), 'utf8')
   const dialog = readFileSync(new URL('../src/features/create/CreateContentDialog.tsx', import.meta.url), 'utf8')
   const canvas = readFileSync(new URL('../src/features/canvas/ProjectCanvas.tsx', import.meta.url), 'utf8')
   const css = readFileSync(new URL('../src/surface.css', import.meta.url), 'utf8')
 
-  it('replaces the nested creation menu with one direct Add Content action', () => {
-    expect(dock).toContain('添加内容')
-    expect(dock).toContain('onOpenCreate')
+  it('keeps creation in the compact capability launcher without restoring a nested dock menu', () => {
+    expect(dock).toContain('添加与工作流')
+    expect(dock).toContain('onOpenCapabilities')
+    expect(capabilityPopover).toContain('onCreateObject')
     expect(dock).not.toContain('dock-create-menu')
     expect(dock).not.toContain('createOpen')
   })

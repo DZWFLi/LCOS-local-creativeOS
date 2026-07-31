@@ -1,7 +1,7 @@
 import { useMemo, useRef } from 'react'
 import type { Camera, CanvasNode, WorkspaceFrameVM } from '../../model'
 import { Maximize2, Minus, Plus } from 'lucide-react'
-import { fitBounds, getSelectionBounds, type SafeInsets } from './canvasGeometry'
+import { CANVAS_ZOOM_STEP, fitBounds, getSelectionBounds, type SafeInsets, zoomCameraAt } from './canvasGeometry'
 
 interface Props {
   nodes: CanvasNode[]
@@ -72,6 +72,12 @@ export function CanvasMiniMap({ nodes, workspaceFrames, camera, setCamera, colla
     const contentBounds = getSelectionBounds(nodes, nodes.map((node) => node.id))
     if (contentBounds) setCamera(fitBounds(contentBounds, viewportWidth, viewportHeight, 72, safeInsets))
   }
+  const viewportCenter = {
+    x: safeInsets.left + (viewportWidth - safeInsets.left - safeInsets.right) / 2,
+    y: safeInsets.top + (viewportHeight - safeInsets.top - safeInsets.bottom) / 2,
+  }
+  const stepZoom = (delta: number) => setCamera((current) => zoomCameraAt(current, current.zoom + delta, viewportCenter.x, viewportCenter.y))
+  const resetZoom = () => setCamera((current) => zoomCameraAt(current, 1, viewportCenter.x, viewportCenter.y))
   const viewWorld = {
     x: -camera.x / camera.zoom,
     y: -camera.y / camera.zoom,
@@ -116,6 +122,6 @@ export function CanvasMiniMap({ nodes, workspaceFrames, camera, setCamera, colla
       {nodes.map((node) => <i key={node.id} data-minimap-node-id={node.id} data-minimap-view-id={node.id} data-minimap-artifact-id={node.artifactId ?? ''} data-minimap-scope-id={node.scopeId ?? 'scope-root'} data-minimap-visible="true" title={`${node.id} / ${node.scopeId ?? 'scope-root'}`} style={{ left: worldToMapX(node.x), top: worldToMapY(node.y), width: Math.max(3, node.width * transform.scale), height: Math.max(2, node.height * transform.scale) }} />)}
       <b data-camera-rect="true" data-testid="minimap-camera-rect" style={{ left: worldToMapX(viewWorld.x), top: worldToMapY(viewWorld.y), width: viewWorld.width * transform.scale, height: viewWorld.height * transform.scale }} />
     </div>
-    <div className="map-controls"><button aria-label="缩小画布" onClick={() => setCamera((current) => ({ ...current, zoom: Math.max(.01, current.zoom - .1) }))}><Minus size={13} /></button><span>{Math.round(camera.zoom * 100)}%</span><button aria-label="放大画布" onClick={() => setCamera((current) => ({ ...current, zoom: Math.min(1.8, current.zoom + .1) }))}><Plus size={13} /></button><button className="map-fit-content" aria-label="定位内容" title="定位内容" onClick={fitContent}><Maximize2 size={12} /></button></div>
+    <div className="map-controls"><button aria-label="缩小画布 5%" onClick={() => stepZoom(-CANVAS_ZOOM_STEP)}><Minus size={13} /></button><button className="map-zoom-value" aria-label="恢复 100% 缩放" title="恢复 100%" onClick={resetZoom}>{Math.round(camera.zoom * 100)}%</button><button aria-label="放大画布 5%" onClick={() => stepZoom(CANVAS_ZOOM_STEP)}><Plus size={13} /></button><button className="map-fit-content" aria-label="定位内容" title="定位内容" onClick={fitContent}><Maximize2 size={12} /></button></div>
   </section>
 }

@@ -1,4 +1,4 @@
-import type { GraphVersion, PreviewRecord, ProjectGraphSnapshot, Scope, WorkspaceContextPolicy, MutationBatch } from '@local-creative-os/contracts'
+import type { ContextManifestV0, GraphVersion, PreviewRecord, ProjectGraphSnapshot, Scope, WorkspaceContextPolicy, MutationBatch } from '@local-creative-os/contracts'
 import type {
   CanvasEdge,
   CanvasNode,
@@ -32,6 +32,13 @@ export interface SaveResult {
 
 export interface PreviewGenerateResult {
   readonly state: PersistedPrototypeState | null
+  readonly error?: string
+}
+
+export interface ImportCopyBridgeResult {
+  readonly state: PersistedPrototypeState | null
+  readonly importedViewId?: string
+  readonly importedRevisionId?: string
   readonly error?: string
 }
 
@@ -233,6 +240,56 @@ export class RuntimeBridge {
       return { state: null, error: err instanceof Error ? err.message : 'Preview generation failed.' }
     }
   }
+
+  async importCopy(input: { readonly file: File; readonly importRequestId: string; readonly scopeId: string; readonly x: number; readonly y: number }): Promise<ImportCopyBridgeResult> {
+    try {
+      const imported = await this.client.importCopy(this.projectId, input)
+      if (!imported.result.ok) return { state: null, error: imported.result.error.message }
+      const loaded = await this.loadProject()
+      return loaded.state === null
+        ? { state: null, error: loaded.error }
+        : {
+            state: loaded.state,
+            importedViewId: String(imported.result.value.view.id),
+            importedRevisionId: String(imported.result.value.revision.id),
+          }
+    } catch (err) {
+      return { state: null, error: err instanceof Error ? err.message : 'Import Copy failed.' }
+    }
+  }
+
+  async buildContextManifest(input: { readonly targetArtifactId?: string; readonly requestedOutput?: string } = {}): Promise<{ readonly manifest: ContextManifestV0 | null; readonly error?: string }> {
+    try {
+      const call = await this.client.buildContextManifest(this.projectId, input)
+      return call.result.ok
+        ? { manifest: call.result.value }
+        : { manifest: null, error: call.result.error.message }
+    } catch (err) {
+      return { manifest: null, error: err instanceof Error ? err.message : 'Context Manifest failed.' }
+    }
+  }
+
+  async refreshFileRecord(fileRecordId: string): Promise<PreviewGenerateResult> {
+    try {
+      const refreshed = await this.client.refreshFileRecord(fileRecordId)
+      if (!refreshed.result.ok) return { state: null, error: refreshed.result.error.message }
+      const loaded = await this.loadProject()
+      return loaded.state === null ? { state: null, error: loaded.error } : { state: loaded.state }
+    } catch (err) {
+      return { state: null, error: err instanceof Error ? err.message : 'File refresh failed.' }
+    }
+  }
+
+  async adoptExternalChange(fileRecordId: string): Promise<PreviewGenerateResult> {
+    try {
+      const adopted = await this.client.adoptExternalChange(fileRecordId)
+      if (!adopted.result.ok) return { state: null, error: adopted.result.error.message }
+      const loaded = await this.loadProject()
+      return loaded.state === null ? { state: null, error: loaded.error } : { state: loaded.state }
+    } catch (err) {
+      return { state: null, error: err instanceof Error ? err.message : 'External change adoption failed.' }
+    }
+  }
 }
 
 // ==================== GraphSnapshot → AppState ====================
@@ -247,25 +304,47 @@ export function mapGraphToState(
   previewRecords: readonly PreviewRecord[] = [],
   previewContents: ReadonlyMap<string, PreviewContentResult> = new Map(),
 ): PersistedPrototypeState {
+  const declaredScopeIds = new Set(graph.scopes.map((scope) => String(scope.id)))
+  const canonicalRootScopeId = String(graph.scopes.find((scope) => scope.kind === 'root')?.id ?? graph.scopes[0]?.id ?? 'scope-root')
+  const normalizeScopeId = (scopeId: unknown): string => {
+    const value = String(scopeId)
+    return declaredScopeIds.has(value) ? value : canonicalRootScopeId
+  }
   const artifactById = new Map(graph.artifacts.map((a) => [a.id, a]))
+  const primaryViewByArtifactId = new Map(
+    [...graph.artifactViews]
+      .sort((left, right) => String(left.id).localeCompare(String(right.id), 'en-US'))
+      .map((view) => [String(view.artifactId), String(view.id)] as const),
+  )
   const revisionById = new Map(graph.artifactRevisions.map((revision) => [revision.id, revision]))
   const fileRecordById = new Map(graph.fileRecords.map((fileRecord) => [fileRecord.id, fileRecord]))
   const previewByRevisionId = new Map(previewRecords.map((preview) => [preview.revisionId, preview]))
+  const referenceArtifactIds = new Set(graph.relations.filter((relation) => relation.kind === 'reference' && relation.sourceEntityType === 'artifact').map((relation) => String(relation.sourceEntityId)))
+  const feedbackArtifactIds = new Set(graph.relations.filter((relation) => relation.kind === 'feedback' && relation.sourceEntityType === 'artifact').map((relation) => String(relation.sourceEntityId)))
 
   const nodes: CanvasNode[] = graph.artifactViews.map((view) => {
     const artifact = artifactById.get(view.artifactId)
-    const revisionId = view.revisionId ?? artifact?.currentRevisionId
+    const revisionId = view.referenceKind === 'primary'
+      ? artifact?.currentRevisionId ?? view.revisionId
+      : view.revisionId ?? artifact?.currentRevisionId
     const revision = revisionId === undefined ? undefined : revisionById.get(revisionId)
     const fileRecord = revision === undefined ? undefined : fileRecordById.get(revision.fileRecordId)
     const preview = revisionId === undefined ? undefined : previewByRevisionId.get(revisionId)
     const previewContent = preview === undefined ? undefined : previewContents.get(String(preview.id))
     const isStale = artifact?.availability === 'stale'
     const isMissing = artifact?.availability === 'missing'
+    const runtimeRole = artifact === undefined
+      ? undefined
+      : feedbackArtifactIds.has(String(artifact.id))
+        ? 'feedback'
+        : referenceArtifactIds.has(String(artifact.id))
+          ? 'reference'
+          : undefined
     return {
       id: String(view.id),
-      kind: artifact ? (KIND_TO_NODE[artifact.kind] ?? 'context') : 'context',
+      kind: runtimeRole === 'feedback' ? 'note' : runtimeRole === 'reference' ? 'context' : artifact ? (KIND_TO_NODE[artifact.kind] ?? 'context') : 'context',
       title: artifact?.title ?? String(view.id),
-      subtitle: artifact?.kind ? `${artifact.kind}${fileRecord ? ' · Runtime source' : ''}` : '',
+      subtitle: artifact?.kind ? `${runtimeRole === 'feedback' ? 'Feedback' : runtimeRole === 'reference' ? 'Reference' : artifact.kind}${fileRecord ? ' · Runtime source' : ''}` : '',
       x: view.position.x, y: view.position.y,
       width: view.size.width, height: view.size.height,
       displayMode: view.displayMode === 'compact' ? 'compact' as const : 'standard' as const,
@@ -274,6 +353,7 @@ export function mapGraphToState(
       artifactId: artifact === undefined ? undefined : String(artifact.id),
       revisionId: revisionId === undefined ? undefined : String(revisionId),
       fileRecordId: revision === undefined ? undefined : String(revision.fileRecordId),
+      fileAvailability: fileRecord?.availability,
       contentHash: revision === undefined ? undefined : String(revision.contentHash),
       observedPath: fileRecord?.observedPath,
       followsCurrentRevision: artifact?.currentRevisionId !== undefined && revisionId === artifact.currentRevisionId,
@@ -284,15 +364,15 @@ export function mapGraphToState(
       previewMimeType: preview?.mimeType,
       previewDataUrl: previewContent === undefined ? undefined : `data:${previewContent.mimeType};base64,${previewContent.data}`,
       previewText: previewContent === undefined || !previewContent.mimeType.startsWith('text/') ? undefined : decodeBase64Text(previewContent.data),
-      scopeId: String(view.scopeId),
+      scopeId: normalizeScopeId(view.scopeId),
     }
   })
 
   const edges: CanvasEdge[] = graph.relations.map((rel) => ({
     id: String(rel.id),
-    from: String(rel.sourceEntityId),
-    to: String(rel.targetEntityId),
-    kind: (rel.kind === 'informs' || rel.kind === 'reference') ? 'reference' as const : 'modify' as const,
+    from: primaryViewByArtifactId.get(String(rel.sourceEntityId)) ?? String(rel.sourceEntityId),
+    to: primaryViewByArtifactId.get(String(rel.targetEntityId)) ?? String(rel.targetEntityId),
+    kind: rel.kind === 'feedback' ? 'feedback' as const : (rel.kind === 'informs' || rel.kind === 'reference') ? 'reference' as const : 'modify' as const,
     active: false,
   }))
 
@@ -301,7 +381,7 @@ export function mapGraphToState(
     id: String(ws.id),
     label: ws.name,
     intent: (ws.intent ?? null) as Workspace['intent'],
-    scopeId: String(ws.scopeId),
+    scopeId: normalizeScopeId(ws.scopeId),
     camera: { x: ws.viewport.x, y: ws.viewport.y, zoom: ws.viewport.zoom },
     visibleLayers: (ws.visibleLayers as Workspace['visibleLayers']) ?? ['core', 'process'],
     focusedViewIds: ws.focusedViewIds.map(String),
@@ -314,7 +394,7 @@ export function mapGraphToState(
     ? graph.scopes.map((s: Scope) => ({
         id: String(s.id), label: s.name,
         kind: s.kind as CanvasScope['kind'],
-        parentScopeId: s.parentScopeId ? String(s.parentScopeId) : null,
+        parentScopeId: s.parentScopeId ? normalizeScopeId(s.parentScopeId) : null,
         camera: workspaces.find((w) => w.scopeId === String(s.id))?.camera ?? { x: 0, y: 0, zoom: 1 },
       }))
     : workspaces.map((ws) => ({ id: 'scope-root', label: ws.label, kind: 'root' as const, parentScopeId: null, camera: ws.camera }))
@@ -382,7 +462,7 @@ export function mapStateToGraph(state: PersistedPrototypeState, projectId: strin
   }))
 
   // Artifacts + ArtifactViews from core nodes (filter out process/note/decision)
-  const coreNodes = state.nodes.filter((n) => n.kind !== 'process' && n.kind !== 'note' && n.kind !== 'decision')
+  const coreNodes = state.nodes.filter((n) => !n.runtimeTransient && n.kind !== 'process' && n.kind !== 'note' && n.kind !== 'decision')
   const artifacts: ProjectGraphSnapshot['artifacts'] = coreNodes.map((n) => ({
     id: n.id as ProjectGraphSnapshot['artifacts'][number]['id'],
     projectId: projectId as ProjectGraphSnapshot['artifacts'][number]['projectId'],
@@ -490,7 +570,7 @@ export function diffStateToOps(
     }
   }
 
-  const coreNodes = state.nodes.filter(n => n.kind !== 'process' && n.kind !== 'note' && n.kind !== 'decision')
+  const coreNodes = state.nodes.filter(n => !n.runtimeTransient && n.kind !== 'process' && n.kind !== 'note' && n.kind !== 'decision')
   for (const n of coreNodes) {
     const before = previousNodes.get(n.id)
     const artifact = {

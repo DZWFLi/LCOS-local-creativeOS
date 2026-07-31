@@ -15,20 +15,17 @@ const run = (status: ActiveRun['status']): ActiveRun => ({
   createdAt: '2026-07-22T00:00:00.000Z',
 })
 
-describe('v0.6 phase 2 adaptive Work Rail', () => {
-  it('prioritizes a human decision and returned result over node selection', () => {
-    expect(deriveWorkRailMode({ activeRun: run('waiting_input'), selectedNodes: [node], focusNode: node, pendingNode: null })).toBe('waiting-input')
-    expect(deriveWorkRailMode({ activeRun: run('review'), selectedNodes: [node], focusNode: node, pendingNode: node })).toBe('review')
+describe('v0.7.1 execution-only Work Rail', () => {
+  it('prioritizes human decisions and returned results', () => {
+    expect(deriveWorkRailMode({ activeRun: run('waiting_input'), pendingNode: null })).toBe('waiting-input')
+    expect(deriveWorkRailMode({ activeRun: run('review'), pendingNode: node })).toBe('review')
   })
 
-  it('automatically shows running state after sending and selection after acceptance', () => {
-    expect(deriveWorkRailMode({ activeRun: run('running'), selectedNodes: [node], focusNode: null, pendingNode: null })).toBe('run')
-    expect(deriveWorkRailMode({ activeRun: run('completed'), selectedNodes: [node], focusNode: null, pendingNode: node })).toBe('selection')
-  })
-
-  it('uses selection and workspace summary when there is no urgent task', () => {
-    expect(deriveWorkRailMode({ activeRun: null, selectedNodes: [node, { ...node, id: 'feedback' }], focusNode: null, pendingNode: null })).toBe('multi-selection')
-    expect(deriveWorkRailMode({ activeRun: null, selectedNodes: [], focusNode: null, pendingNode: null })).toBe('workspace')
+  it('keeps execution states in the Work Rail and ignores ordinary selection', () => {
+    expect(deriveWorkRailMode({ activeRun: run('running'), pendingNode: null })).toBe('run')
+    expect(deriveWorkRailMode({ activeRun: run('completed'), pendingNode: node })).toBe('completed')
+    expect(deriveWorkRailMode({ activeRun: null, pendingNode: null })).toBe('workspace')
+    expect(deriveWorkRailMode({ activeRun: null, pendingNode: null })).toBe('workspace')
   })
 
   it('only blocks sending while an active execution is not yet reviewable', () => {

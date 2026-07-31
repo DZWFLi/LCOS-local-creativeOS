@@ -152,6 +152,7 @@
 .status-chip { display: inline-flex; align-items: center; min-height: 22px; padding: 0 8px; border-radius: 999px; font-size: 9px; font-weight: 790; }
 .status-chip.current { color: #24735d; background: rgba(224,247,238,.92); }
 .status-chip.draft { color: #7c49d9; background: rgba(242,235,255,.95); }
+.status-chip.danger { color: #a13b31; background: rgba(255,234,229,.95); }
 .status-chip.locked { color: #946d23; background: rgba(255,250,232,.95); }
 .iridescent-token { width: 26px; height: 26px; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.7); border-radius: 50%; color: #fff; background: var(--iridescent); box-shadow: 0 5px 13px rgba(91,77,155,.2), inset 0 1px 0 rgba(255,255,255,.75); }
 
@@ -663,6 +664,7 @@
 .app-shell.v051 .status-chip { min-height: 24px; padding: 0 9px; font-size: 10px; }
 .app-shell.v051 .status-chip.current { color: #176b51; background: rgba(215,246,233,.98); border: 1px solid rgba(29,132,96,.12); }
 .app-shell.v051 .status-chip.draft { color: #6c39cf; background: rgba(239,229,255,.98); border: 1px solid rgba(116,65,213,.12); }
+.app-shell.v051 .status-chip.danger { color: #9d332a; background: rgba(255,235,231,.98); border: 1px solid rgba(170,63,49,.14); }
 .app-shell.v051 .status-chip.locked { color: #8a5b08; background: rgba(255,246,207,.98); border: 1px solid rgba(181,121,18,.16); }
 
 /* Human decision: porcelain + localized liquid chrome, not a generic yellow card. */
@@ -2138,6 +2140,25 @@ body,
 .runtime-identity dl div { min-width: 0; display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 8px; }
 .runtime-identity dt { color: rgba(29,45,60,.44); font-size: 10px; font-weight: 760; }
 .runtime-identity dd { min-width: 0; margin: 0; overflow: hidden; color: rgba(29,45,60,.70); font-size: 10.5px; text-overflow: ellipsis; white-space: nowrap; }
+.runtime-file-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
+.runtime-file-actions button {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid rgba(69,91,112,.12);
+  border-radius: 10px;
+  color: rgba(29,45,60,.64);
+  background: rgba(255,255,255,.74);
+  font-size: 9.5px;
+  font-weight: 720;
+}
+.runtime-file-actions button.adopt {
+  color: #416f61;
+  border-color: rgba(58,126,105,.2);
+  background: rgba(229,247,239,.88);
+}
 
 .preview-status {
   display: grid;
@@ -3228,3 +3249,126 @@ body,
 @media (max-width: 1366px) {
   .app-shell.v061 .minimap { transform: none; }
 }
+
+.app-shell.v061 .handoff-button {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  border: 1px solid rgba(69,91,112,.12);
+  border-radius: 12px;
+  color: rgba(29,45,60,.68);
+  background: rgba(255,255,253,.72);
+  box-shadow: inset 0 1px rgba(255,255,255,.9);
+  font-size: 10.5px;
+  font-weight: 730;
+}
+.app-shell.v061 .handoff-button:hover { color: #6541c3; border-color: rgba(112,71,216,.2); background: rgba(250,248,255,.92); }
+
+.handoff-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 140;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  background: rgba(23,31,40,.2);
+  backdrop-filter: blur(10px);
+}
+.handoff-dialog {
+  width: min(760px, calc(100vw - 40px));
+  max-height: min(760px, calc(100dvh - 56px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(69,91,112,.13);
+  border-radius: 24px;
+  background: rgba(250,251,249,.98);
+  box-shadow: 0 30px 90px rgba(25,40,55,.22), inset 0 1px #fff;
+}
+.handoff-dialog > header {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 17px 18px;
+  border-bottom: 1px solid rgba(69,91,112,.09);
+}
+.handoff-dialog > header > span {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  color: #6745c8;
+  background: rgba(112,71,216,.08);
+}
+.handoff-dialog > header div { flex: 1; min-width: 0; }
+.handoff-dialog > header small { color: rgba(29,45,60,.4); font-size: 8px; letter-spacing: .11em; }
+.handoff-dialog > header h2 { margin: 2px 0 0; color: #192837; font-size: 17px; }
+.handoff-dialog > header button {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  color: rgba(29,45,60,.5);
+  background: #eff1ef;
+}
+.handoff-meta {
+  display: flex;
+  gap: 7px;
+  padding: 11px 18px 0;
+}
+.handoff-meta span {
+  padding: 4px 8px;
+  border-radius: 999px;
+  color: rgba(29,45,60,.52);
+  background: rgba(69,91,112,.06);
+  font-size: 9px;
+  font-weight: 680;
+}
+.handoff-dialog pre {
+  flex: 1;
+  min-height: 280px;
+  margin: 12px 18px;
+  padding: 18px;
+  overflow: auto;
+  border: 1px solid rgba(69,91,112,.1);
+  border-radius: 16px;
+  color: #243648;
+  background: #f3f4f1;
+  font: 11px/1.65 ui-monospace, SFMono-Regular, Consolas, monospace;
+  white-space: pre-wrap;
+  user-select: text;
+}
+.handoff-state {
+  min-height: 320px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  color: rgba(29,45,60,.55);
+  font-size: 11px;
+}
+.handoff-state.error { color: #a94e45; }
+.handoff-state .spin { animation: handoff-spin .9s linear infinite; }
+@keyframes handoff-spin { to { transform: rotate(360deg); } }
+.handoff-dialog > footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+  padding: 0 18px 18px;
+}
+.handoff-dialog > footer button {
+  min-height: 37px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 13px;
+  border-radius: 12px;
+  font-size: 10.5px;
+  font-weight: 730;
+}
+.handoff-dialog > footer .quiet { color: rgba(29,45,60,.66); background: #eceeeb; }
+.handoff-dialog > footer .primary { color: #fff; background: linear-gradient(135deg,#7447dc,#5968d7); box-shadow: 0 8px 18px rgba(98,74,211,.2); }

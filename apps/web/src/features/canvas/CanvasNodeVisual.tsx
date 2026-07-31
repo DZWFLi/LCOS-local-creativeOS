@@ -7,7 +7,7 @@ import {
   Link2,
   LockKeyhole,
   MessageSquareText,
-  MoreHorizontal,
+  CircleHelp,
   Play,
   Presentation,
   Sparkles,
@@ -22,17 +22,18 @@ interface Props {
   runStatus: RunStatus | null
   pending: boolean
   onDetails: () => void
+  showDetails: boolean
 }
 
-export function CanvasNodeVisual({ node, density, runId, runStatus, pending, onDetails }: Props) {
-  if (node.kind === 'process') return <ProcessVisual node={node} density={density} runId={runId} runStatus={runStatus} onDetails={onDetails} />
-  if (node.kind === 'context') return <ContextVisual node={node} density={density} onDetails={onDetails} />
-  if (node.kind === 'decision') return <DecisionVisual node={node} density={density} onDetails={onDetails} />
-  if (node.kind === 'note') return <NoteVisual node={node} density={density} onDetails={onDetails} />
-  return <ArtifactVisual node={node} density={density} pending={pending} onDetails={onDetails} />
+export function CanvasNodeVisual({ node, density, runId, runStatus, pending, onDetails, showDetails }: Props) {
+  if (node.kind === 'process') return <ProcessVisual node={node} density={density} runId={runId} runStatus={runStatus} onDetails={onDetails} showDetails={showDetails} />
+  if (node.kind === 'context') return <ContextVisual node={node} density={density} onDetails={onDetails} showDetails={showDetails} />
+  if (node.kind === 'decision') return <DecisionVisual node={node} density={density} onDetails={onDetails} showDetails={showDetails} />
+  if (node.kind === 'note') return <NoteVisual node={node} density={density} onDetails={onDetails} showDetails={showDetails} />
+  return <ArtifactVisual node={node} density={density} pending={pending} onDetails={onDetails} showDetails={showDetails} />
 }
 
-function ArtifactVisual({ node, density, pending, onDetails }: Pick<Props, 'node' | 'density' | 'pending' | 'onDetails'>) {
+function ArtifactVisual({ node, density, pending, onDetails, showDetails }: Pick<Props, 'node' | 'density' | 'pending' | 'onDetails' | 'showDetails'>) {
   const meta = nodeMeta[node.kind]
   const fileKind = getFileKind(node)
   const Icon = fileKind === 'ppt' ? Presentation : fileKind === 'image' ? ImageIcon : FileText
@@ -56,12 +57,14 @@ function ArtifactVisual({ node, density, pending, onDetails }: Pick<Props, 'node
       {density === 'expanded' && <small className="artifact-provenance">{stateLabel}{node.parentRunId ? ` · ${node.parentRunId}` : ''}</small>}
     </footer>
     <div className="artifact-statuses">
+      {node.runtimeState === 'importing' && <span className="status-chip draft">Importing</span>}
+      {node.runtimeState === 'failed' && <span className="status-chip danger">Import failed</span>}
       {node.current && <span className="status-chip current">当前</span>}
       {node.draft && <span className="status-chip draft">待确认</span>}
       {node.kind === 'generated' && <span className="iridescent-token" aria-label="AI 生成结果"><Sparkles size={12} /></span>}
     </div>
     {node.kind === 'generated' && <span className="generated-material-glint" aria-hidden="true" />}
-    <button className="node-details" aria-label={`打开 ${node.title} 状态`} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onDetails() }}><MoreHorizontal size={14} /></button>
+    <InfoButton show={showDetails} label={`查看 ${node.title} 信息`} onDetails={onDetails} />
   </div>
 }
 
@@ -89,9 +92,9 @@ function previewStatusCopy(node: CanvasNode): string {
   return 'Preview not generated'
 }
 
-function ContextVisual({ node, density, onDetails }: { node: CanvasNode; density: NodeDisplayMode; onDetails: () => void }) {
+function ContextVisual({ node, density, onDetails, showDetails }: { node: CanvasNode; density: NodeDisplayMode; onDetails: () => void; showDetails: boolean }) {
   return <div className="context-visual">
-    <header><span><Layers3 size={13} />内容集合</span><button className="node-details" aria-label="打开上下文状态" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onDetails() }}><MoreHorizontal size={14} /></button></header>
+    <header><span><Layers3 size={13} />内容集合</span><InfoButton show={showDetails} label="查看上下文信息" onDetails={onDetails} /></header>
     <strong>{node.title}</strong>
     {density !== 'compact' && <div className="context-stack"><i /><i /><i /></div>}
     <footer><span>3 个参考</span><span>1 个关联</span></footer>
@@ -99,29 +102,34 @@ function ContextVisual({ node, density, onDetails }: { node: CanvasNode; density
   </div>
 }
 
-function ProcessVisual({ node, density, runId, runStatus, onDetails }: { node: CanvasNode; density: NodeDisplayMode; runId: string; runStatus: RunStatus | null; onDetails: () => void }) {
+function ProcessVisual({ node, density, runId, runStatus, onDetails, showDetails }: { node: CanvasNode; density: NodeDisplayMode; runId: string; runStatus: RunStatus | null; onDetails: () => void; showDetails: boolean }) {
   const liveStatus = node.runStatus ?? (node.parentRunId === runId ? runStatus : null)
   const status = liveStatus ?? (node.subtitle.toLowerCase().includes('completed') || node.subtitle.includes('已完成') ? 'completed' : 'archived')
   const statusCopy = liveStatus ? runStatusLabel[liveStatus] : node.subtitle
   return <div className={`process-visual status-${status}`}>
     <span className="process-icon"><Play size={14} fill="currentColor" /></span>
     <div><small>执行</small><strong>{node.title}</strong><span>{statusCopy}</span>{density === 'expanded' && <em>目标：当前提案.pptx · 上下文 3 个对象</em>}</div>
-    <button className="node-details" aria-label="打开执行状态" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onDetails() }}><MoreHorizontal size={14} /></button>
+    <InfoButton show={showDetails} label="查看执行信息" onDetails={onDetails} />
   </div>
 }
 
-function DecisionVisual({ node, density, onDetails }: { node: CanvasNode; density: NodeDisplayMode; onDetails: () => void }) {
+function DecisionVisual({ node, density, onDetails, showDetails }: { node: CanvasNode; density: NodeDisplayMode; onDetails: () => void; showDetails: boolean }) {
   return <div className="decision-visual decision-material">
     <span className="decision-icon"><span className="decision-icon-chrome" aria-hidden="true" /><LockKeyhole size={17} /></span>
     <div><small>人工决策</small><strong>{node.title}</strong><span>{node.subtitle}</span>{density === 'expanded' && <em>锁定于今天 10:18 · 影响 2 个工作视角</em>}</div>
     <span className="status-chip locked">已锁定</span>
     <span className="decision-material-glint" aria-hidden="true" />
-    <button className="node-details" aria-label="打开决策状态" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onDetails() }}><MoreHorizontal size={14} /></button>
+    <InfoButton show={showDetails} label="查看决策信息" onDetails={onDetails} />
   </div>
 }
 
-function NoteVisual({ node, density, onDetails }: { node: CanvasNode; density: NodeDisplayMode; onDetails: () => void }) {
-  return <div className="note-visual"><MessageSquareText size={16} /><div><small>备注</small><strong>{node.title}</strong><span>{node.subtitle}</span>{density === 'expanded' && <em>文件级备注 · 今天 10:12</em>}</div><button className="node-details" aria-label="打开备注状态" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onDetails() }}><MoreHorizontal size={14} /></button></div>
+function NoteVisual({ node, density, onDetails, showDetails }: { node: CanvasNode; density: NodeDisplayMode; onDetails: () => void; showDetails: boolean }) {
+  return <div className="note-visual"><MessageSquareText size={16} /><div><small>备注</small><strong>{node.title}</strong><span>{node.subtitle}</span>{density === 'expanded' && <em>文件级备注 · 今天 10:12</em>}</div><InfoButton show={showDetails} label="查看备注信息" onDetails={onDetails} /></div>
+}
+
+function InfoButton({ show, label, onDetails }: { show: boolean; label: string; onDetails: () => void }) {
+  if (!show) return null
+  return <button className="node-details pressable" aria-label={label} title={label} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onDetails() }}><CircleHelp size={12} /></button>
 }
 
 function getFileKind(node: CanvasNode): 'ppt' | 'image' | 'md' {
