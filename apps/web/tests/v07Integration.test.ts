@@ -53,9 +53,11 @@ describe('v0.7.1 lightweight backend-integrated UI', () => {
     expect(v071).toContain('top: 10px; transform: none;')
   })
 
-  it('imports Link References as project-owned Markdown descriptors', () => {
-    expect(contracts).toContain("sourceKind: ${provider === 'feishu' ? 'feishu_link' : 'external_url'}")
-    expect(contracts).toContain('accessMode: open_with_available_tool')
-    expect(app).toContain('dropFiles([file]')
+  it('routes Link References to server-side universal import instead of frontend form generation', () => {
+    expect(contracts).toContain('readonly title?: string')
+    expect(contracts).not.toContain('createLinkReferenceDocument')
+    expect(contracts).not.toContain('readonly purpose: string')
+    expect(app).toContain('importResourceUrl(')
+    expect(app).not.toContain('dropFiles([file]')
   })
 })

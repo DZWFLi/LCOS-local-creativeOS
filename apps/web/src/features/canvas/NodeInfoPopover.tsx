@@ -10,9 +10,10 @@ interface Props {
   relationCount: number
   onClose: () => void
   onRelations: () => void
+  onShowResource?: (node: CanvasNode) => void
 }
 
-export function NodeInfoPopover({ node, camera, relationCount, onClose, onRelations }: Props) {
+export function NodeInfoPopover({ node, camera, relationCount, onClose, onRelations, onShowResource }: Props) {
   const popoverRef = useRef<HTMLElement | null>(null)
   useEffect(() => {
     const closeFromOutside = (event: PointerEvent) => {
@@ -47,7 +48,7 @@ export function NodeInfoPopover({ node, camera, relationCount, onClose, onRelati
       {node.fileAvailability && <div><dt>文件</dt><dd>{node.fileAvailability}</dd></div>}
       {node.revisionId && <div><dt>Revision ID</dt><dd title={node.revisionId}>{node.revisionId}</dd></div>}
     </dl>
-    <div className="node-info-actions"><button className="pressable" onClick={onRelations}><GitBranch size={13} />查看关联 <span>{relationCount}</span></button>{url && <button className="pressable" onClick={() => window.open(url, '_blank', 'noopener,noreferrer')}><ExternalLink size={13} />浏览器打开</button>}</div>
+    <div className="node-info-actions"><button className="pressable" onClick={onRelations}><GitBranch size={13} />查看关联 <span>{relationCount}</span></button>{node.artifactId && onShowResource && <button className="pressable" onClick={() => onShowResource(node)}><FileText size={13} />资源理解</button>}{url && <button className="pressable" onClick={() => window.open(url, '_blank', 'noopener,noreferrer')}><ExternalLink size={13} />浏览器打开</button>}</div>
     <footer>{node.observedPath ?? node.subtitle}</footer>
   </aside>, document.body)
 }

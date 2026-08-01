@@ -37,6 +37,7 @@ import type {
   WorkspaceContextPolicy,
   WorkspaceViewport,
 } from '../../domain/src/index.js'
+import type { ManifestResourceRefV0 } from './resources.js'
 
 // Re-add types that were removed from domain (keep contracts boundary stable)
 export interface WorkspaceQuery {
@@ -165,6 +166,7 @@ export interface BuildContextManifestV0Input {
   readonly targetArtifactId?: string
   readonly contextArtifactIds?: readonly string[]
   readonly requestedOutput?: string
+  readonly resourceRefs?: readonly ManifestResourceRefV0[]
 }
 
 export interface PersistedContextManifestV0 {
@@ -423,3 +425,19 @@ export type {
   Workspace,
   WorkspaceContextPolicy,
 }
+
+// Universal Resource Import (U0)
+export type {
+  ImportResourceRequestV1,
+  ImportResourceResultV1,
+  ManifestResourceRefV0,
+  ResourceDescriptorId,
+  ResourceDescriptorV0,
+  ResourceId,
+  ResourceImportSourceKind,
+  ResourceMatchQueryV0,
+  ResourceMatchV0,
+  ResourcePlacementV0,
+  ResourceSourceV0,
+  ResourceUnderstandingStatus,
+} from './resources.js'

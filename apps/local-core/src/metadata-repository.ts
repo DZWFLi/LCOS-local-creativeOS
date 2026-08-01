@@ -40,11 +40,15 @@ import type {
   PersistedContextManifestV0,
   ProjectGraphSnapshot,
   RejectArtifactReturnResult,
+  ResourceDescriptorV0,
   RetryRunResult,
 } from '@local-creative-os/contracts'
 
 type Row = Record<string, SQLInputValue | undefined>
 
+function resourceDescriptorHash(descriptor: ResourceDescriptorV0): string {
+  return createHash('sha256').update(JSON.stringify(descriptor)).digest('hex')
+}
 
 type ForeignKeyCheckRow = {
   readonly table: string
@@ -153,13 +157,14 @@ export class SqliteMetadataRepository {
 
   #migrate(): void {
     const version = this.#database.prepare('PRAGMA user_version').get() as { user_version: number }
-    if (version.user_version === 0) { this.#migrate_001(); return }
-    if (version.user_version === 1) { this.#migrate_002_from_v1(); this.#migrate_004_from_v3(); this.#migrate_005_from_v4(); this.#migrate_006_from_v5(); return }
-    if (version.user_version === 2) { this.#migrate_003_from_v2(); this.#migrate_004_from_v3(); this.#migrate_005_from_v4(); this.#migrate_006_from_v5(); return }
-    if (version.user_version === 3) { this.#migrate_004_from_v3(); this.#migrate_005_from_v4(); this.#migrate_006_from_v5(); return }
-    if (version.user_version === 4) { this.#migrate_005_from_v4(); this.#migrate_006_from_v5(); return }
-    if (version.user_version === 5) { this.#migrate_006_from_v5(); return }
-    // v6 = current
+    if (version.user_version === 0) { this.#migrate_001(); this.#migrate_007_from_v6(); return }
+    if (version.user_version === 1) { this.#migrate_002_from_v1(); this.#migrate_004_from_v3(); this.#migrate_005_from_v4(); this.#migrate_006_from_v5(); this.#migrate_007_from_v6(); return }
+    if (version.user_version === 2) { this.#migrate_003_from_v2(); this.#migrate_004_from_v3(); this.#migrate_005_from_v4(); this.#migrate_006_from_v5(); this.#migrate_007_from_v6(); return }
+    if (version.user_version === 3) { this.#migrate_004_from_v3(); this.#migrate_005_from_v4(); this.#migrate_006_from_v5(); this.#migrate_007_from_v6(); return }
+    if (version.user_version === 4) { this.#migrate_005_from_v4(); this.#migrate_006_from_v5(); this.#migrate_007_from_v6(); return }
+    if (version.user_version === 5) { this.#migrate_006_from_v5(); this.#migrate_007_from_v6(); return }
+    if (version.user_version === 6) { this.#migrate_007_from_v6(); return }
+    // v7 = current
   }
 
   #migrate_001(): void {
@@ -534,6 +539,36 @@ export class SqliteMetadataRepository {
     `)
   }
 
+  #migrate_007_from_v6(): void {
+    this.#database.exec(`
+      BEGIN;
+      CREATE TABLE resource_descriptors (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL,
+        resource_id TEXT NOT NULL,
+        artifact_id TEXT NOT NULL,
+        source_revision_id TEXT NOT NULL,
+        descriptor_version TEXT NOT NULL,
+        analyzer_version TEXT NOT NULL,
+        status TEXT NOT NULL
+          CHECK(status IN ('pending','ready','partial','failed')),
+        source_content_hash TEXT,
+        descriptor_hash TEXT NOT NULL,
+        descriptor_json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY(project_id) REFERENCES projects(id),
+        FOREIGN KEY(artifact_id) REFERENCES artifacts(id),
+        FOREIGN KEY(source_revision_id) REFERENCES artifact_revisions(id),
+        UNIQUE(artifact_id, source_revision_id, analyzer_version)
+      );
+      CREATE INDEX idx_resource_descriptors_project ON resource_descriptors(project_id);
+      CREATE INDEX idx_resource_descriptors_status ON resource_descriptors(status);
+      PRAGMA user_version = 7;
+      COMMIT;
+    `)
+  }
+
   // ==================== Graph Save/Load ====================
 
   save(snapshot: ProjectGraphSnapshot): void {
@@ -596,7 +631,7 @@ export class SqliteMetadataRepository {
     const checkpoints = (this.#database.prepare('SELECT * FROM checkpoints WHERE project_id = ?').all(project.id as SQLInputValue) as Row[]).map((r) => this.#checkpoint(r))
 
     return {
-      schemaVersion: 6,
+      schemaVersion: 7,
       graphVersion: project.graphVersion as GraphVersion,
       project,
       scopes,
@@ -1004,6 +1039,97 @@ export class SqliteMetadataRepository {
 
   deletePreviewRecords(projectId: string): void {
     this.#database.prepare('DELETE FROM preview_records WHERE project_id = ?').run(projectId as SQLInputValue)
+  }
+
+  // ==================== Resource Descriptors (Universal Resource Import, v7) ====================
+
+  createResourceDescriptorPending(descriptor: ResourceDescriptorV0): void {
+    this.#insertResourceDescriptor(descriptor)
+  }
+
+  replaceResourceDescriptor(descriptor: ResourceDescriptorV0): void {
+    this.#database.exec('BEGIN IMMEDIATE;')
+    try {
+      this.#database.prepare(
+        'DELETE FROM resource_descriptors WHERE artifact_id = ? AND source_revision_id = ?',
+      ).run(
+        String(descriptor.artifactId) as SQLInputValue,
+        String(descriptor.sourceRevisionId) as SQLInputValue,
+      )
+      this.#insertResourceDescriptor(descriptor)
+      this.#database.exec('COMMIT;')
+    } catch (error: unknown) {
+      this.#database.exec('ROLLBACK;')
+      throw error
+    }
+  }
+
+  getResourceDescriptorForRevision(
+    artifactId: string,
+    sourceRevisionId: string,
+    analyzerVersion?: string,
+  ): ResourceDescriptorV0 | undefined {
+    const rows = analyzerVersion === undefined
+      ? this.#database.prepare(
+        'SELECT * FROM resource_descriptors WHERE artifact_id = ? AND source_revision_id = ? ORDER BY updated_at DESC LIMIT 1',
+      ).all(artifactId as SQLInputValue, sourceRevisionId as SQLInputValue) as Row[]
+      : this.#database.prepare(
+        'SELECT * FROM resource_descriptors WHERE artifact_id = ? AND source_revision_id = ? AND analyzer_version = ?',
+      ).all(artifactId as SQLInputValue, sourceRevisionId as SQLInputValue, analyzerVersion as SQLInputValue) as Row[]
+    return rows.length === 0 ? undefined : this.#resourceDescriptorRow(rows[0] as Row)
+  }
+
+  getResourceDescriptorByResourceId(projectId: string, resourceId: string): ResourceDescriptorV0 | undefined {
+    const rows = this.#database.prepare(
+      'SELECT * FROM resource_descriptors WHERE project_id = ? AND resource_id = ? ORDER BY updated_at DESC LIMIT 1',
+    ).all(projectId as SQLInputValue, resourceId as SQLInputValue) as Row[]
+    return rows.length === 0 ? undefined : this.#resourceDescriptorRow(rows[0] as Row)
+  }
+
+  listResourceDescriptors(projectId: string): ResourceDescriptorV0[] {
+    return (this.#database.prepare(
+      'SELECT * FROM resource_descriptors WHERE project_id = ? ORDER BY updated_at DESC',
+    ).all(projectId as SQLInputValue) as Row[]).map((row) => this.#resourceDescriptorRow(row))
+  }
+
+  markResourceDescriptorFailed(id: string, warnings: readonly string[], analyzerVersion: string): void {
+    const row = this.#database.prepare('SELECT * FROM resource_descriptors WHERE id = ?').get(id as SQLInputValue) as Row | undefined
+    if (row === undefined) return
+    const parsed = this.#resourceDescriptorRow(row)
+    this.#database.prepare(
+      'UPDATE resource_descriptors SET status = ?, analyzer_version = ?, descriptor_json = ?, updated_at = ? WHERE id = ?',
+    ).run(
+      'failed' as SQLInputValue,
+      analyzerVersion as SQLInputValue,
+      JSON.stringify({ ...parsed, understanding: { ...parsed.understanding, status: 'failed', warnings: [...warnings] } }) as SQLInputValue,
+      new Date().toISOString() as SQLInputValue,
+      id as SQLInputValue,
+    )
+  }
+
+  #insertResourceDescriptor(descriptor: ResourceDescriptorV0): void {
+    const now = new Date().toISOString()
+    this.#database.prepare(
+      'INSERT INTO resource_descriptors VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    ).run(
+      descriptor.id as SQLInputValue,
+      descriptor.projectId as SQLInputValue,
+      descriptor.resourceId as SQLInputValue,
+      descriptor.artifactId as SQLInputValue,
+      descriptor.sourceRevisionId as SQLInputValue,
+      descriptor.schemaVersion as SQLInputValue,
+      descriptor.understanding.analyzerVersion as SQLInputValue,
+      descriptor.understanding.status as SQLInputValue,
+      descriptor.source.contentHash ?? null,
+      resourceDescriptorHash(descriptor) as SQLInputValue,
+      JSON.stringify(descriptor) as SQLInputValue,
+      now as SQLInputValue,
+      now as SQLInputValue,
+    )
+  }
+
+  #resourceDescriptorRow(row: Row): ResourceDescriptorV0 {
+    return JSON.parse(String(row.descriptor_json)) as ResourceDescriptorV0
   }
 
   updateFileObservation(fileRecord: FileRecord, artifact?: Artifact): void {
@@ -1610,7 +1736,7 @@ export class SqliteMetadataRepository {
     }
   }
 
-  get schemaVersion(): number { return 6 }
+  get schemaVersion(): number { return 7 }
 
   // ==================== Private helpers ====================
 

@@ -31,6 +31,10 @@ import { FileObservationService } from './file-observation-service.js'
 import { PreviewCacheService } from './preview-cache-service.js'
 import { PreviewWorkerService } from './preview-worker-service.js'
 import { ImportCopyConflictError, ImportCopyService } from './import-copy-service.js'
+import { UniversalResourceImportService } from './resources/universal-resource-import-service.js'
+import { ResourcePackageService } from './resources/resource-package-service.js'
+import { ResourceReader } from './resources/resource-reader.js'
+import { ResourceMatcher } from './resources/resource-matcher.js'
 import { ContextManifestService } from './context-manifest-service.js'
 import { RuntimeReviewService } from './runtime-review-service.js'
 import {
@@ -65,6 +69,10 @@ export interface LocalCoreServerOptions {
   readonly fileObservationService?: FileObservationService
   readonly previewWorkerService?: PreviewWorkerService
   readonly importCopyService?: ImportCopyService
+  readonly resourceImportService?: UniversalResourceImportService
+  readonly resourcePackageService?: ResourcePackageService
+  readonly resourceReader?: ResourceReader
+  readonly resourceMatcher?: ResourceMatcher
   readonly contextManifestService?: ContextManifestService
   readonly runtimeReviewService?: RuntimeReviewService
   readonly runtimeApplicationService?: RuntimeApplicationService
@@ -222,6 +230,10 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
   const fileRegistry = options.fileRegistryService
   const fileObservation = options.fileObservationService ?? (metadata === undefined ? undefined : new FileObservationService(metadata))
   const importCopy = options.importCopyService ?? (metadata === undefined ? undefined : new ImportCopyService(metadata))
+  const resources = options.resourceImportService ?? (metadata === undefined || importCopy === undefined ? undefined : new UniversalResourceImportService(metadata, importCopy))
+  const packages = options.resourcePackageService ?? (metadata === undefined ? undefined : new ResourcePackageService(metadata))
+  const resourceReader = options.resourceReader ?? (metadata === undefined ? undefined : new ResourceReader(metadata))
+  const matcher = options.resourceMatcher ?? new ResourceMatcher()
   const contextManifest = options.contextManifestService ?? (metadata === undefined ? undefined : new ContextManifestService(metadata))
   const runtimeReview = options.runtimeReviewService ?? (metadata === undefined ? undefined : new RuntimeReviewService(metadata))
   const runtimeApplication = options.runtimeApplicationService
@@ -684,12 +696,358 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
             contentType: multipart.file.contentType,
             bytes: multipart.file.bytes,
           })
-          sendJson(response, result.reused ? 200 : 201, { ok: true, value: result })
+          const outcome = resources === undefined
+            ? result
+            : await resources.afterImport(projectId as ProjectId, result)
+          sendJson(response, result.reused ? 200 : 201, { ok: true, value: outcome })
         } catch (error: unknown) {
           const status = error instanceof RangeError ? 413 : error instanceof ImportCopyConflictError ? 409 : 400
           sendJson(response, status, failure(error instanceof ImportCopyConflictError ? 'CONFLICT' : 'VALIDATION', error instanceof Error ? error.message : 'Import Copy failed.'))
         }
         return
+      }
+
+      // ---- Universal Resource Import (U1): URL + descriptor read/reanalyze ----
+      const resourceUrlImportMatch = /^\/projects\/([^/]+)\/resources\/import-url$/.exec(pathname)
+      const resourceDirectoryImportMatch = /^\/projects\/([^/]+)\/resources\/import-directory$/.exec(pathname)
+      const resourceArchiveImportMatch = /^\/projects\/([^/]+)\/resources\/import-archive$/.exec(pathname)
+      if (method === 'POST' && resourceDirectoryImportMatch !== null) {
+        if (!requireMetadata(metadata, response)) return
+        if (packages === undefined) {
+          sendJson(response, 503, failure('UNAVAILABLE', 'Resource Package service is not configured.'))
+          return
+        }
+        let input: unknown
+        try { input = await readJsonBody(request, controller.signal) } catch {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Import directory body must be valid JSON.'))
+          return
+        }
+        const body = input as {
+          importRequestId?: unknown
+          rootName?: unknown
+          files?: unknown
+          scopeId?: unknown
+          x?: unknown
+          y?: unknown
+          note?: unknown
+        }
+        if (typeof body?.importRequestId !== 'string' || body.importRequestId.trim() === '') {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'importRequestId is required.'))
+          return
+        }
+        if (typeof body.rootName !== 'string' || body.rootName.trim() === '') {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'rootName is required.'))
+          return
+        }
+        if (!Array.isArray(body.files) || body.files.length === 0 || body.files.length > 200) {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'files must be a non-empty array under 200 entries.'))
+          return
+        }
+        const files: Array<{ path: string; bytes: Buffer }> = []
+        let total = 0
+        for (const item of body.files) {
+          if (typeof item !== 'object' || item === null) {
+            sendJson(response, 400, failure('INVALID_ARGUMENT', 'Each file must be an object.'))
+            return
+          }
+          const file = item as { path?: unknown; content?: unknown }
+          if (typeof file.path !== 'string' || typeof file.content !== 'string') {
+            sendJson(response, 400, failure('INVALID_ARGUMENT', 'Each file requires path and base64 content.'))
+            return
+          }
+          let bytes: Buffer
+          try {
+            bytes = Buffer.from(file.content, 'base64')
+          } catch {
+            sendJson(response, 400, failure('INVALID_ARGUMENT', 'File content is not valid base64.'))
+            return
+          }
+          if (bytes.byteLength > 10 * 1024 * 1024) {
+            sendJson(response, 413, failure('INVALID_ARGUMENT', 'A package file exceeds the 10 MiB limit.'))
+            return
+          }
+          total += bytes.byteLength
+          if (total > 50 * 1024 * 1024) {
+            sendJson(response, 413, failure('INVALID_ARGUMENT', 'Package exceeds the 50 MiB total limit.'))
+            return
+          }
+          files.push({ path: file.path, bytes })
+        }
+        const projectId = decodeURIComponent(resourceDirectoryImportMatch[1] ?? '')
+        const project = metadata.getProject(projectId)
+        if (project === undefined) {
+          sendJson(response, 404, failure('NOT_FOUND', 'Project not found.'))
+          return
+        }
+        const graph = metadata.get(projectId)
+        const rootScope = graph?.scopes.find((scope) => scope.kind === 'root') ?? graph?.scopes[0]
+        const scopeId = typeof body.scopeId === 'string' && body.scopeId.trim() !== ''
+          ? body.scopeId
+          : String(rootScope?.id ?? '')
+        const x = typeof body.x === 'number' && Number.isFinite(body.x) ? body.x : 180
+        const y = typeof body.y === 'number' && Number.isFinite(body.y) ? body.y : 160
+        try {
+          const outcome = await packages.importDirectory(projectId as ProjectId, {
+            importRequestId: body.importRequestId,
+            rootName: body.rootName,
+            files,
+            scopeId,
+            position: { x, y },
+            ...(body.note === undefined ? {} : { userNote: String(body.note) }),
+          })
+          sendJson(response, outcome.reused ? 200 : 201, { ok: true, value: outcome })
+        } catch (error: unknown) {
+          sendJson(response, 400, failure('VALIDATION', error instanceof Error ? error.message : 'Directory import failed.'))
+        }
+        return
+      }
+      if (method === 'POST' && resourceArchiveImportMatch !== null) {
+        if (!requireMetadata(metadata, response)) return
+        if (packages === undefined || importCopy === undefined) {
+          sendJson(response, 503, failure('UNAVAILABLE', 'Resource Package service is not configured.'))
+          return
+        }
+        try {
+          const raw = await readRawBody(request, controller.signal, MAX_IMPORT_BODY_BYTES)
+          const multipart = parseMultipartImport(request.headers['content-type'], raw)
+          const projectId = decodeURIComponent(resourceArchiveImportMatch[1] ?? '')
+          const x = Number(multipart.fields['position.x'])
+          const y = Number(multipart.fields['position.y'])
+          if (!multipart.fields.importRequestId || !multipart.fields.scopeId || !Number.isFinite(x) || !Number.isFinite(y)) {
+            sendJson(response, 400, failure('INVALID_ARGUMENT', 'Archive import requires importRequestId, scopeId, position and file.'))
+            return
+          }
+          const outcome = await packages.importArchive(projectId as ProjectId, {
+            importRequestId: multipart.fields.importRequestId,
+            fileName: multipart.file.fileName,
+            bytes: multipart.file.bytes,
+            scopeId: multipart.fields.scopeId,
+            position: { x, y },
+          })
+          sendJson(response, outcome.reused ? 200 : 201, { ok: true, value: outcome })
+        } catch (error: unknown) {
+          const status = error instanceof RangeError ? 413 : 400
+          sendJson(response, status, failure('VALIDATION', error instanceof Error ? error.message : 'Archive import failed.'))
+        }
+        return
+      }
+      if (method === 'POST' && resourceUrlImportMatch !== null) {
+        if (!requireMetadata(metadata, response)) return
+        if (resources === undefined) {
+          sendJson(response, 503, failure('UNAVAILABLE', 'Universal Resource Import service is not configured.'))
+          return
+        }
+        let input: unknown
+        try { input = await readJsonBody(request, controller.signal) } catch {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Import URL body must be valid JSON.'))
+          return
+        }
+        const body = input as {
+          url?: unknown
+          title?: unknown
+          note?: unknown
+          importRequestId?: unknown
+          scopeId?: unknown
+          x?: unknown
+          y?: unknown
+        }
+        if (typeof body?.url !== 'string' || body.url.trim() === '' || body.url.length > 2048) {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'url must be a non-empty string under 2048 characters.'))
+          return
+        }
+        if (body.title !== undefined && typeof body.title !== 'string') {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'title must be a string when provided.'))
+          return
+        }
+        if (body.note !== undefined && typeof body.note !== 'string') {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'note must be a string when provided.'))
+          return
+        }
+        const projectId = decodeURIComponent(resourceUrlImportMatch[1] ?? '')
+        const project = metadata.getProject(projectId)
+        if (project === undefined) {
+          sendJson(response, 404, failure('NOT_FOUND', 'Project not found.'))
+          return
+        }
+        const graph = metadata.get(projectId)
+        const rootScope = graph?.scopes.find((scope) => scope.kind === 'root') ?? graph?.scopes[0]
+        const scopeId = typeof body.scopeId === 'string' && body.scopeId.trim() !== ''
+          ? body.scopeId
+          : String(rootScope?.id ?? '')
+        const x = typeof body.x === 'number' && Number.isFinite(body.x) ? body.x : 180
+        const y = typeof body.y === 'number' && Number.isFinite(body.y) ? body.y : 160
+        try {
+          const outcome = await resources.importUrl(projectId as ProjectId, {
+            importRequestId: typeof body.importRequestId === 'string' && body.importRequestId.trim() !== ''
+              ? body.importRequestId
+              : `url-${createProjectId(body.url).slice('project-'.length)}`,
+            url: body.url,
+            ...(body.title === undefined ? {} : { title: body.title }),
+            ...(body.note === undefined ? {} : { userNote: body.note }),
+            scopeId,
+            position: { x, y },
+          })
+          sendJson(response, outcome.reused === undefined || !outcome.reused ? 201 : 200, { ok: true, value: outcome })
+        } catch (error: unknown) {
+          const status = error instanceof ImportCopyConflictError ? 409 : 400
+          sendJson(response, status, failure(error instanceof ImportCopyConflictError ? 'CONFLICT' : 'VALIDATION', error instanceof Error ? error.message : 'URL import failed.'))
+        }
+        return
+      }
+
+      const resourceDescriptorMatch = /^\/projects\/([^/]+)\/resources\/([^/]+)\/descriptor$/.exec(pathname)
+      const resourceReanalyzeMatch = /^\/projects\/([^/]+)\/resources\/([^/]+)\/reanalyze$/.exec(pathname)
+      const resourceContentMatch = /^\/projects\/([^/]+)\/resources\/([^/]+)\/content$/.exec(pathname)
+      const resourceListMatch = /^\/projects\/([^/]+)\/resources$/.exec(pathname)
+      const resourceOneMatch = /^\/projects\/([^/]+)\/resources\/([^/]+)$/.exec(pathname)
+      const resourceMatchRoute = /^\/projects\/([^/]+)\/resources\/match$/.exec(pathname)
+      if (method === 'POST' && resourceMatchRoute !== null) {
+        if (!requireMetadata(metadata, response)) return
+        if (resources === undefined) {
+          sendJson(response, 503, failure('UNAVAILABLE', 'Universal Resource Import service is not configured.'))
+          return
+        }
+        let input: unknown
+        try { input = await readJsonBody(request, controller.signal) } catch {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Match body must be valid JSON.'))
+          return
+        }
+        const body = input as {
+          instruction?: unknown
+          outputIntent?: unknown
+          mediaTypes?: unknown
+          limit?: unknown
+        }
+        if (typeof body?.instruction !== 'string' || body.instruction.trim() === '') {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'instruction is required.'))
+          return
+        }
+        if (body.outputIntent !== undefined && body.outputIntent !== 'create' && body.outputIntent !== 'revise' && body.outputIntent !== 'analyze') {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'outputIntent must be create, revise or analyze.'))
+          return
+        }
+        if (body.mediaTypes !== undefined && (!Array.isArray(body.mediaTypes) || body.mediaTypes.some((item) => typeof item !== 'string'))) {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'mediaTypes must be an array of strings.'))
+          return
+        }
+        const projectId = decodeURIComponent(resourceMatchRoute[1] ?? '')
+        const graph = metadata.get(projectId)
+        const active = graph === undefined ? undefined : activeContext.get(projectId, graph)
+        const viewToArtifact = new Map((graph?.artifactViews ?? []).map((view) => [String(view.id), String(view.artifactId)]))
+        const descriptors = resources.list(projectId)
+        const artifactToResource = new Map(descriptors.map((descriptor) => [descriptor.artifactId, descriptor.resourceId]))
+        const mapViews = (viewIds: readonly string[] | undefined): string[] => (viewIds ?? [])
+          .map((viewId) => viewToArtifact.get(String(viewId)))
+          .filter((artifactId): artifactId is string => artifactId !== undefined)
+        const excludedResourceIds = mapViews(active?.excludedContextIds)
+          .map((artifactId) => artifactToResource.get(artifactId))
+          .filter((resourceId): resourceId is string => resourceId !== undefined)
+        const pinnedResourceIds = mapViews(active?.pinnedContextIds)
+          .map((artifactId) => artifactToResource.get(artifactId))
+          .filter((resourceId): resourceId is string => resourceId !== undefined)
+        const activeContextArtifactIds = mapViews(active?.selectedViewIds)
+        const matches = matcher.match(descriptors, {
+          projectId,
+          instruction: body.instruction,
+          ...(body.outputIntent === undefined ? {} : { outputIntent: body.outputIntent as 'create' | 'revise' | 'analyze' }),
+          ...(body.mediaTypes === undefined ? {} : { mediaTypes: body.mediaTypes as readonly string[] }),
+          ...(body.limit === undefined ? {} : { limit: Number(body.limit) }),
+        }, {
+          ...(excludedResourceIds.length === 0 ? {} : { excludedResourceIds }),
+          ...(pinnedResourceIds.length === 0 ? {} : { pinnedResourceIds }),
+          ...(activeContextArtifactIds.length === 0 ? {} : { activeContextArtifactIds }),
+        })
+        sendJson(response, 200, { ok: true, value: matches })
+        return
+      }
+      if (resources !== undefined) {
+        if (method === 'GET' && resourceListMatch !== null) {
+          if (!requireMetadata(metadata, response)) return
+          const projectId = decodeURIComponent(resourceListMatch[1] ?? '')
+          const descriptors = resources.list(projectId)
+          sendJson(response, 200, {
+            ok: true,
+            value: descriptors.map((descriptor) => ({
+              resourceId: descriptor.resourceId,
+              artifactId: descriptor.artifactId,
+              title: descriptor.display.title,
+              status: descriptor.understanding.status,
+              analyzerVersion: descriptor.understanding.analyzerVersion,
+            })),
+          })
+          return
+        }
+        if (method === 'GET' && resourceDescriptorMatch !== null) {
+          if (!requireMetadata(metadata, response)) return
+          const projectId = decodeURIComponent(resourceDescriptorMatch[1] ?? '')
+          const resourceId = decodeURIComponent(resourceDescriptorMatch[2] ?? '')
+          const descriptor = resources.getDescriptor(projectId, resourceId)
+          if (descriptor === undefined) {
+            sendJson(response, 404, failure('NOT_FOUND', 'Resource descriptor not found.'))
+            return
+          }
+          sendJson(response, 200, { ok: true, value: descriptor })
+          return
+        }
+        if (method === 'GET' && resourceContentMatch !== null) {
+          if (!requireMetadata(metadata, response)) return
+          if (resourceReader === undefined) {
+            sendJson(response, 503, failure('UNAVAILABLE', 'Resource Reader is not configured.'))
+            return
+          }
+          const projectId = decodeURIComponent(resourceContentMatch[1] ?? '')
+          const resourceId = decodeURIComponent(resourceContentMatch[2] ?? '')
+          const params = url.searchParams
+          const format = params.get('format') ?? 'text'
+          if (format !== 'raw' && format !== 'text' && format !== 'json_tree') {
+            sendJson(response, 400, failure('INVALID_ARGUMENT', 'format must be raw, text or json_tree.'))
+            return
+          }
+          const offset = params.get('offset') === null ? undefined : Number(params.get('offset'))
+          const limit = params.get('limit') === null ? undefined : Number(params.get('limit'))
+          if ((offset !== undefined && !Number.isFinite(offset)) || (limit !== undefined && !Number.isFinite(limit))) {
+            sendJson(response, 400, failure('INVALID_ARGUMENT', 'offset and limit must be numbers.'))
+            return
+          }
+          try {
+            const result = await resourceReader.read(projectId, resourceId, {
+              ...(params.get('path') === null ? {} : { path: String(params.get('path')) }),
+              ...(offset === undefined ? {} : { offset }),
+              ...(limit === undefined ? {} : { limit }),
+              format: format as 'raw' | 'text' | 'json_tree',
+            })
+            sendJson(response, 200, { ok: true, value: result })
+          } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : 'Resource content read failed.'
+            sendJson(response, message.includes('not found') ? 404 : 400, failure(message.includes('not found') ? 'NOT_FOUND' : 'VALIDATION', message))
+          }
+          return
+        }
+        if (method === 'POST' && resourceReanalyzeMatch !== null) {
+          if (!requireMetadata(metadata, response)) return
+          const projectId = decodeURIComponent(resourceReanalyzeMatch[1] ?? '')
+          const resourceId = decodeURIComponent(resourceReanalyzeMatch[2] ?? '')
+          const descriptor = await resources.reanalyze(projectId, resourceId)
+          if (descriptor === undefined) {
+            sendJson(response, 404, failure('NOT_FOUND', 'Resource descriptor not found.'))
+            return
+          }
+          sendJson(response, 200, { ok: true, value: descriptor })
+          return
+        }
+        if (method === 'GET' && resourceOneMatch !== null) {
+          if (!requireMetadata(metadata, response)) return
+          const projectId = decodeURIComponent(resourceOneMatch[1] ?? '')
+          const resourceId = decodeURIComponent(resourceOneMatch[2] ?? '')
+          const descriptor = resources.getDescriptor(projectId, resourceId)
+          if (descriptor === undefined) {
+            sendJson(response, 404, failure('NOT_FOUND', 'Resource not found.'))
+            return
+          }
+          const artifact = metadata.getArtifact(descriptor.artifactId)
+          sendJson(response, 200, { ok: true, value: { resourceId, artifact: artifact ?? null, descriptor } })
+          return
+        }
       }
 
       // ==================== Individual CRUD routes ====================

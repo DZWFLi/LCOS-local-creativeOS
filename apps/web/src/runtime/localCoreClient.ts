@@ -11,6 +11,8 @@ import type {
   ProjectGraphSnapshot,
   PreviewRecord,
   RejectArtifactReturnResult,
+  ImportResourceResultV1,
+  ResourceDescriptorV0,
   Result,
   RetryRunInput,
   RetryRunResult,
@@ -123,6 +125,55 @@ export interface LocalCoreClient {
   health(signal?: AbortSignal): Promise<RuntimeCall<HealthStatus>>
   catalog(signal?: AbortSignal): Promise<RuntimeCall<readonly ProjectCatalogEntry[]>>
   validateProjectRoot(rootPath: string, signal?: AbortSignal): Promise<RuntimeCall<ValidatedProjectRoot>>
+  importResourceUrl(projectId: string, input: {
+    readonly url: string
+    readonly title?: string
+    readonly note?: string
+    readonly scopeId: string
+    readonly x: number
+    readonly y: number
+    readonly importRequestId?: string
+  }, signal?: AbortSignal): Promise<RuntimeCall<ImportResourceResultV1>>
+  resourceList(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<readonly {
+    readonly resourceId: string
+    readonly artifactId: string
+    readonly title: string
+    readonly status: string
+    readonly analyzerVersion: string
+  }[]>>
+  resourceDescriptor(projectId: string, resourceId: string, signal?: AbortSignal): Promise<RuntimeCall<ResourceDescriptorV0>>
+  resourceReanalyze(projectId: string, resourceId: string, signal?: AbortSignal): Promise<RuntimeCall<ResourceDescriptorV0>>
+  resourceRead(projectId: string, resourceId: string, input: {
+    readonly path?: string
+    readonly limit?: number
+  }, signal?: AbortSignal): Promise<RuntimeCall<{
+    readonly resourceId: string
+    readonly fileName: string
+    readonly mimeType?: string
+    readonly contentHash?: string
+    readonly size: number
+    readonly offset: number
+    readonly limit: number
+    readonly truncated: boolean
+    readonly format: string
+    readonly data: string
+  }>>
+  importResourceDirectory(projectId: string, input: {
+    readonly importRequestId: string
+    readonly rootName: string
+    readonly files: readonly { readonly path: string; readonly content: string }[]
+    readonly scopeId: string
+    readonly x: number
+    readonly y: number
+    readonly note?: string
+  }, signal?: AbortSignal): Promise<RuntimeCall<ImportResourceResultV1>>
+  importResourceArchive(projectId: string, input: {
+    readonly file: File
+    readonly importRequestId: string
+    readonly scopeId: string
+    readonly x: number
+    readonly y: number
+  }, signal?: AbortSignal): Promise<RuntimeCall<ImportResourceResultV1>>
   createProject(input: {
     readonly name: string
     readonly rootPath: string
@@ -311,6 +362,88 @@ export function createLocalCoreClient(): LocalCoreClient {
           body: JSON.stringify(input),
         },
         decode: decodeResult<ProjectCatalogEntry>,
+      })
+    },
+    importResourceUrl(projectId, input, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/resources/import-url`, {
+        signal,
+        init: {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(input),
+        },
+        decode: decodeResult<ImportResourceResultV1>,
+      })
+    },
+    resourceList(projectId, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/resources`, {
+        signal,
+        decode: decodeResult<readonly {
+          readonly resourceId: string
+          readonly artifactId: string
+          readonly title: string
+          readonly status: string
+          readonly analyzerVersion: string
+        }[]>,
+      })
+    },
+    resourceDescriptor(projectId, resourceId, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/resources/${encodeURIComponent(resourceId)}/descriptor`, {
+        signal,
+        decode: decodeResult<ResourceDescriptorV0>,
+      })
+    },
+    resourceReanalyze(projectId, resourceId, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/resources/${encodeURIComponent(resourceId)}/reanalyze`, {
+        signal,
+        init: { method: 'POST' },
+        decode: decodeResult<ResourceDescriptorV0>,
+      })
+    },
+    resourceRead(projectId, resourceId, input, signal) {
+      const query = new URLSearchParams()
+      if (input.path !== undefined) query.set('path', input.path)
+      if (input.limit !== undefined) query.set('limit', String(input.limit))
+      const suffix = query.size === 0 ? '' : `?${query.toString()}`
+      return request(`/projects/${encodeURIComponent(projectId)}/resources/${encodeURIComponent(resourceId)}/content${suffix}`, {
+        signal,
+        decode: decodeResult<{
+          readonly resourceId: string
+          readonly fileName: string
+          readonly mimeType?: string
+          readonly contentHash?: string
+          readonly size: number
+          readonly offset: number
+          readonly limit: number
+          readonly truncated: boolean
+          readonly format: string
+          readonly data: string
+        }>,
+      })
+    },
+    importResourceDirectory(projectId, input, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/resources/import-directory`, {
+        signal,
+        init: {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(input),
+        },
+        decode: decodeResult<ImportResourceResultV1>,
+      })
+    },
+    importResourceArchive(projectId, input, signal) {
+      const body = new FormData()
+      body.set('file', input.file)
+      body.set('importRequestId', input.importRequestId)
+      body.set('scopeId', input.scopeId)
+      body.set('position.x', String(input.x))
+      body.set('position.y', String(input.y))
+      return request(`/projects/${encodeURIComponent(projectId)}/resources/import-archive`, {
+        signal,
+        timeoutMs: 30_000,
+        init: { method: 'POST', body },
+        decode: decodeResult<ImportResourceResultV1>,
       })
     },
     metadataStatus(signal) {

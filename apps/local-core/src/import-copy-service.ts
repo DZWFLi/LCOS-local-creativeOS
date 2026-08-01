@@ -7,7 +7,7 @@ import type { Artifact, ArtifactRevision, ArtifactView, FileRecord, ProjectId, S
 import { SqliteMetadataRepository } from './metadata-repository.js'
 
 const MAX_IMPORT_BYTES = 25 * 1024 * 1024
-const SUPPORTED_EXTENSIONS = new Set(['.md', '.txt', '.png', '.jpg', '.jpeg', '.webp'])
+const SUPPORTED_EXTENSIONS = new Set(['.md', '.txt', '.json', '.yaml', '.yml', '.png', '.jpg', '.jpeg', '.webp'])
 
 export interface ImportCopyInput {
   readonly importRequestId: string
@@ -47,6 +47,8 @@ function safeFileName(value: string): string {
 function mimeTypeFor(extension: string, provided: string): string {
   if (extension === '.md') return 'text/markdown'
   if (extension === '.txt') return 'text/plain'
+  if (extension === '.json') return 'application/json'
+  if (extension === '.yaml' || extension === '.yml') return 'application/yaml'
   if (extension === '.png') return 'image/png'
   if (extension === '.jpg' || extension === '.jpeg') return 'image/jpeg'
   if (extension === '.webp') return 'image/webp'
@@ -55,6 +57,7 @@ function mimeTypeFor(extension: string, provided: string): string {
 
 function artifactKindFor(extension: string): Artifact['kind'] {
   if (extension === '.md' || extension === '.txt') return 'markdown'
+  if (extension === '.json' || extension === '.yaml' || extension === '.yml') return 'other'
   if (['.png', '.jpg', '.jpeg', '.webp'].includes(extension)) return 'image'
   return 'other'
 }

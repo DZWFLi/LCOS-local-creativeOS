@@ -292,4 +292,60 @@ describe('Local Core browser client', () => {
       },
     })
   })
+
+  it('imports a directory as base64 JSON without any purpose fields', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({
+      ok: true,
+      value: { resourceId: 'resource-dir', sourceKind: 'directory_copy', understandingStatus: 'pending' },
+    }, 201))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await createLocalCoreClient().importResourceDirectory('project-1', {
+      importRequestId: 'dir-1',
+      rootName: 'my-skill',
+      files: [{ path: 'SKILL.md', content: 'IyBTa2lsbA==' }],
+      scopeId: 'scope-root',
+      x: 10,
+      y: 20,
+    })
+
+    const calls = fetchMock.mock.calls as unknown as [string, RequestInit][]
+    const [, init] = calls[0]
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/local-core/v1/projects/project-1/resources/import-directory',
+      expect.objectContaining({ method: 'POST' }),
+    )
+    const body = JSON.parse(String(init.body)) as Record<string, unknown>
+    expect(body.purpose).toBeUndefined()
+    expect(body.description).toBeUndefined()
+    expect(body.files).toEqual([{ path: 'SKILL.md', content: 'IyBTa2lsbA==' }])
+    expect(result.result).toMatchObject({ ok: true, value: { sourceKind: 'directory_copy' } })
+  })
+
+  it('imports a ZIP archive as multipart', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({
+      ok: true,
+      value: { resourceId: 'resource-zip', sourceKind: 'archive_copy', understandingStatus: 'pending' },
+    }, 201))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const file = new File([new Uint8Array([80, 75, 5, 6])], 'pkg.zip', { type: 'application/zip' })
+    await createLocalCoreClient().importResourceArchive('project-1', {
+      file,
+      importRequestId: 'zip-1',
+      scopeId: 'scope-root',
+      x: 0,
+      y: 0,
+    })
+
+    const calls = fetchMock.mock.calls as unknown as [string, RequestInit][]
+    const [, init] = calls[0]
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/local-core/v1/projects/project-1/resources/import-archive',
+      expect.objectContaining({ method: 'POST' }),
+    )
+    const form = init.body as FormData
+    expect(form.get('file')).toBe(file)
+    expect(form.get('importRequestId')).toBe('zip-1')
+  })
 })

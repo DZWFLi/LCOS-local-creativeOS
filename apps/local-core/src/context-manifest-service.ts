@@ -225,6 +225,7 @@ export class ContextManifestService {
       references,
       requestedOutput: input.requestedOutput?.trim() || 'Markdown Script Revision',
       orderedItems,
+      ...(input.resourceRefs !== undefined && input.resourceRefs.length > 0 ? { resourceRefs: input.resourceRefs } : {}),
       truncationMetadata: {
         maxItemCharacters: MAX_ITEM_CHARACTERS,
         truncatedItemIds,

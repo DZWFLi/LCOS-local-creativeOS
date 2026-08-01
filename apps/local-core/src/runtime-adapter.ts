@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { isAbsolute, relative, resolve } from 'node:path'
+import { dirname, isAbsolute, relative, resolve } from 'node:path'
 
 import type {
   RuntimePersistenceContract,
@@ -27,6 +27,20 @@ export interface RuntimeInputPackV0 {
   readonly expectedOutputs: readonly RuntimeExpectedOutputV0[]
   readonly resultEnvelopePath: string
   readonly constraints: readonly string[]
+  readonly resourceRefs?: readonly {
+    readonly resourceId: string
+    readonly artifactId: string
+    readonly sourceRevisionId: string
+    readonly descriptorHash: string
+    readonly role: 'context' | 'candidate_skill' | 'reference' | 'tool_config'
+    readonly matchReasons: readonly string[]
+    readonly requiresApproval: boolean
+  }[]
+  readonly resourceFiles?: readonly {
+    readonly resourceId: string
+    readonly path: string
+    readonly content: string
+  }[]
 }
 
 export interface LegacyBridgeTaskEnvelopeV0 {
@@ -130,6 +144,13 @@ export class RuntimeAdapterError extends Error {
 
 export interface RuntimeProjectReader {
   getProject(projectId: string): { readonly rootPath: string } | undefined
+  getArtifactRevision(revisionId: string): { readonly fileRecordId: string } | undefined
+  getFileRecord(fileRecordId: string): { readonly observedPath: string } | undefined
+  getResourceDescriptorByResourceId(projectId: string, resourceId: string): {
+    readonly sourceRevisionId: string
+    readonly source: { readonly kind: 'file' | 'directory' | 'archive' | 'external' | 'url' }
+    readonly readFirst: readonly string[]
+  } | undefined
 }
 
 function canonicalJson(value: unknown): string {
@@ -321,6 +342,13 @@ export class RuntimeAdapterService {
     await mkdir(resolve(runtimeRoot, 'result'), { recursive: true })
 
     const expectedOutputs = [{ absolutePath: outputPath, mode: 'create_new_file' as const }]
+    const parsedManifest = JSON.parse(manifest.canonicalJson) as {
+      resourceRefs?: RuntimeInputPackV0['resourceRefs']
+    }
+    const resourceRefs = parsedManifest.resourceRefs
+    const resourceFiles = resourceRefs === undefined || resourceRefs.length === 0
+      ? undefined
+      : await this.#resourcePackFiles(String(run.projectId), resourceRefs)
     const pack: RuntimeInputPackV0 = {
       schemaVersion: 0,
       contractVersion: 'runtime-input-pack-v0',
@@ -335,6 +363,8 @@ export class RuntimeAdapterService {
         'Write only the listed expected output.',
         'Return providerStatus review on success.',
       ],
+      ...(resourceRefs === undefined || resourceRefs.length === 0 ? {} : { resourceRefs }),
+      ...(resourceFiles === undefined || resourceFiles.length === 0 ? {} : { resourceFiles }),
     }
     await writeImmutable(packPath, `${canonicalJson(pack)}\n`)
 
@@ -369,6 +399,50 @@ export class RuntimeAdapterService {
     }
     const requestFingerprint = createTaskRequestFingerprint(unsigned)
     return { envelope: { ...unsigned, requestFingerprint } }
+  }
+
+  async #resourcePackFiles(
+    projectId: string,
+    refs: NonNullable<RuntimeInputPackV0['resourceRefs']>,
+  ): Promise<NonNullable<RuntimeInputPackV0['resourceFiles']>> {
+    const result: Array<{
+      readonly resourceId: string
+      readonly path: string
+      readonly content: string
+    }> = []
+    for (const ref of refs.slice(0, 6)) {
+      const descriptor = this.repository.getResourceDescriptorByResourceId(projectId, ref.resourceId)
+      if (descriptor === undefined) continue
+      result.push({
+        resourceId: ref.resourceId,
+        path: '<descriptor>',
+        content: JSON.stringify(descriptor).slice(0, 64 * 1024),
+      })
+      const revision = this.repository.getArtifactRevision(ref.sourceRevisionId)
+      const fileRecord = revision === undefined ? undefined : this.repository.getFileRecord(String(revision.fileRecordId))
+      if (fileRecord === undefined) continue
+      try {
+        if (descriptor.source.kind === 'directory') {
+          const manifestText = await readFile(fileRecord.observedPath, 'utf8')
+          const manifest = JSON.parse(manifestText) as { files?: readonly { path: string }[] }
+          const filePaths = new Set((manifest.files ?? []).map((file) => file.path))
+          const sourceRoot = resolve(dirname(fileRecord.observedPath), 'source')
+          for (const path of descriptor.readFirst.slice(0, 4)) {
+            if (!filePaths.has(path)) continue
+            const target = resolve(sourceRoot, path)
+            if (relative(sourceRoot, target).startsWith('..')) continue
+            const content = await readFile(target, 'utf8')
+            result.push({ resourceId: ref.resourceId, path, content: content.slice(0, 32 * 1024) })
+          }
+        } else if (descriptor.readFirst.length === 0) {
+          const content = await readFile(fileRecord.observedPath, 'utf8')
+          result.push({ resourceId: ref.resourceId, path: 'content', content: content.slice(0, 32 * 1024) })
+        }
+      } catch {
+        // Resource files are best-effort; a failed read never blocks dispatch.
+      }
+    }
+    return result
   }
 
   private bind(run: Run, task: BridgeTaskIdentity): RuntimeBinding {

@@ -1,4 +1,4 @@
-import { FilePlus2, Link2, PackageOpen, Search, Sparkles, Upload, X } from 'lucide-react'
+import { FilePlus2, FolderInput, Link2, PackageOpen, Search, Sparkles, Upload, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CanvasNode } from '../../model'
 import type { V07CapabilitySet } from '../../runtime/v07UiContracts'
@@ -10,6 +10,7 @@ interface Props {
   onImport: (files: File[]) => void
   onCreateObject: () => void
   onAddLink: () => void
+  onUniversalImport: () => void
   onHandoff: () => void
   onOpenComposer: () => void
   onSelectNode: (id: string) => void
@@ -48,6 +49,7 @@ export function CapabilityPopover(props: Props) {
           <button className="capability-card pressable" disabled={!props.capabilities.importCopy.enabled} title={props.capabilities.importCopy.reason} onClick={() => input.current?.click()}><Upload size={15} /><span><b>Import Copy</b><small>复制进项目</small></span></button>
           <button className="capability-card pressable" onClick={props.onCreateObject}><FilePlus2 size={15} /><span><b>新建对象</b><small>Note / Feedback</small></span></button>
           <button className="capability-card pressable" disabled={!props.capabilities.linkReference.enabled} title={props.capabilities.linkReference.reason} onClick={props.onAddLink}><Link2 size={15} /><span><b>链接参考</b><small>网页与在线资料</small></span></button>
+          <button className="capability-card pressable" onClick={props.onUniversalImport}><FolderInput size={15} /><span><b>通用导入</b><small>文件 / 文件夹 / ZIP</small></span></button>
           <button className="capability-card pressable" disabled={!props.capabilities.contextManifest.enabled} title={props.capabilities.contextManifest.reason} onClick={props.onHandoff}><PackageOpen size={15} /><span><b>生成 Handoff</b><small>Context Manifest</small></span></button>
         </div>
         <input ref={input} hidden multiple type="file" onChange={(event) => { const files = [...(event.currentTarget.files ?? [])]; if (files.length) props.onImport(files); event.currentTarget.value = '' }} />

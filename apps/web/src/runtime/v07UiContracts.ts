@@ -19,57 +19,8 @@ export interface V07CapabilitySet {
 
 export interface LinkReferenceInput {
   readonly url: string
-  readonly title: string
-  readonly description: string
-  readonly purpose: string
-}
-
-export interface LinkReferenceDocument {
-  readonly fileName: string
-  readonly markdown: string
-  readonly provider: 'feishu' | 'web'
-  readonly resourceType: 'wiki' | 'document' | 'sheet' | 'base' | 'web'
-}
-
-export function createLinkReferenceDocument(input: LinkReferenceInput): LinkReferenceDocument {
-  const link = new URL(input.url)
-  if (!['http:', 'https:'].includes(link.protocol)) throw new Error('Link Reference requires HTTP or HTTPS.')
-  const provider = /(^|\.)feishu\.cn$|(^|\.)larksuite\.com$|(^|\.)feishu\.com$/i.test(link.hostname)
-    ? 'feishu'
-    : 'web'
-  const resourceType = /\/wiki\//i.test(link.pathname)
-    ? 'wiki'
-    : /\/docx?\//i.test(link.pathname)
-      ? 'document'
-      : /\/sheets?\//i.test(link.pathname)
-        ? 'sheet'
-        : /\/base\//i.test(link.pathname)
-          ? 'base'
-          : 'web'
-  const slug = input.title.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '-').trim() || 'link-reference'
-  return {
-    fileName: `${slug}.link.md`,
-    provider,
-    resourceType,
-    markdown: [
-      '---',
-      `sourceKind: ${provider === 'feishu' ? 'feishu_link' : 'external_url'}`,
-      `provider: ${provider}`,
-      `resourceType: ${resourceType}`,
-      `url: ${input.url}`,
-      `title: ${input.title}`,
-      'accessMode: open_with_available_tool',
-      '---',
-      '',
-      input.description || 'External project reference.',
-      '',
-      '## Project purpose',
-      '',
-      input.purpose || 'Use as project context when explicitly selected.',
-      '',
-      '> Agent rule: report access failure honestly; do not claim the page was read when unavailable.',
-    ].join('\n'),
-  }
+  readonly title?: string
+  readonly note?: string
 }
 
 export interface WebReferencePresentation {

@@ -50,6 +50,27 @@ const tools = [
   tool("cancel_lcos_task", "Request cancellation of a Light Bridge task.", {
     task_id: { type: "string" },
   }, ["task_id"]),
+  tool("lcos_resource_list", "List imported resources and their understanding status.", {
+    projectId: { type: "string" },
+  }, ["projectId"]),
+  tool("lcos_resource_describe", "Read one resource descriptor (system understanding of the resource).", {
+    projectId: { type: "string" },
+    resourceId: { type: "string" },
+  }, ["projectId", "resourceId"]),
+  tool("lcos_resource_read", "Read resource content within safe bounds (never arbitrary host paths).", {
+    projectId: { type: "string" },
+    resourceId: { type: "string" },
+    path: { type: "string" },
+    offset: { type: "number" },
+    limit: { type: "number" },
+    format: { type: "string", enum: ["text", "raw", "json_tree"] },
+  }, ["projectId", "resourceId"]),
+  tool("lcos_resource_match", "Match resources against an instruction at Run time; returns candidates, never writes classifications.", {
+    projectId: { type: "string" },
+    instruction: { type: "string" },
+    outputIntent: { type: "string", enum: ["create", "revise", "analyze"] },
+    limit: { type: "number" },
+  }, ["projectId", "instruction"]),
 ];
 
 const lines = readline.createInterface({ input: process.stdin, crlfDelay: Infinity });
@@ -141,6 +162,33 @@ async function handle({ id, method, params }) {
       value = await bridgeRequest(`/v1/tasks/${encodeURIComponent(required(args.task_id, "task_id"))}/cancel`, {
         method: "POST",
         ...jsonBody({}),
+      });
+      break;
+    case "lcos_resource_list":
+      value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/resources`);
+      break;
+    case "lcos_resource_describe":
+      value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/resources/${encodeURIComponent(required(args.resourceId, "resourceId"))}/descriptor`);
+      break;
+    case "lcos_resource_read":
+      {
+        const query = new URLSearchParams();
+        if (args.path) query.set("path", args.path);
+        if (args.offset !== undefined) query.set("offset", String(args.offset));
+        if (args.limit !== undefined) query.set("limit", String(args.limit));
+        if (args.format) query.set("format", args.format);
+        const suffix = query.size === 0 ? "" : `?${query.toString()}`;
+        value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/resources/${encodeURIComponent(required(args.resourceId, "resourceId"))}/content${suffix}`);
+      }
+      break;
+    case "lcos_resource_match":
+      value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/resources/match`, {
+        method: "POST",
+        ...jsonBody({
+          instruction: required(args.instruction, "instruction"),
+          ...(args.outputIntent ? { outputIntent: args.outputIntent } : {}),
+          ...(args.limit !== undefined ? { limit: args.limit } : {}),
+        }),
       });
       break;
     default:

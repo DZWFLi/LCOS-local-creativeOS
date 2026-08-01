@@ -21,7 +21,9 @@ import { V07TopBar } from './features/shell/V07TopBar'
 import { CapabilityPopover } from './features/shell/CapabilityPopover'
 import { NodeInfoPopover } from './features/canvas/NodeInfoPopover'
 import { LinkReferenceDialog } from './features/create/LinkReferenceDialog'
-import { capabilitiesFor, createLinkReferenceDocument, type LinkReferenceInput } from './runtime/v07UiContracts'
+import { UniversalImportPanel, type DirectoryEntryInput } from './features/resources/UniversalImportPanel'
+import { ResourceDetailDialog } from './features/resources/ResourceDetailDialog'
+import { capabilitiesFor, type LinkReferenceInput } from './runtime/v07UiContracts'
 import { clearPrototypeState, loadProjectCatalog, loadPrototypeState, saveProjectCatalog, savePrototypeState } from './state/prototypeStorage'
 import { clearProjectNavigationState, loadProjectNavigationState, saveProjectNavigationState } from './state/projectNavigation'
 import { buildWorkspaceFrames } from './state/workspaceFrames'
@@ -134,6 +136,8 @@ export function App() {
   const [handoffError, setHandoffError] = useState<string | undefined>()
   const [capabilityOpen, setCapabilityOpen] = useState(false)
   const [linkDialogOpen, setLinkDialogOpen] = useState(false)
+  const [importPanelOpen, setImportPanelOpen] = useState(false)
+  const [resourceDetailArtifactId, setResourceDetailArtifactId] = useState<string | null>(null)
   const [activeContextProjection, setActiveContextProjection] = useState<ActiveContextProjection | null>(null)
   const [activeContextError, setActiveContextError] = useState<string | null>(null)
 
@@ -912,15 +916,111 @@ export function App() {
   }, [activeProjectId, bootMode, resetGraph, scopeId, setNodes])
 
   const createLinkReference = useCallback((input: LinkReferenceInput) => {
-    const document = createLinkReferenceDocument(input)
-    const file = new File([document.markdown], document.fileName, { type: 'text/markdown' })
     const point = lastCanvasPointRef.current ?? { x: 180, y: 160 }
-    dropFiles([file], point.x, point.y)
     setLinkDialogOpen(false)
-    setCapabilityOpen(true)
-  }, [dropFiles])
+    void bridgeRef.current.client.importResourceUrl(activeProjectId, {
+      url: input.url,
+      ...(input.title === undefined ? {} : { title: input.title }),
+      ...(input.note === undefined ? {} : { note: input.note }),
+      scopeId,
+      x: point.x,
+      y: point.y,
+    }).then(async (call) => {
+      if (!call.result.ok) {
+        setNotice(`链接导入失败：${call.result.error.message}`)
+        return
+      }
+      setNotice('链接已加入项目，正在理解…')
+      const loaded = await bridgeRef.current.loadProject()
+      if (loaded.source === 'runtime' && loaded.state) {
+        const rootScope = loaded.state.scopes.find((scope) => scope.kind === 'root')
+        resetGraph({ nodes: loaded.state.nodes, edges: loaded.state.edges })
+        setWorkspaces(loaded.state.workspaces)
+        setScopes(loaded.state.scopes)
+        setWorkspaceId(null)
+        setScopeId(rootScope?.id ?? loaded.state.activeScopeId)
+        setCamera(rootScope?.camera ?? camera)
+        setWorkRail(normalizeRailPreferences(loaded.state.workRail))
+      }
+    }).catch(() => {
+      setNotice('链接已保存，但画布刷新失败')
+    })
+  }, [activeProjectId, camera, resetGraph, scopeId, setCamera, setScopes, setWorkRail, setWorkspaces])
 
+  const reloadRuntimeProject = useCallback(async (): Promise<void> => {
+    const loaded = await bridgeRef.current.loadProject()
+    if (loaded.source === 'runtime' && loaded.state) {
+      const rootScope = loaded.state.scopes.find((scope) => scope.kind === 'root')
+      resetGraph({ nodes: loaded.state.nodes, edges: loaded.state.edges })
+      setWorkspaces(loaded.state.workspaces)
+      setScopes(loaded.state.scopes)
+      setWorkspaceId(null)
+      setScopeId(rootScope?.id ?? loaded.state.activeScopeId)
+      setCamera(rootScope?.camera ?? camera)
+      setWorkRail(normalizeRailPreferences(loaded.state.workRail))
+    }
+  }, [camera, resetGraph, setCamera, setScopes, setWorkRail, setWorkspaces])
 
+  const refreshResourceStatuses = useCallback(async (): Promise<void> => {
+    if (bootMode !== 'runtime') return
+    const call = await bridgeRef.current.client.resourceList(activeProjectId)
+    if (!call.result.ok) return
+    const statusByArtifact = new Map(call.result.value.map((entry) => [entry.artifactId, entry.status]))
+    setNodes((current) => current.map((node) => {
+      if (node.artifactId === undefined) return node
+      const status = statusByArtifact.get(String(node.artifactId))
+      if (status === undefined) return node
+      const label = status === 'ready' ? '已理解' : status === 'partial' ? '部分理解' : status === 'failed' ? '理解失败' : '理解中'
+      if (node.subtitle === label) return node
+      return { ...node, subtitle: label }
+    }))
+  }, [activeProjectId, bootMode, setNodes])
+
+  const handleImportDirectory = useCallback((rootName: string, files: readonly DirectoryEntryInput[], note?: string) => {
+    const point = lastCanvasPointRef.current ?? { x: 180, y: 160 }
+    void bridgeRef.current.client.importResourceDirectory(activeProjectId, {
+      importRequestId: `dir-${Date.now().toString(36)}`,
+      rootName,
+      files,
+      scopeId,
+      x: point.x,
+      y: point.y,
+      ...(note === undefined ? {} : { note }),
+    }).then(async (call) => {
+      if (!call.result.ok) {
+        setNotice(`目录导入失败：${call.result.error.message}`)
+        return
+      }
+      setNotice(`${rootName} 已导入，正在理解…`)
+      await reloadRuntimeProject()
+      await refreshResourceStatuses()
+    }).catch(() => setNotice('目录导入失败：连接异常'))
+  }, [activeProjectId, refreshResourceStatuses, reloadRuntimeProject, scopeId])
+
+  const handleImportArchive = useCallback((file: File, note?: string) => {
+    const point = lastCanvasPointRef.current ?? { x: 180, y: 160 }
+    void bridgeRef.current.client.importResourceArchive(activeProjectId, {
+      file,
+      importRequestId: `zip-${Date.now().toString(36)}`,
+      scopeId,
+      x: point.x,
+      y: point.y,
+    }).then(async (call) => {
+      if (!call.result.ok) {
+        setNotice(`压缩包导入失败：${call.result.error.message}`)
+        return
+      }
+      setNotice(`${file.name} 已导入，正在理解…`)
+      await reloadRuntimeProject()
+      await refreshResourceStatuses()
+    }).catch(() => setNotice('压缩包导入失败：连接异常'))
+  }, [activeProjectId, refreshResourceStatuses, reloadRuntimeProject, scopeId])
+
+  useEffect(() => {
+    if (bootMode !== 'runtime' || !activeProjectId) return
+    const timer = window.setInterval(() => { void refreshResourceStatuses() }, 60_000)
+    return () => window.clearInterval(timer)
+  }, [activeProjectId, bootMode, refreshResourceStatuses])
 
   const applyRuntimeReview = useCallback((review: RunReview, current: ActiveRun, providerError?: string) => {
     const pendingReturn = review.returns.find((item) => item.status === 'pending_review')
@@ -1497,7 +1597,7 @@ export function App() {
   return <main className="app-shell v05 v051 v052 v053 v056 v0561 v06 v06-phase2 v06-phase3 v061 v07 v071 porcelain-studio-v2" data-testid="creative-os-app">
     <V07TopBar projects={projects} openProjectIds={openProjectIds} activeProjectId={activeProjectId} scopePath={scopePath} saveStatus={saveStatus} runStatus={activeRun?.status ?? null} workRailCollapsed={workRail.collapsed} onOpenDrive={() => setProjectOpen(false)} onOpenProject={openProject} onCloseProject={closeProjectTab} onOpenScope={enterScope} onToggleWorkRail={() => setWorkRail((current) => ({ ...current, collapsed: !current.collapsed }))} />
     <section className={`scene intent-${effectiveWorkspace.intent ?? 'blank'}`} style={sceneStyle} data-project-id={activeProjectId} data-scope-id={scopeId} data-workspace-id={workspaceId ?? 'project-overview'} data-workspace-intent={effectiveWorkspace.intent ?? 'blank'}>
-      {capabilityOpen && <CapabilityPopover capabilities={capabilities} nodes={scopeNodes} onClose={() => setCapabilityOpen(false)} onImport={(files) => { const point = lastCanvasPointRef.current ?? { x: 180, y: 160 }; dropFiles(files, point.x, point.y); setCapabilityOpen(false) }} onCreateObject={() => { setCapabilityOpen(false); setCreateDialogOpen(true) }} onAddLink={() => { setCapabilityOpen(false); setLinkDialogOpen(true) }} onHandoff={() => { setCapabilityOpen(false); void openHandoff() }} onOpenComposer={() => { setCapabilityOpen(false); requestComposerFocus() }} onSelectNode={(id) => { selectNode(id); setCapabilityOpen(false) }} />}
+      {capabilityOpen && <CapabilityPopover capabilities={capabilities} nodes={scopeNodes} onClose={() => setCapabilityOpen(false)} onImport={(files) => { const point = lastCanvasPointRef.current ?? { x: 180, y: 160 }; dropFiles(files, point.x, point.y); setCapabilityOpen(false) }} onCreateObject={() => { setCapabilityOpen(false); setCreateDialogOpen(true) }} onAddLink={() => { setCapabilityOpen(false); setLinkDialogOpen(true) }} onUniversalImport={() => { setCapabilityOpen(false); setImportPanelOpen(true) }} onHandoff={() => { setCapabilityOpen(false); void openHandoff() }} onOpenComposer={() => { setCapabilityOpen(false); requestComposerFocus() }} onSelectNode={(id) => { selectNode(id); setCapabilityOpen(false) }} />}
       <WorkspaceDock workspaces={scopeWorkspaces} activeId={workspaceId} collapsed={dockCollapsed} onCollapsedChange={setDockCollapsed} capabilitiesOpen={capabilityOpen} onOpenCapabilities={() => setCapabilityOpen((value) => !value)} onOverview={activateOverview} onChange={changeWorkspace} onLocate={locateWorkspace} onAddWorkspace={() => setWorkspaceEditor({ mode: 'create' })} onEditWorkspace={(id) => setWorkspaceEditor({ mode: 'edit', id })} onDuplicateWorkspace={duplicateWorkspace} onDeleteWorkspace={deleteWorkspace} onMoveWorkspace={moveWorkspace} runStatus={activeRun?.status ?? null} />
       <ProjectCanvas nodes={visibleNodes} setNodes={setNodes} edges={visibleEdges} setEdges={setEdges} camera={camera} setCamera={setCamera} selectedId={selectedId} selectedIds={selectedIds} selectedEdgeId={selectedEdgeId} setSelectedEdgeId={setSelectedEdgeId} pendingId={activeRun?.pendingArtifactId ?? null} runId={activeRun?.id ?? 'RUN-043'} runStatus={activeRun?.status ?? null} spaceHeld={spaceHeld} locked={createDialogOpen || runConfirmOpen || scopeCreateOpen} layoutPreview={layoutPreview} workspaceFrames={activeWorkspaceFrames} workspaceMemberNodes={scopeNodes} activeWorkspaceId={workspaceId} onWorkspaceActivate={changeWorkspace} onPresentationInteractionChange={handlePresentationInteractionChange} onPresentationCommit={handlePresentationCommit} onSelect={selectNode} onClearSelection={clearSelection} onMarqueeSelect={selectMarquee} onSelectEdge={selectEdge} onDoubleClick={handleDoubleClick} onDetails={showNodeDetails} onRequestAi={requestComposerFocus} onCreateNodeFromAnchor={createNodeFromAnchor} onFilesDropped={dropFiles} onArrangeSelection={arrangeSelection} onCopySelection={copySelectedViews} onDuplicateSelection={duplicateSelectedViews} onCreateScopeFromSelection={() => selectedIds.length ? setScopeCreateOpen(true) : setNotice('先选择要整理进子画布的对象')} onDeleteSelection={deleteSelectedViews} onPointerWorldChange={rememberCanvasPoint} />
       <div className="canvas-hud" data-testid="canvas-hud"><CanvasMiniMap nodes={scopeNodes} workspaceFrames={activeWorkspaceFrames} camera={camera} setCamera={setCamera} collapsed={miniMapCollapsed} onCollapsedChange={setMiniMapCollapsed} safeInsets={safeInsets} /></div>
@@ -1509,7 +1609,7 @@ export function App() {
         selectedNodes={selectedNodes}
         error={activeContextError}
       />}
-      {nodeInfoNode && <NodeInfoPopover node={nodeInfoNode} camera={camera} relationCount={nodeInfoRelationCount} onClose={() => setNodeInfoId(null)} onRelations={() => { selectNode(nodeInfoNode.id); setNodeInfoId(null); setNotice(`${nodeInfoRelationCount} 个关联已在画布中高亮`) }} />}
+      {nodeInfoNode && <NodeInfoPopover node={nodeInfoNode} camera={camera} relationCount={nodeInfoRelationCount} onClose={() => setNodeInfoId(null)} onRelations={() => { selectNode(nodeInfoNode.id); setNodeInfoId(null); setNotice(`${nodeInfoRelationCount} 个关联已在画布中高亮`) }} onShowResource={(node) => { setNodeInfoId(null); setResourceDetailArtifactId(String(node.artifactId)) }} />}
       {activeRun && <button className={`run-pill ${activeRun.status}`} onClick={() => { clearSelection(); setWorkRail((current) => ({ ...current, collapsed: false })) }}><Play size={13} /> {activeRun.id} · {runStatusLabel[activeRun.status]}</button>}
       {checkpoint && <div className="checkpoint"><Check size={15} /> 已形成稳定修改集 <button onClick={() => { setCheckpoint(false); setNotice('检查点已创建') }}>创建检查点</button><button className="quiet" onClick={() => setCheckpoint(false)}>稍后</button></div>}
       <nav className="scene-title v06-breadcrumbs" aria-label="画布层级">{scopePath.map((scope, index) => {
@@ -1527,6 +1627,8 @@ export function App() {
       {confirmWorkspaceId && <ConfirmDialog title="删除这个工作空间？" description="只删除工作空间定义，不删除内容、节点、本地文件或 Camera。" onCancel={() => setConfirmWorkspaceId(null)} onConfirm={confirmDeleteWorkspace} />}
       <HandoffDialog open={handoffOpen} loading={handoffLoading} manifest={handoffManifest} error={handoffError} onClose={() => setHandoffOpen(false)} onCopy={() => { void copyHandoff() }} onDownload={downloadHandoff} />
       <LinkReferenceDialog open={linkDialogOpen} onClose={() => setLinkDialogOpen(false)} onCreate={createLinkReference} />
+      <UniversalImportPanel open={importPanelOpen} onClose={() => setImportPanelOpen(false)} onFiles={(files) => { const point = lastCanvasPointRef.current ?? { x: 180, y: 160 }; dropFiles([...files], point.x, point.y) }} onDirectory={(rootName, files, note) => { void handleImportDirectory(rootName, files, note) }} onArchive={(file, note) => { void handleImportArchive(file, note) }} onOpenLink={() => setLinkDialogOpen(true)} />
+      {resourceDetailArtifactId !== null && <ResourceDetailDialog open projectId={activeProjectId} artifactId={resourceDetailArtifactId} client={bridgeRef.current.client} onClose={() => setResourceDetailArtifactId(null)} onChanged={() => { void refreshResourceStatuses() }} />}
       <button className="prototype-reset" onClick={() => { clearPrototypeState(activeProjectId); clearProjectNavigationState(activeProjectId); window.location.reload() }}>重置演示数据</button>
     </section>
   </main>

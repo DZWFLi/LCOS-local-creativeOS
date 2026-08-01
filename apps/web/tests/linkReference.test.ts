@@ -1,33 +1,75 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { createLinkReferenceDocument } from '../src/runtime/v07UiContracts'
+import { createLocalCoreClient } from '../src/runtime/localCoreClient'
 
-describe('Link Reference document', () => {
-  it('classifies a Feishu document and keeps user-authored context metadata', () => {
-    const result = createLinkReferenceDocument({
-      url: 'https://example.feishu.cn/docx/ABC123',
-      title: '客户反馈',
-      description: '第二轮反馈原文',
-      purpose: '作为脚本修改的正式参考',
+afterEach(() => {
+  vi.unstubAllGlobals()
+  vi.restoreAllMocks()
+})
+
+function jsonResponse(value: unknown, status = 200): Response {
+  return new Response(JSON.stringify(value), {
+    status,
+    headers: { 'content-type': 'application/json' },
+  })
+}
+
+describe('Link Reference zero-form import', () => {
+  it('posts only url, optional title/note and placement to import-url', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({
+      ok: true,
+      value: {
+        resourceId: 'resource-abc',
+        artifactId: 'import-artifact-abc',
+        revisionId: 'import-revision-abc',
+        viewId: 'import-view-abc',
+        sourceKind: 'link',
+        understandingStatus: 'pending',
+      },
+    }, 201))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await createLocalCoreClient().importResourceUrl('project-1', {
+      url: 'https://example.com/script',
+      scopeId: 'scope-root',
+      x: 10,
+      y: 20,
     })
 
-    expect(result).toMatchObject({
-      fileName: '客户反馈.link.md',
-      provider: 'feishu',
-      resourceType: 'document',
+    const calls = fetchMock.mock.calls as unknown as [string, RequestInit][]
+    const [, init] = calls[0]
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/local-core/v1/projects/project-1/resources/import-url',
+      expect.objectContaining({ method: 'POST' }),
+    )
+    expect(JSON.parse(String(init.body))).toEqual({
+      url: 'https://example.com/script',
+      scopeId: 'scope-root',
+      x: 10,
+      y: 20,
     })
-    expect(result.markdown).toContain('sourceKind: feishu_link')
-    expect(result.markdown).toContain('url: https://example.feishu.cn/docx/ABC123')
-    expect(result.markdown).toContain('作为脚本修改的正式参考')
-    expect(result.markdown).toContain('do not claim the page was read')
+    expect(result.result).toMatchObject({
+      ok: true,
+      value: { sourceKind: 'link', understandingStatus: 'pending' },
+    })
   })
 
-  it('rejects non-web protocols', () => {
-    expect(() => createLinkReferenceDocument({
-      url: 'file:///C:/secret.txt',
-      title: 'unsafe',
-      description: '',
-      purpose: '',
-    })).toThrow('HTTP or HTTPS')
+  it('does not require purpose, description, category or workflowStage', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ ok: true, value: { resourceId: 'r' } }, 201))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await createLocalCoreClient().importResourceUrl('project-1', {
+      url: 'https://feishu.cn/wiki/abc',
+      scopeId: 'scope-root',
+      x: 0,
+      y: 0,
+    })
+
+    const calls = fetchMock.mock.calls as unknown as [string, RequestInit][]
+    const body = JSON.parse(String(calls[0]?.[1]?.body)) as Record<string, unknown>
+    expect(body.purpose).toBeUndefined()
+    expect(body.description).toBeUndefined()
+    expect(body.category).toBeUndefined()
+    expect(body.workflowStage).toBeUndefined()
   })
 })

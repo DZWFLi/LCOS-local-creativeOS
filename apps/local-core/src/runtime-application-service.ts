@@ -8,6 +8,7 @@ import { SqliteMetadataRepository } from './metadata-repository.js'
 import { RuntimeAdapterError, RuntimeAdapterService, type RuntimeProviderError } from './runtime-adapter.js'
 import { RuntimeResultIngestionService } from './runtime-result-ingestion.js'
 import { RuntimeReviewService } from './runtime-review-service.js'
+import { ResourceMatcher } from './resources/resource-matcher.js'
 
 export interface CreateRuntimeRunInput {
   readonly instruction: string
@@ -30,15 +31,27 @@ export class RuntimeApplicationService {
     private readonly review: RuntimeReviewService,
     private readonly now: () => string = () => new Date().toISOString(),
     private readonly createId: () => string = randomUUID,
+    private readonly matcher: ResourceMatcher = new ResourceMatcher(),
   ) {}
 
   async create(projectId: ProjectId, input: CreateRuntimeRunInput): Promise<RuntimeRunActionResult> {
     const instruction = input.instruction.trim()
     if (instruction.length === 0) throw new Error('Run instruction is required.')
+    const descriptors = this.repository.listResourceDescriptors(String(projectId))
+    const matches = this.matcher.match(descriptors, {
+      projectId: String(projectId),
+      instruction,
+      outputIntent: 'revise',
+      limit: 8,
+    }, {
+      ...(input.contextArtifactIds === undefined ? {} : { activeContextArtifactIds: input.contextArtifactIds }),
+    })
+    const resourceRefs = this.matcher.toManifestRefs(matches, descriptors)
     const manifest = await this.manifests.build(projectId, {
       targetArtifactId: input.targetArtifactId,
       ...(input.contextArtifactIds === undefined ? {} : { contextArtifactIds: input.contextArtifactIds }),
       requestedOutput: 'Markdown Script Revision',
+      ...(resourceRefs.length === 0 ? {} : { resourceRefs }),
     })
     if (manifest.target === null || manifest.currentRevision === null) {
       throw new Error('Run target must have a Current Revision.')

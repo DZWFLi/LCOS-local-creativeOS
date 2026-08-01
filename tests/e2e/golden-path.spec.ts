@@ -175,3 +175,64 @@ test('requested missing project shows explicit error instead of silent demo fall
   await expect(page.locator('text=继续一个项目')).toBeVisible()
   await expect(page.locator('[data-testid="toast"]')).toContainText('项目不存在')
 })
+
+test('imports link and skill folder zero-form; descriptor survives reload (U5)', async ({ page }) => {
+  const projectRoot = mkdtempSync(path.join(tmpdir(), 'lcos-e2e-u5-project-'))
+  const baseUrl = `http://127.0.0.1:${PORT_WEB}`
+  const skillBase64 = Buffer.from('---\nname: storyboard-skill\n---\n# Storyboard', 'utf8').toString('base64')
+  await page.goto(`${baseUrl}/`, { waitUntil: 'domcontentloaded' })
+  const created = await page.evaluate(async ({ rootPath, apiBase }) => {
+    const response = await fetch(`${apiBase}/api/local-core/v1/projects`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'U5 Import Project', rootPath }),
+    })
+    const body = await response.json() as { ok: boolean; value?: { id: string } }
+    return body.value?.id ?? ''
+  }, { rootPath: projectRoot, apiBase: baseUrl })
+  expect(created).toMatch(/^project-/)
+
+  const imported = await page.evaluate(async ({ projectId, apiBase, skillContent }) => {
+    const link = await fetch(`${apiBase}/api/local-core/v1/projects/${projectId}/resources/import-url`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ url: 'https://example.com/script', title: '示例脚本' }),
+    })
+    const linkBody = await link.json() as { ok: boolean; value?: { resourceId: string } }
+    const directory = await fetch(`${apiBase}/api/local-core/v1/projects/${projectId}/resources/import-directory`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        importRequestId: 'dir-u5',
+        rootName: 'storyboard-skill',
+        files: [{ path: 'SKILL.md', content: skillContent }],
+      }),
+    })
+    const directoryBody = await directory.json() as { ok: boolean; value?: { resourceId: string }; error?: { message: string } }
+    return {
+      linkResourceId: linkBody.value?.resourceId ?? '',
+      skillResourceId: directoryBody.value?.resourceId ?? '',
+      directoryStatus: directory.status,
+      directoryError: directoryBody.error?.message ?? '',
+    }
+  }, { projectId: created, apiBase: baseUrl, skillContent: skillBase64 })
+  expect(imported.linkResourceId).toMatch(/^resource-/)
+  expect(imported.skillResourceId, JSON.stringify(imported)).toMatch(/^resource-/)
+
+  await page.goto(`${baseUrl}/?project=${created}`, { waitUntil: 'networkidle' })
+  await page.waitForSelector('[data-testid="creative-os-app"]', { timeout: 15000 })
+  const canvas = page.locator('[data-testid="canvas"]')
+  await expect(canvas).toBeVisible({ timeout: 10000 })
+
+  await page.reload({ waitUntil: 'networkidle' })
+  await page.waitForSelector('[data-testid="creative-os-app"]', { timeout: 15000 })
+  const afterReload = await page.evaluate(async ({ projectId, apiBase }) => {
+    const listed = await fetch(`${apiBase}/api/local-core/v1/projects/${projectId}/resources`)
+    const body = await listed.json() as { ok: boolean; value: readonly { resourceId: string; title: string; status: string }[] }
+    return body.value
+  }, { projectId: created, apiBase: baseUrl })
+  expect(afterReload.some((entry) => entry.title === '示例脚本')).toBe(true)
+  expect(afterReload.some((entry) => entry.title === 'storyboard-skill')).toBe(true)
+
+  rmSync(projectRoot, { recursive: true, force: true })
+})

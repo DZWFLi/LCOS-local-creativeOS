@@ -26,7 +26,7 @@ export async function requestJson(url, init = {}) {
       signal: controller.signal,
       headers: {
         accept: "application/json",
-        ...(init.body === undefined ? {} : { "content-type": "application/json" }),
+        ...(init.body === undefined ? {} : init.body instanceof FormData ? {} : { "content-type": "application/json" }),
         ...init.headers,
       },
     });
