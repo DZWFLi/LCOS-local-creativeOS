@@ -12,7 +12,7 @@
  */
 
 import http from 'node:http'
-import { execSync, spawn } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -62,27 +62,27 @@ function makeSnapshot() {
     schemaVersion: 3, graphVersion: 1,
     project: { id: 'golden-proj', name: 'Golden Path Project', rootPath: 'disposable://golden-proj', graphVersion: 1, createdAt: now(), updatedAt: now() },
     scopes: [
-      { id: 'scope-root', projectId: 'golden-proj', parentScopeId: null, containerViewId: null, kind: 'root', name: 'Root Scope', createdAt: now(), updatedAt: now() },
-      { id: 'scope-child', projectId: 'golden-proj', parentScopeId: 'scope-root', containerViewId: 'view-brief', kind: 'collection', name: 'Sub-scope', createdAt: now(), updatedAt: now() },
+      { id: 'golden-proj-scope-root', projectId: 'golden-proj', parentScopeId: null, containerViewId: null, kind: 'root', name: 'Root Scope', createdAt: now(), updatedAt: now() },
+      { id: 'golden-proj-scope-child', projectId: 'golden-proj', parentScopeId: 'golden-proj-scope-root', containerViewId: 'golden-proj-view-brief', kind: 'collection', name: 'Sub-scope', createdAt: now(), updatedAt: now() },
     ],
-    workspaces: [{ id: 'ws-main', projectId: 'golden-proj', scopeId: 'scope-root', name: 'Main Workspace', intent: 'build', viewport: { x: 100, y: 200, zoom: 1.5 }, focusedViewIds: [], visibleLayers: ['core', 'process'], contextPolicy: 'selection-only', updatedAt: now() }],
+    workspaces: [{ id: 'golden-proj-ws-main', projectId: 'golden-proj', scopeId: 'golden-proj-scope-root', name: 'Main Workspace', intent: 'build', viewport: { x: 100, y: 200, zoom: 1.5 }, focusedViewIds: [], visibleLayers: ['core', 'process'], contextPolicy: 'selection-only', updatedAt: now() }],
     artifacts: [
-      { id: 'art-brief', projectId: 'golden-proj', title: 'Golden Brief', kind: 'markdown', localPath: 'disposable://golden-brief', availability: 'available', createdAt: now(), updatedAt: now() },
+      { id: 'golden-proj-art-brief', projectId: 'golden-proj', title: 'Golden Brief', kind: 'markdown', localPath: 'disposable://golden-brief', availability: 'available', createdAt: now(), updatedAt: now() },
     ],
     artifactViews: [
-      { id: 'view-brief', artifactId: 'art-brief', scopeId: 'scope-root', referenceKind: 'primary', position: { x: 120, y: 180 }, size: { width: 280, height: 200 }, displayMode: 'card', collapsed: false },
-      { id: 'view-brief-alt', artifactId: 'art-brief', scopeId: 'scope-root', referenceKind: 'explicit_additional', position: { x: 500, y: 180 }, size: { width: 280, height: 200 }, displayMode: 'thumbnail', collapsed: false },
+      { id: 'golden-proj-view-brief', artifactId: 'golden-proj-art-brief', scopeId: 'golden-proj-scope-root', referenceKind: 'primary', position: { x: 120, y: 180 }, size: { width: 280, height: 200 }, displayMode: 'card', collapsed: false },
+      { id: 'golden-proj-view-brief-alt', artifactId: 'golden-proj-art-brief', scopeId: 'golden-proj-scope-root', referenceKind: 'explicit_additional', position: { x: 500, y: 180 }, size: { width: 280, height: 200 }, displayMode: 'thumbnail', collapsed: false },
     ],
     relations: [
-      { id: 'rel-brief-board', projectId: 'golden-proj', sourceEntityType: 'artifact', sourceEntityId: 'art-brief', targetEntityType: 'artifact', targetEntityId: 'art-brief', kind: 'reference', createdAt: now(), updatedAt: now() },
+      { id: 'golden-proj-rel-brief-board', projectId: 'golden-proj', sourceEntityType: 'artifact', sourceEntityId: 'golden-proj-art-brief', targetEntityType: 'artifact', targetEntityId: 'golden-proj-art-brief', kind: 'reference', createdAt: now(), updatedAt: now() },
     ],
     notes: [
-      { id: 'note-1', projectId: 'golden-proj', anchor: { type: 'artifact', artifactId: 'art-brief' }, body: 'This is a golden path note.', createdAt: now(), updatedAt: now() },
+      { id: 'golden-proj-note-1', projectId: 'golden-proj', anchor: { type: 'artifact', artifactId: 'golden-proj-art-brief' }, body: 'This is a golden path note.', createdAt: now(), updatedAt: now() },
     ],
     fileRecords: [],
     artifactRevisions: [],
     checkpoints: [
-      { id: 'cp-golden', projectId: 'golden-proj', scopeId: 'scope-root', label: 'Golden Snapshot', snapshotJson: { state: 'initial', nodes: [{ id: 'view-brief', x: 120, y: 180 }] }, createdAt: now() },
+      { id: 'cp-golden', projectId: 'golden-proj', scopeId: 'golden-proj-scope-root', label: 'Golden Snapshot', snapshotJson: { state: 'initial', nodes: [{ id: 'golden-proj-view-brief', x: 120, y: 180 }] }, createdAt: now() },
     ],
   }
 }
@@ -94,16 +94,34 @@ async function main() {
 
   // Step 0: Verify server is running
   console.log('0. Waiting for Local Core...')
-  const alive = await waitForServer()
+  let ownedCore = null
+  let ownedRoot = null
+  let alive = await waitForServer(2)
+  if (!alive) {
+    ownedRoot = mkdtempSync(join(tmpdir(), 'lcos-golden-core-'))
+    ownedCore = spawn(process.execPath, ['apps/local-core/dist/index.js'], {
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        LOCAL_CORE_DB_PATH: join(ownedRoot, 'metadata.sqlite'),
+        LOCAL_CORE_MVP_SAMPLE_ROOT: join(ownedRoot, 'sample-project'),
+        LOCAL_CORE_TEST_PORT: String(PORT),
+      },
+      stdio: 'ignore',
+      windowsHide: true,
+    })
+    alive = await waitForServer()
+  }
   assert(alive, 'Local Core not reachable on ' + HOST + ':' + PORT)
   console.log('   Local Core: OK\n')
 
-  // Step 1: PUT initial snapshot with two Views
-  console.log('1. Seeding Golden Path project (2 views, 1 relation, 1 note, 1 checkpoint)...')
-  const snap = makeSnapshot()
-  const put = await req('PUT', '/projects/golden-proj/graph', { snapshot: snap })
-  assert(put.data.ok, 'PUT failed: ' + (put.data.error?.message ?? 'unknown'))
-  console.log('   PUT: OK, graphVersion:', put.data.value.graphVersion)
+  try {
+    // Step 1: PUT initial snapshot with two Views
+    console.log('1. Seeding Golden Path project (2 views, 1 relation, 1 note, 1 checkpoint)...')
+    const snap = makeSnapshot()
+    const put = await req('PUT', '/projects/golden-proj/graph', { snapshot: snap })
+    assert(put.data.ok, 'PUT failed: ' + (put.data.error?.message ?? 'unknown'))
+    console.log('   PUT: OK, graphVersion:', put.data.value.graphVersion)
 
   // Step 2: Verify GET
   const get1 = await req('GET', '/projects/golden-proj/graph')
@@ -122,14 +140,14 @@ async function main() {
   console.log('3. Mutating: move view-brief to (999, 888)...')
   const mut = await req('POST', '/projects/golden-proj/graph', {
     baseVersion: v.graphVersion,
-    ops: [{ type: 'move_artifact_view', viewId: 'view-brief', x: 999, y: 888 }],
+    ops: [{ type: 'move_artifact_view', viewId: 'golden-proj-view-brief', x: 999, y: 888 }],
   })
   assert(mut.data.ok, 'Mutation failed')
   console.log('   Mutation: OK, ops applied:', mut.data.value.appliedOps)
 
   // Step 4: Verify position changed
   const get2 = await req('GET', '/projects/golden-proj/graph')
-  const pos = get2.data.value.artifactViews.find(v => v.id === 'view-brief').position
+  const pos = get2.data.value.artifactViews.find(v => v.id === 'golden-proj-view-brief').position
   assert(pos.x === 999 && pos.y === 888, 'Position not updated: ' + JSON.stringify(pos))
   console.log('   Position: {x:999,y:888} confirmed')
 
@@ -142,18 +160,18 @@ async function main() {
 
   // Step 6: Verify child scope survived
   console.log('6. Verifying child scope...')
-  const childScope = get2.data.value.scopes.find(s => s.id === 'scope-child')
+  const childScope = get2.data.value.scopes.find(s => s.id === 'golden-proj-scope-child')
   assert(childScope, 'Child scope missing')
-  assert(childScope.parentScopeId === 'scope-root', 'Child scope parent wrong: ' + childScope.parentScopeId)
-  assert(childScope.containerViewId === 'view-brief', 'Child scope container wrong: ' + childScope.containerViewId)
-  console.log('   Child scope: parent=scope-root, container=view-brief')
+  assert(childScope.parentScopeId === 'golden-proj-scope-root', 'Child scope parent wrong: ' + childScope.parentScopeId)
+  assert(childScope.containerViewId === 'golden-proj-view-brief', 'Child scope container wrong: ' + childScope.containerViewId)
+  console.log('   Child scope: parent=golden-proj-scope-root, container=golden-proj-view-brief')
 
   // Step 7: Verify relation is entity-based
   console.log('7. Verifying entity-based relation...')
   const rel = get2.data.value.relations[0]
   assert(rel.sourceEntityType === 'artifact', 'Relation sourceEntityType wrong')
-  assert(rel.sourceEntityId === 'art-brief', 'Relation sourceEntityId wrong')
-  console.log('   Relation: artifact:art-brief → artifact:art-brief')
+  assert(rel.sourceEntityId === 'golden-proj-art-brief', 'Relation sourceEntityId wrong')
+  console.log('   Relation: artifact:golden-proj-art-brief → artifact:golden-proj-art-brief')
 
   // Step 8: Camera from workspace, not checkpoint
   console.log('8. Verifying camera source...')
@@ -165,7 +183,7 @@ async function main() {
   console.log('9. Deleting view-brief-alt, verifying artifact survives...')
   await req('POST', '/projects/golden-proj/graph', {
     baseVersion: get2.data.value.graphVersion,
-    ops: [{ type: 'delete_artifact_view', viewId: 'view-brief-alt' }],
+    ops: [{ type: 'delete_artifact_view', viewId: 'golden-proj-view-brief-alt' }],
   })
   const get3 = await req('GET', '/projects/golden-proj/graph')
   assert(get3.data.value.artifactViews.length === 1, 'Expected 1 view after deletion, got ' + get3.data.value.artifactViews.length)
@@ -179,7 +197,15 @@ async function main() {
   console.log('  ✓ Child scope parent/container recovery')
   console.log('  ✓ Entity-based relations')
   console.log('  ✓ Camera from workspace, not checkpoint')
-  console.log('  ✓ Artifact survives last view deletion')
+    console.log('  ✓ Artifact survives last view deletion')
+  } finally {
+    if (ownedCore !== null && ownedCore.exitCode === null) {
+      const exited = new Promise((resolveExit) => ownedCore.once('exit', resolveExit))
+      ownedCore.kill()
+      await Promise.race([exited, new Promise((resolveWait) => setTimeout(resolveWait, 3_000))])
+    }
+    if (ownedRoot !== null) rmSync(ownedRoot, { recursive: true, force: true })
+  }
 }
 
 main().catch(e => {

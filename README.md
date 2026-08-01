@@ -4,6 +4,15 @@
 > 当前阶段：正式开发前基线冻结、技术 Spike 与 Sprint 0
 > 当前原则：先验证真实闭环，再扩展完整平台。
 
+## 当前 MVP V1 执行入口
+
+`codex/mvp-fast-build` 必须先阅读并遵循：
+
+- [`MVP_V1_EXECUTION_README.md`](./MVP_V1_EXECUTION_README.md)
+
+当前开发按“真实输入 → 项目理解 → 文件演化 → AI 执行 → 结果回收”五个纵向
+Slice 推进，不再按旧 Stage 编号回退或以 Fixture 能力代替 Runtime 真相。
+
 ## 1. 项目定位
 
 Local Creative OS 是一个以 **Project + 单张持续 Canvas** 为工作容器、以 **Workspace** 为语义视角、以本地项目上下文为核心、由 Codex / Buddy 等执行者完成真实任务的个人 Creative OS。

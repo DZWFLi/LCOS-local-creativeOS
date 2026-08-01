@@ -123,6 +123,10 @@ export interface LocalCoreClient {
   health(signal?: AbortSignal): Promise<RuntimeCall<HealthStatus>>
   catalog(signal?: AbortSignal): Promise<RuntimeCall<readonly ProjectCatalogEntry[]>>
   validateProjectRoot(rootPath: string, signal?: AbortSignal): Promise<RuntimeCall<ValidatedProjectRoot>>
+  createProject(input: {
+    readonly name: string
+    readonly rootPath: string
+  }, signal?: AbortSignal): Promise<RuntimeCall<ProjectCatalogEntry>>
   metadataStatus(signal?: AbortSignal): Promise<RuntimeCall<MetadataStoreStatus>>
   projectGraph(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<ProjectGraphSnapshot>>
   updateActiveContext(projectId: string, input: {
@@ -296,6 +300,17 @@ export function createLocalCoreClient(): LocalCoreClient {
           body: JSON.stringify({ rootPath }),
         },
         decode: decodeResult<ValidatedProjectRoot>,
+      })
+    },
+    createProject(input, signal) {
+      return request('/projects', {
+        signal,
+        init: {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(input),
+        },
+        decode: decodeResult<ProjectCatalogEntry>,
       })
     },
     metadataStatus(signal) {

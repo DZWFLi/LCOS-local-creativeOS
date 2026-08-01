@@ -256,4 +256,40 @@ describe('Local Core browser client', () => {
       body: JSON.stringify({ instruction: 'Keep the title.' }),
     }))
   })
+
+  it('creates a real project through POST /projects with only name and rootPath', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({
+      ok: true,
+      value: {
+        id: 'project-summer-3f2a9c1b',
+        name: '夏季 Campaign',
+        rootPath: 'E:\\Projects\\summer',
+        graphVersion: 1,
+      },
+    }, 201))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await createLocalCoreClient().createProject({
+      name: '夏季 Campaign',
+      rootPath: 'E:\\Projects\\summer',
+    })
+
+    const calls = fetchMock.mock.calls as unknown as [string, RequestInit][]
+    const [, init] = calls[0]
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/local-core/v1/projects',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ name: '夏季 Campaign', rootPath: 'E:\\Projects\\summer' }),
+      }),
+    )
+    expect((init.headers as Headers).get('content-type')).toBe('application/json')
+    expect(result).toMatchObject({
+      origin: 'runtime',
+      result: {
+        ok: true,
+        value: { id: 'project-summer-3f2a9c1b', graphVersion: 1 },
+      },
+    })
+  })
 })

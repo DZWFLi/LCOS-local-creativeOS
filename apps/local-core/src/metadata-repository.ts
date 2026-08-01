@@ -44,6 +44,8 @@ import type {
 } from '@local-creative-os/contracts'
 
 type Row = Record<string, SQLInputValue | undefined>
+
+
 type ForeignKeyCheckRow = {
   readonly table: string
   readonly rowid: number
@@ -833,6 +835,56 @@ export class SqliteMetadataRepository {
 
   listProjects(): Project[] {
     return (this.#database.prepare('SELECT * FROM projects').all() as Row[]).map((r) => this.#project(r as Row))
+  }
+
+  createProject(input: {
+    readonly id: ProjectId
+    readonly name: string
+    readonly rootPath: string
+  }): void {
+    if (this.getProject(String(input.id)) !== undefined) {
+      throw new Error(`Project already exists: ${String(input.id)}`)
+    }
+    const createdAt = new Date().toISOString()
+    const rootScopeId = `scope-${String(input.id)}-root` as ScopeId
+    const defaultWorkspaceId = `workspace-${String(input.id)}-main` as WorkspaceId
+    this.#database.exec('BEGIN IMMEDIATE;')
+    try {
+      this.#upsertProject({
+        id: input.id,
+        name: input.name,
+        rootPath: input.rootPath,
+        graphVersion: 1 as GraphVersion,
+        createdAt,
+        updatedAt: createdAt,
+      })
+      this.#upsertScope({
+        id: rootScopeId,
+        projectId: input.id,
+        parentScopeId: null,
+        containerViewId: null,
+        kind: 'root',
+        name: 'Root',
+        createdAt,
+        updatedAt: createdAt,
+      }, input.id)
+      this.#upsertWorkspace({
+        id: defaultWorkspaceId,
+        projectId: input.id,
+        scopeId: rootScopeId,
+        name: 'Main',
+        intent: null,
+        viewport: { x: 0, y: 0, zoom: 1 },
+        focusedViewIds: [],
+        visibleLayers: ['core', 'process'],
+        contextPolicy: 'selection-only',
+        updatedAt: createdAt,
+      })
+      this.#database.exec('COMMIT;')
+    } catch (error: unknown) {
+      this.#database.exec('ROLLBACK;')
+      throw error
+    }
   }
 
   getWorkspaces(projectId: string): Workspace[] {

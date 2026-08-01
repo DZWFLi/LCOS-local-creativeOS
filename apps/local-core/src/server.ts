@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 
@@ -43,6 +44,15 @@ const MAX_BODY_BYTES = 1 * 1024 * 1024 // 1 MiB
 const MAX_IMPORT_BODY_BYTES = 26 * 1024 * 1024 // 25 MiB file + multipart overhead
 const FORBIDDEN_BROWSER_PATH_FIELDS = new Set(['path', 'absolutePath', 'targetPath', 'observedPath', 'rootPath'])
 export const LOCAL_CORE_DEV_PORT = 43121
+
+function createProjectId(name: string): string {
+  const slug = name
+    .toLowerCase()
+    .replace(/[^a-z0-9\u4e00-\u9fff]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 24) || 'project'
+  return `project-${slug}-${randomUUID().slice(0, 8)}`
+}
 
 export interface LocalCoreServerOptions {
   readonly host?: string
@@ -289,6 +299,49 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
           controller.signal,
         )
         sendJson(response, result.ok ? 200 : statusForError(result.error.code), result)
+        return
+      }
+
+      // ---- Project Create (real user projects) ----
+      if (method === 'POST' && pathname === '/projects') {
+        if (!requireMetadata(metadata, response)) return
+        let input: unknown
+        try { input = await readJsonBody(request, controller.signal) } catch {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Request body must be valid JSON under 64 KiB.'))
+          return
+        }
+        const body = input as { name?: unknown; rootPath?: unknown }
+        if (typeof body?.name !== 'string' || body.name.trim() === '' || body.name.length > 120) {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'name must be a non-empty string under 120 characters.'))
+          return
+        }
+        if (typeof body?.rootPath !== 'string' || body.rootPath.trim() === '' || body.rootPath.length > 1024) {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'rootPath must be a non-empty string under 1024 characters.'))
+          return
+        }
+        const root = await withAbort(validateProjectRoot(body.rootPath, {
+          signal: controller.signal,
+          ...(options.allowedRoot === undefined ? {} : { allowedRoot: options.allowedRoot }),
+        }), controller.signal)
+        if (!root.ok) {
+          sendJson(response, statusForError(root.error.code), root)
+          return
+        }
+        const name = body.name.trim()
+        const projectId = createProjectId(name)
+        try {
+          metadata.createProject({
+            id: projectId as ProjectId,
+            name,
+            rootPath: root.value.normalizedPath,
+          })
+          sendJson(response, 201, {
+            ok: true,
+            value: { id: projectId, name, rootPath: root.value.normalizedPath, graphVersion: 1 },
+          })
+        } catch (error: unknown) {
+          sendJson(response, 409, failure('CONFLICT', error instanceof Error ? error.message : 'Project could not be created.'))
+        }
         return
       }
 

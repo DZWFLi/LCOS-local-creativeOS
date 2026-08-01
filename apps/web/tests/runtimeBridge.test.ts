@@ -116,6 +116,7 @@ function mockClient(overrides: Partial<LocalCoreClient> = {}): LocalCoreClient {
     health: unavailable,
     catalog: unavailable,
     validateProjectRoot: unavailable,
+    createProject: unavailable,
     metadataStatus: unavailable,
     projectGraph: vi.fn(async () => call(snapshot())),
     updateActiveContext: unavailable,

@@ -26,6 +26,7 @@ import { clearPrototypeState, loadProjectCatalog, loadPrototypeState, saveProjec
 import { clearProjectNavigationState, loadProjectNavigationState, saveProjectNavigationState } from './state/projectNavigation'
 import { buildWorkspaceFrames } from './state/workspaceFrames'
 import { RuntimeBridge, type DataSource, type SaveStatus } from './runtime/runtimeBridge'
+import { selectRuntimeProject } from './runtime/runtimeProjectSelection'
 import { createWorkspaceRecord, duplicateWorkspaceRecord, moveWorkspaceRecord, removeWorkspaceRecord, toggleWorkspaceLayer, updateWorkspaceRecord } from './state/workspaceState'
 import { fitBounds, getSelectionBounds, nodeDimensions, revealNode } from './features/canvas/canvasGeometry'
 import { findPendingReturnPosition } from './features/canvas/canvasLayout'
@@ -34,7 +35,7 @@ import { arrangeSelectedNodes } from './features/canvas/selectionLayout'
 import { copyCanvasSelection, pasteCanvasNodes, pasteRelationTemplate, type CanvasClipboardPayload } from './state/canvasClipboard'
 import { useCanvasHistory } from './state/useCanvasHistory'
 import { inferTargetContext, moveBetweenTargetAndContext, setPrimaryTarget } from './state/workContext'
-import { createBlankProjectState, defaultProjectCatalog, fixtureStateForProject } from './qa-fixtures/projectFixtures'
+import { defaultProjectCatalog, fixtureStateForProject } from './qa-fixtures/projectFixtures'
 import { createChildScopeFromSelection, removeScopeTree } from './state/canvasScopes'
 import type { ActiveContextProjection } from './runtime/localCoreClient'
 
@@ -86,7 +87,7 @@ export function App() {
   const perfCount = Number(qaSearchParams?.get('perf') ?? 0)
   const performanceFixture = perfCount >= 80 ? makePerformanceFixture(Math.min(300, perfCount)) : null
   const requestedProjectId = launchSearchParams?.get('project')
-  const initialProjectId = requestedProjectId || (queryState === 'project-huaxin' ? 'project-huaxin' : DEFAULT_PROJECT_ID)
+  const initialProjectId = requestedProjectId || DEFAULT_PROJECT_ID
   const initial = useMemo(() => initialPrototype(initialProjectId, performanceFixture), [performanceFixture])
   const { nodes, edges, setNodes, setEdges, setGraph, undo, redo, resetGraph } = useCanvasHistory({ nodes: initial.nodes, edges: initial.edges })
 
@@ -251,19 +252,28 @@ export function App() {
       }
       bridge.loadCatalog().then((catalog) => {
         const runtimeProjects = catalog.projects
-        const runtimeProjectId = runtimeProjects.find((project) => project.id === initialProjectId)?.id
-          ?? runtimeProjects.find((project) => project.id === MVP_SAMPLE_PROJECT_ID)?.id
-          ?? runtimeProjects[0]?.id
-          ?? activeProjectId
-        if (runtimeProjects.length > 0) {
+        const selection = selectRuntimeProject(runtimeProjects, requestedProjectId ?? null, MVP_SAMPLE_PROJECT_ID)
+        if (selection.kind === 'missing-requested') {
           setProjects(runtimeProjects)
-          setOpenProjectIds([runtimeProjectId])
-          setActiveProjectId(runtimeProjectId)
-          bridgeRef.current = new RuntimeBridge(runtimeProjectId)
+          setProjectOpen(false)
+          setBootMode('offline')
+          setNotice(`项目不存在：${selection.requestedProjectId}。Local Core 中未找到该项目，已回到项目列表，未使用 Demo 数据`)
+          return
         }
+        if (selection.kind === 'empty-catalog') {
+          setProjects([])
+          setBootMode('offline')
+          setNotice('Local Core 暂无项目数据，当前为 Demo 模式')
+          return
+        }
+        const runtimeProjectId = selection.projectId
+        setProjects(runtimeProjects)
+        setOpenProjectIds([runtimeProjectId])
+        setActiveProjectId(runtimeProjectId)
+        bridgeRef.current = new RuntimeBridge(runtimeProjectId)
         return bridgeRef.current.loadProject()
       }).then((result) => {
-        if (result.source === 'runtime' && result.state) {
+        if (result?.source === 'runtime' && result.state) {
           resetGraph({ nodes: result.state.nodes, edges: result.state.edges })
           setWorkspaces(result.state.workspaces)
           setScopes(result.state.scopes)
@@ -275,13 +285,16 @@ export function App() {
           setDataSource('runtime')
           setBootMode('runtime')
           setNotice('已打开 Runtime MVP Sample · 默认项目总览')
-        } else {
+        } else if (result !== undefined) {
+          setProjects([])
+          setProjectOpen(false)
           setBootMode('offline')
-          setNotice('Local Core 暂无项目数据，当前为 Demo 模式')
+          setNotice('Runtime 项目加载失败，已回到项目列表（未回退 Demo 数据）')
         }
       }).catch(() => {
+        setProjectOpen(false)
         setBootMode('offline')
-        setNotice('Local Core 连接异常，使用 Demo 模式')
+        setNotice('Local Core 连接异常，已回到项目列表（未使用 Demo 数据）')
       })
     })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -474,16 +487,44 @@ export function App() {
     } else setProjectOpen(false)
   }, [activeProjectId, applyProjectState, camera, captureProjectState, openProjectIds])
 
-  const createProject = useCallback(({ label, localPath }: { label: string; localPath: string }) => {
-    const project: ProjectPackage = { id: createId('project'), label, localPath, updatedAt: '刚刚', pendingCount: 0, rootScopeId: createId('scope-root') }
-    const state = createBlankProjectState(project, defaultRailWidth())
-    projectStateCacheRef.current.set(project.id, state)
-    setProjects((current) => [...current, project])
-    setOpenProjectIds((current) => [...current, project.id])
+  const createProject = useCallback(async ({ label, localPath }: { label: string; localPath: string }) => {
     setProjectCreateOpen(false)
-    applyProjectState(project.id, state)
-    setNotice(`${label} 已创建，可以直接拖入本地文件`)
-  }, [applyProjectState])
+    const call = await bridgeRef.current.client.createProject({ name: label, rootPath: localPath })
+    if (!call.result.ok) {
+      setNotice(`项目创建失败：${call.result.error.message}`)
+      return
+    }
+    const entry = call.result.value
+    bridgeRef.current = new RuntimeBridge(entry.id)
+    const loaded = await bridgeRef.current.loadProject()
+    if (loaded.source !== 'runtime' || !loaded.state) {
+      setNotice(`项目已创建（${entry.name}），但 Runtime 数据加载失败`)
+      return
+    }
+    const rootScope = loaded.state.scopes.find((scope) => scope.kind === 'root')
+    const project: ProjectPackage = {
+      id: entry.id,
+      label,
+      localPath: entry.rootPath,
+      updatedAt: '刚刚',
+      pendingCount: 0,
+      rootScopeId: rootScope?.id,
+    }
+    setProjects((current) => current.some((item) => item.id === entry.id) ? current : [...current, project])
+    setOpenProjectIds((current) => [...current, entry.id])
+    setActiveProjectId(entry.id)
+    resetGraph({ nodes: loaded.state.nodes, edges: loaded.state.edges })
+    setWorkspaces(loaded.state.workspaces)
+    setScopes(loaded.state.scopes)
+    setWorkspaceId(null)
+    setScopeId(rootScope?.id ?? loaded.state.activeScopeId)
+    setCamera(rootScope?.camera ?? camera)
+    setWorkRail(normalizeRailPreferences(loaded.state.workRail))
+    setDataSource('runtime')
+    setBootMode('runtime')
+    setProjectOpen(true)
+    setNotice(`${label} 已创建并写入 Local Core，可以直接拖入本地文件`)
+  }, [camera, resetGraph, setCamera, setDataSource, setProjectOpen, setScopes, setWorkRail, setWorkspaces])
   const selectNode = useCallback((id: string, additive = false) => {
     setSelectedEdgeId(null)
     setSelectedIds((current) => additive ? current.includes(id) ? current.filter((item) => item !== id) : [...current, id] : [id])
@@ -878,6 +919,8 @@ export function App() {
     setLinkDialogOpen(false)
     setCapabilityOpen(true)
   }, [dropFiles])
+
+
 
   const applyRuntimeReview = useCallback((review: RunReview, current: ActiveRun, providerError?: string) => {
     const pendingReturn = review.returns.find((item) => item.status === 'pending_review')
@@ -1442,6 +1485,7 @@ export function App() {
   }, [arrangeSelection, clearSelection, copySelection, createDialogOpen, deleteNodes, duplicateSelection, capabilityOpen, nodeInfoId, layoutPreview, openNative, pasteClipboard, projectCreateOpen, redo, requestComposerFocus, requestRun, runConfirmOpen, scopeCreateOpen, selectedEdgeId, selectedId, selectedIds, selectedNodes, setEdges, undo])
 
   if (!projectOpen) return <>
+    {notice && <div data-testid="toast" className="notice" role="status" aria-live="polite">{notice}</div>}
     <ProjectDrive projects={projects} openProjectIds={openProjectIds} onOpen={openProject} onCreate={() => setProjectCreateOpen(true)} />
     <ProjectCreateDialog open={projectCreateOpen} onCancel={() => setProjectCreateOpen(false)} onCreate={createProject} />
   </>
