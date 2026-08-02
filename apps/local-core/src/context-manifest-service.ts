@@ -23,6 +23,7 @@ import { SqliteMetadataRepository } from './metadata-repository.js'
 
 const BUILDER_VERSION = '0.1.0'
 const MAX_ITEM_CHARACTERS = 32_000
+const MAX_TOTAL_CHARACTERS = 128_000
 const TEXT_MIME_TYPES = new Set(['text/markdown', 'text/plain'])
 
 function hash(value: string): string {
@@ -144,6 +145,7 @@ export class ContextManifestService {
     const orderedItems: ContextManifestOrderedItemV0[] = []
     const feedback: ContextManifestFeedbackV0[] = []
     const lockedSource: string[] = []
+    let remainingCharacters = MAX_TOTAL_CHARACTERS
 
     const appendArtifact = async (artifact: Artifact, role: ContextManifestOrderedItemV0['role']): Promise<ContextManifestArtifactRefV0 | null> => {
       if (artifact.currentRevisionId === undefined) return null
@@ -159,12 +161,15 @@ export class ContextManifestService {
       }
       if (excerpt.truncated) truncatedItemIds.push(String(artifact.id))
       if (excerpt.content) lockedSource.push(excerpt.content)
+      const boundedContent = excerpt.content?.slice(0, Math.max(0, remainingCharacters))
+      if (excerpt.content !== boundedContent) truncatedItemIds.push(String(artifact.id))
+      remainingCharacters -= boundedContent?.length ?? 0
       orderedItems.push({
         role,
         identity: String(artifact.id),
         title: artifact.title,
         contentHash: String(revision.contentHash),
-        ...(excerpt.content === undefined ? {} : { content: excerpt.content }),
+        ...(boundedContent === undefined ? {} : { content: `<untrusted-context identity="${String(artifact.id)}">\n${boundedContent}\n</untrusted-context>` }),
       })
       return artifactRef(artifact, revision, fileRecord)
     }
@@ -263,9 +268,6 @@ export class ContextManifestService {
       if (requested === undefined) throw new Error('Target Artifact not found.')
       return requested
     }
-    return [...graph.artifacts]
-      .sort(byIdentity)
-      .find((artifact) => artifact.kind === 'markdown' && /script/i.test(artifact.title))
-      ?? [...graph.artifacts].sort(byIdentity).find((artifact) => artifact.kind === 'markdown')
+    return undefined
   }
 }

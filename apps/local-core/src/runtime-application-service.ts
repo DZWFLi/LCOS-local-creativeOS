@@ -38,6 +38,10 @@ export class RuntimeApplicationService {
     const instruction = input.instruction.trim()
     if (instruction.length === 0) throw new Error('Run instruction is required.')
     const descriptors = this.repository.listResourceDescriptors(String(projectId))
+    const policyByResourceId = new Map(descriptors.map((descriptor) => [
+      descriptor.resourceId,
+      this.repository.getResourcePolicy(String(projectId), descriptor.resourceId) ?? { approvedContext: false, executable: false },
+    ]))
     const matches = this.matcher.match(descriptors, {
       projectId: String(projectId),
       instruction,
@@ -45,8 +49,9 @@ export class RuntimeApplicationService {
       limit: 8,
     }, {
       ...(input.contextArtifactIds === undefined ? {} : { activeContextArtifactIds: input.contextArtifactIds }),
+      policyByResourceId,
     })
-    const resourceRefs = this.matcher.toManifestRefs(matches, descriptors)
+    const resourceRefs = this.matcher.toManifestRefs(matches.filter((match) => match.layer !== 'suggested'), descriptors)
     const manifest = await this.manifests.build(projectId, {
       targetArtifactId: input.targetArtifactId,
       ...(input.contextArtifactIds === undefined ? {} : { contextArtifactIds: input.contextArtifactIds }),

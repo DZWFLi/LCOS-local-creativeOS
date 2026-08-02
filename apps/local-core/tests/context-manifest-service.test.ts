@@ -23,11 +23,13 @@ describe('ContextManifestService', () => {
     temporaryDirectories.push(sampleRoot, databaseRoot)
     const repository = new SqliteMetadataRepository(join(databaseRoot, 'metadata.sqlite'))
     repositories.push(repository)
-    repository.save(createMvpSampleSnapshot(sampleRoot, '2026-07-29T00:00:00.000Z'))
+    const snapshot = createMvpSampleSnapshot(sampleRoot, '2026-07-29T00:00:00.000Z')
+    repository.save(snapshot)
     const service = new ContextManifestService(repository)
+    const script = snapshot.artifacts.find((artifact) => artifact.title === 'Script')!
 
-    const first = await service.build(MVP_SAMPLE_PROJECT_ID)
-    const second = await service.build(MVP_SAMPLE_PROJECT_ID)
+    const first = await service.build(MVP_SAMPLE_PROJECT_ID, { targetArtifactId: String(script.id) })
+    const second = await service.build(MVP_SAMPLE_PROJECT_ID, { targetArtifactId: String(script.id) })
     const serialized = JSON.stringify(first)
 
     expect(first.id).toBe(second.id)

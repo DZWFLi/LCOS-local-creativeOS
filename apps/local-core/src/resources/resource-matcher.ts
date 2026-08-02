@@ -13,6 +13,7 @@ export interface ResourceMatchOptions {
   readonly excludedResourceIds?: readonly string[]
   readonly pinnedResourceIds?: readonly string[]
   readonly activeContextArtifactIds?: readonly string[]
+  readonly policyByResourceId?: ReadonlyMap<string, { readonly approvedContext: boolean; readonly executable: boolean }>
 }
 
 export class ResourceMatcher {
@@ -48,6 +49,8 @@ export class ResourceMatcher {
       if (total <= 0) continue
       const requiresApproval = role === 'candidate_skill'
         && (descriptor.trust.level !== 'trusted' || descriptor.entrypoints.some((entry) => entry.kind === 'command'))
+      const policy = options.policyByResourceId?.get(descriptor.resourceId)
+      const layer = policy?.executable === true ? 'executable' : policy?.approvedContext === true ? 'approved' : 'suggested'
       const warnings: string[] = []
       if (requiresApproval) warnings.push('未授权 Skill：需要用户批准后才能作为执行候选。')
       if (descriptor.trust.executable) warnings.push('该资源包含可执行入口，默认不执行。')
@@ -60,12 +63,15 @@ export class ResourceMatcher {
           reasons: buildReasons(descriptor, tokens),
           warnings,
           requiresApproval,
+          layer,
         },
         descriptor,
       })
     }
 
-    scored.sort((a, b) => b.match.score - a.match.score)
+    scored.sort((a, b) => b.match.score - a.match.score
+      || a.match.resourceId.localeCompare(b.match.resourceId)
+      || a.match.artifactId.localeCompare(b.match.artifactId))
     const result: ResourceMatchV0[] = []
     let skillCandidates = 0
     for (const entry of scored) {
@@ -152,7 +158,7 @@ function buildReasons(descriptor: ResourceDescriptorV0, tokens: Set<string>): st
 
 function tokenize(text: string): Set<string> {
   const tokens = new Set<string>()
-  const normalized = text.toLocaleLowerCase('en-US')
+    const normalized = text.normalize('NFKC').toLocaleLowerCase('en-US')
   for (const match of normalized.matchAll(/[a-z0-9]+/g)) {
     const token = match[0]
     if (token.length >= 2) tokens.add(token)
@@ -161,5 +167,6 @@ function tokenize(text: string): Set<string> {
   for (let index = 0; index + 1 < cjk.length; index += 1) {
     tokens.add(cjk.slice(index, index + 2))
   }
+  for (const character of cjk) tokens.add(character)
   return tokens
 }

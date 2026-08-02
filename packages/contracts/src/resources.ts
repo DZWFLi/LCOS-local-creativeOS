@@ -167,6 +167,8 @@ export type ResourceMatchV0 = {
   readonly reasons: readonly string[]
   readonly warnings: readonly string[]
   readonly requiresApproval: boolean
+  /** suggestion is informational; approved is context-safe; executable is explicitly authorized. */
+  readonly layer: 'suggested' | 'approved' | 'executable'
 }
 
 export type ManifestResourceRefV0 = {
