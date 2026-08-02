@@ -14,6 +14,14 @@ const GENERATED_SEGMENTS = new Set([
   ".pytest_cache",
   "__pycache__",
 ]);
+const TEXT_EXTENSIONS = new Set([
+  ".bat", ".cmd", ".css", ".csv", ".html", ".js", ".json", ".jsx",
+  ".md", ".mjs", ".ps1", ".sh", ".sql", ".svg", ".toml", ".ts",
+  ".tsx", ".txt", ".xml", ".yaml", ".yml",
+]);
+const TEXT_FILENAMES = new Set([
+  ".editorconfig", ".gitattributes", ".gitignore", "LICENSE", "README",
+]);
 
 function trackedFiles() {
   const output = execFileSync("git", ["ls-files", "-z"], {
@@ -56,7 +64,12 @@ function assertSafeTrackedPaths(files) {
 }
 
 async function readCanonicalContent(file) {
-  return readFile(path.join(ROOT, file));
+  const content = await readFile(path.join(ROOT, file));
+  const basename = path.basename(file);
+  if (!TEXT_FILENAMES.has(basename) && !TEXT_EXTENSIONS.has(path.extname(file).toLowerCase())) {
+    return content;
+  }
+  return Buffer.from(content.toString("utf8").replace(/\r\n?/g, "\n"), "utf8");
 }
 
 async function buildManifest(files) {
