@@ -30,6 +30,9 @@ so no synthetic duplicate baseline commit was created.
 
 - Preserve the monorepo directory hierarchy.
 - Generate archives from a clean Git tree, never from an ad-hoc file list.
+- Generate and verify hashes against the actual Windows delivery bytes; Git's
+  ZIP export applies checkout line-ending rules and therefore differs from raw
+  blob bytes for text files.
 - Reject normalized path collisions before packaging.
 - Reject tracked build/cache artifacts.
 - Exclude `MANIFEST.sha256` from its own hash set.

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
 
@@ -55,27 +55,14 @@ function assertSafeTrackedPaths(files) {
   }
 }
 
-function hasGitIndex() {
-  return spawnSync("git", ["rev-parse", "--is-inside-work-tree"], {
-    cwd: ROOT,
-    stdio: "ignore",
-  }).status === 0;
-}
-
-async function readCanonicalContent(file, useGitIndex) {
-  if (useGitIndex) {
-    return execFileSync("git", ["show", `:${file}`], {
-      cwd: ROOT,
-      maxBuffer: 100 * 1024 * 1024,
-    });
-  }
+async function readCanonicalContent(file) {
   return readFile(path.join(ROOT, file));
 }
 
-async function buildManifest(files, useGitIndex) {
+async function buildManifest(files) {
   const lines = [];
   for (const file of files) {
-    const content = await readCanonicalContent(file, useGitIndex);
+    const content = await readCanonicalContent(file);
     const hash = createHash("sha256").update(content).digest("hex");
     lines.push(`${hash}  ${file}`);
   }
@@ -105,7 +92,7 @@ async function main() {
   if (mode === "write") {
     const files = trackedFiles();
     assertSafeTrackedPaths(files);
-    const expected = await buildManifest(files, true);
+    const expected = await buildManifest(files);
     await writeFile(manifestPath, expected, "utf8");
     process.stdout.write(`wrote ${MANIFEST_NAME} for ${files.length} tracked files\n`);
     return;
@@ -114,9 +101,8 @@ async function main() {
   if (mode === "verify") {
     const actual = await readFile(manifestPath, "utf8");
     const entries = parseManifest(actual);
-    const useGitIndex = hasGitIndex();
     for (const { file, hash } of entries) {
-      const content = await readCanonicalContent(file, useGitIndex);
+      const content = await readCanonicalContent(file);
       const actualHash = createHash("sha256").update(content).digest("hex");
       if (actualHash !== hash) {
         throw new Error(`hash mismatch: ${file}`);
