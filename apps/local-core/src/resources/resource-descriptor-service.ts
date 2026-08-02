@@ -9,9 +9,29 @@ import type {
 import { AnalyzerRegistry, type ResourceAnalysisInput } from './analyzers/analyzer-registry.js'
 
 export const FAST_DESCRIPTOR_ANALYZER = 'fast-v0'
+export const RESOURCE_ANALYZER_VERSION = 'resource-v1'
 
 export function resourceDescriptorHash(descriptor: ResourceDescriptorV0): string {
-  return createHash('sha256').update(JSON.stringify(descriptor)).digest('hex')
+  const semantic = {
+    ...descriptor,
+    understanding: {
+      ...descriptor.understanding,
+      analyzedAt: undefined,
+    },
+    userAnnotation: undefined,
+  }
+  return createHash('sha256').update(stableJson(semantic)).digest('hex')
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`
+  if (value !== null && typeof value === 'object') {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .filter(([, item]) => item !== undefined)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, item]) => `${JSON.stringify(key)}:${stableJson(item)}`).join(',')}}`
+  }
+  return JSON.stringify(value)
 }
 
 export interface FastDescriptorInput {
@@ -76,7 +96,6 @@ export class ResourceDescriptorService {
         executable: false,
         requiresApproval: false,
       },
-      ...(input.userNote === undefined ? {} : { userAnnotation: { note: input.userNote } }),
     }
   }
 

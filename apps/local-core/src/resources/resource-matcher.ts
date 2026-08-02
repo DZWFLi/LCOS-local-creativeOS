@@ -4,7 +4,7 @@ import type {
   ResourceMatchQueryV0,
   ResourceMatchV0,
 } from '@local-creative-os/contracts'
-import { createHash } from 'node:crypto'
+import { resourceDescriptorHash } from './resource-descriptor-service.js'
 
 const DEFAULT_LIMIT = 8
 const MAX_SKILL_CANDIDATES = 3
@@ -92,7 +92,7 @@ export class ResourceMatcher {
         resourceId: match.resourceId,
         artifactId: match.artifactId,
         sourceRevisionId: descriptor.sourceRevisionId,
-        descriptorHash: descriptorHashOf(descriptor),
+        descriptorHash: resourceDescriptorHash(descriptor),
         role: match.role,
         matchReasons: match.reasons,
         requiresApproval: match.requiresApproval,
@@ -100,10 +100,6 @@ export class ResourceMatcher {
     }
     return refs
   }
-}
-
-function descriptorHashOf(descriptor: ResourceDescriptorV0): string {
-  return createHash('sha256').update(JSON.stringify(descriptor)).digest('hex')
 }
 
 function roleFor(descriptor: ResourceDescriptorV0): ResourceMatchV0['role'] {

@@ -157,14 +157,15 @@ export class SqliteMetadataRepository {
 
   #migrate(): void {
     const version = this.#database.prepare('PRAGMA user_version').get() as { user_version: number }
-    if (version.user_version === 0) { this.#migrate_001(); this.#migrate_007_from_v6(); return }
-    if (version.user_version === 1) { this.#migrate_002_from_v1(); this.#migrate_004_from_v3(); this.#migrate_005_from_v4(); this.#migrate_006_from_v5(); this.#migrate_007_from_v6(); return }
-    if (version.user_version === 2) { this.#migrate_003_from_v2(); this.#migrate_004_from_v3(); this.#migrate_005_from_v4(); this.#migrate_006_from_v5(); this.#migrate_007_from_v6(); return }
-    if (version.user_version === 3) { this.#migrate_004_from_v3(); this.#migrate_005_from_v4(); this.#migrate_006_from_v5(); this.#migrate_007_from_v6(); return }
-    if (version.user_version === 4) { this.#migrate_005_from_v4(); this.#migrate_006_from_v5(); this.#migrate_007_from_v6(); return }
-    if (version.user_version === 5) { this.#migrate_006_from_v5(); this.#migrate_007_from_v6(); return }
-    if (version.user_version === 6) { this.#migrate_007_from_v6(); return }
-    // v7 = current
+    if (version.user_version === 0) { this.#migrate_001(); this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); return }
+    if (version.user_version === 1) { this.#migrate_002_from_v1(); this.#migrate_004_from_v3(); this.#migrate_005_from_v4(); this.#migrate_006_from_v5(); this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); return }
+    if (version.user_version === 2) { this.#migrate_003_from_v2(); this.#migrate_004_from_v3(); this.#migrate_005_from_v4(); this.#migrate_006_from_v5(); this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); return }
+    if (version.user_version === 3) { this.#migrate_004_from_v3(); this.#migrate_005_from_v4(); this.#migrate_006_from_v5(); this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); return }
+    if (version.user_version === 4) { this.#migrate_005_from_v4(); this.#migrate_006_from_v5(); this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); return }
+    if (version.user_version === 5) { this.#migrate_006_from_v5(); this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); return }
+    if (version.user_version === 6) { this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); return }
+    if (version.user_version === 7) { this.#migrate_008_from_v7(); return }
+    // v8 = current
   }
 
   #migrate_001(): void {
@@ -565,6 +566,42 @@ export class SqliteMetadataRepository {
       CREATE INDEX idx_resource_descriptors_project ON resource_descriptors(project_id);
       CREATE INDEX idx_resource_descriptors_status ON resource_descriptors(status);
       PRAGMA user_version = 7;
+      COMMIT;
+    `)
+  }
+
+  #migrate_008_from_v7(): void {
+    this.#database.exec(`
+      BEGIN;
+      CREATE TABLE resource_analysis_jobs (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        resource_id TEXT NOT NULL,
+        source_revision_id TEXT NOT NULL REFERENCES artifact_revisions(id) ON DELETE CASCADE,
+        analyzer_version TEXT NOT NULL,
+        status TEXT NOT NULL CHECK(status IN ('pending','running','retryable','failed','completed')),
+        attempt_count INTEGER NOT NULL DEFAULT 0,
+        last_error TEXT,
+        next_attempt_at TEXT,
+        lease_owner TEXT,
+        lease_expires_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(resource_id, source_revision_id, analyzer_version)
+      );
+      CREATE INDEX idx_resource_analysis_jobs_ready
+        ON resource_analysis_jobs(status, next_attempt_at, created_at);
+      CREATE TABLE resource_policies (
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        resource_id TEXT NOT NULL,
+        trust_level TEXT NOT NULL DEFAULT 'untrusted' CHECK(trust_level IN ('untrusted','reviewed','trusted')),
+        approved_context INTEGER NOT NULL DEFAULT 0 CHECK(approved_context IN (0,1)),
+        executable INTEGER NOT NULL DEFAULT 0 CHECK(executable IN (0,1)),
+        annotation_json TEXT NOT NULL DEFAULT '{}',
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY(project_id, resource_id)
+      );
+      PRAGMA user_version = 8;
       COMMIT;
     `)
   }
@@ -1109,6 +1146,88 @@ export class SqliteMetadataRepository {
       new Date().toISOString() as SQLInputValue,
       id as SQLInputValue,
     )
+  }
+
+  enqueueResourceAnalysis(input: {
+    readonly id: string
+    readonly projectId: string
+    readonly resourceId: string
+    readonly sourceRevisionId: string
+    readonly analyzerVersion: string
+  }): void {
+    const now = new Date().toISOString()
+    this.#database.prepare(`
+      INSERT INTO resource_analysis_jobs (
+        id, project_id, resource_id, source_revision_id, analyzer_version,
+        status, attempt_count, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, 'pending', 0, ?, ?)
+      ON CONFLICT(resource_id, source_revision_id, analyzer_version) DO UPDATE SET
+        status = CASE WHEN status = 'completed' THEN status ELSE 'pending' END,
+        updated_at = excluded.updated_at
+    `).run(input.id, input.projectId, input.resourceId, input.sourceRevisionId, input.analyzerVersion, now, now)
+  }
+
+  claimResourceAnalysis(workerId: string, leaseMs = 60_000): { readonly id: string; readonly projectId: string; readonly resourceId: string; readonly sourceRevisionId: string } | undefined {
+    const now = new Date()
+    const nowIso = now.toISOString()
+    const row = this.#database.prepare(`
+      SELECT id, project_id, resource_id, source_revision_id FROM resource_analysis_jobs
+      WHERE (status IN ('pending','retryable') AND (next_attempt_at IS NULL OR next_attempt_at <= ?))
+         OR (status = 'running' AND lease_expires_at < ?)
+      ORDER BY created_at, id LIMIT 1
+    `).get(nowIso, nowIso) as Row | undefined
+    if (row === undefined) return undefined
+    const expiresAt = new Date(now.getTime() + leaseMs).toISOString()
+    this.#database.prepare(`
+      UPDATE resource_analysis_jobs SET status = 'running', attempt_count = attempt_count + 1,
+        lease_owner = ?, lease_expires_at = ?, updated_at = ? WHERE id = ?
+    `).run(workerId, expiresAt, nowIso, row.id as SQLInputValue)
+    return { id: String(row.id), projectId: String(row.project_id), resourceId: String(row.resource_id), sourceRevisionId: String(row.source_revision_id) }
+  }
+
+  completeResourceAnalysis(id: string): void {
+    const now = new Date().toISOString()
+    this.#database.prepare(`UPDATE resource_analysis_jobs SET status = 'completed', lease_owner = NULL,
+      lease_expires_at = NULL, last_error = NULL, updated_at = ? WHERE id = ?`).run(now, id)
+  }
+
+  failResourceAnalysis(id: string, message: string, retryable = true): void {
+    const now = new Date()
+    this.#database.prepare(`UPDATE resource_analysis_jobs SET status = ?, last_error = ?,
+      next_attempt_at = ?, lease_owner = NULL, lease_expires_at = NULL, updated_at = ? WHERE id = ?`)
+      .run(retryable ? 'retryable' : 'failed', message, retryable ? new Date(now.getTime() + 5_000).toISOString() : null, now.toISOString(), id)
+  }
+
+  upsertResourcePolicy(input: {
+    readonly projectId: string
+    readonly resourceId: string
+    readonly trustLevel: 'untrusted' | 'reviewed' | 'trusted'
+    readonly approvedContext: boolean
+    readonly executable: boolean
+    readonly annotation?: Readonly<Record<string, unknown>>
+  }): void {
+    this.#database.prepare(`INSERT INTO resource_policies VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(project_id, resource_id) DO UPDATE SET trust_level=excluded.trust_level,
+      approved_context=excluded.approved_context, executable=excluded.executable,
+      annotation_json=excluded.annotation_json, updated_at=excluded.updated_at`)
+      .run(input.projectId, input.resourceId, input.trustLevel, input.approvedContext ? 1 : 0,
+        input.executable ? 1 : 0, JSON.stringify(input.annotation ?? {}), new Date().toISOString())
+  }
+
+  getResourcePolicy(projectId: string, resourceId: string): {
+    readonly trustLevel: 'untrusted' | 'reviewed' | 'trusted'
+    readonly approvedContext: boolean
+    readonly executable: boolean
+    readonly annotation: Readonly<Record<string, unknown>>
+  } | undefined {
+    const row = this.#database.prepare('SELECT * FROM resource_policies WHERE project_id = ? AND resource_id = ?')
+      .get(projectId, resourceId) as Row | undefined
+    return row === undefined ? undefined : {
+      trustLevel: String(row.trust_level) as 'untrusted' | 'reviewed' | 'trusted',
+      approvedContext: Number(row.approved_context) === 1,
+      executable: Number(row.executable) === 1,
+      annotation: json<Readonly<Record<string, unknown>>>(row.annotation_json as SQLInputValue),
+    }
   }
 
   #insertResourceDescriptor(descriptor: ResourceDescriptorV0): void {
@@ -1740,7 +1859,7 @@ export class SqliteMetadataRepository {
     }
   }
 
-  get schemaVersion(): number { return 7 }
+  get schemaVersion(): number { return 8 }
 
   // ==================== Private helpers ====================
 

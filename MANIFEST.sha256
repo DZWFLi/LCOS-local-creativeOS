@@ -14,7 +14,7 @@ c98b1a43e29d3f2faf58cd45fefc22a459b0ac6fae95c59259591168d618981b  apps/local-cor
 e20ec2a0f08dc48b33cf089d81b828794c490cd38350860b302927f1c279f583  apps/local-core/src/health.ts
 efbfd7b65ee950de31233a4b29ce23d844e83b05c5e8eff89b1bcb7ad56e2f65  apps/local-core/src/import-copy-service.ts
 0dc012e5708bffbd8d629e7d4dc1fb2d20dba8194489a267fee24748262f196c  apps/local-core/src/index.ts
-925632d47590ea38151260ceeeb34ed055cbaac23e7d938108cb9724958bd47b  apps/local-core/src/metadata-repository.ts
+d50f3c1d086a49a99e5f4b6b250b9e4459622960bf91ee93d4a3091f02c0cd86  apps/local-core/src/metadata-repository.ts
 417b9347559438e1c3a00f4409e1c20df73ab24d7aa3889fea84d8424a544711  apps/local-core/src/mvp-sample-project.ts
 7176922126edca319bc47b91b620cf3288e8038a5ae281ea73021c88c1e8d40c  apps/local-core/src/path-guard.ts
 d01a79ba4c720616c8216c59a23a75f2938f0acb21c1cbe4d59ddf0e7a296de4  apps/local-core/src/preview-cache-service.ts
@@ -31,11 +31,11 @@ ea6987a2b72ed294c4b366f45b76152ade7b5c50762a52f9f9804b3afee66711  apps/local-cor
 5e551fa421e9850f6f2b89b5ae87d1ff032bdcdbbd04894e047144313b36171d  apps/local-core/src/resources/analyzers/text-analyzer.ts
 2a906f545acd0a9bc6df79864af4876c775642fd8dc4298711b1bed0326983bc  apps/local-core/src/resources/analyzers/yaml-analyzer.ts
 a443524fa74f4c0ea187d16cee4b0837a58b6684e56fa0794a90f9c038d32f1b  apps/local-core/src/resources/link-document.ts
-cda77c206940824747849e67d799ccd153eb2cad47376d31b308ddac24c1c163  apps/local-core/src/resources/resource-descriptor-service.ts
-f9929246203043c84500dc096fe905a7f843266c31f7cc72529a4c6d0cbcd935  apps/local-core/src/resources/resource-matcher.ts
+43d1886165eed88e2eddcfd296c442b0f110c5f9a497194a6aaf80ade4aa2ef5  apps/local-core/src/resources/resource-descriptor-service.ts
+dd749c5ebea48126b7660ec4d8478c378bbf453c4a03e8874fe26b1579947452  apps/local-core/src/resources/resource-matcher.ts
 4fe79cca68014ffecda8128b15b0f9dde907fe017d295ef169cab5083ee6d685  apps/local-core/src/resources/resource-package-service.ts
 68b28b54dbb58113c872ec9701a69801e26621caf66b150b0d2fa99151d8ef5d  apps/local-core/src/resources/resource-reader.ts
-4e05d02a2fc13595e04b0b94a2c0d83706fbb2a7e9e3496fca6e98c12f14a4b4  apps/local-core/src/resources/universal-resource-import-service.ts
+e6164b90d2cc735f1182bd9404173566ab75ae8ae0b4a1274b3effa24543daea  apps/local-core/src/resources/universal-resource-import-service.ts
 381fa52b7e523c2038c3d0bc0552140c025bc91fd343c6a095dd72d1d8be9fd6  apps/local-core/src/resources/url-security.ts
 3ccc34860a16ddc5e1c1aade5675e8bb3d3f78aad6f0321d382417657bab80b0  apps/local-core/src/resources/zip-reader.ts
 5dd131ad7e7d951ebd599d3d0481e703068ea3a7d7754a54b4dc3d46906d4643  apps/local-core/src/runtime-adapter.ts
@@ -50,7 +50,7 @@ fa053c14d6730ab93b5ba073dc810e220896463e1f8cc9b69f9877bd35a6b6e6  apps/local-cor
 fd5ce2a27060056bb13db8cb63953e551b2f41847c12a8e5ad73b9101f0ac8e9  apps/local-core/tests/file-registry-service.test.ts
 4eeff958f20b2f910b7ccffb5624e079270faf96e1ed8b41545a5bb99700f01d  apps/local-core/tests/health.test.ts
 6f863f82105680fbd30532dd6c633b4a05357082d6836983371fb73abf44872b  apps/local-core/tests/local-api-security.test.ts
-9249c2461be43dfd4ebbbbfafeea669db51168755e88173a95777c98212c2ec2  apps/local-core/tests/metadata-repository.test.ts
+aa21bf64e55ec30f4cd8e8e1335eda3702ddd40f809e5bda1e52e6800d3d4f5a  apps/local-core/tests/metadata-repository.test.ts
 e3fe344ac0d18dbdce17204854066f6a641b332fc6c91e4a2a7aecd8942bcaac  apps/local-core/tests/mvp-sample-project.test.ts
 c6f20bf7575bd059e6a4ee28d243fec99ec202c8f82043dab5780d1b53797f4f  apps/local-core/tests/path-guard.test.ts
 55c7bc08edb0919489aabf853c16b101589e4852c3f86f27aaf2c922896d7f64  apps/local-core/tests/preview-cache-service.test.ts
@@ -69,12 +69,12 @@ ccab9d08b136ec92572d3ae15075d9e48ce51af8494ab29c2279dc0f252d1559  apps/local-cor
 a96c93e233b23061f67b207de6aa56e0f21fc5330a679b305995fbdfd6037b04  apps/local-core/tests/resources/resource-reader.test.ts
 f84bc1696e592cee70733c03c3eac428714f14f1cdee25907ab9d2e42c20de15  apps/local-core/tests/resources/runtime-resource-pack.test.ts
 9cabfae782ef1dbd8d4aa20785e73089c336088ce23b9a535eb58d3776445a34  apps/local-core/tests/resources/skill-package-analyzer.test.ts
-bef5b855f478b496213e69169fb004222e2580185d7dab9f41b2431a32d39b95  apps/local-core/tests/resources/universal-resource-import.test.ts
+f170d8cfaa1c43044e8e95b0d3a24e464939afd8e8aa2ea3284126cd491bc4b6  apps/local-core/tests/resources/universal-resource-import.test.ts
 fef5bafc0f8881d43446f1062b7f326a336314c989aff85d1927664371a6fb10  apps/local-core/tests/resources/zip-reader.test.ts
 73461c0e5bc125808bc30d96ec69384337768e9141e805c0231e9ad3767f3248  apps/local-core/tests/runtime-adapter.test.ts
 0094dd0989c344af874656a6e9c4cbf1da476bd435138070dfe020d63f1db4ba  apps/local-core/tests/runtime-application-service.test.ts
 9cea95c2d796fb4616c9f07a5a2bc2b7372271bfc219b0c60c647d5f584baedc  apps/local-core/tests/runtime-http.test.ts
-9c59f95a9f90ea2da494f9678142bda5f8e046b0e95056ff69e2b30b75e49d43  apps/local-core/tests/runtime-persistence.test.ts
+a4e1fc0a60146b7a33d15b91485560e4affb628bed40e0a102126759c514c4a6  apps/local-core/tests/runtime-persistence.test.ts
 d1e02396485ee09c27395f6d8a14f303b92d26b7c9ad35d0202195d321f14fd9  apps/local-core/tests/runtime-result-ingestion.test.ts
 1a23a1c564677b0076a38e5439c1906524c4ab3a36e313cedebb9d754c026a49  apps/local-core/tests/runtime-review-service.test.ts
 43a5fdf8550f25e8e47a1f53199a1dc6710c6506b3a2d8ffad014a761afc1dc7  apps/local-core/tests/server.test.ts

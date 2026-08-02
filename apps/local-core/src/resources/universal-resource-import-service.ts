@@ -20,7 +20,8 @@ import { SkillPackageAnalyzer } from './analyzers/skill-package-analyzer.js'
 import { TextAnalyzer } from './analyzers/text-analyzer.js'
 import { YamlAnalyzer } from './analyzers/yaml-analyzer.js'
 import { buildLinkMarkdown } from './link-document.js'
-import { ResourceDescriptorService } from './resource-descriptor-service.js'
+import { randomUUID } from 'node:crypto'
+import { ResourceDescriptorService, RESOURCE_ANALYZER_VERSION } from './resource-descriptor-service.js'
 import { assertSafeHttpUrl } from './url-security.js'
 
 const CONTENT_PEEK_BYTES = 512 * 1024
@@ -48,7 +49,8 @@ function resourceIdFromFileRecord(fileRecordId: string): ResourceId {
 }
 
 export class UniversalResourceImportService {
-  readonly #queue = new Map<string, Promise<void>>()
+  readonly #workerId = `resource-worker-${process.pid}-${randomUUID()}`
+  #draining = false
 
   constructor(
     readonly repository: SqliteMetadataRepository,
@@ -154,6 +156,30 @@ export class UniversalResourceImportService {
     return analyzed
   }
 
+  async drainAnalysisQueue(): Promise<void> {
+    if (this.#draining) return
+    this.#draining = true
+    try {
+      for (;;) {
+        const job = this.repository.claimResourceAnalysis(this.#workerId)
+        if (job === undefined) break
+        try {
+          const current = this.getDescriptor(job.projectId, job.resourceId)
+          if (current === undefined || current.sourceRevisionId !== job.sourceRevisionId) {
+            this.repository.completeResourceAnalysis(job.id)
+            continue
+          }
+          await this.reanalyze(job.projectId, job.resourceId)
+          this.repository.completeResourceAnalysis(job.id)
+        } catch (error) {
+          this.repository.failResourceAnalysis(job.id, error instanceof Error ? error.message : String(error))
+        }
+      }
+    } finally {
+      this.#draining = false
+    }
+  }
+
   #registerOutcome(
     projectId: ProjectId,
     imported: {
@@ -209,6 +235,12 @@ export class UniversalResourceImportService {
       ...(meta.userNote === undefined ? {} : { userNote: meta.userNote }),
     })
     this.repository.createResourceDescriptorPending(fast)
+    if (meta.userNote !== undefined) {
+      this.repository.upsertResourcePolicy({
+        projectId: String(projectId), resourceId, trustLevel: 'untrusted', approvedContext: false,
+        executable: false, annotation: { note: meta.userNote },
+      })
+    }
     if (meta.normalizedUrl === undefined) this.#enqueueUnderstanding(String(projectId), resourceId)
     return {
       resourceId,
@@ -227,18 +259,13 @@ export class UniversalResourceImportService {
   }
 
   #enqueueUnderstanding(projectId: string, resourceId: string): void {
-    if (this.#queue.has(resourceId)) return
-    const task = (async () => {
-      try {
-        await this.reanalyze(projectId, resourceId)
-      } catch {
-        // Keep the pending descriptor; reanalyze endpoint can retry.
-      } finally {
-        this.#queue.delete(resourceId)
-      }
-    })()
-    this.#queue.set(resourceId, task)
-    setImmediate(() => { void task })
+    const descriptor = this.getDescriptor(projectId, resourceId)
+    if (descriptor === undefined) return
+    this.repository.enqueueResourceAnalysis({
+      id: `analysis-${randomUUID()}`, projectId, resourceId,
+      sourceRevisionId: descriptor.sourceRevisionId, analyzerVersion: RESOURCE_ANALYZER_VERSION,
+    })
+    setImmediate(() => { void this.drainAnalysisQueue().catch(() => undefined) })
   }
 
   async #readContent(observedPath: string | undefined): Promise<string | undefined> {
