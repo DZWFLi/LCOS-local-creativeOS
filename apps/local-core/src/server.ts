@@ -32,7 +32,7 @@ import { PreviewCacheService } from './preview-cache-service.js'
 import { PreviewWorkerService } from './preview-worker-service.js'
 import { ImportCopyConflictError, ImportCopyService } from './import-copy-service.js'
 import { UniversalResourceImportService } from './resources/universal-resource-import-service.js'
-import { ResourcePackageService } from './resources/resource-package-service.js'
+import { ResourcePackageConflictError, ResourcePackageService } from './resources/resource-package-service.js'
 import { ResourceReader } from './resources/resource-reader.js'
 import { ResourceMatcher } from './resources/resource-matcher.js'
 import { ContextManifestService } from './context-manifest-service.js'
@@ -174,6 +174,15 @@ function parseMultipartImport(contentType: string | undefined, body: Buffer): Mu
   }
   if (file === undefined) throw new Error('Multipart import requires file.')
   return { fields, file }
+}
+
+function decodeStrictBase64(value: string): Buffer {
+  if (value.length === 0 || value.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(value)) {
+    throw new Error('File content is not valid base64.')
+  }
+  const decoded = Buffer.from(value, 'base64')
+  if (decoded.toString('base64') !== value) throw new Error('File content is not canonical base64.')
+  return decoded
 }
 
 async function withAbort<Value>(operation: Promise<Value>, signal: AbortSignal): Promise<Value> {
@@ -778,7 +787,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
           }
           let bytes: Buffer
           try {
-            bytes = Buffer.from(file.content, 'base64')
+            bytes = decodeStrictBase64(file.content)
           } catch {
             sendJson(response, 400, failure('INVALID_ARGUMENT', 'File content is not valid base64.'))
             return
@@ -818,7 +827,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
           })
           sendJson(response, outcome.reused ? 200 : 201, { ok: true, value: outcome })
         } catch (error: unknown) {
-          sendJson(response, 400, failure('VALIDATION', error instanceof Error ? error.message : 'Directory import failed.'))
+          sendJson(response, error instanceof ResourcePackageConflictError ? 409 : 400, failure(error instanceof ResourcePackageConflictError ? 'CONFLICT' : 'VALIDATION', error instanceof Error ? error.message : 'Directory import failed.'))
         }
         return
       }
@@ -847,8 +856,8 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
           })
           sendJson(response, outcome.reused ? 200 : 201, { ok: true, value: outcome })
         } catch (error: unknown) {
-          const status = error instanceof RangeError ? 413 : 400
-          sendJson(response, status, failure('VALIDATION', error instanceof Error ? error.message : 'Archive import failed.'))
+          const status = error instanceof RangeError ? 413 : error instanceof ResourcePackageConflictError ? 409 : 400
+          sendJson(response, status, failure(error instanceof ResourcePackageConflictError ? 'CONFLICT' : 'VALIDATION', error instanceof Error ? error.message : 'Archive import failed.'))
         }
         return
       }

@@ -25,7 +25,14 @@ interface CentralEntry {
   readonly name: string
   readonly localOffset: number
   readonly unixMode: number
+  readonly crc32: number
 }
+
+const WINDOWS_RESERVED_NAMES = new Set([
+  'con', 'prn', 'aux', 'nul',
+  ...Array.from({ length: 9 }, (_, index) => `com${index + 1}`),
+  ...Array.from({ length: 9 }, (_, index) => `lpt${index + 1}`),
+])
 
 export function readZipArchive(bytes: Buffer): ZipEntryData[] {
   const eocd = findEndOfCentralDirectory(bytes)
@@ -49,6 +56,7 @@ export function readZipArchive(bytes: Buffer): ZipEntryData[] {
     const extraLength = bytes.readUInt16LE(cursor + 30)
     const commentLength = bytes.readUInt16LE(cursor + 32)
     const externalAttributes = bytes.readUInt32LE(cursor + 38)
+    const crc32 = bytes.readUInt32LE(cursor + 16)
     const localOffset = bytes.readUInt32LE(cursor + 42)
     const name = bytes.subarray(cursor + 46, cursor + 46 + nameLength).toString('utf8')
     if (nameLength === 0 || nameLength > MAX_NAME_LENGTH) throw new ZipReadError('Invalid entry name length.')
@@ -56,17 +64,21 @@ export function readZipArchive(bytes: Buffer): ZipEntryData[] {
     if (method !== 0 && method !== 8) throw new ZipReadError(`Unsupported compression method: ${method}.`)
     const unixMode = (externalAttributes >>> 16) & 0xffff
     if ((unixMode & 0xf000) === 0xa000) throw new ZipReadError(`Symlink entries are rejected: ${name}`)
-    entries.push({ method, flags, compressedSize, uncompressedSize, name, localOffset, unixMode })
+    entries.push({ method, flags, compressedSize, uncompressedSize, name, localOffset, unixMode, crc32 })
     totalUncompressed += uncompressedSize
     if (totalUncompressed > MAX_TOTAL_UNCOMPRESSED) throw new ZipReadError('Archive exceeds the total uncompressed size limit.')
     cursor += 46 + nameLength + extraLength + commentLength
   }
 
   const result: ZipEntryData[] = []
+  const normalizedPaths = new Set<string>()
   let materialized = 0
   for (const entry of entries) {
     const path = safeZipPath(entry.name)
     if (path === undefined) continue
+    const collisionKey = path.normalize('NFC').toLocaleLowerCase('en-US')
+    if (normalizedPaths.has(collisionKey)) throw new ZipReadError(`Duplicate normalized ZIP path: ${entry.name}`)
+    normalizedPaths.add(collisionKey)
     if (entry.uncompressedSize > MAX_ENTRY_UNCOMPRESSED) {
       throw new ZipReadError(`Entry exceeds the per-file size limit: ${entry.name}`)
     }
@@ -75,6 +87,8 @@ export function readZipArchive(bytes: Buffer): ZipEntryData[] {
     const localNameLength = bytes.readUInt16LE(entry.localOffset + 26)
     const localExtraLength = bytes.readUInt16LE(entry.localOffset + 28)
     const dataStart = entry.localOffset + 30 + localNameLength + localExtraLength
+    const localName = bytes.subarray(entry.localOffset + 30, entry.localOffset + 30 + localNameLength).toString('utf8')
+    if (localName !== entry.name) throw new ZipReadError(`Local header name mismatch: ${entry.name}`)
     const dataEnd = dataStart + entry.compressedSize
     if (dataEnd > bytes.length) throw new ZipReadError('Entry data is truncated.')
     const compressed = bytes.subarray(dataStart, dataEnd)
@@ -84,6 +98,7 @@ export function readZipArchive(bytes: Buffer): ZipEntryData[] {
     if (content.length !== entry.uncompressedSize) {
       throw new ZipReadError(`Entry size mismatch: ${entry.name}`)
     }
+    if (crc32(content) !== entry.crc32) throw new ZipReadError(`CRC mismatch: ${entry.name}`)
     materialized += content.length
     if (materialized > MAX_TOTAL_UNCOMPRESSED) throw new ZipReadError('Archive exceeds the total uncompressed size limit.')
     result.push({ path, bytes: content })
@@ -105,7 +120,7 @@ function findEndOfCentralDirectory(bytes: Buffer): Buffer | undefined {
 }
 
 function safeZipPath(rawName: string): string | undefined {
-  let name = rawName.replace(/\\/g, '/')
+  let name = rawName.normalize('NFC').replace(/\\/g, '/')
   if (name.startsWith('/')) return undefined
   if (name.endsWith('/')) return undefined
   name = name.replace(/^\/+/, '')
@@ -113,7 +128,20 @@ function safeZipPath(rawName: string): string | undefined {
   for (const segment of segments) {
     if (segment === '' || segment === '.' || segment === '..') return undefined
     if (segment.length > 240) return undefined
+    if (segment.endsWith('.') || segment.endsWith(' ') || segment.includes(':')) return undefined
+    if (WINDOWS_RESERVED_NAMES.has(segment.split('.')[0]!.toLocaleLowerCase('en-US'))) return undefined
   }
   if (segments.length > 16) return undefined
   return name
+}
+
+function crc32(bytes: Buffer): number {
+  let crc = 0xffffffff
+  for (const byte of bytes) {
+    crc ^= byte
+    for (let bit = 0; bit < 8; bit += 1) {
+      crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0)
+    }
+  }
+  return (crc ^ 0xffffffff) >>> 0
 }

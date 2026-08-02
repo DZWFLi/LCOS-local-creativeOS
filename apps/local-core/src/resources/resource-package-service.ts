@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { mkdir, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname, extname, join, relative, resolve } from 'node:path'
 
 import type {
@@ -28,6 +28,15 @@ const IGNORED_FILE_NAMES = new Set([
 ])
 
 const IGNORED_FILE_SUFFIXES = ['.key', '.pem', '.p12', '.pfx']
+const WINDOWS_RESERVED_NAMES = new Set([
+  'con', 'prn', 'aux', 'nul',
+  ...Array.from({ length: 9 }, (_, index) => `com${index + 1}`),
+  ...Array.from({ length: 9 }, (_, index) => `lpt${index + 1}`),
+])
+
+export class ResourcePackageConflictError extends Error {
+  readonly code = 'IMPORT_REQUEST_CONFLICT'
+}
 
 export interface PackageFileInput {
   readonly path: string
@@ -73,18 +82,29 @@ function packageIdentity(projectId: ProjectId, requestId: string): string {
 }
 
 function safePackagePath(rawPath: string): string | undefined {
-  let path = rawPath.replace(/\\/g, '/')
+  let path = rawPath.normalize('NFC').replace(/\\/g, '/')
   path = path.replace(/^\/+/, '')
   if (/^[a-z]:/i.test(path)) return undefined
   const segments = path.split('/')
   if (segments.some((segment) => segment === '' || segment === '.' || segment === '..')) return undefined
   if (segments.length > MAX_PACKAGE_DEPTH) return undefined
-  if (segments.some((segment) => IGNORED_DIRECTORIES.has(segment))) return undefined
+  if (segments.some((segment) => IGNORED_DIRECTORIES.has(segment.toLocaleLowerCase('en-US')))) return undefined
+  if (segments.some((segment) => segment.endsWith('.') || segment.endsWith(' ') || segment.includes(':'))) return undefined
+  if (segments.some((segment) => WINDOWS_RESERVED_NAMES.has(segment.split('.')[0]!.toLocaleLowerCase('en-US')))) return undefined
   const fileName = segments.at(-1) ?? ''
-  if (IGNORED_FILE_NAMES.has(fileName)) return undefined
+  if (IGNORED_FILE_NAMES.has(fileName.toLocaleLowerCase('en-US'))) return undefined
   if (IGNORED_FILE_SUFFIXES.some((suffix) => fileName.toLocaleLowerCase('en-US').endsWith(suffix))) return undefined
   if (fileName.length === 0 || fileName.length > 240 || path.length > 1024) return undefined
   return path
+}
+
+function packageFingerprint(rootName: string, files: readonly { readonly path: string; readonly bytes: Buffer }[]): string {
+  const hash = createHash('sha256').update(rootName.normalize('NFC')).update('\0')
+  for (const file of files) {
+    hash.update(file.path).update('\0')
+    hash.update(createHash('sha256').update(file.bytes).digest('hex')).update('\0')
+  }
+  return hash.digest('hex')
 }
 
 function isInsideDirectory(root: string, candidate: string): boolean {
@@ -108,10 +128,14 @@ export class ResourcePackageService {
     const resourceId = `resource-${identity}` as ResourceId
     const rootName = input.rootName.trim()
     const files: Array<{ readonly path: string; readonly bytes: Buffer }> = []
+    const normalizedPaths = new Set<string>()
     let totalBytes = 0
     for (const file of input.files) {
       const path = safePackagePath(file.path)
       if (path === undefined) continue
+      const collisionKey = path.normalize('NFC').toLocaleLowerCase('en-US')
+      if (normalizedPaths.has(collisionKey)) throw new Error(`Duplicate normalized package path: ${file.path}`)
+      normalizedPaths.add(collisionKey)
       if (file.bytes.byteLength > MAX_PACKAGE_SINGLE_BYTES) {
         throw new Error(`File exceeds the per-file limit: ${file.path}`)
       }
@@ -120,6 +144,8 @@ export class ResourcePackageService {
       files.push({ path, bytes: file.bytes })
     }
     if (files.length === 0) throw new Error('Directory has no importable files after security filtering.')
+    files.sort((a, b) => a.path.localeCompare(b.path, 'en'))
+    const fingerprint = packageFingerprint(rootName, files)
 
     const ids = {
       fileRecordId: `import-file-${identity}` as FileRecord['id'],
@@ -132,9 +158,14 @@ export class ResourcePackageService {
     const existingRevision = this.repository.getArtifactRevision(String(ids.revisionId))
     const existingFileRecord = this.repository.getFileRecord(String(ids.fileRecordId))
     if (existingView !== undefined && existingArtifact !== undefined && existingRevision !== undefined && existingFileRecord !== undefined) {
+      let existingFingerprint: string | undefined
+      try {
+        const manifest = JSON.parse(await readFile(existingFileRecord.observedPath, 'utf8')) as { packageFingerprint?: string }
+        existingFingerprint = manifest.packageFingerprint
+      } catch {}
       const compatible = String(existingArtifact.projectId) === String(projectId)
-        && existingArtifact.title === rootName
-      if (!compatible) throw new Error('importRequestId was already used with a different package.')
+        && existingArtifact.title === rootName && existingFingerprint === fingerprint
+      if (!compatible) throw new ResourcePackageConflictError('importRequestId was already used with different package content.')
       const descriptor = this.repository.getResourceDescriptorByResourceId(String(projectId), resourceId)
       return {
         resourceId,
@@ -158,7 +189,7 @@ export class ResourcePackageService {
     await mkdir(sourceRoot, { recursive: true })
     const manifestEntries: ManifestEntry[] = []
     try {
-      for (const file of files.sort((a, b) => a.path.localeCompare(b.path))) {
+      for (const file of files) {
         const finalPath = resolve(sourceRoot, file.path)
         if (!isInsideDirectory(sourceRoot, finalPath)) throw new Error('Package file escaped its source root.')
         const tempPath = `${finalPath}.tmp`
@@ -172,10 +203,11 @@ export class ResourcePackageService {
           contentHash: createHash('sha256').update(file.bytes).digest('hex'),
         })
       }
-      const manifest: { schemaVersion: '0'; resourceId: string; rootName: string; files: readonly ManifestEntry[] } = {
+      const manifest: { schemaVersion: '0'; resourceId: string; rootName: string; packageFingerprint: string; files: readonly ManifestEntry[] } = {
         schemaVersion: '0',
         resourceId,
         rootName,
+        packageFingerprint: fingerprint,
         files: manifestEntries,
       }
       const manifestBytes = Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`, 'utf8')

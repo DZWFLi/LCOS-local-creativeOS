@@ -209,7 +209,7 @@ export class UniversalResourceImportService {
       ...(meta.userNote === undefined ? {} : { userNote: meta.userNote }),
     })
     this.repository.createResourceDescriptorPending(fast)
-    this.#enqueueUnderstanding(String(projectId), resourceId)
+    if (meta.normalizedUrl === undefined) this.#enqueueUnderstanding(String(projectId), resourceId)
     return {
       resourceId,
       artifactId: String(imported.artifact.id),
