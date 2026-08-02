@@ -93,15 +93,22 @@ try {
       });
     } else {
       const files = await collectDirectory(source);
-      result = await coreRequest(`/projects/${encodeURIComponent(projectId)}/resources/import-directory`, {
+      const session = await coreRequest(`/projects/${encodeURIComponent(projectId)}/resource-upload-sessions`, {
         method: "POST",
         ...jsonBody({
           importRequestId,
           rootName: option("name") || fallbackName,
           scopeId,
-          files,
+          x: Number(option("x") || 180),
+          y: Number(option("y") || 160),
         }),
       });
+      for (const file of files) {
+        await coreRequest(`/projects/${encodeURIComponent(projectId)}/resource-upload-sessions/${encodeURIComponent(session.sessionId)}/files?path=${encodeURIComponent(file.path)}`, {
+          method: "PUT", headers: { "content-type": "application/octet-stream" }, body: await readFile(file.filePath),
+        });
+      }
+      result = await coreRequest(`/projects/${encodeURIComponent(projectId)}/resource-upload-sessions/${encodeURIComponent(session.sessionId)}/complete`, { method: "POST" });
     }
   } else if (group === "task" && action === "claim") {
     result = await bridgeRequest("/v1/tasks/claim-next", {
@@ -155,10 +162,9 @@ async function collectDirectory(root) {
       if (!entry.isFile()) continue;
       const info = await lstat(full);
       if (info.size > 10 * 1024 * 1024) continue;
-      const bytes = await readFile(full);
       files.push({
         path: relative(root, full).split(sep).join("/"),
-        content: bytes.toString("base64"),
+        filePath: full,
       });
     }
   };

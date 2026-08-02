@@ -76,6 +76,7 @@ describe('Run-time resource matching into RuntimeInputPack (U4)', () => {
       position: { x: 0, y: 0 },
     })
     await imports.reanalyze('project-pack', skill.resourceId)
+    repository.upsertResourcePolicy({ projectId: 'project-pack', resourceId: skill.resourceId, trustLevel: 'reviewed', approvedContext: true, executable: false })
 
     const bridge = new FakeBridge()
     const review = new RuntimeReviewService(repository, undefined, () => 'pack-one')
@@ -93,6 +94,7 @@ describe('Run-time resource matching into RuntimeInputPack (U4)', () => {
       targetArtifactId: target.artifact.id,
     })
     const runId = String(action.review.run.id)
+    await application.dispatch(action.review.run.id)
     const pack = JSON.parse(readFileSync(
       join(projectRoot, '.creative-os', 'runtime', runId, 'runtime-input-pack.json'),
       'utf8',

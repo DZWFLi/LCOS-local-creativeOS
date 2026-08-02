@@ -35,6 +35,7 @@ a443524fa74f4c0ea187d16cee4b0837a58b6684e56fa0794a90f9c038d32f1b  apps/local-cor
 114cc6e25138e0235b7c8e65e162454e2c71e535af58cd6fbf08229aa3b20088  apps/local-core/src/resources/resource-matcher.ts
 4fe79cca68014ffecda8128b15b0f9dde907fe017d295ef169cab5083ee6d685  apps/local-core/src/resources/resource-package-service.ts
 68b28b54dbb58113c872ec9701a69801e26621caf66b150b0d2fa99151d8ef5d  apps/local-core/src/resources/resource-reader.ts
+f6c95050aef41252f06d29b9ad2a425602db8d005577e33005b8e988cf813b5f  apps/local-core/src/resources/resource-upload-session-service.ts
 e6164b90d2cc735f1182bd9404173566ab75ae8ae0b4a1274b3effa24543daea  apps/local-core/src/resources/universal-resource-import-service.ts
 381fa52b7e523c2038c3d0bc0552140c025bc91fd343c6a095dd72d1d8be9fd6  apps/local-core/src/resources/url-security.ts
 3ccc34860a16ddc5e1c1aade5675e8bb3d3f78aad6f0321d382417657bab80b0  apps/local-core/src/resources/zip-reader.ts
@@ -68,13 +69,13 @@ de1b9e3799113efb9b3a85dcc42540519316da6bd21baabe8bd9ce03faa601c7  apps/local-cor
 083343fe6362f061ac82802c58fdb4066edb9882ef57fd87ffba2efac5b43b8b  apps/local-core/tests/resources/resource-package-http.test.ts
 ccab9d08b136ec92572d3ae15075d9e48ce51af8494ab29c2279dc0f252d1559  apps/local-core/tests/resources/resource-package-service.test.ts
 a96c93e233b23061f67b207de6aa56e0f21fc5330a679b305995fbdfd6037b04  apps/local-core/tests/resources/resource-reader.test.ts
-f84bc1696e592cee70733c03c3eac428714f14f1cdee25907ab9d2e42c20de15  apps/local-core/tests/resources/runtime-resource-pack.test.ts
+bc553d555efd7815db1cf399696dbb23751b8432099e83d75ba3322878f1ecc2  apps/local-core/tests/resources/runtime-resource-pack.test.ts
 9cabfae782ef1dbd8d4aa20785e73089c336088ce23b9a535eb58d3776445a34  apps/local-core/tests/resources/skill-package-analyzer.test.ts
 ce4564d3b25cac2accbe5e9c77232160475f825274df1b0742dda6af2a52a490  apps/local-core/tests/resources/universal-resource-import.test.ts
 fef5bafc0f8881d43446f1062b7f326a336314c989aff85d1927664371a6fb10  apps/local-core/tests/resources/zip-reader.test.ts
 73461c0e5bc125808bc30d96ec69384337768e9141e805c0231e9ad3767f3248  apps/local-core/tests/runtime-adapter.test.ts
 a941bff189fb028cfbadf74f135dbd94c6ccfdd9dc815555ad646d4d43752b1f  apps/local-core/tests/runtime-application-service.test.ts
-9cea95c2d796fb4616c9f07a5a2bc2b7372271bfc219b0c60c647d5f584baedc  apps/local-core/tests/runtime-http.test.ts
+94a11a8abe6eff8aa57892c90fe489317185b20b69cee3631f465e412b523d83  apps/local-core/tests/runtime-http.test.ts
 aa5aae172b2d05ad21c9776116c194161def86d81da861722506eeddd9cb70e6  apps/local-core/tests/runtime-persistence.test.ts
 d1e02396485ee09c27395f6d8a14f303b92d26b7c9ad35d0202195d321f14fd9  apps/local-core/tests/runtime-result-ingestion.test.ts
 1a23a1c564677b0076a38e5439c1906524c4ab3a36e313cedebb9d754c026a49  apps/local-core/tests/runtime-review-service.test.ts
@@ -467,7 +468,7 @@ cd5d623527edb643df5eaccaa3e15df24ec86b22b8e4fb3b97cbe0e3b93c2760  tools/ai-bridg
 bb2ca3aaa5ed8a6bb9143ea5e2fd601fd4bb452d2990ea6ce05a4a3efd38a548  tools/ai-bridge-runtime/tests/test_lcos_contract.py
 a87313d9ab14feba0bc9591dce30db22b541f3232b85391bcba97832c60c232e  tools/ai-bridge-runtime/tests/test_purified_baseline.py
 0b465513f45137c049ae8e1adc3bc01fc10041fca0aa10021eb8cd45455ec76d  tools/lcos-agent/.mcp.json.example
-d9c1e24f7529b2a2de7748fa684d80811d6499bd548a0fccfbb355737d6e7e96  tools/lcos-agent/cli.mjs
+a1978b6ac0f52d910c7daff158c2c265e007ce5b435b0baaeeb355a14fd078a1  tools/lcos-agent/cli.mjs
 81e829d1d40d0a3921becb53efef41031c1bae2f45053d4f2378ffc7f1257a51  tools/lcos-agent/lib/client.mjs
 f649663f36e41fb46b249b43b55a57803dfe7927b27e115d005741565e3e43a7  tools/lcos-agent/mcp-server.mjs
 3e78644a627a5fedd7a0baf210421d7df34438ca8a410023a7c886535d90a1b7  tools/lcos-agent/package.json

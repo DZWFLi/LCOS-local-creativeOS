@@ -89,9 +89,8 @@ describe('Runtime HTTP closure', () => {
       ok: true,
       value: {
         review: {
-          run: { id: 'run-http-one', status: 'queued' },
-          dispatch: { status: 'bound' },
-          binding: { providerStatus: 'assigned' },
+          run: { id: 'run-http-one', status: 'created' },
+          dispatch: { status: 'planned' },
         },
       },
     })
@@ -100,7 +99,7 @@ describe('Runtime HTTP closure', () => {
     expect(listResponse.status).toBe(200)
     await expect(listResponse.json()).resolves.toMatchObject({
       ok: true,
-      value: [{ run: { id: 'run-http-one' }, presentationPhase: 'queued' }],
+      value: [{ run: { id: 'run-http-one' }, presentationPhase: 'created' }],
     })
   })
 })
