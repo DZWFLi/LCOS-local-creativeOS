@@ -3021,6 +3021,10 @@ body,
 .scope-name-field input:focus { border-color: rgba(112,71,216,.42); box-shadow: 0 0 0 3px rgba(112,71,216,.08); }
 .path-input { display: flex; align-items: center; gap: 8px; padding-left: 11px; border: 1px solid rgba(29,45,60,.1); border-radius: 12px; background: #fff; }
 .path-input input { border: 0; padding-left: 0; box-shadow: none !important; }
+.path-input button { flex: 0 0 auto; align-self: stretch; min-width: 76px; margin: 4px; border: 0; border-radius: 9px; color: #5435ad; background: #eee9fb; font-size: 10.5px; font-weight: 760; cursor: pointer; }
+.path-input button:hover:not(:disabled) { background: #e4dcfa; }
+.path-input button:disabled { cursor: wait; opacity: .58; }
+.project-create-error { color: #a53d3d !important; }
 .project-intent-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 4px; border-radius: 12px; background: rgba(29,45,60,.06); }
 .project-intent-switch button { min-height: 34px; border: 0; border-radius: 9px; color: #667582; background: transparent; cursor: pointer; }
 .project-intent-switch button.active { color: #172b3c; background: #fff; box-shadow: 0 2px 8px rgba(29,45,60,.1); }

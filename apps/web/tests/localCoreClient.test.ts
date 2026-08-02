@@ -191,6 +191,28 @@ describe('Local Core browser client', () => {
     expect(result.result).toMatchObject({ ok: true, value: { reused: false, record: { status: 'ready' } } })
   })
 
+  it('requests a native directory selection through Local Core', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({
+      ok: true,
+      value: { path: 'E:\\Creative\\PortaSplit', cancelled: false },
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await createLocalCoreClient().selectDirectory('选择已有项目目录')
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/local-core/v1/system/select-directory',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ title: '选择已有项目目录' }),
+      }),
+    )
+    expect(result.result).toEqual({
+      ok: true,
+      value: { path: 'E:\\Creative\\PortaSplit', cancelled: false },
+    })
+  })
+
   it('imports dropped files through multipart Import Copy without browser paths', async () => {
     const fetchMock = vi.fn(async () => jsonResponse({
       ok: true,

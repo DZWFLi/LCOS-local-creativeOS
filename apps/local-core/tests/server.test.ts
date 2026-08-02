@@ -102,6 +102,25 @@ describe('Local Core HTTP server', () => {
     })
   })
 
+  it('returns only the directory explicitly selected through the native picker', async () => {
+    const directoryPicker = async ({ title }: { readonly title: string }) => ({
+      path: title === '选择已有项目目录' ? 'E:\\Creative\\PortaSplit' : undefined,
+      cancelled: false,
+    })
+    const { baseUrl } = await startServer(createLocalCoreServer({ directoryPicker }))
+    const response = await fetch(`${baseUrl}/system/select-directory`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ title: '选择已有项目目录' }),
+    })
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({
+      ok: true,
+      value: { path: 'E:\\Creative\\PortaSplit', cancelled: false },
+    })
+  })
+
   it.each(['0.0.0.0', '::', '192.168.1.10'])('rejects non-loopback host %s', (host) => {
     expect(() => createLocalCoreServer({ host })).toThrow('only bind to 127.0.0.1')
   })

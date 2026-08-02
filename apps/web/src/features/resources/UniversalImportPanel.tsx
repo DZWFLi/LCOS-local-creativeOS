@@ -101,7 +101,7 @@ export function UniversalImportPanel({ open, onClose, onFiles, onDirectory, onAr
     </label>
     {error && <p className="import-error" role="alert">{error}</p>}
     <input ref={fileInputRef} type="file" multiple hidden data-testid="import-file-input" onChange={pickFiles} />
-    <input ref={directoryInputRef} type="file" multiple hidden data-testid="import-directory-input" onChange={(event) => { void pickDirectory(event) }} />
+    <input ref={directoryInputRef} type="file" multiple hidden data-testid="import-directory-input" {...{ webkitdirectory: '' }} onChange={(event) => { void pickDirectory(event) }} />
     <input ref={archiveInputRef} type="file" accept=".zip" hidden data-testid="import-archive-input" onChange={pickArchive} />
   </section></div>
 }

@@ -542,6 +542,11 @@ export function App() {
     setProjectOpen(true)
     setNotice(`${label} 已创建并写入 Local Core，可以直接拖入本地文件`)
   }, [camera, resetGraph, setCamera, setDataSource, setProjectOpen, setScopes, setWorkRail, setWorkspaces])
+  const browseProjectDirectory = useCallback(async (title: string): Promise<string | undefined> => {
+    const call = await bridgeRef.current.client.selectDirectory(title)
+    if (!call.result.ok) throw new Error(call.result.error.message)
+    return call.result.value.cancelled ? undefined : call.result.value.path
+  }, [])
   const selectNode = useCallback((id: string, additive = false) => {
     setSelectedEdgeId(null)
     setSelectedIds((current) => additive ? current.includes(id) ? current.filter((item) => item !== id) : [...current, id] : [id])
@@ -1604,7 +1609,7 @@ export function App() {
   if (!projectOpen) return <>
     {notice && <div data-testid="toast" className="notice" role="status" aria-live="polite">{notice}</div>}
     <ProjectDrive projects={projects} openProjectIds={openProjectIds} onOpen={openProject} onCreate={() => setProjectCreateOpen(true)} />
-    <ProjectCreateDialog open={projectCreateOpen} onCancel={() => setProjectCreateOpen(false)} onCreate={createProject} />
+    <ProjectCreateDialog open={projectCreateOpen} onCancel={() => setProjectCreateOpen(false)} onBrowseDirectory={browseProjectDirectory} onCreate={createProject} />
   </>
 
   const editorWorkspace = workspaceEditor?.id ? workspaces.find((workspace) => workspace.id === workspaceEditor.id) : undefined

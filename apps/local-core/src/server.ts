@@ -43,6 +43,7 @@ import {
   type CreateRuntimeRunInput,
 } from './runtime-application-service.js'
 import { ActiveContextStore, type ActiveContextInput } from './active-context-store.js'
+import { selectNativeDirectory, type DirectoryPickerInput, type DirectoryPickerResult } from './native-directory-picker.js'
 
 const LOOPBACK_HOST = '127.0.0.1'
 const MAX_BODY_BYTES = 1 * 1024 * 1024 // 1 MiB
@@ -81,6 +82,7 @@ export interface LocalCoreServerOptions {
   readonly activeContextStore?: ActiveContextStore
   readonly apiToken?: string
   readonly allowedOrigins?: readonly string[]
+  readonly directoryPicker?: (input: DirectoryPickerInput) => Promise<DirectoryPickerResult>
 }
 
 export interface LocalCoreAddress {
@@ -297,6 +299,16 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
       }
 
       // ---- Project Catalog ----
+      if (method === 'POST' && pathname === '/system/select-directory') {
+        const body = await readJsonBody(request, controller.signal) as { title?: unknown }
+        const title = typeof body.title === 'string' && body.title.trim()
+          ? body.title.trim().slice(0, 120)
+          : '选择项目目录'
+        const result = await (options.directoryPicker ?? selectNativeDirectory)({ title })
+        sendJson(response, 200, { ok: true, value: result })
+        return
+      }
+
       if (method === 'GET' && pathname === '/projects') {
         const result = metadata === undefined
           ? await withAbort(catalog.list(controller.signal), controller.signal)

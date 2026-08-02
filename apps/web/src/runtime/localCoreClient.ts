@@ -125,6 +125,7 @@ export interface LocalCoreClient {
   health(signal?: AbortSignal): Promise<RuntimeCall<HealthStatus>>
   catalog(signal?: AbortSignal): Promise<RuntimeCall<readonly ProjectCatalogEntry[]>>
   validateProjectRoot(rootPath: string, signal?: AbortSignal): Promise<RuntimeCall<ValidatedProjectRoot>>
+  selectDirectory(title: string, signal?: AbortSignal): Promise<RuntimeCall<{ readonly path?: string; readonly cancelled: boolean }>>
   importResourceUrl(projectId: string, input: {
     readonly url: string
     readonly title?: string
@@ -354,6 +355,18 @@ export function createLocalCoreClient(): LocalCoreClient {
           body: JSON.stringify({ rootPath }),
         },
         decode: decodeResult<ValidatedProjectRoot>,
+      })
+    },
+    selectDirectory(title, signal) {
+      return request('/system/select-directory', {
+        signal,
+        timeoutMs: 5 * 60 * 1_000,
+        init: {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ title }),
+        },
+        decode: decodeResult<{ readonly path?: string; readonly cancelled: boolean }>,
       })
     },
     createProject(input, signal) {
