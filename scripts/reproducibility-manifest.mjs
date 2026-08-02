@@ -15,9 +15,9 @@ const GENERATED_SEGMENTS = new Set([
   "__pycache__",
 ]);
 const TEXT_EXTENSIONS = new Set([
-  ".bat", ".cmd", ".css", ".csv", ".html", ".js", ".json", ".jsx",
-  ".md", ".mjs", ".ps1", ".sh", ".sql", ".svg", ".toml", ".ts",
-  ".tsx", ".txt", ".xml", ".yaml", ".yml",
+  ".bat", ".cmd", ".css", ".csv", ".example", ".html", ".js", ".json",
+  ".jsx", ".md", ".mjs", ".ps1", ".py", ".sh", ".sha256", ".sql",
+  ".svg", ".toml", ".ts", ".tsx", ".txt", ".xml", ".yaml", ".yml",
 ]);
 const TEXT_FILENAMES = new Set([
   ".editorconfig", ".gitattributes", ".gitignore", "LICENSE", "README",
