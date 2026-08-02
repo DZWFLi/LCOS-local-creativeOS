@@ -1030,6 +1030,10 @@ export class SqliteMetadataRepository {
     return row === undefined ? undefined : this.#previewRecord(row)
   }
 
+  getArtifactViewsByProject(projectId: string): ArtifactView[] {
+    return (this.#database.prepare('SELECT * FROM artifact_views WHERE project_id = ?').all(projectId as SQLInputValue) as Row[]).map((r) => this.#artifactView(r))
+  }
+
   getPreviewRecord(previewRecordId: string): PreviewRecord | undefined {
     const row = this.#database.prepare('SELECT * FROM preview_records WHERE id = ?').get(previewRecordId as SQLInputValue) as Row | undefined
     return row === undefined ? undefined : this.#previewRecord(row)

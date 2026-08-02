@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync, openSync, closeSync } from 'node:fs'
+import { randomBytes } from 'node:crypto'
 import { join } from 'node:path'
 import { spawn, spawnSync } from 'node:child_process'
 import http from 'node:http'
@@ -177,7 +178,7 @@ function assertPortsFreeOrOwned() {
   stopOwned({ quiet: true })
 }
 
-function spawnLogged(script, logName) {
+function spawnLogged(script, logName, environment = {}) {
   const npmCli = process.env.npm_execpath
   const npmCommand = npmCli ? process.execPath : process.platform === 'win32' ? 'npm.cmd' : 'npm'
   const args = npmCli ? [npmCli, 'run', script] : ['run', script]
@@ -187,6 +188,7 @@ function spawnLogged(script, logName) {
     cwd: process.cwd(),
     stdio: ['ignore', outFd, errFd],
     windowsHide: true,
+    env: { ...process.env, ...environment },
   })
   child.once('exit', () => {
     try { closeSync(outFd) } catch {}
@@ -318,8 +320,10 @@ async function open() {
     process.exit(1)
   }
   assertPortsFreeOrOwned()
-  const core = spawnLogged('dev:local-core', 'local-core')
-  const web = spawnLogged('dev:web', 'web')
+  const localCoreToken = randomBytes(32).toString('base64url')
+  const environment = { LOCAL_CORE_API_TOKEN: localCoreToken }
+  const core = spawnLogged('dev:local-core', 'local-core', environment)
+  const web = spawnLogged('dev:web', 'web', environment)
   const state = { cwd: process.cwd(), version, branch: info.branch, commit: info.commit, startedAt: new Date().toISOString(), launcherPid: process.pid, corePid: core.pid, webPid: web.pid, browserPid: null }
   writeState(state)
   try {

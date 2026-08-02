@@ -10,7 +10,14 @@ export function bridgeUrl() {
 }
 
 export async function coreRequest(path, init = {}) {
-  return requestJson(new URL(path, `${coreUrl()}/`), init);
+  const token = process.env.LOCAL_CORE_API_TOKEN;
+  return requestJson(new URL(path, `${coreUrl()}/`), {
+    ...init,
+    headers: {
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
+      ...init.headers,
+    },
+  });
 }
 
 export async function bridgeRequest(path, init = {}) {

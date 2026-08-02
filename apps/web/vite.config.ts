@@ -4,6 +4,7 @@ import { execSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 
 const rootPackage = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as { version?: string }
+const localCoreToken = process.env.LOCAL_CORE_API_TOKEN
 
 function gitValue(command: string): string {
   try {
@@ -27,6 +28,7 @@ export default defineConfig({
         target: 'http://127.0.0.1:43121',
         changeOrigin: false,
         rewrite: (path) => path.replace(/^\/api\/local-core\/v1/, ''),
+        ...(localCoreToken === undefined ? {} : { headers: { authorization: `Bearer ${localCoreToken}` } }),
       },
     },
   },

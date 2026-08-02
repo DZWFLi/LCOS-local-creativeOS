@@ -1,8 +1,10 @@
 import { spawn } from 'node:child_process'
+import { randomBytes } from 'node:crypto'
 
 const npmCli = process.env.npm_execpath
 const npmCommand = npmCli ? process.execPath : process.platform === 'win32' ? 'npm.cmd' : 'npm'
 const children = new Set()
+const localCoreToken = randomBytes(32).toString('base64url')
 let stopping = false
 
 function stop(child) {
@@ -23,6 +25,7 @@ function start(script) {
     cwd: process.cwd(),
     stdio: 'inherit',
     windowsHide: true,
+    env: { ...process.env, LOCAL_CORE_API_TOKEN: localCoreToken },
   })
   children.add(child)
   child.once('exit', (code, signal) => {

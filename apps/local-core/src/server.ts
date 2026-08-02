@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { randomUUID, timingSafeEqual } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 
@@ -78,6 +78,8 @@ export interface LocalCoreServerOptions {
   readonly runtimeApplicationService?: RuntimeApplicationService
   readonly previewCacheRoot?: string
   readonly activeContextStore?: ActiveContextStore
+  readonly apiToken?: string
+  readonly allowedOrigins?: readonly string[]
 }
 
 export interface LocalCoreAddress {
@@ -221,6 +223,8 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
     throw new Error('Local Core may only bind to 127.0.0.1.')
   }
   const requestTimeoutMs = options.requestTimeoutMs ?? 10_000
+  const apiToken = options.apiToken
+  const allowedOrigins = new Set(options.allowedOrigins ?? ['http://127.0.0.1:5173', 'http://localhost:5173'])
   if (!Number.isFinite(requestTimeoutMs) || requestTimeoutMs <= 0) {
     throw new Error('Local Core requestTimeoutMs must be a positive finite number.')
   }
@@ -267,9 +271,26 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
       const method = request.method ?? 'GET'
       const pathname = url.pathname
 
+      const hostHeader = request.headers.host ?? ''
+      const requestHost = hostHeader.replace(/^\[|\](:\d+)?$/g, '').split(':')[0]?.toLowerCase()
+      if (requestHost !== '127.0.0.1' && requestHost !== 'localhost' && requestHost !== '::1') {
+        sendJson(response, 403, failure('VALIDATION', 'Local Core Host must be loopback.'))
+        return
+      }
+      const origin = request.headers.origin
+      if (origin !== undefined && !allowedOrigins.has(origin)) {
+        sendJson(response, 403, failure('VALIDATION', 'Origin is not allowed.'))
+        return
+      }
+
       // ---- Health ----
       if (method === 'GET' && pathname === '/health') {
         sendJson(response, 200, getHealthStatus())
+        return
+      }
+
+      if (apiToken !== undefined && !validBearerToken(request.headers.authorization, apiToken)) {
+        sendJson(response, 401, failure('VALIDATION', 'Local Core authorization is required.'))
         return
       }
 
@@ -1142,6 +1163,23 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
 
 type RouteResult = { status: number; body: unknown } | undefined
 
+function validBearerToken(header: string | undefined, expected: string): boolean {
+  if (header === undefined || !header.startsWith('Bearer ')) return false
+  const actual = Buffer.from(header.slice('Bearer '.length), 'utf8')
+  const expectedBytes = Buffer.from(expected, 'utf8')
+  return actual.length === expectedBytes.length && timingSafeEqual(actual, expectedBytes)
+}
+
+function belongsToProject(value: unknown, projectId: string): value is Record<string, unknown> {
+  return isRecord(value) && value.projectId === projectId && !containsForbiddenPathKey(value)
+}
+
+function containsForbiddenPathKey(value: unknown): boolean {
+  if (Array.isArray(value)) return value.some(containsForbiddenPathKey)
+  if (!isRecord(value)) return false
+  return Object.entries(value).some(([key, child]) => FORBIDDEN_BROWSER_PATH_FIELDS.has(key) || containsForbiddenPathKey(child))
+}
+
 async function handleEntityRoute(
   method: string,
   pathname: string,
@@ -1174,14 +1212,15 @@ async function handleEntityRoute(
     }
     if (method === 'POST') {
       const body = await readJsonBody(request, signal)
-      const ws = body as Workspace
-      if (!ws.id || !ws.projectId) return { status: 400, body: failure('INVALID_ARGUMENT', 'Workspace must have id and projectId.') }
+      if (!belongsToProject(body, projectId) || typeof body.id !== 'string') return { status: 400, body: failure('INVALID_ARGUMENT', 'Workspace identity must match the route project.') }
+      const ws = body as unknown as Workspace
       metadata.upsertWorkspace(ws)
       return { status: 200, body: { ok: true, value: ws } }
     }
     return undefined
   }
   if (wsOneMatch !== null) {
+    const projectId = decodeURIComponent(wsOneMatch[1] ?? '')
     const wsId = decodeURIComponent(wsOneMatch[2] ?? '')
     if (method === 'GET') {
       const ws = metadata.getWorkspace(wsId)
@@ -1189,7 +1228,8 @@ async function handleEntityRoute(
     }
     if (method === 'PUT') {
       const body = await readJsonBody(request, signal)
-      metadata.upsertWorkspace(body as Workspace)
+      if (!belongsToProject(body, projectId) || body.id !== wsId) return { status: 400, body: failure('INVALID_ARGUMENT', 'Workspace identity must match the route.') }
+      metadata.upsertWorkspace(body as unknown as Workspace)
       return { status: 200, body: { ok: true, value: body } }
     }
     return undefined
@@ -1203,6 +1243,7 @@ async function handleEntityRoute(
     return { status: 200, body: { ok: true, value: metadata.getArtifacts(projectId) } }
   }
   if (artOneMatch !== null) {
+    const projectId = decodeURIComponent(artOneMatch[1] ?? '')
     const artId = decodeURIComponent(artOneMatch[2] ?? '')
     if (method === 'GET') {
       const art = metadata.getArtifact(artId)
@@ -1210,7 +1251,8 @@ async function handleEntityRoute(
     }
     if (method === 'PUT') {
       const body = await readJsonBody(request, signal)
-      metadata.upsertArtifact(body as Artifact)
+      if (!belongsToProject(body, projectId) || body.id !== artId) return { status: 400, body: failure('INVALID_ARGUMENT', 'Artifact identity must match the route.') }
+      metadata.upsertArtifact(body as unknown as Artifact)
       return { status: 200, body: { ok: true, value: body } }
     }
     return undefined
@@ -1261,21 +1303,31 @@ async function handleEntityRoute(
   const avOneMatch = /^\/projects\/([^/]+)\/artifact-views\/([^/]+)$/.exec(pathname)
   if (avListMatch !== null && method === 'GET') {
     const projectId = decodeURIComponent(avListMatch[1] ?? '')
-    return { status: 200, body: { ok: true, value: metadata.getArtifactViews(projectId) } }
+    return { status: 200, body: { ok: true, value: metadata.getArtifactViewsByProject(projectId) } }
   }
   if (avOneMatch !== null) {
+    const projectId = decodeURIComponent(avOneMatch[1] ?? '')
     const viewId = decodeURIComponent(avOneMatch[2] ?? '')
     if (method === 'GET') {
       const view = metadata.getArtifactView(viewId)
-      return view === undefined ? { status: 404, body: failure('NOT_FOUND', 'ArtifactView not found.') } : { status: 200, body: { ok: true, value: view } }
+      const artifact = view === undefined ? undefined : metadata.getArtifact(String(view.artifactId))
+      return view === undefined || artifact === undefined || String(artifact.projectId) !== projectId
+        ? { status: 404, body: failure('NOT_FOUND', 'ArtifactView not found.') }
+        : { status: 200, body: { ok: true, value: view } }
     }
     if (method === 'PUT') {
       const body = await readJsonBody(request, signal)
-      const view = body as ArtifactView
+      if (!isRecord(body) || body.id !== viewId || typeof body.artifactId !== 'string' || containsForbiddenPathKey(body)) return { status: 400, body: failure('INVALID_ARGUMENT', 'ArtifactView identity must match the route.') }
+      const artifact = metadata.getArtifact(body.artifactId)
+      if (artifact === undefined || String(artifact.projectId) !== projectId) return { status: 400, body: failure('INVALID_ARGUMENT', 'ArtifactView Artifact must belong to the route project.') }
+      const view = body as unknown as ArtifactView
       metadata.upsertArtifactView(view)
       return { status: 200, body: { ok: true, value: view } }
     }
     if (method === 'DELETE') {
+      const existing = metadata.getArtifactView(viewId)
+      const artifact = existing === undefined ? undefined : metadata.getArtifact(String(existing.artifactId))
+      if (existing === undefined || artifact === undefined || String(artifact.projectId) !== projectId) return { status: 404, body: failure('NOT_FOUND', 'ArtifactView not found.') }
       metadata.deleteArtifactView(viewId)
       return { status: 200, body: { ok: true, value: null } }
     }
@@ -1290,6 +1342,7 @@ async function handleEntityRoute(
     return { status: 200, body: { ok: true, value: metadata.getRelations(projectId) } }
   }
   if (relOneMatch !== null) {
+    const projectId = decodeURIComponent(relOneMatch[1] ?? '')
     const relId = decodeURIComponent(relOneMatch[2] ?? '')
     if (method === 'GET') {
       const rel = metadata.getRelation(relId)
@@ -1297,10 +1350,13 @@ async function handleEntityRoute(
     }
     if (method === 'PUT') {
       const body = await readJsonBody(request, signal)
-      metadata.upsertRelation(body as Relation)
+      if (!belongsToProject(body, projectId) || body.id !== relId) return { status: 400, body: failure('INVALID_ARGUMENT', 'Relation identity must match the route.') }
+      metadata.upsertRelation(body as unknown as Relation)
       return { status: 200, body: { ok: true, value: body } }
     }
     if (method === 'DELETE') {
+      const existing = metadata.getRelation(relId)
+      if (existing === undefined || String(existing.projectId) !== projectId) return { status: 404, body: failure('NOT_FOUND', 'Relation not found.') }
       metadata.deleteRelation(relId)
       return { status: 200, body: { ok: true, value: null } }
     }
@@ -1326,6 +1382,7 @@ async function handleEntityRoute(
     return undefined
   }
   if (noteOneMatch !== null) {
+    const projectId = decodeURIComponent(noteOneMatch[1] ?? '')
     const noteId = decodeURIComponent(noteOneMatch[2] ?? '')
     if (method === 'GET') {
       const note = metadata.getNote(noteId)
@@ -1333,13 +1390,15 @@ async function handleEntityRoute(
     }
     if (method === 'PUT') {
       const body = await readJsonBody(request, signal)
-      if (!isNote(body) || String(body.id) !== noteId) {
+      if (!isNote(body) || String(body.id) !== noteId || String(body.projectId) !== projectId || containsForbiddenPathKey(body)) {
         return { status: 400, body: failure('INVALID_ARGUMENT', 'Note or NoteAnchor is invalid.') }
       }
       metadata.upsertNote(body)
       return { status: 200, body: { ok: true, value: body } }
     }
     if (method === 'DELETE') {
+      const existing = metadata.getNote(noteId)
+      if (existing === undefined || String(existing.projectId) !== projectId) return { status: 404, body: failure('NOT_FOUND', 'Note not found.') }
       metadata.deleteNote(noteId)
       return { status: 200, body: { ok: true, value: null } }
     }

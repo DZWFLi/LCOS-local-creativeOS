@@ -1,4 +1,5 @@
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { randomBytes } from 'node:crypto'
 
 import { createLocalCoreServer, LOCAL_CORE_DEV_PORT } from './server.js'
 import { SqliteMetadataRepository } from './metadata-repository.js'
@@ -72,6 +73,7 @@ async function main(): Promise<void> {
     throw new Error('LOCAL_CORE_TEST_PORT must be a valid TCP port.')
   }
   const metadataRepository = new SqliteMetadataRepository(databasePath, { disposableOnly: false })
+  const apiToken = process.env.LOCAL_CORE_API_TOKEN ?? randomBytes(32).toString('base64url')
   if (process.env.LOCAL_CORE_DISABLE_MVP_SAMPLE !== '1') {
     const sampleRoot = process.env.LOCAL_CORE_MVP_SAMPLE_ROOT
       ?? fileURLToPath(new URL('../.data/mvp-sample-project', import.meta.url))
@@ -98,6 +100,7 @@ async function main(): Promise<void> {
     metadataRepository,
     runtimeReviewService,
     runtimeApplicationService,
+    apiToken,
   })
   const address = await server.start()
   process.stdout.write(`Local Core Phase 2 listening on http://${address.host}:${address.port}\n`)
