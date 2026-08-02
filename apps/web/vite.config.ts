@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs'
 
 const rootPackage = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as { version?: string }
 const localCoreToken = process.env.LOCAL_CORE_API_TOKEN
+const localCoreTarget = process.env.LOCAL_CORE_PROXY_TARGET ?? 'http://127.0.0.1:43121'
 
 function gitValue(command: string): string {
   try {
@@ -25,7 +26,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api/local-core/v1': {
-        target: 'http://127.0.0.1:43121',
+        target: localCoreTarget,
         changeOrigin: false,
         rewrite: (path) => path.replace(/^\/api\/local-core\/v1/, ''),
         ...(localCoreToken === undefined ? {} : { headers: { authorization: `Bearer ${localCoreToken}` } }),

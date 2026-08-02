@@ -345,7 +345,7 @@ export function mapGraphToState(
       id: String(view.id),
       kind: runtimeRole === 'feedback' ? 'note' : runtimeRole === 'reference' ? 'context' : artifact ? (KIND_TO_NODE[artifact.kind] ?? 'context') : 'context',
       title: artifact?.title ?? String(view.id),
-      subtitle: artifact?.kind ? `${runtimeRole === 'feedback' ? 'Feedback' : runtimeRole === 'reference' ? 'Reference' : artifact.kind}${fileRecord ? ' · Runtime source' : ''}` : '',
+      subtitle: artifact?.kind ? `${runtimeRole === 'feedback' ? 'Feedback' : runtimeRole === 'reference' ? 'Reference' : artifact.kind}${fileRecord ? ' · Runtime source' : ''}${fileRecord && (artifact.kind === 'pdf' || artifact.kind === 'presentation') ? ' · 只读预览可用' : ''}` : '',
       x: view.position.x, y: view.position.y,
       width: view.size.width, height: view.size.height,
       displayMode: view.displayMode === 'compact' ? 'compact' as const : 'standard' as const,

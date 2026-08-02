@@ -18,7 +18,8 @@ describe('dev-only Runtime Diagnostics integration', () => {
     const vite = read('apps/web/vite.config.ts')
 
     expect(vite).toContain("'/api/local-core/v1'")
-    expect(vite).toContain("target: 'http://127.0.0.1:43121'")
+    expect(vite).toContain("process.env.LOCAL_CORE_PROXY_TARGET ?? 'http://127.0.0.1:43121'")
+    expect(vite).toContain('target: localCoreTarget')
     expect(vite).not.toContain('0.0.0.0')
   })
 

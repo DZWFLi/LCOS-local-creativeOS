@@ -3384,3 +3384,45 @@ body,
 }
 .handoff-dialog > footer .quiet { color: rgba(29,45,60,.66); background: #eceeeb; }
 .handoff-dialog > footer .primary { color: #fff; background: linear-gradient(135deg,#7447dc,#5968d7); box-shadow: 0 8px 18px rgba(98,74,211,.2); }
+
+.document-preview-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 1600;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(22, 31, 42, .48);
+  backdrop-filter: blur(12px);
+}
+.document-preview-dialog {
+  width: min(1180px, calc(100vw - 48px));
+  height: min(820px, calc(100vh - 48px));
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,.72);
+  border-radius: 22px;
+  background: #f4f5f2;
+  box-shadow: 0 32px 90px rgba(14,25,38,.32), inset 0 1px 0 #fff;
+}
+.document-preview-dialog > header,
+.document-preview-dialog > footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 18px;
+  border-bottom: 1px solid rgba(53,72,91,.1);
+}
+.document-preview-dialog > header small { color: #7b8793; font-size: 9px; letter-spacing: .14em; }
+.document-preview-dialog > header h2 { max-width: 900px; margin: 2px 0 0; overflow: hidden; color: #192837; font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
+.document-preview-dialog > main { min-height: 0; overflow: auto; background: #dfe2df; }
+.document-preview-dialog iframe { width: 100%; height: 100%; border: 0; background: #fff; }
+.document-preview-dialog > main > div:not(.document-preview-loading):not(.document-preview-error) { min-height: 100%; }
+.document-preview-dialog > footer { justify-content: flex-start; border-top: 1px solid rgba(53,72,91,.1); border-bottom: 0; color: #667482; font-size: 10px; }
+.document-preview-dialog > footer span { display: inline-flex; align-items: center; gap: 7px; }
+.document-preview-loading,
+.document-preview-error { min-height: 100%; display: grid; place-content: center; justify-items: center; gap: 10px; color: #596a79; }
+.document-preview-loading svg { animation: handoff-spin .9s linear infinite; }
+.document-preview-error strong { color: #a34e47; }

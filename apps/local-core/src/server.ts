@@ -49,6 +49,7 @@ import { indexProjectRoot, inspectProjectRoot } from './project-root-indexer.js'
 const LOOPBACK_HOST = '127.0.0.1'
 const MAX_BODY_BYTES = 1 * 1024 * 1024 // 1 MiB
 const MAX_IMPORT_BODY_BYTES = 26 * 1024 * 1024 // 25 MiB file + multipart overhead
+const MAX_DOCUMENT_PREVIEW_BYTES = 50 * 1024 * 1024
 const FORBIDDEN_BROWSER_PATH_FIELDS = new Set(['path', 'absolutePath', 'targetPath', 'observedPath', 'rootPath'])
 export const LOCAL_CORE_DEV_PORT = 43121
 
@@ -153,6 +154,20 @@ interface MultipartImportBody {
   readonly file: MultipartFilePart
 }
 
+function decodeMultipartFileName(headerText: string): string | undefined {
+  const encoded = /filename\*\s*=\s*UTF-8''([^;\r\n]+)/i.exec(headerText)?.[1]?.trim()
+  if (encoded !== undefined) {
+    try { return decodeURIComponent(encoded) } catch { throw new Error('Multipart filename* is not valid UTF-8.') }
+  }
+  const legacy = /filename="([^"]*)"/i.exec(headerText)?.[1]
+  if (legacy === undefined || !/[\x80-\xff]/.test(legacy)) return legacy
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(Buffer.from(legacy, 'latin1'))
+  } catch {
+    return legacy
+  }
+}
+
 function parseMultipartImport(contentType: string | undefined, body: Buffer): MultipartImportBody {
   const boundary = /boundary=([^;]+)/i.exec(contentType ?? '')?.[1]?.replace(/^"|"$/g, '')
   if (!boundary) throw new Error('Multipart boundary is required.')
@@ -168,7 +183,7 @@ function parseMultipartImport(contentType: string | undefined, body: Buffer): Mu
     const contentText = normalized.slice(separator + 4)
     const name = /name="([^"]+)"/i.exec(headerText)?.[1]
     if (!name) continue
-    const fileName = /filename="([^"]*)"/i.exec(headerText)?.[1]
+    const fileName = decodeMultipartFileName(headerText)
     if (fileName !== undefined) {
       const contentTypeHeader = /content-type:\s*([^\r\n]+)/i.exec(headerText)?.[1]?.trim() ?? 'application/octet-stream'
       file = { fileName, contentType: contentTypeHeader, bytes: Buffer.from(contentText, 'latin1') }
@@ -490,6 +505,40 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
           } else {
             sendJson(response, 400, failure('VALIDATION', msg))
           }
+        }
+        return
+      }
+
+      const documentPreviewMatch = /^\/projects\/([^/]+)\/file-records\/([^/]+)\/content$/.exec(pathname)
+      if (method === 'GET' && documentPreviewMatch !== null) {
+        if (!requireMetadata(metadata, response)) return
+        const projectId = decodeURIComponent(documentPreviewMatch[1] ?? '')
+        const fileRecordId = decodeURIComponent(documentPreviewMatch[2] ?? '')
+        if (!requireProject(projectId, metadata, response)) return
+        const fileRecord = metadata.getFileRecord(fileRecordId)
+        if (fileRecord === undefined || String(fileRecord.projectId) !== projectId) {
+          sendJson(response, 404, failure('NOT_FOUND', 'FileRecord not found in Project.'))
+          return
+        }
+        if (fileRecord.availability !== 'current') {
+          sendJson(response, 409, failure('CONFLICT', `File is ${fileRecord.availability}.`))
+          return
+        }
+        if (fileRecord.size > MAX_DOCUMENT_PREVIEW_BYTES) {
+          sendJson(response, 413, failure('VALIDATION', 'Document preview is limited to 50 MiB.'))
+          return
+        }
+        try {
+          const bytes = await withAbort(readFile(fileRecord.observedPath), controller.signal)
+          response.writeHead(200, {
+            'content-type': fileRecord.mimeType,
+            'content-length': String(bytes.byteLength),
+            'cache-control': 'private, no-store',
+            'x-content-type-options': 'nosniff',
+          })
+          response.end(bytes)
+        } catch (error: unknown) {
+          sendJson(response, 409, failure('CONFLICT', error instanceof Error ? error.message : 'Document could not be read.'))
         }
         return
       }

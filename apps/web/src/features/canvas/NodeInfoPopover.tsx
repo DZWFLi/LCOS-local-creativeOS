@@ -11,9 +11,10 @@ interface Props {
   onClose: () => void
   onRelations: () => void
   onShowResource?: (node: CanvasNode) => void
+  onPreview?: (node: CanvasNode) => void
 }
 
-export function NodeInfoPopover({ node, camera, relationCount, onClose, onRelations, onShowResource }: Props) {
+export function NodeInfoPopover({ node, camera, relationCount, onClose, onRelations, onShowResource, onPreview }: Props) {
   const popoverRef = useRef<HTMLElement | null>(null)
   useEffect(() => {
     const closeFromOutside = (event: PointerEvent) => {
@@ -37,6 +38,7 @@ export function NodeInfoPopover({ node, camera, relationCount, onClose, onRelati
   const revisionState = node.current ? 'Current' : node.draft ? 'Draft' : node.revisionId ? 'Revision' : '—'
   const source = url ? 'External URL' : node.runtimeState === 'persisted' ? 'Runtime' : node.fileRecordId ? 'Local Core' : 'Local'
   const processState = node.parentRunId ? `${node.parentRunId}${node.runStatus ? ` · ${node.runStatus}` : ''}` : '没有关联执行记录'
+  const hasReadOnlyPreview = Boolean(node.fileRecordId && (node.fileType === 'pdf' || node.fileType === 'presentation'))
 
   return createPortal(<aside ref={popoverRef} className={`node-info-popover ${preferLeft ? 'place-left' : 'place-right'}`} style={{ left, top }} data-testid="node-info-popover" role="dialog" aria-label={`${node.title} 信息`}>
     <header><div><small>{nodeMeta[node.kind].label}</small><h3>{node.title}</h3></div><button className="icon-button pressable" aria-label="关闭节点信息" onClick={onClose}><X size={14} /></button></header>
@@ -44,11 +46,11 @@ export function NodeInfoPopover({ node, camera, relationCount, onClose, onRelati
       <div><dt><FileText size={12} />版本</dt><dd>{revisionState}</dd></div>
       <div><dt><Layers3 size={12} />来源</dt><dd>{source}</dd></div>
       <div><dt><GitBranch size={12} />流程</dt><dd>{processState}</dd></div>
-      <div><dt>Preview</dt><dd>{node.previewStatus ?? 'not-generated'}</dd></div>
+      <div><dt>Preview</dt><dd>{hasReadOnlyPreview ? 'read-only available' : node.previewStatus ?? 'not-generated'}</dd></div>
       {node.fileAvailability && <div><dt>文件</dt><dd>{node.fileAvailability}</dd></div>}
       {node.revisionId && <div><dt>Revision ID</dt><dd title={node.revisionId}>{node.revisionId}</dd></div>}
     </dl>
-    <div className="node-info-actions"><button className="pressable" onClick={onRelations}><GitBranch size={13} />查看关联 <span>{relationCount}</span></button>{node.artifactId && onShowResource && <button className="pressable" onClick={() => onShowResource(node)}><FileText size={13} />资源理解</button>}{url && <button className="pressable" onClick={() => window.open(url, '_blank', 'noopener,noreferrer')}><ExternalLink size={13} />浏览器打开</button>}</div>
+    <div className="node-info-actions"><button className="pressable" onClick={onRelations}><GitBranch size={13} />查看关联 <span>{relationCount}</span></button>{hasReadOnlyPreview && onPreview && <button className="pressable" onClick={() => onPreview(node)}><ExternalLink size={13} />只读预览</button>}{node.artifactId && onShowResource && <button className="pressable" onClick={() => onShowResource(node)}><FileText size={13} />资源理解</button>}{url && <button className="pressable" onClick={() => window.open(url, '_blank', 'noopener,noreferrer')}><ExternalLink size={13} />浏览器打开</button>}</div>
     <footer>{node.observedPath ?? node.subtitle}</footer>
   </aside>, document.body)
 }

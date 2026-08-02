@@ -132,9 +132,10 @@ function InfoButton({ show, label, onDetails }: { show: boolean; label: string; 
   return <button className="node-details pressable" aria-label={label} title={label} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onDetails() }}><CircleHelp size={12} /></button>
 }
 
-function getFileKind(node: CanvasNode): 'ppt' | 'image' | 'md' {
+function getFileKind(node: CanvasNode): 'ppt' | 'pdf' | 'image' | 'md' {
   const name = node.title.toLowerCase()
   if (name.endsWith('.ppt') || name.endsWith('.pptx') || node.pageCount) return 'ppt'
+  if (name.endsWith('.pdf') || node.fileType === 'pdf' || node.fileType === 'application/pdf') return 'pdf'
   if (name.match(/\.(jpg|jpeg|png|webp|gif|bmp|svg|avif)$/) || node.fileType?.startsWith('image/') || node.previewUrl) return 'image'
   return 'md'
 }

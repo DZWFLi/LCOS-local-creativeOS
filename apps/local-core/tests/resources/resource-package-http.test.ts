@@ -33,6 +33,27 @@ async function startServer(): Promise<{ readonly baseUrl: string; readonly proje
 }
 
 describe('Resource package HTTP routes (U3)', () => {
+  it('preserves UTF-8 PDF filenames and exposes project-scoped read-only content', async () => {
+    const { baseUrl, projectId, scopeId } = await startServer()
+    const pdf = Buffer.from('%PDF-1.4\nLCOS preview test\n%%EOF', 'utf8')
+    const form = new FormData()
+    form.set('file', new Blob([pdf], { type: 'application/pdf' }), '中文提案.pdf')
+    form.set('importRequestId', 'pdf-utf8-1')
+    form.set('scopeId', scopeId)
+    form.set('position.x', '20')
+    form.set('position.y', '30')
+
+    const imported = await fetch(`${baseUrl}/projects/${projectId}/imports`, { method: 'POST', body: form })
+    expect(imported.status).toBe(201)
+    const importedBody = await imported.json() as { value: { fileRecord: { id: string }; artifact: { title: string } } }
+    expect(importedBody.value.artifact.title).toBe('中文提案.pdf')
+
+    const content = await fetch(`${baseUrl}/projects/${projectId}/file-records/${importedBody.value.fileRecord.id}/content`)
+    expect(content.status).toBe(200)
+    expect(content.headers.get('content-type')).toBe('application/pdf')
+    expect(Buffer.from(await content.arrayBuffer())).toEqual(pdf)
+  })
+
   it('imports a directory through a resumable raw-byte session and lists it', async () => {
     const { baseUrl, projectId, scopeId } = await startServer()
     const started = await fetch(`${baseUrl}/projects/${projectId}/resource-upload-sessions`, {
