@@ -173,11 +173,14 @@ export interface LocalCoreClient {
     readonly scopeId: string
     readonly x: number
     readonly y: number
+    readonly note?: string
   }, signal?: AbortSignal): Promise<RuntimeCall<ImportResourceResultV1>>
   createProject(input: {
     readonly name: string
-    readonly rootPath: string
-  }, signal?: AbortSignal): Promise<RuntimeCall<ProjectCatalogEntry>>
+  } & (
+    | { readonly intent: 'create'; readonly parentPath: string; readonly directoryName: string }
+    | { readonly intent: 'open'; readonly rootPath: string }
+  ), signal?: AbortSignal): Promise<RuntimeCall<ProjectCatalogEntry>>
   metadataStatus(signal?: AbortSignal): Promise<RuntimeCall<MetadataStoreStatus>>
   projectGraph(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<ProjectGraphSnapshot>>
   updateActiveContext(projectId: string, input: {
@@ -450,6 +453,7 @@ export function createLocalCoreClient(): LocalCoreClient {
       body.set('scopeId', input.scopeId)
       body.set('position.x', String(input.x))
       body.set('position.y', String(input.y))
+      if (input.note !== undefined) body.set('note', input.note)
       return request(`/projects/${encodeURIComponent(projectId)}/resources/import-archive`, {
         signal,
         timeoutMs: 30_000,

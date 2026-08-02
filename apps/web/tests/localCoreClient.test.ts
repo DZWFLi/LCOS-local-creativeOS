@@ -257,7 +257,7 @@ describe('Local Core browser client', () => {
     }))
   })
 
-  it('creates a real project through POST /projects with only name and rootPath', async () => {
+  it('opens an existing real project through POST /projects with explicit intent', async () => {
     const fetchMock = vi.fn(async () => jsonResponse({
       ok: true,
       value: {
@@ -271,6 +271,7 @@ describe('Local Core browser client', () => {
 
     const result = await createLocalCoreClient().createProject({
       name: '夏季 Campaign',
+      intent: 'open',
       rootPath: 'E:\\Projects\\summer',
     })
 
@@ -280,7 +281,7 @@ describe('Local Core browser client', () => {
       '/api/local-core/v1/projects',
       expect.objectContaining({
         method: 'POST',
-        body: JSON.stringify({ name: '夏季 Campaign', rootPath: 'E:\\Projects\\summer' }),
+        body: JSON.stringify({ name: '夏季 Campaign', intent: 'open', rootPath: 'E:\\Projects\\summer' }),
       }),
     )
     expect((init.headers as Headers).get('content-type')).toBe('application/json')
@@ -340,6 +341,7 @@ describe('Local Core browser client', () => {
       scopeId: 'scope-root',
       x: 0,
       y: 0,
+      note: 'Keep the package isolated.',
     })
 
     const calls = fetchMock.mock.calls as unknown as [string, RequestInit][]
@@ -351,5 +353,6 @@ describe('Local Core browser client', () => {
     const form = init.body as FormData
     expect(form.get('file')).toBe(file)
     expect(form.get('importRequestId')).toBe('zip-1')
+    expect(form.get('note')).toBe('Keep the package isolated.')
   })
 })

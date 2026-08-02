@@ -124,6 +124,19 @@ describe('Project Create', () => {
     expect(graphBody.value.workspaces[0]?.name).toBe('Main')
   })
 
+  it('creates one new child directory under an existing parent', async () => {
+    const { repository, projectRoot } = openRepository()
+    const baseUrl = await startServer(repository)
+    const created = await fetch(`${baseUrl}/projects`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'New Work', intent: 'create', parentPath: projectRoot, directoryName: 'new-work' }),
+    })
+    expect(created.status).toBe(201)
+    const body = await created.json() as { value: { rootPath: string } }
+    expect(body.value.rootPath).toBe(join(projectRoot, 'new-work'))
+    expect(repository.listProjects()).toContainEqual(expect.objectContaining({ rootPath: join(projectRoot, 'new-work') }))
+  })
+
   it('rejects invalid creation input without writing a project', async () => {
     const { repository, projectRoot } = openRepository()
     const baseUrl = await startServer(repository)

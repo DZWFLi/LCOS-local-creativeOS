@@ -1,5 +1,5 @@
 import { constants } from 'node:fs'
-import { access, stat } from 'node:fs/promises'
+import { access, mkdir, rmdir, stat } from 'node:fs/promises'
 import { isAbsolute, relative, resolve } from 'node:path'
 
 import type { Result, ValidatedProjectRoot } from '@local-creative-os/contracts'
@@ -74,4 +74,39 @@ export async function validateProjectRoot(
       readable: true,
     },
   }
+}
+
+export async function createProjectRoot(
+  parentPath: string,
+  directoryName: string,
+  options: { readonly signal?: AbortSignal; readonly allowedRoot?: string } = {},
+): Promise<Result<ValidatedProjectRoot & { readonly created: true }>> {
+  if (!/^[^<>:"/\\|?*\u0000-\u001f.][^<>:"/\\|?*\u0000-\u001f]*$/.test(directoryName)
+    || directoryName.endsWith('.') || directoryName.endsWith(' ')) {
+    return failure('INVALID_ARGUMENT', 'Project directory name contains unsupported characters.')
+  }
+  const parent = await validateProjectRoot(parentPath, options)
+  if (!parent.ok) return parent
+  try {
+    await access(parent.value.normalizedPath, constants.W_OK)
+    const target = resolve(parent.value.normalizedPath, directoryName)
+    if (!isWithinAllowedRoot(target, parent.value.normalizedPath) || target === parent.value.normalizedPath) {
+      return failure('PATH_OUTSIDE_ALLOWED_ROOT', 'Project directory escaped its selected parent.')
+    }
+    await mkdir(target, { recursive: false })
+    if (options.signal?.aborted) {
+      await rollbackCreatedProjectRoot(target)
+      return failure('ABORTED', 'Project creation was aborted.')
+    }
+    return { ok: true, value: { normalizedPath: target, exists: true, isDirectory: true, readable: true, created: true } }
+  } catch (error: unknown) {
+    const code = typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : ''
+    if (code === 'EEXIST') return failure('CONFLICT', 'Project directory already exists; use Open existing project instead.')
+    if (code === 'EACCES' || code === 'EPERM') return failure('PROJECT_ROOT_NOT_READABLE', 'Selected parent directory is not writable.')
+    return failure('INTERNAL', 'Project directory could not be created.')
+  }
+}
+
+export async function rollbackCreatedProjectRoot(path: string): Promise<void> {
+  try { await rmdir(path) } catch { /* only removes the exact directory when still empty */ }
 }

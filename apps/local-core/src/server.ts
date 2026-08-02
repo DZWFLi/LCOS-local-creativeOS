@@ -24,7 +24,7 @@ import type { ArtifactReturnId, ArtifactRevisionId, FileRecordId, ProjectId, Run
 import { failure } from './errors.js'
 import { getHealthStatus } from './health.js'
 import { ExplicitProjectCatalog } from './project-catalog.js'
-import { validateProjectRoot } from './project-root.js'
+import { createProjectRoot, rollbackCreatedProjectRoot, validateProjectRoot } from './project-root.js'
 import { MetadataForeignKeyConstraintError, SqliteMetadataRepository } from './metadata-repository.js'
 import { FileRegistryService } from './file-registry-service.js'
 import { FileObservationService } from './file-observation-service.js'
@@ -345,19 +345,27 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
           sendJson(response, 400, failure('INVALID_ARGUMENT', 'Request body must be valid JSON under 64 KiB.'))
           return
         }
-        const body = input as { name?: unknown; rootPath?: unknown }
+        const body = input as { name?: unknown; intent?: unknown; rootPath?: unknown; parentPath?: unknown; directoryName?: unknown }
         if (typeof body?.name !== 'string' || body.name.trim() === '' || body.name.length > 120) {
           sendJson(response, 400, failure('INVALID_ARGUMENT', 'name must be a non-empty string under 120 characters.'))
           return
         }
-        if (typeof body?.rootPath !== 'string' || body.rootPath.trim() === '' || body.rootPath.length > 1024) {
-          sendJson(response, 400, failure('INVALID_ARGUMENT', 'rootPath must be a non-empty string under 1024 characters.'))
+        const intent = body.intent === 'create' ? 'create' : body.intent === 'open' || body.intent === undefined ? 'open' : undefined
+        if (intent === undefined) {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'intent must be create or open.'))
           return
         }
-        const root = await withAbort(validateProjectRoot(body.rootPath, {
-          signal: controller.signal,
-          ...(options.allowedRoot === undefined ? {} : { allowedRoot: options.allowedRoot }),
-        }), controller.signal)
+        if (intent === 'open' && (typeof body.rootPath !== 'string' || body.rootPath.trim() === '' || body.rootPath.length > 1024)) {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Open Project requires an existing rootPath.'))
+          return
+        }
+        if (intent === 'create' && (typeof body.parentPath !== 'string' || typeof body.directoryName !== 'string')) {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Create Project requires parentPath and directoryName.'))
+          return
+        }
+        const root = intent === 'create'
+          ? await createProjectRoot(body.parentPath as string, body.directoryName as string, { signal: controller.signal, ...(options.allowedRoot === undefined ? {} : { allowedRoot: options.allowedRoot }) })
+          : await withAbort(validateProjectRoot(body.rootPath as string, { signal: controller.signal, ...(options.allowedRoot === undefined ? {} : { allowedRoot: options.allowedRoot }) }), controller.signal)
         if (!root.ok) {
           sendJson(response, statusForError(root.error.code), root)
           return
@@ -375,6 +383,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
             value: { id: projectId, name, rootPath: root.value.normalizedPath, graphVersion: 1 },
           })
         } catch (error: unknown) {
+          if (intent === 'create') await rollbackCreatedProjectRoot(root.value.normalizedPath)
           sendJson(response, 409, failure('CONFLICT', error instanceof Error ? error.message : 'Project could not be created.'))
         }
         return
@@ -794,6 +803,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
             bytes: multipart.file.bytes,
             scopeId: multipart.fields.scopeId,
             position: { x, y },
+            ...(multipart.fields.note === undefined ? {} : { userNote: multipart.fields.note }),
           })
           sendJson(response, outcome.reused ? 200 : 201, { ok: true, value: outcome })
         } catch (error: unknown) {

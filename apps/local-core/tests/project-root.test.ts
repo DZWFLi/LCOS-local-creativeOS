@@ -4,7 +4,7 @@ import { join, resolve } from 'node:path'
 
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { validateProjectRoot, type ReadonlyFileSystem } from '../src/project-root.js'
+import { createProjectRoot, validateProjectRoot, type ReadonlyFileSystem } from '../src/project-root.js'
 
 const disposablePaths: string[] = []
 
@@ -105,5 +105,24 @@ describe('validateProjectRoot', () => {
       ok: false,
       error: { code: 'ABORTED' },
     })
+  })
+})
+
+describe('createProjectRoot', () => {
+  it('creates exactly one child directory under an existing parent', async () => {
+    const parent = await createFixtureDirectory()
+    await expect(createProjectRoot(parent, 'summer-campaign')).resolves.toMatchObject({
+      ok: true,
+      value: { normalizedPath: join(parent, 'summer-campaign'), created: true },
+    })
+    await expect(validateProjectRoot(join(parent, 'summer-campaign'))).resolves.toMatchObject({ ok: true })
+  })
+
+  it('rejects traversal, separators and an existing child', async () => {
+    const parent = await createFixtureDirectory()
+    await expect(createProjectRoot(parent, '../escape')).resolves.toMatchObject({ ok: false, error: { code: 'INVALID_ARGUMENT' } })
+    await expect(createProjectRoot(parent, 'nested/name')).resolves.toMatchObject({ ok: false, error: { code: 'INVALID_ARGUMENT' } })
+    await createProjectRoot(parent, 'existing')
+    await expect(createProjectRoot(parent, 'existing')).resolves.toMatchObject({ ok: false, error: { code: 'CONFLICT' } })
   })
 })

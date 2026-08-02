@@ -267,7 +267,7 @@ export function App() {
         if (selection.kind === 'empty-catalog') {
           setProjects([])
           setBootMode('offline')
-          setNotice('Local Core 暂无项目数据，当前为 Demo 模式')
+          setNotice('Local Core 已连接，但还没有项目；请创建新项目或打开已有目录')
           return
         }
         const runtimeProjectId = selection.projectId
@@ -472,12 +472,24 @@ export function App() {
   const openProject = useCallback((projectId: string) => {
     if (projectId === activeProjectId && projectOpen) return
     if (projectOpen) { saveProjectNavigationState(activeProjectId, camera); projectStateCacheRef.current.set(activeProjectId, captureProjectState()) }
+    if (bootMode === 'runtime') {
+      bridgeRef.current = new RuntimeBridge(projectId)
+      void bridgeRef.current.loadProject().then((loaded) => {
+        if (loaded.source !== 'runtime' || loaded.state === null) { setNotice(`项目打开失败：${loaded.error ?? 'Runtime 数据不可用'}`); return }
+        projectStateCacheRef.current.set(projectId, loaded.state)
+        setOpenProjectIds((current) => current.includes(projectId) ? current : [...current, projectId])
+        applyProjectState(projectId, loaded.state)
+        setDataSource('runtime')
+        setNotice(`已从 Local Core 打开 ${projects.find((project) => project.id === projectId)?.label ?? '项目'}`)
+      }).catch(() => setNotice('项目打开失败：Local Core 连接异常'))
+      return
+    }
     const next = projectStateCacheRef.current.get(projectId) ?? loadPrototypeState(projectId) ?? fixtureStateForProject(projectId, defaultRailWidth())
     projectStateCacheRef.current.set(projectId, next)
     setOpenProjectIds((current) => current.includes(projectId) ? current : [...current, projectId])
     applyProjectState(projectId, next)
     setNotice(`已打开 ${projects.find((project) => project.id === projectId)?.label ?? '项目'}`)
-  }, [activeProjectId, applyProjectState, camera, captureProjectState, projectOpen, projects])
+  }, [activeProjectId, applyProjectState, bootMode, camera, captureProjectState, projectOpen, projects])
 
   const closeProjectTab = useCallback((projectId: string) => {
     if (projectId === activeProjectId) { saveProjectNavigationState(projectId, camera); projectStateCacheRef.current.set(projectId, captureProjectState()) }
@@ -491,9 +503,10 @@ export function App() {
     } else setProjectOpen(false)
   }, [activeProjectId, applyProjectState, camera, captureProjectState, openProjectIds])
 
-  const createProject = useCallback(async ({ label, localPath }: { label: string; localPath: string }) => {
+  const createProject = useCallback(async (input: { label: string; intent: 'create'; parentPath: string; directoryName: string } | { label: string; intent: 'open'; rootPath: string }) => {
     setProjectCreateOpen(false)
-    const call = await bridgeRef.current.client.createProject({ name: label, rootPath: localPath })
+    const { label, ...request } = input
+    const call = await bridgeRef.current.client.createProject({ name: label, ...request })
     if (!call.result.ok) {
       setNotice(`项目创建失败：${call.result.error.message}`)
       return
@@ -930,7 +943,7 @@ export function App() {
         setNotice(`链接导入失败：${call.result.error.message}`)
         return
       }
-      setNotice('链接已加入项目，正在理解…')
+      setNotice('链接已保存；需要时可手动获取并重新理解')
       const loaded = await bridgeRef.current.loadProject()
       if (loaded.source === 'runtime' && loaded.state) {
         const rootScope = loaded.state.scopes.find((scope) => scope.kind === 'root')
@@ -942,9 +955,7 @@ export function App() {
         setCamera(rootScope?.camera ?? camera)
         setWorkRail(normalizeRailPreferences(loaded.state.workRail))
       }
-    }).catch(() => {
-      setNotice('链接已保存，但画布刷新失败')
-    })
+    }).catch(() => setNotice('链接导入失败：Local Core 连接异常'))
   }, [activeProjectId, camera, resetGraph, scopeId, setCamera, setScopes, setWorkRail, setWorkspaces])
 
   const reloadRuntimeProject = useCallback(async (): Promise<void> => {
@@ -1005,6 +1016,7 @@ export function App() {
       scopeId,
       x: point.x,
       y: point.y,
+      ...(note === undefined ? {} : { note }),
     }).then(async (call) => {
       if (!call.result.ok) {
         setNotice(`压缩包导入失败：${call.result.error.message}`)
@@ -1159,12 +1171,17 @@ export function App() {
           .map((contextId) => nodes.find((node) => node.id === contextId)?.artifactId)
           .filter((artifactId): artifactId is string => artifactId !== undefined && artifactId !== target.artifactId))],
         ...(workspaceId === null ? {} : { workspaceId }),
-      }).then((call) => {
+      }).then(async (call) => {
         if (!call.result.ok) {
           setNotice(`Run 创建失败：${call.result.error.message}`)
           return
         }
-        const { review, providerError } = call.result.value
+        const created = call.result.value
+        const dispatched = await bridgeRef.current.client.dispatchRuntimeRun(String(created.review.run.id))
+        const review = dispatched.result.ok ? dispatched.result.value.review : created.review
+        const providerError = dispatched.result.ok
+          ? dispatched.result.value.providerError
+          : { code: 'DISPATCH_REQUEST_FAILED', message: dispatched.result.error.message, retryable: true }
         const id = String(review.run.id)
         const processNodeId = `runtime-run-view-${id}`
         const dimensions = nodeDimensions('process', 'standard')
@@ -1208,7 +1225,7 @@ export function App() {
         setCheckpoint(false)
         applyRuntimeReview(review, runtimeRun, providerError?.message)
         setNotice(providerError
-          ? `Run 已保存，但 Bridge 派发需要恢复：${providerError.message}`
+          ? `Run 已保存为 planned，派发需要恢复：${providerError.message}`
           : `真实 Run 已派发：${id}`)
       })
       return
