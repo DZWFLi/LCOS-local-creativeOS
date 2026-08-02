@@ -64,7 +64,10 @@ function hasGitIndex() {
 
 async function readCanonicalContent(file, useGitIndex) {
   if (useGitIndex) {
-    return execFileSync("git", ["show", `:${file}`], { cwd: ROOT });
+    return execFileSync("git", ["show", `:${file}`], {
+      cwd: ROOT,
+      maxBuffer: 100 * 1024 * 1024,
+    });
   }
   return readFile(path.join(ROOT, file));
 }
