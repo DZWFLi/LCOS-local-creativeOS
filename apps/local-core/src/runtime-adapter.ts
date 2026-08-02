@@ -22,7 +22,7 @@ export interface RuntimeInputPackV0 {
   readonly contractVersion: 'runtime-input-pack-v0'
   readonly lcosRunId: string
   readonly contextManifest: unknown
-  readonly taskType: 'markdown_script_revision'
+  readonly taskType: 'artifact_create' | 'artifact_revise' | 'artifact_analyze'
   readonly instruction: string
   readonly expectedOutputs: readonly RuntimeExpectedOutputV0[]
   readonly resultEnvelopePath: string
@@ -48,8 +48,8 @@ export interface LegacyBridgeTaskEnvelopeV0 {
   readonly lcosRunId: string
   readonly idempotencyKey: string
   readonly requestFingerprint: string
-  readonly provider: 'workbuddy'
-  readonly taskType: 'markdown_script_revision'
+  readonly provider: 'workbuddy' | 'codex'
+  readonly taskType: 'artifact_create' | 'artifact_revise' | 'artifact_analyze'
   readonly runtimeInputPackPath: string
   readonly expectedOutputs: readonly RuntimeExpectedOutputV0[]
   readonly timeoutSeconds: number
@@ -63,22 +63,22 @@ export interface BridgeTaskEnvelopeV1 {
   readonly requestFingerprint: string
   readonly manifestId: string
   readonly manifestHash: string
-  readonly outputIntent: 'revise'
+  readonly outputIntent: 'create' | 'revise' | 'analyze'
   readonly instructions: string
-  readonly provider: 'workbuddy'
-  readonly taskType: 'markdown_script_revision'
+  readonly provider: 'workbuddy' | 'codex'
+  readonly taskType: 'artifact_create' | 'artifact_revise' | 'artifact_analyze'
   readonly runtimeInputPackPath: string
   readonly outputRoot: string
   readonly expectedOutputs: readonly {
     readonly outputId: string
     readonly role: 'primary'
-    readonly action: 'modified'
+    readonly action: 'created' | 'modified'
     readonly absolutePath: string
     readonly mediaType: 'text/markdown'
     readonly required: true
   }[]
   readonly outputPolicy: {
-    readonly allowZeroFiles: false
+    readonly allowZeroFiles: boolean
     readonly allowAdditionalFiles: false
     readonly maxFiles: 1
   }
@@ -354,7 +354,7 @@ export class RuntimeAdapterService {
       contractVersion: 'runtime-input-pack-v0',
       lcosRunId: String(run.id),
       contextManifest: JSON.parse(manifest.canonicalJson) as unknown,
-      taskType: 'markdown_script_revision',
+      taskType: run.outputIntent === 'create' ? 'artifact_create' : run.outputIntent === 'analyze' ? 'artifact_analyze' : 'artifact_revise',
       instruction: run.instruction,
       expectedOutputs,
       resultEnvelopePath,
@@ -374,22 +374,22 @@ export class RuntimeAdapterService {
       idempotencyKey: String(run.id),
       manifestId: String(manifest.id),
       manifestHash: manifest.manifestHash,
-      outputIntent: 'revise',
+      outputIntent: run.outputIntent,
       instructions: run.instruction,
-      provider: 'workbuddy',
-      taskType: 'markdown_script_revision',
+      provider: run.requestedProvider,
+      taskType: run.outputIntent === 'create' ? 'artifact_create' : run.outputIntent === 'analyze' ? 'artifact_analyze' : 'artifact_revise',
       runtimeInputPackPath: packPath,
       outputRoot: resolve(runtimeRoot, 'staging'),
       expectedOutputs: [{
         outputId: 'primary-draft',
         role: 'primary',
-        action: 'modified',
+        action: run.outputIntent === 'revise' ? 'modified' : 'created',
         absolutePath: outputPath,
         mediaType: 'text/markdown',
         required: true,
       }],
       outputPolicy: {
-        allowZeroFiles: false,
+        allowZeroFiles: run.outputIntent === 'analyze',
         allowAdditionalFiles: false,
         maxFiles: 1,
       },
@@ -451,7 +451,7 @@ export class RuntimeAdapterService {
     const binding: RuntimeBinding = {
       id: `binding-${String(run.id)}` as RuntimeBinding['id'],
       runId: run.id,
-      provider: 'workbuddy',
+      provider: run.provider,
       externalTaskId: task.taskId,
       ...(task.sessionId === undefined ? {} : { externalSessionId: task.sessionId }),
       providerStatus: task.status,

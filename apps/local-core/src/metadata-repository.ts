@@ -157,15 +157,16 @@ export class SqliteMetadataRepository {
 
   #migrate(): void {
     const version = this.#database.prepare('PRAGMA user_version').get() as { user_version: number }
-    if (version.user_version === 0) { this.#migrate_001(); this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); return }
+    if (version.user_version === 0) { this.#migrate_001(); this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); this.#migrate_009_from_v8(); return }
     if (version.user_version === 1) { this.#migrate_002_from_v1(); this.#migrate_004_from_v3(); this.#migrate_005_from_v4(); this.#migrate_006_from_v5(); this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); return }
     if (version.user_version === 2) { this.#migrate_003_from_v2(); this.#migrate_004_from_v3(); this.#migrate_005_from_v4(); this.#migrate_006_from_v5(); this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); return }
     if (version.user_version === 3) { this.#migrate_004_from_v3(); this.#migrate_005_from_v4(); this.#migrate_006_from_v5(); this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); return }
     if (version.user_version === 4) { this.#migrate_005_from_v4(); this.#migrate_006_from_v5(); this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); return }
     if (version.user_version === 5) { this.#migrate_006_from_v5(); this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); return }
     if (version.user_version === 6) { this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); return }
-    if (version.user_version === 7) { this.#migrate_008_from_v7(); return }
-    // v8 = current
+    if (version.user_version === 7) { this.#migrate_008_from_v7(); this.#migrate_009_from_v8(); return }
+    if (version.user_version === 8) { this.#migrate_009_from_v8(); return }
+    // v9 = current
   }
 
   #migrate_001(): void {
@@ -603,6 +604,71 @@ export class SqliteMetadataRepository {
       );
       PRAGMA user_version = 8;
       COMMIT;
+    `)
+  }
+
+  #migrate_009_from_v8(): void {
+    this.#database.exec(`
+      PRAGMA legacy_alter_table = ON;
+      ALTER TABLE artifact_returns RENAME TO artifact_returns_v8;
+      ALTER TABLE runtime_bindings RENAME TO runtime_bindings_v8;
+      ALTER TABLE runtime_dispatches RENAME TO runtime_dispatches_v8;
+      ALTER TABLE runs RENAME TO runs_v8;
+      CREATE TABLE runs (
+        id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        workspace_id TEXT REFERENCES workspaces(id) ON DELETE SET NULL,
+        target_artifact_id TEXT REFERENCES artifacts(id) ON DELETE RESTRICT,
+        target_revision_id TEXT REFERENCES artifact_revisions(id) ON DELETE RESTRICT,
+        context_manifest_id TEXT NOT NULL REFERENCES context_manifests(id) ON DELETE RESTRICT,
+        retry_of_run_id TEXT REFERENCES runs(id) ON DELETE RESTRICT,
+        provider TEXT NOT NULL CHECK(provider IN ('workbuddy','codex')),
+        requested_provider TEXT NOT NULL CHECK(requested_provider IN ('workbuddy','codex')),
+        output_intent TEXT NOT NULL CHECK(output_intent IN ('create','revise','analyze')),
+        return_group_id TEXT NOT NULL,
+        status TEXT NOT NULL CHECK(status IN ('created','queued','running','waiting_input','completed','failed','cancelled')),
+        instruction TEXT NOT NULL, result_summary TEXT, short_summary TEXT, error_code TEXT, error_message TEXT,
+        created_at TEXT NOT NULL, updated_at TEXT NOT NULL, completed_at TEXT
+      );
+      INSERT INTO runs SELECT id, project_id, workspace_id, target_artifact_id, target_revision_id,
+        context_manifest_id, retry_of_run_id, provider, provider, 'revise', 'return-group-' || id,
+        status, instruction, result_summary, short_summary, error_code, error_message, created_at, updated_at, completed_at FROM runs_v8;
+      CREATE TABLE runtime_dispatches (
+        id TEXT PRIMARY KEY, run_id TEXT NOT NULL UNIQUE REFERENCES runs(id) ON DELETE CASCADE,
+        provider TEXT NOT NULL CHECK(provider IN ('workbuddy','codex')), idempotency_key TEXT NOT NULL UNIQUE,
+        status TEXT NOT NULL CHECK(status IN ('planned','dispatching','bound','failed','recovery_required')),
+        attempt_count INTEGER NOT NULL DEFAULT 0 CHECK(attempt_count >= 0), last_error_code TEXT, last_error_message TEXT,
+        created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+      );
+      INSERT INTO runtime_dispatches SELECT * FROM runtime_dispatches_v8;
+      CREATE TABLE runtime_bindings (
+        id TEXT PRIMARY KEY, run_id TEXT NOT NULL UNIQUE REFERENCES runs(id) ON DELETE CASCADE,
+        provider TEXT NOT NULL CHECK(provider IN ('workbuddy','codex')), external_task_id TEXT, external_session_id TEXT,
+        provider_status TEXT, last_synced_at TEXT, finalize_pending INTEGER NOT NULL DEFAULT 0 CHECK(finalize_pending IN (0,1)),
+        created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE(provider, external_task_id)
+      );
+      INSERT INTO runtime_bindings SELECT * FROM runtime_bindings_v8;
+      CREATE TABLE artifact_returns (
+        id TEXT PRIMARY KEY, run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+        target_artifact_id TEXT NOT NULL REFERENCES artifacts(id) ON DELETE RESTRICT,
+        base_revision_id TEXT NOT NULL REFERENCES artifact_revisions(id) ON DELETE RESTRICT,
+        returned_file_id TEXT NOT NULL REFERENCES file_records(id) ON DELETE RESTRICT,
+        content_hash TEXT NOT NULL, canonical_path TEXT NOT NULL,
+        action TEXT NOT NULL CHECK(action = 'created'),
+        status TEXT NOT NULL CHECK(status IN ('pending_review','adopted','rejected')),
+        draft_revision_id TEXT REFERENCES artifact_revisions(id) ON DELETE RESTRICT,
+        created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+        UNIQUE(run_id, canonical_path, content_hash, action)
+      );
+      INSERT INTO artifact_returns SELECT * FROM artifact_returns_v8;
+      DROP TABLE artifact_returns_v8;
+      DROP TABLE runtime_bindings_v8;
+      DROP TABLE runtime_dispatches_v8;
+      DROP TABLE runs_v8;
+      CREATE INDEX idx_runs_project_status ON runs(project_id, status);
+      CREATE INDEX idx_runtime_dispatches_status ON runtime_dispatches(status);
+      CREATE INDEX idx_runtime_bindings_provider_status ON runtime_bindings(provider, provider_status);
+      PRAGMA legacy_alter_table = OFF;
+      PRAGMA user_version = 9;
     `)
   }
 
@@ -1420,19 +1486,22 @@ export class SqliteMetadataRepository {
       this.#database.prepare(`
         INSERT INTO runs (
           id, project_id, workspace_id, target_artifact_id, target_revision_id,
-          context_manifest_id, retry_of_run_id, provider, status, instruction,
+          context_manifest_id, retry_of_run_id, provider, requested_provider, output_intent, return_group_id, status, instruction,
           result_summary, short_summary, error_code, error_message,
           created_at, updated_at, completed_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         run.id as SQLInputValue,
         run.projectId as SQLInputValue,
         run.workspaceId as SQLInputValue ?? null,
-        run.targetArtifactId as SQLInputValue,
-        run.targetRevisionId as SQLInputValue,
+        run.targetArtifactId as SQLInputValue ?? null,
+        run.targetRevisionId as SQLInputValue ?? null,
         run.contextManifestId as SQLInputValue,
         run.retryOfRunId as SQLInputValue ?? null,
         run.provider,
+        run.requestedProvider ?? run.provider,
+        run.outputIntent ?? 'revise',
+        run.returnGroupId ?? `return-group-${String(run.id)}`,
         run.status,
         run.instruction,
         run.resultSummary ?? null,
@@ -1485,11 +1554,14 @@ export class SqliteMetadataRepository {
       id: String(row.id) as Run['id'],
       projectId: String(row.project_id) as Run['projectId'],
       ...(row.workspace_id ? { workspaceId: String(row.workspace_id) as WorkspaceId } : {}),
-      targetArtifactId: String(row.target_artifact_id) as Run['targetArtifactId'],
-      targetRevisionId: String(row.target_revision_id) as Run['targetRevisionId'],
+      ...(row.target_artifact_id ? { targetArtifactId: String(row.target_artifact_id) as NonNullable<Run['targetArtifactId']> } : {}),
+      ...(row.target_revision_id ? { targetRevisionId: String(row.target_revision_id) as NonNullable<Run['targetRevisionId']> } : {}),
       contextManifestId: String(row.context_manifest_id) as Run['contextManifestId'],
       ...(row.retry_of_run_id ? { retryOfRunId: String(row.retry_of_run_id) as RunId } : {}),
       provider: String(row.provider) as Run['provider'],
+      requestedProvider: String(row.requested_provider) as Run['requestedProvider'],
+      outputIntent: String(row.output_intent) as Run['outputIntent'],
+      returnGroupId: String(row.return_group_id),
       status: String(row.status) as Run['status'],
       instruction: String(row.instruction),
       ...(row.result_summary ? { resultSummary: String(row.result_summary) } : {}),
@@ -1859,7 +1931,7 @@ export class SqliteMetadataRepository {
     }
   }
 
-  get schemaVersion(): number { return 8 }
+  get schemaVersion(): number { return 9 }
 
   // ==================== Private helpers ====================
 
@@ -1924,15 +1996,16 @@ export class SqliteMetadataRepository {
     this.#database.prepare(`
       INSERT INTO runs (
         id, project_id, workspace_id, target_artifact_id, target_revision_id,
-        context_manifest_id, retry_of_run_id, provider, status, instruction,
+        context_manifest_id, retry_of_run_id, provider, requested_provider, output_intent, return_group_id, status, instruction,
         result_summary, short_summary, error_code, error_message,
         created_at, updated_at, completed_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       run.id as SQLInputValue, run.projectId as SQLInputValue, run.workspaceId as SQLInputValue ?? null,
       run.targetArtifactId as SQLInputValue, run.targetRevisionId as SQLInputValue,
       run.contextManifestId as SQLInputValue, run.retryOfRunId as SQLInputValue ?? null,
-      run.provider, run.status, run.instruction, run.resultSummary ?? null, run.shortSummary ?? null,
+      run.provider, run.requestedProvider ?? run.provider, run.outputIntent ?? 'revise', run.returnGroupId ?? `return-group-${String(run.id)}`,
+      run.status, run.instruction, run.resultSummary ?? null, run.shortSummary ?? null,
       run.errorCode ?? null, run.errorMessage ?? null, run.createdAt, run.updatedAt, run.completedAt ?? null,
     )
   }

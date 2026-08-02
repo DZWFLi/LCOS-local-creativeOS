@@ -74,9 +74,11 @@ describe('RuntimeApplicationService', () => {
       targetArtifactId: String(target.id),
       workspaceId: String(snapshot.workspaces[0]!.id),
     })
+    expect(result.review).toMatchObject({ run: { status: 'created' }, dispatch: { status: 'planned' } })
+    const dispatched = await service.dispatch(result.review.run.id)
 
-    expect(result.providerError).toBeUndefined()
-    expect(result.review).toMatchObject({
+    expect(dispatched.providerError).toBeUndefined()
+    expect(dispatched.review).toMatchObject({
       run: { id: 'run-one', status: 'queued', targetArtifactId: target.id },
       dispatch: { status: 'bound', idempotencyKey: 'run-one' },
       binding: { externalTaskId: 'task-run-one', providerStatus: 'assigned' },
@@ -91,7 +93,7 @@ describe('RuntimeApplicationService', () => {
     repositories.push(restarted)
     expect(restarted.getProjectRuns(snapshot.project.id, 1)[0]).toMatchObject({
       id: 'run-one',
-      contextManifestId: result.review.run.contextManifestId,
+      contextManifestId: dispatched.review.run.contextManifestId,
     })
   })
 
@@ -108,10 +110,11 @@ describe('RuntimeApplicationService', () => {
       instruction: 'Revise the script.',
       targetArtifactId: String(target.id),
     })
+    const dispatched = await service.dispatch(result.review.run.id)
 
-    expect(result.providerError).toMatchObject({ code: 'BRIDGE_UNAVAILABLE', retryable: true })
-    expect(result.review.run.status).toBe('created')
-    expect(result.review.dispatch.status).toBe('recovery_required')
+    expect(dispatched.providerError).toMatchObject({ code: 'BRIDGE_UNAVAILABLE', retryable: true })
+    expect(dispatched.review.run.status).toBe('created')
+    expect(dispatched.review.dispatch.status).toBe('recovery_required')
     expect(repository.getProjectRuns(snapshot.project.id, 10)).toHaveLength(1)
   })
 })

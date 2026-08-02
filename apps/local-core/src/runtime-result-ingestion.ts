@@ -164,6 +164,9 @@ export class RuntimeResultIngestionService {
       }
       throw error(code, envelope.summary ?? envelope.shortSummary ?? envelope.resultSummary ?? 'Provider did not return a reviewable result.')
     }
+    if (run.outputIntent !== 'revise' || run.targetArtifactId === undefined || run.targetRevisionId === undefined) {
+      throw error('CONTRACT_UNSUPPORTED', 'Create/analyze returns require return-group ingestion and cannot enter the revise lifecycle.')
+    }
     const changedFile = envelope.changedFiles[0]
     if (envelope.changedFiles.length !== 1 || changedFile === undefined || !['created', 'modified'].includes(changedFile.action)) {
       throw error('CONTRACT_UNSUPPORTED', 'MVP requires exactly one created or modified changed file.')

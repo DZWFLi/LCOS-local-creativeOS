@@ -12,9 +12,11 @@ import { ResourceMatcher } from './resources/resource-matcher.js'
 
 export interface CreateRuntimeRunInput {
   readonly instruction: string
-  readonly targetArtifactId: string
+  readonly targetArtifactId?: string
   readonly contextArtifactIds?: readonly string[]
   readonly workspaceId?: string
+  readonly outputIntent?: 'create' | 'revise' | 'analyze'
+  readonly requestedProvider?: 'workbuddy' | 'codex'
 }
 
 export interface RuntimeRunActionResult {
@@ -37,6 +39,8 @@ export class RuntimeApplicationService {
   async create(projectId: ProjectId, input: CreateRuntimeRunInput): Promise<RuntimeRunActionResult> {
     const instruction = input.instruction.trim()
     if (instruction.length === 0) throw new Error('Run instruction is required.')
+    const outputIntent = input.outputIntent ?? 'revise'
+    if (outputIntent === 'revise' && input.targetArtifactId === undefined) throw new Error('Revise Run requires an explicit target Artifact.')
     const descriptors = this.repository.listResourceDescriptors(String(projectId))
     const policyByResourceId = new Map(descriptors.map((descriptor) => [
       descriptor.resourceId,
@@ -45,7 +49,7 @@ export class RuntimeApplicationService {
     const matches = this.matcher.match(descriptors, {
       projectId: String(projectId),
       instruction,
-      outputIntent: 'revise',
+      outputIntent,
       limit: 8,
     }, {
       ...(input.contextArtifactIds === undefined ? {} : { activeContextArtifactIds: input.contextArtifactIds }),
@@ -53,12 +57,12 @@ export class RuntimeApplicationService {
     })
     const resourceRefs = this.matcher.toManifestRefs(matches.filter((match) => match.layer !== 'suggested'), descriptors)
     const manifest = await this.manifests.build(projectId, {
-      targetArtifactId: input.targetArtifactId,
+      ...(input.targetArtifactId === undefined ? {} : { targetArtifactId: input.targetArtifactId }),
       ...(input.contextArtifactIds === undefined ? {} : { contextArtifactIds: input.contextArtifactIds }),
       requestedOutput: 'Markdown Script Revision',
       ...(resourceRefs.length === 0 ? {} : { resourceRefs }),
     })
-    if (manifest.target === null || manifest.currentRevision === null) {
+    if (outputIntent === 'revise' && (manifest.target === null || manifest.currentRevision === null)) {
       throw new Error('Run target must have a Current Revision.')
     }
     const timestamp = this.now()
@@ -67,10 +71,13 @@ export class RuntimeApplicationService {
       id: `run-${suffix}` as Run['id'],
       projectId,
       ...(input.workspaceId === undefined ? {} : { workspaceId: input.workspaceId as NonNullable<Run['workspaceId']> }),
-      targetArtifactId: manifest.target.artifactId as Run['targetArtifactId'],
-      targetRevisionId: manifest.currentRevision.revisionId as Run['targetRevisionId'],
+      ...(manifest.target === null ? {} : { targetArtifactId: manifest.target.artifactId as NonNullable<Run['targetArtifactId']> }),
+      ...(manifest.currentRevision === null ? {} : { targetRevisionId: manifest.currentRevision.revisionId as NonNullable<Run['targetRevisionId']> }),
       contextManifestId: manifest.id,
-      provider: 'workbuddy',
+      provider: input.requestedProvider ?? 'workbuddy',
+      requestedProvider: input.requestedProvider ?? 'workbuddy',
+      outputIntent,
+      returnGroupId: `return-group-${suffix}`,
       status: 'created',
       instruction,
       createdAt: timestamp,
@@ -87,7 +94,7 @@ export class RuntimeApplicationService {
       updatedAt: timestamp,
     }
     this.repository.createRunWithDispatch(run, dispatch)
-    return this.dispatch(run.id)
+    return { review: this.review.getRunReview(run.id) }
   }
 
   async dispatch(runId: RunId): Promise<RuntimeRunActionResult> {

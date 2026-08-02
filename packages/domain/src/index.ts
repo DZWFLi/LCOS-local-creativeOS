@@ -294,17 +294,21 @@ export const LCOS_RUN_STATUSES = [
   'cancelled',
 ] as const
 export type RunStatus = typeof LCOS_RUN_STATUSES[number]
-export type RuntimeProvider = 'workbuddy'
+export type RuntimeProvider = 'workbuddy' | 'codex'
+export type RunOutputIntent = 'create' | 'revise' | 'analyze'
 
 export interface Run {
   readonly id: RunId
   readonly projectId: ProjectId
   readonly workspaceId?: WorkspaceId
-  readonly targetArtifactId: ArtifactId
-  readonly targetRevisionId: ArtifactRevisionId
+  readonly targetArtifactId?: ArtifactId
+  readonly targetRevisionId?: ArtifactRevisionId
   readonly contextManifestId: ContextManifestId
   readonly retryOfRunId?: RunId
   readonly provider: RuntimeProvider
+  readonly requestedProvider: RuntimeProvider
+  readonly outputIntent: RunOutputIntent
+  readonly returnGroupId: string
   readonly status: RunStatus
   readonly instruction: string
   readonly resultSummary?: string
