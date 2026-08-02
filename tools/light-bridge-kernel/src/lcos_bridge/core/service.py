@@ -58,9 +58,12 @@ class BridgeService:
     def get_task(self, task_id: str) -> BridgeTask | None:
         return self.store.get(task_id)
 
-    def claim_next(self, provider: str, worker_id: str) -> BridgeTask | None:
+    def claim_next(self, provider: str, worker_id: str, lease_seconds: int = 120) -> BridgeTask | None:
         self.providers.get(provider)
-        return self.store.claim_next(provider, worker_id)
+        return self.store.claim_next(provider, worker_id, lease_seconds)
+
+    def heartbeat(self, task_id: str, worker_id: str, lease_seconds: int = 120) -> BridgeTask:
+        return self.store.heartbeat(task_id, worker_id, lease_seconds)
 
     def start(self, task_id: str, worker_id: str | None = None) -> BridgeTask:
         return self.store.mark_running(task_id, worker_id)

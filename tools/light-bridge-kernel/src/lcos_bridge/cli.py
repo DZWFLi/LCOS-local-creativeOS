@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 from typing import Annotated
 
@@ -17,6 +18,8 @@ from .transport.http_api import create_app
 app = typer.Typer(help="LCOS Light Bridge Kernel")
 task_app = typer.Typer(help="Task plane commands")
 app.add_typer(task_app, name="task")
+worker_app = typer.Typer(help="Pull-based local agent worker commands")
+app.add_typer(worker_app, name="worker")
 
 
 def _service(runtime_root: str | Path | None) -> tuple[BridgeSettings, BridgeService]:
@@ -98,9 +101,10 @@ def claim_next(
     provider: Annotated[str, typer.Option("--provider")],
     worker: Annotated[str, typer.Option("--worker")],
     runtime_root: Annotated[str | None, typer.Option("--runtime-root")] = None,
+    lease_seconds: Annotated[int, typer.Option("--lease-seconds")] = 120,
 ) -> None:
     _, service = _service(runtime_root)
-    task = service.claim_next(provider, worker)
+    task = service.claim_next(provider, worker, lease_seconds)
     _print(
         {
             "ok": True,
@@ -109,6 +113,47 @@ def claim_next(
             else task.model_dump(mode="json", by_alias=True),
         }
     )
+
+
+@worker_app.command("run-once")
+def worker_run_once(
+    provider: Annotated[str, typer.Option("--provider")] = "codex",
+    worker: Annotated[str, typer.Option("--worker")] = "codex-local",
+    runtime_root: Annotated[str | None, typer.Option("--runtime-root")] = None,
+    lease_seconds: Annotated[int, typer.Option("--lease-seconds")] = 120,
+) -> None:
+    _, service = _service(runtime_root)
+    task = service.claim_next(provider, worker, lease_seconds)
+    if task is not None:
+        task = service.start(task.task_id, worker)
+    _print({"ok": True, "task": None if task is None else task.model_dump(mode="json", by_alias=True)})
+
+
+@worker_app.command("heartbeat")
+def worker_heartbeat(
+    task_id: Annotated[str, typer.Option("--task-id")],
+    worker: Annotated[str, typer.Option("--worker")] = "codex-local",
+    runtime_root: Annotated[str | None, typer.Option("--runtime-root")] = None,
+    lease_seconds: Annotated[int, typer.Option("--lease-seconds")] = 120,
+) -> None:
+    _, service = _service(runtime_root)
+    _print({"ok": True, "task": service.heartbeat(task_id, worker, lease_seconds).model_dump(mode="json", by_alias=True)})
+
+
+@worker_app.command("watch")
+def worker_watch(
+    provider: Annotated[str, typer.Option("--provider")] = "codex",
+    worker: Annotated[str, typer.Option("--worker")] = "codex-local",
+    runtime_root: Annotated[str | None, typer.Option("--runtime-root")] = None,
+    poll_seconds: Annotated[float, typer.Option("--poll-seconds")] = 2.0,
+) -> None:
+    _, service = _service(runtime_root)
+    while True:
+        task = service.claim_next(provider, worker)
+        if task is not None:
+            task = service.start(task.task_id, worker)
+            _print({"ok": True, "task": task.model_dump(mode="json", by_alias=True)})
+        time.sleep(max(0.2, poll_seconds))
 
 
 @task_app.command("start")

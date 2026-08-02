@@ -5,6 +5,7 @@ import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
+from datetime import datetime, timedelta, timezone
 
 from ..canonical.ids import canonical_json, task_id_for_run
 from ..canonical.models import (
@@ -26,7 +27,7 @@ from ..canonical.models import (
 )
 from .errors import BridgeError
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 class SQLiteTaskStore:
@@ -73,6 +74,9 @@ class SQLiteTaskStore:
                   external_session_id TEXT,
                   provider_status TEXT,
                   claimed_by TEXT,
+                  lease_expires_at TEXT,
+                  last_heartbeat_at TEXT,
+                  attempt_count INTEGER NOT NULL DEFAULT 0,
                   final_disposition TEXT,
                   created_at TEXT NOT NULL,
                   updated_at TEXT NOT NULL
@@ -92,6 +96,13 @@ class SQLiteTaskStore:
                 connection.execute(
                     "ALTER TABLE bridge_tasks ADD COLUMN output_intent TEXT NOT NULL DEFAULT 'revise'"
                 )
+            for name, definition in (
+                ("lease_expires_at", "TEXT"),
+                ("last_heartbeat_at", "TEXT"),
+                ("attempt_count", "INTEGER NOT NULL DEFAULT 0"),
+            ):
+                if name not in columns:
+                    connection.execute(f"ALTER TABLE bridge_tasks ADD COLUMN {name} {definition}")
             connection.execute(
                 "CREATE INDEX IF NOT EXISTS idx_bridge_tasks_intent_status "
                 "ON bridge_tasks(output_intent, status, created_at)"
@@ -193,19 +204,20 @@ class SQLiteTaskStore:
             ).fetchone()
         return None if row is None else self._row_to_task(row)
 
-    def claim_next(self, provider: str, worker_id: str) -> BridgeTask | None:
+    def claim_next(self, provider: str, worker_id: str, lease_seconds: int = 120) -> BridgeTask | None:
         now = utc_now()
+        expires = (datetime.now(timezone.utc) + timedelta(seconds=max(10, lease_seconds))).isoformat().replace("+00:00", "Z")
         with self._connection() as connection:
             connection.execute("BEGIN IMMEDIATE")
             try:
                 row = connection.execute(
                     """
                     SELECT * FROM bridge_tasks
-                    WHERE provider = ? AND status = ?
+                    WHERE provider = ? AND (status = ? OR (status IN (?, ?) AND lease_expires_at < ?))
                     ORDER BY created_at ASC
                     LIMIT 1
                     """,
-                    (provider, ProviderStatus.QUEUED.value),
+                    (provider, ProviderStatus.QUEUED.value, ProviderStatus.CLAIMED.value, ProviderStatus.RUNNING.value, now),
                 ).fetchone()
                 if row is None:
                     connection.execute("COMMIT")
@@ -213,14 +225,15 @@ class SQLiteTaskStore:
                 connection.execute(
                     """
                     UPDATE bridge_tasks
-                    SET status = ?, provider_status = ?, claimed_by = ?, updated_at = ?
+                    SET status = ?, provider_status = ?, claimed_by = ?, lease_expires_at = ?,
+                        last_heartbeat_at = ?, attempt_count = attempt_count + 1, updated_at = ?
                     WHERE task_id = ?
                     """,
                     (
                         ProviderStatus.CLAIMED.value,
                         ProviderStatus.CLAIMED.value,
                         worker_id,
-                        now,
+                        expires, now, now,
                         row["task_id"],
                     ),
                 )
@@ -235,6 +248,16 @@ class SQLiteTaskStore:
                     connection.execute("ROLLBACK")
                 raise
 
+    def heartbeat(self, task_id: str, worker_id: str, lease_seconds: int = 120) -> BridgeTask:
+        task = self._require(task_id)
+        if task.claimed_by != worker_id or task.status not in {ProviderStatus.CLAIMED, ProviderStatus.RUNNING}:
+            raise BridgeError("LEASE_CONFLICT", "Task lease is not owned by this worker.", retryable=False, http_status=409)
+        now = utc_now()
+        expires = (datetime.now(timezone.utc) + timedelta(seconds=max(10, lease_seconds))).isoformat().replace("+00:00", "Z")
+        with self._connection() as connection:
+            connection.execute("UPDATE bridge_tasks SET last_heartbeat_at=?, lease_expires_at=?, updated_at=? WHERE task_id=?", (now, expires, now, task_id))
+        return self._require(task_id)
+
     def mark_running(self, task_id: str, worker_id: str | None = None) -> BridgeTask:
         task = self._require(task_id)
         if task.status not in {ProviderStatus.QUEUED, ProviderStatus.CLAIMED}:
@@ -244,6 +267,8 @@ class SQLiteTaskStore:
                 retryable=False,
                 http_status=409,
             )
+        if task.claimed_by is not None and worker_id != task.claimed_by:
+            raise BridgeError("LEASE_CONFLICT", "Task lease is owned by another worker.", retryable=False, http_status=409)
         return self._update_status(
             task_id,
             ProviderStatus.RUNNING,
@@ -531,6 +556,9 @@ class SQLiteTaskStore:
             externalSessionId=row["external_session_id"],
             providerStatus=row["provider_status"],
             claimedBy=row["claimed_by"],
+            leaseExpiresAt=row["lease_expires_at"],
+            lastHeartbeatAt=row["last_heartbeat_at"],
+            attemptCount=row["attempt_count"],
             finalDisposition=row["final_disposition"],
             createdAt=row["created_at"],
             updatedAt=row["updated_at"],

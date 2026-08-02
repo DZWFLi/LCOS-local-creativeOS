@@ -31,6 +31,26 @@ def test_restart_recovers_same_task(tmp_path):
     assert recovered.output_intent == "create"
 
 
+def test_claim_lease_heartbeat_and_expiry(tmp_path):
+    path = tmp_path / "bridge.sqlite3"
+    service = BridgeService(SQLiteTaskStore(path))
+    service.create_task(make_create_envelope().model_copy(update={"provider": "codex"}))
+    claimed = service.claim_next("codex", "worker-a", 30)
+    assert claimed is not None
+    assert claimed.attempt_count == 1
+    assert claimed.lease_expires_at is not None
+    heartbeated = service.heartbeat(claimed.task_id, "worker-a", 60)
+    assert heartbeated.last_heartbeat_at is not None
+    with pytest.raises(BridgeError):
+        service.start(claimed.task_id, "worker-b")
+    with sqlite3.connect(path) as connection:
+        connection.execute("UPDATE bridge_tasks SET lease_expires_at='2000-01-01T00:00:00Z' WHERE task_id=?", (claimed.task_id,))
+    reclaimed = service.claim_next("codex", "worker-b", 30)
+    assert reclaimed is not None
+    assert reclaimed.claimed_by == "worker-b"
+    assert reclaimed.attempt_count == 2
+
+
 def test_create_multi_file_result(service):
     task, _ = service.create_task(make_create_envelope(expected_count=2))
     service.start(task.task_id)

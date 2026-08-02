@@ -157,6 +157,17 @@ MCP：
 http://127.0.0.1:43122/mcp
 ```
 
+## Codex pull worker
+
+`run-once` 原子认领一个 Codex Task、建立租约并进入 running，然后把完整 Task Envelope 输出给本地 Agent：
+
+```powershell
+lcos-bridge worker run-once --provider codex --worker codex-local
+lcos-bridge worker heartbeat --task-id <task-id> --worker codex-local
+```
+
+长期值守使用 `worker watch`。租约过期后任务可以被其他 worker 重新认领；`attemptCount` 会递增。该命令只负责可靠取件，不会静默启动或操控 Codex GUI。
+
 ## 测试
 
 ```powershell
