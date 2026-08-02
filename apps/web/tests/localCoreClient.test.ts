@@ -293,32 +293,36 @@ describe('Local Core browser client', () => {
     })
   })
 
-  it('imports a directory as base64 JSON without any purpose fields', async () => {
-    const fetchMock = vi.fn(async () => jsonResponse({
-      ok: true,
-      value: { resourceId: 'resource-dir', sourceKind: 'directory_copy', understandingStatus: 'pending' },
-    }, 201))
+  it('imports a directory through a raw-byte upload session', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ ok: true, value: { sessionId: 'upload-1' } }, 201))
+      .mockResolvedValueOnce(jsonResponse({ ok: true, value: null }))
+      .mockResolvedValueOnce(jsonResponse({ ok: true, value: { resourceId: 'resource-dir', sourceKind: 'directory_copy', understandingStatus: 'pending' } }, 201))
     vi.stubGlobal('fetch', fetchMock)
 
     const result = await createLocalCoreClient().importResourceDirectory('project-1', {
       importRequestId: 'dir-1',
       rootName: 'my-skill',
-      files: [{ path: 'SKILL.md', content: 'IyBTa2lsbA==' }],
+      files: [{ path: 'my-skill/SKILL.md', file: new File(['# Skill'], 'SKILL.md', { type: 'text/markdown' }) }],
       scopeId: 'scope-root',
       x: 10,
       y: 20,
     })
 
     const calls = fetchMock.mock.calls as unknown as [string, RequestInit][]
-    const [, init] = calls[0]
     expect(fetchMock).toHaveBeenCalledWith(
-      '/api/local-core/v1/projects/project-1/resources/import-directory',
+      '/api/local-core/v1/projects/project-1/resource-upload-sessions',
       expect.objectContaining({ method: 'POST' }),
     )
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/local-core/v1/projects/project-1/resource-upload-sessions/upload-1/files?path=my-skill%2FSKILL.md',
+      expect.objectContaining({ method: 'PUT', body: expect.any(File) }),
+    )
+    const [, init] = calls[0]!
     const body = JSON.parse(String(init.body)) as Record<string, unknown>
     expect(body.purpose).toBeUndefined()
     expect(body.description).toBeUndefined()
-    expect(body.files).toEqual([{ path: 'SKILL.md', content: 'IyBTa2lsbA==' }])
+    expect(body.files).toBeUndefined()
     expect(result.result).toMatchObject({ ok: true, value: { sourceKind: 'directory_copy' } })
   })
 

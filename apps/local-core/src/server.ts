@@ -33,6 +33,7 @@ import { PreviewWorkerService } from './preview-worker-service.js'
 import { ImportCopyConflictError, ImportCopyService } from './import-copy-service.js'
 import { UniversalResourceImportService } from './resources/universal-resource-import-service.js'
 import { ResourcePackageConflictError, ResourcePackageService } from './resources/resource-package-service.js'
+import { ResourceUploadSessionService } from './resources/resource-upload-session-service.js'
 import { ResourceReader } from './resources/resource-reader.js'
 import { ResourceMatcher } from './resources/resource-matcher.js'
 import { ContextManifestService } from './context-manifest-service.js'
@@ -176,15 +177,6 @@ function parseMultipartImport(contentType: string | undefined, body: Buffer): Mu
   return { fields, file }
 }
 
-function decodeStrictBase64(value: string): Buffer {
-  if (value.length === 0 || value.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(value)) {
-    throw new Error('File content is not valid base64.')
-  }
-  const decoded = Buffer.from(value, 'base64')
-  if (decoded.toString('base64') !== value) throw new Error('File content is not canonical base64.')
-  return decoded
-}
-
 async function withAbort<Value>(operation: Promise<Value>, signal: AbortSignal): Promise<Value> {
   if (signal.aborted) throw new DOMException('Operation aborted', 'AbortError')
 
@@ -245,6 +237,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
   const importCopy = options.importCopyService ?? (metadata === undefined ? undefined : new ImportCopyService(metadata))
   const resources = options.resourceImportService ?? (metadata === undefined || importCopy === undefined ? undefined : new UniversalResourceImportService(metadata, importCopy))
   const packages = options.resourcePackageService ?? (metadata === undefined ? undefined : new ResourcePackageService(metadata))
+  const uploads = metadata === undefined || packages === undefined ? undefined : new ResourceUploadSessionService(metadata, packages)
   const resourceReader = options.resourceReader ?? (metadata === undefined ? undefined : new ResourceReader(metadata))
   const matcher = options.resourceMatcher ?? new ResourceMatcher()
   const contextManifest = options.contextManifestService ?? (metadata === undefined ? undefined : new ContextManifestService(metadata))
@@ -741,96 +734,42 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
 
       // ---- Universal Resource Import (U1): URL + descriptor read/reanalyze ----
       const resourceUrlImportMatch = /^\/projects\/([^/]+)\/resources\/import-url$/.exec(pathname)
+      const uploadSessionCreateMatch = /^\/projects\/([^/]+)\/resource-upload-sessions$/.exec(pathname)
+      const uploadSessionFileMatch = /^\/projects\/([^/]+)\/resource-upload-sessions\/([^/]+)\/files$/.exec(pathname)
+      const uploadSessionCompleteMatch = /^\/projects\/([^/]+)\/resource-upload-sessions\/([^/]+)\/complete$/.exec(pathname)
+      if (method === 'POST' && uploadSessionCreateMatch !== null) {
+        if (uploads === undefined || !requireMetadata(metadata, response)) return
+        try {
+          const projectId = decodeURIComponent(uploadSessionCreateMatch[1] ?? '')
+          const body = await readJsonBody(request, controller.signal) as Record<string, unknown>
+          if (typeof body.importRequestId !== 'string' || typeof body.rootName !== 'string' || typeof body.scopeId !== 'string'
+            || typeof body.x !== 'number' || typeof body.y !== 'number') throw new Error('Upload session metadata is invalid.')
+          sendJson(response, 201, { ok: true, value: await uploads.start({ projectId, importRequestId: body.importRequestId, rootName: body.rootName, scopeId: body.scopeId, x: body.x, y: body.y, ...(typeof body.note === 'string' ? { note: body.note } : {}) }) })
+        } catch (error) { sendJson(response, 400, failure('VALIDATION', error instanceof Error ? error.message : 'Upload session failed.')) }
+        return
+      }
+      if (method === 'PUT' && uploadSessionFileMatch !== null) {
+        if (uploads === undefined || !requireMetadata(metadata, response)) return
+        try {
+          const relativePath = url.searchParams.get('path')
+          if (relativePath === null) throw new Error('Relative path is required.')
+          await uploads.putFile(decodeURIComponent(uploadSessionFileMatch[1] ?? ''), decodeURIComponent(uploadSessionFileMatch[2] ?? ''), relativePath, request)
+          sendJson(response, 200, { ok: true, value: null })
+        } catch (error) { sendJson(response, error instanceof RangeError ? 413 : 400, failure('VALIDATION', error instanceof Error ? error.message : 'Upload failed.')) }
+        return
+      }
+      if (method === 'POST' && uploadSessionCompleteMatch !== null) {
+        if (uploads === undefined || !requireMetadata(metadata, response)) return
+        try {
+          const outcome = await uploads.complete(decodeURIComponent(uploadSessionCompleteMatch[1] ?? ''), decodeURIComponent(uploadSessionCompleteMatch[2] ?? ''))
+          sendJson(response, outcome.reused ? 200 : 201, { ok: true, value: outcome })
+        } catch (error) { sendJson(response, error instanceof ResourcePackageConflictError ? 409 : error instanceof RangeError ? 413 : 400, failure('VALIDATION', error instanceof Error ? error.message : 'Upload completion failed.')) }
+        return
+      }
       const resourceDirectoryImportMatch = /^\/projects\/([^/]+)\/resources\/import-directory$/.exec(pathname)
       const resourceArchiveImportMatch = /^\/projects\/([^/]+)\/resources\/import-archive$/.exec(pathname)
       if (method === 'POST' && resourceDirectoryImportMatch !== null) {
-        if (!requireMetadata(metadata, response)) return
-        if (packages === undefined) {
-          sendJson(response, 503, failure('UNAVAILABLE', 'Resource Package service is not configured.'))
-          return
-        }
-        let input: unknown
-        try { input = await readJsonBody(request, controller.signal) } catch {
-          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Import directory body must be valid JSON.'))
-          return
-        }
-        const body = input as {
-          importRequestId?: unknown
-          rootName?: unknown
-          files?: unknown
-          scopeId?: unknown
-          x?: unknown
-          y?: unknown
-          note?: unknown
-        }
-        if (typeof body?.importRequestId !== 'string' || body.importRequestId.trim() === '') {
-          sendJson(response, 400, failure('INVALID_ARGUMENT', 'importRequestId is required.'))
-          return
-        }
-        if (typeof body.rootName !== 'string' || body.rootName.trim() === '') {
-          sendJson(response, 400, failure('INVALID_ARGUMENT', 'rootName is required.'))
-          return
-        }
-        if (!Array.isArray(body.files) || body.files.length === 0 || body.files.length > 200) {
-          sendJson(response, 400, failure('INVALID_ARGUMENT', 'files must be a non-empty array under 200 entries.'))
-          return
-        }
-        const files: Array<{ path: string; bytes: Buffer }> = []
-        let total = 0
-        for (const item of body.files) {
-          if (typeof item !== 'object' || item === null) {
-            sendJson(response, 400, failure('INVALID_ARGUMENT', 'Each file must be an object.'))
-            return
-          }
-          const file = item as { path?: unknown; content?: unknown }
-          if (typeof file.path !== 'string' || typeof file.content !== 'string') {
-            sendJson(response, 400, failure('INVALID_ARGUMENT', 'Each file requires path and base64 content.'))
-            return
-          }
-          let bytes: Buffer
-          try {
-            bytes = decodeStrictBase64(file.content)
-          } catch {
-            sendJson(response, 400, failure('INVALID_ARGUMENT', 'File content is not valid base64.'))
-            return
-          }
-          if (bytes.byteLength > 10 * 1024 * 1024) {
-            sendJson(response, 413, failure('INVALID_ARGUMENT', 'A package file exceeds the 10 MiB limit.'))
-            return
-          }
-          total += bytes.byteLength
-          if (total > 50 * 1024 * 1024) {
-            sendJson(response, 413, failure('INVALID_ARGUMENT', 'Package exceeds the 50 MiB total limit.'))
-            return
-          }
-          files.push({ path: file.path, bytes })
-        }
-        const projectId = decodeURIComponent(resourceDirectoryImportMatch[1] ?? '')
-        const project = metadata.getProject(projectId)
-        if (project === undefined) {
-          sendJson(response, 404, failure('NOT_FOUND', 'Project not found.'))
-          return
-        }
-        const graph = metadata.get(projectId)
-        const rootScope = graph?.scopes.find((scope) => scope.kind === 'root') ?? graph?.scopes[0]
-        const scopeId = typeof body.scopeId === 'string' && body.scopeId.trim() !== ''
-          ? body.scopeId
-          : String(rootScope?.id ?? '')
-        const x = typeof body.x === 'number' && Number.isFinite(body.x) ? body.x : 180
-        const y = typeof body.y === 'number' && Number.isFinite(body.y) ? body.y : 160
-        try {
-          const outcome = await packages.importDirectory(projectId as ProjectId, {
-            importRequestId: body.importRequestId,
-            rootName: body.rootName,
-            files,
-            scopeId,
-            position: { x, y },
-            ...(body.note === undefined ? {} : { userNote: String(body.note) }),
-          })
-          sendJson(response, outcome.reused ? 200 : 201, { ok: true, value: outcome })
-        } catch (error: unknown) {
-          sendJson(response, error instanceof ResourcePackageConflictError ? 409 : 400, failure(error instanceof ResourcePackageConflictError ? 'CONFLICT' : 'VALIDATION', error instanceof Error ? error.message : 'Directory import failed.'))
-        }
+        sendJson(response, 410, failure('VALIDATION', 'Base64 directory import was removed; use resource-upload-sessions.'))
         return
       }
       if (method === 'POST' && resourceArchiveImportMatch !== null) {

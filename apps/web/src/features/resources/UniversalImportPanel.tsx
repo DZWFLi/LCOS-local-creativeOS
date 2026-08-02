@@ -7,7 +7,7 @@ const MAX_FILES = 200
 
 export interface DirectoryEntryInput {
   readonly path: string
-  readonly content: string
+  readonly file: File
 }
 
 export function UniversalImportPanel({ open, onClose, onFiles, onDirectory, onArchive, onOpenLink }: {
@@ -68,11 +68,10 @@ export function UniversalImportPanel({ open, onClose, onFiles, onDirectory, onAr
       let total = 0
       for (const file of files) {
         const path = file.webkitRelativePath || file.name
-        const bytes = await file.arrayBuffer()
-        if (bytes.byteLength > MAX_SINGLE_BYTES) throw new Error(`单文件超过 10MB：${path}`)
-        total += bytes.byteLength
+        if (file.size > MAX_SINGLE_BYTES) throw new Error(`单文件超过 10MB：${path}`)
+        total += file.size
         if (total > MAX_TOTAL_BYTES) throw new Error('目录总大小超过 50MB')
-        entries.push({ path, content: Buffer.from(bytes).toString('base64') })
+        entries.push({ path, file })
       }
       const rootName = files[0]?.webkitRelativePath.split('/')[0] ?? 'imported-folder'
       onDirectory(rootName, entries, note.trim() === '' ? undefined : note.trim())

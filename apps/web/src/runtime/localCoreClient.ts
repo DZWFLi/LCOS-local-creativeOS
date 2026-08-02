@@ -161,7 +161,7 @@ export interface LocalCoreClient {
   importResourceDirectory(projectId: string, input: {
     readonly importRequestId: string
     readonly rootName: string
-    readonly files: readonly { readonly path: string; readonly content: string }[]
+    readonly files: readonly { readonly path: string; readonly file: File }[]
     readonly scopeId: string
     readonly x: number
     readonly y: number
@@ -421,15 +421,26 @@ export function createLocalCoreClient(): LocalCoreClient {
         }>,
       })
     },
-    importResourceDirectory(projectId, input, signal) {
-      return request(`/projects/${encodeURIComponent(projectId)}/resources/import-directory`, {
+    async importResourceDirectory(projectId, input, signal) {
+      const started = await request<{ sessionId: string }>(`/projects/${encodeURIComponent(projectId)}/resource-upload-sessions`, {
         signal,
         init: {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(input),
+          body: JSON.stringify({ importRequestId: input.importRequestId, rootName: input.rootName, scopeId: input.scopeId, x: input.x, y: input.y, ...(input.note === undefined ? {} : { note: input.note }) }),
         },
-        decode: decodeResult<ImportResourceResultV1>,
+        decode: decodeResult<{ sessionId: string }>,
+      })
+      if (!started.result.ok) return { ...started, result: started.result }
+      const sessionId = started.result.value.sessionId
+      for (const entry of input.files) {
+        const uploaded = await request<null>(`/projects/${encodeURIComponent(projectId)}/resource-upload-sessions/${encodeURIComponent(sessionId)}/files?path=${encodeURIComponent(entry.path)}`, {
+          signal, timeoutMs: 30_000, init: { method: 'PUT', headers: { 'content-type': 'application/octet-stream' }, body: entry.file }, decode: decodeResult<null>,
+        })
+        if (!uploaded.result.ok) return { ...uploaded, result: uploaded.result }
+      }
+      return request(`/projects/${encodeURIComponent(projectId)}/resource-upload-sessions/${encodeURIComponent(sessionId)}/complete`, {
+        signal, timeoutMs: 30_000, init: { method: 'POST' }, decode: decodeResult<ImportResourceResultV1>,
       })
     },
     importResourceArchive(projectId, input, signal) {
