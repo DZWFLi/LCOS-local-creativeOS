@@ -14,6 +14,18 @@ try {
   let result;
   if (group === "project" && action === "list") {
     result = await coreRequest("/projects");
+  } else if (group === "project" && action === "open") {
+    const rootPath = required(positional[0], "project root path");
+    const name = required(option("name"), "--name");
+    const inspection = await coreRequest("/project-roots/inspect", { method: "POST", ...jsonBody({ rootPath }), timeoutMs: 60_000 });
+    if (inspection.requiresConfirmation && !rest.includes("--import-existing") && !rest.includes("--empty")) {
+      throw new Error(`Directory contains ${inspection.fileCount} files and ${inspection.directoryCount} folders. Re-run with --import-existing to build Canvas nodes or --empty to register only the root.`);
+    }
+    result = await coreRequest("/projects", { method: "POST", ...jsonBody({ name, intent: "open", rootPath, importExisting: rest.includes("--import-existing") }), timeoutMs: 120_000 });
+  } else if (group === "project" && action === "create") {
+    const parentPath = required(positional[0], "parent path");
+    const name = required(option("name"), "--name");
+    result = await coreRequest("/projects", { method: "POST", ...jsonBody({ name, intent: "create", parentPath, directoryName: option("directory") || name.replace(/\s+/g, "-") }), timeoutMs: 60_000 });
   } else if (group === "project" && action === "show") {
     result = await coreRequest(`/projects/${encodeURIComponent(required(positional[0], "project id"))}/graph`);
   } else if (group === "context" && action === "get") {
@@ -31,10 +43,40 @@ try {
     });
   } else if (group === "run" && action === "list") {
     result = await coreRequest(`/projects/${encodeURIComponent(required(positional[0], "project id"))}/runs?limit=${encodeURIComponent(option("limit") || "20")}`);
+  } else if (group === "run" && action === "create") {
+    const projectId = required(positional[0], "project id");
+    const instruction = required(option("instruction"), "--instruction");
+    result = await coreRequest(`/projects/${encodeURIComponent(projectId)}/runs`, {
+      method: "POST",
+      ...jsonBody({ instruction, ...(option("target") ? { targetArtifactId: option("target") } : {}), ...(option("output") ? { outputIntent: option("output") } : {}), requestedProvider: option("provider") || "workbuddy" }),
+      timeoutMs: 60_000,
+    });
+  } else if (group === "run" && action === "dispatch") {
+    result = await coreRequest(`/runs/${encodeURIComponent(required(positional[0], "run id"))}/dispatch`, { method: "POST", ...jsonBody({}), timeoutMs: 60_000 });
+  } else if (group === "run" && action === "recover") {
+    result = await coreRequest(`/runs/${encodeURIComponent(required(positional[0], "run id"))}/recover`, { method: "POST", ...jsonBody({}), timeoutMs: 60_000 });
+  } else if (group === "run" && action === "finalize") {
+    result = await coreRequest(`/runs/${encodeURIComponent(required(positional[0], "run id"))}/finalize`, {
+      method: "POST",
+      ...jsonBody({ decision: option("decision") || "completed", ...(option("comment") ? { comment: option("comment") } : {}) }),
+    });
   } else if (group === "run" && action === "show") {
     result = await coreRequest(`/runs/${encodeURIComponent(required(positional[0], "run id"))}/review`);
   } else if (group === "run" && action === "sync") {
     result = await coreRequest(`/runs/${encodeURIComponent(required(positional[0], "run id"))}/sync`, { method: "POST", ...jsonBody({}) });
+  } else if (group === "run" && action === "accept") {
+    const returnId = required(positional[0], "artifact return id");
+    result = await coreRequest(`/artifact-returns/${encodeURIComponent(returnId)}/accept`, {
+      method: "POST",
+      ...jsonBody({ expectedBaseRevisionId: required(option("base-revision"), "--base-revision") }),
+    });
+  } else if (group === "run" && action === "reject") {
+    result = await coreRequest(`/artifact-returns/${encodeURIComponent(required(positional[0], "artifact return id"))}/reject`, { method: "POST", ...jsonBody({}) });
+  } else if (group === "run" && action === "retry") {
+    result = await coreRequest(`/artifact-returns/${encodeURIComponent(required(positional[0], "artifact return id"))}/retry`, {
+      method: "POST",
+      ...jsonBody(option("instruction") ? { instruction: option("instruction") } : {}),
+    });
   } else if (group === "resource" && action === "list") {
     result = await coreRequest(`/projects/${encodeURIComponent(required(positional[0], "project id"))}/resources`);
   } else if (group === "resource" && action === "show") {
@@ -91,6 +133,15 @@ try {
         method: "POST",
         body: form,
       });
+    } else if ((await lstat(source)).isFile()) {
+      const bytes = await readFile(source);
+      const form = new FormData();
+      form.set("file", new Blob([bytes]), basename(source));
+      form.set("importRequestId", importRequestId);
+      form.set("scopeId", scopeId);
+      form.set("position.x", option("x") || "180");
+      form.set("position.y", option("y") || "160");
+      result = await coreRequest(`/projects/${encodeURIComponent(projectId)}/imports`, { method: "POST", body: form, timeoutMs: 60_000 });
     } else {
       const files = await collectDirectory(source);
       const session = await coreRequest(`/projects/${encodeURIComponent(projectId)}/resource-upload-sessions`, {
@@ -105,7 +156,7 @@ try {
       });
       for (const file of files) {
         await coreRequest(`/projects/${encodeURIComponent(projectId)}/resource-upload-sessions/${encodeURIComponent(session.sessionId)}/files?path=${encodeURIComponent(file.path)}`, {
-          method: "PUT", headers: { "content-type": "application/octet-stream" }, body: await readFile(file.filePath),
+          method: "PUT", headers: { "content-type": "application/octet-stream" }, body: await readFile(file.filePath), timeoutMs: 60_000,
         });
       }
       result = await coreRequest(`/projects/${encodeURIComponent(projectId)}/resource-upload-sessions/${encodeURIComponent(session.sessionId)}/complete`, { method: "POST" });
@@ -123,9 +174,14 @@ try {
   } else if (group === "task" && action === "submit") {
     const taskId = required(positional[0], "task id");
     const resultPath = required(positional[1], "result envelope path");
+    const envelope = JSON.parse(await readFile(resultPath, "utf8"));
+    if (envelope.contractVersion === "bridge-result-v1" && !envelope.summary && envelope.shortSummary) {
+      envelope.summary = envelope.shortSummary;
+      delete envelope.shortSummary;
+    }
     result = await bridgeRequest(`/v1/tasks/${encodeURIComponent(taskId)}/result`, {
       method: "POST",
-      ...jsonBody(JSON.parse(await readFile(resultPath, "utf8"))),
+      ...jsonBody(envelope),
     });
   } else if (group === "task" && action === "show") {
     result = await bridgeRequest(`/v1/tasks/${encodeURIComponent(required(positional[0], "task id"))}`);
@@ -177,12 +233,21 @@ function printHelp() {
 
 Project truth:
   lcos project list
+  lcos project open <root-path> --name "Project" [--import-existing|--empty]
+  lcos project create <parent-path> --name "Project" [--directory folder-name]
   lcos project show <project-id>
   lcos context get <project-id>
   lcos manifest build <project-id> [--target <artifact-id>] [--output <description>]
   lcos run list <project-id> [--limit 20]
+  lcos run create <project-id> --instruction "..." [--target artifact-id] [--output create|revise|analyze] [--provider workbuddy|codex]
+  lcos run dispatch <run-id>
+  lcos run recover <run-id>
+  lcos run finalize <run-id> [--decision completed|retrying] [--comment "..."]
   lcos run show <run-id>
   lcos run sync <run-id>
+  lcos run accept <artifact-return-id> --base-revision <revision-id>
+  lcos run reject <artifact-return-id>
+  lcos run retry <artifact-return-id> [--instruction "..."]
   lcos resource list <project-id>
   lcos resource show <project-id> <resource-id>
   lcos resource read <project-id> <resource-id> [--path name] [--offset N] [--limit N] [--format text|raw|json_tree]

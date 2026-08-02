@@ -81,6 +81,22 @@ describe('Universal Resource Import (U1)', () => {
     expect(outcome.descriptor?.source.mediaType).toBe('application/json')
   })
 
+  it('imports DOCX as a durable artifact even when preview is unsupported', async () => {
+    const { service, projectId, scopeId } = setup()
+    const outcome = await service.importFile(projectId, {
+      importRequestId: 'visual-spec-docx',
+      fileName: 'LUMINA_visual-spec.docx',
+      contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      bytes: Buffer.from('PK\u0003\u0004synthetic-docx-fixture', 'binary'),
+      scopeId,
+      position: { x: 20, y: 30 },
+    })
+
+    expect(outcome.artifact.kind).toBe('other')
+    expect(outcome.fileRecord.mimeType).toBe('application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+    expect(outcome.artifact.currentRevisionId).toBe(outcome.revision.id)
+  })
+
   it('reanalyze upgrades pending to ready with text analyzer summary', async () => {
     const { service, projectId, scopeId } = setup()
     const outcome = await service.importFile(projectId, {

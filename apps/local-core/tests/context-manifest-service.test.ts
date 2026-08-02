@@ -42,6 +42,10 @@ describe('ContextManifestService', () => {
     })
     expect(first.target?.title).toBe('Script')
     expect(first.references.map((reference) => reference.title)).toContain('Reference Image')
+    expect(first.orderedItems).toContainEqual(expect.objectContaining({
+      role: 'context',
+      title: 'Brief',
+    }))
     expect(first.feedback.some((item) => item.title === 'Feedback Notes')).toBe(true)
     expect(first.lockedElements).toContain('the MVP path focused on project understanding and handoff.')
     expect(first.orderedItems.some((item) => item.role === 'decision')).toBe(true)

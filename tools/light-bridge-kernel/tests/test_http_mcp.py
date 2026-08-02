@@ -52,6 +52,29 @@ def test_rest_analyze_zero_file_result(service):
     assert submitted.json()["task"]["result"]["changedFiles"] == []
 
 
+def test_rest_result_contract_error_is_structured_422(service):
+    client = TestClient(create_app(service))
+    envelope = make_analyze_envelope()
+    created = client.post(
+        "/v1/tasks", json=envelope.model_dump(mode="json", by_alias=True)
+    )
+    task_id = created.json()["task"]["taskId"]
+
+    submitted = client.post(
+        f"/v1/tasks/{task_id}/result",
+        json={
+            "contractVersion": "bridge-result-v1",
+            "taskId": task_id,
+            "lcosRunId": "run-analyze-1",
+            "providerStatus": "review",
+            "shortSummary": "legacy field must not leak a server error",
+        },
+    )
+
+    assert submitted.status_code == 422
+    assert submitted.json()["error"]["code"] == "CONTRACT_VALIDATION_FAILED"
+
+
 def test_mcp_create_and_lookup_v1(service):
     client = TestClient(create_app(service))
     init = _rpc(client, "initialize", {"protocolVersion": "2025-03-26"})

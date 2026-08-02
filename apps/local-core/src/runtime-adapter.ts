@@ -22,7 +22,7 @@ export interface RuntimeInputPackV0 {
   readonly contractVersion: 'runtime-input-pack-v0'
   readonly lcosRunId: string
   readonly contextManifest: unknown
-  readonly taskType: 'artifact_create' | 'artifact_revise' | 'artifact_analyze'
+  readonly taskType: 'creative_run' | 'markdown_script_revision'
   readonly instruction: string
   readonly expectedOutputs: readonly RuntimeExpectedOutputV0[]
   readonly resultEnvelopePath: string
@@ -49,7 +49,7 @@ export interface LegacyBridgeTaskEnvelopeV0 {
   readonly idempotencyKey: string
   readonly requestFingerprint: string
   readonly provider: 'workbuddy' | 'codex'
-  readonly taskType: 'artifact_create' | 'artifact_revise' | 'artifact_analyze'
+  readonly taskType: 'creative_run' | 'markdown_script_revision'
   readonly runtimeInputPackPath: string
   readonly expectedOutputs: readonly RuntimeExpectedOutputV0[]
   readonly timeoutSeconds: number
@@ -66,7 +66,7 @@ export interface BridgeTaskEnvelopeV1 {
   readonly outputIntent: 'create' | 'revise' | 'analyze'
   readonly instructions: string
   readonly provider: 'workbuddy' | 'codex'
-  readonly taskType: 'artifact_create' | 'artifact_revise' | 'artifact_analyze'
+  readonly taskType: 'creative_run' | 'markdown_script_revision'
   readonly runtimeInputPackPath: string
   readonly outputRoot: string
   readonly expectedOutputs: readonly {
@@ -354,7 +354,7 @@ export class RuntimeAdapterService {
       contractVersion: 'runtime-input-pack-v0',
       lcosRunId: String(run.id),
       contextManifest: JSON.parse(manifest.canonicalJson) as unknown,
-      taskType: run.outputIntent === 'create' ? 'artifact_create' : run.outputIntent === 'analyze' ? 'artifact_analyze' : 'artifact_revise',
+      taskType: run.outputIntent === 'revise' ? 'markdown_script_revision' : 'creative_run',
       instruction: run.instruction,
       expectedOutputs,
       resultEnvelopePath,
@@ -377,7 +377,7 @@ export class RuntimeAdapterService {
       outputIntent: run.outputIntent,
       instructions: run.instruction,
       provider: run.requestedProvider,
-      taskType: run.outputIntent === 'create' ? 'artifact_create' : run.outputIntent === 'analyze' ? 'artifact_analyze' : 'artifact_revise',
+      taskType: run.outputIntent === 'revise' ? 'markdown_script_revision' : 'creative_run',
       runtimeInputPackPath: packPath,
       outputRoot: resolve(runtimeRoot, 'staging'),
       expectedOutputs: [{

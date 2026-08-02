@@ -1025,6 +1025,10 @@ export class SqliteMetadataRepository {
     }
   }
 
+  deleteProject(projectId: string): void {
+    this.#database.prepare('DELETE FROM projects WHERE id = ?').run(projectId as SQLInputValue)
+  }
+
   getWorkspaces(projectId: string): Workspace[] {
     return (this.#database.prepare('SELECT * FROM workspaces WHERE project_id = ?').all(projectId as SQLInputValue) as Row[]).map((r) => this.#workspace(r))
   }

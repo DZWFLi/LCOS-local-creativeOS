@@ -26,15 +26,16 @@ export async function bridgeRequest(path, init = {}) {
 
 export async function requestJson(url, init = {}) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10_000);
+  const { timeoutMs = 10_000, ...requestInit } = init;
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(url, {
-      ...init,
+      ...requestInit,
       signal: controller.signal,
       headers: {
         accept: "application/json",
-        ...(init.body === undefined ? {} : init.body instanceof FormData ? {} : { "content-type": "application/json" }),
-        ...init.headers,
+        ...(requestInit.body === undefined ? {} : requestInit.body instanceof FormData ? {} : { "content-type": "application/json" }),
+        ...requestInit.headers,
       },
     });
     const value = await response.json().catch(() => ({ ok: false, error: { message: `HTTP ${response.status}` } }));

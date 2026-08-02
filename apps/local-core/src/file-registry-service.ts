@@ -1,5 +1,5 @@
 import { createReadStream } from 'node:fs'
-import { basename, extname } from 'node:path'
+import { basename } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { createHash } from 'node:crypto'
 
@@ -18,29 +18,7 @@ import type {
 
 import { guardTrustedFilePath } from './path-guard.js'
 import { SqliteMetadataRepository } from './metadata-repository.js'
-
-function mimeTypeFor(path: string): string {
-  switch (extname(path).toLocaleLowerCase('en-US')) {
-    case '.png': return 'image/png'
-    case '.jpg':
-    case '.jpeg': return 'image/jpeg'
-    case '.webp': return 'image/webp'
-    case '.gif': return 'image/gif'
-    case '.md': return 'text/markdown'
-    case '.txt': return 'text/plain'
-    case '.pdf': return 'application/pdf'
-    default: return 'application/octet-stream'
-  }
-}
-
-function artifactKindFor(path: string): Artifact['kind'] {
-  const extension = extname(path).toLocaleLowerCase('en-US')
-  if (extension === '.md' || extension === '.txt') return 'markdown'
-  if (['.png', '.jpg', '.jpeg', '.webp', '.gif'].includes(extension)) return 'image'
-  if (extension === '.pdf') return 'pdf'
-  if (extension === '.ppt' || extension === '.pptx') return 'presentation'
-  return 'other'
-}
+import { artifactKindForFile, mimeTypeForFile } from './file-format-registry.js'
 
 export async function hashFileSha256(path: string, signal?: AbortSignal): Promise<string> {
   const hash = createHash('sha256')
@@ -115,7 +93,7 @@ export class FileRegistryService {
       observedHash: observedHash as FileRecord['observedHash'],
       size: guarded.size,
       modifiedAt: guarded.modifiedAt,
-      mimeType: mimeTypeFor(guarded.realPath),
+      mimeType: mimeTypeForFile(guarded.realPath),
       availability: 'current',
       observedAt: now,
     }
@@ -123,7 +101,7 @@ export class FileRegistryService {
       id: artifactId,
       projectId,
       title: input.title?.trim() || basename(guarded.realPath),
-      kind: artifactKindFor(guarded.realPath),
+      kind: artifactKindForFile(guarded.realPath),
       availability: 'available',
       currentRevisionId: revisionId,
       createdAt: now,

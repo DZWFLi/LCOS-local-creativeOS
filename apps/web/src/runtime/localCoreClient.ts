@@ -126,6 +126,7 @@ export interface LocalCoreClient {
   catalog(signal?: AbortSignal): Promise<RuntimeCall<readonly ProjectCatalogEntry[]>>
   validateProjectRoot(rootPath: string, signal?: AbortSignal): Promise<RuntimeCall<ValidatedProjectRoot>>
   selectDirectory(title: string, signal?: AbortSignal): Promise<RuntimeCall<{ readonly path?: string; readonly cancelled: boolean }>>
+  inspectProjectRoot(rootPath: string, signal?: AbortSignal): Promise<RuntimeCall<{ readonly fileCount: number; readonly directoryCount: number; readonly totalBytes: number; readonly skipped: readonly string[]; readonly requiresConfirmation: boolean }>>
   importResourceUrl(projectId: string, input: {
     readonly url: string
     readonly title?: string
@@ -180,7 +181,7 @@ export interface LocalCoreClient {
     readonly name: string
   } & (
     | { readonly intent: 'create'; readonly parentPath: string; readonly directoryName: string }
-    | { readonly intent: 'open'; readonly rootPath: string }
+    | { readonly intent: 'open'; readonly rootPath: string; readonly importExisting?: boolean }
   ), signal?: AbortSignal): Promise<RuntimeCall<ProjectCatalogEntry>>
   metadataStatus(signal?: AbortSignal): Promise<RuntimeCall<MetadataStoreStatus>>
   projectGraph(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<ProjectGraphSnapshot>>
@@ -367,6 +368,14 @@ export function createLocalCoreClient(): LocalCoreClient {
           body: JSON.stringify({ title }),
         },
         decode: decodeResult<{ readonly path?: string; readonly cancelled: boolean }>,
+      })
+    },
+    inspectProjectRoot(rootPath, signal) {
+      return request('/project-roots/inspect', {
+        signal,
+        timeoutMs: 60_000,
+        init: { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ rootPath }) },
+        decode: decodeResult<{ readonly fileCount: number; readonly directoryCount: number; readonly totalBytes: number; readonly skipped: readonly string[]; readonly requiresConfirmation: boolean }>,
       })
     },
     createProject(input, signal) {

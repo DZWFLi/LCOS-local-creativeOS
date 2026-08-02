@@ -1,13 +1,13 @@
 import { createHash } from 'node:crypto'
 import { mkdir, rename, rm, stat, writeFile } from 'node:fs/promises'
-import { basename, extname, join, relative, resolve } from 'node:path'
+import { basename, join, relative, resolve } from 'node:path'
 
 import type { Artifact, ArtifactRevision, ArtifactView, FileRecord, ProjectId, ScopeId } from '@local-creative-os/domain'
 
 import { SqliteMetadataRepository } from './metadata-repository.js'
+import { artifactKindForFile, mimeTypeForFile } from './file-format-registry.js'
 
 const MAX_IMPORT_BYTES = 25 * 1024 * 1024
-const SUPPORTED_EXTENSIONS = new Set(['.md', '.txt', '.json', '.yaml', '.yml', '.png', '.jpg', '.jpeg', '.webp'])
 
 export interface ImportCopyInput {
   readonly importRequestId: string
@@ -44,24 +44,6 @@ function safeFileName(value: string): string {
   return base.length === 0 ? 'imported-file' : base.slice(0, 120)
 }
 
-function mimeTypeFor(extension: string, provided: string): string {
-  if (extension === '.md') return 'text/markdown'
-  if (extension === '.txt') return 'text/plain'
-  if (extension === '.json') return 'application/json'
-  if (extension === '.yaml' || extension === '.yml') return 'application/yaml'
-  if (extension === '.png') return 'image/png'
-  if (extension === '.jpg' || extension === '.jpeg') return 'image/jpeg'
-  if (extension === '.webp') return 'image/webp'
-  return provided || 'application/octet-stream'
-}
-
-function artifactKindFor(extension: string): Artifact['kind'] {
-  if (extension === '.md' || extension === '.txt') return 'markdown'
-  if (extension === '.json' || extension === '.yaml' || extension === '.yml') return 'other'
-  if (['.png', '.jpg', '.jpeg', '.webp'].includes(extension)) return 'image'
-  return 'other'
-}
-
 function hashBytes(bytes: Buffer): FileRecord['observedHash'] {
   return createHash('sha256').update(bytes).digest('hex') as FileRecord['observedHash']
 }
@@ -84,11 +66,22 @@ export class ImportCopyService {
     if (input.bytes.byteLength === 0) throw new Error('Imported file is empty.')
     if (input.bytes.byteLength > MAX_IMPORT_BYTES) throw new Error('Imported file exceeds the 25 MiB MVP limit.')
     const requestId = cleanIdPart(input.importRequestId)
-    const extension = extname(input.fileName).toLocaleLowerCase('en-US')
-    if (!SUPPORTED_EXTENSIONS.has(extension)) throw new Error(`Unsupported import type: ${extension || 'unknown'}.`)
     const identity = importIdentity(projectId, requestId)
     const observedHash = hashBytes(input.bytes)
     const importedTitle = safeFileName(input.fileName)
+
+    const matchingFile = this.repository.getFileRecords(String(projectId)).find((record) => String(record.observedHash) === String(observedHash))
+    if (matchingFile !== undefined) {
+      const matchingArtifact = this.repository.getArtifacts(String(projectId)).find((artifact) => {
+        if (artifact.currentRevisionId === undefined) return false
+        return String(this.repository.getArtifactRevision(String(artifact.currentRevisionId))?.fileRecordId) === String(matchingFile.id)
+      })
+      const matchingRevision = matchingArtifact?.currentRevisionId === undefined ? undefined : this.repository.getArtifactRevision(String(matchingArtifact.currentRevisionId))
+      const matchingView = matchingArtifact === undefined ? undefined : this.repository.getArtifactViews(String(matchingArtifact.id))[0]
+      if (matchingArtifact !== undefined && matchingRevision !== undefined && matchingView !== undefined) {
+        return { fileRecord: matchingFile, artifact: matchingArtifact, revision: matchingRevision, view: matchingView, reused: true }
+      }
+    }
 
     const ids = {
       fileRecordId: `import-file-${identity}` as FileRecord['id'],
@@ -142,7 +135,7 @@ export class ImportCopyService {
       observedHash,
       size: fileStat.size,
       modifiedAt: fileStat.mtime.toISOString(),
-      mimeType: mimeTypeFor(extension, input.contentType),
+      mimeType: mimeTypeForFile(input.fileName, input.contentType),
       availability: 'current',
       observedAt: now,
     }
@@ -150,7 +143,7 @@ export class ImportCopyService {
       id: ids.artifactId,
       projectId,
       title: importedTitle,
-      kind: artifactKindFor(extension),
+      kind: artifactKindForFile(input.fileName, mimeTypeForFile(input.fileName, input.contentType)),
       availability: 'available',
       currentRevisionId: ids.revisionId,
       createdAt: now,

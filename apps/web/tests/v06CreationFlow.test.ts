@@ -36,4 +36,10 @@ describe('v0.6 simplified content creation contract', () => {
     expect(css).toContain('grid-column: 2')
     expect(css).not.toContain('.canvas-create-layer {\n  backdrop-filter')
   })
+
+  it('uses Space plus blank-canvas click to create at the pointer instead of panning', () => {
+    expect(canvas).toContain('blankCanvas && spaceHeld')
+    expect(canvas).toContain('onSpaceCreate(point)')
+    expect(app).toContain('onSpaceCreate={(point) =>')
+  })
 })

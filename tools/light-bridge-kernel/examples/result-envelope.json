@@ -3,7 +3,7 @@
   "taskId": "REPLACE_WITH_TASK_ID",
   "lcosRunId": "run-demo-001",
   "providerStatus": "review",
-  "shortSummary": "Markdown script revision completed.",
+  "summary": "Markdown script revision completed.",
   "changedFiles": [
     {
       "path": "C:\\LCOS-DEMO\\outputs\\script-draft-run-demo-001.md",

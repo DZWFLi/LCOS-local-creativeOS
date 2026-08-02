@@ -44,6 +44,7 @@ import {
 } from './runtime-application-service.js'
 import { ActiveContextStore, type ActiveContextInput } from './active-context-store.js'
 import { selectNativeDirectory, type DirectoryPickerInput, type DirectoryPickerResult } from './native-directory-picker.js'
+import { indexProjectRoot, inspectProjectRoot } from './project-root-indexer.js'
 
 const LOOPBACK_HOST = '127.0.0.1'
 const MAX_BODY_BYTES = 1 * 1024 * 1024 // 1 MiB
@@ -349,6 +350,29 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
         return
       }
 
+      if (method === 'POST' && pathname === '/project-roots/inspect') {
+        if (!requireMetadata(metadata, response)) return
+        let input: unknown
+        try { input = await readJsonBody(request, controller.signal) } catch {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Request body must be valid JSON.'))
+          return
+        }
+        const rootPath = typeof input === 'object' && input !== null && 'rootPath' in input ? (input as { rootPath?: unknown }).rootPath : undefined
+        if (typeof rootPath !== 'string' || rootPath.trim() === '') {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'rootPath must be a non-empty string.'))
+          return
+        }
+        const validated = await validateProjectRoot(rootPath, { signal: controller.signal, ...(options.allowedRoot === undefined ? {} : { allowedRoot: options.allowedRoot }) })
+        if (!validated.ok) { sendJson(response, statusForError(validated.error.code), validated); return }
+        try {
+          const inspection = await inspectProjectRoot(validated.value.normalizedPath, controller.signal)
+          sendJson(response, 200, { ok: true, value: inspection })
+        } catch (error: unknown) {
+          sendJson(response, 400, failure('VALIDATION', error instanceof Error ? error.message : 'Project root inspection failed.'))
+        }
+        return
+      }
+
       // ---- Project Create (real user projects) ----
       if (method === 'POST' && pathname === '/projects') {
         if (!requireMetadata(metadata, response)) return
@@ -357,7 +381,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
           sendJson(response, 400, failure('INVALID_ARGUMENT', 'Request body must be valid JSON under 64 KiB.'))
           return
         }
-        const body = input as { name?: unknown; intent?: unknown; rootPath?: unknown; parentPath?: unknown; directoryName?: unknown }
+        const body = input as { name?: unknown; intent?: unknown; rootPath?: unknown; parentPath?: unknown; directoryName?: unknown; importExisting?: unknown }
         if (typeof body?.name !== 'string' || body.name.trim() === '' || body.name.length > 120) {
           sendJson(response, 400, failure('INVALID_ARGUMENT', 'name must be a non-empty string under 120 characters.'))
           return
@@ -390,11 +414,17 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
             name,
             rootPath: root.value.normalizedPath,
           })
+          if (intent === 'open' && body.importExisting === true) {
+            const initial = metadata.get(projectId)
+            if (initial === undefined) throw new Error('Created Project could not be reloaded for indexing.')
+            metadata.save(await indexProjectRoot(initial, controller.signal))
+          }
           sendJson(response, 201, {
             ok: true,
             value: { id: projectId, name, rootPath: root.value.normalizedPath, graphVersion: 1 },
           })
         } catch (error: unknown) {
+          if (metadata.getProject(projectId) !== undefined) metadata.deleteProject(projectId)
           if (intent === 'create') await rollbackCreatedProjectRoot(root.value.normalizedPath)
           sendJson(response, 409, failure('CONFLICT', error instanceof Error ? error.message : 'Project could not be created.'))
         }

@@ -6,7 +6,7 @@ from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from .. import __version__
 from ..canonical.models import (
@@ -180,6 +180,20 @@ def create_app(service: BridgeService) -> FastAPI:
         return JSONResponse(
             status_code=error.http_status,
             content={"ok": False, "error": error.as_dict()},
+        )
+
+    @app.exception_handler(ValidationError)
+    async def validation_error_handler(_: Request, error: ValidationError) -> JSONResponse:
+        return JSONResponse(
+            status_code=422,
+            content={
+                "ok": False,
+                "error": {
+                    "code": "CONTRACT_VALIDATION_FAILED",
+                    "message": "Request does not match the canonical Bridge contract.",
+                    "details": error.errors(include_url=False, include_context=False),
+                },
+            },
         )
 
     @app.get("/health")

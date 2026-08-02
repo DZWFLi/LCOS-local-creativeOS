@@ -140,6 +140,32 @@ export class ContextManifestService {
         if (artifact === undefined) throw new Error(`Context Artifact not found: ${artifactId}`)
         return artifact
       })
+    const targetScopeIds = new Set(
+      graph.artifactViews
+        .filter((view) => String(view.artifactId) === String(target?.id))
+        .map((view) => String(view.scopeId)),
+    )
+    const scopeById = new Map(graph.scopes.map((scope) => [String(scope.id), scope]))
+    const neighborhoodScopeIds = new Set(targetScopeIds)
+    for (const scopeId of targetScopeIds) {
+      const parentScopeId = scopeById.get(scopeId)?.parentScopeId
+      if (parentScopeId === null || parentScopeId === undefined) continue
+      neighborhoodScopeIds.add(String(parentScopeId))
+      for (const scope of graph.scopes) {
+        if (String(scope.parentScopeId) === String(parentScopeId)) neighborhoodScopeIds.add(String(scope.id))
+      }
+    }
+    const siblingContextArtifacts = input.contextArtifactIds === undefined || input.contextArtifactIds.length === 0
+      ? [...new Set(
+          graph.artifactViews
+            .filter((view) => neighborhoodScopeIds.has(String(view.scopeId)) && String(view.artifactId) !== String(target?.id))
+            .map((view) => String(view.artifactId)),
+        )]
+          .map((artifactId) => artifactById.get(artifactId))
+          .filter((artifact): artifact is Artifact => artifact !== undefined)
+          .sort(byIdentity)
+          .slice(0, 12)
+      : []
 
     const truncatedItemIds: string[] = []
     const orderedItems: ContextManifestOrderedItemV0[] = []
@@ -195,6 +221,12 @@ export class ContextManifestService {
     for (const artifact of explicitContextArtifacts.sort(byIdentity)) {
       if (alreadyIncluded.has(String(artifact.id))) continue
       await appendArtifact(artifact, 'context')
+      alreadyIncluded.add(String(artifact.id))
+    }
+    for (const artifact of siblingContextArtifacts.sort(byIdentity)) {
+      if (alreadyIncluded.has(String(artifact.id))) continue
+      await appendArtifact(artifact, 'context')
+      alreadyIncluded.add(String(artifact.id))
     }
     for (const note of [...graph.notes].sort(byIdentity)) {
       lockedSource.push(note.body)

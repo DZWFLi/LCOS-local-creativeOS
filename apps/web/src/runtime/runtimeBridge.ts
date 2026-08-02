@@ -319,6 +319,7 @@ export function mapGraphToState(
   const revisionById = new Map(graph.artifactRevisions.map((revision) => [revision.id, revision]))
   const fileRecordById = new Map(graph.fileRecords.map((fileRecord) => [fileRecord.id, fileRecord]))
   const previewByRevisionId = new Map(previewRecords.map((preview) => [preview.revisionId, preview]))
+  const childScopeByContainerViewId = new Map(graph.scopes.filter((scope) => scope.containerViewId !== null).map((scope) => [String(scope.containerViewId), String(scope.id)]))
   const referenceArtifactIds = new Set(graph.relations.filter((relation) => relation.kind === 'reference' && relation.sourceEntityType === 'artifact').map((relation) => String(relation.sourceEntityId)))
   const feedbackArtifactIds = new Set(graph.relations.filter((relation) => relation.kind === 'feedback' && relation.sourceEntityType === 'artifact').map((relation) => String(relation.sourceEntityId)))
 
@@ -365,6 +366,7 @@ export function mapGraphToState(
       previewDataUrl: previewContent === undefined ? undefined : `data:${previewContent.mimeType};base64,${previewContent.data}`,
       previewText: previewContent === undefined || !previewContent.mimeType.startsWith('text/') ? undefined : decodeBase64Text(previewContent.data),
       scopeId: normalizeScopeId(view.scopeId),
+      opensScopeId: childScopeByContainerViewId.get(String(view.id)),
     }
   })
 
@@ -395,6 +397,7 @@ export function mapGraphToState(
         id: String(s.id), label: s.name,
         kind: s.kind as CanvasScope['kind'],
         parentScopeId: s.parentScopeId ? normalizeScopeId(s.parentScopeId) : null,
+        containerNodeId: s.containerViewId === null ? undefined : String(s.containerViewId),
         camera: workspaces.find((w) => w.scopeId === String(s.id))?.camera ?? { x: 0, y: 0, zoom: 1 },
       }))
     : workspaces.map((ws) => ({ id: 'scope-root', label: ws.label, kind: 'root' as const, parentScopeId: null, camera: ws.camera }))

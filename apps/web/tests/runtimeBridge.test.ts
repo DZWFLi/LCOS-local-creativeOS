@@ -117,6 +117,7 @@ function mockClient(overrides: Partial<LocalCoreClient> = {}): LocalCoreClient {
     catalog: unavailable,
     validateProjectRoot: unavailable,
     selectDirectory: unavailable,
+    inspectProjectRoot: unavailable,
     createProject: unavailable,
     importResourceUrl: unavailable,
     resourceList: unavailable,

@@ -3025,6 +3025,11 @@ body,
 .path-input button:hover:not(:disabled) { background: #e4dcfa; }
 .path-input button:disabled { cursor: wait; opacity: .58; }
 .project-create-error { color: #a53d3d !important; }
+.project-root-import-confirm { display: flex !important; grid-template-columns: none !important; align-items: flex-start; gap: 10px !important; padding: 12px; border: 1px solid rgba(112,71,216,.18); border-radius: 12px; background: rgba(112,71,216,.055); }
+.project-root-import-confirm > input { width: 16px; height: 16px; margin-top: 2px; padding: 0; }
+.project-root-import-confirm > span { display: grid; gap: 3px; }
+.project-root-import-confirm b { color: #263746; font-size: 11px; }
+.project-root-import-confirm small { color: rgba(29,45,60,.58); font-size: 10px; }
 .project-intent-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 4px; border-radius: 12px; background: rgba(29,45,60,.06); }
 .project-intent-switch button { min-height: 34px; border: 0; border-radius: 9px; color: #667582; background: transparent; cursor: pointer; }
 .project-intent-switch button.active { color: #172b3c; background: #fff; box-shadow: 0 2px 8px rgba(29,45,60,.1); }
