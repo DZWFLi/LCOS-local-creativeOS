@@ -31,7 +31,7 @@ describe('v0.7.1 corrected interaction contract', () => {
   it('uses single click for selection, a local toolbar for quick actions, and explicit Scope entry', () => {
     expect(canvas).toContain('onSelect(node.id, event.shiftKey)')
     expect(canvas).toContain('<NodeContextToolbar')
-    expect(app).toContain('if (node.opensScopeId) enterScope(node.opensScopeId)')
+    expect(app).toContain('if (node.opensScopeId) {')
     expect(app).not.toContain('setFocusPreviewId(id)')
   })
 

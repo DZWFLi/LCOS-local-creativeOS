@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { Check, Command, Play } from 'lucide-react'
 import type { ContextManifestV0, RunReview } from '@local-creative-os/contracts'
 import { makePerformanceFixture } from './qa-fixtures/fixtures'
@@ -32,10 +32,10 @@ import { selectRuntimeProject } from './runtime/runtimeProjectSelection'
 import { createWorkspaceRecord, duplicateWorkspaceRecord, moveWorkspaceRecord, removeWorkspaceRecord, toggleWorkspaceLayer, updateWorkspaceRecord } from './state/workspaceState'
 import { fitBounds, getSelectionBounds, nodeDimensions, revealNode } from './features/canvas/canvasGeometry'
 import { findPendingReturnPosition } from './features/canvas/canvasLayout'
-
-const DocumentPreviewDialog = lazy(() => import('./features/preview/DocumentPreviewDialog').then((module) => ({ default: module.DocumentPreviewDialog })))
 import { applyScopeLayout, proposeScopeLayout, type LayoutPreviewItem } from './features/canvas/scopeLayout'
 import { arrangeSelectedNodes } from './features/canvas/selectionLayout'
+import { ArtifactWorkbench, type WorkbenchFocus } from './features/workbench/ArtifactWorkbench'
+import { canPreviewArtifact } from './features/viewer/artifactViewerRegistry'
 import { copyCanvasSelection, pasteCanvasNodes, pasteRelationTemplate, type CanvasClipboardPayload } from './state/canvasClipboard'
 import { useCanvasHistory } from './state/useCanvasHistory'
 import { inferTargetContext, moveBetweenTargetAndContext, setPrimaryTarget } from './state/workContext'
@@ -107,7 +107,7 @@ export function App() {
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null)
   const [nodeInfoId, setNodeInfoId] = useState<string | null>(null)
-  const [previewNodeId, setPreviewNodeId] = useState<string | null>(null)
+  const [workbench, setWorkbench] = useState<{ nodeId: string; focus: WorkbenchFocus } | null>(null)
   const [pinnedContextIds, setPinnedContextIds] = useState<string[]>(['brief', 'feedback', 'reference'])
   const [excludedContextIds, setExcludedContextIds] = useState<string[]>([])
   const [manualInference, setManualInference] = useState<TargetContextInference | null>(null)
@@ -179,7 +179,8 @@ export function App() {
   const selectedNodes = selectedIds.map((id) => nodes.find((node) => node.id === id)).filter((node): node is CanvasNode => Boolean(node))
   const selectedId = selectedIds.at(-1) ?? null
   const nodeInfoNode = nodeInfoId ? nodes.find((node) => node.id === nodeInfoId) ?? null : null
-  const previewNode = previewNodeId ? nodes.find((node) => node.id === previewNodeId) ?? null : null
+  const workbenchNode = workbench ? nodes.find((node) => node.id === workbench.nodeId) ?? null : null
+  const workbenchRelationCount = useMemo(() => workbenchNode ? edges.filter((edge) => edge.from === workbenchNode.id || edge.to === workbenchNode.id).length : 0, [edges, workbenchNode])
   const visibleLayers: NodeLayer[] = activeWorkspace ? (activeWorkspace.visibleLayers.length ? activeWorkspace.visibleLayers : ['core', 'process']) : overviewLayers
   const scopeNodes = useMemo(() => nodes.filter((node) => (node.scopeId ?? 'scope-root') === scopeId), [nodes, scopeId])
   const scopeWorkspaces = useMemo(() => workspaces.filter((workspace) => workspace.scopeId === scopeId), [scopeId, workspaces])
@@ -1579,7 +1580,14 @@ export function App() {
     const node = nodes.find((item) => item.id === id)
     if (!node) return
     selectNode(id)
-    if (node.opensScopeId) enterScope(node.opensScopeId)
+    if (node.opensScopeId) {
+      enterScope(node.opensScopeId)
+      return
+    }
+    if (canPreviewArtifact(node) || node.artifactId !== undefined) {
+      setNodeInfoId(null)
+      setWorkbench({ nodeId: id, focus: 'preview' })
+    }
   }, [enterScope, nodes, selectNode])
 
   const showNodeDetails = useCallback((id: string) => {
@@ -1611,7 +1619,7 @@ export function App() {
       if (modifier && event.shiftKey && key === 'l') { event.preventDefault(); arrangeSelection(); return }
       if (modifier && key === 'o' && selectedNodes.length === 1) { event.preventDefault(); openNative(selectedNodes[0]); return }
       if (event.code === 'Space') { event.preventDefault(); setSpaceHeld(true); return }
-      if (event.key === 'Escape') { if (previewNodeId) setPreviewNodeId(null); else if (capabilityOpen) setCapabilityOpen(false); else if (nodeInfoId) setNodeInfoId(null); else if (layoutPreview) setLayoutPreview(null); else clearSelection(); return }
+      if (event.key === 'Escape') { if (workbench) setWorkbench(null); else if (capabilityOpen) setCapabilityOpen(false); else if (nodeInfoId) setNodeInfoId(null); else if (layoutPreview) setLayoutPreview(null); else clearSelection(); return }
       if (key === 'c') { event.preventDefault(); requestComposerFocus(); return }
       if (event.key === 'Delete' || event.key === 'Backspace') {
         if (selectedIds.length) { deleteNodes(selectedIds); return }
@@ -1621,7 +1629,7 @@ export function App() {
     const release = (event: KeyboardEvent) => { if (event.code === 'Space') setSpaceHeld(false) }
     window.addEventListener('keydown', handler); window.addEventListener('keyup', release)
     return () => { window.removeEventListener('keydown', handler); window.removeEventListener('keyup', release) }
-  }, [arrangeSelection, clearSelection, copySelection, createDialogOpen, deleteNodes, duplicateSelection, capabilityOpen, nodeInfoId, previewNodeId, layoutPreview, openNative, pasteClipboard, projectCreateOpen, redo, requestComposerFocus, requestRun, runConfirmOpen, scopeCreateOpen, selectedEdgeId, selectedId, selectedIds, selectedNodes, setEdges, undo])
+  }, [arrangeSelection, clearSelection, copySelection, createDialogOpen, deleteNodes, duplicateSelection, capabilityOpen, nodeInfoId, workbench, layoutPreview, openNative, pasteClipboard, projectCreateOpen, redo, requestComposerFocus, requestRun, runConfirmOpen, scopeCreateOpen, selectedEdgeId, selectedId, selectedIds, selectedNodes, setEdges, undo])
 
   if (!projectOpen) return <>
     {notice && <div data-testid="toast" className="notice" role="status" aria-live="polite">{notice}</div>}
@@ -1648,8 +1656,14 @@ export function App() {
         selectedNodes={selectedNodes}
         error={activeContextError}
       />}
-      {nodeInfoNode && <NodeInfoPopover node={nodeInfoNode} camera={camera} relationCount={nodeInfoRelationCount} onClose={() => setNodeInfoId(null)} onRelations={() => { selectNode(nodeInfoNode.id); setNodeInfoId(null); setNotice(`${nodeInfoRelationCount} 个关联已在画布中高亮`) }} onPreview={(node) => { setNodeInfoId(null); setPreviewNodeId(node.id) }} onShowResource={(node) => { setNodeInfoId(null); setResourceDetailArtifactId(String(node.artifactId)) }} />}
-      {previewNode && <Suspense fallback={<div className="document-preview-layer"><div className="document-preview-loading">正在加载只读预览器…</div></div>}><DocumentPreviewDialog projectId={activeProjectId} node={previewNode} onClose={() => setPreviewNodeId(null)} /></Suspense>}
+      {nodeInfoNode && <NodeInfoPopover node={nodeInfoNode} camera={camera} relationCount={nodeInfoRelationCount} onClose={() => setNodeInfoId(null)} onRelations={() => { selectNode(nodeInfoNode.id); setNodeInfoId(null); setNotice(`${nodeInfoRelationCount} 个关联已在画布中高亮`) }} onPreview={(node) => { setNodeInfoId(null); setWorkbench({ nodeId: node.id, focus: 'preview' }) }} onShowResource={(node) => { setNodeInfoId(null); setResourceDetailArtifactId(String(node.artifactId)) }} />}
+      {workbenchNode && <ArtifactWorkbench node={workbenchNode} projectId={activeProjectId} relationCount={workbenchRelationCount} focus={workbench?.focus ?? 'preview'} onFocusChange={(focus) => setWorkbench((current) => current ? { ...current, focus } : current)} onClose={() => setWorkbench(null)} onLocate={() => {
+        selectNode(workbenchNode.id)
+        setNodeInfoId(null)
+        const viewport = document.querySelector<HTMLElement>('[data-testid="canvas"]')?.getBoundingClientRect()
+        setCamera(revealNode(camera, workbenchNode, viewport?.width ?? 1000, viewport?.height ?? 820))
+        setNotice(`已定位「${workbenchNode.title}」`)
+      }} onShowResource={workbenchNode.artifactId === undefined ? undefined : () => { setWorkbench(null); setResourceDetailArtifactId(String(workbenchNode.artifactId)) }} />}
       {activeRun && <button className={`run-pill ${activeRun.status}`} onClick={() => { clearSelection(); setWorkRail((current) => ({ ...current, collapsed: false })) }}><Play size={13} /> {activeRun.id} · {runStatusLabel[activeRun.status]}</button>}
       {checkpoint && <div className="checkpoint"><Check size={15} /> 已形成稳定修改集 <button onClick={() => { setCheckpoint(false); setNotice('检查点已创建') }}>创建检查点</button><button className="quiet" onClick={() => setCheckpoint(false)}>稍后</button></div>}
       <nav className="scene-title v06-breadcrumbs" aria-label="画布层级">{scopePath.map((scope, index) => {

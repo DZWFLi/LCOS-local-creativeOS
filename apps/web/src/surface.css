@@ -3426,3 +3426,69 @@ body,
 .document-preview-error { min-height: 100%; display: grid; place-content: center; justify-items: center; gap: 10px; color: #596a79; }
 .document-preview-loading svg { animation: handoff-spin .9s linear infinite; }
 .document-preview-error strong { color: #a34e47; }
+
+/* Slice E — Artifact Workbench + Viewer Registry */
+.artifact-workbench {
+  position: fixed;
+  right: 344px;
+  top: 64px;
+  bottom: 76px;
+  width: 420px;
+  max-width: calc(100vw - 760px);
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(53, 72, 91, .14);
+  border-radius: 14px;
+  background: rgba(248, 250, 252, .97);
+  box-shadow: 0 12px 34px rgba(25, 40, 55, .16);
+  backdrop-filter: blur(8px);
+}
+.workbench-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px 8px;
+  border-bottom: 1px solid rgba(53, 72, 91, .1);
+}
+.workbench-heading { min-width: 0; }
+.workbench-heading small { display: block; color: #7b8793; font-size: 9px; letter-spacing: .14em; }
+.workbench-heading h3 { margin: 2px 0 0; overflow: hidden; color: #192837; font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
+.workbench-nav { display: flex; gap: 4px; padding: 6px 12px; border-bottom: 1px solid rgba(53, 72, 91, .08); }
+.workbench-nav button {
+  padding: 4px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #667482;
+  font-size: 11px;
+  cursor: pointer;
+}
+.workbench-nav button.active { background: rgba(62, 110, 158, .12); color: #24547f; font-weight: 600; }
+.workbench-body { min-height: 0; flex: 1; overflow: auto; }
+.workbench-body .viewer-body { min-height: 100%; }
+.viewer-body { display: grid; place-content: center; justify-items: center; gap: 10px; padding: 18px; color: #596a79; font-size: 12px; background: #eef1f4; }
+.viewer-body.image-viewer { background: repeating-conic-gradient(#e5e8ec 0 25%, #f2f4f7 0 50%) 0 0 / 18px 18px; }
+.viewer-body.image-viewer img { max-width: 100%; max-height: 52vh; border-radius: 8px; box-shadow: 0 4px 14px rgba(25, 40, 55, .18); }
+.viewer-body.text-viewer pre { margin: 0; max-width: 100%; overflow: auto; color: #26384a; font-size: 12px; line-height: 1.55; white-space: pre-wrap; background: #fff; border-radius: 8px; padding: 12px; }
+.viewer-body.pdf-viewer iframe { width: 100%; height: 58vh; border: 0; border-radius: 8px; background: #fff; }
+.viewer-body.pptx-viewer { min-height: 420px; }
+.viewer-body.media-viewer audio, .viewer-body.media-viewer video { width: 100%; max-height: 46vh; }
+.viewer-body.link-viewer a { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; overflow: hidden; color: #24547f; text-overflow: ellipsis; white-space: nowrap; }
+.viewer-body.fallback-viewer dl { margin: 4px 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; text-align: left; }
+.viewer-body.fallback-viewer dt { color: #7b8793; }
+.viewer-body.fallback-viewer dd { margin: 0; color: #26384a; }
+.viewer-body.fallback-viewer small { max-width: 300px; text-align: center; color: #7b8793; line-height: 1.5; }
+.viewer-loading, .viewer-error { display: grid; place-content: center; justify-items: center; gap: 10px; min-height: 220px; color: #596a79; font-size: 12px; }
+.viewer-loading svg { animation: handoff-spin .9s linear infinite; }
+.viewer-error strong { color: #a34e47; }
+.workbench-overview { padding: 14px; display: grid; gap: 12px; }
+.workbench-meta { margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.workbench-meta div { padding: 8px 10px; border-radius: 10px; background: #fff; border: 1px solid rgba(53, 72, 91, .1); }
+.workbench-meta dt { color: #7b8793; font-size: 10px; letter-spacing: .06em; }
+.workbench-meta dd { margin: 3px 0 0; overflow: hidden; color: #26384a; font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.workbench-actions { display: flex; gap: 8px; }
+.workbench-actions button { display: inline-flex; align-items: center; gap: 6px; }
+.workbench-hint { display: flex; align-items: center; gap: 6px; margin: 0; color: #7b8793; font-size: 11px; line-height: 1.5; }
