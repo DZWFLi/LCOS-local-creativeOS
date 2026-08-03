@@ -9,6 +9,8 @@ import { McpBridgeRuntimeClient } from './bridge-mcp-client.js'
 import { RuntimeAdapterService } from './runtime-adapter.js'
 import { RuntimeApplicationService } from './runtime-application-service.js'
 import { RuntimeAutoSyncService } from './runtime-auto-sync-service.js'
+import { FileObservationService } from './file-observation-service.js'
+import { ProjectWatcherService } from './project-watcher-service.js'
 import { RuntimeResultIngestionService } from './runtime-result-ingestion.js'
 import { RuntimeReviewService } from './runtime-review-service.js'
 
@@ -111,9 +113,15 @@ async function main(): Promise<void> {
     Number(process.env.LCOS_AUTO_SYNC_MS ?? 10_000),
   )
   autoSync.start()
+  const watcher = new ProjectWatcherService(
+    metadataRepository,
+    new FileObservationService(metadataRepository),
+  )
+  watcher.start()
 
   const shutdown = () => {
     autoSync.stop()
+    watcher.stop()
     void server.close().then(() => {
       metadataRepository.close()
       process.exit(0)

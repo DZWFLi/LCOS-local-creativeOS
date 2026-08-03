@@ -34,7 +34,7 @@
 | Source/Managed 边界 | DZ-RUN-11 | ✅ managed 列 + revise Guard |
 | 零点击回收 | DZ-RT-05, DZ-AGENT-10 | 🟡 AutoSync 已加；真 executor 未证明（manual） |
 | waiting_input | DZ-RT-05 | 🔴 阻塞：Bridge 协议无该状态，需扩展+批准 |
-| .lcosproj 工程文件 | DZ-PROJ-08/09/10/11 | 🔴 未做（Phase 4 后段） |
+| .lcosproj 工程文件 | DZ-PROJ-08/09/10/11 | 🔴 ADR 已交，等批准后按 P1–P4 施工 |
 
 ---
 
@@ -110,7 +110,7 @@
 | DATA-02 | 常用文件导入 | 🟡 | ✅ | — | — | — | — | — | 🟡 部分预览缺口 |
 | DATA-03 | Preview 统一 | 🟡 | 🟡 | — | — | — | — | — | 🟡 Viewer Host 与 Cache 未统一 |
 | DATA-04 | DOCX 预览 | 🔴 | — | — | — | — | — | — | 🔴 无正式预览 |
-| DATA-05 | Watcher | 🔴 | 🔴 | — | — | — | — | — | 🔴 未实现 |
+| DATA-05 | Watcher | — | ✅ | — | — | — | — | — | ✅ fs.watch 常驻+去抖+stale 翻转实测 |
 | DATA-06 | Safe Write | 🟡 | 🟡 | — | — | — | — | — | 🟡 默认 Draft，覆盖协议未完成 |
 | DATA-07 | 删除 View 不删 Artifact | ✅ | ✅ | — | — | — | ✅ | — | ✅ 架构测试覆盖 |
 | DATA-08 | Truth 不落 localStorage | 🟡 | ✅ | — | — | — | — | — | 🟡 Fixture 分支仍存在 |
