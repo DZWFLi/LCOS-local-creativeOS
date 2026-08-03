@@ -48,4 +48,5 @@ process.once('SIGINT', shutdown)
 process.once('SIGTERM', shutdown)
 
 start('dev:local-core')
+start('bridge')
 start('dev:web')
