@@ -132,7 +132,7 @@ function ownedPidsFromState() {
   const state = readJson(STATE_FILE)
   const pids = []
   if (state && state.cwd === process.cwd()) {
-    pids.push(state.browserPid, state.webPid, state.corePid, state.bridgePid)
+    pids.push(state.browserPid, state.launcherPid, state.webPid, state.corePid, state.bridgePid)
   }
   if (existsSync(LEGACY_DEV_STACK_PID_FILE)) {
     const pid = Number(readFileSync(LEGACY_DEV_STACK_PID_FILE, 'utf8').trim())
