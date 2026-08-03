@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -326,5 +326,63 @@ describe('Runtime HTTP closure', () => {
     const sessionsResponse = await fetch(`${baseUrl}/projects/${snapshot.project.id}/session-summaries`)
     const sessionsBody = await sessionsResponse.json() as { value: { title: string }[] }
     expect(sessionsBody.value.map((item) => item.title)).toContain('收口')
+  })
+
+  it('exports and reopens a .lcosproj project file over HTTP', async () => {
+    const dbRoot = mkdtempSync(join(tmpdir(), 'lcos-runtime-http-db-'))
+    const projectRoot = mkdtempSync(join(tmpdir(), 'lcos-runtime-http-project-'))
+    const outDir = mkdtempSync(join(tmpdir(), 'lcos-runtime-http-out-'))
+    roots.push(dbRoot, projectRoot, outDir)
+    const repository = new SqliteMetadataRepository(join(dbRoot, 'metadata.sqlite'))
+    repositories.push(repository)
+    const snapshot = createMvpSampleSnapshot(projectRoot, '2026-07-29T19:30:00.000Z')
+    repository.save(snapshot)
+    const bridge = new FakeBridge()
+    const review = new RuntimeReviewService(repository, undefined, () => 'http-five')
+    const application = new RuntimeApplicationService(
+      repository,
+      new ContextManifestService(repository),
+      new RuntimeAdapterService(repository, bridge, 'mvp-fast-build'),
+      new RuntimeResultIngestionService(repository, bridge),
+      review,
+      undefined,
+      () => 'http-five',
+    )
+    const server = createLocalCoreServer({
+      port: 0,
+      metadataRepository: repository,
+      runtimeReviewService: review,
+      runtimeApplicationService: application,
+    })
+    servers.push(server)
+    const address = await server.start()
+    const baseUrl = `http://${address.host}:${address.port}`
+    const targetFile = join(outDir, '项目.lcosproj')
+
+    const exportResponse = await fetch(`${baseUrl}/projects/${snapshot.project.id}/export-lcosproj`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ targetPath: targetFile }),
+    })
+    expect(exportResponse.status).toBe(201)
+    const exportBody = await exportResponse.json() as { value: { path: string; projectId: string; schemaVersion: number } }
+    expect(exportBody.value.projectId).toBe(String(snapshot.project.id))
+    expect(exportBody.value.schemaVersion).toBe(12)
+    expect(existsSync(targetFile)).toBe(true)
+
+    const inspectResponse = await fetch(`${baseUrl}/lcosproj/inspect?file=${encodeURIComponent(targetFile)}`)
+    expect(inspectResponse.status).toBe(200)
+    const inspectBody = await inspectResponse.json() as { value: { project: { id: string } } }
+    expect(inspectBody.value.project.id).toBe(String(snapshot.project.id))
+
+    const openResponse = await fetch(`${baseUrl}/lcosproj/open`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ filePath: targetFile }),
+    })
+    expect(openResponse.status).toBe(200)
+    const openBody = await openResponse.json() as { value: { project: { id: string }; tables: { artifacts: number } } }
+    expect(openBody.value.project.id).toBe(String(snapshot.project.id))
+    expect(openBody.value.tables.artifacts).toBe(snapshot.artifacts.length)
   })
 })

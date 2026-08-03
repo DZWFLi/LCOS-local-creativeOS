@@ -1,7 +1,16 @@
 # ADR：.lcosproj 工程文件 — 真相定位与迁移路径（DZ-PROJ-08~11）
 
 > 日期：2026-08-03
-> 状态：**待批准（Proposed）** — 施工文档 16.7 要求先 ADR 定真相，批准后再实现
+> 状态：**已批准；P1 施工完成（2026-08-03）** — export/open/inspect/rebind 已实现并实测；P2–P4 待续
+
+## P1 完成记录（2026-08-03）
+
+- `LcosprojService.exportProject`：全真相拷贝（Canvas/Content/Work History/Memberships，19 张表）+ `lcosproj_meta`（schemaVersion 12、相对路径 Locator、rootHint、导出时间）+ 临时文件原子替换
+- `LcosprojService.open / inspect`：工程文件导入回运行库（先清旧行再整表插入），inspect 只读预览
+- `LcosprojService` 重绑定：目录搬迁后按 relativePath + hash 校验重定位；缺失文件标 missing，内容变化标 stale/current
+- API：`POST /projects/:id/export-lcosproj`、`POST /lcosproj/open`、`GET /lcosproj/inspect`
+- CLI：`lcos project export/open-file/inspect-file`；web client 三个对应方法
+- 验证：391 测试全绿；真实项目 `disposable-mvp-sample` 导出 299KB（4 Artifact/4 Run/4 Dispatch/1 Binding/1 Manifest/3 Relations/2 Notes/1 Checkpoint），inspect 回读一致
 
 ## Context
 

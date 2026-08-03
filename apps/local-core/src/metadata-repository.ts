@@ -1087,6 +1087,57 @@ export class SqliteMetadataRepository {
     this.#database.prepare('DELETE FROM projects WHERE id = ?').run(projectId as SQLInputValue)
   }
 
+  /**
+   * .lcosproj P1：把单个 Project 的完整真相（Canvas + Content + Work History + Memberships）
+   * 原样拷贝到目标 SQLite 文件。目标文件必须已由同一 Schema（v12）初始化。
+   */
+  exportProjectTruth(projectId: ProjectId, targetDbPath: string): Record<string, number> {
+    const counts: Record<string, number> = {}
+    this.#database.prepare('ATTACH DATABASE ? AS dst').run(targetDbPath)
+    try {
+      for (const table of PROJECT_TRUTH_TABLES) {
+        const sql = `INSERT INTO dst.${table.table} SELECT * FROM main.${table.table} WHERE ${table.where}`
+        const result = this.#database.prepare(sql).run(projectId as SQLInputValue)
+        counts[table.table] = Number(result.changes)
+      }
+      this.#database.exec('DETACH DATABASE dst')
+    } catch (error: unknown) {
+      try { this.#database.exec('DETACH DATABASE dst') } catch { /* 忽略二次 DETACH */ }
+      throw error
+    }
+    return counts
+  }
+
+  /**
+   * .lcosproj P1：从工程文件导入同一 Project（先按反向 FK 顺序清空本库该项目的旧行，再整表插入）。
+   */
+  importProjectTruth(sourceDbPath: string, projectId: ProjectId): Record<string, number> {
+    const counts: Record<string, number> = {}
+    this.#database.prepare('ATTACH DATABASE ? AS src').run(sourceDbPath)
+    const foreignKeys = (this.#database.prepare('PRAGMA foreign_keys').get() as { foreign_keys: number }).foreign_keys
+    this.#database.exec('PRAGMA foreign_keys = OFF')
+    this.#database.exec('BEGIN IMMEDIATE;')
+    try {
+      for (const sql of PROJECT_TRUTH_DELETE_SQL) {
+        this.#database.prepare(sql).run(projectId as SQLInputValue)
+      }
+      for (const table of PROJECT_TRUTH_TABLES) {
+        const sql = `INSERT INTO main.${table.table} SELECT * FROM src.${table.table} WHERE ${table.where}`
+        const result = this.#database.prepare(sql).run(projectId as SQLInputValue)
+        counts[table.table] = Number(result.changes)
+      }
+      this.#database.exec('COMMIT;')
+      this.#database.exec('PRAGMA foreign_keys = ON')
+      this.#database.exec('DETACH DATABASE src')
+    } catch (error: unknown) {
+      try { this.#database.exec('ROLLBACK;') } catch { /* 事务可能未开启 */ }
+      if (foreignKeys === 1) { try { this.#database.exec('PRAGMA foreign_keys = ON') } catch { /* 忽略 */ } }
+      try { this.#database.exec('DETACH DATABASE src') } catch { /* 忽略 */ }
+      throw error
+    }
+    return counts
+  }
+
   getWorkspaces(projectId: string): Workspace[] {
     return (this.#database.prepare('SELECT * FROM workspaces WHERE project_id = ?').all(projectId as SQLInputValue) as Row[]).map((r) => this.#workspace(r))
   }
@@ -2667,6 +2718,56 @@ const PRESENTATION_OPS = new Set([
   'update_artifact_view_presentation',
   'delete_artifact_view',
 ])
+
+/**
+ * .lcosproj 工程文件拷贝清单（父表在前；WHERE 统一接受 projectId 参数）。
+ */
+const PROJECT_TRUTH_TABLES: readonly { readonly table: string; readonly where: string }[] = [
+  { table: 'projects', where: 'id = ?' },
+  { table: 'scopes', where: 'project_id = ?' },
+  { table: 'workspaces', where: 'project_id = ?' },
+  { table: 'artifacts', where: 'project_id = ?' },
+  { table: 'file_records', where: 'project_id = ?' },
+  { table: 'artifact_revisions', where: 'artifact_id IN (SELECT id FROM artifacts WHERE project_id = ?)' },
+  { table: 'artifact_views', where: 'artifact_id IN (SELECT id FROM artifacts WHERE project_id = ?)' },
+  { table: 'relations', where: 'project_id = ?' },
+  { table: 'notes', where: 'project_id = ?' },
+  { table: 'checkpoints', where: 'project_id = ?' },
+  { table: 'context_manifests', where: 'project_id = ?' },
+  { table: 'runs', where: 'project_id = ?' },
+  { table: 'session_summaries', where: 'project_id = ?' },
+  { table: 'preview_records', where: 'project_id = ?' },
+  { table: 'runtime_dispatches', where: 'run_id IN (SELECT id FROM runs WHERE project_id = ?)' },
+  { table: 'runtime_bindings', where: 'run_id IN (SELECT id FROM runs WHERE project_id = ?)' },
+  { table: 'artifact_returns', where: 'run_id IN (SELECT id FROM runs WHERE project_id = ?)' },
+  { table: 'run_events', where: 'run_id IN (SELECT id FROM runs WHERE project_id = ?)' },
+  { table: 'workspace_memberships', where: 'workspace_id IN (SELECT id FROM workspaces WHERE project_id = ?)' },
+]
+
+/**
+ * 导入前按反向 FK 顺序清空目标库中该项目的旧行。
+ */
+const PROJECT_TRUTH_DELETE_SQL: readonly string[] = [
+  'DELETE FROM workspace_memberships WHERE workspace_id IN (SELECT id FROM workspaces WHERE project_id = ?)',
+  'DELETE FROM run_events WHERE run_id IN (SELECT id FROM runs WHERE project_id = ?)',
+  'DELETE FROM artifact_returns WHERE run_id IN (SELECT id FROM runs WHERE project_id = ?)',
+  'DELETE FROM runtime_bindings WHERE run_id IN (SELECT id FROM runs WHERE project_id = ?)',
+  'DELETE FROM runtime_dispatches WHERE run_id IN (SELECT id FROM runs WHERE project_id = ?)',
+  'DELETE FROM preview_records WHERE project_id = ?',
+  'DELETE FROM session_summaries WHERE project_id = ?',
+  'DELETE FROM context_manifests WHERE project_id = ?',
+  'DELETE FROM checkpoints WHERE project_id = ?',
+  'DELETE FROM notes WHERE project_id = ?',
+  'DELETE FROM relations WHERE project_id = ?',
+  'DELETE FROM artifact_views WHERE artifact_id IN (SELECT id FROM artifacts WHERE project_id = ?)',
+  'DELETE FROM artifact_revisions WHERE artifact_id IN (SELECT id FROM artifacts WHERE project_id = ?)',
+  'DELETE FROM runs WHERE project_id = ?',
+  'DELETE FROM file_records WHERE project_id = ?',
+  'DELETE FROM artifacts WHERE project_id = ?',
+  'DELETE FROM workspaces WHERE project_id = ?',
+  'DELETE FROM scopes WHERE project_id = ?',
+  'DELETE FROM projects WHERE id = ?',
+]
 
 function isSemanticOp(op: { type: string }): boolean {
   return !PRESENTATION_OPS.has(op.type) && op.type !== 'bootstrap'

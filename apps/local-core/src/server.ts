@@ -1,6 +1,7 @@
 import { randomUUID, timingSafeEqual } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
+import { isAbsolute } from 'node:path'
 
 import type {
   Artifact,
@@ -43,6 +44,7 @@ import { proposeRun } from './runtime-proposal-service.js'
 import { RuntimeRevisionCompareService } from './runtime-revision-compare-service.js'
 import { WorkspaceStateService } from './workspace-state-service.js'
 import { ProcessProjectionService } from './process-projection-service.js'
+import { LcosprojService } from './lcosproj-service.js'
 import {
   RuntimeApplicationService,
   type CreateRuntimeRunInput,
@@ -56,6 +58,10 @@ const MAX_BODY_BYTES = 1 * 1024 * 1024 // 1 MiB
 const MAX_IMPORT_BODY_BYTES = 26 * 1024 * 1024 // 25 MiB file + multipart overhead
 const MAX_DOCUMENT_PREVIEW_BYTES = 50 * 1024 * 1024
 const FORBIDDEN_BROWSER_PATH_FIELDS = new Set(['path', 'absolutePath', 'targetPath', 'observedPath', 'rootPath'])
+
+function isAbsolutePath(value: string): boolean {
+  return isAbsolute(value)
+}
 export const LOCAL_CORE_DEV_PORT = 43121
 
 function createProjectId(name: string): string {
@@ -760,6 +766,67 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
           })
         } catch (error: unknown) {
           sendJson(response, 400, failure('INVALID_ARGUMENT', error instanceof Error ? error.message : 'Run proposal failed.'))
+        }
+        return
+      }
+
+      const exportLcosprojMatch = /^\/projects\/([^/]+)\/export-lcosproj$/.exec(pathname)
+      if (method === 'POST' && exportLcosprojMatch !== null) {
+        if (!requireMetadata(metadata, response)) return
+        const projectId = decodeURIComponent(exportLcosprojMatch[1] ?? '') as ProjectId
+        const input = await readJsonBody(request, controller.signal)
+        if (!isRecord(input) || typeof input.targetPath !== 'string' || !isAbsolutePath(input.targetPath)
+          || Object.keys(input).some((key) => key !== 'targetPath')) {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Export requires an absolute targetPath.'))
+          return
+        }
+        try {
+          sendJson(response, 201, {
+            ok: true,
+            value: await new LcosprojService(metadata).exportProject(projectId, input.targetPath),
+          })
+        } catch (error: unknown) {
+          sendJson(response, 409, failure('CONFLICT', error instanceof Error ? error.message : 'Export failed.'))
+        }
+        return
+      }
+
+      const lcosprojOpenMatch = /^\/lcosproj\/open$/.exec(pathname)
+      if (method === 'POST' && lcosprojOpenMatch !== null) {
+        if (!requireMetadata(metadata, response)) return
+        const input = await readJsonBody(request, controller.signal)
+        if (!isRecord(input) || typeof input.filePath !== 'string' || !isAbsolutePath(input.filePath)
+          || (input.rootPath !== undefined && (typeof input.rootPath !== 'string' || !isAbsolutePath(input.rootPath)))
+          || Object.keys(input).some((key) => !['filePath', 'rootPath'].includes(key))) {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Open requires an absolute filePath and optional absolute rootPath.'))
+          return
+        }
+        try {
+          sendJson(response, 200, {
+            ok: true,
+            value: await new LcosprojService(metadata).open(
+              input.filePath,
+              typeof input.rootPath === 'string' ? input.rootPath : undefined,
+            ),
+          })
+        } catch (error: unknown) {
+          sendJson(response, 409, failure('CONFLICT', error instanceof Error ? error.message : 'Open failed.'))
+        }
+        return
+      }
+
+      const lcosprojInspectMatch = /^\/lcosproj\/inspect$/.exec(pathname)
+      if (method === 'GET' && lcosprojInspectMatch !== null) {
+        if (!requireMetadata(metadata, response)) return
+        const filePath = url.searchParams.get('file')
+        if (filePath === null || !isAbsolutePath(filePath)) {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Inspect requires an absolute file query param.'))
+          return
+        }
+        try {
+          sendJson(response, 200, { ok: true, value: new LcosprojService(metadata).inspect(filePath) })
+        } catch (error: unknown) {
+          sendJson(response, 409, failure('CONFLICT', error instanceof Error ? error.message : 'Inspect failed.'))
         }
         return
       }

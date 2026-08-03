@@ -68,6 +68,24 @@ try {
     } else {
       throw new Error(`Multiple projects registered; pass the project id: ${projects.map((item) => item.id).join(", ")}`);
     }
+  } else if (group === "project" && action === "export") {
+    const projectId = required(positional[0], "project id");
+    result = await coreRequest(`/projects/${encodeURIComponent(projectId)}/export-lcosproj`, {
+      method: "POST",
+      ...jsonBody({ targetPath: required(option("to"), "--to") }),
+      timeoutMs: 120_000,
+    });
+  } else if (group === "project" && action === "open-file") {
+    result = await coreRequest("/lcosproj/open", {
+      method: "POST",
+      ...jsonBody({
+        filePath: required(positional[0], ".lcosproj path"),
+        ...(option("root") ? { rootPath: option("root") } : {}),
+      }),
+      timeoutMs: 120_000,
+    });
+  } else if (group === "project" && action === "inspect-file") {
+    result = await coreRequest(`/lcosproj/inspect?file=${encodeURIComponent(required(positional[0], ".lcosproj path"))}`);
   } else if (group === "workspace" && action === "list") {
     result = await coreRequest(`/projects/${encodeURIComponent(required(positional[0], "project id"))}/workspace-memberships`);
   } else if (group === "workspace" && action === "add") {
@@ -439,6 +457,9 @@ Project truth:
   lcos project show <project-id>
   lcos project inspect <root-path>
   lcos project current [project-id]
+  lcos project export <project-id> --to <path.lcosproj>
+  lcos project open-file <path.lcosproj> [--root <项目根目录>]
+  lcos project inspect-file <path.lcosproj>
   lcos workspace list <project-id>
   lcos workspace add <workspace-id> <view...> [--by user|agent|run|import]
   lcos workspace remove <workspace-id> <view-id>

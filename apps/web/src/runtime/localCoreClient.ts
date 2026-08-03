@@ -191,6 +191,9 @@ export interface LocalCoreClient {
   ), signal?: AbortSignal): Promise<RuntimeCall<ProjectCatalogEntry>>
   metadataStatus(signal?: AbortSignal): Promise<RuntimeCall<MetadataStoreStatus>>
   projectGraph(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<ProjectGraphSnapshot>>
+  exportLcosproj(projectId: string, targetPath: string, signal?: AbortSignal): Promise<RuntimeCall<unknown>>
+  openLcosproj(filePath: string, rootPath?: string, signal?: AbortSignal): Promise<RuntimeCall<unknown>>
+  inspectLcosproj(filePath: string, signal?: AbortSignal): Promise<RuntimeCall<unknown>>
   workspaceMemberships(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<readonly WorkspaceMembership[]>>
   addWorkspaceMembers(workspaceId: string, input: {
     readonly viewIds: readonly string[]
@@ -554,6 +557,34 @@ export function createLocalCoreClient(): LocalCoreClient {
       return request(`/projects/${encodeURIComponent(projectId)}/graph`, {
         signal,
         decode: decodeResult<ProjectGraphSnapshot>,
+      })
+    },
+    exportLcosproj(projectId, targetPath, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/export-lcosproj`, {
+        signal,
+        init: {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ targetPath }),
+        },
+        decode: decodeResult<unknown>,
+      })
+    },
+    openLcosproj(filePath, rootPath, signal) {
+      return request('/lcosproj/open', {
+        signal,
+        init: {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ filePath, ...(rootPath === undefined ? {} : { rootPath }) }),
+        },
+        decode: decodeResult<unknown>,
+      })
+    },
+    inspectLcosproj(filePath, signal) {
+      return request(`/lcosproj/inspect?file=${encodeURIComponent(filePath)}`, {
+        signal,
+        decode: decodeResult<unknown>,
       })
     },
     workspaceMemberships(projectId, signal) {
