@@ -20,6 +20,18 @@
 | E2E | 完整浏览器→Core→Bridge→Agent 闭环成立 |
 | 状态 | ✅ 已兑现 / 🟡 部分兑现 / 🟠 接口存在 / 🔴 未兑现 / ⚫ 已被替代 |
 
+## Dz Requirement IDs 关联（Phase 0/1，2026-08-03）
+
+| Capability | DZ IDs | 状态 |
+|---|---|---|
+| Workspace Membership（新增 v11） | DZ-WS-01/02/03/05/07 | ✅ Core+API+CLI+MCP+测试+冒烟；UI 消费待前端 |
+| Run Proposal（新增） | DZ-RUN-12/13/14/18 | ✅ 确定性版真实完成；模型版施工中 |
+| Intent/Target/ResultPolicy Guard | DZ-RUN-09/10/11, DZ-CORE-06 | ✅ 真实完成；Source/Managed 边界施工中 |
+| Provider 状态（新增） | DZ-AGENT-09, DZ-RT-10 | ✅ 真实完成（7.2 Gate：manual） |
+| 中文路径 Picker | DZ-PROJ-01 | ✅ 真实完成 |
+| CLI/MCP 操作面 | DZ-AGENT-01/02 | 🟡 workspace/propose/providers 已加；Canvas/Revision 全套未齐 |
+| .lcosproj 工程文件 | DZ-PROJ-08/09/10/11 | 🔴 未做（Phase 4 后段） |
+
 ---
 
 ## A. GUI、Canvas 与用户可触达性
