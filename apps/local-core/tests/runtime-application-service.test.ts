@@ -173,4 +173,31 @@ describe('RuntimeApplicationService', () => {
     expect(cancelled.providerError).toMatchObject({ code: 'RUN_ALREADY_TERMINAL', retryable: false })
     expect(repository.getRun(runId)?.status).toBe('completed')
   })
+
+  it('rejects analyze/create runs that carry a modify target', async () => {
+    const { service, snapshot } = setup()
+    const target = snapshot.artifacts.find((artifact) => artifact.kind === 'markdown')!
+    await expect(service.create(snapshot.project.id, {
+      instruction: '分析脚本。',
+      outputIntent: 'analyze',
+      targetArtifactId: String(target.id),
+    })).rejects.toThrow(/analyze 不允许指定修改目标/)
+    await expect(service.create(snapshot.project.id, {
+      instruction: '创建新文件。',
+      outputIntent: 'create',
+      targetArtifactId: String(target.id),
+    })).rejects.toThrow(/create 不允许指定修改目标/)
+  })
+
+  it('persists the result policy on the canonical Run', async () => {
+    const { repository, service, snapshot } = setup()
+    const target = snapshot.artifacts.find((artifact) => artifact.kind === 'markdown')!
+    const result = await service.create(snapshot.project.id, {
+      instruction: '修改脚本。',
+      outputIntent: 'revise',
+      targetArtifactId: String(target.id),
+      resultPolicy: { type: 'draft_revision_per_target' },
+    })
+    expect(repository.getRun(result.review.run.id)?.resultPolicy).toEqual({ type: 'draft_revision_per_target' })
+  })
 })

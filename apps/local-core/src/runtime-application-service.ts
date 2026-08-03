@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto'
 
 import type { RunReview } from '@local-creative-os/contracts'
-import type { JsonValue, ProjectId, Run, RunEvent, RunId, RuntimeDispatch } from '@local-creative-os/domain'
+import type { JsonValue, ProjectId, Run, RunEvent, RunId, RunResultPolicy, RuntimeDispatch } from '@local-creative-os/domain'
+import type { RuntimeProviderStatus } from '@local-creative-os/contracts'
 
 import { ContextManifestService } from './context-manifest-service.js'
 import { SqliteMetadataRepository } from './metadata-repository.js'
@@ -16,6 +17,7 @@ export interface CreateRuntimeRunInput {
   readonly contextArtifactIds?: readonly string[]
   readonly workspaceId?: string
   readonly outputIntent: 'create' | 'revise' | 'analyze'
+  readonly resultPolicy?: RunResultPolicy
   readonly requestedProvider?: 'workbuddy' | 'codex'
 }
 
@@ -41,7 +43,22 @@ export class RuntimeApplicationService {
     if (instruction.length === 0) throw new Error('Run instruction is required.')
     const outputIntent = input.outputIntent
     if (outputIntent === undefined) throw new Error('Run outputIntent is required (create|revise|analyze).')
+    if (outputIntent !== 'revise' && input.targetArtifactId !== undefined) {
+      throw new Error(`${outputIntent} 不允许指定修改目标；只有 revise 可以绑定 Target。`)
+    }
     if (outputIntent === 'revise' && input.targetArtifactId === undefined) throw new Error('Revise Run requires an explicit target Artifact.')
+    if (outputIntent === 'analyze' && input.resultPolicy !== undefined
+      && !['reply_only', 'create_artifact'].includes(input.resultPolicy.type)) {
+      throw new Error('analyze 的结果去向只能是直接回复或创建分析 Artifact。')
+    }
+    if (outputIntent === 'create' && input.resultPolicy !== undefined
+      && !['create_artifact', 'create_collection'].includes(input.resultPolicy.type)) {
+      throw new Error('create 的结果去向只能是新建 Artifact 或内容集合。')
+    }
+    if (outputIntent === 'revise' && input.resultPolicy !== undefined
+      && input.resultPolicy.type !== 'draft_revision_per_target') {
+      throw new Error('revise 的结果去向只能是每个目标生成新 Draft Revision。')
+    }
     const descriptors = this.repository.listResourceDescriptors(String(projectId))
     const policyByResourceId = new Map(descriptors.map((descriptor) => [
       descriptor.resourceId,
@@ -79,6 +96,7 @@ export class RuntimeApplicationService {
       requestedProvider: input.requestedProvider ?? 'workbuddy',
       outputIntent,
       returnGroupId: `return-group-${suffix}`,
+      ...(input.resultPolicy === undefined ? {} : { resultPolicy: input.resultPolicy }),
       status: 'created',
       instruction,
       createdAt: timestamp,
@@ -124,6 +142,10 @@ export class RuntimeApplicationService {
 
   async cancel(runId: RunId): Promise<RuntimeRunActionResult> {
     return this.providerAction(runId, () => this.adapter.cancel(runId))
+  }
+
+  async providers(): Promise<readonly RuntimeProviderStatus[]> {
+    return this.adapter.providersStatus()
   }
 
   getProjectReviews(projectId: ProjectId, limit = 20): readonly RunReview[] {

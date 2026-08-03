@@ -17,7 +17,11 @@ import type {
   RetryRunInput,
   RetryRunResult,
   RunReview,
+  RunProposalResult,
+  RuntimeProviderStatus,
   ValidatedProjectRoot,
+  WorkspaceMembership,
+  WorkspaceMembershipSource,
 } from '@local-creative-os/contracts'
 
 export const LOCAL_CORE_API_PREFIX = '/api/local-core/v1'
@@ -187,6 +191,29 @@ export interface LocalCoreClient {
   ), signal?: AbortSignal): Promise<RuntimeCall<ProjectCatalogEntry>>
   metadataStatus(signal?: AbortSignal): Promise<RuntimeCall<MetadataStoreStatus>>
   projectGraph(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<ProjectGraphSnapshot>>
+  workspaceMemberships(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<readonly WorkspaceMembership[]>>
+  addWorkspaceMembers(workspaceId: string, input: {
+    readonly viewIds: readonly string[]
+    readonly addedBy?: WorkspaceMembershipSource
+  }, signal?: AbortSignal): Promise<RuntimeCall<readonly WorkspaceMembership[]>>
+  removeWorkspaceMember(workspaceId: string, viewId: string, signal?: AbortSignal): Promise<RuntimeCall<readonly WorkspaceMembership[]>>
+  moveWorkspaceMember(workspaceId: string, input: {
+    readonly viewId: string
+    readonly toWorkspaceId: string
+  }, signal?: AbortSignal): Promise<RuntimeCall<readonly WorkspaceMembership[]>>
+  proposeRun(projectId: string, input: {
+    readonly workspaceId?: string
+    readonly prompt: string
+    readonly intent?: 'analyze' | 'create' | 'revise'
+    readonly requestedProvider: string | 'auto'
+    readonly contextItems: readonly { readonly artifactId: string; readonly revisionId: string; readonly order: number }[]
+    readonly editTargets: readonly { readonly artifactId: string; readonly baseRevisionId: string }[]
+    readonly resultPolicy: {
+      readonly type: 'reply_only' | 'create_artifact' | 'create_collection' | 'draft_revision_per_target'
+      readonly format?: string
+    }
+  }, signal?: AbortSignal): Promise<RuntimeCall<RunProposalResult>>
+  runtimeProviders(signal?: AbortSignal): Promise<RuntimeCall<readonly RuntimeProviderStatus[]>>
   createCheckpoint(projectId: string, input: {
     readonly id: string
     readonly scopeId: string
@@ -504,6 +531,58 @@ export function createLocalCoreClient(): LocalCoreClient {
       return request(`/projects/${encodeURIComponent(projectId)}/graph`, {
         signal,
         decode: decodeResult<ProjectGraphSnapshot>,
+      })
+    },
+    workspaceMemberships(projectId, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/workspace-memberships`, {
+        signal,
+        decode: decodeResult<readonly WorkspaceMembership[]>,
+      })
+    },
+    addWorkspaceMembers(workspaceId, input, signal) {
+      return request(`/workspaces/${encodeURIComponent(workspaceId)}/members`, {
+        signal,
+        init: {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(input),
+        },
+        decode: decodeResult<readonly WorkspaceMembership[]>,
+      })
+    },
+    removeWorkspaceMember(workspaceId, viewId, signal) {
+      return request(`/workspaces/${encodeURIComponent(workspaceId)}/members/${encodeURIComponent(viewId)}`, {
+        signal,
+        init: { method: 'DELETE' },
+        decode: decodeResult<readonly WorkspaceMembership[]>,
+      })
+    },
+    moveWorkspaceMember(workspaceId, input, signal) {
+      return request(`/workspaces/${encodeURIComponent(workspaceId)}/members/move`, {
+        signal,
+        init: {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(input),
+        },
+        decode: decodeResult<readonly WorkspaceMembership[]>,
+      })
+    },
+    proposeRun(projectId, input, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/runs/propose`, {
+        signal,
+        init: {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(input),
+        },
+        decode: decodeResult<RunProposalResult>,
+      })
+    },
+    runtimeProviders(signal) {
+      return request('/runtime/providers', {
+        signal,
+        decode: decodeResult<readonly RuntimeProviderStatus[]>,
       })
     },
     createCheckpoint(projectId, input, signal) {

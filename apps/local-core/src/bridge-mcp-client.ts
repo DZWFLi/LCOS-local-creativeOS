@@ -237,6 +237,40 @@ export class McpBridgeRuntimeClient implements BridgeRuntimePort {
     }
   }
 
+  async getCapabilities(): Promise<{
+    readonly bridgeVersion?: string
+    readonly primaryContractVersion?: string
+    readonly providers?: readonly {
+      readonly provider: string
+      readonly executionMode?: string
+      readonly taskTypes?: readonly string[]
+      readonly outputIntents?: readonly string[]
+      readonly contractVersions?: readonly string[]
+      readonly sessionBinding?: boolean
+      readonly completionHook?: boolean
+    }[]
+  }> {
+    const response = await this.callTool('get_capabilities', {})
+    return {
+      ...(typeof response.bridge_version === 'string' ? { bridgeVersion: response.bridge_version } : {}),
+      ...(typeof response.primary_contract_version === 'string' ? { primaryContractVersion: response.primary_contract_version } : {}),
+      ...(Array.isArray(response.providers) ? {
+        providers: response.providers.map((item) => {
+          const value = item as JsonObject
+          return {
+            provider: String(value.provider ?? ''),
+            ...(typeof value.execution_mode === 'string' ? { executionMode: value.execution_mode } : {}),
+            ...(Array.isArray(value.task_types) ? { taskTypes: value.task_types.map(String) } : {}),
+            ...(Array.isArray(value.output_intents) ? { outputIntents: value.output_intents.map(String) } : {}),
+            ...(Array.isArray(value.contract_versions) ? { contractVersions: value.contract_versions.map(String) } : {}),
+            ...(typeof value.session_binding === 'boolean' ? { sessionBinding: value.session_binding } : {}),
+            ...(typeof value.completion_hook === 'boolean' ? { completionHook: value.completion_hook } : {}),
+          }
+        }),
+      } : {}),
+    }
+  }
+
   private identityFromResponse(
     response: JsonObject,
     expected?: {

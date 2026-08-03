@@ -18,8 +18,9 @@ import type {
   RegisterTrustedSourceInput,
   Workspace,
   ValidateProjectRootInput,
+  CreateRunProposal,
 } from '@local-creative-os/contracts'
-import type { ArtifactReturnId, ArtifactRevisionId, FileRecordId, ProjectId, RunId } from '@local-creative-os/domain'
+import type { ArtifactReturnId, ArtifactRevisionId, ArtifactViewId, FileRecordId, ProjectId, RunId, WorkspaceId } from '@local-creative-os/domain'
 
 import { failure } from './errors.js'
 import { getHealthStatus } from './health.js'
@@ -38,6 +39,7 @@ import { ResourceReader } from './resources/resource-reader.js'
 import { ResourceMatcher } from './resources/resource-matcher.js'
 import { ContextManifestService } from './context-manifest-service.js'
 import { RuntimeReviewService } from './runtime-review-service.js'
+import { proposeRun } from './runtime-proposal-service.js'
 import {
   RuntimeApplicationService,
   type CreateRuntimeRunInput,
@@ -720,6 +722,140 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
           return
         }
         sendJson(response, 200, { ok: true, value: metadata.getRunEvents(runId, afterSequence) })
+        return
+      }
+
+      const runProposeMatch = /^\/projects\/([^/]+)\/runs\/propose$/.exec(pathname)
+      if (method === 'POST' && runProposeMatch !== null) {
+        const projectId = decodeURIComponent(runProposeMatch[1] ?? '')
+        const input = await readJsonBody(request, controller.signal)
+        if (!isRecord(input)
+          || typeof input.prompt !== 'string'
+          || typeof input.requestedProvider !== 'string'
+          || !Array.isArray(input.contextItems)
+          || !Array.isArray(input.editTargets)
+          || !isRecord(input.resultPolicy)
+          || Object.keys(input).some((key) => !['workspaceId', 'prompt', 'intent', 'requestedProvider', 'contextItems', 'editTargets', 'resultPolicy'].includes(key))) {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Run proposal requires prompt, requestedProvider, contextItems, editTargets and resultPolicy.'))
+          return
+        }
+        try {
+          sendJson(response, 200, {
+            ok: true,
+            value: proposeRun({
+              projectId,
+              ...(typeof input.workspaceId === 'string' ? { workspaceId: input.workspaceId } : {}),
+              prompt: input.prompt,
+              ...(typeof input.intent === 'string' ? { intent: input.intent as 'analyze' | 'create' | 'revise' } : {}),
+              requestedProvider: input.requestedProvider,
+              contextItems: input.contextItems as CreateRunProposal['contextItems'],
+              editTargets: input.editTargets as CreateRunProposal['editTargets'],
+              resultPolicy: input.resultPolicy as CreateRunProposal['resultPolicy'],
+            }),
+          })
+        } catch (error: unknown) {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', error instanceof Error ? error.message : 'Run proposal failed.'))
+        }
+        return
+      }
+
+      const projectMembershipsMatch = /^\/projects\/([^/]+)\/workspace-memberships$/.exec(pathname)
+      if (method === 'GET' && projectMembershipsMatch !== null) {
+        if (!requireMetadata(metadata, response)) return
+        const projectId = decodeURIComponent(projectMembershipsMatch[1] ?? '') as ProjectId
+        if (!requireProject(projectId, metadata, response)) return
+        sendJson(response, 200, { ok: true, value: metadata.listProjectWorkspaceMemberships(projectId) })
+        return
+      }
+
+      const membersMatch = /^\/workspaces\/([^/]+)\/members$/.exec(pathname)
+      if (membersMatch !== null && (method === 'POST' || method === 'GET')) {
+        if (!requireMetadata(metadata, response)) return
+        const workspaceId = decodeURIComponent(membersMatch[1] ?? '') as WorkspaceId
+        if (metadata.getWorkspace(workspaceId) === undefined) {
+          sendJson(response, 404, failure('NOT_FOUND', 'Workspace not found.'))
+          return
+        }
+        if (method === 'GET') {
+          sendJson(response, 200, { ok: true, value: metadata.listWorkspaceMembers(workspaceId) })
+          return
+        }
+        const input = await readJsonBody(request, controller.signal)
+        if (!isRecord(input) || !isStringArray(input.viewIds)
+          || (input.addedBy !== undefined && typeof input.addedBy !== 'string')
+          || Object.keys(input).some((key) => !['viewIds', 'addedBy'].includes(key))) {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Membership add requires viewIds array.'))
+          return
+        }
+        const addedBy = ['user', 'agent', 'run', 'import'].includes(String(input.addedBy ?? 'user'))
+          ? String(input.addedBy ?? 'user') as 'user' | 'agent' | 'run' | 'import'
+          : 'user'
+        sendJson(response, 200, {
+          ok: true,
+          value: metadata.addWorkspaceMembers(
+            workspaceId,
+            input.viewIds as ArtifactViewId[],
+            addedBy,
+            new Date().toISOString(),
+          ),
+        })
+        return
+      }
+
+      const memberOneMatch = /^\/workspaces\/([^/]+)\/members\/([^/]+)$/.exec(pathname)
+      if (method === 'DELETE' && memberOneMatch !== null) {
+        if (!requireMetadata(metadata, response)) return
+        const workspaceId = decodeURIComponent(memberOneMatch[1] ?? '') as WorkspaceId
+        const viewId = decodeURIComponent(memberOneMatch[2] ?? '') as ArtifactViewId
+        if (metadata.getWorkspace(workspaceId) === undefined) {
+          sendJson(response, 404, failure('NOT_FOUND', 'Workspace not found.'))
+          return
+        }
+        sendJson(response, 200, {
+          ok: true,
+          value: metadata.removeWorkspaceMembers(workspaceId, [viewId]),
+        })
+        return
+      }
+
+      const membersMoveMatch = /^\/workspaces\/([^/]+)\/members\/move$/.exec(pathname)
+      if (method === 'POST' && membersMoveMatch !== null) {
+        if (!requireMetadata(metadata, response)) return
+        const fromWorkspaceId = decodeURIComponent(membersMoveMatch[1] ?? '') as WorkspaceId
+        const input = await readJsonBody(request, controller.signal)
+        if (!isRecord(input) || typeof input.toWorkspaceId !== 'string' || typeof input.viewId !== 'string'
+          || Object.keys(input).some((key) => !['toWorkspaceId', 'viewId'].includes(key))) {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Membership move requires toWorkspaceId and viewId.'))
+          return
+        }
+        try {
+          sendJson(response, 200, {
+            ok: true,
+            value: metadata.moveWorkspaceMembers(
+              fromWorkspaceId,
+              input.toWorkspaceId as WorkspaceId,
+              [input.viewId as ArtifactViewId],
+              'user',
+              new Date().toISOString(),
+            ),
+          })
+        } catch (error: unknown) {
+          sendJson(response, 409, failure('CONFLICT', error instanceof Error ? error.message : 'Membership move conflicted.'))
+        }
+        return
+      }
+
+      const runtimeProvidersMatch = /^\/runtime\/providers$/.exec(pathname)
+      if (method === 'GET' && runtimeProvidersMatch !== null) {
+        if (runtimeApplication === undefined) {
+          sendJson(response, 503, failure('UNAVAILABLE', 'Runtime execution service is not configured.'))
+          return
+        }
+        try {
+          sendJson(response, 200, { ok: true, value: await runtimeApplication.providers() })
+        } catch (error: unknown) {
+          sendJson(response, 503, failure('UNAVAILABLE', error instanceof Error ? error.message : 'Provider status unavailable.'))
+        }
         return
       }
 

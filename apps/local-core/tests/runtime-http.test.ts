@@ -170,4 +170,77 @@ describe('Runtime HTTP closure', () => {
       'run.cancelled',
     ])
   })
+
+  it('serves Run Proposal, Workspace Membership and Provider status contracts', async () => {
+    const dbRoot = mkdtempSync(join(tmpdir(), 'lcos-runtime-http-db-'))
+    const projectRoot = mkdtempSync(join(tmpdir(), 'lcos-runtime-http-project-'))
+    roots.push(dbRoot, projectRoot)
+    const repository = new SqliteMetadataRepository(join(dbRoot, 'metadata.sqlite'))
+    repositories.push(repository)
+    const snapshot = createMvpSampleSnapshot(projectRoot, '2026-07-29T19:30:00.000Z')
+    repository.save(snapshot)
+    const bridge = new FakeBridge()
+    const review = new RuntimeReviewService(repository, undefined, () => 'http-three')
+    const application = new RuntimeApplicationService(
+      repository,
+      new ContextManifestService(repository),
+      new RuntimeAdapterService(repository, bridge, 'mvp-fast-build'),
+      new RuntimeResultIngestionService(repository, bridge),
+      review,
+      undefined,
+      () => 'http-three',
+    )
+    const server = createLocalCoreServer({
+      port: 0,
+      metadataRepository: repository,
+      runtimeReviewService: review,
+      runtimeApplicationService: application,
+    })
+    servers.push(server)
+    const address = await server.start()
+    const baseUrl = `http://${address.host}:${address.port}`
+    const workspaceId = String(snapshot.workspaces[0]!.id)
+    const viewId = String(snapshot.artifactViews[0]!.id)
+
+    const proposeResponse = await fetch(`${baseUrl}/projects/${snapshot.project.id}/runs/propose`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        prompt: '分析这份脚本的节奏问题',
+        requestedProvider: 'auto',
+        contextItems: [{ artifactId: String(snapshot.artifacts[0]!.id), revisionId: String(snapshot.artifactRevisions[0]!.id), order: 1 }],
+        editTargets: [],
+        resultPolicy: { type: 'reply_only' },
+      }),
+    })
+    expect(proposeResponse.status).toBe(200)
+    const proposeBody = await proposeResponse.json() as { value: { summary: string; proposal: { intent: string } } }
+    expect(proposeBody.value.proposal.intent).toBe('analyze')
+    expect(proposeBody.value.summary).toContain('分析')
+
+    const addResponse = await fetch(`${baseUrl}/workspaces/${encodeURIComponent(workspaceId)}/members`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ viewIds: [viewId] }),
+    })
+    expect(addResponse.status).toBe(200)
+    const addBody = await addResponse.json() as { value: { artifactViewId: string }[] }
+    expect(addBody.value.map((item) => item.artifactViewId)).toContain(viewId)
+
+    const listResponse = await fetch(`${baseUrl}/projects/${snapshot.project.id}/workspace-memberships`)
+    const listBody = await listResponse.json() as { value: { artifactViewId: string }[] }
+    expect(listBody.value.map((item) => item.artifactViewId)).toContain(viewId)
+
+    const removeResponse = await fetch(`${baseUrl}/workspaces/${encodeURIComponent(workspaceId)}/members/${encodeURIComponent(viewId)}`, {
+      method: 'DELETE',
+    })
+    expect(removeResponse.status).toBe(200)
+    const removeBody = await removeResponse.json() as { value: { artifactViewId: string }[] }
+    expect(removeBody.value).toHaveLength(0)
+
+    const providersResponse = await fetch(`${baseUrl}/runtime/providers`)
+    expect(providersResponse.status).toBe(200)
+    const providersBody = await providersResponse.json() as { value: { provider: string; availability: string }[] }
+    expect(providersBody.value.map((item) => item.provider)).toEqual(['workbuddy', 'codex', 'auto'])
+  })
 })

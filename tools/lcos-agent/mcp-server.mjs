@@ -14,6 +14,33 @@ const tools = [
   tool("get_lcos_active_context", "Read the latest stable Canvas selection and resolved artifacts.", {
     projectId: { type: "string" },
   }, ["projectId"]),
+  tool("list_lcos_workspace_members", "List canonical Workspace memberships for a project.", {
+    projectId: { type: "string" },
+  }, ["projectId"]),
+  tool("add_lcos_workspace_members", "Add Artifact Views to a Workspace (canonical membership).", {
+    workspaceId: { type: "string" },
+    viewIds: { type: "array", items: { type: "string" } },
+    addedBy: { type: "string", enum: ["user", "agent", "run", "import"] },
+  }, ["workspaceId", "viewIds"]),
+  tool("remove_lcos_workspace_member", "Remove one Artifact View from a Workspace.", {
+    workspaceId: { type: "string" },
+    viewId: { type: "string" },
+  }, ["workspaceId", "viewId"]),
+  tool("move_lcos_workspace_member", "Move one Artifact View to another Workspace.", {
+    workspaceId: { type: "string" },
+    viewId: { type: "string" },
+    toWorkspaceId: { type: "string" },
+  }, ["workspaceId", "viewId", "toWorkspaceId"]),
+  tool("propose_lcos_run", "Build a visible one-line Run proposal from selection and prompt.", {
+    projectId: { type: "string" },
+    prompt: { type: "string" },
+    intent: { type: "string", enum: ["analyze", "create", "revise"] },
+    requestedProvider: { type: "string" },
+    contextItems: { type: "array", items: { type: "object" } },
+    editTargets: { type: "array", items: { type: "object" } },
+    resultPolicy: { type: "object" },
+  }, ["projectId", "prompt"]),
+  tool("list_lcos_runtime_providers", "Read Provider capability and availability before sending.", {}, []),
   tool("build_lcos_context_manifest", "Freeze an immutable ContextManifest from Project Truth.", {
     projectId: { type: "string" },
     targetArtifactId: { type: "string" },
@@ -139,6 +166,45 @@ async function handle({ id, method, params }) {
       break;
     case "get_lcos_active_context":
       value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/active-context`);
+      break;
+    case "list_lcos_workspace_members":
+      value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/workspace-memberships`);
+      break;
+    case "add_lcos_workspace_members":
+      value = await coreRequest(`/workspaces/${encodeURIComponent(required(args.workspaceId, "workspaceId"))}/members`, {
+        method: "POST",
+        ...jsonBody({
+          viewIds: args.viewIds,
+          ...(args.addedBy ? { addedBy: args.addedBy } : {}),
+        }),
+      });
+      break;
+    case "remove_lcos_workspace_member":
+      value = await coreRequest(`/workspaces/${encodeURIComponent(required(args.workspaceId, "workspaceId"))}/members/${encodeURIComponent(required(args.viewId, "viewId"))}`, {
+        method: "DELETE",
+      });
+      break;
+    case "move_lcos_workspace_member":
+      value = await coreRequest(`/workspaces/${encodeURIComponent(required(args.workspaceId, "workspaceId"))}/members/move`, {
+        method: "POST",
+        ...jsonBody({ viewId: required(args.viewId, "viewId"), toWorkspaceId: required(args.toWorkspaceId, "toWorkspaceId") }),
+      });
+      break;
+    case "propose_lcos_run":
+      value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/runs/propose`, {
+        method: "POST",
+        ...jsonBody({
+          prompt: required(args.prompt, "prompt"),
+          ...(args.intent ? { intent: args.intent } : {}),
+          requestedProvider: args.requestedProvider || "auto",
+          contextItems: args.contextItems || [],
+          editTargets: args.editTargets || [],
+          resultPolicy: args.resultPolicy || { type: "reply_only" },
+        }),
+      });
+      break;
+    case "list_lcos_runtime_providers":
+      value = await coreRequest("/runtime/providers");
       break;
     case "build_lcos_context_manifest":
       {

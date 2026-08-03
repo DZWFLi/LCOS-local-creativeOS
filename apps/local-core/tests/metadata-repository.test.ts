@@ -4,13 +4,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import type { Checkpoint, Note, PersistedContextManifestV0, ProjectGraphSnapshot } from '@local-creative-os/contracts'
-import type { ContextManifestId, ProjectId, Run, RunEvent, RuntimeDispatch } from '@local-creative-os/domain'
+import type { ArtifactViewId, ContextManifestId, ProjectId, Run, RunEvent, RuntimeDispatch, WorkspaceId } from '@local-creative-os/domain'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { MetadataForeignKeyConstraintError, SqliteMetadataRepository } from '../src/metadata-repository.js'
 
 const cleanup: string[] = []
-const SCHEMA_VERSION = 10
+const SCHEMA_VERSION = 11
 
 function disposableSnapshot(): ProjectGraphSnapshot {
   const now = '2026-07-24T12:00:00.000Z'
@@ -169,6 +169,60 @@ describe('SqliteMetadataRepository', () => {
     repository.close()
     const reopened = new SqliteMetadataRepository(path)
     expect(reopened.getRunEvents(run.id)).toHaveLength(2)
+  })
+
+  it('persists canonical workspace memberships with add/remove/move and view cascade', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'local-core-memberships-'))
+    cleanup.push(directory)
+    const path = join(directory, 'metadata.sqlite')
+    const repository = new SqliteMetadataRepository(path)
+    const snapshot = disposableSnapshot()
+    const extraWorkspace: ProjectGraphSnapshot['workspaces'][number] = {
+      id: 'workspace-extra' as ProjectGraphSnapshot['workspaces'][number]['id'],
+      projectId: snapshot.project.id,
+      scopeId: 'scope-root' as ProjectGraphSnapshot['scopes'][number]['id'],
+      name: '包装方向',
+      intent: 'build',
+      viewport: { x: 0, y: 0, zoom: 1 },
+      focusedViewIds: [],
+      visibleLayers: ['core'],
+      contextPolicy: 'selection-only',
+      updatedAt: '2026-08-03T09:00:00.000Z',
+    }
+    snapshot.workspaces = [...snapshot.workspaces, extraWorkspace]
+    repository.save(snapshot)
+
+    const workspaceId = 'workspace-main' as WorkspaceId
+    const views = ['view-brief', 'view-board'] as const
+    const added = repository.addWorkspaceMembers(
+      workspaceId,
+      views as unknown as ArtifactViewId[],
+      'user',
+      '2026-08-03T09:00:01.000Z',
+    )
+    expect(added).toHaveLength(2)
+    expect(added[0]?.sortOrder).toBe(1)
+
+    // 去重：重复加入不产生第二行
+    repository.addWorkspaceMembers(workspaceId, [views[0] as unknown as ArtifactViewId], 'agent', '2026-08-03T09:00:02.000Z')
+    expect(repository.listWorkspaceMembers(workspaceId)).toHaveLength(2)
+
+    // 移动：从 main 到 extra
+    const moved = repository.moveWorkspaceMembers(
+      workspaceId,
+      extraWorkspace.id,
+      [views[0] as unknown as ArtifactViewId],
+      'user',
+      '2026-08-03T09:00:03.000Z',
+    )
+    expect(moved.map((item) => String(item.artifactViewId))).toEqual(['view-brief'])
+    expect(repository.listWorkspaceMembers(workspaceId).map((item) => String(item.artifactViewId))).toEqual(['view-board'])
+
+    // 删除 View 级联清理 Membership
+    repository.deleteArtifactView('view-board')
+    expect(repository.listWorkspaceMembers(workspaceId)).toHaveLength(0)
+    expect(repository.listProjectWorkspaceMemberships('disposable-portasplit' as ProjectId).map((item) => String(item.artifactViewId)))
+      .toEqual(['view-brief'])
   })
 
   it('migrates from empty, saves metadata, and restores after reopening', async () => {

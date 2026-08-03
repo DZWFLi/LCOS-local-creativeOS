@@ -35,6 +35,8 @@ import type {
   ScopeId,
   Workspace,
   WorkspaceId,
+  WorkspaceMembership,
+  WorkspaceMembershipSource,
 } from '@local-creative-os/domain'
 import type {
   AcceptArtifactReturnResult,
@@ -159,16 +161,17 @@ export class SqliteMetadataRepository {
 
   #migrate(): void {
     const version = this.#database.prepare('PRAGMA user_version').get() as { user_version: number }
-    if (version.user_version === 0) { this.#migrate_001(); this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); this.#migrate_009_from_v8(); this.#migrate_010_from_v9(); return }
+    if (version.user_version === 0) { this.#migrate_001(); this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); this.#migrate_009_from_v8(); this.#migrate_010_from_v9(); this.#migrate_011_from_v10(); return }
     if (version.user_version === 1) { this.#migrate_002_from_v1(); this.#migrate_004_from_v3(); this.#migrate_005_from_v4(); this.#migrate_006_from_v5(); this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); return }
     if (version.user_version === 2) { this.#migrate_003_from_v2(); this.#migrate_004_from_v3(); this.#migrate_005_from_v4(); this.#migrate_006_from_v5(); this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); return }
     if (version.user_version === 3) { this.#migrate_004_from_v3(); this.#migrate_005_from_v4(); this.#migrate_006_from_v5(); this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); return }
     if (version.user_version === 4) { this.#migrate_005_from_v4(); this.#migrate_006_from_v5(); this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); return }
     if (version.user_version === 5) { this.#migrate_006_from_v5(); this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); return }
     if (version.user_version === 6) { this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); return }
-    if (version.user_version === 7) { this.#migrate_008_from_v7(); this.#migrate_009_from_v8(); this.#migrate_010_from_v9(); return }
-    if (version.user_version === 8) { this.#migrate_009_from_v8(); this.#migrate_010_from_v9(); return }
-    if (version.user_version === 9) { this.#migrate_010_from_v9(); return }
+    if (version.user_version === 7) { this.#migrate_008_from_v7(); this.#migrate_009_from_v8(); this.#migrate_010_from_v9(); this.#migrate_011_from_v10(); return }
+    if (version.user_version === 8) { this.#migrate_009_from_v8(); this.#migrate_010_from_v9(); this.#migrate_011_from_v10(); return }
+    if (version.user_version === 9) { this.#migrate_010_from_v9(); this.#migrate_011_from_v10(); return }
+    if (version.user_version === 10) { this.#migrate_011_from_v10(); return }
     // v9 = current
   }
 
@@ -688,6 +691,22 @@ export class SqliteMetadataRepository {
       );
       CREATE INDEX IF NOT EXISTS idx_run_events_run_sequence ON run_events(run_id, sequence);
       PRAGMA user_version = 10;
+    `)
+  }
+
+  #migrate_011_from_v10(): void {
+    this.#database.exec(`
+      CREATE TABLE IF NOT EXISTS workspace_memberships (
+        workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+        artifact_view_id TEXT NOT NULL REFERENCES artifact_views(id) ON DELETE CASCADE,
+        added_at TEXT NOT NULL,
+        added_by TEXT NOT NULL CHECK(added_by IN ('user','agent','run','import')),
+        sort_order INTEGER,
+        PRIMARY KEY(workspace_id, artifact_view_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_workspace_memberships_view ON workspace_memberships(artifact_view_id);
+      ALTER TABLE runs ADD COLUMN result_policy TEXT;
+      PRAGMA user_version = 11;
     `)
   }
 
@@ -1510,9 +1529,9 @@ export class SqliteMetadataRepository {
         INSERT INTO runs (
           id, project_id, workspace_id, target_artifact_id, target_revision_id,
           context_manifest_id, retry_of_run_id, provider, requested_provider, output_intent, return_group_id, status, instruction,
-          result_summary, short_summary, error_code, error_message,
+          result_policy, result_summary, short_summary, error_code, error_message,
           created_at, updated_at, completed_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         run.id as SQLInputValue,
         run.projectId as SQLInputValue,
@@ -1527,6 +1546,7 @@ export class SqliteMetadataRepository {
         run.returnGroupId ?? `return-group-${String(run.id)}`,
         run.status,
         run.instruction,
+        run.resultPolicy === undefined ? null : JSON.stringify(run.resultPolicy),
         run.resultSummary ?? null,
         run.shortSummary ?? null,
         run.errorCode ?? null,
@@ -1585,6 +1605,7 @@ export class SqliteMetadataRepository {
       requestedProvider: String(row.requested_provider) as Run['requestedProvider'],
       outputIntent: String(row.output_intent) as Run['outputIntent'],
       returnGroupId: String(row.return_group_id),
+      ...(row.result_policy ? { resultPolicy: JSON.parse(String(row.result_policy)) as NonNullable<Run['resultPolicy']> } : {}),
       status: String(row.status) as Run['status'],
       instruction: String(row.instruction),
       ...(row.result_summary ? { resultSummary: String(row.result_summary) } : {}),
@@ -1594,6 +1615,111 @@ export class SqliteMetadataRepository {
       createdAt: String(row.created_at),
       updatedAt: String(row.updated_at),
       ...(row.completed_at ? { completedAt: String(row.completed_at) } : {}),
+    }
+  }
+
+  // ==================== Workspace Memberships (Phase 0/1 canonical truth) ====================
+
+  addWorkspaceMembers(
+    workspaceId: WorkspaceId,
+    viewIds: readonly ArtifactViewId[],
+    addedBy: WorkspaceMembershipSource,
+    addedAt: string,
+  ): readonly WorkspaceMembership[] {
+    this.#database.exec('BEGIN IMMEDIATE;')
+    try {
+      for (const viewId of viewIds) {
+        const row = this.#database.prepare(
+          'SELECT COALESCE(MAX(sort_order), 0) + 1 AS next_order FROM workspace_memberships WHERE workspace_id = ?',
+        ).get(workspaceId as SQLInputValue) as Row
+        this.#database.prepare(`
+          INSERT OR IGNORE INTO workspace_memberships (workspace_id, artifact_view_id, added_at, added_by, sort_order)
+          VALUES (?, ?, ?, ?, ?)
+        `).run(workspaceId as SQLInputValue, viewId as SQLInputValue, addedAt, addedBy, Number(row.next_order))
+      }
+      this.#database.exec('COMMIT;')
+    } catch (error: unknown) {
+      this.#database.exec('ROLLBACK;')
+      throw error
+    }
+    return this.listWorkspaceMembers(workspaceId)
+  }
+
+  removeWorkspaceMembers(
+    workspaceId: WorkspaceId,
+    viewIds: readonly ArtifactViewId[],
+  ): readonly WorkspaceMembership[] {
+    this.#database.exec('BEGIN IMMEDIATE;')
+    try {
+      for (const viewId of viewIds) {
+        this.#database.prepare(
+          'DELETE FROM workspace_memberships WHERE workspace_id = ? AND artifact_view_id = ?',
+        ).run(workspaceId as SQLInputValue, viewId as SQLInputValue)
+      }
+      this.#database.exec('COMMIT;')
+    } catch (error: unknown) {
+      this.#database.exec('ROLLBACK;')
+      throw error
+    }
+    return this.listWorkspaceMembers(workspaceId)
+  }
+
+  moveWorkspaceMembers(
+    fromWorkspaceId: WorkspaceId,
+    toWorkspaceId: WorkspaceId,
+    viewIds: readonly ArtifactViewId[],
+    addedBy: WorkspaceMembershipSource,
+    addedAt: string,
+  ): readonly WorkspaceMembership[] {
+    this.#database.exec('BEGIN IMMEDIATE;')
+    try {
+      const fromExists = this.#database.prepare('SELECT id FROM workspaces WHERE id = ?').get(fromWorkspaceId as SQLInputValue)
+      const toExists = this.#database.prepare('SELECT id FROM workspaces WHERE id = ?').get(toWorkspaceId as SQLInputValue)
+      if (fromExists === undefined || toExists === undefined) {
+        throw new Error('Workspace not found for membership move.')
+      }
+      for (const viewId of viewIds) {
+        this.#database.prepare(
+          'DELETE FROM workspace_memberships WHERE workspace_id = ? AND artifact_view_id = ?',
+        ).run(fromWorkspaceId as SQLInputValue, viewId as SQLInputValue)
+        const row = this.#database.prepare(
+          'SELECT COALESCE(MAX(sort_order), 0) + 1 AS next_order FROM workspace_memberships WHERE workspace_id = ?',
+        ).get(toWorkspaceId as SQLInputValue) as Row
+        this.#database.prepare(`
+          INSERT OR IGNORE INTO workspace_memberships (workspace_id, artifact_view_id, added_at, added_by, sort_order)
+          VALUES (?, ?, ?, ?, ?)
+        `).run(toWorkspaceId as SQLInputValue, viewId as SQLInputValue, addedAt, addedBy, Number(row.next_order))
+      }
+      this.#database.exec('COMMIT;')
+    } catch (error: unknown) {
+      this.#database.exec('ROLLBACK;')
+      throw error
+    }
+    return this.listWorkspaceMembers(toWorkspaceId)
+  }
+
+  listWorkspaceMembers(workspaceId: WorkspaceId): readonly WorkspaceMembership[] {
+    return (this.#database.prepare(
+      'SELECT * FROM workspace_memberships WHERE workspace_id = ? ORDER BY sort_order, added_at, artifact_view_id',
+    ).all(workspaceId as SQLInputValue) as Row[]).map((row) => this.#membershipFromRow(row))
+  }
+
+  listProjectWorkspaceMemberships(projectId: ProjectId): readonly WorkspaceMembership[] {
+    return (this.#database.prepare(`
+      SELECT m.* FROM workspace_memberships m
+      JOIN workspaces w ON w.id = m.workspace_id
+      WHERE w.project_id = ?
+      ORDER BY w.id, m.sort_order, m.artifact_view_id
+    `).all(projectId as SQLInputValue) as Row[]).map((row) => this.#membershipFromRow(row))
+  }
+
+  #membershipFromRow(row: Row): WorkspaceMembership {
+    return {
+      workspaceId: String(row.workspace_id) as WorkspaceId,
+      artifactViewId: String(row.artifact_view_id) as ArtifactViewId,
+      addedAt: String(row.added_at),
+      addedBy: String(row.added_by) as WorkspaceMembershipSource,
+      ...(row.sort_order === null || row.sort_order === undefined ? {} : { sortOrder: Number(row.sort_order) }),
     }
   }
 
@@ -2110,7 +2236,7 @@ export class SqliteMetadataRepository {
     }
   }
 
-  get schemaVersion(): number { return 10 }
+  get schemaVersion(): number { return 11 }
 
   // ==================== Private helpers ====================
 
@@ -2176,15 +2302,16 @@ export class SqliteMetadataRepository {
       INSERT INTO runs (
         id, project_id, workspace_id, target_artifact_id, target_revision_id,
         context_manifest_id, retry_of_run_id, provider, requested_provider, output_intent, return_group_id, status, instruction,
-        result_summary, short_summary, error_code, error_message,
+        result_policy, result_summary, short_summary, error_code, error_message,
         created_at, updated_at, completed_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       run.id as SQLInputValue, run.projectId as SQLInputValue, run.workspaceId as SQLInputValue ?? null,
       run.targetArtifactId as SQLInputValue, run.targetRevisionId as SQLInputValue,
       run.contextManifestId as SQLInputValue, run.retryOfRunId as SQLInputValue ?? null,
       run.provider, run.requestedProvider ?? run.provider, run.outputIntent ?? 'revise', run.returnGroupId ?? `return-group-${String(run.id)}`,
-      run.status, run.instruction, run.resultSummary ?? null, run.shortSummary ?? null,
+      run.status, run.instruction, run.resultPolicy === undefined ? null : JSON.stringify(run.resultPolicy),
+      run.resultSummary ?? null, run.shortSummary ?? null,
       run.errorCode ?? null, run.errorMessage ?? null, run.createdAt, run.updatedAt, run.completedAt ?? null,
     )
   }

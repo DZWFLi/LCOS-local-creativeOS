@@ -27,6 +27,7 @@ import type {
   Run,
   RunEvent,
   RunId,
+  RunResultPolicy,
   RuntimeBinding,
   RuntimeDispatch,
   Relation,
@@ -36,6 +37,8 @@ import type {
   WorkspaceId,
   WorkspaceContextPolicy,
   WorkspaceViewport,
+  WorkspaceMembership,
+  WorkspaceMembershipSource,
 } from '../../domain/src/index.js'
 import type { ManifestResourceRefV0 } from './resources.js'
 
@@ -232,6 +235,52 @@ export interface AcceptArtifactReturnResult {
   readonly currentRevision: ArtifactRevision
   readonly previousRevision?: ArtifactRevision
   readonly run: Run
+}
+
+// ==================== Phase 0 Contracts: Composer Proposal / Membership / Provider ====================
+
+export interface RunProposalContextItem {
+  readonly artifactId: string
+  readonly revisionId: string
+  readonly order: number
+}
+
+export interface RunProposalEditTarget {
+  readonly artifactId: string
+  readonly baseRevisionId: string
+}
+
+export interface CreateRunProposal {
+  readonly projectId: string
+  readonly workspaceId?: string
+  readonly prompt: string
+  readonly intent: 'analyze' | 'create' | 'revise'
+  readonly requestedProvider: string | 'auto'
+  readonly contextItems: readonly RunProposalContextItem[]
+  readonly editTargets: readonly RunProposalEditTarget[]
+  readonly resultPolicy: RunResultPolicy
+}
+
+export interface RunProposalResult {
+  readonly proposal: CreateRunProposal
+  readonly summary: string
+  readonly confidence: 'high' | 'low'
+  readonly ambiguity?: { readonly question: string }
+}
+
+export type RuntimeProviderAvailability = 'ready' | 'busy' | 'offline' | 'manual'
+
+export interface RuntimeProviderStatus {
+  readonly provider: 'workbuddy' | 'codex' | 'auto'
+  readonly availability: RuntimeProviderAvailability
+  readonly contractVersion?: string
+  readonly outputIntents?: readonly string[]
+}
+
+export type {
+  WorkspaceMembership,
+  WorkspaceMembershipSource,
+  RunResultPolicy,
 }
 
 export interface RejectArtifactReturnResult {

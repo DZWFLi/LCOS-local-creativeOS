@@ -91,6 +91,16 @@ export interface Workspace {
   readonly updatedAt: IsoDateTime
 }
 
+export type WorkspaceMembershipSource = 'user' | 'agent' | 'run' | 'import'
+
+export interface WorkspaceMembership {
+  readonly workspaceId: WorkspaceId
+  readonly artifactViewId: ArtifactViewId
+  readonly addedAt: IsoDateTime
+  readonly addedBy: WorkspaceMembershipSource
+  readonly sortOrder?: number
+}
+
 // ==================== Artifact ====================
 
 export type ArtifactKind = 'markdown' | 'image' | 'presentation' | 'pdf' | 'other'
@@ -309,6 +319,7 @@ export interface Run {
   readonly requestedProvider: RuntimeProvider
   readonly outputIntent: RunOutputIntent
   readonly returnGroupId: string
+  readonly resultPolicy?: RunResultPolicy
   readonly status: RunStatus
   readonly instruction: string
   readonly resultSummary?: string
@@ -319,6 +330,12 @@ export interface Run {
   readonly updatedAt: IsoDateTime
   readonly completedAt?: IsoDateTime
 }
+
+export type RunResultPolicy =
+  | { readonly type: 'reply_only' }
+  | { readonly type: 'create_artifact'; readonly format?: string }
+  | { readonly type: 'create_collection' }
+  | { readonly type: 'draft_revision_per_target' }
 
 export const RUNTIME_DISPATCH_STATUSES = [
   'planned',

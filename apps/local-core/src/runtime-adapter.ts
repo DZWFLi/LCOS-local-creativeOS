@@ -12,6 +12,7 @@ import type {
   RuntimeBinding,
   RuntimeDispatch,
 } from '@local-creative-os/domain'
+import type { RuntimeProviderStatus } from '@local-creative-os/contracts'
 import { isTerminalRunStatus } from '@local-creative-os/domain'
 
 import type { RuntimeAdapterProfile, RuntimeAdapterRegistry } from './adapter-registry.js'
@@ -114,6 +115,19 @@ export interface BridgeRuntimePort {
   getResult(taskId: string, runId: string): Promise<BridgeResultEnvelopeV0 | undefined>
   finalizeReview?(taskId: string, decision: 'completed' | 'retrying', comment?: string): Promise<void>
   cancelTask?(taskId: string, runId: string): Promise<void>
+  getCapabilities?(): Promise<{
+    readonly bridgeVersion?: string
+    readonly primaryContractVersion?: string
+    readonly providers?: readonly {
+      readonly provider: string
+      readonly executionMode?: string
+      readonly taskTypes?: readonly string[]
+      readonly outputIntents?: readonly string[]
+      readonly contractVersions?: readonly string[]
+      readonly sessionBinding?: boolean
+      readonly completionHook?: boolean
+    }[]
+  }>
 }
 
 export interface BridgeResultEnvelopeV0 {
@@ -365,6 +379,36 @@ export class RuntimeAdapterService {
       lastSyncedAt: timestamp,
       updatedAt: timestamp,
     })
+  }
+
+  async providersStatus(): Promise<readonly RuntimeProviderStatus[]> {
+    const caps = this.bridge.getCapabilities === undefined
+      ? undefined
+      : await this.bridge.getCapabilities().catch(() => undefined)
+    const bridgeOnline = caps !== undefined
+    const providerRows = caps?.providers ?? []
+    const known: RuntimeProviderStatus[] = []
+    for (const provider of ['workbuddy', 'codex'] as const) {
+      const row = providerRows.find((item) => String(item.provider).toLocaleLowerCase('en-US') === provider)
+      if (row === undefined) {
+        known.push({ provider, availability: bridgeOnline ? 'offline' : 'offline' })
+        continue
+      }
+      // 7.2 Gate：零点击 executor 未证明前，不显示 Ready。
+      const contractVersion = row.contractVersions?.[0] ?? caps?.primaryContractVersion
+      known.push({
+        provider,
+        availability: bridgeOnline ? 'manual' : 'offline',
+        ...(contractVersion === undefined ? {} : { contractVersion }),
+        ...(row.outputIntents === undefined ? {} : { outputIntents: row.outputIntents }),
+      })
+    }
+    const autoReady = known.some((item) => item.availability === 'ready' || item.availability === 'manual')
+    known.push({
+      provider: 'auto',
+      availability: autoReady ? 'manual' : 'offline',
+    })
+    return known
   }
 
   private async materialize(run: Run): Promise<{ envelope: BridgeTaskEnvelopeV1 }> {

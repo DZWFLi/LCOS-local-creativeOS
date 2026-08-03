@@ -68,6 +68,43 @@ try {
     } else {
       throw new Error(`Multiple projects registered; pass the project id: ${projects.map((item) => item.id).join(", ")}`);
     }
+  } else if (group === "workspace" && action === "list") {
+    result = await coreRequest(`/projects/${encodeURIComponent(required(positional[0], "project id"))}/workspace-memberships`);
+  } else if (group === "workspace" && action === "add") {
+    const workspaceId = required(positional[0], "workspace id");
+    const viewIds = positional.slice(1);
+    if (viewIds.length === 0) throw new Error("workspace add requires at least one view id");
+    result = await coreRequest(`/workspaces/${encodeURIComponent(workspaceId)}/members`, {
+      method: "POST",
+      ...jsonBody({ viewIds, ...(option("by") ? { addedBy: option("by") } : {}) }),
+    });
+  } else if (group === "workspace" && action === "remove") {
+    const workspaceId = required(positional[0], "workspace id");
+    const viewId = required(positional[1], "view id");
+    result = await coreRequest(`/workspaces/${encodeURIComponent(workspaceId)}/members/${encodeURIComponent(viewId)}`, { method: "DELETE" });
+  } else if (group === "workspace" && action === "move") {
+    const fromWorkspaceId = required(positional[0], "from workspace id");
+    const viewId = required(positional[1], "view id");
+    const toWorkspaceId = required(option("to"), "--to (target workspace id)");
+    result = await coreRequest(`/workspaces/${encodeURIComponent(fromWorkspaceId)}/members/move`, {
+      method: "POST",
+      ...jsonBody({ viewId, toWorkspaceId }),
+    });
+  } else if (group === "run" && action === "propose") {
+    const projectId = required(positional[0], "project id");
+    const prompt = required(option("prompt"), "--prompt");
+    result = await coreRequest(`/projects/${encodeURIComponent(projectId)}/runs/propose`, {
+      method: "POST",
+      ...jsonBody({
+        prompt,
+        requestedProvider: option("provider") || "auto",
+        contextItems: [],
+        editTargets: [],
+        resultPolicy: { type: "reply_only" },
+      }),
+    });
+  } else if (group === "providers") {
+    result = await coreRequest("/runtime/providers");
   } else if (group === "context" && action === "get") {
     result = await coreRequest(`/projects/${encodeURIComponent(required(positional[0], "project id"))}/active-context`);
   } else if (group === "manifest" && action === "build") {
@@ -307,10 +344,15 @@ Project truth:
   lcos project show <project-id>
   lcos project inspect <root-path>
   lcos project current [project-id]
+  lcos workspace list <project-id>
+  lcos workspace add <workspace-id> <view...> [--by user|agent|run|import]
+  lcos workspace remove <workspace-id> <view-id>
+  lcos workspace move <from-workspace-id> <view-id> --to <to-workspace-id>
   lcos context get <project-id>
   lcos manifest build <project-id> [--target <artifact-id>] [--output <description>]
   lcos run list <project-id> [--limit 20]
   lcos run create <project-id> --instruction "..." [--target artifact-id] [--output create|revise|analyze] [--provider workbuddy|codex] [--dry-run]
+  lcos run propose <project-id> --prompt "..."
   lcos run dispatch <run-id>
   lcos run recover <run-id>
   lcos run finalize <run-id> [--decision completed|retrying] [--comment "..."]
@@ -328,6 +370,7 @@ Project truth:
   lcos resource import <project-id> <path-or-url> [--name rootName]
   lcos resource match <project-id> --instruction "..." [--output create|revise|analyze] [--limit 8]
   lcos open [project-id]
+  lcos providers
 
 Agent pull:
   lcos task claim [--provider workbuddy] [--worker local-agent]

@@ -304,6 +304,7 @@ def create_app(service: BridgeService) -> FastAPI:
                 "submit_result",
                 "cancel_task",
                 "finalize_task_review",
+                "get_capabilities",
             ]
             return JSONResponse(
                 headers=headers,
@@ -333,6 +334,11 @@ def create_app(service: BridgeService) -> FastAPI:
         args = params.get("arguments", {}) or {}
         try:
             if name == "health_check":
+                value = {
+                    "ok": True,
+                    **service.capabilities().model_dump(mode="json", by_alias=True),
+                }
+            elif name == "get_capabilities":
                 value = {
                     "ok": True,
                     **service.capabilities().model_dump(mode="json", by_alias=True),
