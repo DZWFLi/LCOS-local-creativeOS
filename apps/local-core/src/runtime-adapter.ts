@@ -84,7 +84,7 @@ export interface BridgeTaskEnvelopeV1 {
   readonly outputPolicy: {
     readonly allowZeroFiles: boolean
     readonly allowAdditionalFiles: boolean
-    readonly maxFiles: 0 | 1 | 5
+    readonly maxFiles: 1 | 5
   }
   readonly timeoutSeconds: number
   readonly reportMode: 'short'
@@ -419,7 +419,7 @@ export class RuntimeAdapterService {
       outputPolicy: {
         allowZeroFiles: isAnalyze,
         allowAdditionalFiles: isCreate,
-        maxFiles: isAnalyze ? 0 : isCreate ? 5 : 1,
+        maxFiles: isAnalyze || isCreate ? 5 : 1,
       },
       timeoutSeconds: 600,
       reportMode: 'short',

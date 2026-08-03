@@ -108,7 +108,7 @@ describe('Analyze output intent (Slice B)', () => {
     await new RuntimeAdapterService(fixture.repository, bridge, 'mvp-fast-build', () => now)
       .dispatch(fixture.run.id)
     expect(bridge.envelope?.expectedOutputs).toHaveLength(0)
-    expect(bridge.envelope?.outputPolicy).toMatchObject({ allowZeroFiles: true, maxFiles: 0 })
+    expect(bridge.envelope?.outputPolicy).toMatchObject({ allowZeroFiles: true, maxFiles: 5 })
     expect(bridge.envelope?.outputIntent).toBe('analyze')
   })
 
