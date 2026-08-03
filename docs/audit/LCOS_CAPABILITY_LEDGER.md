@@ -30,6 +30,10 @@
 | Provider 状态（新增） | DZ-AGENT-09, DZ-RT-10 | ✅ 真实完成（7.2 Gate：manual） |
 | 中文路径 Picker | DZ-PROJ-01 | ✅ 真实完成 |
 | CLI/MCP 操作面 | DZ-AGENT-01/02 | 🟡 workspace/propose/providers 已加；Canvas/Revision 全套未齐 |
+| Revision/Process 后端 | DZ-REV-01/02/05/07, DZ-WS-08/09 | ✅ compare/inspect/projection/session/workspace-state 真实完成（v12） |
+| Source/Managed 边界 | DZ-RUN-11 | ✅ managed 列 + revise Guard |
+| 零点击回收 | DZ-RT-05, DZ-AGENT-10 | 🟡 AutoSync 已加；真 executor 未证明（manual） |
+| waiting_input | DZ-RT-05 | 🔴 阻塞：Bridge 协议无该状态，需扩展+批准 |
 | .lcosproj 工程文件 | DZ-PROJ-08/09/10/11 | 🔴 未做（Phase 4 后段） |
 
 ---

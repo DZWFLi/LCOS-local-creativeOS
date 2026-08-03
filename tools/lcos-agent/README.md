@@ -38,6 +38,13 @@ npm run lcos -- task start <task-id> --worker buddy-local
 npm run lcos -- task submit <task-id> <result-envelope.json>
 npm run lcos -- run events <run-id> [--after N]
 npm run lcos -- run cancel <run-id>
+npm run lcos -- artifact inspect <artifact-id>
+npm run lcos -- revision list <artifact-id>
+npm run lcos -- revision compare <project-id> <base> <head>
+npm run lcos -- workspace save-state <workspace-id> --name "现场名"
+npm run lcos -- workspace restore-state <workspace-id> <state-id>
+npm run lcos -- session summarize <project-id> --summary "..."
+npm run lcos -- process projection <project-id>
 ```
 
 `doctor` 汇总 Core / Bridge / Provider / Contract 状态；`capabilities` 输出 Bridge
