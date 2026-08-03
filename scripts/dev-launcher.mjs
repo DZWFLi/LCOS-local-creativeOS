@@ -17,6 +17,7 @@ const PROFILE_DIR = join(RUNTIME_DIR, 'browser-profile')
 const LOG_DIR = join(RUNTIME_DIR, 'logs')
 const TARGET_FILE = join(process.cwd(), '.dev-launcher', 'target.json')
 const BRIDGE_RUNTIME_ROOT = join(RUNTIME_DIR, 'bridge')
+const CORE_TOKEN_FILE = join(RUNTIME_DIR, 'local-core-token')
 const RESTART_WINDOW_MS = 5 * 60_000
 const MAX_RESTARTS_PER_WINDOW = 3
 const HEALTH_CHECK_MS = 5_000
@@ -41,6 +42,7 @@ function writeState(state) {
 
 function clearState() {
   if (existsSync(STATE_FILE)) rmSync(STATE_FILE, { force: true })
+  if (existsSync(CORE_TOKEN_FILE)) rmSync(CORE_TOKEN_FILE, { force: true })
 }
 
 function run(commandName, args, options = {}) {
@@ -430,6 +432,7 @@ async function open() {
   }
   const localCoreToken = randomBytes(32).toString('base64url')
   const environment = { LOCAL_CORE_API_TOKEN: localCoreToken }
+  writeFileSync(CORE_TOKEN_FILE, `${localCoreToken}\n`, 'utf8')
   const state = {
     cwd: process.cwd(),
     version,

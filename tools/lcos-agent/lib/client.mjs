@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 const DEFAULT_CORE_URL = "http://127.0.0.1:43121";
 const DEFAULT_BRIDGE_URL = "http://127.0.0.1:43122";
 
@@ -10,7 +13,7 @@ export function bridgeUrl() {
 }
 
 export async function coreRequest(path, init = {}) {
-  const token = process.env.LOCAL_CORE_API_TOKEN;
+  const token = coreToken();
   return requestJson(new URL(path, `${coreUrl()}/`), {
     ...init,
     headers: {
@@ -18,6 +21,15 @@ export async function coreRequest(path, init = {}) {
       ...init.headers,
     },
   });
+}
+
+function coreToken() {
+  if (process.env.LOCAL_CORE_API_TOKEN) return process.env.LOCAL_CORE_API_TOKEN;
+  try {
+    return readFileSync(join(process.cwd(), ".codex-runtime", "local-core-token"), "utf8").trim() || undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 export async function bridgeRequest(path, init = {}) {
