@@ -12,6 +12,15 @@ export interface DirectoryPickerResult {
   readonly cancelled: boolean
 }
 
+/** Base64 回传路径，绕开 Windows PowerShell 5.1 管道输出代码页（GBK/UTF-8 不一致导致的乱码）。 */
+export function encodePickerPath(path: string): string {
+  return Buffer.from(path, 'utf8').toString('base64')
+}
+
+export function decodePickerPath(encoded: string): string {
+  return Buffer.from(encoded, 'base64').toString('utf8')
+}
+
 export async function selectNativeDirectory(input: DirectoryPickerInput): Promise<DirectoryPickerResult> {
   if (process.platform !== 'win32') {
     throw new Error('Native directory selection is currently available on Windows only.')
@@ -23,7 +32,7 @@ export async function selectNativeDirectory(input: DirectoryPickerInput): Promis
     `$dialog.Description = '${input.title.replace(/'/g, "''")}'`,
     '$dialog.ShowNewFolderButton = $true',
     'if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {',
-    '  [Console]::Out.Write($dialog.SelectedPath)',
+    '  [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($dialog.SelectedPath))',
     '}',
   ].join('; ')
 
@@ -38,5 +47,5 @@ export async function selectNativeDirectory(input: DirectoryPickerInput): Promis
     windowsHide: false,
   })
   const selectedPath = stdout.trim()
-  return selectedPath ? { path: selectedPath, cancelled: false } : { cancelled: true }
+  return selectedPath ? { path: decodePickerPath(selectedPath), cancelled: false } : { cancelled: true }
 }
