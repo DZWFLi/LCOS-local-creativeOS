@@ -26,10 +26,10 @@
 
 | ID | 简述 | GUI | Core | Bridge | CLI | MCP | Skill | E2E | 状态 |
 |---|---|---|---|---|---|---|---|---|---|
-| UI-01 | 单击选择/双击预览 | 🔴 | — | — | — | — | — | — | 🔴 双击只处理 opensScopeId |
-| UI-02 | 右侧 Artifact Workbench | 🔴 | — | — | — | — | — | — | 🔴 WorkRail 分散，Inspector 未建成 |
-| UI-03 | 统一 Viewer Host | 🟡 | — | — | — | — | — | 🟡 图片/文本分散，PDF/PPTX 独立 Modal |
-| UI-04 | Editor Host 预留 | 🔴 | — | — | — | — | — | 🔴 无 Editor Registry |
+| UI-01 | 单击选择/双击预览 | ✅ | — | — | — | — | — | — | ✅ 双击文件→右侧预览，双击 Scope→进入关系（实测 E） |
+| UI-02 | 右侧 Artifact Workbench | ✅ | — | — | — | — | — | — | ✅ 单实例/预览⇄概览/Esc 关闭（实测 E） |
+| UI-03 | 统一 Viewer Host | ✅ | — | — | — | — | — | — | ✅ Viewer Registry 统一入口；DOCX 走诚实 fallback（DATA-04 未变） |
+| UI-04 | Editor Host 预留 | ✅ | — | — | — | — | — | — | ✅ 接口已预留，无假编辑器（E） |
 | UI-05 | 三处共用 ActiveContext | 🟠 | ✅ | — | — | 🔴 | — | 🟠 Core PUT 存在，Web 未写回 |
 | UI-06 | 功能可见性 | 🔴 | — | — | — | — | — | 🔴 入口分散，无命令面板 |
 | UI-07 | Checkpoint | 🔴 | 🔴 | — | — | — | — | 🔴 按钮只 toast，未调 Core API |
