@@ -2033,3 +2033,1422 @@
 .app-shell.porcelain-studio-v2 .agent-context-surface ul {
   background: var(--ps-surface-inset);
 }
+
+/* -------------------------------------------------------------------------- */
+/* Editorial Spatial Lab — node anatomy, studio mats and revision stacks      */
+/* -------------------------------------------------------------------------- */
+
+/* Workspace frames become quiet studio mats instead of colored containers. */
+.app-shell.porcelain-studio-v2 .workspace-frame {
+  border: 1px solid rgba(var(--workspace-glow-rgb), .085);
+  border-radius: 20px;
+  background: rgba(255,255,255,.055);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.25);
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.app-shell.porcelain-studio-v2 .workspace-frame.active {
+  border-color: rgba(var(--workspace-glow-rgb), .17);
+  background: rgba(var(--workspace-glow-rgb), .012);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.34);
+}
+
+.app-shell.porcelain-studio-v2 .workspace-frame-header {
+  top: -13px;
+  height: 25px;
+  padding: 0 9px;
+  border-radius: 8px;
+  color: rgba(24,36,49,.62);
+  background: rgba(248,248,245,.97);
+  border: 1px solid rgba(24,36,49,.075);
+  box-shadow: 0 2px 8px rgba(19,29,39,.045), inset 0 1px 0 rgba(255,255,255,.95);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: .02em;
+}
+
+.app-shell.porcelain-studio-v2 .workspace-frame-header b {
+  color: rgba(24,36,49,.38);
+  font-weight: 500;
+}
+
+/* A return group is a temporary tray, not another permanent node family. */
+.app-shell.porcelain-studio-v2 .return-group-mat {
+  position: absolute;
+  z-index: 1;
+  pointer-events: none;
+  border: 1px dashed rgba(var(--ps-generated-rgb), .16);
+  border-radius: 19px;
+  background: rgba(var(--ps-generated-rgb), .014);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.28);
+}
+
+.app-shell.porcelain-studio-v2 .return-group-mat > span {
+  position: absolute;
+  left: 10px;
+  top: 7px;
+  padding: 3px 7px;
+  border-radius: 7px;
+  color: rgba(var(--ps-generated-rgb), .72);
+  background: rgba(248,248,245,.93);
+  border: 1px solid rgba(var(--ps-generated-rgb), .10);
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: .02em;
+}
+
+/* Shared porcelain material for the new stack shell and feedback anatomy. */
+.app-shell.porcelain-studio-v2 .artifact-stack-shell {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  isolation: isolate;
+}
+
+.app-shell.porcelain-studio-v2 .artifact-stack-shell > .artifact-visual,
+.app-shell.porcelain-studio-v2 .canvas-node > .feedback-visual {
+  position: relative;
+  z-index: 3;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border: 1px solid var(--ps-border);
+  border-radius: var(--ps-radius-card);
+  color: var(--ps-text-strong);
+  background: linear-gradient(180deg, rgba(255,255,255,.995), rgba(249,250,248,.985));
+  box-shadow: var(--ps-shadow-node);
+  isolation: isolate;
+  transition: border-color 120ms ease, box-shadow 140ms ease, background-color 120ms ease;
+}
+
+.app-shell.porcelain-studio-v2 .artifact-stack-shell > .artifact-visual::before,
+.app-shell.porcelain-studio-v2 .canvas-node > .feedback-visual::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  inset: 0 0 auto;
+  height: 2px;
+  background: linear-gradient(90deg, transparent 4%, rgba(var(--ps-node-rgb), .64) 28%, rgba(var(--ps-node-rgb), .24) 72%, transparent 96%);
+  opacity: .68;
+  pointer-events: none;
+}
+
+.app-shell.porcelain-studio-v2 .canvas-node:hover .artifact-stack-shell > .artifact-visual,
+.app-shell.porcelain-studio-v2 .canvas-node:hover > .feedback-visual {
+  border-color: rgba(var(--ps-node-rgb), .18);
+  box-shadow: var(--ps-shadow-node-hover);
+}
+
+.app-shell.porcelain-studio-v2 .canvas-node.selected .artifact-stack-shell > .artifact-visual,
+.app-shell.porcelain-studio-v2 .canvas-node.selected > .feedback-visual {
+  border-color: rgba(var(--ps-accent-rgb), .48);
+  box-shadow:
+    0 0 0 2px rgba(255,255,255,.94),
+    0 0 0 4px rgba(var(--ps-accent-rgb), .20),
+    0 10px 30px rgba(19,29,39,.10);
+}
+
+/* Revision stack: one ArtifactView, immutable revisions behind it. */
+.app-shell.porcelain-studio-v2 .revision-backplates {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  pointer-events: none;
+}
+
+.app-shell.porcelain-studio-v2 .revision-backplates i {
+  position: absolute;
+  inset: 0;
+  border: 1px solid rgba(24,36,49,.075);
+  border-radius: var(--ps-radius-card);
+  background: #eeefec;
+  box-shadow: 0 4px 12px rgba(19,29,39,.035);
+}
+
+.app-shell.porcelain-studio-v2 .revision-backplates i:nth-child(1) { transform: translate(5px, 5px); opacity: .92; }
+.app-shell.porcelain-studio-v2 .revision-backplates i:nth-child(2) { transform: translate(10px, 10px); opacity: .66; }
+.app-shell.porcelain-studio-v2 .revision-backplates i:nth-child(3) { transform: translate(15px, 15px); opacity: .36; }
+
+.app-shell.porcelain-studio-v2 .revision-stack-trigger {
+  position: absolute;
+  z-index: 7;
+  top: 8px;
+  right: 8px;
+  min-width: 43px;
+  height: 23px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 6px 0 7px;
+  border-radius: 8px;
+  color: var(--ps-text-muted);
+  background: rgba(252,252,250,.96);
+  border: 1px solid rgba(24,36,49,.09);
+  box-shadow: 0 3px 9px rgba(19,29,39,.07), inset 0 1px 0 #fff;
+  font-size: 8.5px;
+  font-weight: 600;
+}
+
+.app-shell.porcelain-studio-v2 .revision-stack-trigger b {
+  min-width: 15px;
+  height: 15px;
+  display: grid;
+  place-items: center;
+  border-radius: 5px;
+  color: var(--ps-text);
+  background: rgba(24,36,49,.055);
+  font-size: 8px;
+}
+
+.app-shell.porcelain-studio-v2 .revision-stack-trigger:hover {
+  color: var(--ps-accent);
+  border-color: rgba(var(--ps-accent-rgb), .18);
+  box-shadow: 0 4px 12px rgba(19,29,39,.08), 0 0 0 3px rgba(var(--ps-accent-rgb), .045);
+}
+
+.app-shell.porcelain-studio-v2 .status-chip.historical {
+  color: rgba(24,36,49,.58);
+  background: rgba(24,36,49,.055);
+  border-color: rgba(24,36,49,.09);
+}
+
+/* Reference cards are image-led editorial material. */
+.app-shell.porcelain-studio-v2 .artifact-family-reference {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 0;
+  padding: 7px;
+  background: #fbfbf9;
+}
+
+.app-shell.porcelain-studio-v2 .artifact-family-reference .artifact-topline {
+  position: absolute;
+  z-index: 4;
+  left: 12px;
+  top: 11px;
+  right: 12px;
+  pointer-events: none;
+}
+
+.app-shell.porcelain-studio-v2 .artifact-family-reference .artifact-kind,
+.app-shell.porcelain-studio-v2 .artifact-family-reference .artifact-format {
+  padding: 3px 6px;
+  border-radius: 6px;
+  color: rgba(255,255,255,.88);
+  background: rgba(17,25,34,.40);
+  border: 1px solid rgba(255,255,255,.15);
+  backdrop-filter: blur(3px);
+}
+
+.app-shell.porcelain-studio-v2 .artifact-family-reference .artifact-kind i { display: none; }
+
+.app-shell.porcelain-studio-v2 .artifact-family-reference .preview-art {
+  min-height: 0;
+  height: 100%;
+  border-radius: 10px 10px 7px 7px;
+  border: 0;
+  box-shadow: none;
+}
+
+.app-shell.porcelain-studio-v2 .artifact-family-reference .artifact-copy {
+  min-height: 48px;
+  display: flex;
+  justify-content: center;
+  padding: 8px 5px 3px;
+}
+
+.app-shell.porcelain-studio-v2 .artifact-family-reference .artifact-copy strong { font-size: 10.5px; }
+.app-shell.porcelain-studio-v2 .artifact-family-reference .artifact-copy > span { font-size: 8.8px; }
+.app-shell.porcelain-studio-v2 .artifact-family-reference .artifact-statuses { top: auto; bottom: 8px; right: 8px; }
+
+.app-shell.porcelain-studio-v2 .reference-image {
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 76% 20%, rgba(255,231,187,.68), transparent 22%),
+    linear-gradient(155deg, #d7d8d4 0 43%, #b9c3c5 43% 58%, #e6ddd1 58%);
+}
+
+.app-shell.porcelain-studio-v2 .reference-image::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(17,25,34,.04), transparent 42%, rgba(17,25,34,.08));
+  pointer-events: none;
+}
+
+.app-shell.porcelain-studio-v2 .reference-crop-mark {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  width: 25px;
+  height: 17px;
+  border-left: 1px solid rgba(255,255,255,.78);
+  border-bottom: 1px solid rgba(255,255,255,.78);
+}
+
+/* Document cards read like working pages rather than generic file tiles. */
+.app-shell.porcelain-studio-v2 .artifact-family-document {
+  display: grid;
+  grid-template-rows: 18px minmax(60px, 1fr) auto;
+  gap: 7px;
+  padding: 11px;
+}
+
+.app-shell.porcelain-studio-v2 .artifact-family-document .preview-art {
+  border-radius: 6px 9px 9px 6px;
+  background: #fff;
+  border-color: rgba(24,36,49,.07);
+  box-shadow: inset 3px 0 0 rgba(var(--ps-node-rgb), .085), 0 2px 7px rgba(19,29,39,.035);
+}
+
+.app-shell.porcelain-studio-v2 .preview-art.document {
+  align-items: flex-start;
+  justify-content: center;
+  gap: 5px;
+  padding: 13px 14px 12px 16px;
+  text-align: left;
+}
+
+.app-shell.porcelain-studio-v2 .preview-art.document p {
+  width: 88%;
+  margin: 1px 0 2px;
+  color: var(--ps-text-muted);
+  font-size: 8px;
+  line-height: 1.45;
+}
+
+/* Feedback becomes an attached editorial annotation strip. */
+.app-shell.porcelain-studio-v2 .canvas-node.visual-family-feedback {
+  --ps-node-rgb: var(--ps-note-rgb);
+  --ps-node-color: var(--ps-note);
+}
+
+.app-shell.porcelain-studio-v2 .feedback-visual {
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  gap: 8px;
+  padding: 12px 13px 11px 15px;
+  background: linear-gradient(180deg, #fff, #fbfaf7);
+}
+
+.app-shell.porcelain-studio-v2 .feedback-visual::after {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  left: 0;
+  top: 13px;
+  bottom: 13px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: rgba(var(--ps-note-rgb), .58);
+}
+
+.app-shell.porcelain-studio-v2 .feedback-visual > * { position: relative; z-index: 1; }
+
+.app-shell.porcelain-studio-v2 .feedback-visual header,
+.app-shell.porcelain-studio-v2 .feedback-visual footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.app-shell.porcelain-studio-v2 .feedback-visual header span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--ps-note);
+  font-size: 8.5px;
+  font-weight: 600;
+}
+
+.app-shell.porcelain-studio-v2 .feedback-visual header small,
+.app-shell.porcelain-studio-v2 .feedback-visual footer {
+  color: var(--ps-text-faint);
+  font-size: 7.8px;
+  font-weight: 600;
+  letter-spacing: .035em;
+}
+
+.app-shell.porcelain-studio-v2 .feedback-visual > strong {
+  padding-right: 22px;
+  color: var(--ps-text-strong);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.app-shell.porcelain-studio-v2 .feedback-points {
+  display: grid;
+  gap: 5px;
+}
+
+.app-shell.porcelain-studio-v2 .feedback-points p {
+  min-width: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: 42px 1fr;
+  gap: 6px;
+  align-items: start;
+}
+
+.app-shell.porcelain-studio-v2 .feedback-points b {
+  color: var(--ps-text-faint);
+  font-size: 7.8px;
+  font-weight: 700;
+  letter-spacing: .035em;
+  text-transform: uppercase;
+}
+
+.app-shell.porcelain-studio-v2 .feedback-points span {
+  overflow: hidden;
+  color: var(--ps-text-muted);
+  font-size: 8.8px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+}
+
+/* Decision and process nodes become quiet strips in the spatial flow. */
+.app-shell.porcelain-studio-v2 .decision-visual {
+  grid-template-columns: auto minmax(0,1fr) auto;
+  padding: 10px 12px;
+  border-radius: 12px !important;
+  background: linear-gradient(180deg, #fff, rgba(var(--ps-decision-rgb), .025)) !important;
+}
+
+.app-shell.porcelain-studio-v2 .decision-visual::before {
+  background: linear-gradient(90deg, rgba(var(--ps-decision-rgb), .58), rgba(var(--ps-decision-rgb), .10) 55%, transparent) !important;
+}
+
+.app-shell.porcelain-studio-v2 .process-visual {
+  grid-template-columns: auto minmax(0,1fr) auto;
+  padding: 9px 11px;
+  border-radius: 11px !important;
+  background: rgba(251,251,249,.97) !important;
+  box-shadow: 0 1px 2px rgba(19,29,39,.025), 0 5px 14px rgba(19,29,39,.045) !important;
+}
+
+.app-shell.porcelain-studio-v2 .process-visual .process-icon,
+.app-shell.porcelain-studio-v2 .decision-visual .decision-icon {
+  width: 25px;
+  height: 25px;
+  flex-basis: 25px;
+  border-radius: 8px;
+}
+
+.app-shell.porcelain-studio-v2 .return-origin {
+  position: absolute;
+  z-index: 3;
+  left: 10px;
+  bottom: 9px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: rgba(var(--ps-generated-rgb), .64);
+  font-size: 7.8px;
+  font-weight: 600;
+}
+
+/* Continuous zoom disclosure: geometry stays stable, details fade in/out. */
+.app-shell.porcelain-studio-v2 .canvas .artifact-topline,
+.app-shell.porcelain-studio-v2 .canvas .artifact-copy,
+.app-shell.porcelain-studio-v2 .canvas .artifact-statuses,
+.app-shell.porcelain-studio-v2 .canvas .return-origin,
+.app-shell.porcelain-studio-v2 .canvas .feedback-points,
+.app-shell.porcelain-studio-v2 .canvas .feedback-visual > strong,
+.app-shell.porcelain-studio-v2 .canvas .context-visual footer {
+  transition: opacity 130ms ease, transform 130ms ease;
+}
+
+.app-shell.porcelain-studio-v2 .canvas.zoom-band-20 .artifact-topline,
+.app-shell.porcelain-studio-v2 .canvas.zoom-band-20 .artifact-copy,
+.app-shell.porcelain-studio-v2 .canvas.zoom-band-20 .return-origin,
+.app-shell.porcelain-studio-v2 .canvas.zoom-band-20 .feedback-points,
+.app-shell.porcelain-studio-v2 .canvas.zoom-band-20 .feedback-visual > strong,
+.app-shell.porcelain-studio-v2 .canvas.zoom-band-20 .context-visual footer,
+.app-shell.porcelain-studio-v2 .canvas.zoom-band-20 .node-details {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.app-shell.porcelain-studio-v2 .canvas.zoom-band-20 .revision-stack-trigger {
+  transform: scale(.82);
+  transform-origin: right top;
+}
+
+.app-shell.porcelain-studio-v2 .canvas.zoom-band-35 .artifact-copy > span,
+.app-shell.porcelain-studio-v2 .canvas.zoom-band-35 .artifact-expanded-meta,
+.app-shell.porcelain-studio-v2 .canvas.zoom-band-35 .artifact-provenance,
+.app-shell.porcelain-studio-v2 .canvas.zoom-band-35 .return-origin,
+.app-shell.porcelain-studio-v2 .canvas.zoom-band-35 .feedback-points p:nth-child(2) {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.app-shell.porcelain-studio-v2 .canvas.zoom-band-60 .artifact-expanded-meta,
+.app-shell.porcelain-studio-v2 .canvas.zoom-band-60 .artifact-provenance {
+  opacity: .72;
+}
+
+/* Active path gets one calm moving point; selected relations remain static. */
+.app-shell.porcelain-studio-v2 .edge.active {
+  stroke: rgba(var(--ps-accent-rgb), .46);
+  stroke-width: 1.55px;
+  stroke-dasharray: none;
+  animation: none !important;
+  filter: none;
+}
+
+.app-shell.porcelain-studio-v2 .edge-runner {
+  fill: rgba(var(--ps-accent-rgb), .88);
+  filter: drop-shadow(0 0 3px rgba(var(--ps-accent-rgb), .32));
+  pointer-events: none;
+}
+
+/* Revision history in the existing node information popover. */
+.node-info-popover .revision-history {
+  margin: 0 10px 9px;
+  padding: 9px;
+  border-radius: 11px;
+  background: rgba(24,36,49,.025);
+  border: 1px solid rgba(24,36,49,.065);
+}
+
+.node-info-popover .revision-history > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 7px;
+}
+
+.node-info-popover .revision-history > header span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: rgba(24,36,49,.58);
+  font-size: 8.5px;
+  font-weight: 600;
+}
+
+.node-info-popover .revision-history > header b {
+  min-width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  color: rgba(24,36,49,.62);
+  background: #fff;
+  border: 1px solid rgba(24,36,49,.075);
+  font-size: 8px;
+}
+
+.node-info-popover .revision-history ol {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.node-info-popover .revision-history li {
+  min-height: 35px;
+  display: grid;
+  grid-template-columns: 8px minmax(0,1fr) auto;
+  gap: 7px;
+  align-items: center;
+  padding: 4px 6px;
+  border-radius: 8px;
+}
+
+.node-info-popover .revision-history li.active { background: rgba(112,85,199,.055); }
+.node-info-popover .revision-history li > i { width: 5px; height: 5px; border-radius: 50%; background: rgba(24,36,49,.20); }
+.node-info-popover .revision-history li.active > i { background: #7055c7; box-shadow: 0 0 0 3px rgba(112,85,199,.10); }
+.node-info-popover .revision-history li div { min-width: 0; display: grid; gap: 1px; }
+.node-info-popover .revision-history li strong { color: #182431; font-size: 9px; font-weight: 600; }
+.node-info-popover .revision-history li span { color: rgba(24,36,49,.44); font-size: 8px; }
+.node-info-popover .revision-history li em { color: rgba(24,36,49,.28); font-size: 6.8px; font-style: normal; font-weight: 700; letter-spacing: .04em; }
+.node-info-popover .revision-history > p { margin: 6px 2px 0; color: rgba(24,36,49,.38); font-size: 7.8px; line-height: 1.4; }
+
+@media (prefers-reduced-motion: reduce) {
+  .app-shell.porcelain-studio-v2 .edge-runner { display: none; }
+}
+
+/* vNext context + version controls: the Canvas launches work, the rail follows it. */
+.app-shell.porcelain-studio-v2 .selection-composer {
+  --composer-border: rgba(34, 43, 55, .10);
+  position: absolute;
+  z-index: 72;
+  width: 520px;
+  max-width: calc(100vw - 96px);
+  transform: scale(var(--selection-composer-scale, 1));
+  transform-origin: top left;
+  overflow: visible;
+  border: 1px solid var(--composer-border);
+  border-radius: 17px;
+  background: rgba(255, 255, 253, .97);
+  box-shadow: 0 16px 42px rgba(25, 31, 41, .13), 0 2px 8px rgba(25, 31, 41, .05);
+  backdrop-filter: blur(18px) saturate(1.08);
+  color: var(--ps-text-strong);
+}
+
+.app-shell.porcelain-studio-v2 .selection-composer-header {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px 7px 13px;
+  border-bottom: 1px solid rgba(34, 43, 55, .065);
+}
+
+.app-shell.porcelain-studio-v2 .selection-composer-header > div:first-child {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.app-shell.porcelain-studio-v2 .selection-composer-header span,
+.app-shell.porcelain-studio-v2 .selection-composer-header strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-shell.porcelain-studio-v2 .selection-composer-header span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--ps-text-faint);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.app-shell.porcelain-studio-v2 .selection-composer-header strong {
+  color: var(--ps-text-strong);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.app-shell.porcelain-studio-v2 .selection-composer-header-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.app-shell.porcelain-studio-v2 .selection-composer button {
+  font: inherit;
+}
+
+.app-shell.porcelain-studio-v2 .workspace-membership-action,
+.app-shell.porcelain-studio-v2 .selection-composer .icon-only {
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 9px;
+  border: 1px solid rgba(34, 43, 55, .08);
+  border-radius: 9px;
+  background: rgba(34, 43, 55, .025);
+  color: var(--ps-text-muted);
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.app-shell.porcelain-studio-v2 .selection-composer .icon-only {
+  width: 28px;
+  padding: 0;
+}
+
+.app-shell.porcelain-studio-v2 .selection-provenance {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  margin: 9px 11px 0;
+  padding: 8px 9px;
+  border: 1px solid rgba(112, 85, 199, .11);
+  border-radius: 10px;
+  background: rgba(112, 85, 199, .045);
+  color: rgba(83, 63, 154, .82);
+}
+
+.app-shell.porcelain-studio-v2 .selection-provenance div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.app-shell.porcelain-studio-v2 .selection-provenance b {
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.app-shell.porcelain-studio-v2 .selection-provenance span {
+  overflow: hidden;
+  color: rgba(38, 42, 52, .55);
+  font-size: 9px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-shell.porcelain-studio-v2 .selection-composer-input {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px;
+  gap: 8px;
+  align-items: end;
+  padding: 10px 11px 8px;
+}
+
+.app-shell.porcelain-studio-v2 .selection-composer-input textarea {
+  width: 100%;
+  min-height: 58px;
+  max-height: 150px;
+  resize: vertical;
+  padding: 8px 9px;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--ps-text-strong);
+  font: 500 12px/1.55 var(--ps-font-ui, inherit);
+}
+
+.app-shell.porcelain-studio-v2 .selection-composer-input textarea::placeholder {
+  color: rgba(36, 43, 52, .34);
+}
+
+.app-shell.porcelain-studio-v2 .selection-send {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 11px;
+  background: #272c36;
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(27, 31, 40, .18);
+}
+
+.app-shell.porcelain-studio-v2 .selection-send:disabled {
+  opacity: .28;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.app-shell.porcelain-studio-v2 .proposal-summary,
+.app-shell.porcelain-studio-v2 .proposal-ambiguity {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 12px 8px;
+  color: rgba(54, 61, 72, .58);
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+.app-shell.porcelain-studio-v2 .proposal-ambiguity { color: rgba(172, 95, 35, .82); }
+
+.app-shell.porcelain-studio-v2 .selection-composer-options,
+.app-shell.porcelain-studio-v2 .global-composer-options {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 9px 9px;
+  border-top: 1px solid rgba(34, 43, 55, .06);
+}
+
+.app-shell.porcelain-studio-v2 .selection-composer-options label,
+.app-shell.porcelain-studio-v2 .global-composer-options label {
+  position: relative;
+  min-width: 0;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 21px 0 8px;
+  border: 1px solid rgba(34, 43, 55, .075);
+  border-radius: 9px;
+  background: rgba(34, 43, 55, .025);
+  color: var(--ps-text-muted);
+}
+
+.app-shell.porcelain-studio-v2 .selection-composer-options label > span,
+.app-shell.porcelain-studio-v2 .global-composer-options label > span {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--ps-text-faint);
+  font-size: 8px;
+  font-weight: 650;
+}
+
+.app-shell.porcelain-studio-v2 .selection-composer-options select,
+.app-shell.porcelain-studio-v2 .global-composer-options select {
+  min-width: 0;
+  max-width: 98px;
+  appearance: none;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ps-text-strong);
+  font: 600 9px/1 var(--ps-font-ui, inherit);
+  cursor: pointer;
+}
+
+.app-shell.porcelain-studio-v2 .selection-composer-options label > svg,
+.app-shell.porcelain-studio-v2 .global-composer-options label > svg {
+  position: absolute;
+  right: 6px;
+  pointer-events: none;
+  color: rgba(34, 43, 55, .35);
+}
+
+.app-shell.porcelain-studio-v2 .selection-composer-options .target-option,
+.app-shell.porcelain-studio-v2 .global-composer-options .global-target-option {
+  flex: 1 1 auto;
+}
+
+.app-shell.porcelain-studio-v2 .selection-composer-options .target-option select,
+.app-shell.porcelain-studio-v2 .global-composer-options .global-target-option select {
+  max-width: none;
+  width: 100%;
+}
+
+.app-shell.porcelain-studio-v2 .work-rail-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.app-shell.porcelain-studio-v2 .work-rail-header-actions button {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: rgba(37, 45, 55, .52);
+}
+
+.app-shell.porcelain-studio-v2 .global-context-composer .composer-context-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 10px;
+}
+
+.app-shell.porcelain-studio-v2 .global-composer-options {
+  flex-wrap: wrap;
+  padding: 7px 0 2px;
+  border-top: 0;
+}
+
+.app-shell.porcelain-studio-v2 .global-composer-options label {
+  flex: 1 1 84px;
+}
+
+.app-shell.porcelain-studio-v2 .global-composer-options .global-target-option {
+  flex-basis: 100%;
+}
+
+.app-shell.porcelain-studio-v2 .run-contract-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 8px 0 0;
+}
+
+.app-shell.porcelain-studio-v2 .run-contract-summary span {
+  padding: 4px 7px;
+  border: 1px solid rgba(34, 43, 55, .07);
+  border-radius: 7px;
+  background: rgba(34, 43, 55, .025);
+  color: rgba(34, 43, 55, .55);
+  font-size: 9px;
+  font-weight: 600;
+}
+
+.app-shell.porcelain-studio-v2 .run-proposal-summary {
+  margin: 8px 0 0;
+  color: rgba(34, 43, 55, .55);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+/* Content objects should read as their own media, not as generic white widgets. */
+.app-shell.porcelain-studio-v2 .canvas-node.visual-family-reference:not(.selected):not(.multi-selected),
+.app-shell.porcelain-studio-v2 .canvas-node.visual-family-document:not(.selected):not(.multi-selected) {
+  border-color: rgba(25, 33, 43, .055) !important;
+  box-shadow: 0 1px 2px rgba(19, 29, 39, .025), 0 5px 16px rgba(19, 29, 39, .035) !important;
+}
+
+.app-shell.porcelain-studio-v2 .preview-art.image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+@media (max-width: 1180px) {
+  .app-shell.porcelain-studio-v2 .selection-composer { width: 460px; }
+  .app-shell.porcelain-studio-v2 .selection-composer-options { flex-wrap: wrap; }
+  .app-shell.porcelain-studio-v2 .selection-composer-options .target-option { flex-basis: 100%; }
+}
+
+.app-shell.porcelain-studio-v2 .workspace-move-action {
+  position: relative;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 20px 0 8px;
+  border: 1px solid rgba(34, 43, 55, .08);
+  border-radius: 9px;
+  background: rgba(34, 43, 55, .025);
+  color: var(--ps-text-faint);
+  font-size: 9px;
+  font-weight: 600;
+}
+.app-shell.porcelain-studio-v2 .workspace-move-action select {
+  max-width: 88px;
+  appearance: none;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ps-text-strong);
+  font: 600 9px/1 var(--ps-font-ui, inherit);
+}
+.app-shell.porcelain-studio-v2 .workspace-move-action > svg {
+  position: absolute;
+  right: 6px;
+  pointer-events: none;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Context + version management: revision provenance and Workspace history     */
+/* -------------------------------------------------------------------------- */
+
+.app-shell.porcelain-studio-v2 .workbench-revisions {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.app-shell.porcelain-studio-v2 .workbench-revisions > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--ps-border-soft);
+}
+
+.app-shell.porcelain-studio-v2 .workbench-revisions > header > div,
+.app-shell.porcelain-studio-v2 .workbench-revisions dl dt,
+.app-shell.porcelain-studio-v2 .workbench-revisions article footer button,
+.app-shell.porcelain-studio-v2 .workspace-states-actions button,
+.app-shell.porcelain-studio-v2 .workspace-states-dialog main li > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.app-shell.porcelain-studio-v2 .workbench-revisions > header > div {
+  color: var(--ps-text-strong);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.app-shell.porcelain-studio-v2 .workbench-revisions > header small {
+  max-width: 160px;
+  color: var(--ps-text-faint);
+  font-size: 9px;
+  line-height: 1.45;
+  text-align: right;
+}
+
+.app-shell.porcelain-studio-v2 .workbench-loading,
+.app-shell.porcelain-studio-v2 .workbench-error,
+.app-shell.porcelain-studio-v2 .revision-compare-summary {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 11px;
+  border-radius: 10px;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.app-shell.porcelain-studio-v2 .workbench-loading {
+  color: var(--ps-text-muted);
+  background: var(--ps-surface-1);
+  border: 1px solid var(--ps-border-soft);
+}
+
+.app-shell.porcelain-studio-v2 .workbench-error {
+  color: var(--ps-danger);
+  background: rgba(var(--ps-danger-rgb), .045);
+  border: 1px solid rgba(var(--ps-danger-rgb), .12);
+}
+
+.app-shell.porcelain-studio-v2 .workbench-revisions > ol {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.app-shell.porcelain-studio-v2 .workbench-revisions > ol > li {
+  position: relative;
+  display: grid;
+  grid-template-columns: 17px minmax(0, 1fr);
+  gap: 9px;
+  min-width: 0;
+  padding-bottom: 12px;
+}
+
+.app-shell.porcelain-studio-v2 .workbench-revisions > ol > li:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 11px;
+  bottom: -1px;
+  width: 1px;
+  background: rgba(41, 49, 60, .10);
+}
+
+.app-shell.porcelain-studio-v2 .revision-rail-dot {
+  position: relative;
+  z-index: 1;
+  width: 11px;
+  height: 11px;
+  margin-top: 12px;
+  border: 2px solid rgba(41, 49, 60, .20);
+  border-radius: 50%;
+  background: var(--ps-canvas);
+}
+
+.app-shell.porcelain-studio-v2 .workbench-revisions li.current .revision-rail-dot {
+  border-color: rgba(var(--ps-accent-rgb), .42);
+  background: var(--ps-accent);
+  box-shadow: 0 0 0 3px rgba(var(--ps-accent-rgb), .09);
+}
+
+.app-shell.porcelain-studio-v2 .workbench-revisions li.viewing .revision-rail-dot {
+  border-color: rgba(41, 49, 60, .38);
+  background: #fff;
+}
+
+.app-shell.porcelain-studio-v2 .workbench-revisions article {
+  min-width: 0;
+  padding: 10px 11px;
+  border: 1px solid var(--ps-border-soft);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .76);
+  box-shadow: 0 2px 9px rgba(22, 31, 42, .035);
+}
+
+.app-shell.porcelain-studio-v2 .workbench-revisions li.current article {
+  border-color: rgba(var(--ps-accent-rgb), .17);
+  box-shadow: 0 0 0 1px rgba(var(--ps-accent-rgb), .035), 0 4px 13px rgba(22, 31, 42, .045);
+}
+
+.app-shell.porcelain-studio-v2 .workbench-revisions article > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.app-shell.porcelain-studio-v2 .workbench-revisions article > header strong {
+  color: var(--ps-text-strong);
+  font-size: 11px;
+}
+
+.app-shell.porcelain-studio-v2 .workbench-revisions article > header span {
+  color: var(--ps-text-faint);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.app-shell.porcelain-studio-v2 .workbench-revisions article > p {
+  display: -webkit-box;
+  margin: 8px 0;
+  overflow: hidden;
+  color: var(--ps-text);
+  font-size: 10px;
+  line-height: 1.55;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.app-shell.porcelain-studio-v2 .workbench-revisions dl {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+
+.app-shell.porcelain-studio-v2 .workbench-revisions dl > div {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.app-shell.porcelain-studio-v2 .workbench-revisions dl dt,
+.app-shell.porcelain-studio-v2 .workbench-revisions dl dd {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-shell.porcelain-studio-v2 .workbench-revisions dl dt { color: var(--ps-text-faint); }
+.app-shell.porcelain-studio-v2 .workbench-revisions dl dd { color: var(--ps-text-muted); }
+
+.app-shell.porcelain-studio-v2 .workbench-revisions article footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 9px;
+}
+
+.app-shell.porcelain-studio-v2 .workbench-revisions article footer button {
+  min-height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--ps-border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ps-text);
+  font-size: 9px;
+  font-weight: 600;
+}
+
+.app-shell.porcelain-studio-v2 .workbench-revisions article footer button:hover:not(:disabled) {
+  color: var(--ps-text-strong);
+  border-color: var(--ps-border-strong);
+}
+
+.app-shell.porcelain-studio-v2 .revision-compare-summary {
+  color: var(--ps-text);
+  background: rgba(var(--ps-accent-rgb), .045);
+  border: 1px solid rgba(var(--ps-accent-rgb), .12);
+}
+
+.app-shell.porcelain-studio-v2 .workspace-states-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 180;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(23, 30, 38, .18);
+  backdrop-filter: blur(8px) saturate(.92);
+  -webkit-backdrop-filter: blur(8px) saturate(.92);
+}
+
+.app-shell.porcelain-studio-v2 .workspace-states-dialog {
+  width: min(660px, calc(100vw - 32px));
+  max-height: min(720px, calc(100vh - 48px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: var(--ps-text-strong);
+  background: rgba(252, 252, 250, .997);
+  border: 1px solid var(--ps-border);
+  border-radius: var(--ps-radius-modal);
+  box-shadow: var(--ps-shadow-4), inset 0 1px 0 rgba(255, 255, 255, .96);
+}
+
+.app-shell.porcelain-studio-v2 .workspace-states-dialog > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 18px 19px 14px;
+  border-bottom: 1px solid var(--ps-border-soft);
+}
+
+.app-shell.porcelain-studio-v2 .workspace-states-dialog > header small {
+  color: var(--ps-text-faint);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: .14em;
+}
+
+.app-shell.porcelain-studio-v2 .workspace-states-dialog > header h2 {
+  margin: 3px 0 0;
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.app-shell.porcelain-studio-v2 .workspace-states-dialog > header p {
+  margin: 5px 0 0;
+  color: var(--ps-text-muted);
+  font-size: 10px;
+}
+
+.app-shell.porcelain-studio-v2 .workspace-states-actions {
+  display: flex;
+  gap: 7px;
+  padding: 11px 19px;
+  border-bottom: 1px solid var(--ps-border-soft);
+}
+
+.app-shell.porcelain-studio-v2 .workspace-states-actions button,
+.app-shell.porcelain-studio-v2 .workspace-states-dialog main li > button {
+  min-height: 31px;
+  padding: 0 10px;
+  border: 1px solid var(--ps-border);
+  border-radius: 9px;
+  background: #fff;
+  color: var(--ps-text);
+  font-size: 9px;
+  font-weight: 650;
+}
+
+.app-shell.porcelain-studio-v2 .workspace-states-dialog .primary {
+  color: #fff;
+  background: var(--ps-accent);
+  border-color: rgba(var(--ps-accent-rgb), .34);
+}
+
+.app-shell.porcelain-studio-v2 .workspace-states-error {
+  margin: 11px 19px 0;
+  padding: 9px 10px;
+  border: 1px solid rgba(var(--ps-danger-rgb), .12);
+  border-radius: 9px;
+  color: var(--ps-danger);
+  background: rgba(var(--ps-danger-rgb), .045);
+  font-size: 10px;
+}
+
+.app-shell.porcelain-studio-v2 .workspace-states-dialog > main {
+  min-height: 180px;
+  overflow: auto;
+  padding: 8px 19px 15px;
+}
+
+.app-shell.porcelain-studio-v2 .workspace-states-dialog main > ol {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.app-shell.porcelain-studio-v2 .workspace-states-dialog main li {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--ps-border-soft);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, .75);
+}
+
+.app-shell.porcelain-studio-v2 .workspace-state-index {
+  color: rgba(42, 50, 61, .28);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: .06em;
+}
+
+.app-shell.porcelain-studio-v2 .workspace-states-dialog main article { min-width: 0; }
+
+.app-shell.porcelain-studio-v2 .workspace-states-dialog main article > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.app-shell.porcelain-studio-v2 .workspace-states-dialog main article strong {
+  overflow: hidden;
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-shell.porcelain-studio-v2 .workspace-states-dialog main time {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--ps-text-faint);
+  font-size: 8px;
+  white-space: nowrap;
+}
+
+.app-shell.porcelain-studio-v2 .workspace-states-dialog main article p {
+  margin: 4px 0 0;
+  color: var(--ps-text-muted);
+  font-size: 9px;
+}
+
+.app-shell.porcelain-studio-v2 .workspace-states-empty {
+  min-height: 170px;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 7px;
+  color: var(--ps-text-muted);
+  text-align: center;
+  font-size: 10px;
+}
+
+.app-shell.porcelain-studio-v2 .workspace-states-empty strong { color: var(--ps-text-strong); }
+.app-shell.porcelain-studio-v2 .workspace-states-empty span { max-width: 300px; color: var(--ps-text-faint); }
+
+.app-shell.porcelain-studio-v2 .workspace-states-dialog > footer {
+  padding: 10px 19px 13px;
+  border-top: 1px solid var(--ps-border-soft);
+  color: var(--ps-text-faint);
+  font-size: 8.5px;
+}
+
+.app-shell.porcelain-studio-v2 .spin { animation: handoff-spin .9s linear infinite; }
+
+@media (max-width: 780px) {
+  .app-shell.porcelain-studio-v2 .workspace-states-backdrop { padding: 12px; }
+  .app-shell.porcelain-studio-v2 .workspace-states-dialog { width: 100%; max-height: calc(100vh - 24px); }
+  .app-shell.porcelain-studio-v2 .workspace-states-dialog main li { grid-template-columns: 24px minmax(0, 1fr); }
+  .app-shell.porcelain-studio-v2 .workspace-states-dialog main li > button { grid-column: 2; justify-self: start; }
+}
+
+/* vNext.1 source identity: imported material looks like itself, not like an invented LCOS card. */
+.app-shell.porcelain-studio-v2 .preview-art.source-identity {
+  min-height: 72px;
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 13px 14px;
+  overflow: hidden;
+  background: rgba(255,255,253,.94);
+  border: 1px solid rgba(24,36,49,.065);
+  box-shadow: inset 3px 0 0 rgba(var(--ps-node-rgb), .08);
+}
+
+.app-shell.porcelain-studio-v2 .preview-art.source-identity.compact {
+  min-height: 52px;
+  grid-template-columns: 1fr;
+  place-items: center;
+  gap: 3px;
+  padding: 8px;
+}
+
+.app-shell.porcelain-studio-v2 .source-file-icon {
+  width: 48px;
+  height: 56px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(24,36,49,.07);
+  border-radius: 9px;
+  background: rgba(245,246,244,.92);
+  color: rgba(var(--ps-node-rgb), .82);
+}
+
+.app-shell.porcelain-studio-v2 .kind-image .source-file-icon {
+  background: rgba(239,242,241,.88);
+}
+
+.app-shell.porcelain-studio-v2 .kind-ppt .source-file-icon { color: #b7653f; }
+.app-shell.porcelain-studio-v2 .kind-pdf .source-file-icon { color: #aa4d4d; }
+.app-shell.porcelain-studio-v2 .kind-link .source-file-icon { color: #5078a7; }
+.app-shell.porcelain-studio-v2 .kind-md .source-file-icon { color: #586574; }
+
+.app-shell.porcelain-studio-v2 .source-file-copy {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.app-shell.porcelain-studio-v2 .source-file-copy small {
+  color: var(--ps-text-faint);
+  font-size: 7.5px;
+  font-weight: 700;
+  letter-spacing: .06em;
+}
+
+.app-shell.porcelain-studio-v2 .source-file-copy b {
+  overflow: hidden;
+  color: var(--ps-text-strong);
+  font-size: 10px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-shell.porcelain-studio-v2 .source-file-copy p {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: var(--ps-text-muted);
+  font-size: 8.5px;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+/* External/reference content keeps the frame quiet until it is selected. */
+.app-shell.porcelain-studio-v2 .canvas-node[data-context-only="true"] .artifact-stack-shell > .artifact-visual {
+  border-color: rgba(24,36,49,.045);
+  box-shadow: 0 4px 14px rgba(19,29,39,.035);
+}
+
+.app-shell.porcelain-studio-v2 .canvas-node[data-context-only="true"] .artifact-stack-shell > .artifact-visual::before {
+  opacity: .22;
+}
+
+.app-shell.porcelain-studio-v2 .artifact-source-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+  color: var(--ps-text-faint);
+  font-size: 8px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-shell.porcelain-studio-v2 .process-visual em {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.app-shell.porcelain-studio-v2 .density-compact .process-visual em,
+.app-shell.porcelain-studio-v2 .lod-overview .process-visual em,
+.app-shell.porcelain-studio-v2 .density-compact .artifact-source-line {
+  display: none;
+}
+
+.app-shell.porcelain-studio-v2 .process-counts {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 4px;
+}
+
+.app-shell.porcelain-studio-v2 .process-counts span {
+  padding: 2px 5px;
+  border: 1px solid rgba(35,44,55,.07);
+  border-radius: 6px;
+  background: rgba(35,44,55,.03);
+  color: var(--ps-text-faint) !important;
+  font-size: 7.5px !important;
+  font-weight: 650;
+}

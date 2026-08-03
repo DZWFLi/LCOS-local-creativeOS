@@ -317,6 +317,14 @@ export function mapGraphToState(
       .map((view) => [String(view.artifactId), String(view.id)] as const),
   )
   const revisionById = new Map(graph.artifactRevisions.map((revision) => [revision.id, revision]))
+  const revisionsByArtifactId = new Map<string, ProjectGraphSnapshot['artifactRevisions'][number][]>()
+  graph.artifactRevisions.forEach((revision) => {
+    const key = String(revision.artifactId)
+    const list = revisionsByArtifactId.get(key) ?? []
+    list.push(revision)
+    revisionsByArtifactId.set(key, list)
+  })
+  revisionsByArtifactId.forEach((list) => list.sort((left, right) => String(left.createdAt).localeCompare(String(right.createdAt))))
   const fileRecordById = new Map(graph.fileRecords.map((fileRecord) => [fileRecord.id, fileRecord]))
   const previewByRevisionId = new Map(previewRecords.map((preview) => [preview.revisionId, preview]))
   const childScopeByContainerViewId = new Map(graph.scopes.filter((scope) => scope.containerViewId !== null).map((scope) => [String(scope.containerViewId), String(scope.id)]))
@@ -334,6 +342,9 @@ export function mapGraphToState(
     const previewContent = preview === undefined ? undefined : previewContents.get(String(preview.id))
     const isStale = artifact?.availability === 'stale'
     const isMissing = artifact?.availability === 'missing'
+    const artifactRevisions = artifact === undefined ? [] : (revisionsByArtifactId.get(String(artifact.id)) ?? [])
+    const revisionIndex = revisionId === undefined ? -1 : artifactRevisions.findIndex((item) => String(item.id) === String(revisionId))
+    const historical = Boolean(revisionId && artifact?.currentRevisionId && String(revisionId) !== String(artifact.currentRevisionId))
     const runtimeRole = artifact === undefined
       ? undefined
       : feedbackArtifactIds.has(String(artifact.id))
@@ -343,9 +354,10 @@ export function mapGraphToState(
           : undefined
     return {
       id: String(view.id),
-      kind: runtimeRole === 'feedback' ? 'note' : runtimeRole === 'reference' ? 'context' : artifact ? (KIND_TO_NODE[artifact.kind] ?? 'context') : 'context',
+      kind: runtimeRole === 'feedback' ? 'note' : artifact ? (KIND_TO_NODE[artifact.kind] ?? 'source') : 'source',
       title: artifact?.title ?? String(view.id),
-      subtitle: artifact?.kind ? `${runtimeRole === 'feedback' ? 'Feedback' : runtimeRole === 'reference' ? 'Reference' : artifact.kind}${fileRecord ? ' · Runtime source' : ''}${fileRecord && (artifact.kind === 'pdf' || artifact.kind === 'presentation') ? ' · 只读预览可用' : ''}` : '',
+      subtitle: artifact?.kind ? `${runtimeRole === 'feedback' ? 'Feedback' : runtimeRole === 'reference' ? 'External Reference' : artifact.kind}${fileRecord ? ' · Runtime source' : ''}${fileRecord && (artifact.kind === 'pdf' || artifact.kind === 'presentation') ? ' · 只读预览可用' : ''}` : '',
+      contextOnly: runtimeRole === 'reference' || artifact?.managed !== true,
       x: view.position.x, y: view.position.y,
       width: view.size.width, height: view.size.height,
       displayMode: view.displayMode === 'compact' ? 'compact' as const : 'standard' as const,
@@ -353,6 +365,12 @@ export function mapGraphToState(
       fileType: artifact?.kind,
       artifactId: artifact === undefined ? undefined : String(artifact.id),
       revisionId: revisionId === undefined ? undefined : String(revisionId),
+      revisionCount: artifactRevisions.length,
+      revisionLabel: revisionIndex >= 0 ? `V${revisionIndex + 1}` : undefined,
+      historical,
+      managed: artifact?.managed ?? false,
+      createdAt: revision?.createdAt ?? artifact?.createdAt,
+      sourceRunId: revision?.runId === undefined ? undefined : String(revision.runId),
       fileRecordId: revision === undefined ? undefined : String(revision.fileRecordId),
       fileAvailability: fileRecord?.availability,
       contentHash: revision === undefined ? undefined : String(revision.contentHash),
@@ -486,17 +504,21 @@ export function mapStateToGraph(state: PersistedPrototypeState, projectId: strin
     collapsed: false,
   }))
 
-  // Relations: entity-based (sourceEntityType/sourceEntityId)
-  const relations: ProjectGraphSnapshot['relations'] = state.edges.map((e) => ({
-    id: e.id as ProjectGraphSnapshot['relations'][number]['id'],
-    projectId: projectId as ProjectGraphSnapshot['relations'][number]['projectId'],
-    sourceEntityType: 'artifact' as const,
-    sourceEntityId: e.from as ProjectGraphSnapshot['relations'][number]['sourceEntityId'],
-    targetEntityType: 'artifact' as const,
-    targetEntityId: e.to as ProjectGraphSnapshot['relations'][number]['targetEntityId'],
-    kind: e.kind,
-    createdAt: now, updatedAt: now,
-  }))
+  // Relations: only persist edges between durable content objects.
+  // Run / process projection edges are presentation-only and come from the backend.
+  const coreNodeIds = new Set(coreNodes.map((node) => node.id))
+  const relations: ProjectGraphSnapshot['relations'] = state.edges
+    .filter((edge) => coreNodeIds.has(edge.from) && coreNodeIds.has(edge.to))
+    .map((e) => ({
+      id: e.id as ProjectGraphSnapshot['relations'][number]['id'],
+      projectId: projectId as ProjectGraphSnapshot['relations'][number]['projectId'],
+      sourceEntityType: 'artifact' as const,
+      sourceEntityId: e.from as ProjectGraphSnapshot['relations'][number]['sourceEntityId'],
+      targetEntityType: 'artifact' as const,
+      targetEntityId: e.to as ProjectGraphSnapshot['relations'][number]['targetEntityId'],
+      kind: e.kind,
+      createdAt: now, updatedAt: now,
+    }))
 
   return {
     schemaVersion: 3,
@@ -624,14 +646,20 @@ export function diffStateToOps(
     }
   }
 
-  for (const e of state.edges) {
+  const durableNodeIds = new Set(coreNodes.map((node) => node.id))
+  const durableEdges = state.edges.filter((edge) => durableNodeIds.has(edge.from) && durableNodeIds.has(edge.to))
+  const previousDurableNodeIds = new Set(previous.nodes
+    .filter((node) => !node.runtimeTransient && node.kind !== 'process' && node.kind !== 'note' && node.kind !== 'decision')
+    .map((node) => node.id))
+  const previousDurableEdges = previous.edges.filter((edge) => previousDurableNodeIds.has(edge.from) && previousDurableNodeIds.has(edge.to))
+  for (const e of durableEdges) {
     const before = previousEdges.get(e.id)
     if (before === undefined || before.from !== e.from || before.to !== e.to || before.kind !== e.kind) {
       ops.push({ type: 'upsert_relation', relation: { id: e.id, projectId, sourceEntityType: 'artifact', sourceEntityId: e.from, targetEntityType: 'artifact', targetEntityId: e.to, kind: e.kind, createdAt: now, updatedAt: now } })
     }
   }
-  const edgeIds = new Set(state.edges.map((edge) => edge.id))
-  for (const edge of previous.edges) {
+  const edgeIds = new Set(durableEdges.map((edge) => edge.id))
+  for (const edge of previousDurableEdges) {
     if (!edgeIds.has(edge.id)) ops.push({ type: 'delete_relation', relationId: edge.id, projectId })
   }
 

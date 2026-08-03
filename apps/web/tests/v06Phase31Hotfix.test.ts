@@ -19,10 +19,10 @@ describe('v0.6 phase 3.1 navigation and shortcut hotfix', () => {
     expect(app).toContain('enterScope(activeScope.parentScopeId)')
   })
 
-  it('routes Ctrl/Cmd+Enter through the run confirmation even when focus is outside the composer', () => {
+  it('routes Ctrl/Cmd+Enter to the active context composer without a confirmation page', () => {
     expect(app).toContain("if (modifier && event.key === 'Enter')")
-    expect(app).toContain('requestRun()')
-    expect(app).toContain('setRunConfirmOpen(true)')
+    expect(app).toContain('selectedIds.length ? requestSelectionRun() : requestGlobalRun()')
+    expect(app).not.toContain('setRunConfirmOpen(true)')
   })
 
   it('exposes a discoverable close control for every project tab', () => {

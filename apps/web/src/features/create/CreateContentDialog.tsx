@@ -72,17 +72,17 @@ export function CreateContentDialog({ open, leftInset, rightInset, onCancel, onC
         <header>
           <div>
             <span>添加到画布</span>
-            <h2 id={titleId}>你想记录什么？</h2>
+            <h2 id={titleId}>创建内容</h2>
           </div>
           <button type="button" aria-label="关闭" onClick={onCancel}><X size={17} /></button>
         </header>
 
-        <p className="canvas-create-intro">只选择结果，节点类型、关系和位置由系统处理。文件仍然直接拖入画布。</p>
+        <p className="canvas-create-intro">这里只创建最基础的文本或集合。文件、链接和 Agent 过程由各自来源自动建立。</p>
 
         <div className="canvas-create-options">
           <button ref={noteRef} type="button" onClick={() => onCreate('note')}>
             <span className="canvas-create-icon note"><MessageSquareText size={19} /></span>
-            <span><b>记录一个想法</b><small>判断、灵感、修改意见或临时备注</small></span>
+            <span><b>新建文本</b><small>轻量文字内容，可直接加入 Context 或交给 Agent 整理</small></span>
           </button>
           <button type="button" onClick={() => onCreate('context')}>
             <span className="canvas-create-icon collection"><FolderPlus size={19} /></span>

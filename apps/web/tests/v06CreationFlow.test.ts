@@ -18,9 +18,9 @@ describe('v0.6 simplified content creation contract', () => {
   })
 
   it('shows only two human-readable creation outcomes', () => {
-    expect(dialog).toContain('记录一个想法')
+    expect(dialog).toContain('新建文本')
     expect(dialog).toContain('建立内容集合')
-    expect(dialog).toContain('节点类型、关系和位置由系统处理')
+    expect(dialog).toContain('最基础的文本或集合')
     expect(dialog).not.toContain('Command')
     expect(dialog).not.toContain('Context Pack')
     expect(dialog).not.toContain('Skill')
@@ -29,7 +29,7 @@ describe('v0.6 simplified content creation contract', () => {
   it('centers the dialog outside the transformed canvas and locks canvas interaction', () => {
     expect(dialog).toContain('createPortal')
     expect(dialog).toContain('canvas-create-layer')
-    expect(app).toContain('locked={createDialogOpen || runConfirmOpen || scopeCreateOpen}')
+    expect(app).toContain('locked={createDialogOpen || scopeCreateOpen}')
     expect(canvas).toContain("${locked ? 'is-locked' : ''}")
     expect(css).toContain('.canvas.is-locked')
     expect(css).toContain('pointer-events: none')

@@ -1,64 +1,47 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
-describe('v0.6 centered run confirmation and Canvas lock', () => {
+describe('vNext direct context composer contract', () => {
   const readSource = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8').replaceAll('\r\n', '\n')
   const app = readSource('../src/App.tsx')
-  const dialog = readSource('../src/features/create/RunConfirmDialog.tsx')
+  const composer = readSource('../src/features/canvas/SelectionComposer.tsx')
   const rail = readSource('../src/features/workrail/WorkRail.tsx')
-  const createDialog = readSource('../src/features/create/CreateContentDialog.tsx')
   const canvas = readSource('../src/features/canvas/ProjectCanvas.tsx')
-  const css = readSource('../src/surface.css')
 
-  it('opens one centered confirmation instead of starting immediately', () => {
-    expect(app).toContain('setRunConfirmOpen(true)')
-    expect(app).toContain('<RunConfirmDialog')
-    expect(app).toContain('onConfirm={confirmRun}')
-    expect(dialog).toContain('把这次修改交给 WorkBuddy')
-    expect(dialog).toContain('你想怎么修改')
-    expect(dialog).toContain('修改目标')
-    expect(dialog).toContain('参考内容')
+  it('launches runs directly from the selected context without RunConfirmDialog', () => {
+    expect(app).not.toContain('<RunConfirmDialog')
+    expect(app).toContain('selectionComposer={selectedIds.length ?')
+    expect(app).toContain('onSend: requestSelectionRun')
+    expect(composer).toContain('data-testid="selection-composer"')
+    expect(composer).toContain('Ctrl/Cmd+Enter')
   })
 
-  it('allows ambiguous target selection inside the lightweight confirmation', () => {
-    expect(rail).toContain('hasResolvableTarget')
-    expect(dialog).toContain('这次主要修改哪个文件？')
-    expect(dialog).toContain('onSelectTarget(node.id)')
+  it('keeps intent, provider, result policy and edit target independent', () => {
+    expect(composer).toContain('范式')
+    expect(composer).toContain('Agent')
+    expect(composer).toContain('结果')
+    expect(composer).toContain('编辑对象')
+    expect(app).toContain('targetRevisionId')
+    expect(app).toContain('resultPolicy: { type: resultPolicy }')
   })
 
-  it('keeps backdrop gestures inside the lock instead of dismissing the dialog', () => {
-    expect(dialog).not.toContain('if (event.target === event.currentTarget) onCancel()')
-    expect(dialog).toContain('event.currentTarget.setPointerCapture(event.pointerId)')
-    expect(dialog).toContain('event.currentTarget.releasePointerCapture(event.pointerId)')
-    expect(canvas).toContain("if (locked) { event.preventDefault(); event.stopPropagation(); return }")
-    expect(canvas).toContain('if (locked) {\n      event.preventDefault()')
-    expect(css).toContain('.app-shell.v06 .canvas.is-locked {\n  pointer-events: none;')
-    expect(createDialog).not.toContain('if (event.target === event.currentTarget) onCancel()')
-    expect(createDialog).toContain('event.currentTarget.setPointerCapture(event.pointerId)')
+  it('uses single+linked context and strict multi-selection context', () => {
+    expect(app).toContain("if (selectedIds.length !== 1) return [...selectedIds]")
+    expect(app).toContain('relationNodes.map((node) => node.id)')
+    expect(composer).toContain('当前对象 +')
+    expect(composer).toContain('严格使用已选')
   })
 
-  it('locks the Canvas and cancels queued gesture frames while the dialog is open', () => {
-    expect(app).toContain('locked={createDialogOpen || runConfirmOpen || scopeCreateOpen}')
-    expect(canvas).toContain('cancelAnimationFrame(dragFrame.current)')
-    expect(canvas).toContain('cancelAnimationFrame(wheelFrame.current)')
-    expect(canvas).toContain('wheelZoom.current = null')
-    expect(css).toContain('.run-confirm-layer')
-    expect(css).toContain('grid-column: 2')
-    expect(css).toContain('animation-play-state: paused')
-    expect(css).not.toContain('.run-confirm-layer {\n  backdrop-filter')
+  it('keeps the right rail as workspace/canvas global context', () => {
+    expect(rail).toContain('对整个{contextLabel}直接工作')
+    expect(rail).toContain('global-context-composer')
+    expect(app).toContain('contextCount={globalContextIds.length}')
+    expect(app).toContain('onSend={requestGlobalRun}')
   })
 
-  it('memoizes the heavy Canvas so editing the command does not rerender every node', () => {
+  it('memoizes the heavy Canvas while the inline command changes', () => {
     expect(canvas).toContain('memo(function ProjectCanvas')
     expect(app).toContain('const sceneStyle = useMemo')
     expect(app).toContain('onPointerWorldChange={rememberCanvasPoint}')
-  })
-
-  it('keeps advanced execution details collapsed by default', () => {
-    expect(dialog).toContain('执行方式：WorkBuddy')
-    expect(dialog).toContain("revise: '保存为新版本'")
-    expect(dialog).toContain('advancedOpen &&')
-    expect(dialog).not.toContain('Context Pack')
-    expect(dialog).not.toContain('Execution Router')
   })
 })

@@ -26,6 +26,17 @@ export interface CanvasNode {
   previewUrl?: string
   artifactId?: string
   revisionId?: string
+  revisionCount?: number
+  revisionLabel?: string
+  historical?: boolean
+  managed?: boolean
+  createdAt?: string
+  sourceRunId?: string
+  sourcePrompt?: string
+  sourceProvider?: string
+  contextCount?: number
+  targetCount?: number
+  outputCount?: number
   fileRecordId?: string
   fileAvailability?: 'current' | 'stale' | 'missing' | 'unreadable'
   contentHash?: string
@@ -115,6 +126,10 @@ export interface ActiveRun {
   runtimeReturnId?: string
   baseRevisionId?: string
   providerError?: string
+  provider?: string
+  outputIntent?: 'analyze' | 'create' | 'revise'
+  resultPolicy?: 'reply_only' | 'create_artifact' | 'create_collection' | 'draft_revision_per_target'
+  proposalSummary?: string
 }
 
 export interface ProjectPackage {
@@ -167,7 +182,7 @@ export const nodeMeta: Record<NodeKind, { label: string; accent: string; shape: 
   context: { label: '内容集合', accent: '#4D9084', shape: '◇', layer: 'core' },
   process: { label: '执行记录', accent: '#6F7D89', shape: '→', layer: 'process' },
   decision: { label: '确认记录', accent: '#AA7B3E', shape: '✓', layer: 'process' },
-  note: { label: '备注', accent: '#B45F54', shape: '✎', layer: 'process' },
+  note: { label: '文本', accent: '#B45F54', shape: '✎', layer: 'process' },
 }
 
 export const runStatusLabel: Record<RunStatus, string> = {

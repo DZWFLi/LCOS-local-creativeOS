@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
-import { Check, Command, Play } from 'lucide-react'
-import type { ContextManifestV0, RunReview } from '@local-creative-os/contracts'
+import { Command, Play } from 'lucide-react'
+import type { ContextManifestV0, RunProposalResult, RunReview, RuntimeProviderStatus, WorkspaceMembership } from '@local-creative-os/contracts'
 import { makePerformanceFixture } from './qa-fixtures/fixtures'
 import type { ActiveRun, Camera, CanvasNode, CanvasScope, NodeDisplayMode, NodeLayer, PersistedPrototypeState, ProjectPackage, ScopeKind, TargetContextInference, WorkRailPreferences, Workspace, WorkspaceIntent } from './model'
 import { nodeMeta, runStatusLabel } from './model'
 import { ProjectCanvas } from './features/canvas/ProjectCanvas'
+import type { ComposerResultPolicy } from './features/canvas/SelectionComposer'
 import { CanvasMiniMap } from './features/canvas/CanvasMiniMap'
 import { WorkRail } from './features/workrail/WorkRail'
 import { ProjectDrive } from './features/project/ProjectDrive'
@@ -13,7 +14,6 @@ import { WorkspaceDialog } from './features/workspace/WorkspaceDialog'
 import { ConfirmDialog } from './features/ui/ConfirmDialog'
 import { InlineNodeRename } from './features/ui/InlineNodeRename'
 import { CreateContentDialog } from './features/create/CreateContentDialog'
-import { RunConfirmDialog } from './features/create/RunConfirmDialog'
 import { ScopeCreateDialog } from './features/create/ScopeCreateDialog'
 import { ProjectCreateDialog } from './features/create/ProjectCreateDialog'
 import { HandoffDialog } from './features/handoff/HandoffDialog'
@@ -42,6 +42,8 @@ import { inferTargetContext, moveBetweenTargetAndContext, setPrimaryTarget } fro
 import { defaultProjectCatalog, fixtureStateForProject } from './qa-fixtures/projectFixtures'
 import { createChildScopeFromSelection, removeScopeTree } from './state/canvasScopes'
 import type { ActiveContextProjection } from './runtime/localCoreClient'
+import { parseArtifactRevisions, parseProcessProjection, parseSessionSummaries, parseWorkspaceStates, type ArtifactRevisionProvenance, type WorkspaceStateSummary } from './runtime/projectionAdapters'
+import { WorkspaceStatesDialog } from './features/workspace/WorkspaceStatesDialog'
 
 const MVP_SAMPLE_PROJECT_ID = 'disposable-mvp-sample'
 const DEFAULT_PROJECT_ID = MVP_SAMPLE_PROJECT_ID
@@ -112,7 +114,6 @@ export function App() {
   const [excludedContextIds, setExcludedContextIds] = useState<string[]>([])
   const [manualInference, setManualInference] = useState<TargetContextInference | null>(null)
   const [activeRun, setActiveRun] = useState<ActiveRun | null>(null)
-  const [checkpoint, setCheckpoint] = useState(false)
   const [spaceHeld, setSpaceHeld] = useState(false)
   const [notice, setNotice] = useState('已恢复上次工作现场')
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved')
@@ -121,14 +122,25 @@ export function App() {
   const [workRail, setWorkRail] = useState<WorkRailPreferences>(() => normalizeRailPreferences(initial.workRail))
   const [dockCollapsed, setDockCollapsed] = useState(true)
   const [miniMapCollapsed, setMiniMapCollapsed] = useState(false)
-  const [composerText, setComposerText] = useState(() => queryState === 'confirm' ? '根据第二轮客户反馈调整构图，拉开产品与雕像距离，优化人物比例，保留 0–6 秒缓慢拉镜和三句字幕。' : '')
+  const [globalComposerText, setGlobalComposerText] = useState('')
+  const [globalIntent, setGlobalIntent] = useState<RunOutputIntent>('analyze')
+  const [globalProvider, setGlobalProvider] = useState('auto')
+  const [globalResultPolicy, setGlobalResultPolicy] = useState<ComposerResultPolicy>('reply_only')
+  const [globalTargetId, setGlobalTargetId] = useState<string | null>(null)
+  const [selectionComposerText, setSelectionComposerText] = useState(() => queryState === 'confirm' ? '根据第二轮客户反馈调整构图，拉开产品与雕像距离，优化人物比例，保留 0–6 秒缓慢拉镜和三句字幕。' : '')
+  const [selectionIntent, setSelectionIntent] = useState<RunOutputIntent>('analyze')
+  const [selectionProvider, setSelectionProvider] = useState('auto')
+  const [selectionResultPolicy, setSelectionResultPolicy] = useState<ComposerResultPolicy>('create_artifact')
+  const [selectionTargetId, setSelectionTargetId] = useState<string | null>(null)
+  const [selectionBaseRevision, setSelectionBaseRevision] = useState<ArtifactRevisionProvenance | null>(null)
+  const [runtimeProviders, setRuntimeProviders] = useState<readonly RuntimeProviderStatus[]>([])
+  const [runProposal, setRunProposal] = useState<RunProposalResult | null>(null)
+  const [, setWorkspaceMemberships] = useState<readonly WorkspaceMembership[]>([])
   const [confirmWorkspaceId, setConfirmWorkspaceId] = useState<string | null>(null)
   const [workspaceEditor, setWorkspaceEditor] = useState<{ mode: 'create' | 'edit'; id?: string } | null>(null)
   const [renameNodeId, setRenameNodeId] = useState<string | null>(null)
   const [layoutPreview, setLayoutPreview] = useState<LayoutPreviewItem[] | null>(null)
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
-  const [runConfirmOpen, setRunConfirmOpen] = useState(false)
-  const [runIntent, setRunIntent] = useState<RunOutputIntent>('revise')
   const [scopeCreateOpen, setScopeCreateOpen] = useState(false)
   const [projectCreateOpen, setProjectCreateOpen] = useState(false)
   const [composerFocusRequest, setComposerFocusRequest] = useState(0)
@@ -144,13 +156,19 @@ export function App() {
   const [resourceDetailArtifactId, setResourceDetailArtifactId] = useState<string | null>(null)
   const [activeContextProjection, setActiveContextProjection] = useState<ActiveContextProjection | null>(null)
   const [activeContextError, setActiveContextError] = useState<string | null>(null)
+  const [workspaceStatesOpen, setWorkspaceStatesOpen] = useState(false)
+  const [workspaceStatesWorkspaceId, setWorkspaceStatesWorkspaceId] = useState<string | null>(null)
+  const [workspaceStates, setWorkspaceStates] = useState<WorkspaceStateSummary[]>([])
+  const [workspaceStatesLoading, setWorkspaceStatesLoading] = useState(false)
+  const [workspaceStateSaving, setWorkspaceStateSaving] = useState(false)
+  const [workspaceStateRestoringId, setWorkspaceStateRestoringId] = useState<string | null>(null)
+  const [workspaceStatesError, setWorkspaceStatesError] = useState<string | undefined>()
 
   const objectUrls = useRef<Set<string>>(new Set())
   const clipboardRef = useRef<CanvasClipboardPayload | null>(null)
   const lastCanvasPointRef = useRef<{ x: number; y: number } | null>(null)
   const composerRef = useRef<HTMLTextAreaElement | null>(null)
   const runCounterRef = useRef(43)
-  const runConfirmFrameRef = useRef<number | null>(null)
   const seededStateRef = useRef(false)
   const projectStateCacheRef = useRef<Map<string, PersistedPrototypeState>>(new Map([[initialProjectId, initial]]))
   const bridgeRef = useRef(new RuntimeBridge(initialProjectId))
@@ -178,6 +196,7 @@ export function App() {
   const effectiveWorkspace = activeWorkspace ?? overviewWorkspace
   const selectedNodes = selectedIds.map((id) => nodes.find((node) => node.id === id)).filter((node): node is CanvasNode => Boolean(node))
   const selectedId = selectedIds.at(-1) ?? null
+  const singleSelectedNode = selectedIds.length === 1 ? selectedNodes[0] ?? null : null
   const nodeInfoNode = nodeInfoId ? nodes.find((node) => node.id === nodeInfoId) ?? null : null
   const workbenchNode = workbench ? nodes.find((node) => node.id === workbench.nodeId) ?? null : null
   const workbenchRelationCount = useMemo(() => workbenchNode ? edges.filter((edge) => edge.from === workbenchNode.id || edge.to === workbenchNode.id).length : 0, [edges, workbenchNode])
@@ -191,6 +210,20 @@ export function App() {
   const activeWorkspaceFrames = useMemo(() => workspaceId ? workspaceFrames.filter((frame) => frame.workspaceId === workspaceId) : [], [workspaceFrames, workspaceId])
   const relationNodes = useMemo(() => selectedId ? edges.filter((edge) => edge.from === selectedId || edge.to === selectedId).map((edge) => nodes.find((node) => node.id === (edge.from === selectedId ? edge.to : edge.from))).filter((node): node is CanvasNode => Boolean(node)) : [], [edges, nodes, selectedId])
   const nodeInfoRelationCount = useMemo(() => nodeInfoId ? edges.filter((edge) => edge.from === nodeInfoId || edge.to === nodeInfoId).length : 0, [edges, nodeInfoId])
+  const selectionContextIds = useMemo(() => {
+    if (selectedIds.length !== 1) return [...selectedIds]
+    return Array.from(new Set([selectedIds[0], ...relationNodes.map((node) => node.id)]))
+  }, [relationNodes, selectedIds])
+  const globalContextIds = useMemo(() => {
+    if (activeWorkspace) return nodes.filter((node) => node.workspaceIds?.includes(activeWorkspace.id)).map((node) => node.id)
+    return scopeNodes.map((node) => node.id)
+  }, [activeWorkspace, nodes, scopeNodes])
+  const globalTargetCandidates = useMemo(() => globalContextIds
+    .map((id) => nodes.find((node) => node.id === id))
+    .filter((node): node is CanvasNode => Boolean(node?.managed === true && node.artifactId && node.revisionId)), [globalContextIds, nodes])
+  const globalTargetNode = globalTargetId ? nodes.find((node) => node.id === globalTargetId) ?? null : null
+  const selectionTargetNode = selectionTargetId ? nodes.find((node) => node.id === selectionTargetId) ?? null : null
+  const runBusy = Boolean(activeRun && ['queued', 'running'].includes(activeRun.status))
   const capabilities = useMemo(() => capabilitiesFor(dataSource), [dataSource])
 
   const baseInference = useMemo(() => inferTargetContext(nodes, selectedIds, effectiveWorkspace, scopeId, pinnedContextIds), [effectiveWorkspace, nodes, pinnedContextIds, scopeId, selectedIds])
@@ -224,9 +257,80 @@ export function App() {
   useEffect(() => () => {
     objectUrls.current.forEach((url) => URL.revokeObjectURL(url))
     objectUrls.current.clear()
-    if (runConfirmFrameRef.current !== null) window.cancelAnimationFrame(runConfirmFrameRef.current)
   }, [])
   useEffect(() => { setManualInference(null) }, [scopeId, selectedIds.join(',')])
+  useEffect(() => {
+    setRunProposal(null)
+    setSelectionBaseRevision(null)
+    setSelectionComposerText('')
+    if (!selectedNodes.length) {
+      setSelectionTargetId(null)
+      return
+    }
+    const editable = selectedNodes.filter((node) => node.managed === true && node.artifactId && node.revisionId)
+    if (selectedNodes.length === 1 && editable.length === 1) {
+      setSelectionTargetId(editable[0].id)
+      setSelectionIntent('revise')
+      setSelectionResultPolicy('draft_revision_per_target')
+      return
+    }
+    setSelectionTargetId(null)
+    setSelectionIntent('analyze')
+    setSelectionResultPolicy('create_artifact')
+  }, [selectedIds.join(','), scopeId]) // selection identity owns the default; user changes survive typing
+  useEffect(() => {
+    if (!singleSelectedNode?.revisionId) return
+    const fallback: ArtifactRevisionProvenance | null = (singleSelectedNode.sourceRunId || singleSelectedNode.sourcePrompt || singleSelectedNode.sourceProvider)
+      ? {
+          id: singleSelectedNode.revisionId,
+          label: singleSelectedNode.revisionLabel ?? (singleSelectedNode.current ? 'Current' : 'Revision'),
+          createdAt: singleSelectedNode.createdAt,
+          runId: singleSelectedNode.sourceRunId,
+          prompt: singleSelectedNode.sourcePrompt,
+          provider: singleSelectedNode.sourceProvider,
+          current: Boolean(singleSelectedNode.current),
+          draft: Boolean(singleSelectedNode.draft),
+        }
+      : null
+    if (fallback) {
+      setSelectionBaseRevision(fallback)
+      if (fallback.prompt) setSelectionComposerText(fallback.prompt)
+    }
+    if (bootMode !== 'runtime' || !singleSelectedNode.artifactId) return
+    const controller = new AbortController()
+    void Promise.all([
+      bridgeRef.current.client.artifactDetail(singleSelectedNode.artifactId, controller.signal),
+      bridgeRef.current.client.revisionList(singleSelectedNode.artifactId, controller.signal),
+    ]).then(([detailCall, listCall]) => {
+      if (controller.signal.aborted || (!detailCall.result.ok && !listCall.result.ok)) return
+      const revisions = parseArtifactRevisions(
+        detailCall.result.ok ? detailCall.result.value : undefined,
+        listCall.result.ok ? listCall.result.value : undefined,
+        singleSelectedNode.revisionId,
+      )
+      const revision = revisions.find((item) => item.id === singleSelectedNode.revisionId)
+      if (!revision) return
+      setSelectionBaseRevision(revision)
+      if (revision.prompt) setSelectionComposerText(revision.prompt)
+      if (revision.provider && runtimeProviders.some((provider) => provider.provider === revision.provider && provider.availability !== 'offline')) setSelectionProvider(revision.provider)
+    })
+    return () => controller.abort()
+  }, [bootMode, runtimeProviders, singleSelectedNode?.artifactId, singleSelectedNode?.id, singleSelectedNode?.revisionId])
+  useEffect(() => { setRunProposal(null) }, [selectionBaseRevision?.id, selectionComposerText, selectionIntent, selectionProvider, selectionResultPolicy, selectionTargetId])
+  useEffect(() => {
+    if (globalIntent === 'analyze') setGlobalResultPolicy((current) => current === 'draft_revision_per_target' || current === 'create_collection' ? 'reply_only' : current)
+    if (globalIntent === 'create') {
+      setGlobalResultPolicy((current) => current === 'reply_only' || current === 'draft_revision_per_target' ? 'create_artifact' : current)
+      setGlobalTargetId(null)
+    }
+    if (globalIntent === 'revise') {
+      setGlobalResultPolicy('draft_revision_per_target')
+      setGlobalTargetId((current) => current && globalTargetCandidates.some((node) => node.id === current) ? current : globalTargetCandidates[0]?.id ?? null)
+    }
+  }, [globalIntent, globalTargetCandidates])
+  useEffect(() => {
+    if (globalTargetId && !globalTargetCandidates.some((node) => node.id === globalTargetId)) setGlobalTargetId(null)
+  }, [globalTargetCandidates, globalTargetId])
 
   useEffect(() => {
     if (bootMode !== 'runtime') return
@@ -236,8 +340,10 @@ export function App() {
         ...(workspaceId === null ? {} : { workspaceId }),
         scopeId,
         selectedViewIds: selectedIds,
-        pinnedContextIds,
-        excludedContextIds,
+        pinnedContextIds: selectedIds.length === 1 ? relationNodes.map((node) => node.id) : [],
+        excludedContextIds: [],
+        ...(selectionTargetNode?.artifactId ? { targetArtifactId: selectionTargetNode.artifactId } : {}),
+        ...((selectionBaseRevision?.id ?? selectionTargetNode?.revisionId) ? { targetRevisionId: selectionBaseRevision?.id ?? selectionTargetNode?.revisionId } : {}),
       }, controller.signal).then((call) => {
         if (call.result.ok) {
           setActiveContextProjection(call.result.value)
@@ -251,7 +357,7 @@ export function App() {
       window.clearTimeout(timeout)
       controller.abort()
     }
-  }, [activeProjectId, bootMode, excludedContextIds, pinnedContextIds, scopeId, selectedIds, workspaceId])
+  }, [activeProjectId, bootMode, relationNodes, scopeId, selectedIds, selectionBaseRevision?.id, selectionTargetNode?.artifactId, selectionTargetNode?.revisionId, workspaceId])
   useEffect(() => {
     const bridge = bridgeRef.current
     bridge.isAvailable().then((available) => {
@@ -309,6 +415,130 @@ export function App() {
     })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  const applyMembershipProjection = useCallback((memberships: readonly WorkspaceMembership[]) => {
+    setWorkspaceMemberships(memberships)
+    const byView = new Map<string, string[]>()
+    memberships.forEach((membership) => {
+      const viewId = String(membership.artifactViewId)
+      byView.set(viewId, [...(byView.get(viewId) ?? []), String(membership.workspaceId)])
+    })
+    setNodes((current) => current.map((node) => ({ ...node, workspaceIds: byView.get(node.id) ?? [] })))
+  }, [setNodes])
+
+  const syncProcessProjection = useCallback(async () => {
+    if (bootMode !== 'runtime') return
+    const [processCall, sessionCall] = await Promise.all([
+      bridgeRef.current.client.processProjection(activeProjectId),
+      bridgeRef.current.client.listSessionSummaries(activeProjectId),
+    ])
+    if (!processCall.result.ok && !sessionCall.result.ok) return
+    const projection = parseProcessProjection(processCall.result.ok ? processCall.result.value : [])
+    const sessionSummaries = parseSessionSummaries(sessionCall.result.ok ? sessionCall.result.value : [])
+    setGraph((current) => {
+      const baseNodes = current.nodes.filter((node) => !node.id.startsWith('projection-') && !node.id.startsWith('session-summary-'))
+      const baseEdges = current.edges.filter((edge) => !edge.id.startsWith('projection-edge-') && !edge.id.startsWith('session-summary-edge-'))
+      if (!projection.length && !sessionSummaries.length) return { nodes: baseNodes, edges: baseEdges }
+      const contentNodes = baseNodes.filter((node) => node.kind !== 'process' && (node.scopeId ?? scopeId) === scopeId)
+      const left = contentNodes.length ? Math.min(...contentNodes.map((node) => node.x)) : 160
+      const bottom = contentNodes.length ? Math.max(...contentNodes.map((node) => node.y + node.height)) : 360
+      const processDimensions = nodeDimensions('process', 'standard')
+      const projectedNodes: CanvasNode[] = projection.map((item, index) => ({
+        id: item.id,
+        kind: 'process',
+        title: item.title,
+        subtitle: [item.provider, item.status, item.createdAt ? new Date(item.createdAt).toLocaleString() : null].filter(Boolean).join(' · '),
+        commandText: item.summary,
+        x: left + (index % 4) * (processDimensions.width + 38),
+        y: bottom + 128 + Math.floor(index / 4) * (processDimensions.height + 48),
+        ...processDimensions,
+        displayMode: 'standard',
+        scopeId,
+        runStatus: item.status,
+        parentRunId: item.runId,
+        sourceRunId: item.runId,
+        sourcePrompt: item.summary,
+        sourceProvider: item.provider,
+        contextCount: item.contextViewIds.length,
+        targetCount: item.targetViewIds.length,
+        outputCount: item.outputViewIds.length,
+        createdAt: item.createdAt,
+        managed: false,
+        runtimeTransient: true,
+      }))
+      const processRows = Math.max(1, Math.ceil(projectedNodes.length / 4))
+      const summaryNodes: CanvasNode[] = sessionSummaries.map((item, index) => ({
+        id: item.id,
+        kind: 'process',
+        title: `Session · ${item.title}`,
+        subtitle: item.handoffRef ? `对话总结 · ${item.handoffRef}` : '对话总结 · 可用于跨 Session 继续',
+        commandText: item.summary,
+        x: left + (index % 3) * (processDimensions.width + 38),
+        y: bottom + 128 + processRows * (processDimensions.height + 48) + Math.floor(index / 3) * (processDimensions.height + 48),
+        ...processDimensions,
+        displayMode: 'standard',
+        scopeId,
+        sourceRunId: item.runIds[0],
+        sourcePrompt: item.summary,
+        sourceProvider: 'Session Summary',
+        contextCount: item.runIds.length,
+        targetCount: 0,
+        outputCount: 0,
+        createdAt: item.createdAt,
+        managed: false,
+        runtimeTransient: true,
+      }))
+      const availableIds = new Set([...baseNodes, ...projectedNodes, ...summaryNodes].map((node) => node.id))
+      const projectedEdges = projection.flatMap((item) => {
+        const edgesToRun = [...new Set([...item.contextViewIds, ...item.targetViewIds])]
+          .filter((viewId) => availableIds.has(viewId))
+          .map((viewId, edgeIndex) => ({
+            id: `projection-edge-${item.id}-in-${edgeIndex}`,
+            from: viewId,
+            to: item.id,
+            kind: item.targetViewIds.includes(viewId) ? 'modify' as const : 'reference' as const,
+          }))
+        const edgesFromRun = item.outputViewIds
+          .filter((viewId) => availableIds.has(viewId))
+          .map((viewId, edgeIndex) => ({
+            id: `projection-edge-${item.id}-out-${edgeIndex}`,
+            from: item.id,
+            to: viewId,
+            kind: 'generate' as const,
+          }))
+        return [...edgesToRun, ...edgesFromRun]
+      })
+      const processNodeByRunId = new Map(projection.flatMap((item) => item.runId ? [[item.runId, item.id] as const] : []))
+      const summaryEdges = sessionSummaries.flatMap((item) => item.runIds.flatMap((runId, index) => {
+        const processNodeId = processNodeByRunId.get(runId)
+        return processNodeId ? [{ id: `session-summary-edge-${item.id}-${index}`, from: processNodeId, to: item.id, kind: 'reference' as const }] : []
+      }))
+      return { nodes: [...baseNodes, ...projectedNodes, ...summaryNodes], edges: [...baseEdges, ...projectedEdges, ...summaryEdges] }
+    })
+  }, [activeProjectId, bootMode, scopeId, setGraph])
+
+
+  useEffect(() => {
+    if (bootMode !== 'runtime') {
+      setRuntimeProviders([
+        { provider: 'auto', availability: 'manual' },
+        { provider: 'workbuddy', availability: 'manual' },
+        { provider: 'codex', availability: 'manual' },
+      ])
+      return
+    }
+    let cancelled = false
+    void Promise.all([
+      bridgeRef.current.client.runtimeProviders(),
+      bridgeRef.current.client.workspaceMemberships(activeProjectId),
+    ]).then(([providerCall, membershipCall]) => {
+      if (cancelled) return
+      if (providerCall.result.ok) setRuntimeProviders(providerCall.result.value)
+      if (membershipCall.result.ok) applyMembershipProjection(membershipCall.result.value)
+      void syncProcessProjection()
+    })
+    return () => { cancelled = true }
+  }, [activeProjectId, applyMembershipProjection, bootMode, syncProcessProjection])
+
   useEffect(() => {
     const resize = () => {
       if (window.innerWidth < 1160) setWorkRail((current) => ({ ...current, collapsed: true }))
@@ -324,7 +554,7 @@ export function App() {
     seededStateRef.current = true
     if (queryState === 'collapsed') setWorkRail((current) => ({ ...current, collapsed: true }))
     if (queryState === 'create') setCreateDialogOpen(true)
-    if (queryState === 'confirm') { setSelectedIds(['proposal', 'feedback', 'reference']); setRunConfirmOpen(true) }
+    if (queryState === 'confirm') { setSelectedIds(['proposal', 'feedback', 'reference']); setSelectionComposerText('根据第二轮客户反馈调整构图，拉开产品与雕像距离。') }
     if (queryState === 'scope') enterScope('scope-reference')
     if (queryState === 'selection') selectNode('proposal')
     if (queryState === 'multi') setSelectedIds(['proposal', 'feedback', 'reference'])
@@ -340,17 +570,16 @@ export function App() {
       setNodes((current) => current.map((node) => node.id === 'generated' ? { ...node, kind: 'working', draft: false, current: true, followsCurrentRevision: true, subtitle: '当前版本 · 已接受' } : node.id === 'proposal' ? { ...node, current: false, followsCurrentRevision: false, subtitle: `${node.subtitle} · 已归档` } : node))
       setSelectedIds(['generated'])
       setActiveRun({ id: 'RUN-044', status: 'completed', command: '调整第 6 页构图与产品距离', targetIds: ['proposal'], contextIds: ['feedback', 'reference'], processNodeId: 'run-042', pendingArtifactId: 'generated', reviewStatus: 'accepted', inputResolved: true, changedFiles: ['Thinker_Concept_V4_AI.pptx'], createdAt: new Date().toISOString() })
-      setCheckpoint(true)
     }
     if (queryState === 'layout') setLayoutPreview(proposeScopeLayout(nodes, scopeId))
     if (queryState === 'scope-create') { setSelectedIds(['proposal', 'feedback', 'reference']); setScopeCreateOpen(true) }
     if (queryState === 'phase2-single') {
       setSelectedIds(['proposal'])
-      setComposerText('根据第二轮客户反馈调整第 6 页构图和产品距离。')
+      setSelectionComposerText('根据第二轮客户反馈调整第 6 页构图和产品距离。')
     }
     if (queryState === 'phase2-multi') {
       setSelectedIds(['proposal', 'feedback', 'reference'])
-      setComposerText('结合客户反馈与参考图优化提案构图。')
+      setSelectionComposerText('结合客户反馈与参考图优化提案构图。')
     }
   }, [queryState])
 
@@ -469,8 +698,8 @@ export function App() {
     setExcludedContextIds([])
     setManualInference(null)
     setActiveRun(null)
-    setCheckpoint(false)
-    setComposerText('')
+    setSelectionComposerText('')
+    setGlobalComposerText('')
     setLayoutPreview(null)
     setProjectOpen(true)
   }, [resetGraph])
@@ -661,6 +890,161 @@ export function App() {
     setNotice('工作空间已删除，内容、节点与 Camera 均未删除')
   }, [clearSelection, confirmWorkspaceId, setNodes, workspaceId, workspaces])
 
+  const addViewsToWorkspace = useCallback(async (targetWorkspaceId: string, viewIds: readonly string[], addedBy: 'user' | 'agent' | 'run' | 'import' = 'user') => {
+    const uniqueIds = [...new Set(viewIds)]
+    if (!uniqueIds.length) return false
+    if (bootMode !== 'runtime') {
+      const idSet = new Set(uniqueIds)
+      setNodes((current) => current.map((node) => idSet.has(node.id)
+        ? { ...node, workspaceIds: [...new Set([...(node.workspaceIds ?? []), targetWorkspaceId])] }
+        : node))
+      return true
+    }
+    const call = await bridgeRef.current.client.addWorkspaceMembers(targetWorkspaceId, { viewIds: uniqueIds, addedBy })
+    if (!call.result.ok) {
+      setNotice(`加入工作空间失败：${call.result.error.message}`)
+      return false
+    }
+    applyMembershipProjection(call.result.value)
+    return true
+  }, [applyMembershipProjection, bootMode, setNodes])
+
+  const addSelectionToActiveWorkspace = useCallback(() => {
+    if (!workspaceId) { setNotice('先激活一个工作空间'); return }
+    if (!selectedIds.length) { setNotice('先选择要加入工作空间的内容'); return }
+    void addViewsToWorkspace(workspaceId, selectedIds, 'user').then((ok) => {
+      if (ok) setNotice(`已将 ${selectedIds.length} 项加入「${activeWorkspace?.label ?? '当前工作空间'}」`)
+    })
+  }, [activeWorkspace?.label, addViewsToWorkspace, selectedIds, workspaceId])
+
+  const removeSelectionFromActiveWorkspace = useCallback(() => {
+    if (!workspaceId) { setNotice('先激活一个工作空间'); return }
+    if (!selectedIds.length) { setNotice('先选择要移出的内容'); return }
+    if (bootMode !== 'runtime') {
+      const idSet = new Set(selectedIds)
+      setNodes((current) => current.map((node) => idSet.has(node.id)
+        ? { ...node, workspaceIds: (node.workspaceIds ?? []).filter((id) => id !== workspaceId) }
+        : node))
+      setNotice(`已从「${activeWorkspace?.label ?? '当前工作空间'}」移出 ${selectedIds.length} 项`)
+      return
+    }
+    void Promise.all(selectedIds.map((viewId) => bridgeRef.current.client.removeWorkspaceMember(workspaceId, viewId))).then((calls) => {
+      const failed = calls.find((call) => !call.result.ok)
+      if (failed && !failed.result.ok) { setNotice(`移出工作空间失败：${failed.result.error.message}`); return }
+      const memberships = calls.at(-1)
+      if (memberships?.result.ok) applyMembershipProjection(memberships.result.value)
+      setNotice(`已从「${activeWorkspace?.label ?? '当前工作空间'}」移出 ${selectedIds.length} 项`)
+    })
+  }, [activeWorkspace?.label, applyMembershipProjection, bootMode, selectedIds, setNodes, workspaceId])
+
+  const moveSelectionToWorkspace = useCallback((toWorkspaceId: string) => {
+    if (!workspaceId) { setNotice('先激活所选内容当前所属的工作空间'); return }
+    if (!selectedIds.length) { setNotice('先选择要移动的内容'); return }
+    const targetWorkspace = workspaces.find((workspace) => workspace.id === toWorkspaceId)
+    if (!targetWorkspace) { setNotice('目标工作空间不存在'); return }
+    if (bootMode !== 'runtime') {
+      const idSet = new Set(selectedIds)
+      setNodes((current) => current.map((node) => idSet.has(node.id)
+        ? { ...node, workspaceIds: [...new Set((node.workspaceIds ?? []).filter((id) => id !== workspaceId).concat(toWorkspaceId))] }
+        : node))
+      setWorkspaceId(toWorkspaceId)
+      setNotice(`已将 ${selectedIds.length} 项移动到「${targetWorkspace.label}」`)
+      return
+    }
+    void Promise.all(selectedIds.map((viewId) => bridgeRef.current.client.moveWorkspaceMember(workspaceId, { viewId, toWorkspaceId }))).then((calls) => {
+      const failed = calls.find((call) => !call.result.ok)
+      if (failed && !failed.result.ok) { setNotice(`移动工作空间失败：${failed.result.error.message}`); return }
+      const memberships = calls.at(-1)
+      if (memberships?.result.ok) applyMembershipProjection(memberships.result.value)
+      setWorkspaceId(toWorkspaceId)
+      setNotice(`已将 ${selectedIds.length} 项移动到「${targetWorkspace.label}」`)
+    })
+  }, [applyMembershipProjection, bootMode, selectedIds, setNodes, workspaceId, workspaces])
+
+  const loadWorkspaceStates = useCallback((requestedWorkspaceId?: string) => {
+    const targetWorkspaceId = requestedWorkspaceId ?? workspaceStatesWorkspaceId ?? workspaceId
+    if (!targetWorkspaceId) { setWorkspaceStatesError('先激活一个工作空间'); return }
+    if (bootMode !== 'runtime') {
+      setWorkspaceStates([])
+      setWorkspaceStatesLoading(false)
+      setWorkspaceStatesError('Demo 模式不伪造工作现场历史；连接 Local Core 后读取真实记录。')
+      return
+    }
+    setWorkspaceStatesLoading(true)
+    setWorkspaceStatesError(undefined)
+    void bridgeRef.current.client.listWorkspaceStates(targetWorkspaceId).then((call) => {
+      if (!call.result.ok) {
+        setWorkspaceStatesError(call.result.error.message)
+        return
+      }
+      setWorkspaceStates(parseWorkspaceStates(call.result.value))
+    }).finally(() => setWorkspaceStatesLoading(false))
+  }, [bootMode, workspaceId, workspaceStatesWorkspaceId])
+
+  const openWorkspaceStates = useCallback((requestedWorkspaceId?: string) => {
+    const targetWorkspaceId = requestedWorkspaceId ?? workspaceId
+    const targetWorkspace = workspaces.find((workspace) => workspace.id === targetWorkspaceId)
+    if (!targetWorkspaceId || !targetWorkspace) { setNotice('先激活一个工作空间，再查看工作现场'); return }
+    setWorkspaceStatesWorkspaceId(targetWorkspaceId)
+    setWorkspaceStatesOpen(true)
+    setWorkspaceStates([])
+    setWorkspaceStatesError(undefined)
+    loadWorkspaceStates(targetWorkspaceId)
+  }, [loadWorkspaceStates, workspaceId, workspaces])
+
+  const saveCurrentWorkspaceState = useCallback((requestedWorkspaceId?: string) => {
+    const targetWorkspaceId = requestedWorkspaceId ?? workspaceStatesWorkspaceId ?? workspaceId
+    const targetWorkspace = workspaces.find((workspace) => workspace.id === targetWorkspaceId)
+    if (!targetWorkspaceId || !targetWorkspace) { setNotice('先激活一个工作空间，再保存工作现场'); return }
+    if (bootMode !== 'runtime') {
+      setNotice(`Demo 模式未写入「${targetWorkspace.label}」工作现场`)
+      return
+    }
+    const name = `${targetWorkspace.label} · ${new Date().toLocaleString()}`
+    setWorkspaceStateSaving(true)
+    void bridgeRef.current.client.saveWorkspaceState(targetWorkspaceId, name).then((call) => {
+      if (call.result.ok) {
+        setNotice(`已保存工作现场：${name}`)
+        if (workspaceStatesOpen) loadWorkspaceStates(targetWorkspaceId)
+      } else {
+        setNotice(`保存工作现场失败：${call.result.error.message}`)
+        setWorkspaceStatesError(call.result.error.message)
+      }
+    }).finally(() => setWorkspaceStateSaving(false))
+  }, [bootMode, loadWorkspaceStates, workspaceId, workspaceStatesOpen, workspaceStatesWorkspaceId, workspaces])
+
+  const restoreSavedWorkspaceState = useCallback((stateId: string) => {
+    const targetWorkspaceId = workspaceStatesWorkspaceId ?? workspaceId
+    if (!targetWorkspaceId || bootMode !== 'runtime') return
+    setWorkspaceStateRestoringId(stateId)
+    setWorkspaceStatesError(undefined)
+    void bridgeRef.current.client.restoreWorkspaceState(targetWorkspaceId, stateId).then(async (call) => {
+      if (!call.result.ok) {
+        setWorkspaceStatesError(call.result.error.message)
+        return
+      }
+      const loaded = await bridgeRef.current.loadProject()
+      if (loaded.source !== 'runtime' || !loaded.state) {
+        setWorkspaceStatesError(loaded.error ?? '工作现场已恢复，但前端重新加载失败')
+        return
+      }
+      resetGraph({ nodes: loaded.state.nodes, edges: loaded.state.edges })
+      setWorkspaces(loaded.state.workspaces)
+      setScopes(loaded.state.scopes)
+      setWorkspaceId(loaded.state.workspaces.some((workspace) => workspace.id === targetWorkspaceId) ? targetWorkspaceId : null)
+      const restoredWorkspace = loaded.state.workspaces.find((workspace) => workspace.id === targetWorkspaceId)
+      if (restoredWorkspace) {
+        setScopeId(restoredWorkspace.scopeId)
+        setCamera(restoredWorkspace.camera)
+      }
+      const memberships = await bridgeRef.current.client.workspaceMemberships(activeProjectId)
+      if (memberships.result.ok) applyMembershipProjection(memberships.result.value)
+      await syncProcessProjection()
+      setWorkspaceStatesOpen(false)
+      setNotice('已恢复工作现场；后续 Revision 和 Run 记录未被删除')
+    }).finally(() => setWorkspaceStateRestoringId(null))
+  }, [activeProjectId, applyMembershipProjection, bootMode, resetGraph, syncProcessProjection, workspaceId, workspaceStatesWorkspaceId])
+
   const toggleLayer = useCallback((layer: NodeLayer) => {
     if (!workspaceId) {
       setOverviewLayers((current) => current.includes(layer) ? current.length > 1 ? current.filter((item) => item !== layer) : current : [...current, layer])
@@ -767,9 +1151,9 @@ export function App() {
       opensScopeId = createId('scope')
       setScopes((current) => [...current, { id: opensScopeId!, label: '新内容集合', kind: 'collection', parentScopeId: scopeId, containerNodeId: id, camera: { x: 170, y: 100, zoom: 1 } }])
     }
-    const next: CanvasNode = { id, kind, title: kind === 'note' ? '新备注' : '新内容集合', subtitle: kind === 'note' ? '双击名称或从工作栏修改' : '双击进入子画布', x, y, ...nodeDimensions(kind, displayMode), displayMode, scopeId, opensScopeId, contextOnly: kind === 'context' }
+    const next: CanvasNode = { id, kind, title: kind === 'note' ? '新文本' : '新内容集合', subtitle: kind === 'note' ? '直接输入或交给 Agent 整理' : '双击进入子画布', x, y, ...nodeDimensions(kind, displayMode), displayMode, scopeId, opensScopeId, contextOnly: kind === 'context', createdAt: new Date().toISOString(), workspaceIds: workspaceId ? [workspaceId] : [] }
     setNodes((current) => [...current, next]); setSelectedIds([id]); setRenameNodeId(id); return id
-  }, [scopeId, setNodes])
+  }, [scopeId, setNodes, workspaceId])
 
   const createContentFromDialog = useCallback((kind: 'note' | 'context') => {
     const viewport = document.querySelector<HTMLElement>('[data-testid="canvas"]')?.getBoundingClientRect()
@@ -780,7 +1164,7 @@ export function App() {
     const y = (height / 2 - camera.y) / camera.zoom - dimensions.height / 2
     createNodeAt(kind, x, y)
     setCreateDialogOpen(false)
-    setNotice(kind === 'note' ? '已在画布中央添加备注' : '已创建内容集合与子画布')
+    setNotice(kind === 'note' ? '已在画布中央添加文本' : '已创建内容集合与子画布')
   }, [camera, createNodeAt])
 
   const createNodeFromAnchor = useCallback((kind: 'note' | 'context', x: number, y: number, from: string) => {
@@ -893,7 +1277,7 @@ export function App() {
       const textPreview = isTextPreviewFile(file)
       const fileType = file.type || inferFileType(file.name)
       const runtimeState = bootMode === 'runtime' ? 'importing' : 'temporary'
-      return { id: createId('file'), artifactId: createId('artifact'), kind: 'source', title: file.name, subtitle: runtimeState === 'importing' ? 'Importing…' : previewUrl ? '本地图片 · 临时预览' : textPreview ? '本地文本 · 临时预览' : '本地文件 · 等待本地核心服务预览', x: x + index * 28, y: y + index * 28, ...nodeDimensions('source', 'standard'), displayMode: 'standard', fileType, fileSize: file.size, previewUrl, previewDataUrl: previewUrl, previewMimeType: fileType, scopeId, runtimeState, editable: /\.(pptx?|md|docx?|txt)$/i.test(file.name) }
+      return { id: createId('file'), artifactId: createId('artifact'), kind: 'source', title: file.name, subtitle: runtimeState === 'importing' ? 'Importing…' : previewUrl ? '本地图片 · 临时预览' : textPreview ? '本地文本 · 临时预览' : '本地文件 · 等待本地核心服务预览', x: x + index * 28, y: y + index * 28, ...nodeDimensions('source', 'standard'), displayMode: 'standard', fileType, fileSize: file.size, previewUrl, previewDataUrl: previewUrl, previewMimeType: fileType, scopeId, runtimeState, editable: /\.(pptx?|md|docx?|txt)$/i.test(file.name), managed: false, createdAt: new Date().toISOString(), workspaceIds: workspaceId ? [workspaceId] : [] }
     })
     setNodes((current) => [...current, ...created]); setSelectedIds(created.map((node) => node.id)); setNotice(bootMode === 'runtime' ? `正在导入 ${created.length} 个文件到 Project imports…` : `已加入 ${created.length} 个本地文件引用，不上传、不移动原文件`)
     for (const [index, file] of files.entries()) {
@@ -929,7 +1313,10 @@ export function App() {
         setWorkspaces(nextState.workspaces)
         setScopes(nextState.scopes)
         setWorkRail((current) => ({ ...nextState.workRail, collapsed: current.collapsed, width: 312 }))
-        if (result.importedViewId !== undefined) setSelectedIds([result.importedViewId])
+        if (result.importedViewId !== undefined) {
+          setSelectedIds([result.importedViewId])
+          if (workspaceId) void addViewsToWorkspace(workspaceId, [result.importedViewId], 'import')
+        }
         if (result.importedRevisionId !== undefined) void bridgeRef.current.generatePreview(result.importedRevisionId, 'thumbnail').then((previewResult) => {
           if (previewResult.state === null) return
           const previewState = previewResult.state
@@ -945,7 +1332,7 @@ export function App() {
         setNodes((current) => current.map((node) => node.id === temporaryNode.id ? { ...node, subtitle: 'Import failed', runtimeState: 'failed', error: true, previewError: error instanceof Error ? error.message : 'Import Copy failed.' } : node))
       })
     }
-  }, [activeProjectId, bootMode, resetGraph, scopeId, setNodes])
+  }, [activeProjectId, addViewsToWorkspace, bootMode, resetGraph, scopeId, setNodes, workspaceId])
 
   const createLinkReference = useCallback((input: LinkReferenceInput) => {
     const point = lastCanvasPointRef.current ?? { x: 180, y: 160 }
@@ -962,6 +1349,7 @@ export function App() {
         setNotice(`链接导入失败：${call.result.error.message}`)
         return
       }
+      if (workspaceId && call.result.value.viewId) await addViewsToWorkspace(workspaceId, [call.result.value.viewId], 'import')
       setNotice('链接已保存；需要时可手动获取并重新理解')
       const loaded = await bridgeRef.current.loadProject()
       if (loaded.source === 'runtime' && loaded.state) {
@@ -969,13 +1357,13 @@ export function App() {
         resetGraph({ nodes: loaded.state.nodes, edges: loaded.state.edges })
         setWorkspaces(loaded.state.workspaces)
         setScopes(loaded.state.scopes)
-        setWorkspaceId(null)
+        setWorkspaceId((current) => current && loaded.state!.workspaces.some((workspace) => workspace.id === current) ? current : null)
         setScopeId(rootScope?.id ?? loaded.state.activeScopeId)
         setCamera(rootScope?.camera ?? camera)
         setWorkRail(normalizeRailPreferences(loaded.state.workRail))
       }
     }).catch(() => setNotice('链接导入失败：Local Core 连接异常'))
-  }, [activeProjectId, camera, resetGraph, scopeId, setCamera, setScopes, setWorkRail, setWorkspaces])
+  }, [activeProjectId, addViewsToWorkspace, camera, resetGraph, scopeId, setCamera, setScopes, setWorkRail, setWorkspaces, workspaceId])
 
   const reloadRuntimeProject = useCallback(async (): Promise<void> => {
     const loaded = await bridgeRef.current.loadProject()
@@ -984,7 +1372,7 @@ export function App() {
       resetGraph({ nodes: loaded.state.nodes, edges: loaded.state.edges })
       setWorkspaces(loaded.state.workspaces)
       setScopes(loaded.state.scopes)
-      setWorkspaceId(null)
+      setWorkspaceId((current) => current && loaded.state!.workspaces.some((workspace) => workspace.id === current) ? current : null)
       setScopeId(rootScope?.id ?? loaded.state.activeScopeId)
       setCamera(rootScope?.camera ?? camera)
       setWorkRail(normalizeRailPreferences(loaded.state.workRail))
@@ -1021,11 +1409,12 @@ export function App() {
         setNotice(`目录导入失败：${call.result.error.message}`)
         return
       }
+      if (workspaceId && call.result.value.viewId) await addViewsToWorkspace(workspaceId, [call.result.value.viewId], 'import')
       setNotice(`${rootName} 已导入，正在理解…`)
       await reloadRuntimeProject()
       await refreshResourceStatuses()
     }).catch(() => setNotice('目录导入失败：连接异常'))
-  }, [activeProjectId, refreshResourceStatuses, reloadRuntimeProject, scopeId])
+  }, [activeProjectId, addViewsToWorkspace, refreshResourceStatuses, reloadRuntimeProject, scopeId, workspaceId])
 
   const handleImportArchive = useCallback((file: File, note?: string) => {
     const point = lastCanvasPointRef.current ?? { x: 180, y: 160 }
@@ -1041,11 +1430,12 @@ export function App() {
         setNotice(`压缩包导入失败：${call.result.error.message}`)
         return
       }
+      if (workspaceId && call.result.value.viewId) await addViewsToWorkspace(workspaceId, [call.result.value.viewId], 'import')
       setNotice(`${file.name} 已导入，正在理解…`)
       await reloadRuntimeProject()
       await refreshResourceStatuses()
     }).catch(() => setNotice('压缩包导入失败：连接异常'))
-  }, [activeProjectId, refreshResourceStatuses, reloadRuntimeProject, scopeId])
+  }, [activeProjectId, addViewsToWorkspace, refreshResourceStatuses, reloadRuntimeProject, scopeId, workspaceId])
 
   useEffect(() => {
     if (bootMode !== 'runtime' || !activeProjectId) return
@@ -1086,6 +1476,15 @@ export function App() {
         revisionOf: String(review.run.targetRevisionId),
         resultGroupId: String(review.run.id),
         runtimeTransient: true,
+        managed: true,
+        current: false,
+        createdAt: String(draftRevision.createdAt ?? review.run.createdAt),
+        sourceRunId: String(review.run.id),
+        sourcePrompt: review.run.instruction,
+        sourceProvider: String(review.run.provider),
+        revisionCount: Math.max(1, (target?.revisionCount ?? 0) + 1),
+        revisionLabel: `V${Math.max(1, (target?.revisionCount ?? 0) + 1)}`,
+        workspaceIds: target?.workspaceIds ?? (workspaceId ? [workspaceId] : []),
       }
       setGraph((graph) => {
         const withoutOldReturn = graph.nodes.filter((node) =>
@@ -1117,7 +1516,7 @@ export function App() {
       changedFiles,
       providerError,
     })
-  }, [nodes, scopeId, setGraph])
+  }, [nodes, scopeId, setGraph, workspaceId])
 
   useEffect(() => {
     if (bootMode !== 'runtime' || activeRun !== null || restoredRunProjectRef.current === activeProjectId) return
@@ -1148,6 +1547,13 @@ export function App() {
           runStatus: runtimePresentationStatus(review),
           commandText: review.run.instruction,
           parentRunId: id,
+          createdAt: String(review.run.createdAt),
+          sourceRunId: id,
+          sourcePrompt: review.run.instruction,
+          sourceProvider: String(review.run.provider),
+          contextCount: 0,
+          targetCount: 1,
+          outputCount: review.returns.length,
           runtimeTransient: true,
         }],
         edges: [...graph.edges, {
@@ -1174,11 +1580,12 @@ export function App() {
     })
   }, [activeProjectId, activeRun, applyRuntimeReview, bootMode, nodes, scopeId, setGraph])
 
-  const startRunFrom = useCallback((command: string, targetIds: string[], contextIds: string[], intent: RunOutputIntent = 'revise') => {
+  const startRunFrom = useCallback((command: string, targetIds: string[], contextIds: string[], intent: RunOutputIntent = 'revise', requestedProvider = 'auto', resultPolicy: ComposerResultPolicy = intent === 'revise' ? 'draft_revision_per_target' : 'create_artifact', proposalSummary?: string, targetRevisionIdOverride?: string) => {
     if (!command.trim()) return
     const target = nodes.find((node) => node.id === targetIds[0])
+    const targetRevisionId = targetRevisionIdOverride ?? target?.revisionId
     if (bootMode === 'runtime') {
-      if (intent === 'revise' && (target?.artifactId === undefined || target.revisionId === undefined)) {
+      if (intent === 'revise' && (target?.artifactId === undefined || targetRevisionId === undefined)) {
         setNotice('修改 Run 需要已持久化且具有 Current Revision 的目标')
         return
       }
@@ -1187,6 +1594,9 @@ export function App() {
         instruction: command,
         outputIntent: intent,
         ...(target?.artifactId === undefined ? {} : { targetArtifactId: target.artifactId }),
+        ...(targetRevisionId === undefined ? {} : { targetRevisionId }),
+        requestedProvider,
+        resultPolicy: { type: resultPolicy },
         contextArtifactIds: [...new Set(contextIds
           .map((contextId) => nodes.find((node) => node.id === contextId)?.artifactId)
           .filter((artifactId): artifactId is string => artifactId !== undefined && artifactId !== target?.artifactId))],
@@ -1209,7 +1619,7 @@ export function App() {
           id: processNodeId,
           kind: 'process',
           title: `${id} · ${command.slice(0, 22)}`,
-          subtitle: providerError ? `派发待恢复 · ${providerError.code}` : '真实 Runtime Run',
+          subtitle: providerError ? `派发待恢复 · ${providerError.code}` : `${requestedProvider === 'auto' ? 'Auto' : requestedProvider} · ${intent}`,
           x: target ? target.x + 24 : 460,
           y: target ? target.y + target.height + 54 : 560,
           ...dimensions,
@@ -1218,6 +1628,13 @@ export function App() {
           runStatus: providerError ? 'failed' : runtimePresentationStatus(review),
           commandText: command,
           parentRunId: id,
+          createdAt: String(review.run.createdAt),
+          sourceRunId: id,
+          sourcePrompt: command,
+          sourceProvider: requestedProvider,
+          contextCount: contextIds.length,
+          targetCount: targetIds.length,
+          outputCount: review.returns.length,
           runtimeTransient: true,
         }
         const runEdges = [
@@ -1238,11 +1655,16 @@ export function App() {
           createdAt: String(review.run.createdAt),
           runtime: true,
           providerError: providerError?.message,
+          baseRevisionId: targetRevisionId,
+          provider: requestedProvider,
+          outputIntent: intent,
+          resultPolicy,
+          proposalSummary,
         }
         setSelectedIds([])
         setNodeInfoId(null)
-        setComposerText('')
-        setCheckpoint(false)
+        setSelectionComposerText('')
+        setGlobalComposerText('')
         applyRuntimeReview(review, runtimeRun, providerError?.message)
         setNotice(providerError
           ? `Run 已保存为 planned，派发需要恢复：${providerError.message}`
@@ -1254,7 +1676,7 @@ export function App() {
     const id = `RUN-${String(runCounterRef.current).padStart(3, '0')}`
     const processNodeId = createId('run')
     const dimensions = nodeDimensions('process', 'standard')
-    const process: CanvasNode = { id: processNodeId, kind: 'process', title: `${id} · ${command.slice(0, 22)}`, subtitle: '排队中 · 正在冻结上下文', x: target ? target.x + 24 : 460, y: target ? target.y + target.height + 54 : 560, ...dimensions, displayMode: 'standard', scopeId, runStatus: 'queued', commandText: command, parentRunId: id }
+    const process: CanvasNode = { id: processNodeId, kind: 'process', title: `${id} · ${command.slice(0, 22)}`, subtitle: '排队中 · 正在冻结上下文', x: target ? target.x + 24 : 460, y: target ? target.y + target.height + 54 : 560, ...dimensions, displayMode: 'standard', scopeId, runStatus: 'queued', commandText: command, parentRunId: id, createdAt: new Date().toISOString(), sourceRunId: id, sourcePrompt: command, sourceProvider: requestedProvider, contextCount: contextIds.length, targetCount: targetIds.length, outputCount: 0 }
     const runEdges = [
       ...targetIds.map((targetId) => ({ id: createId('edge'), from: targetId, to: processNodeId, kind: 'modify' as const })),
       ...contextIds.map((contextId) => ({ id: createId('edge'), from: contextId, to: processNodeId, kind: 'reference' as const })),
@@ -1262,49 +1684,125 @@ export function App() {
     setGraph((current) => ({ nodes: [...current.nodes, process], edges: [...current.edges, ...runEdges] }))
     setSelectedIds([])
     setNodeInfoId(null)
-    setActiveRun({ id, status: 'queued', command, targetIds, contextIds, processNodeId, commandId: createId('command'), contextSnapshotId: createId('context-snapshot'), reviewStatus: 'idle', inputResolved: false, changedFiles: [], createdAt: new Date().toISOString() })
-    setComposerText('')
-    setCheckpoint(false)
+    setActiveRun({ id, status: 'queued', command, targetIds, contextIds, processNodeId, commandId: createId('command'), contextSnapshotId: createId('context-snapshot'), reviewStatus: 'idle', inputResolved: false, changedFiles: [], createdAt: new Date().toISOString(), baseRevisionId: targetRevisionId, provider: requestedProvider, outputIntent: intent, resultPolicy, proposalSummary })
+    setSelectionComposerText('')
+    setGlobalComposerText('')
     setNotice('参考快照、指令和执行记录已自动保存')
   }, [activeProjectId, applyRuntimeReview, bootMode, nodes, scopeId, setGraph, workspaceId])
 
   const requestComposerFocus = useCallback(() => {
-    setWorkRail((current) => ({ ...current, collapsed: false }))
-    setComposerFocusRequest((current) => current + 1)
     const focusComposer = () => {
-      const composer = composerRef.current ?? document.querySelector<HTMLTextAreaElement>('[data-testid="work-rail-composer-input"]')
+      const composer = selectedIds.length
+        ? document.querySelector<HTMLTextAreaElement>('[data-testid="selection-composer-input"]')
+        : composerRef.current ?? document.querySelector<HTMLTextAreaElement>('[data-testid="work-rail-composer-input"]')
       if (!composer) return false
       composer.focus({ preventScroll: true })
       const end = composer.value.length
       composer.setSelectionRange(end, end)
       return document.activeElement === composer
     }
+    if (!selectedIds.length) {
+      setWorkRail((current) => ({ ...current, collapsed: false }))
+      setComposerFocusRequest((current) => current + 1)
+    }
     queueMicrotask(focusComposer)
     window.requestAnimationFrame(() => {
       if (!focusComposer()) window.requestAnimationFrame(focusComposer)
     })
-  }, [])
+  }, [selectedIds.length])
 
-  const requestRun = useCallback(() => {
-    if (!composerText.trim()) { setNotice('先写一句你希望 AI 完成的修改'); return }
-    if (runConfirmFrameRef.current !== null) window.cancelAnimationFrame(runConfirmFrameRef.current)
-    // Mount the confirmation after the current keyboard/click event completes.
-    // This prevents the same Ctrl/Cmd+Enter gesture from opening and immediately
-    // confirming the dialog in one native event bubble.
-    runConfirmFrameRef.current = window.requestAnimationFrame(() => {
-      runConfirmFrameRef.current = null
-      setRunConfirmOpen(true)
-    })
-  }, [composerText])
-
-  const confirmRun = useCallback(() => {
-    if (runIntent === 'revise' && (inference.ambiguousTargetIds.length || inference.targetIds.length !== 1)) {
-      setNotice('请先确认一个主要修改目标')
+  const requestSelectionRun = useCallback(() => {
+    const prompt = selectionComposerText.trim()
+    if (!prompt) { setNotice('先写一句你希望本地 Agent 完成的工作'); return }
+    if (!selectedIds.length) { setNotice('先选择要进入上下文的内容'); return }
+    const selectedProviderStatus = selectionProvider === 'auto' ? null : runtimeProviders.find((provider) => provider.provider === selectionProvider)
+    if (selectedProviderStatus?.availability === 'offline') { setNotice(`Agent ${selectionProvider} 当前离线，换一个执行者再发送`); return }
+    const target = selectionIntent === 'revise' ? selectionTargetNode : null
+    const baseRevisionId = selectionBaseRevision?.id ?? target?.revisionId
+    if (selectionIntent === 'revise' && (!target?.artifactId || !baseRevisionId || target.managed !== true)) {
+      setNotice('修改需要选择一个受管内容作为编辑对象；外部引用只能用于分析或创建')
       return
     }
-    setRunConfirmOpen(false)
-    startRunFrom(composerText, inference.targetIds, inference.contextIds, runIntent)
-  }, [composerText, inference, runIntent, startRunFrom])
+    const contextNodes = selectionContextIds
+      .filter((id) => id !== target?.id)
+      .map((id) => nodes.find((node) => node.id === id))
+      .filter((node): node is CanvasNode => Boolean(node?.artifactId && node.revisionId))
+    const targetIds = target ? [target.id] : []
+    const contextIds = contextNodes.map((node) => node.id)
+    if (bootMode !== 'runtime') {
+      startRunFrom(prompt, targetIds, contextIds, selectionIntent, selectionProvider, selectionResultPolicy, undefined, baseRevisionId)
+      return
+    }
+    setNotice('正在确认上下文、目标与结果去向…')
+    void bridgeRef.current.client.proposeRun(activeProjectId, {
+      ...(workspaceId ? { workspaceId } : {}),
+      prompt,
+      intent: selectionIntent,
+      requestedProvider: selectionProvider,
+      contextItems: contextNodes.map((node, order) => ({ artifactId: node.artifactId!, revisionId: node.revisionId!, order })),
+      editTargets: target && baseRevisionId ? [{ artifactId: target.artifactId!, baseRevisionId }] : [],
+      resultPolicy: { type: selectionResultPolicy },
+    }).then((call) => {
+      if (!call.result.ok) {
+        setNotice(`执行提案失败：${call.result.error.message}`)
+        return
+      }
+      const proposal = call.result.value
+      setRunProposal(proposal)
+      if (proposal.ambiguity) {
+        setNotice(proposal.ambiguity.question)
+        return
+      }
+      startRunFrom(
+        proposal.proposal.prompt,
+        targetIds,
+        contextIds,
+        proposal.proposal.intent,
+        proposal.proposal.requestedProvider,
+        proposal.proposal.resultPolicy.type,
+        proposal.summary,
+        baseRevisionId,
+      )
+    })
+  }, [activeProjectId, bootMode, nodes, selectionBaseRevision?.id, selectionComposerText, selectionContextIds, selectionIntent, selectionProvider, selectionResultPolicy, selectionTargetNode, selectedIds.length, startRunFrom, runtimeProviders, workspaceId])
+
+  const requestGlobalRun = useCallback(() => {
+    const prompt = globalComposerText.trim()
+    if (!prompt) { setNotice('先写一句要对当前工作空间做什么'); return }
+    const selectedProviderStatus = globalProvider === 'auto' ? null : runtimeProviders.find((provider) => provider.provider === globalProvider)
+    if (selectedProviderStatus?.availability === 'offline') { setNotice(`Agent ${globalProvider} 当前离线，换一个执行者再发送`); return }
+    const target = globalIntent === 'revise' ? globalTargetNode : null
+    if (globalIntent === 'revise' && (!target?.artifactId || !target.revisionId || target.managed !== true)) {
+      setNotice('全局修改需要选择一个受管内容作为编辑对象')
+      return
+    }
+    const contextNodes = globalContextIds
+      .filter((id) => id !== target?.id)
+      .map((id) => nodes.find((node) => node.id === id))
+      .filter((node): node is CanvasNode => Boolean(node?.artifactId && node.revisionId))
+    const targetIds = target ? [target.id] : []
+    const contextIds = contextNodes.map((node) => node.id)
+    const summary = `${activeWorkspace ? activeWorkspace.label : activeScope.label} · 全局上下文 ${contextIds.length} 项`
+    if (bootMode !== 'runtime') {
+      startRunFrom(prompt, targetIds, contextIds, globalIntent, globalProvider, globalResultPolicy, summary)
+      return
+    }
+    setNotice('正在确认全局上下文、编辑对象与结果去向…')
+    void bridgeRef.current.client.proposeRun(activeProjectId, {
+      ...(workspaceId ? { workspaceId } : {}),
+      prompt,
+      intent: globalIntent,
+      requestedProvider: globalProvider,
+      contextItems: contextNodes.map((node, order) => ({ artifactId: node.artifactId!, revisionId: node.revisionId!, order })),
+      editTargets: target ? [{ artifactId: target.artifactId!, baseRevisionId: target.revisionId! }] : [],
+      resultPolicy: { type: globalResultPolicy },
+    }).then((call) => {
+      if (!call.result.ok) { setNotice(`执行提案失败：${call.result.error.message}`); return }
+      const proposal = call.result.value
+      if (proposal.ambiguity) { setNotice(proposal.ambiguity.question); return }
+      startRunFrom(proposal.proposal.prompt, targetIds, contextIds, proposal.proposal.intent, proposal.proposal.requestedProvider, proposal.proposal.resultPolicy.type, proposal.summary)
+    })
+  }, [activeProjectId, activeScope.label, activeWorkspace, bootMode, globalComposerText, globalContextIds, globalIntent, globalProvider, globalResultPolicy, globalTargetNode, nodes, runtimeProviders, startRunFrom, workspaceId])
 
   const returnArtifact = useCallback((run: ActiveRun) => {
     const target = nodes.find((node) => node.id === run.targetIds[0])
@@ -1312,7 +1810,7 @@ export function App() {
     const id = createId('generated')
     const dimensions = nodeDimensions('generated', 'standard')
     const position = findPendingReturnPosition(nodes, target, dimensions)
-    const generated: CanvasNode = { id, artifactId: target.artifactId ?? createId('artifact'), revisionId: createId('revision'), followsCurrentRevision: false, kind: 'generated', title: `Thinker_Concept_${run.id}_AI.pptx`, subtitle: '结果待回收 · 等待确认', ...position, ...dimensions, displayMode: 'standard', draft: true, pageCount: target.pageCount ?? 18, scopeId: target.scopeId ?? scopeId, editable: true, parentRunId: run.id, revisionOf: target.revisionId ?? target.id, resultGroupId: run.id, workspaceIds: target.workspaceIds }
+    const generated: CanvasNode = { id, artifactId: target.artifactId ?? createId('artifact'), revisionId: createId('revision'), followsCurrentRevision: false, kind: 'generated', title: `Thinker_Concept_${run.id}_AI.pptx`, subtitle: '结果待回收 · 等待确认', ...position, ...dimensions, displayMode: 'standard', draft: true, pageCount: target.pageCount ?? 18, scopeId: target.scopeId ?? scopeId, editable: true, parentRunId: run.id, revisionOf: target.revisionId ?? target.id, resultGroupId: run.id, createdAt: new Date().toISOString(), sourceRunId: run.id, sourcePrompt: run.command, sourceProvider: run.provider, managed: true, workspaceIds: target.workspaceIds }
     setGraph((current) => ({ nodes: [...current.nodes, generated], edges: [...current.edges, { id: createId('edge'), from: run.processNodeId, to: id, kind: 'generate', active: true }, { id: createId('edge'), from: target.id, to: id, kind: 'modify' }] }))
     setActiveRun((current) => current?.id === run.id ? { ...current, status: 'review', pendingArtifactId: id, reviewStatus: 'pending', changedFiles: [generated.title] } : current)
     setSelectedIds([id])
@@ -1321,14 +1819,6 @@ export function App() {
     setNotice('结果已自动归位，工作栏已进入版本确认')
   }, [nodes, safeInsets, scopeId, setGraph])
 
-  const continueRun = useCallback((answer: '35%' | '30%') => {
-    if (activeRun?.runtime) {
-      setNotice('当前 MVP Runtime 不伪造 waiting_input；请使用 Retry 补充新指令')
-      return
-    }
-    setActiveRun((run) => run ? { ...run, status: 'running', inputResolved: true, command: `${run.command}（已确认使用 ${answer}）` } : run)
-    setNotice(`已确认 ${answer}，继续同一任务`)
-  }, [activeRun?.runtime])
 
   const syncRuntimeRun = useCallback(() => {
     if (!activeRun?.runtime || runtimeSyncBusyRef.current) return
@@ -1381,8 +1871,7 @@ export function App() {
             pendingArtifactId: undefined,
             providerError: undefined,
           })
-          setCheckpoint(true)
-          setNotice(finalized.result.ok && finalized.result.value.providerError === undefined
+              setNotice(finalized.result.ok && finalized.result.value.providerError === undefined
             ? 'Draft 已成为 Current Revision，Bridge Review 已完成'
             : 'Draft 已成为 Current；Bridge finalize 将在后续恢复')
         })
@@ -1418,7 +1907,6 @@ export function App() {
     setSelectedIds([activeRun.pendingArtifactId])
     setNodeInfoId(null)
     setActiveRun((run) => run ? { ...run, status: 'completed', reviewStatus: 'accepted' } : run)
-    setCheckpoint(true)
     setNotice('已接受为当前版本，相关视图已同步')
   }, [activeRun, applyReloadedRuntimeState, pendingNode, setGraph])
 
@@ -1459,10 +1947,29 @@ export function App() {
     if (!activeRun?.pendingArtifactId || !pendingNode) return
     setSelectedIds([pendingNode.id])
     setNodeInfoId(null)
-    setComposerText('继续修改：')
-    setNotice('返回结果已设为本轮修改目标，请直接补充下一步要求')
-    requestComposerFocus()
-  }, [activeRun?.pendingArtifactId, pendingNode, requestComposerFocus])
+    setSelectionBaseRevision(null)
+    setSelectionComposerText(activeRun.command)
+    setNotice('返回结果已设为本轮修改目标，请直接在节点下方补充要求')
+    window.requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>('[data-testid="selection-composer-input"]')?.focus({ preventScroll: true }))
+  }, [activeRun?.pendingArtifactId, pendingNode])
+
+  const useHistoricalRevision = useCallback((revision: ArtifactRevisionProvenance) => {
+    if (!workbenchNode?.artifactId || workbenchNode.managed !== true) {
+      setNotice('只有受管内容可以从历史 Revision 继续修改')
+      return
+    }
+    setSelectedIds([workbenchNode.id])
+    setSelectionTargetId(workbenchNode.id)
+    setSelectionBaseRevision(revision)
+    setSelectionIntent('revise')
+    setSelectionResultPolicy('draft_revision_per_target')
+    if (revision.provider && runtimeProviders.some((provider) => provider.provider === revision.provider)) setSelectionProvider(revision.provider)
+    setSelectionComposerText(revision.prompt ?? '')
+    setWorkbench(null)
+    setNodeInfoId(null)
+    setNotice(`已将 ${revision.label} 设为修改基线；发送后只会创建新的 Draft`)
+    window.requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>('[data-testid="selection-composer-input"]')?.focus({ preventScroll: true }))
+  }, [runtimeProviders, workbenchNode])
 
   const retryRun = useCallback(() => {
     if (!activeRun) return
@@ -1480,7 +1987,7 @@ export function App() {
       }
       setNotice('正在创建 Retry Run…')
       void bridgeRef.current.client.retryArtifactReturn(activeRun.runtimeReturnId, {
-        instruction: composerText.trim() || activeRun.command,
+        instruction: selectionComposerText.trim() || globalComposerText.trim() || activeRun.command,
       }).then(async (retryCall) => {
         if (!retryCall.result.ok) {
           setNotice(`Retry 失败：${retryCall.result.error.message}`)
@@ -1515,7 +2022,8 @@ export function App() {
           providerError: dispatchCall.result.value.providerError?.message,
         }
         applyRuntimeReview(dispatchCall.result.value.review, next, dispatchCall.result.value.providerError?.message)
-        setComposerText('')
+        setSelectionComposerText('')
+        setGlobalComposerText('')
         setNotice(dispatchCall.result.value.providerError?.message
           ?? (finalized.result.ok && finalized.result.value.providerError === undefined
             ? `Retry Run 已派发：${String(newRun.id)}`
@@ -1523,9 +2031,9 @@ export function App() {
       })
       return
     }
-    startRunFrom(activeRun.command.replace(/（已确认.*?）/, ''), activeRun.targetIds, activeRun.contextIds)
+    startRunFrom(activeRun.command.replace(/（已确认.*?）/, ''), activeRun.targetIds, activeRun.contextIds, activeRun.outputIntent ?? 'revise', activeRun.provider ?? 'auto', activeRun.resultPolicy ?? 'draft_revision_per_target', activeRun.proposalSummary, activeRun.baseRevisionId)
     setNotice('已沿用原指令与上下文重新执行')
-  }, [activeRun, applyRuntimeReview, composerText, setGraph, startRunFrom])
+  }, [activeRun, applyRuntimeReview, globalComposerText, selectionComposerText, setGraph, startRunFrom])
 
   const toggleContext = useCallback((id: string) => {
     if (inference.contextIds.includes(id)) {
@@ -1598,34 +2106,16 @@ export function App() {
   const deleteSelectedViews = useCallback(() => { deleteNodes(selectedIds) }, [deleteNodes, selectedIds])
   const rememberCanvasPoint = useCallback((point: { x: number; y: number }) => { lastCanvasPointRef.current = point }, [])
 
-  const createCheckpoint = useCallback(async () => {
-    if (!activeProjectId) return
-    setCheckpoint(false)
-    const graphCall = await bridgeRef.current.client.projectGraph(activeProjectId)
-    if (!graphCall.result.ok) {
-      setNotice(`检查点失败：${graphCall.result.error.message}`)
-      return
-    }
-    const call = await bridgeRef.current.client.createCheckpoint(activeProjectId, {
-      id: `checkpoint-${Date.now().toString(36)}`,
-      scopeId: scopeId ?? 'scope-root',
-      label: `手动检查点 ${new Date().toLocaleString()}`,
-      snapshotJson: graphCall.result.value,
-    })
-    if (call.result.ok) setNotice(`检查点已创建：${call.result.value.label}`)
-    else setNotice(`检查点失败：${call.result.error.message}`)
-  }, [activeProjectId, scopeId])
-
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
       const isText = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement || target?.isContentEditable
       const modifier = event.metaKey || event.ctrlKey
       const key = event.key.toLowerCase()
-      if (createDialogOpen || runConfirmOpen || scopeCreateOpen || projectCreateOpen) return
+      if (createDialogOpen || scopeCreateOpen || projectCreateOpen) return
       if (modifier && event.key === 'Enter') {
         event.preventDefault()
-        requestRun()
+        selectedIds.length ? requestSelectionRun() : requestGlobalRun()
         return
       }
       if (isText) return
@@ -1647,7 +2137,7 @@ export function App() {
     const release = (event: KeyboardEvent) => { if (event.code === 'Space') setSpaceHeld(false) }
     window.addEventListener('keydown', handler); window.addEventListener('keyup', release)
     return () => { window.removeEventListener('keydown', handler); window.removeEventListener('keyup', release) }
-  }, [arrangeSelection, clearSelection, copySelection, createDialogOpen, deleteNodes, duplicateSelection, capabilityOpen, nodeInfoId, workbench, layoutPreview, openNative, pasteClipboard, projectCreateOpen, redo, requestComposerFocus, requestRun, runConfirmOpen, scopeCreateOpen, selectedEdgeId, selectedId, selectedIds, selectedNodes, setEdges, undo])
+  }, [arrangeSelection, clearSelection, copySelection, createDialogOpen, deleteNodes, duplicateSelection, capabilityOpen, nodeInfoId, workbench, layoutPreview, openNative, pasteClipboard, projectCreateOpen, redo, requestComposerFocus, requestGlobalRun, requestSelectionRun, scopeCreateOpen, selectedEdgeId, selectedId, selectedIds, selectedNodes, setEdges, undo])
 
   if (!projectOpen) return <>
     {notice && <div data-testid="toast" className="notice" role="status" aria-live="polite">{notice}</div>}
@@ -1663,10 +2153,116 @@ export function App() {
     <V07TopBar projects={projects} openProjectIds={openProjectIds} activeProjectId={activeProjectId} scopePath={scopePath} saveStatus={saveStatus} runStatus={activeRun?.status ?? null} workRailCollapsed={workRail.collapsed} onOpenDrive={() => setProjectOpen(false)} onOpenProject={openProject} onCloseProject={closeProjectTab} onOpenScope={enterScope} onToggleWorkRail={() => setWorkRail((current) => ({ ...current, collapsed: !current.collapsed }))} />
     <section className={`scene intent-${effectiveWorkspace.intent ?? 'blank'}`} style={sceneStyle} data-project-id={activeProjectId} data-scope-id={scopeId} data-workspace-id={workspaceId ?? 'project-overview'} data-workspace-intent={effectiveWorkspace.intent ?? 'blank'}>
       {capabilityOpen && <CapabilityPopover capabilities={capabilities} nodes={scopeNodes} onClose={() => setCapabilityOpen(false)} onImport={(files) => { const point = lastCanvasPointRef.current ?? { x: 180, y: 160 }; dropFiles(files, point.x, point.y); setCapabilityOpen(false) }} onCreateObject={() => { setCapabilityOpen(false); setCreateDialogOpen(true) }} onAddLink={() => { setCapabilityOpen(false); setLinkDialogOpen(true) }} onUniversalImport={() => { setCapabilityOpen(false); setImportPanelOpen(true) }} onHandoff={() => { setCapabilityOpen(false); void openHandoff() }} onOpenComposer={() => { setCapabilityOpen(false); requestComposerFocus() }} onSelectNode={(id) => { selectNode(id); setCapabilityOpen(false) }} />}
-      <WorkspaceDock workspaces={scopeWorkspaces} activeId={workspaceId} collapsed={dockCollapsed} onCollapsedChange={setDockCollapsed} capabilitiesOpen={capabilityOpen} onOpenCapabilities={() => setCapabilityOpen((value) => !value)} onOverview={activateOverview} onChange={changeWorkspace} onLocate={locateWorkspace} onAddWorkspace={() => setWorkspaceEditor({ mode: 'create' })} onEditWorkspace={(id) => setWorkspaceEditor({ mode: 'edit', id })} onDuplicateWorkspace={duplicateWorkspace} onDeleteWorkspace={deleteWorkspace} onMoveWorkspace={moveWorkspace} runStatus={activeRun?.status ?? null} />
-      <ProjectCanvas nodes={visibleNodes} setNodes={setNodes} edges={visibleEdges} setEdges={setEdges} camera={camera} setCamera={setCamera} selectedId={selectedId} selectedIds={selectedIds} selectedEdgeId={selectedEdgeId} setSelectedEdgeId={setSelectedEdgeId} pendingId={activeRun?.pendingArtifactId ?? null} runId={activeRun?.id ?? 'RUN-043'} runStatus={activeRun?.status ?? null} spaceHeld={spaceHeld} locked={createDialogOpen || runConfirmOpen || scopeCreateOpen} layoutPreview={layoutPreview} workspaceFrames={activeWorkspaceFrames} workspaceMemberNodes={scopeNodes} activeWorkspaceId={workspaceId} onWorkspaceActivate={changeWorkspace} onPresentationInteractionChange={handlePresentationInteractionChange} onPresentationCommit={handlePresentationCommit} onSelect={selectNode} onClearSelection={clearSelection} onMarqueeSelect={selectMarquee} onSelectEdge={selectEdge} onDoubleClick={handleDoubleClick} onDetails={showNodeDetails} onRequestAi={requestComposerFocus} onCreateNodeFromAnchor={createNodeFromAnchor} onFilesDropped={dropFiles} onArrangeSelection={arrangeSelection} onCopySelection={copySelectedViews} onDuplicateSelection={duplicateSelectedViews} onCreateScopeFromSelection={() => selectedIds.length ? setScopeCreateOpen(true) : setNotice('先选择要整理进子画布的对象')} onDeleteSelection={deleteSelectedViews} onPointerWorldChange={rememberCanvasPoint} onSpaceCreate={(point) => { lastCanvasPointRef.current = point; setCreateDialogOpen(true) }} />
+      <WorkspaceDock workspaces={scopeWorkspaces} activeId={workspaceId} collapsed={dockCollapsed} onCollapsedChange={setDockCollapsed} capabilitiesOpen={capabilityOpen} onOpenCapabilities={() => setCapabilityOpen((value) => !value)} onOverview={activateOverview} onChange={changeWorkspace} onLocate={locateWorkspace} onAddWorkspace={() => setWorkspaceEditor({ mode: 'create' })} onEditWorkspace={(id) => setWorkspaceEditor({ mode: 'edit', id })} onDuplicateWorkspace={duplicateWorkspace} onDeleteWorkspace={deleteWorkspace} onMoveWorkspace={moveWorkspace} onSaveWorkspaceState={saveCurrentWorkspaceState} onOpenWorkspaceStates={openWorkspaceStates} runStatus={activeRun?.status ?? null} />
+      <ProjectCanvas
+        nodes={visibleNodes}
+        setNodes={setNodes}
+        edges={visibleEdges}
+        setEdges={setEdges}
+        camera={camera}
+        setCamera={setCamera}
+        selectedId={selectedId}
+        selectedIds={selectedIds}
+        selectedEdgeId={selectedEdgeId}
+        setSelectedEdgeId={setSelectedEdgeId}
+        pendingId={activeRun?.pendingArtifactId ?? null}
+        runId={activeRun?.id ?? 'RUN-043'}
+        runStatus={activeRun?.status ?? null}
+        spaceHeld={spaceHeld}
+        locked={createDialogOpen || scopeCreateOpen}
+        layoutPreview={layoutPreview}
+        workspaceFrames={activeWorkspaceFrames}
+        workspaceMemberNodes={scopeNodes}
+        activeWorkspaceId={workspaceId}
+        onWorkspaceActivate={changeWorkspace}
+        onPresentationInteractionChange={handlePresentationInteractionChange}
+        onPresentationCommit={handlePresentationCommit}
+        selectionComposer={selectedIds.length ? {
+          prompt: selectionComposerText,
+          intent: selectionIntent,
+          provider: selectionProvider,
+          resultPolicy: selectionResultPolicy,
+          targetId: selectionTargetId,
+          ...(selectionBaseRevision ? { baseRevision: selectionBaseRevision } : {}),
+          providers: runtimeProviders,
+          activeWorkspace,
+          workspaces: scopeWorkspaces,
+          busy: runBusy,
+          ...(runProposal?.summary ? { proposalSummary: runProposal.summary } : {}),
+          ...(runProposal?.ambiguity?.question ? { ambiguityQuestion: runProposal.ambiguity.question } : {}),
+          onPromptChange: setSelectionComposerText,
+          onIntentChange: (intent) => {
+            setSelectionIntent(intent)
+            if (intent === 'analyze') { setSelectionResultPolicy('reply_only'); setSelectionTargetId(null); setSelectionBaseRevision(null) }
+            if (intent === 'create') { setSelectionResultPolicy('create_artifact'); setSelectionTargetId(null); setSelectionBaseRevision(null) }
+            if (intent === 'revise') {
+              setSelectionResultPolicy('draft_revision_per_target')
+              setSelectionTargetId((current) => current ?? selectedNodes.find((node) => node.managed === true && node.artifactId && node.revisionId)?.id ?? null)
+            }
+          },
+          onProviderChange: setSelectionProvider,
+          onResultPolicyChange: setSelectionResultPolicy,
+          onTargetChange: (targetId) => { setSelectionTargetId(targetId); setSelectionBaseRevision(null) },
+          onSend: requestSelectionRun,
+          onAddToWorkspace: addSelectionToActiveWorkspace,
+          onRemoveFromWorkspace: removeSelectionFromActiveWorkspace,
+          onMoveToWorkspace: moveSelectionToWorkspace,
+          onClose: clearSelection,
+        } : undefined}
+        onSelect={selectNode}
+        onClearSelection={clearSelection}
+        onMarqueeSelect={selectMarquee}
+        onSelectEdge={selectEdge}
+        onDoubleClick={handleDoubleClick}
+        onDetails={showNodeDetails}
+        onRequestAi={requestComposerFocus}
+        onCreateNodeFromAnchor={createNodeFromAnchor}
+        onFilesDropped={dropFiles}
+        onArrangeSelection={arrangeSelection}
+        onCopySelection={copySelectedViews}
+        onDuplicateSelection={duplicateSelectedViews}
+        onCreateScopeFromSelection={() => selectedIds.length ? setScopeCreateOpen(true) : setNotice('先选择要整理进子画布的对象')}
+        onDeleteSelection={deleteSelectedViews}
+        onPointerWorldChange={rememberCanvasPoint}
+        onSpaceCreate={(point) => { lastCanvasPointRef.current = point; setCreateDialogOpen(true) }}
+      />
       <div className="canvas-hud" data-testid="canvas-hud"><CanvasMiniMap nodes={scopeNodes} workspaceFrames={activeWorkspaceFrames} camera={camera} setCamera={setCamera} collapsed={miniMapCollapsed} onCollapsedChange={setMiniMapCollapsed} safeInsets={safeInsets} /></div>
-      <WorkRail workspace={effectiveWorkspace} nodes={nodes} inference={inference} activeRun={activeRun} pendingNode={pendingNode} collapsed={workRail.collapsed} width={effectiveRailWidth} composerText={composerText} composerRef={composerRef} composerFocusRequest={composerFocusRequest} onRequestComposerFocus={requestComposerFocus} onCollapse={() => setWorkRail((current) => ({ ...current, collapsed: true }))} onExpand={() => setWorkRail((current) => ({ ...current, collapsed: false }))} onComposerChange={setComposerText} onSend={requestRun} onContinue={continueRun} onAccept={acceptRun} onReject={rejectRun} onRetry={retryRun} onSyncRun={syncRuntimeRun} onContinueModify={continueModify} onShowRun={clearSelection} />
+      <WorkRail
+        workspace={effectiveWorkspace}
+        nodes={nodes}
+        activeRun={activeRun}
+        pendingNode={pendingNode}
+        collapsed={workRail.collapsed}
+        width={effectiveRailWidth}
+        contextLabel={activeWorkspace ? `工作空间「${activeWorkspace.label}」` : '当前画布'}
+        contextCount={globalContextIds.length}
+        composerText={globalComposerText}
+        composerRef={composerRef}
+        composerFocusRequest={composerFocusRequest}
+        intent={globalIntent}
+        provider={globalProvider}
+        resultPolicy={globalResultPolicy}
+        targetId={globalTargetId}
+        providers={runtimeProviders}
+        targetCandidates={globalTargetCandidates}
+        onRequestComposerFocus={requestComposerFocus}
+        onCollapse={() => setWorkRail((current) => ({ ...current, collapsed: true }))}
+        onExpand={() => setWorkRail((current) => ({ ...current, collapsed: false }))}
+        onComposerChange={setGlobalComposerText}
+        onIntentChange={setGlobalIntent}
+        onProviderChange={setGlobalProvider}
+        onResultPolicyChange={setGlobalResultPolicy}
+        onTargetChange={setGlobalTargetId}
+        onSend={requestGlobalRun}
+        onSaveWorkspaceState={() => saveCurrentWorkspaceState()}
+        onOpenWorkspaceStates={() => openWorkspaceStates()}
+        onAccept={acceptRun}
+        onReject={rejectRun}
+        onRetry={retryRun}
+        onSyncRun={syncRuntimeRun}
+        onContinueModify={continueModify}
+        onShowRun={clearSelection}
+      />
       {agentMode && <AgentContextSurface
         projectLabel={activeProject.label}
         workspaceLabel={effectiveWorkspace.label}
@@ -1674,16 +2270,15 @@ export function App() {
         selectedNodes={selectedNodes}
         error={activeContextError}
       />}
-      {nodeInfoNode && <NodeInfoPopover node={nodeInfoNode} camera={camera} relationCount={nodeInfoRelationCount} onClose={() => setNodeInfoId(null)} onRelations={() => { selectNode(nodeInfoNode.id); setNodeInfoId(null); setNotice(`${nodeInfoRelationCount} 个关联已在画布中高亮`) }} onPreview={(node) => { setNodeInfoId(null); setWorkbench({ nodeId: node.id, focus: 'preview' }) }} onShowResource={(node) => { setNodeInfoId(null); setResourceDetailArtifactId(String(node.artifactId)) }} />}
-      {workbenchNode && <ArtifactWorkbench node={workbenchNode} projectId={activeProjectId} relationCount={workbenchRelationCount} focus={workbench?.focus ?? 'preview'} onFocusChange={(focus) => setWorkbench((current) => current ? { ...current, focus } : current)} onClose={() => setWorkbench(null)} onLocate={() => {
+      {nodeInfoNode && <NodeInfoPopover node={nodeInfoNode} camera={camera} relationCount={nodeInfoRelationCount} onClose={() => setNodeInfoId(null)} onRelations={() => { selectNode(nodeInfoNode.id); setNodeInfoId(null); setNotice(`${nodeInfoRelationCount} 个关联已在画布中高亮`) }} onPreview={(node) => { setNodeInfoId(null); setWorkbench({ nodeId: node.id, focus: 'preview' }) }} onShowResource={(node) => { setNodeInfoId(null); setResourceDetailArtifactId(String(node.artifactId)) }} onRevisions={(node) => { setNodeInfoId(null); setWorkbench({ nodeId: node.id, focus: 'revisions' }) }} />}
+      {workbenchNode && <ArtifactWorkbench node={workbenchNode} projectId={activeProjectId} client={bridgeRef.current.client} relationCount={workbenchRelationCount} focus={workbench?.focus ?? 'preview'} onFocusChange={(focus) => setWorkbench((current) => current ? { ...current, focus } : current)} onClose={() => setWorkbench(null)} onLocate={() => {
         selectNode(workbenchNode.id)
         setNodeInfoId(null)
         const viewport = document.querySelector<HTMLElement>('[data-testid="canvas"]')?.getBoundingClientRect()
         setCamera(revealNode(camera, workbenchNode, viewport?.width ?? 1000, viewport?.height ?? 820))
         setNotice(`已定位「${workbenchNode.title}」`)
-      }} onShowResource={workbenchNode.artifactId === undefined ? undefined : () => { setWorkbench(null); setResourceDetailArtifactId(String(workbenchNode.artifactId)) }} />}
+      }} onUseRevision={useHistoricalRevision} onShowResource={workbenchNode.artifactId === undefined ? undefined : () => { setWorkbench(null); setResourceDetailArtifactId(String(workbenchNode.artifactId)) }} />}
       {activeRun && <button className={`run-pill ${activeRun.status}`} onClick={() => { clearSelection(); setWorkRail((current) => ({ ...current, collapsed: false })) }}><Play size={13} /> {activeRun.id} · {runStatusLabel[activeRun.status]}</button>}
-      {checkpoint && <div className="checkpoint"><Check size={15} /> 已形成稳定修改集 <button onClick={() => { void createCheckpoint() }}>创建检查点</button><button className="quiet" onClick={() => setCheckpoint(false)}>稍后</button></div>}
       <nav className="scene-title v06-breadcrumbs" aria-label="画布层级">{scopePath.map((scope, index) => {
         const current = index === scopePath.length - 1
         return <button key={scope.id} data-testid={`scope-crumb-${scope.id}`} aria-current={current ? 'page' : undefined} disabled={current} onClick={() => enterScope(scope.id)}>{index > 0 && <span>/</span>}{index === 0 ? activeProject.label : scope.label}</button>
@@ -1692,7 +2287,6 @@ export function App() {
       {layoutPreview && <div className="layout-preview-banner"><span>预览自动布局 · 只移动当前子画布中的视图</span><button onClick={applyLayout}>应用</button><button onClick={() => setLayoutPreview(null)}>取消</button></div>}
       {notice && <div data-testid="toast" className="notice" role="status" aria-live="polite">{notice}</div>}
       <ScopeCreateDialog open={scopeCreateOpen} selectedCount={selectedIds.length} leftInset={safeInsets.left} rightInset={24} onCancel={() => setScopeCreateOpen(false)} onCreate={createScopeFromSelection} />
-      <RunConfirmDialog open={runConfirmOpen} command={composerText} intent={runIntent} nodes={nodes} inference={inference} leftInset={safeInsets.left} rightInset={24} onIntentChange={setRunIntent} onCommandChange={setComposerText} onSelectTarget={selectPrimaryTarget} onCancel={() => setRunConfirmOpen(false)} onConfirm={confirmRun} />
       <CreateContentDialog open={createDialogOpen} leftInset={safeInsets.left} rightInset={24} onCancel={() => setCreateDialogOpen(false)} onCreate={createContentFromDialog} />
       {workspaceEditor && <WorkspaceDialog mode={workspaceEditor.mode} workspace={editorWorkspace} currentCamera={camera} onCancel={() => setWorkspaceEditor(null)} onSave={saveWorkspaceEditor} />}
       {nodeToRename && <InlineNodeRename node={nodeToRename} camera={camera} onCancel={() => setRenameNodeId(null)} onSave={(value) => renameNodeTitle(nodeToRename.id, value)} />}
@@ -1701,6 +2295,10 @@ export function App() {
       <LinkReferenceDialog open={linkDialogOpen} onClose={() => setLinkDialogOpen(false)} onCreate={createLinkReference} />
       <UniversalImportPanel open={importPanelOpen} onClose={() => setImportPanelOpen(false)} onFiles={(files) => { const point = lastCanvasPointRef.current ?? { x: 180, y: 160 }; dropFiles([...files], point.x, point.y) }} onDirectory={(rootName, files, note) => { void handleImportDirectory(rootName, files, note) }} onArchive={(file, note) => { void handleImportArchive(file, note) }} onOpenLink={() => setLinkDialogOpen(true)} />
       {resourceDetailArtifactId !== null && <ResourceDetailDialog open projectId={activeProjectId} artifactId={resourceDetailArtifactId} client={bridgeRef.current.client} onClose={() => setResourceDetailArtifactId(null)} onChanged={() => { void refreshResourceStatuses() }} />}
+      {workspaceStatesOpen && workspaceStatesWorkspaceId && (() => {
+        const stateWorkspace = workspaces.find((workspace) => workspace.id === workspaceStatesWorkspaceId)
+        return stateWorkspace ? <WorkspaceStatesDialog workspace={stateWorkspace} states={workspaceStates} loading={workspaceStatesLoading} saving={workspaceStateSaving} restoringId={workspaceStateRestoringId} error={workspaceStatesError} onClose={() => setWorkspaceStatesOpen(false)} onRefresh={() => loadWorkspaceStates(workspaceStatesWorkspaceId)} onSave={() => saveCurrentWorkspaceState(workspaceStatesWorkspaceId)} onRestore={restoreSavedWorkspaceState} /> : null
+      })()}
       <button className="prototype-reset" onClick={() => { clearPrototypeState(activeProjectId); clearProjectNavigationState(activeProjectId); window.location.reload() }}>重置演示数据</button>
     </section>
   </main>

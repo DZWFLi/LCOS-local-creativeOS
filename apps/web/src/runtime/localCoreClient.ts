@@ -86,10 +86,15 @@ export interface AdoptExternalChangeResult {
 export interface CreateRuntimeRunInput {
   readonly instruction: string
   readonly targetArtifactId?: string
+  readonly targetRevisionId?: string
   readonly contextArtifactIds?: readonly string[]
   readonly workspaceId?: string
   readonly outputIntent: 'create' | 'revise' | 'analyze'
   readonly requestedProvider?: string
+  readonly resultPolicy?: {
+    readonly type: 'reply_only' | 'create_artifact' | 'create_collection' | 'draft_revision_per_target'
+    readonly format?: string
+  }
 }
 
 export interface RuntimeRunActionResult {
@@ -111,6 +116,8 @@ export interface ActiveContextProjection {
   readonly excludedContextIds: readonly string[]
   readonly version: number
   readonly updatedAt: string
+  readonly targetArtifactId?: string
+  readonly targetRevisionId?: string
   readonly selectedArtifacts: readonly {
     readonly viewId: string
     readonly artifactId: string

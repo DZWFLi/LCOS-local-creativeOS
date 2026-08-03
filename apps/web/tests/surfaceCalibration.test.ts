@@ -11,7 +11,7 @@ describe('v0.5.3 surface calibration guards', () => {
       '内容集合',
       '执行记录',
       '确认记录',
-      '备注',
+      '文本',
     ])
     expect(runStatusLabel.waiting_input).toBe('等待确认')
     expect(nodeDisplayModeLabel).toEqual({ compact: '紧凑', standard: '标准', expanded: '展开' })

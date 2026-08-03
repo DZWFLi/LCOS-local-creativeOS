@@ -11,7 +11,7 @@ describe('v0.7.1 corrected interaction contract', () => {
     expect(app).toContain('<WorkRail')
     expect(app).not.toContain('<Inspector')
     expect(rail).toContain('work-rail-composer')
-    expect(rail).toContain('告诉 AI 你想怎么改')
+    expect(rail).toContain('对${props.contextLabel}提问、分析、创建或修改')
     expect(app).not.toContain('focusNode=')
   })
 

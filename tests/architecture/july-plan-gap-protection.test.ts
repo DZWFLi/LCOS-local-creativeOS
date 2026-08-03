@@ -129,14 +129,14 @@ describe('GAP-UI-07: Checkpoint button is a toast, not a Core API call', () => {
     expect(serverSrc).toContain('createCheckpoint')
   })
 
-  it('App.tsx Checkpoint button calls the Core API (Slice F fix)', () => {
+  it('App.tsx Workspace State UI calls the Core API (Slice F fix / UI v5)', () => {
     const fs = require('node:fs')
     const appSrc = fs.readFileSync(
       join(__dirname, '../../apps/web/src/App.tsx'), 'utf-8'
     )
-    const hasCheckpointBtn = appSrc.includes('已形成稳定修改集')
-    expect(hasCheckpointBtn).toBe(true)
-    expect(appSrc).toContain('createCheckpoint(activeProjectId')
+    expect(appSrc).toContain('listWorkspaceStates')
+    expect(appSrc).toContain('saveWorkspaceState')
+    expect(appSrc).toContain('restoreWorkspaceState')
     expect(appSrc).not.toContain("setNotice('检查点已创建')")
   })
 })
