@@ -437,7 +437,10 @@ async function open() {
   }
   // 残留自愈：先把本机 LCOS 签名进程（旧栈/崩溃残留）清掉，再检查端口，
   // 避免“旧进程占着端口导致新栈拒绝启动”的死锁。
-  for (const pid of lcosLauncherPids()) killTree(pid)
+  for (const pid of lcosLauncherPids()) {
+    if (pid === process.pid) continue
+    killTree(pid)
+  }
   for (const pid of lcosListenerPids()) killTree(pid)
   spawnSync('powershell.exe', ['-NoProfile', '-Command', 'Start-Sleep -Milliseconds 800'], {
     stdio: 'ignore',
