@@ -103,4 +103,71 @@ describe('Runtime HTTP closure', () => {
       value: [{ run: { id: 'run-http-one' }, presentationPhase: 'created' }],
     })
   })
+
+  it('exposes durable run events and cancels a bound Run over HTTP', async () => {
+    const dbRoot = mkdtempSync(join(tmpdir(), 'lcos-runtime-http-db-'))
+    const projectRoot = mkdtempSync(join(tmpdir(), 'lcos-runtime-http-project-'))
+    roots.push(dbRoot, projectRoot)
+    const repository = new SqliteMetadataRepository(join(dbRoot, 'metadata.sqlite'))
+    repositories.push(repository)
+    const snapshot = createMvpSampleSnapshot(projectRoot, '2026-07-29T19:30:00.000Z')
+    repository.save(snapshot)
+    const bridge = new FakeBridge()
+    const review = new RuntimeReviewService(repository, undefined, () => 'http-two')
+    const application = new RuntimeApplicationService(
+      repository,
+      new ContextManifestService(repository),
+      new RuntimeAdapterService(repository, bridge, 'mvp-fast-build'),
+      new RuntimeResultIngestionService(repository, bridge),
+      review,
+      undefined,
+      () => 'http-two',
+    )
+    const server = createLocalCoreServer({
+      port: 0,
+      metadataRepository: repository,
+      runtimeReviewService: review,
+      runtimeApplicationService: application,
+    })
+    servers.push(server)
+    const address = await server.start()
+    const baseUrl = `http://${address.host}:${address.port}`
+    const target = snapshot.artifacts.find((artifact) => artifact.kind === 'markdown')!
+
+    const createdResponse = await fetch(`${baseUrl}/projects/${snapshot.project.id}/runs`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        instruction: 'Revise the script.',
+        outputIntent: 'revise',
+        targetArtifactId: target.id,
+      }),
+    })
+    expect(createdResponse.status).toBe(201)
+    const createdBody = await createdResponse.json() as { value: { review: { run: { id: string } } } }
+    const runId = createdBody.value.review.run.id
+
+    const eventsResponse = await fetch(`${baseUrl}/runs/${encodeURIComponent(runId)}/events`)
+    expect(eventsResponse.status).toBe(200)
+    const eventsBody = await eventsResponse.json() as { value: { type: string; sequence: number }[] }
+    expect(eventsBody.value.map((event) => event.type)).toEqual(['run.queued'])
+
+    await fetch(`${baseUrl}/runs/${encodeURIComponent(runId)}/dispatch`, { method: 'POST', body: '{}' })
+    const cancelResponse = await fetch(`${baseUrl}/runs/${encodeURIComponent(runId)}/cancel`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+    })
+    expect(cancelResponse.status).toBe(200)
+    const cancelBody = await cancelResponse.json() as { value: { review: { run: { status: string } } } }
+    expect(cancelBody.value.review.run.status).toBe('cancelled')
+
+    const eventsAfter = await fetch(`${baseUrl}/runs/${encodeURIComponent(runId)}/events`)
+    const eventsAfterBody = await eventsAfter.json() as { value: { type: string }[] }
+    expect(eventsAfterBody.value.map((event) => event.type)).toEqual([
+      'run.queued',
+      'run.started',
+      'run.cancelled',
+    ])
+  })
 })

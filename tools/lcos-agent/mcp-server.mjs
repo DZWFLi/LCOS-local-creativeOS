@@ -42,6 +42,9 @@ const tools = [
   tool("recover_lcos_run", "Recover a Run whose dispatch outcome is uncertain.", {
     runId: { type: "string" },
   }, ["runId"]),
+  tool("cancel_lcos_run", "Cancel one canonical Run and its bound Bridge task.", {
+    runId: { type: "string" },
+  }, ["runId"]),
   tool("finalize_lcos_run", "Finalize a reviewed Run with completed or retrying decision.", {
     runId: { type: "string" },
     decision: { type: "string", enum: ["completed", "retrying"] },
@@ -184,6 +187,12 @@ async function handle({ id, method, params }) {
         method: "POST",
         ...jsonBody({}),
         timeoutMs: 60_000,
+      });
+      break;
+    case "cancel_lcos_run":
+      value = await coreRequest(`/runs/${encodeURIComponent(required(args.runId, "runId"))}/cancel`, {
+        method: "POST",
+        ...jsonBody({}),
       });
       break;
     case "finalize_lcos_run":

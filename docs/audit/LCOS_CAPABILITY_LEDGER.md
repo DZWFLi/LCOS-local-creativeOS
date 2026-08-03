@@ -50,7 +50,7 @@
 | RUN-07 | expectedOutputs 反映真实 | — | ✅ | ✅ | — | — | — | 🔴 | ✅ 三 Intent 各自合同（B-1/2/3） |
 | RUN-08 | ResultEnvelope 三种 Intent | 🟠 | ✅ | ✅ | — | — | — | 🟠 | 🟠 Ingestion 三路成立，浏览器链待 F |
 | RUN-09 | Retry=New Run | 🟡 | 🟡 | — | — | — | — | 🟡 | 基础存在，GUI 未完整 |
-| RUN-10 | RunEvent/Activity | 🔴 | 🔴 | — | — | — | — | 🔴 | 无 durable Event 存储 |
+| RUN-10 | RunEvent/Activity | 🔴 | ✅ | ✅ | ✅ | — | — | 🔴 | ✅ run_events 表 v10 + 生命周期发射 + API/CLI（红区树实测） |
 | RUN-11 | waiting_input 恢复 | 🔴 | 🔴 | — | — | — | — | 🔴 | Fixture 存在，真实未闭合 |
 | RUN-12 | Mutation 不绕过 Accept | 🟠 | 🟠 | — | — | — | ✅ | 🟠 | Guard 未完全封死 |
 
@@ -61,7 +61,7 @@
 | RT-01 | Launcher 管理 Core+Bridge+Web | — | ✅ | ✅ | — | — | — | 🔴 | ✅ 实测三端口在线（Slice C） |
 | RT-02 | GUI 关闭 Core/Bridge 仍运行 | — | ✅ | ✅ | — | — | — | 🔴 | ✅ 实测关 GUI 仅停 Web（Slice C） |
 | RT-03 | 无 CMD 窗口 | — | ✅ | ✅ | — | — | — | 🔴 | ✅ 隐藏启动+文件日志（Slice C） |
-| RT-04 | 托盘宿主 | 🔴 | — | — | — | — | — | 🔴 | 无桌面托盘 |
+| RT-04 | 托盘宿主 | 🟡 | — | — | — | — | — | — | 🟡 `runtime-host-tray.ps1` 已交付（方案 A，零依赖）；托盘 UX 待人工确认 |
 | RT-05 | Bridge 崩溃恢复 | — | ✅ | ✅ | — | — | — | 🔴 | ✅ 限次退避重启+崩溃循环保护，实测恢复（Slice C） |
 | RT-06 | Bridge 唯一写路径 | 🟡 | 🟡 | ✅ | — | — | — | 🟡 | Legacy 路径未盘 |
 | RT-07 | Capabilities Handshake | 🟠 | 🟠 | ✅ | — | — | — | 🟠 | GUI/Adapter 未使用 |
@@ -78,10 +78,10 @@
 | CLI-03 | project current/inspect | — | — | — | 🟡 | — | — | — | 🟡 current/inspect/--json 已加（D）；多项目 current 需显式 id |
 | CLI-04 | Artifact inspect/compare | — | — | — | 🔴 | — | — | — | 🔴 缺失 |
 | CLI-05 | Feedback/Decision | — | — | — | 🔴 | — | — | — | 🔴 缺失 |
-| CLI-06 | Run events/cancel | — | — | — | 🟡 | — | — | — | 🟡 dry-run 已加（D）；events 需 Event 表（红区），cancel 待决策 |
+| CLI-06 | Run events/cancel | — | — | — | ✅ | — | — | — | ✅ `run events` + `run cancel` 已加并真实链验证（红区树） |
 | CLI-07 | Checkpoint/Preview | — | — | — | 🔴 | — | — | — | 🔴 缺失 |
 | CLI-08 | GUI-only 边界表 | — | — | — | 🟠 | — | — | — | 🟠 无明确边界 |
-| MCP-01 | Agent 创建 Run | — | — | — | — | ✅ | — | — | ✅ create/dispatch/recover/finalize 实测绑定真实 Bridge（D） |
+| MCP-01 | Agent 创建 Run | — | — | — | — | ✅ | — | — | ✅ create/dispatch/recover/finalize/cancel 实测（D+红区树） |
 | MCP-02 | Agent 读 GUI Selection | — | — | — | — | ✅ | — | — | ✅ 浏览器点选→PUT→CLI 立读实测（D） |
 | MCP-03 | Agent 确认 Revision | — | — | — | — | 🟡 | — | — | 🟡 accept/reject/retry 已加（D）；compare 缺失 |
 | MCP-04 | Skill 与代码同步 | — | — | — | — | 🟡 | 🟡 | — | 🟡 Skill 已同步 Intent/MCP 声明（D）；E2E 一致性待 F |

@@ -228,6 +228,15 @@ export class McpBridgeRuntimeClient implements BridgeRuntimePort {
     }
   }
 
+  async cancelTask(taskId: string, runId: string): Promise<void> {
+    const response = await this.callTool('cancel_task', { task_id: taskId })
+    const status = response.status ?? response.provider_status ?? response.providerStatus
+    const cancelled = String(status).toLocaleLowerCase('en-US') === 'cancelled'
+    if (!cancelled) {
+      throw providerError('CANCEL_REJECTED', `Bridge did not cancel task ${taskId} for run ${runId}.`, false)
+    }
+  }
+
   private identityFromResponse(
     response: JsonObject,
     expected?: {

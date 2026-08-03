@@ -1,14 +1,16 @@
 import { mkdtemp, rm } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import type { Checkpoint, Note, ProjectGraphSnapshot } from '@local-creative-os/contracts'
+import type { Checkpoint, Note, PersistedContextManifestV0, ProjectGraphSnapshot } from '@local-creative-os/contracts'
+import type { ContextManifestId, ProjectId, Run, RunEvent, RuntimeDispatch } from '@local-creative-os/domain'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { MetadataForeignKeyConstraintError, SqliteMetadataRepository } from '../src/metadata-repository.js'
 
 const cleanup: string[] = []
-const SCHEMA_VERSION = 9
+const SCHEMA_VERSION = 10
 
 function disposableSnapshot(): ProjectGraphSnapshot {
   const now = '2026-07-24T12:00:00.000Z'
@@ -92,6 +94,83 @@ afterEach(async () => {
 })
 
 describe('SqliteMetadataRepository', () => {
+  it('persists durable run events with per-run sequence and idempotent replay', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'local-core-run-events-'))
+    cleanup.push(directory)
+    const path = join(directory, 'metadata.sqlite')
+    const repository = new SqliteMetadataRepository(path)
+    repository.save(disposableSnapshot())
+    const canonicalJson = JSON.stringify({
+      schemaVersion: 0,
+      project: { id: 'disposable-portasplit' },
+      lockedElements: [],
+    })
+    const manifestHash = createHash('sha256').update(canonicalJson).digest('hex')
+    repository.createContextManifest({
+      id: 'manifest-events-one' as PersistedContextManifestV0['id'],
+      projectId: 'disposable-portasplit' as ProjectId,
+      schemaVersion: 0,
+      canonicalJson,
+      manifestHash,
+      createdAt: '2026-08-03T08:00:00.000Z',
+    })
+    const run: Run = {
+      id: 'run-events-one' as Run['id'],
+      projectId: 'disposable-portasplit' as ProjectId,
+      contextManifestId: 'manifest-events-one' as ContextManifestId,
+      provider: 'workbuddy',
+      requestedProvider: 'workbuddy',
+      outputIntent: 'analyze',
+      returnGroupId: 'return-group-events-one',
+      status: 'created',
+      instruction: 'Analyze.',
+      createdAt: '2026-08-03T08:00:00.000Z',
+      updatedAt: '2026-08-03T08:00:00.000Z',
+    }
+    repository.createRunWithDispatch(run, {
+      id: 'dispatch-events-one' as RuntimeDispatch['id'],
+      runId: run.id,
+      provider: 'workbuddy',
+      idempotencyKey: String(run.id),
+      status: 'planned',
+      attemptCount: 0,
+      createdAt: run.createdAt,
+      updatedAt: run.updatedAt,
+    })
+
+    const first = repository.createRunEvent({
+      id: 'event-events-one-a' as RunEvent['id'],
+      runId: run.id,
+      type: 'run.queued',
+      payload: { outputIntent: 'analyze' },
+      occurredAt: '2026-08-03T08:00:01.000Z',
+    })
+    const second = repository.createRunEvent({
+      id: 'event-events-one-b' as RunEvent['id'],
+      runId: run.id,
+      type: 'run.started',
+      payload: {},
+      occurredAt: '2026-08-03T08:00:02.000Z',
+    })
+    expect(first.sequence).toBe(1)
+    expect(second.sequence).toBe(2)
+
+    const replay = repository.createRunEvent({
+      id: 'event-events-one-a' as RunEvent['id'],
+      runId: run.id,
+      type: 'run.queued',
+      payload: { outputIntent: 'analyze' },
+      occurredAt: '2026-08-03T08:00:01.000Z',
+    })
+    expect(replay.sequence).toBe(1)
+    expect(repository.getRunEvents(run.id)).toHaveLength(2)
+    expect(repository.getRunEvents(run.id, 1).map((event) => event.type)).toEqual(['run.started'])
+
+    repository.close()
+    const reopened = new SqliteMetadataRepository(path)
+    expect(reopened.getRunEvents(run.id)).toHaveLength(2)
+  })
+
   it('migrates from empty, saves metadata, and restores after reopening', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'local-core-phase2-'))
     cleanup.push(directory)

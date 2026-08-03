@@ -29,6 +29,7 @@ afterEach(() => {
 
 class FakeBridge implements BridgeRuntimePort {
   createError: Error | undefined
+  cancelledTaskIds: string[] = []
   async createTask(envelope: BridgeTaskEnvelopeV0): Promise<BridgeTaskIdentity> {
     if (this.createError !== undefined) throw this.createError
     return {
@@ -41,6 +42,7 @@ class FakeBridge implements BridgeRuntimePort {
   }
   async findTaskByRunId(): Promise<BridgeTaskIdentity | undefined> { return undefined }
   async getResult(): Promise<BridgeResultEnvelopeV0 | undefined> { return undefined }
+  async cancelTask(taskId: string): Promise<void> { this.cancelledTaskIds.push(taskId) }
 }
 
 function setup() {
@@ -118,5 +120,57 @@ describe('RuntimeApplicationService', () => {
     expect(dispatched.review.run.status).toBe('created')
     expect(dispatched.review.dispatch.status).toBe('recovery_required')
     expect(repository.getProjectRuns(snapshot.project.id, 10)).toHaveLength(1)
+  })
+
+  it('emits durable run events across create/dispatch/accept', async () => {
+    const { repository, service, snapshot } = setup()
+    const target = snapshot.artifacts.find((artifact) => artifact.kind === 'markdown')!
+    const result = await service.create(snapshot.project.id, {
+      instruction: 'Revise the script.',
+      outputIntent: 'revise',
+      targetArtifactId: String(target.id),
+    })
+    const runId = result.review.run.id
+    const dispatched = await service.dispatch(runId)
+    expect(dispatched.providerError).toBeUndefined()
+    expect(dispatched.review.dispatch.status).toBe('bound')
+
+    const events = repository.getRunEvents(runId)
+    const types = events.map((event) => event.type)
+    expect(types).toContain('run.queued')
+    expect(types).toContain('run.started')
+    expect(events.map((event) => event.sequence)).toEqual([1, 2])
+  })
+
+  it('cancels a bound Run through the Bridge and records run.cancelled', async () => {
+    const { bridge, repository, service, snapshot } = setup()
+    const target = snapshot.artifacts.find((artifact) => artifact.kind === 'markdown')!
+    const result = await service.create(snapshot.project.id, {
+      instruction: 'Revise the script.',
+      outputIntent: 'revise',
+      targetArtifactId: String(target.id),
+    })
+    const runId = result.review.run.id
+    await service.dispatch(runId)
+
+    const cancelled = await service.cancel(runId)
+    expect(cancelled.review.run.status).toBe('cancelled')
+    expect(bridge.cancelledTaskIds).toHaveLength(1)
+    expect(repository.getRunEvents(runId).map((event) => event.type)).toContain('run.cancelled')
+  })
+
+  it('refuses to cancel a terminal Run', async () => {
+    const { repository, service, snapshot } = setup()
+    const target = snapshot.artifacts.find((artifact) => artifact.kind === 'markdown')!
+    const result = await service.create(snapshot.project.id, {
+      instruction: 'Revise the script.',
+      outputIntent: 'revise',
+      targetArtifactId: String(target.id),
+    })
+    const runId = result.review.run.id
+    repository.updateRunStatus(runId, 'completed', now)
+    const cancelled = await service.cancel(runId)
+    expect(cancelled.providerError).toMatchObject({ code: 'RUN_ALREADY_TERMINAL', retryable: false })
+    expect(repository.getRun(runId)?.status).toBe('completed')
   })
 })

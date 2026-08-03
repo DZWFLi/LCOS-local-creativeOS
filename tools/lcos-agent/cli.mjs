@@ -115,6 +115,12 @@ try {
     result = await coreRequest(`/runs/${encodeURIComponent(required(positional[0], "run id"))}/review`);
   } else if (group === "run" && action === "sync") {
     result = await coreRequest(`/runs/${encodeURIComponent(required(positional[0], "run id"))}/sync`, { method: "POST", ...jsonBody({}) });
+  } else if (group === "run" && action === "cancel") {
+    result = await coreRequest(`/runs/${encodeURIComponent(required(positional[0], "run id"))}/cancel`, { method: "POST", ...jsonBody({}) });
+  } else if (group === "run" && action === "events") {
+    const runId = required(positional[0], "run id");
+    const query = option("after") === undefined ? "" : `?after=${encodeURIComponent(option("after"))}`;
+    result = await coreRequest(`/runs/${encodeURIComponent(runId)}/events${query}`);
   } else if (group === "run" && action === "accept") {
     const returnId = required(positional[0], "artifact return id");
     result = await coreRequest(`/artifact-returns/${encodeURIComponent(returnId)}/accept`, {
@@ -310,6 +316,8 @@ Project truth:
   lcos run finalize <run-id> [--decision completed|retrying] [--comment "..."]
   lcos run show <run-id>
   lcos run sync <run-id>
+  lcos run cancel <run-id>
+  lcos run events <run-id> [--after N]
   lcos run accept <artifact-return-id> --base-revision <revision-id>
   lcos run reject <artifact-return-id>
   lcos run retry <artifact-return-id> [--instruction "..."]

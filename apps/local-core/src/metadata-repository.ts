@@ -29,6 +29,8 @@ import type {
   PreviewRecordId,
   Relation,
   RelationId,
+  RunEvent,
+  RunEventId,
   Scope,
   ScopeId,
   Workspace,
@@ -157,15 +159,16 @@ export class SqliteMetadataRepository {
 
   #migrate(): void {
     const version = this.#database.prepare('PRAGMA user_version').get() as { user_version: number }
-    if (version.user_version === 0) { this.#migrate_001(); this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); this.#migrate_009_from_v8(); return }
+    if (version.user_version === 0) { this.#migrate_001(); this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); this.#migrate_009_from_v8(); this.#migrate_010_from_v9(); return }
     if (version.user_version === 1) { this.#migrate_002_from_v1(); this.#migrate_004_from_v3(); this.#migrate_005_from_v4(); this.#migrate_006_from_v5(); this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); return }
     if (version.user_version === 2) { this.#migrate_003_from_v2(); this.#migrate_004_from_v3(); this.#migrate_005_from_v4(); this.#migrate_006_from_v5(); this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); return }
     if (version.user_version === 3) { this.#migrate_004_from_v3(); this.#migrate_005_from_v4(); this.#migrate_006_from_v5(); this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); return }
     if (version.user_version === 4) { this.#migrate_005_from_v4(); this.#migrate_006_from_v5(); this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); return }
     if (version.user_version === 5) { this.#migrate_006_from_v5(); this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); return }
     if (version.user_version === 6) { this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); return }
-    if (version.user_version === 7) { this.#migrate_008_from_v7(); this.#migrate_009_from_v8(); return }
-    if (version.user_version === 8) { this.#migrate_009_from_v8(); return }
+    if (version.user_version === 7) { this.#migrate_008_from_v7(); this.#migrate_009_from_v8(); this.#migrate_010_from_v9(); return }
+    if (version.user_version === 8) { this.#migrate_009_from_v8(); this.#migrate_010_from_v9(); return }
+    if (version.user_version === 9) { this.#migrate_010_from_v9(); return }
     // v9 = current
   }
 
@@ -669,6 +672,22 @@ export class SqliteMetadataRepository {
       CREATE INDEX idx_runtime_bindings_provider_status ON runtime_bindings(provider, provider_status);
       PRAGMA legacy_alter_table = OFF;
       PRAGMA user_version = 9;
+    `)
+  }
+
+  #migrate_010_from_v9(): void {
+    this.#database.exec(`
+      CREATE TABLE IF NOT EXISTS run_events (
+        id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+        sequence INTEGER NOT NULL,
+        type TEXT NOT NULL,
+        payload_json TEXT NOT NULL DEFAULT '{}',
+        occurred_at TEXT NOT NULL,
+        UNIQUE(run_id, sequence)
+      );
+      CREATE INDEX IF NOT EXISTS idx_run_events_run_sequence ON run_events(run_id, sequence);
+      PRAGMA user_version = 10;
     `)
   }
 
@@ -1685,6 +1704,69 @@ export class SqliteMetadataRepository {
     return run
   }
 
+  createRunEvent(
+    input: Pick<RunEvent, 'id' | 'runId' | 'type' | 'payload' | 'occurredAt'>,
+  ): RunEvent {
+    const existing = this.#database.prepare(
+      'SELECT * FROM run_events WHERE id = ?',
+    ).get(input.id as SQLInputValue) as Row | undefined
+    if (existing !== undefined) {
+      return this.#mapRunEvent(existing)
+    }
+    this.#database.exec('BEGIN IMMEDIATE;')
+    try {
+      const row = this.#database.prepare(
+        'SELECT COALESCE(MAX(sequence), 0) + 1 AS next_sequence FROM run_events WHERE run_id = ?',
+      ).get(input.runId as SQLInputValue) as Row
+      const sequence = Number(row.next_sequence)
+      this.#database.prepare(`
+        INSERT INTO run_events (id, run_id, sequence, type, payload_json, occurred_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(
+        input.id as SQLInputValue,
+        input.runId as SQLInputValue,
+        sequence,
+        input.type,
+        JSON.stringify(input.payload),
+        input.occurredAt,
+      )
+      this.#database.exec('COMMIT;')
+      const created = this.#database.prepare(
+        'SELECT * FROM run_events WHERE id = ?',
+      ).get(input.id as SQLInputValue) as Row
+      return this.#mapRunEvent(created)
+    } catch (error: unknown) {
+      this.#database.exec('ROLLBACK;')
+      const replay = this.#database.prepare(
+        'SELECT * FROM run_events WHERE id = ?',
+      ).get(input.id as SQLInputValue) as Row | undefined
+      if (replay !== undefined) return this.#mapRunEvent(replay)
+      throw error
+    }
+  }
+
+  getRunEvents(runId: RunId, afterSequence?: number): readonly RunEvent[] {
+    if (afterSequence === undefined) {
+      return (this.#database.prepare(
+        'SELECT * FROM run_events WHERE run_id = ? ORDER BY sequence',
+      ).all(runId as SQLInputValue) as Row[]).map((row) => this.#mapRunEvent(row))
+    }
+    return (this.#database.prepare(
+      'SELECT * FROM run_events WHERE run_id = ? AND sequence > ? ORDER BY sequence',
+    ).all(runId as SQLInputValue, afterSequence) as Row[]).map((row) => this.#mapRunEvent(row))
+  }
+
+  #mapRunEvent(row: Row): RunEvent {
+    return {
+      id: String(row.id) as RunEventId,
+      runId: String(row.run_id) as RunId,
+      sequence: Number(row.sequence),
+      type: String(row.type) as RunEvent['type'],
+      payload: JSON.parse(String(row.payload_json)) as RunEvent['payload'],
+      occurredAt: String(row.occurred_at),
+    }
+  }
+
   createArtifactReturn(value: ArtifactReturn): ArtifactReturn {
     this.#database.prepare(`
       INSERT INTO artifact_returns (
@@ -2028,7 +2110,7 @@ export class SqliteMetadataRepository {
     }
   }
 
-  get schemaVersion(): number { return 9 }
+  get schemaVersion(): number { return 10 }
 
   // ==================== Private helpers ====================
 

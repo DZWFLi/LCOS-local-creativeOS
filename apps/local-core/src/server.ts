@@ -691,6 +691,38 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
         return
       }
 
+      const cancelRunMatch = /^\/runs\/([^/]+)\/cancel$/.exec(pathname)
+      if (method === 'POST' && cancelRunMatch !== null) {
+        if (runtimeApplication === undefined) {
+          sendJson(response, 503, failure('UNAVAILABLE', 'Runtime execution service is not configured.'))
+          return
+        }
+        const runId = decodeURIComponent(cancelRunMatch[1] ?? '') as RunId
+        try {
+          sendJson(response, 200, {
+            ok: true,
+            value: await runtimeApplication.cancel(runId),
+          })
+        } catch (error: unknown) {
+          sendJson(response, 409, failure('CONFLICT', error instanceof Error ? error.message : 'Run cancellation conflicted.'))
+        }
+        return
+      }
+
+      const runEventsMatch = /^\/runs\/([^/]+)\/events$/.exec(pathname)
+      if (method === 'GET' && runEventsMatch !== null) {
+        if (!requireMetadata(metadata, response)) return
+        const runId = decodeURIComponent(runEventsMatch[1] ?? '') as RunId
+        const afterRaw = url.searchParams.get('after')
+        const afterSequence = afterRaw === null ? undefined : Number(afterRaw)
+        if (afterRaw !== null && (!Number.isInteger(afterSequence) || (afterSequence ?? -1) < 0)) {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'after must be a non-negative integer.'))
+          return
+        }
+        sendJson(response, 200, { ok: true, value: metadata.getRunEvents(runId, afterSequence) })
+        return
+      }
+
       const finalizeRunMatch = /^\/runs\/([^/]+)\/finalize$/.exec(pathname)
       if (method === 'POST' && finalizeRunMatch !== null) {
         if (runtimeApplication === undefined) {
