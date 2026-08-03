@@ -184,9 +184,26 @@ function ownedPidSet() {
 }
 
 function stopOwned({ quiet = false } = {}) {
+  const announce = (pid, source) => {
+    if (!quiet && Number.isInteger(pid)) console.log(`- stop pid=${pid} (${source})`)
+  }
+  for (const pid of lcosListenerPids()) {
+    announce(pid, 'port listener')
+    killTree(pid)
+  }
   const pids = ownedPidsFromState()
-  for (const pid of pids) killTree(pid)
-  for (const pid of lcosListenerPids()) killTree(pid)
+  for (const pid of pids) {
+    announce(pid, 'state')
+    killTree(pid)
+  }
+  spawnSync('powershell.exe', ['-NoProfile', '-Command', 'Start-Sleep -Milliseconds 1200'], {
+    stdio: 'ignore',
+    windowsHide: true,
+  })
+  for (const pid of lcosListenerPids()) {
+    announce(pid, 'port listener (second pass)')
+    killTree(pid)
+  }
   clearState()
   if (existsSync(LEGACY_DEV_STACK_PID_FILE)) rmSync(LEGACY_DEV_STACK_PID_FILE, { force: true })
   if (!quiet) console.log('✓ LCOS dev stack stopped')
