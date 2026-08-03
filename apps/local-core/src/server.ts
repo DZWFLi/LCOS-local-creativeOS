@@ -45,6 +45,7 @@ import { RuntimeRevisionCompareService } from './runtime-revision-compare-servic
 import { WorkspaceStateService } from './workspace-state-service.js'
 import { ProcessProjectionService } from './process-projection-service.js'
 import { LcosprojService } from './lcosproj-service.js'
+import { createTextArtifact } from './text-artifact-service.js'
 import {
   RuntimeApplicationService,
   type CreateRuntimeRunInput,
@@ -772,6 +773,40 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
           })
         } catch (error: unknown) {
           sendJson(response, 400, failure('INVALID_ARGUMENT', error instanceof Error ? error.message : 'Run proposal failed.'))
+        }
+        return
+      }
+
+      const textArtifactMatch = /^\/projects\/([^/]+)\/text-artifacts$/.exec(pathname)
+      if (method === 'POST' && textArtifactMatch !== null) {
+        if (!requireMetadata(metadata, response)) return
+        const projectId = decodeURIComponent(textArtifactMatch[1] ?? '') as ProjectId
+        if (!requireProject(projectId, metadata, response)) return
+        const input = await readJsonBody(request, controller.signal)
+        if (!isRecord(input) || typeof input.body !== 'string' || input.body.length > 200_000
+          || typeof input.scopeId !== 'string'
+          || (input.title !== undefined && typeof input.title !== 'string')
+          || (input.workspaceId !== undefined && typeof input.workspaceId !== 'string')
+          || (input.x !== undefined && typeof input.x !== 'number')
+          || (input.y !== undefined && typeof input.y !== 'number')
+          || Object.keys(input).some((key) => !['title', 'body', 'scopeId', 'workspaceId', 'x', 'y'].includes(key))) {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Text artifact requires a body string and scopeId.'))
+          return
+        }
+        try {
+          sendJson(response, 201, {
+            ok: true,
+            value: await createTextArtifact(metadata, projectId, {
+              ...(typeof input.title === 'string' ? { title: input.title } : {}),
+              body: input.body,
+              scopeId: input.scopeId,
+              ...(typeof input.workspaceId === 'string' ? { workspaceId: input.workspaceId } : {}),
+              ...(typeof input.x === 'number' ? { x: input.x } : {}),
+              ...(typeof input.y === 'number' ? { y: input.y } : {}),
+            }),
+          })
+        } catch (error: unknown) {
+          sendJson(response, 409, failure('CONFLICT', error instanceof Error ? error.message : 'Text artifact creation failed.'))
         }
         return
       }

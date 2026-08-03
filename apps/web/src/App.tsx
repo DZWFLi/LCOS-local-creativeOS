@@ -1144,6 +1144,52 @@ export function App() {
   }, [layoutPreview, nodes, safeInsets, scopeId, setNodes])
 
   const createNodeAt = useCallback((kind: 'note' | 'context', x: number, y: number) => {
+    if (kind === 'note' && bootMode === 'runtime' && activeProjectId) {
+      const localId = createId('note')
+      const temp: CanvasNode = {
+        id: localId,
+        kind,
+        title: '新文本…',
+        subtitle: '正在写入 Local Core…',
+        x,
+        y,
+        ...nodeDimensions(kind, 'standard'),
+        displayMode: 'standard',
+        scopeId,
+        createdAt: new Date().toISOString(),
+        workspaceIds: workspaceId ? [workspaceId] : [],
+      }
+      setNodes((current) => [...current, temp])
+      setSelectedIds([localId])
+      void bridgeRef.current.client.createTextArtifact(activeProjectId, {
+        body: '',
+        scopeId,
+        ...(workspaceId === null ? {} : { workspaceId }),
+        x,
+        y,
+      }).then((call) => {
+        if (!call.result.ok) {
+          setNodes((current) => current.filter((node) => node.id !== localId))
+          setNotice(`文本创建失败：${call.result.error.message}`)
+          return
+        }
+        const value = call.result.value
+        setNodes((current) => current.map((node) => node.id === localId ? {
+          ...node,
+          id: value.viewId,
+          artifactId: value.artifactId,
+          revisionId: value.revisionId,
+          fileRecordId: value.fileRecordId,
+          managed: true,
+          title: value.title,
+          subtitle: '文本 · 可进入 Context 与修改',
+          previewText: '',
+        } : node))
+        setSelectedIds([value.viewId])
+        setRenameNodeId(value.viewId)
+      })
+      return localId
+    }
     const id = createId(kind)
     const displayMode: NodeDisplayMode = 'standard'
     let opensScopeId: string | undefined
@@ -1153,7 +1199,7 @@ export function App() {
     }
     const next: CanvasNode = { id, kind, title: kind === 'note' ? '新文本' : '新内容集合', subtitle: kind === 'note' ? '直接输入或交给 Agent 整理' : '双击进入子画布', x, y, ...nodeDimensions(kind, displayMode), displayMode, scopeId, opensScopeId, contextOnly: kind === 'context', createdAt: new Date().toISOString(), workspaceIds: workspaceId ? [workspaceId] : [] }
     setNodes((current) => [...current, next]); setSelectedIds([id]); setRenameNodeId(id); return id
-  }, [scopeId, setNodes, workspaceId])
+  }, [activeProjectId, bootMode, scopeId, setNodes, setSelectedIds, setRenameNodeId, workspaceId])
 
   const createContentFromDialog = useCallback((kind: 'note' | 'context') => {
     const viewport = document.querySelector<HTMLElement>('[data-testid="canvas"]')?.getBoundingClientRect()

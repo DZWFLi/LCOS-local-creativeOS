@@ -102,6 +102,7 @@ export class FileRegistryService {
       projectId,
       title: input.title?.trim() || basename(guarded.realPath),
       kind: artifactKindForFile(guarded.realPath),
+      managed: true,
       availability: 'available',
       currentRevisionId: revisionId,
       createdAt: now,

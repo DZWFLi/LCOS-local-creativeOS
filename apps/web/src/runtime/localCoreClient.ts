@@ -198,6 +198,20 @@ export interface LocalCoreClient {
   ), signal?: AbortSignal): Promise<RuntimeCall<ProjectCatalogEntry>>
   metadataStatus(signal?: AbortSignal): Promise<RuntimeCall<MetadataStoreStatus>>
   projectGraph(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<ProjectGraphSnapshot>>
+  createTextArtifact(projectId: string, input: {
+    readonly title?: string
+    readonly body: string
+    readonly scopeId: string
+    readonly workspaceId?: string
+    readonly x?: number
+    readonly y?: number
+  }, signal?: AbortSignal): Promise<RuntimeCall<{
+    readonly artifactId: string
+    readonly revisionId: string
+    readonly viewId: string
+    readonly fileRecordId: string
+    readonly title: string
+  }>>
   exportLcosproj(projectId: string, targetPath: string, signal?: AbortSignal): Promise<RuntimeCall<unknown>>
   exportAllLcosproj(targetDir: string, projectIds?: readonly string[], signal?: AbortSignal): Promise<RuntimeCall<unknown>>
   openLcosproj(filePath: string, rootPath?: string, signal?: AbortSignal): Promise<RuntimeCall<unknown>>
@@ -565,6 +579,23 @@ export function createLocalCoreClient(): LocalCoreClient {
       return request(`/projects/${encodeURIComponent(projectId)}/graph`, {
         signal,
         decode: decodeResult<ProjectGraphSnapshot>,
+      })
+    },
+    createTextArtifact(projectId, input, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/text-artifacts`, {
+        signal,
+        init: {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(input),
+        },
+        decode: decodeResult<{
+          readonly artifactId: string
+          readonly revisionId: string
+          readonly viewId: string
+          readonly fileRecordId: string
+          readonly title: string
+        }>,
       })
     },
     exportLcosproj(projectId, targetPath, signal) {

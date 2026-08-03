@@ -385,4 +385,65 @@ describe('Runtime HTTP closure', () => {
     expect(openBody.value.project.id).toBe(String(snapshot.project.id))
     expect(openBody.value.tables.artifacts).toBe(snapshot.artifacts.length)
   })
+
+  it('creates a managed Text Artifact that can enter Run Context', async () => {
+    const dbRoot = mkdtempSync(join(tmpdir(), 'lcos-runtime-http-db-'))
+    const projectRoot = mkdtempSync(join(tmpdir(), 'lcos-runtime-http-project-'))
+    roots.push(dbRoot, projectRoot)
+    const repository = new SqliteMetadataRepository(join(dbRoot, 'metadata.sqlite'))
+    repositories.push(repository)
+    const snapshot = createMvpSampleSnapshot(projectRoot, '2026-07-29T19:30:00.000Z')
+    repository.save(snapshot)
+    const bridge = new FakeBridge()
+    const review = new RuntimeReviewService(repository, undefined, () => 'http-six')
+    const application = new RuntimeApplicationService(
+      repository,
+      new ContextManifestService(repository),
+      new RuntimeAdapterService(repository, bridge, 'mvp-fast-build'),
+      new RuntimeResultIngestionService(repository, bridge),
+      review,
+      undefined,
+      () => 'http-six',
+    )
+    const server = createLocalCoreServer({
+      port: 0,
+      metadataRepository: repository,
+      runtimeReviewService: review,
+      runtimeApplicationService: application,
+    })
+    servers.push(server)
+    const address = await server.start()
+    const baseUrl = `http://${address.host}:${address.port}`
+    const scopeId = String(snapshot.scopes[0]!.id)
+    const workspaceId = String(snapshot.workspaces[0]!.id)
+
+    const createResponse = await fetch(`${baseUrl}/projects/${snapshot.project.id}/text-artifacts`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ body: '开场要压到三秒。', scopeId, workspaceId, x: 40, y: 60 }),
+    })
+    expect(createResponse.status).toBe(201)
+    const created = await createResponse.json() as { value: { artifactId: string; revisionId: string; viewId: string } }
+    const artifact = repository.getArtifact(created.value.artifactId)
+    expect(artifact?.managed).toBe(true)
+    expect(artifact?.kind).toBe('markdown')
+    expect(repository.getArtifactRevision(created.value.revisionId)?.status).toBe('current')
+    expect(repository.listWorkspaceMembers(workspaceId as never).map((item) => String(item.artifactViewId)))
+      .toContain(created.value.viewId)
+
+    const proposeResponse = await fetch(`${baseUrl}/projects/${snapshot.project.id}/runs/propose`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        prompt: '根据这条文本分析节奏问题',
+        requestedProvider: 'auto',
+        contextItems: [{ artifactId: created.value.artifactId, revisionId: created.value.revisionId, order: 1 }],
+        editTargets: [],
+        resultPolicy: { type: 'reply_only' },
+      }),
+    })
+    expect(proposeResponse.status).toBe(200)
+    const proposeBody = await proposeResponse.json() as { value: { proposal: { contextItems: { artifactId: string }[] } } }
+    expect(proposeBody.value.proposal.contextItems.map((item) => item.artifactId)).toContain(created.value.artifactId)
+  })
 })
