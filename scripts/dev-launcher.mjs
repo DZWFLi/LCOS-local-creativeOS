@@ -100,6 +100,27 @@ function portOwners(ports = [WEB_PORT, CORE_PORT, BRIDGE_PORT]) {
   }
 }
 
+function lcosListenerPids(ports = [WEB_PORT, CORE_PORT, BRIDGE_PORT]) {
+  if (process.platform !== 'win32') return []
+  const cwdNeedle = process.cwd().replace(/'/g, "''")
+  const portList = ports.join(',')
+  const ps = [
+    `$ports=@(${portList});`,
+    `$needle=[regex]::Escape('${cwdNeedle}');`,
+    'Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue |',
+    'Where-Object { $ports -contains $_.LocalPort } |',
+    'Select-Object -ExpandProperty OwningProcess -Unique |',
+    'ForEach-Object {',
+    '  $p=Get-CimInstance Win32_Process -Filter "ProcessId=$_" -ErrorAction SilentlyContinue;',
+    '  if ($p -and $p.CommandLine -and $p.CommandLine -match $needle) { $p.ProcessId }',
+    '}',
+  ].join(' ')
+  const result = run('powershell.exe', ['-NoProfile', '-Command', ps])
+  const raw = result.stdout.trim()
+  if (!raw) return []
+  return raw.split(/\r?\n/).map((line) => Number(line.trim())).filter((pid) => Number.isInteger(pid))
+}
+
 function killTree(pid) {
   if (!isPidRunning(pid)) return
   if (process.platform === 'win32') {
@@ -167,6 +188,7 @@ function ownedPidSet() {
 function stopOwned({ quiet = false } = {}) {
   const pids = ownedPidsFromState()
   for (const pid of pids) killTree(pid)
+  for (const pid of lcosListenerPids()) killTree(pid)
   clearState()
   if (existsSync(LEGACY_DEV_STACK_PID_FILE)) rmSync(LEGACY_DEV_STACK_PID_FILE, { force: true })
   if (!quiet) console.log('✓ LCOS dev stack stopped')
@@ -414,9 +436,9 @@ async function open() {
   writeState(state)
 
   const services = {
-    core: { healthUrl: CORE_HEALTH_URL, pid: null, pendingRestart: false, restarts: 0, restartWindowStart: 0, healthFails: 0, lastRestartAt: null },
-    web: { healthUrl: WEB_URL, pid: null, pendingRestart: false, restarts: 0, restartWindowStart: 0, healthFails: 0, lastRestartAt: null },
-    bridge: { healthUrl: BRIDGE_HEALTH_URL, pid: null, pendingRestart: false, restarts: 0, restartWindowStart: 0, healthFails: 0, lastRestartAt: null },
+    core: { healthUrl: CORE_HEALTH_URL, pid: null, pendingRestart: false, manualStop: false, restarts: 0, restartWindowStart: 0, healthFails: 0, lastRestartAt: null },
+    web: { healthUrl: WEB_URL, pid: null, pendingRestart: false, manualStop: false, restarts: 0, restartWindowStart: 0, healthFails: 0, lastRestartAt: null },
+    bridge: { healthUrl: BRIDGE_HEALTH_URL, pid: null, pendingRestart: false, manualStop: false, restarts: 0, restartWindowStart: 0, healthFails: 0, lastRestartAt: null },
   }
   const spawners = {
     core: () => spawnLogged('dev:local-core', 'local-core', environment),
@@ -442,6 +464,7 @@ async function open() {
     const child = spawners[name]()
     service.pid = child.pid ?? null
     service.pendingRestart = false
+    service.manualStop = false
     child.once('error', (error) => {
       console.error(`✗ ${name} failed to start: ${error.message}`)
       scheduleRestart(name)
@@ -449,7 +472,7 @@ async function open() {
     child.once('exit', (code, signal) => {
       service.pid = null
       refreshState()
-      if (stopping) return
+      if (stopping || service.manualStop) return
       console.log(`⚠ ${name} exited (code=${code ?? 'null'} signal=${signal ?? 'null'})`)
       scheduleRestart(name)
     })
@@ -483,10 +506,13 @@ async function open() {
   function stopService(name) {
     const service = services[name]
     if (service.pid !== null) {
+      service.manualStop = true
       killTree(service.pid)
       service.pid = null
       refreshState()
     }
+    const port = name === 'core' ? CORE_PORT : name === 'bridge' ? BRIDGE_PORT : WEB_PORT
+    for (const pid of lcosListenerPids([port])) killTree(pid)
   }
 
   function stopAll() {
