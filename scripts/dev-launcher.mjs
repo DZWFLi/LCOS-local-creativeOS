@@ -102,17 +102,15 @@ function portOwners(ports = [WEB_PORT, CORE_PORT, BRIDGE_PORT]) {
 
 function lcosListenerPids(ports = [WEB_PORT, CORE_PORT, BRIDGE_PORT]) {
   if (process.platform !== 'win32') return []
-  const cwdNeedle = process.cwd().replace(/'/g, "''")
   const portList = ports.join(',')
   const ps = [
     `$ports=@(${portList});`,
-    `$needle=[regex]::Escape('${cwdNeedle}');`,
     'Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue |',
     'Where-Object { $ports -contains $_.LocalPort } |',
     'Select-Object -ExpandProperty OwningProcess -Unique |',
     'ForEach-Object {',
     '  $p=Get-CimInstance Win32_Process -Filter "ProcessId=$_" -ErrorAction SilentlyContinue;',
-    '  if ($p -and $p.CommandLine -and $p.CommandLine -match $needle) { $p.ProcessId }',
+    '  if ($p -and $p.CommandLine -and ($p.CommandLine -match "lcos_bridge" -or $p.CommandLine -match "vite" -or $p.CommandLine -match "dist/index.js")) { $p.ProcessId }',
     '}',
   ].join(' ')
   const result = run('powershell.exe', ['-NoProfile', '-Command', ps])
