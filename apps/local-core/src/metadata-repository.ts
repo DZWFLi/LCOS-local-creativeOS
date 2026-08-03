@@ -1756,6 +1756,59 @@ export class SqliteMetadataRepository {
     }
   }
 
+  createRuntimeCreatedArtifact(
+    fileRecord: FileRecord,
+    artifact: Artifact,
+    revision: ArtifactRevision,
+    artifactReturn: ArtifactReturn,
+  ): ArtifactReturn {
+    if (
+      String(fileRecord.id) !== String(artifactReturn.returnedFileId)
+      || String(revision.id) !== String(artifactReturn.draftRevisionId)
+      || String(revision.fileRecordId) !== String(fileRecord.id)
+      || String(revision.artifactId) !== String(artifactReturn.targetArtifactId)
+      || String(revision.artifactId) !== String(artifact.id)
+      || revision.parentRevisionId !== undefined
+      || artifact.currentRevisionId !== undefined
+      || String(revision.runId) !== String(artifactReturn.runId)
+      || String(revision.contentHash) !== String(artifactReturn.contentHash)
+      || String(fileRecord.observedHash) !== String(artifactReturn.contentHash)
+      || String(artifactReturn.baseRevisionId) !== String(revision.id)
+      || revision.source !== 'run'
+      || revision.status !== 'draft'
+      || artifactReturn.status !== 'pending_review'
+      || artifactReturn.action !== 'created'
+    ) {
+      throw new Error('Runtime Created Artifact invariants are invalid.')
+    }
+    const existing = this.getArtifactReturnByIdentity(
+      artifactReturn.runId,
+      artifactReturn.canonicalPath,
+      String(artifactReturn.contentHash),
+      artifactReturn.action,
+    )
+    if (existing !== undefined) return existing
+    this.#database.exec('BEGIN IMMEDIATE;')
+    try {
+      this.#upsertFileRecord(fileRecord)
+      this.#upsertArtifact(artifact)
+      this.#upsertArtifactRevision(revision)
+      this.createArtifactReturn(artifactReturn)
+      this.#database.exec('COMMIT;')
+      return artifactReturn
+    } catch (error: unknown) {
+      this.#database.exec('ROLLBACK;')
+      const replay = this.getArtifactReturnByIdentity(
+        artifactReturn.runId,
+        artifactReturn.canonicalPath,
+        String(artifactReturn.contentHash),
+        artifactReturn.action,
+      )
+      if (replay !== undefined) return replay
+      throw error
+    }
+  }
+
   getArtifactReturn(returnId: ArtifactReturnId): ArtifactReturn | undefined {
     const row = this.#database.prepare('SELECT * FROM artifact_returns WHERE id = ?').get(returnId as SQLInputValue) as Row | undefined
     if (row === undefined) return undefined
@@ -1806,13 +1859,53 @@ export class SqliteMetadataRepository {
       const artifactReturn = this.getArtifactReturn(returnId)
       if (artifactReturn === undefined) throw new RuntimeLifecycleConflictError('ArtifactReturn not found.')
       if (artifactReturn.status !== 'pending_review') throw new RuntimeLifecycleConflictError('ArtifactReturn is no longer pending review.')
+      const artifact = this.getArtifact(String(artifactReturn.targetArtifactId))
+      const draftRevision = artifactReturn.draftRevisionId === undefined
+        ? undefined
+        : this.getArtifactRevision(String(artifactReturn.draftRevisionId))
+      if (
+        artifact !== undefined
+        && draftRevision !== undefined
+        && artifact.currentRevisionId === undefined
+        && String(artifactReturn.baseRevisionId) === String(artifactReturn.draftRevisionId)
+        && draftRevision.parentRevisionId === undefined
+      ) {
+        if (String(artifactReturn.baseRevisionId) !== String(expectedBaseRevisionId)) {
+          throw new RuntimeLifecycleConflictError('Accept base revision does not match the Return base revision.')
+        }
+        const run = this.getRun(artifactReturn.runId)
+        if (run === undefined || draftRevision.status !== 'draft') {
+          throw new RuntimeLifecycleConflictError('Accept lifecycle evidence is incomplete.')
+        }
+        this.#database.prepare('UPDATE artifact_revisions SET status = ? WHERE id = ? AND status = ?')
+          .run('current', draftRevision.id as SQLInputValue, 'draft')
+        this.#database.prepare(
+          'UPDATE artifacts SET current_revision_id = ?, updated_at = ? WHERE id = ? AND current_revision_id IS NULL',
+        ).run(draftRevision.id as SQLInputValue, updatedAt, artifact.id as SQLInputValue)
+        this.#database.prepare('UPDATE artifact_returns SET status = ?, updated_at = ? WHERE id = ? AND status = ?')
+          .run('adopted', updatedAt, returnId as SQLInputValue, 'pending_review')
+        this.#database.prepare(
+          'UPDATE runs SET status = ?, updated_at = ?, completed_at = ? WHERE id = ?',
+        ).run('completed', updatedAt, updatedAt, run.id as SQLInputValue)
+        this.#database.prepare(
+          'UPDATE runtime_bindings SET finalize_pending = 1, updated_at = ? WHERE run_id = ?',
+        ).run(updatedAt, run.id as SQLInputValue)
+        this.#database.prepare(
+          'UPDATE projects SET graph_version = graph_version + 1, updated_at = ? WHERE id = ?',
+        ).run(updatedAt, run.projectId as SQLInputValue)
+        const result = {
+          artifactReturn: this.getArtifactReturn(returnId)!,
+          currentRevision: this.getArtifactRevision(String(draftRevision.id))!,
+          run: this.getRun(run.id)!,
+        }
+        this.#database.exec('COMMIT;')
+        return result
+      }
       if (String(artifactReturn.baseRevisionId) !== String(expectedBaseRevisionId)) {
         throw new RuntimeLifecycleConflictError('Accept base revision does not match the Return base revision.')
       }
       if (artifactReturn.draftRevisionId === undefined) throw new RuntimeLifecycleConflictError('ArtifactReturn has no Draft Revision.')
-      const artifact = this.getArtifact(String(artifactReturn.targetArtifactId))
       const previousRevision = this.getArtifactRevision(String(artifactReturn.baseRevisionId))
-      const draftRevision = this.getArtifactRevision(String(artifactReturn.draftRevisionId))
       const run = this.getRun(artifactReturn.runId)
       if (artifact === undefined || previousRevision === undefined || draftRevision === undefined || run === undefined) {
         throw new RuntimeLifecycleConflictError('Accept lifecycle evidence is incomplete.')

@@ -79,8 +79,8 @@ export interface BridgeTaskEnvelopeV1 {
   }[]
   readonly outputPolicy: {
     readonly allowZeroFiles: boolean
-    readonly allowAdditionalFiles: false
-    readonly maxFiles: 0 | 1
+    readonly allowAdditionalFiles: boolean
+    readonly maxFiles: 0 | 1 | 5
   }
   readonly timeoutSeconds: number
   readonly reportMode: 'short'
@@ -335,7 +335,8 @@ export class RuntimeAdapterService {
     const runtimeRoot = resolve(project.rootPath, '.creative-os', 'runtime', String(run.id))
     const packPath = resolve(runtimeRoot, 'runtime-input-pack.json')
     const isAnalyze = run.outputIntent === 'analyze'
-    const outputPath = isAnalyze ? undefined : resolve(runtimeRoot, 'staging', `script-draft-${String(run.id)}.md`)
+    const isCreate = run.outputIntent === 'create'
+    const outputPath = isAnalyze || isCreate ? undefined : resolve(runtimeRoot, 'staging', `script-draft-${String(run.id)}.md`)
     const resultEnvelopePath = resolve(runtimeRoot, 'result', 'result-envelope-v0.json')
     assertWithin(project.rootPath, packPath)
     if (outputPath !== undefined) assertWithin(runtimeRoot, outputPath)
@@ -395,8 +396,8 @@ export class RuntimeAdapterService {
           }],
       outputPolicy: {
         allowZeroFiles: isAnalyze,
-        allowAdditionalFiles: false,
-        maxFiles: isAnalyze ? 0 : 1,
+        allowAdditionalFiles: isCreate,
+        maxFiles: isAnalyze ? 0 : isCreate ? 5 : 1,
       },
       timeoutSeconds: 600,
       reportMode: 'short',

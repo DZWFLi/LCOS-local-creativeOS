@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { mkdir, readFile, realpath, stat, writeFile } from 'node:fs/promises'
-import { dirname, extname, isAbsolute, relative, resolve } from 'node:path'
+import { basename, dirname, extname, isAbsolute, relative, resolve } from 'node:path'
 
 import type { RuntimePersistenceContract } from '@local-creative-os/contracts'
 import type {
@@ -25,6 +25,12 @@ export interface RuntimeResultRepository extends RuntimePersistenceContract, Run
   getArtifact(artifactId: string): Artifact | undefined
   getArtifactRevision(revisionId: string): ArtifactRevision | undefined
   getFileRecord(fileRecordId: string): FileRecord | undefined
+  createRuntimeCreatedArtifact(
+    fileRecord: FileRecord,
+    artifact: Artifact,
+    revision: ArtifactRevision,
+    artifactReturn: ArtifactReturn,
+  ): ArtifactReturn
 }
 
 export type IngestedRuntimeResult =
@@ -40,6 +46,32 @@ export type IngestedRuntimeResult =
       readonly kind: 'analyze'
       readonly summary: string
     }
+  | {
+      readonly kind: 'create'
+      readonly artifactReturns: readonly ArtifactReturn[]
+    }
+
+function kindForExtension(extension: string): Artifact['kind'] {
+  if (extension === '.md' || extension === '.txt') return 'markdown'
+  if (['.png', '.jpg', '.jpeg', '.webp'].includes(extension)) return 'image'
+  if (extension === '.pdf') return 'pdf'
+  if (extension === '.ppt' || extension === '.pptx') return 'presentation'
+  return 'other'
+}
+
+function mimeForExtension(extension: string): string {
+  if (extension === '.md') return 'text/markdown'
+  if (extension === '.txt') return 'text/plain'
+  if (extension === '.json') return 'application/json'
+  if (extension === '.yaml' || extension === '.yml') return 'application/yaml'
+  if (extension === '.png') return 'image/png'
+  if (extension === '.jpg' || extension === '.jpeg') return 'image/jpeg'
+  if (extension === '.webp') return 'image/webp'
+  if (extension === '.pdf') return 'application/pdf'
+  if (extension === '.pptx') return 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+  if (extension === '.docx') return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  return 'application/octet-stream'
+}
 
 function error(code: string, message: string, retryable = false): RuntimeAdapterError {
   return new RuntimeAdapterError({ code, message, retryable, provider: 'workbuddy' })
@@ -170,21 +202,104 @@ export class RuntimeResultIngestionService {
       }
       throw error(code, envelope.summary ?? envelope.shortSummary ?? envelope.resultSummary ?? 'Provider did not return a reviewable result.')
     }
-    if (run.outputIntent !== 'revise' || run.targetArtifactId === undefined || run.targetRevisionId === undefined) {
-      if (run.outputIntent === 'analyze') {
-        if (envelope.changedFiles.length !== 0) {
-          throw error('CONTRACT_UNSUPPORTED', 'Analyze runs must return zero changed files; provider returned file changes.')
-        }
-        const summary = envelope.summary ?? envelope.resultSummary ?? envelope.shortSummary ?? 'Analysis completed with no file changes.'
-        this.repository.updateRunStatus(run.id, 'completed', syncedAt)
-        return {
-          kind: 'analyze',
-          summary,
-        }
+    if (run.outputIntent === 'analyze') {
+      if (envelope.changedFiles.length !== 0) {
+        throw error('CONTRACT_UNSUPPORTED', 'Analyze runs must return zero changed files; provider returned file changes.')
       }
-      throw error('CONTRACT_UNSUPPORTED', 'Create returns require return-group ingestion which is not yet open; use revise or analyze.')
+      const summary = envelope.summary ?? envelope.resultSummary ?? envelope.shortSummary ?? 'Analysis completed with no file changes.'
+      this.repository.updateRunStatus(run.id, 'completed', syncedAt)
+      return {
+        kind: 'analyze',
+        summary,
+      }
     }
-    if (run.outputIntent === 'revise' && (run.targetArtifactId === undefined || run.targetRevisionId === undefined)) {
+    if (run.outputIntent === 'create') {
+      if (envelope.changedFiles.length < 1 || envelope.changedFiles.length > 5) {
+        throw error('CONTRACT_UNSUPPORTED', 'Create runs must return between 1 and 5 changed files.')
+      }
+      const stagingRoot = await realpath(resolve(runtimeRoot, 'staging'))
+      assertContained(canonicalRuntimeRoot, stagingRoot)
+      const artifactReturns: ArtifactReturn[] = []
+      for (const changedFile of envelope.changedFiles) {
+        if (changedFile.action !== 'created') {
+          throw error('CONTRACT_UNSUPPORTED', 'Create returns must declare created files only.')
+        }
+        const declaredPath = changedFile.path
+        if (!isAbsolute(declaredPath)) throw error('RESULT_PATH_REJECTED', 'Result path must be absolute.')
+        const canonicalPath = await realpath(declaredPath)
+        assertContained(stagingRoot, canonicalPath, 'RESULT_PATH_REJECTED')
+        const outputStat = await stat(canonicalPath)
+        if (!outputStat.isFile()) throw error('RESULT_PATH_REJECTED', 'Result output is not a regular file.')
+        const contentHash = createHash('sha256')
+          .update(await readFile(canonicalPath))
+          .digest('hex') as ContentHash
+        const identityHash = createHash('sha256')
+          .update(`${String(run.id)}\0${canonicalPath}\0${String(contentHash)}`)
+          .digest('hex')
+        const existing = this.repository.getArtifactReturnByIdentity(
+          run.id,
+          canonicalPath,
+          String(contentHash),
+          'created',
+        )
+        if (existing !== undefined) {
+          artifactReturns.push(existing)
+          continue
+        }
+        const extension = extname(canonicalPath).toLocaleLowerCase('en-US')
+        const artifactId = `artifact-created-${identityHash}` as Artifact['id']
+        const fileName = basename(canonicalPath)
+        const fileRecord: FileRecord = {
+          id: `file-created-${identityHash}` as FileRecord['id'],
+          projectId: run.projectId,
+          observedPath: canonicalPath,
+          observedHash: contentHash,
+          size: outputStat.size,
+          modifiedAt: outputStat.mtime.toISOString(),
+          mimeType: mimeForExtension(extension),
+          availability: 'current',
+          observedAt: syncedAt,
+        }
+        const artifact: Artifact = {
+          id: artifactId,
+          projectId: run.projectId,
+          title: fileName,
+          kind: kindForExtension(extension),
+          availability: 'available',
+          createdAt: syncedAt,
+          updatedAt: syncedAt,
+        }
+        const draftRevision: ArtifactRevision = {
+          id: `revision-created-${identityHash}` as ArtifactRevision['id'],
+          artifactId,
+          fileRecordId: fileRecord.id,
+          contentHash,
+          source: 'run',
+          runId: run.id,
+          status: 'draft',
+          createdAt: syncedAt,
+        }
+        const artifactReturn: ArtifactReturn = {
+          id: `return-created-${identityHash}` as ArtifactReturn['id'],
+          runId: run.id,
+          targetArtifactId: artifactId,
+          baseRevisionId: draftRevision.id,
+          returnedFileId: fileRecord.id,
+          contentHash,
+          canonicalPath,
+          action: 'created',
+          status: 'pending_review',
+          draftRevisionId: draftRevision.id,
+          createdAt: syncedAt,
+          updatedAt: syncedAt,
+        }
+        artifactReturns.push(
+          this.repository.createRuntimeCreatedArtifact(fileRecord, artifact, draftRevision, artifactReturn),
+        )
+      }
+      return { kind: 'create', artifactReturns }
+    }
+    if (run.outputIntent !== 'revise' || run.targetArtifactId === undefined || run.targetRevisionId === undefined) {
       throw error('CONTRACT_UNSUPPORTED', 'Revise Run requires a target Artifact and Base Revision.')
     }
     const changedFile = envelope.changedFiles[0]

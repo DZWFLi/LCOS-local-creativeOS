@@ -230,7 +230,7 @@ export interface AcceptArtifactReturnInput {
 export interface AcceptArtifactReturnResult {
   readonly artifactReturn: ArtifactReturn
   readonly currentRevision: ArtifactRevision
-  readonly previousRevision: ArtifactRevision
+  readonly previousRevision?: ArtifactRevision
   readonly run: Run
 }
 
