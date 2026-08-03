@@ -32,7 +32,7 @@
 | UI-04 | Editor Host 预留 | ✅ | — | — | — | — | — | — | ✅ 接口已预留，无假编辑器（E） |
 | UI-05 | 三处共用 ActiveContext | 🟠 | ✅ | — | — | 🔴 | — | 🟠 Core PUT 存在，Web 未写回 |
 | UI-06 | 功能可见性 | 🔴 | — | — | — | — | — | 🔴 入口分散，无命令面板 |
-| UI-07 | Checkpoint | 🔴 | 🔴 | — | — | — | — | 🔴 按钮只 toast，未调 Core API |
+| UI-07 | Checkpoint | ✅ | ✅ | — | — | — | — | 🔴 | ✅ 按钮真实写 Core，重启后存在（F） |
 | UI-08 | Feedback/Decision | 🟡 | — | — | — | — | — | 🟡 Note 存在，结构化操作不完整 |
 | UI-09 | Diff / Compare | 🟡 | — | — | — | — | — | 🟡 仅卡片式 ReviewSurface |
 | UI-10 | 失败恢复入口 | 🔴 | — | — | — | — | — | 🔴 无恢复派发 UI |
@@ -67,7 +67,7 @@
 | RT-07 | Capabilities Handshake | 🟠 | 🟠 | ✅ | — | — | — | 🟠 | GUI/Adapter 未使用 |
 | RT-08 | WorkBuddy 主动取件 | 🟡 | 🟡 | ✅ | ✅ | ✅ | 🟡 | 🟡 | claim/start/submit 有，零点击唤醒未证明 |
 | RT-09 | Provider Task 与 Run 分离 | ✅ | ✅ | ✅ | — | — | — | ✅ | 投影层分离 |
-| RT-10 | 重启恢复 | 🟡 | 🟡 | 🟡 | — | — | — | 🟡 | 单元有，真实 Run 未过 |
+| RT-10 | 重启恢复 | 🟡 | ✅ | ✅ | — | — | — | 🟡 | ✅ 真实 Core+Bridge+Agent 重启恢复实测（F） |
 
 ## D. CLI、MCP 与 Agent Product Surface
 
@@ -103,7 +103,7 @@
 
 | ID | 简述 | GUI | Core | Bridge | CLI | MCP | Skill | E2E | 状态 |
 |---|---|---|---|---|---|---|---|---|---|
-| QA-01 | 浏览器 Golden Path | 🔴 | 🔴 | 🔴 | — | — | — | 🔴 | 未通过完整链 |
+| QA-01 | 浏览器 Golden Path | 🟡 | ✅ | ✅ | — | — | — | 🟡 | 🟡 Runtime/Bridge/Agent 全链实测（F）；GUI 全链待手工 |
 | QA-02 | Bridge 离线不假装执行 | 🟡 | 🟡 | — | — | — | — | 🟡 | 按钮仍允许创建 Run |
 | QA-03 | Fixture 不接管 Runtime | 🟡 | — | — | — | — | — | 🟡 | App 保留 Fixture 状态机 |
 | QA-04 | Restart Recovery | — | 🟡 | 🟡 | — | — | — | 🟡 | 数据层有，GUI 无 |

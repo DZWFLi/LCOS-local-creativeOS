@@ -32,6 +32,7 @@
     "test:integration": "vitest run tests/integration --reporter=verbose",
     "test:e2e": "npx playwright test --reporter=list",
     "test:e2e:golden": "node scripts/phase25-golden-path.mjs",
+    "test:golden:full": "node scripts/full-golden-path.mjs",
     "audit:manifest:write": "node scripts/reproducibility-manifest.mjs write",
     "audit:manifest:verify": "node scripts/reproducibility-manifest.mjs verify",
     "smoke": "npm run smoke --workspace @local-creative-os/web",

@@ -26,13 +26,21 @@ npm run dev:open
 
 ```powershell
 npm run lcos -- project list
+npm run lcos -- doctor
+npm run lcos -- capabilities
 npm run lcos -- context get disposable-mvp-sample
 npm run lcos -- open disposable-mvp-sample
+npm run lcos -- project current [project-id]
+npm run lcos -- project inspect <root-path>
 
 npm run lcos -- task claim --provider workbuddy --worker buddy-local
 npm run lcos -- task start <task-id> --worker buddy-local
 npm run lcos -- task submit <task-id> <result-envelope.json>
 ```
+
+`doctor` 汇总 Core / Bridge / Provider / Contract 状态；`capabilities` 输出 Bridge
+能力与两个 provider 的契约。`run create` 必须显式传 `--output create|revise|analyze`
+（Local Core 已拒绝缺省 Intent）；`--dry-run` 只打印将发送的请求体。
 
 `open` 返回：
 
@@ -51,7 +59,8 @@ Workspace、选择与 Context 版本，不创建第二张 tldraw/React Flow Proj
 - Project 列表与 Graph；
 - Active Context；
 - 不可变 ContextManifest；
-- Run / Pending Return 查询与同步；
+- Run 创建（显式 outputIntent）/ 派发 / 恢复 / 收尾 / 同步；
+- Pending Return 的 accept / reject / retry 与 Run Review 查询；
 - Agent Browser URL；
 - **Light Bridge task lifecycle**：claim / start / get / submit / cancel（全部为薄委托 loopback REST，不复制状态机）
 

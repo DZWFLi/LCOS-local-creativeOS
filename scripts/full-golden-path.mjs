@@ -80,6 +80,7 @@ async function waitHealth(url, timeoutMs = 30_000) {
 async function coreRequest(path, init = {}) {
   const response = await fetch(`${CORE_URL}${path}`, {
     ...init,
+    signal: AbortSignal.timeout(10_000),
     headers: {
       authorization: `Bearer ${token}`,
       'content-type': 'application/json',
@@ -96,6 +97,7 @@ async function coreRequest(path, init = {}) {
 async function bridgeRequest(path, init = {}) {
   const response = await fetch(`${BRIDGE_URL}${path}`, {
     ...init,
+    signal: AbortSignal.timeout(10_000),
     headers: { 'content-type': 'application/json', ...init.headers },
   })
   const value = await response.json().catch(() => null)
@@ -119,11 +121,14 @@ async function claimStartSubmit(lcosRunId, { prepare, changedFiles, summary }) {
   const taskId = task.task_id ?? task.taskId
   const taskRunId = task.lcos_run_id ?? task.lcosRunId
   assert(String(taskRunId) === String(lcosRunId), `claimed task belongs to ${taskRunId}, expected ${lcosRunId}`)
+  console.log(`  agent: claimed ${taskId}`)
   await bridgeRequest(`/v1/tasks/${encodeURIComponent(taskId)}/running`, {
     method: 'POST',
     body: JSON.stringify({ workerId: 'golden-agent' }),
   })
+  console.log('  agent: started')
   const files = await prepare(task)
+  console.log(`  agent: prepared ${files.length} file(s)`)
   const effectiveChanged = files.length > 0 ? files : changedFiles
   await bridgeRequest(`/v1/tasks/${encodeURIComponent(taskId)}/result`, {
     method: 'POST',
@@ -136,6 +141,7 @@ async function claimStartSubmit(lcosRunId, { prepare, changedFiles, summary }) {
       changedFiles: effectiveChanged,
     }),
   })
+  console.log('  agent: submitted')
   return { taskId, files }
 }
 
@@ -183,6 +189,7 @@ async function main() {
     importExisting: true,
   })
   const projectId = project.id
+  console.log('step: project open')
   let graph = await coreRequest(`/projects/${encodeURIComponent(projectId)}/graph`)
   const scriptArtifact = graph.artifacts.find((item) => item.title.toLowerCase().includes('script'))
   assert(scriptArtifact !== undefined, 'script artifact was not imported')
@@ -196,7 +203,9 @@ async function main() {
     targetArtifactId: String(scriptArtifact.id),
   })
   const reviseRunId = reviseRun.review.run.id
+  console.log(`step: revise create ${reviseRunId}`)
   await post(`/runs/${encodeURIComponent(reviseRunId)}/dispatch`, {})
+  console.log('step: revise dispatch')
   const reviseEvidence = await claimStartSubmit(reviseRunId, {
     prepare: async (task) => [{
       path: writeExpectedOutput(task, '# 脚本\n\n画面 1：产品特写。\n画面 2：用户故事。\n结尾：现在就试试 X，感受轻快稳。\n'),
@@ -205,13 +214,16 @@ async function main() {
     changedFiles: [],
     summary: '已在结尾补充行动号召。',
   })
+  console.log('step: revise submitted')
   await post(`/runs/${encodeURIComponent(reviseRunId)}/sync`, {})
+  console.log('step: revise synced')
   let review = await coreRequest(`/runs/${encodeURIComponent(reviseRunId)}/review`)
   assert(review.returns.length === 1 && review.returns[0].status === 'pending_review', 'revise return is not pending review')
   const reviseReturn = review.returns[0]
   const accepted = await post(`/artifact-returns/${encodeURIComponent(reviseReturn.id)}/accept`, {
     expectedBaseRevisionId: String(reviseReturn.baseRevisionId),
   })
+  console.log('step: revise accepted')
   assert(accepted.currentRevision.status === 'current' && accepted.run.status === 'completed', 'revise accept did not complete the run')
   console.log(`✓ revise run=${reviseRunId} → accepted revision=${accepted.currentRevision.id}`)
 
@@ -221,13 +233,17 @@ async function main() {
     outputIntent: 'analyze',
   })
   const analyzeRunId = analyzeRun.review.run.id
+  console.log(`step: analyze create ${analyzeRunId}`)
   await post(`/runs/${encodeURIComponent(analyzeRunId)}/dispatch`, {})
+  console.log('step: analyze dispatch')
   await claimStartSubmit(analyzeRunId, {
     prepare: async () => [],
     changedFiles: [],
     summary: '节奏分析：1) 开场信息密度高；2) 中段缺少停顿；3) 结尾需要行动号召。',
   })
+  console.log('step: analyze submitted')
   await post(`/runs/${encodeURIComponent(analyzeRunId)}/sync`, {})
+  console.log('step: analyze synced')
   review = await coreRequest(`/runs/${encodeURIComponent(analyzeRunId)}/review`)
   assert(review.run.status === 'completed', 'analyze run did not complete')
   assert(review.returns.length === 0, 'analyze must not produce returns')
@@ -239,7 +255,9 @@ async function main() {
     outputIntent: 'create',
   })
   const createRunId = createRun.review.run.id
+  console.log(`step: create run ${createRunId}`)
   await post(`/runs/${encodeURIComponent(createRunId)}/dispatch`, {})
+  console.log('step: create dispatch')
   const createEvidence = await claimStartSubmit(createRunId, {
     prepare: async (task) => {
       const outputRoot = task.envelope?.outputRoot
@@ -255,16 +273,20 @@ async function main() {
     changedFiles: [],
     summary: '已创建 shot list 与 storyboard 两个新文件。',
   })
+  console.log('step: create submitted')
   await post(`/runs/${encodeURIComponent(createRunId)}/sync`, {})
+  console.log('step: create synced')
   review = await coreRequest(`/runs/${encodeURIComponent(createRunId)}/review`)
   assert(review.returns.length === 2 && review.returns.every((item) => item.status === 'pending_review'), 'create return group is not pending')
   const firstCreated = await post(`/artifact-returns/${encodeURIComponent(review.returns[0].id)}/accept`, {
     expectedBaseRevisionId: String(review.returns[0].baseRevisionId),
   })
+  console.log('step: create accepted')
   assert(firstCreated.run.status === 'completed' && firstCreated.currentRevision.status === 'current', 'create accept failed')
   console.log(`✓ create run=${createRunId} → 2 returns, 1 accepted`)
 
   // 5. Checkpoint
+  console.log('step: checkpoint')
   graph = await coreRequest(`/projects/${encodeURIComponent(projectId)}/graph`)
   const checkpoint = await post(`/projects/${encodeURIComponent(projectId)}/checkpoints`, {
     id: `checkpoint-golden-1`,
@@ -278,12 +300,17 @@ async function main() {
   console.log(`✓ checkpoint ${checkpoint.id}`)
 
   // 6. Core restart recovery
+  console.log('step: kill core')
   const coreChild = children[children.length - 1]
   spawnSync('taskkill.exe', ['/pid', String(coreChild.pid), '/t', '/f'], { stdio: 'ignore', windowsHide: true })
+  console.log('step: wait core down')
   await new Promise((resolveWait) => setTimeout(resolveWait, 1_500))
   assert(!(await waitHealth(`${CORE_URL}/health`, 3_000)), 'core should be down after kill')
+  console.log('step: respawn core')
   spawnCore()
+  console.log('step: wait core up')
   assert(await waitHealth(`${CORE_URL}/health`), 'core did not recover after restart')
+  console.log('step: verify recovery')
   const afterRestart = await coreRequest(`/runs/${encodeURIComponent(reviseRunId)}/review`)
   assert(afterRestart.run.status === 'completed', 'accepted run state lost after restart')
   const checkpoints = await coreRequest(`/projects/${encodeURIComponent(projectId)}/checkpoints`)
@@ -302,6 +329,8 @@ async function main() {
     checkpoint: checkpoint.id,
     evidenceRoot,
   }, null, 2))
+  stopAll()
+  rmSync(evidenceRoot, { recursive: true, force: true })
 }
 
 main().catch((error) => {
