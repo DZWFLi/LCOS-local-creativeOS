@@ -91,6 +91,7 @@ describe('Run-time resource matching into RuntimeInputPack (U4)', () => {
     )
     const action = await application.create('project-pack' as ProjectId, {
       instruction: 'use the storyboard skill to revise the script',
+      outputIntent: 'revise',
       targetArtifactId: target.artifact.id,
     })
     const runId = String(action.review.run.id)

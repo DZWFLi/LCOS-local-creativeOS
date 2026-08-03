@@ -29,6 +29,35 @@ const tools = [
   tool("sync_lcos_run", "Synchronize one Run with its bound provider task.", {
     runId: { type: "string" },
   }, ["runId"]),
+  tool("create_lcos_run", "Create a canonical Run with an explicit output intent (create/revise/analyze).", {
+    projectId: { type: "string" },
+    instruction: { type: "string" },
+    outputIntent: { type: "string", enum: ["create", "revise", "analyze"] },
+    targetArtifactId: { type: "string" },
+    provider: { type: "string", enum: ["workbuddy", "codex"] },
+  }, ["projectId", "instruction", "outputIntent"]),
+  tool("dispatch_lcos_run", "Dispatch a canonical Run to the bound Bridge provider.", {
+    runId: { type: "string" },
+  }, ["runId"]),
+  tool("recover_lcos_run", "Recover a Run whose dispatch outcome is uncertain.", {
+    runId: { type: "string" },
+  }, ["runId"]),
+  tool("finalize_lcos_run", "Finalize a reviewed Run with completed or retrying decision.", {
+    runId: { type: "string" },
+    decision: { type: "string", enum: ["completed", "retrying"] },
+    comment: { type: "string" },
+  }, ["runId", "decision"]),
+  tool("accept_lcos_return", "Accept one pending Artifact Return against its expected base revision.", {
+    returnId: { type: "string" },
+    expectedBaseRevisionId: { type: "string" },
+  }, ["returnId", "expectedBaseRevisionId"]),
+  tool("reject_lcos_return", "Reject one pending Artifact Return and keep the Draft as evidence.", {
+    returnId: { type: "string" },
+  }, ["returnId"]),
+  tool("retry_lcos_return", "Retry one pending Artifact Return as a new linked Run.", {
+    returnId: { type: "string" },
+    instruction: { type: "string" },
+  }, ["returnId"]),
   tool("claim_lcos_task", "Pull one Light Bridge task pending assignment for a provider.", {
     provider: { type: "string" },
     worker_id: { type: "string" },
@@ -130,6 +159,59 @@ async function handle({ id, method, params }) {
       break;
     case "sync_lcos_run":
       value = await coreRequest(`/runs/${encodeURIComponent(required(args.runId, "runId"))}/sync`, { method: "POST", ...jsonBody({}) });
+      break;
+    case "create_lcos_run":
+      value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/runs`, {
+        method: "POST",
+        ...jsonBody({
+          instruction: required(args.instruction, "instruction"),
+          outputIntent: required(args.outputIntent, "outputIntent"),
+          ...(args.targetArtifactId ? { targetArtifactId: args.targetArtifactId } : {}),
+          requestedProvider: args.provider || "workbuddy",
+        }),
+        timeoutMs: 60_000,
+      });
+      break;
+    case "dispatch_lcos_run":
+      value = await coreRequest(`/runs/${encodeURIComponent(required(args.runId, "runId"))}/dispatch`, {
+        method: "POST",
+        ...jsonBody({}),
+        timeoutMs: 60_000,
+      });
+      break;
+    case "recover_lcos_run":
+      value = await coreRequest(`/runs/${encodeURIComponent(required(args.runId, "runId"))}/recover`, {
+        method: "POST",
+        ...jsonBody({}),
+        timeoutMs: 60_000,
+      });
+      break;
+    case "finalize_lcos_run":
+      value = await coreRequest(`/runs/${encodeURIComponent(required(args.runId, "runId"))}/finalize`, {
+        method: "POST",
+        ...jsonBody({
+          decision: required(args.decision, "decision"),
+          ...(args.comment ? { comment: args.comment } : {}),
+        }),
+      });
+      break;
+    case "accept_lcos_return":
+      value = await coreRequest(`/artifact-returns/${encodeURIComponent(required(args.returnId, "returnId"))}/accept`, {
+        method: "POST",
+        ...jsonBody({ expectedBaseRevisionId: required(args.expectedBaseRevisionId, "expectedBaseRevisionId") }),
+      });
+      break;
+    case "reject_lcos_return":
+      value = await coreRequest(`/artifact-returns/${encodeURIComponent(required(args.returnId, "returnId"))}/reject`, {
+        method: "POST",
+        ...jsonBody({}),
+      });
+      break;
+    case "retry_lcos_return":
+      value = await coreRequest(`/artifact-returns/${encodeURIComponent(required(args.returnId, "returnId"))}/retry`, {
+        method: "POST",
+        ...jsonBody(args.instruction ? { instruction: args.instruction } : {}),
+      });
       break;
     case "claim_lcos_task":
       value = await bridgeRequest("/v1/tasks/claim-next", {

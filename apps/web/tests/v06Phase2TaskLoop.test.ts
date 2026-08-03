@@ -23,7 +23,7 @@ describe('v0.6 phase 2 intuitive task loop contract', () => {
 
   it('creates traceable process records only after final confirmation', () => {
     expect(app).toContain('setRunConfirmOpen(true)')
-    expect(app).toContain('startRunFrom(composerText, inference.targetIds, inference.contextIds)')
+    expect(app).toContain('startRunFrom(composerText, inference.targetIds, inference.contextIds, runIntent)')
     expect(app).toContain("kind: 'process'")
     expect(app).toContain('contextSnapshotId: createId')
   })

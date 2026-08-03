@@ -84,7 +84,7 @@ export interface CreateRuntimeRunInput {
   readonly targetArtifactId?: string
   readonly contextArtifactIds?: readonly string[]
   readonly workspaceId?: string
-  readonly outputIntent?: 'create' | 'revise' | 'analyze'
+  readonly outputIntent: 'create' | 'revise' | 'analyze'
   readonly requestedProvider?: string
 }
 

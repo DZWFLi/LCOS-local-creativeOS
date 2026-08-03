@@ -55,7 +55,8 @@ describe('v0.6 centered run confirmation and Canvas lock', () => {
   })
 
   it('keeps advanced execution details collapsed by default', () => {
-    expect(dialog).toContain('执行方式：WorkBuddy · 保存为新版本')
+    expect(dialog).toContain('执行方式：WorkBuddy')
+    expect(dialog).toContain("revise: '保存为新版本'")
     expect(dialog).toContain('advancedOpen &&')
     expect(dialog).not.toContain('Context Pack')
     expect(dialog).not.toContain('Execution Router')

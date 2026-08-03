@@ -650,13 +650,14 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
           const input = await readJsonBody(request, controller.signal)
           if (!isRecord(input)
             || typeof input.instruction !== 'string'
+            || typeof input.outputIntent !== 'string'
+            || !['create', 'revise', 'analyze'].includes(input.outputIntent)
             || (input.targetArtifactId !== undefined && typeof input.targetArtifactId !== 'string')
             || (input.contextArtifactIds !== undefined && !isStringArray(input.contextArtifactIds))
             || (input.workspaceId !== undefined && typeof input.workspaceId !== 'string')
-            || (input.outputIntent !== undefined && !['create', 'revise', 'analyze'].includes(String(input.outputIntent)))
             || (input.requestedProvider !== undefined && !['workbuddy', 'codex'].includes(String(input.requestedProvider)))
             || Object.keys(input).some((key) => !['instruction', 'targetArtifactId', 'contextArtifactIds', 'workspaceId', 'outputIntent', 'requestedProvider'].includes(key))) {
-            sendJson(response, 400, failure('INVALID_ARGUMENT', 'Run requires instruction; revise also requires an explicit target.'))
+            sendJson(response, 400, failure('INVALID_ARGUMENT', 'Run requires instruction and outputIntent (create|revise|analyze); revise also requires an explicit target.'))
             return
           }
           sendJson(response, 201, {

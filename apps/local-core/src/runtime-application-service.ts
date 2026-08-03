@@ -15,7 +15,7 @@ export interface CreateRuntimeRunInput {
   readonly targetArtifactId?: string
   readonly contextArtifactIds?: readonly string[]
   readonly workspaceId?: string
-  readonly outputIntent?: 'create' | 'revise' | 'analyze'
+  readonly outputIntent: 'create' | 'revise' | 'analyze'
   readonly requestedProvider?: 'workbuddy' | 'codex'
 }
 
@@ -39,7 +39,8 @@ export class RuntimeApplicationService {
   async create(projectId: ProjectId, input: CreateRuntimeRunInput): Promise<RuntimeRunActionResult> {
     const instruction = input.instruction.trim()
     if (instruction.length === 0) throw new Error('Run instruction is required.')
-    const outputIntent = input.outputIntent ?? 'revise'
+    const outputIntent = input.outputIntent
+    if (outputIntent === undefined) throw new Error('Run outputIntent is required (create|revise|analyze).')
     if (outputIntent === 'revise' && input.targetArtifactId === undefined) throw new Error('Revise Run requires an explicit target Artifact.')
     const descriptors = this.repository.listResourceDescriptors(String(projectId))
     const policyByResourceId = new Map(descriptors.map((descriptor) => [

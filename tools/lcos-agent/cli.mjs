@@ -9,10 +9,33 @@ const option = (name) => {
   return index < 0 ? undefined : rest[index + 1];
 };
 const positional = rest.filter((value, index) => !value.startsWith("--") && !rest[index - 1]?.startsWith("--"));
+let exitCode = 0;
 
 try {
   let result;
-  if (group === "project" && action === "list") {
+  if (group === "doctor") {
+    const [core, bridge] = await Promise.all([
+      probe(coreRequest("/health")),
+      probe(bridgeRequest("/health")),
+    ]);
+    const capabilities = bridge.ok ? await probe(bridgeRequest("/v1/capabilities")) : null;
+    const healthy = core.ok && bridge.ok;
+    result = {
+      healthy,
+      core: core.ok ? { ok: true, ...core.value } : { ok: false, error: core.error },
+      bridge: bridge.ok ? { ok: true, ...bridge.value } : { ok: false, error: bridge.error },
+      capabilities: capabilities === null ? null : capabilities.ok ? capabilities.value : { error: capabilities.error },
+    };
+    if (!healthy) exitCode = 1;
+  } else if (group === "capabilities") {
+    const bridge = await probe(bridgeRequest("/v1/capabilities"));
+    const core = await probe(coreRequest("/health"));
+    result = {
+      coreHealthy: core.ok,
+      ...(bridge.ok ? bridge.value : { bridgeError: bridge.error }),
+    };
+    if (!bridge.ok || !core.ok) exitCode = 1;
+  } else if (group === "project" && action === "list") {
     result = await coreRequest("/projects");
   } else if (group === "project" && action === "open") {
     const rootPath = required(positional[0], "project root path");
@@ -28,6 +51,23 @@ try {
     result = await coreRequest("/projects", { method: "POST", ...jsonBody({ name, intent: "create", parentPath, directoryName: option("directory") || name.replace(/\s+/g, "-") }), timeoutMs: 60_000 });
   } else if (group === "project" && action === "show") {
     result = await coreRequest(`/projects/${encodeURIComponent(required(positional[0], "project id"))}/graph`);
+  } else if (group === "project" && action === "inspect") {
+    const rootPath = required(positional[0], "root path");
+    result = await coreRequest("/project-roots/inspect", { method: "POST", ...jsonBody({ rootPath }), timeoutMs: 60_000 });
+  } else if (group === "project" && action === "current") {
+    const projects = await coreRequest("/projects");
+    const explicit = positional[0];
+    if (explicit !== undefined) {
+      const found = projects.find((item) => item.id === explicit);
+      if (found === undefined) throw new Error(`Project not found: ${explicit}`);
+      result = found;
+    } else if (projects.length === 1) {
+      result = projects[0];
+    } else if (projects.length === 0) {
+      throw new Error("No projects registered. Use lcos project open|create first.");
+    } else {
+      throw new Error(`Multiple projects registered; pass the project id: ${projects.map((item) => item.id).join(", ")}`);
+    }
   } else if (group === "context" && action === "get") {
     result = await coreRequest(`/projects/${encodeURIComponent(required(positional[0], "project id"))}/active-context`);
   } else if (group === "manifest" && action === "build") {
@@ -46,11 +86,22 @@ try {
   } else if (group === "run" && action === "create") {
     const projectId = required(positional[0], "project id");
     const instruction = required(option("instruction"), "--instruction");
-    result = await coreRequest(`/projects/${encodeURIComponent(projectId)}/runs`, {
-      method: "POST",
-      ...jsonBody({ instruction, ...(option("target") ? { targetArtifactId: option("target") } : {}), ...(option("output") ? { outputIntent: option("output") } : {}), requestedProvider: option("provider") || "workbuddy" }),
-      timeoutMs: 60_000,
-    });
+    const outputIntent = required(option("output"), "--output (create|revise|analyze)");
+    const payload = {
+      instruction,
+      ...(option("target") ? { targetArtifactId: option("target") } : {}),
+      outputIntent,
+      requestedProvider: option("provider") || "workbuddy",
+    };
+    if (rest.includes("--dry-run")) {
+      result = { dryRun: true, projectId, method: "POST", path: `/projects/${encodeURIComponent(projectId)}/runs`, payload };
+    } else {
+      result = await coreRequest(`/projects/${encodeURIComponent(projectId)}/runs`, {
+        method: "POST",
+        ...jsonBody(payload),
+        timeoutMs: 60_000,
+      });
+    }
   } else if (group === "run" && action === "dispatch") {
     result = await coreRequest(`/runs/${encodeURIComponent(required(positional[0], "run id"))}/dispatch`, { method: "POST", ...jsonBody({}), timeoutMs: 60_000 });
   } else if (group === "run" && action === "recover") {
@@ -193,9 +244,19 @@ try {
     process.exit(0);
   }
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  if (exitCode !== 0) process.exitCode = exitCode;
 } catch (error) {
   process.stderr.write(`lcos: ${error instanceof Error ? error.message : String(error)}\n`);
   process.exitCode = 1;
+}
+
+async function probe(requestPromise) {
+  try {
+    const value = await requestPromise;
+    return { ok: true, value };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  }
 }
 
 function required(value, label) {
@@ -232,14 +293,18 @@ function printHelp() {
   process.stdout.write(`LCOS Agent CLI
 
 Project truth:
+  lcos doctor
+  lcos capabilities
   lcos project list
   lcos project open <root-path> --name "Project" [--import-existing|--empty]
   lcos project create <parent-path> --name "Project" [--directory folder-name]
   lcos project show <project-id>
+  lcos project inspect <root-path>
+  lcos project current [project-id]
   lcos context get <project-id>
   lcos manifest build <project-id> [--target <artifact-id>] [--output <description>]
   lcos run list <project-id> [--limit 20]
-  lcos run create <project-id> --instruction "..." [--target artifact-id] [--output create|revise|analyze] [--provider workbuddy|codex]
+  lcos run create <project-id> --instruction "..." [--target artifact-id] [--output create|revise|analyze] [--provider workbuddy|codex] [--dry-run]
   lcos run dispatch <run-id>
   lcos run recover <run-id>
   lcos run finalize <run-id> [--decision completed|retrying] [--comment "..."]

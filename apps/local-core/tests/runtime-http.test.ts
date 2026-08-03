@@ -81,6 +81,7 @@ describe('Runtime HTTP closure', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         instruction: 'Create a new Markdown draft.',
+        outputIntent: 'revise',
         targetArtifactId: target.id,
       }),
     })

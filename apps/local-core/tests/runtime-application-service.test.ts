@@ -71,6 +71,7 @@ describe('RuntimeApplicationService', () => {
     const target = snapshot.artifacts.find((artifact) => artifact.kind === 'markdown')!
     const result = await service.create(snapshot.project.id, {
       instruction: 'Revise the script without overwriting the source.',
+      outputIntent: 'revise',
       targetArtifactId: String(target.id),
       workspaceId: String(snapshot.workspaces[0]!.id),
     })
@@ -108,6 +109,7 @@ describe('RuntimeApplicationService', () => {
     const target = snapshot.artifacts.find((artifact) => artifact.kind === 'markdown')!
     const result = await service.create(snapshot.project.id, {
       instruction: 'Revise the script.',
+      outputIntent: 'revise',
       targetArtifactId: String(target.id),
     })
     const dispatched = await service.dispatch(result.review.run.id)

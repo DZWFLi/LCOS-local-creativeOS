@@ -14,7 +14,10 @@ LCOS Canvas / Project Truth  ←→  Local Core (127.0.0.1:43121)
 Local Core                   ←→  Light Bridge (127.0.0.1:43122)
 Light Bridge                 ←→  Agent (claim / start / submit)
 
-Project MCP: read-only Project Truth, ActiveContext, ContextManifest, Runs
+Project MCP: read Project Truth / ActiveContext / ContextManifest / Runs, and
+             create / dispatch / recover / finalize Runs plus accept / reject /
+             retry Artifact Returns (writes go through Local Core HTTP; the MCP
+             proxy never touches SQLite)
 Bridge MCP:  task lifecycle (claim / start / get / submit / cancel)
 ```
 
@@ -35,6 +38,22 @@ Bridge MCP:  task lifecycle (claim / start / get / submit / cancel)
 4. `build_lcos_context_manifest` — freeze an immutable ContextManifest from Project Truth **immediately before** creating or executing a Run.
 
 ### Execute phase (WorkBuddy / Codex as Agent)
+
+Agent-initiated run:
+
+```text
+create_lcos_run(projectId, instruction, outputIntent, targetArtifactId?)
+  // outputIntent is REQUIRED: create | revise | analyze
+→ dispatch_lcos_run(runId)
+→ claim_lcos_task(provider, worker_id)
+→ start_lcos_task(task_id, worker_id)
+→ execute within outputRoot only
+→ submit_lcos_result(task_id, resultEnvelope)
+→ get_lcos_run(runId)          // review projection
+→ accept_lcos_return / reject_lcos_return / retry_lcos_return
+```
+
+Pulled-task flow (no LCOS run creation):
 
 ```text
 claim_lcos_task(provider, worker_id)
@@ -63,7 +82,7 @@ Bridge V1 tasks carry an `output_intent`:
 | `revise` | Agent modifies an existing artifact (draft output)   |
 | `analyze`| Agent produces analysis/report without file changes  |
 
-MVP V1 uses `revise` as the primary intent. Output is written to `outputRoot` (set by the TaskEnvelope), never overwriting source files directly. The task's `output_policy` further constrains where and how outputs may land.
+`output_intent` must be passed explicitly by the Web Run Composer, CLI, or MCP — Local Core rejects Run creation without it (no implicit `revise` default). `revise` requires `targetArtifactId`; `create` may create 1–5 new files under `outputRoot`; `analyze` must return zero changed files. Output is written to `outputRoot` (set by the TaskEnvelope), never overwriting source files directly. The task's `output_policy` further constrains where and how outputs may land.
 
 ## 4. changed_files
 
@@ -74,7 +93,7 @@ Every `submit_lcos_result` must include `changed_files` — a structured array:
   "changed_files": [
     {
       "path": "absolute path",
-      "action": "created | modified | deleted",
+      "action": "created | modified",
       "contentHash": "optional sha256"
     }
   ]
@@ -144,7 +163,7 @@ Each execution should verify:
 - `get_lcos_task` reflects the latest status
 - `cancel_lcos_task` marks the task `cancelled`
 - The Light Bridge canary (`npm run bridge -- canary`) passes
-- The LCOS MCP smoke (`initialize` + `tools/list` �� 14 tools) passes
+- The LCOS MCP smoke (`initialize` + `tools/list`) passes
 
 ## 10. Example: full WorkBuddy agent flow
 
