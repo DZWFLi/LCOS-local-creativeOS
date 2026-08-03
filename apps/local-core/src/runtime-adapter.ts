@@ -80,7 +80,7 @@ export interface BridgeTaskEnvelopeV1 {
   readonly outputPolicy: {
     readonly allowZeroFiles: boolean
     readonly allowAdditionalFiles: false
-    readonly maxFiles: 1
+    readonly maxFiles: 0 | 1
   }
   readonly timeoutSeconds: number
   readonly reportMode: 'short'
@@ -334,14 +334,17 @@ export class RuntimeAdapterService {
 
     const runtimeRoot = resolve(project.rootPath, '.creative-os', 'runtime', String(run.id))
     const packPath = resolve(runtimeRoot, 'runtime-input-pack.json')
-    const outputPath = resolve(runtimeRoot, 'staging', `script-draft-${String(run.id)}.md`)
+    const isAnalyze = run.outputIntent === 'analyze'
+    const outputPath = isAnalyze ? undefined : resolve(runtimeRoot, 'staging', `script-draft-${String(run.id)}.md`)
     const resultEnvelopePath = resolve(runtimeRoot, 'result', 'result-envelope-v0.json')
     assertWithin(project.rootPath, packPath)
-    assertWithin(runtimeRoot, outputPath)
+    if (outputPath !== undefined) assertWithin(runtimeRoot, outputPath)
     await mkdir(resolve(runtimeRoot, 'staging'), { recursive: true })
     await mkdir(resolve(runtimeRoot, 'result'), { recursive: true })
 
-    const expectedOutputs = [{ absolutePath: outputPath, mode: 'create_new_file' as const }]
+    const expectedOutputs = outputPath === undefined
+      ? []
+      : [{ absolutePath: outputPath, mode: 'create_new_file' as const }]
     const parsedManifest = JSON.parse(manifest.canonicalJson) as {
       resourceRefs?: RuntimeInputPackV0['resourceRefs']
     }
@@ -380,18 +383,20 @@ export class RuntimeAdapterService {
       taskType: run.outputIntent === 'revise' ? 'markdown_script_revision' : 'creative_run',
       runtimeInputPackPath: packPath,
       outputRoot: resolve(runtimeRoot, 'staging'),
-      expectedOutputs: [{
-        outputId: 'primary-draft',
-        role: 'primary',
-        action: run.outputIntent === 'revise' ? 'modified' : 'created',
-        absolutePath: outputPath,
-        mediaType: 'text/markdown',
-        required: true,
-      }],
+      expectedOutputs: outputPath === undefined
+        ? []
+        : [{
+            outputId: 'primary-draft',
+            role: 'primary',
+            action: run.outputIntent === 'revise' ? 'modified' : 'created',
+            absolutePath: outputPath,
+            mediaType: 'text/markdown',
+            required: true,
+          }],
       outputPolicy: {
-        allowZeroFiles: run.outputIntent === 'analyze',
+        allowZeroFiles: isAnalyze,
         allowAdditionalFiles: false,
-        maxFiles: 1,
+        maxFiles: isAnalyze ? 0 : 1,
       },
       timeoutSeconds: 600,
       reportMode: 'short',

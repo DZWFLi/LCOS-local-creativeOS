@@ -50,18 +50,15 @@ describe('GAP-RUN-01: Run Intent defaults to revise', () => {
     expect(adapterSrc).toContain("outputIntent === 'revise' ? 'markdown_script_revision'")
   })
 
-  it('REGRESSION GUARD: no path for analyze zero-file completion', async () => {
-    // If analyze ever gets its own branch, this structural test must FAIL
-    // and be replaced with proper integration tests.
+  it('analyze zero-file completion path exists (Slice B fix)', async () => {
+    // Slice B added a real analyze branch: zero changed files complete the Run
+    // without creating a Draft. Positive structural lock + integration tests.
     const fs = require('node:fs')
     const resultIngestSrc = fs.readFileSync(
       join(__dirname, '../../apps/local-core/src/runtime-result-ingestion.ts'), 'utf-8'
     )
-    // Currently analyze produces the same path as revise — this is the bug
-    const hasAnalyzeBranch = resultIngestSrc.includes('analyze')
-      && !resultIngestSrc.includes("outputIntent !== 'revise'")
-    // This test captures: analyze path does NOT have a separate zero-file flow
-    expect(hasAnalyzeBranch).toBe(false)
+    expect(resultIngestSrc).toContain("kind: 'analyze'")
+    expect(resultIngestSrc).toContain('Analyze runs must return zero changed files')
   })
 })
 

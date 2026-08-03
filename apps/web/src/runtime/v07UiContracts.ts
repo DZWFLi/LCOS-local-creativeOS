@@ -3,6 +3,8 @@ export interface UiCapability {
   readonly reason?: string
 }
 
+export type RunOutputIntent = 'create' | 'revise' | 'analyze'
+
 export interface V07CapabilitySet {
   readonly schemaVersion: 1
   readonly importCopy: UiCapability

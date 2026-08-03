@@ -15,6 +15,7 @@ import type {
   BridgeTaskIdentity,
 } from '../src/runtime-adapter.js'
 import { RuntimeAdapterError, RuntimeAdapterService } from '../src/runtime-adapter.js'
+import type { IngestedRuntimeResult } from '../src/runtime-result-ingestion.js'
 import { SqliteMetadataRepository } from '../src/metadata-repository.js'
 import { createMvpSampleSnapshot } from '../src/mvp-sample-project.js'
 import { RuntimeResultIngestionService } from '../src/runtime-result-ingestion.js'
@@ -50,6 +51,11 @@ class ResultBridge implements BridgeRuntimePort {
   async getResult(): Promise<BridgeResultEnvelopeV0 | undefined> {
     return this.result
   }
+}
+
+function reviseResult(result: IngestedRuntimeResult) {
+  if (result.kind !== 'revise') throw new Error('expected revise result')
+  return result
 }
 
 function setup() {
@@ -136,13 +142,13 @@ describe('RuntimeResultIngestionService', () => {
     const first = await service.ingest(bridge.result!)
     const replay = await service.ingest(bridge.result!)
 
-    expect(first.artifactReturn.status).toBe('pending_review')
-    expect(first.draftRevision.status).toBe('draft')
-    expect(first.draftRevision.parentRevisionId).toBe(run.targetRevisionId)
-    expect(first.draftRevision.runId).toBe(run.id)
-    expect(first.baseStale).toBe(false)
-    expect(replay.replayed).toBe(true)
-    expect(replay.artifactReturn.id).toBe(first.artifactReturn.id)
+    expect(reviseResult(first).artifactReturn.status).toBe('pending_review')
+    expect(reviseResult(first).draftRevision.status).toBe('draft')
+    expect(reviseResult(first).draftRevision.parentRevisionId).toBe(run.targetRevisionId)
+    expect(reviseResult(first).draftRevision.runId).toBe(run.id)
+    expect(reviseResult(first).baseStale).toBe(false)
+    expect(reviseResult(replay).replayed).toBe(true)
+    expect(reviseResult(replay).artifactReturn.id).toBe(reviseResult(first).artifactReturn.id)
     expect(repository.getArtifact(String(run.targetArtifactId))?.currentRevisionId).toBe(currentBefore)
     expect(repository.getArtifactRevisions(String(run.targetArtifactId))).toHaveLength(
       snapshot.artifactRevisions.filter((revision) => revision.artifactId === run.targetArtifactId).length + 1,
@@ -153,8 +159,9 @@ describe('RuntimeResultIngestionService', () => {
     const { repository, run, bridge } = await dispatchedFixture()
     const ingested = await new RuntimeResultIngestionService(repository, bridge, () => now)
       .ingestFromBridge(run.id)
-    expect(ingested?.artifactReturn.status).toBe('pending_review')
-    expect(ingested?.replayed).toBe(false)
+    if (ingested === undefined || ingested.kind !== 'revise') throw new Error('expected revise result')
+    expect(ingested.artifactReturn.status).toBe('pending_review')
+    expect(ingested.replayed).toBe(false)
   })
 
   it('keeps richer worker evidence when legacy Bridge summaries differ', async () => {
@@ -176,7 +183,8 @@ describe('RuntimeResultIngestionService', () => {
     const ingested = await new RuntimeResultIngestionService(repository, bridge, () => now)
       .ingestFromBridge(run.id)
 
-    expect(ingested?.artifactReturn.status).toBe('pending_review')
+    if (ingested === undefined || ingested.kind !== 'revise') throw new Error('expected revise result')
+    expect(ingested.artifactReturn.status).toBe('pending_review')
   })
 
   it('recomputes baseStale when Current changed while the Run was executing', async () => {
@@ -190,8 +198,8 @@ describe('RuntimeResultIngestionService', () => {
 
     const ingested = await new RuntimeResultIngestionService(repository, bridge, () => now)
       .ingest(bridge.result!)
-    expect(ingested.baseStale).toBe(true)
-    expect(ingested.artifactReturn.baseRevisionId).toBe(run.targetRevisionId)
+    expect(reviseResult(ingested).baseStale).toBe(true)
+    expect(reviseResult(ingested).artifactReturn.baseRevisionId).toBe(run.targetRevisionId)
     expect(repository.getArtifact(String(run.targetArtifactId))?.currentRevisionId).toBeUndefined()
   })
 

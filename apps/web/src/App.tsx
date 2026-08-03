@@ -23,7 +23,7 @@ import { NodeInfoPopover } from './features/canvas/NodeInfoPopover'
 import { LinkReferenceDialog } from './features/create/LinkReferenceDialog'
 import { UniversalImportPanel, type DirectoryEntryInput } from './features/resources/UniversalImportPanel'
 import { ResourceDetailDialog } from './features/resources/ResourceDetailDialog'
-import { capabilitiesFor, type LinkReferenceInput } from './runtime/v07UiContracts'
+import { capabilitiesFor, type LinkReferenceInput, type RunOutputIntent } from './runtime/v07UiContracts'
 import { clearPrototypeState, loadProjectCatalog, loadPrototypeState, saveProjectCatalog, savePrototypeState } from './state/prototypeStorage'
 import { clearProjectNavigationState, loadProjectNavigationState, saveProjectNavigationState } from './state/projectNavigation'
 import { buildWorkspaceFrames } from './state/workspaceFrames'
@@ -128,6 +128,7 @@ export function App() {
   const [layoutPreview, setLayoutPreview] = useState<LayoutPreviewItem[] | null>(null)
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [runConfirmOpen, setRunConfirmOpen] = useState(false)
+  const [runIntent, setRunIntent] = useState<RunOutputIntent>('revise')
   const [scopeCreateOpen, setScopeCreateOpen] = useState(false)
   const [projectCreateOpen, setProjectCreateOpen] = useState(false)
   const [composerFocusRequest, setComposerFocusRequest] = useState(0)
@@ -1172,21 +1173,22 @@ export function App() {
     })
   }, [activeProjectId, activeRun, applyRuntimeReview, bootMode, nodes, scopeId, setGraph])
 
-  const startRunFrom = useCallback((command: string, targetIds: string[], contextIds: string[]) => {
-    if (!command.trim() || !targetIds.length) return
+  const startRunFrom = useCallback((command: string, targetIds: string[], contextIds: string[], intent: RunOutputIntent = 'revise') => {
+    if (!command.trim()) return
     const target = nodes.find((node) => node.id === targetIds[0])
     if (bootMode === 'runtime') {
-      if (target?.artifactId === undefined || target.revisionId === undefined) {
-        setNotice('真实 Run 需要已持久化且具有 Current Revision 的目标')
+      if (intent === 'revise' && (target?.artifactId === undefined || target.revisionId === undefined)) {
+        setNotice('修改 Run 需要已持久化且具有 Current Revision 的目标')
         return
       }
       setNotice('正在冻结 ContextManifest 并创建真实 Run…')
       void bridgeRef.current.client.createRuntimeRun(activeProjectId, {
         instruction: command,
-        targetArtifactId: target.artifactId,
+        outputIntent: intent,
+        ...(target?.artifactId === undefined ? {} : { targetArtifactId: target.artifactId }),
         contextArtifactIds: [...new Set(contextIds
           .map((contextId) => nodes.find((node) => node.id === contextId)?.artifactId)
-          .filter((artifactId): artifactId is string => artifactId !== undefined && artifactId !== target.artifactId))],
+          .filter((artifactId): artifactId is string => artifactId !== undefined && artifactId !== target?.artifactId))],
         ...(workspaceId === null ? {} : { workspaceId }),
       }).then(async (call) => {
         if (!call.result.ok) {
@@ -1207,8 +1209,8 @@ export function App() {
           kind: 'process',
           title: `${id} · ${command.slice(0, 22)}`,
           subtitle: providerError ? `派发待恢复 · ${providerError.code}` : '真实 Runtime Run',
-          x: target.x + 24,
-          y: target.y + target.height + 54,
+          x: target ? target.x + 24 : 460,
+          y: target ? target.y + target.height + 54 : 560,
           ...dimensions,
           displayMode: 'standard',
           scopeId,
@@ -1295,10 +1297,13 @@ export function App() {
   }, [composerText])
 
   const confirmRun = useCallback(() => {
-    if (inference.ambiguousTargetIds.length || inference.targetIds.length !== 1) { setNotice('请先确认一个主要修改目标'); return }
+    if (runIntent === 'revise' && (inference.ambiguousTargetIds.length || inference.targetIds.length !== 1)) {
+      setNotice('请先确认一个主要修改目标')
+      return
+    }
     setRunConfirmOpen(false)
-    startRunFrom(composerText, inference.targetIds, inference.contextIds)
-  }, [composerText, inference, startRunFrom])
+    startRunFrom(composerText, inference.targetIds, inference.contextIds, runIntent)
+  }, [composerText, inference, runIntent, startRunFrom])
 
   const returnArtifact = useCallback((run: ActiveRun) => {
     const target = nodes.find((node) => node.id === run.targetIds[0])
@@ -1655,7 +1660,7 @@ export function App() {
       {layoutPreview && <div className="layout-preview-banner"><span>预览自动布局 · 只移动当前子画布中的视图</span><button onClick={applyLayout}>应用</button><button onClick={() => setLayoutPreview(null)}>取消</button></div>}
       {notice && <div data-testid="toast" className="notice" role="status" aria-live="polite">{notice}</div>}
       <ScopeCreateDialog open={scopeCreateOpen} selectedCount={selectedIds.length} leftInset={safeInsets.left} rightInset={24} onCancel={() => setScopeCreateOpen(false)} onCreate={createScopeFromSelection} />
-      <RunConfirmDialog open={runConfirmOpen} command={composerText} nodes={nodes} inference={inference} leftInset={safeInsets.left} rightInset={24} onCommandChange={setComposerText} onSelectTarget={selectPrimaryTarget} onCancel={() => setRunConfirmOpen(false)} onConfirm={confirmRun} />
+      <RunConfirmDialog open={runConfirmOpen} command={composerText} intent={runIntent} nodes={nodes} inference={inference} leftInset={safeInsets.left} rightInset={24} onIntentChange={setRunIntent} onCommandChange={setComposerText} onSelectTarget={selectPrimaryTarget} onCancel={() => setRunConfirmOpen(false)} onConfirm={confirmRun} />
       <CreateContentDialog open={createDialogOpen} leftInset={safeInsets.left} rightInset={24} onCancel={() => setCreateDialogOpen(false)} onCreate={createContentFromDialog} />
       {workspaceEditor && <WorkspaceDialog mode={workspaceEditor.mode} workspace={editorWorkspace} currentCamera={camera} onCancel={() => setWorkspaceEditor(null)} onSave={saveWorkspaceEditor} />}
       {nodeToRename && <InlineNodeRename node={nodeToRename} camera={camera} onCancel={() => setRenameNodeId(null)} onSave={(value) => renameNodeTitle(nodeToRename.id, value)} />}

@@ -2,14 +2,17 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ChevronDown, Layers3, Play, Sparkles, Target, X } from 'lucide-react'
 import type { CanvasNode, TargetContextInference } from '../../model'
+import type { RunOutputIntent } from '../../runtime/v07UiContracts'
 
 interface Props {
   open: boolean
   command: string
+  intent: RunOutputIntent
   nodes: CanvasNode[]
   inference: TargetContextInference
   leftInset: number
   rightInset: number
+  onIntentChange: (intent: RunOutputIntent) => void
   onCommandChange: (value: string) => void
   onSelectTarget: (id: string) => void
   onCancel: () => void
@@ -19,10 +22,12 @@ interface Props {
 export function RunConfirmDialog({
   open,
   command,
+  intent,
   nodes,
   inference,
   leftInset,
   rightInset,
+  onIntentChange,
   onCommandChange,
   onSelectTarget,
   onCancel,
@@ -48,7 +53,8 @@ export function RunConfirmDialog({
     () => inference.ambiguousTargetIds.map((id) => nodes.find((node) => node.id === id)).filter((node): node is CanvasNode => Boolean(node)),
     [inference.ambiguousTargetIds, nodes],
   )
-  const ready = command.trim().length > 0 && targets.length === 1 && ambiguousTargets.length === 0
+  const ready = command.trim().length > 0
+    && (intent === 'revise' ? targets.length === 1 && ambiguousTargets.length === 0 : true)
 
   useEffect(() => { cancelRef.current = onCancel }, [onCancel])
   useEffect(() => { confirmRef.current = onConfirm }, [onConfirm])
@@ -84,6 +90,17 @@ export function RunConfirmDialog({
   }, [open])
 
   if (!open) return null
+
+  const intentOptions: Array<{ value: RunOutputIntent; label: string; hint: string }> = [
+    { value: 'revise', label: '修改', hint: '改当前文件，生成 Draft' },
+    { value: 'analyze', label: '分析', hint: '零文件结果，只回结论' },
+    { value: 'create', label: '新建', hint: '生成新文件/新内容' },
+  ]
+  const intentLabel: Record<RunOutputIntent, string> = {
+    revise: '保存为新版本',
+    analyze: '只返回分析结果（不生成文件）',
+    create: '新建输出文件',
+  }
 
   return createPortal(
     <div
@@ -126,14 +143,14 @@ export function RunConfirmDialog({
           <div className="run-confirm-heading-icon"><Sparkles size={18} /></div>
           <div>
             <span>发送前确认</span>
-            <h2 id={titleId}>把这次修改交给 WorkBuddy</h2>
+            <h2 id={titleId}>{intent === 'analyze' ? '把这次分析交给 WorkBuddy' : intent === 'create' ? '把这次新建交给 WorkBuddy' : '把这次修改交给 WorkBuddy'}</h2>
           </div>
           <button type="button" aria-label="关闭" onClick={onCancel}><X size={17} /></button>
         </header>
 
         <div className="run-confirm-body">
           <label className="run-confirm-command">
-            <span>你想怎么修改</span>
+            <span>{intent === 'analyze' ? '你想分析什么' : intent === 'create' ? '你想新建什么' : '你想怎么修改'}</span>
             <textarea
               ref={textareaRef}
               data-testid="run-confirm-command"
@@ -144,9 +161,22 @@ export function RunConfirmDialog({
             />
           </label>
 
+          <section className="run-confirm-block intent-block">
+            <header><Sparkles size={15} /><h3>执行方式</h3></header>
+            <div className="run-confirm-intents" data-testid="run-confirm-intents">
+              {intentOptions.map((option) => (
+                <button key={option.value} type="button" className={intent === option.value ? 'intent-option active' : 'intent-option'} onClick={() => onIntentChange(option.value)}>
+                  <b>{option.label}</b><small>{option.hint}</small>
+                </button>
+              ))}
+            </div>
+          </section>
+
           <section className="run-confirm-block target-block">
             <header><Target size={15} /><h3>修改目标</h3></header>
-            {ambiguousTargets.length > 0
+            {intent !== 'revise'
+              ? <p className="run-confirm-empty">此执行方式不要求目标文件（可附带参考内容）。</p>
+              : ambiguousTargets.length > 0
               ? <div className="run-confirm-target-question">
                   <p>这次主要修改哪个文件？</p>
                   {ambiguousTargets.map((node) => <button key={node.id} type="button" onClick={() => onSelectTarget(node.id)}><span className="target-radio" /><b>{node.title}</b><small>{node.subtitle}</small></button>)}
@@ -165,11 +195,11 @@ export function RunConfirmDialog({
           </section>
 
           <button className="run-confirm-advanced-toggle" type="button" aria-expanded={advancedOpen} onClick={() => setAdvancedOpen((current) => !current)}>
-            <span>执行方式：WorkBuddy · 保存为新版本</span><ChevronDown size={15} />
+            <span>执行方式：WorkBuddy · {intentLabel[intent]}</span><ChevronDown size={15} />
           </button>
           {advancedOpen && <section className="run-confirm-advanced">
             <div><span>执行器</span><b>WorkBuddy</b></div>
-            <div><span>结果处理</span><b>保存为新版本</b></div>
+            <div><span>输出 Intent</span><b>{intentLabel[intent]}</b></div>
             <p>Alpha 接入后，这里只在需要切换执行器或输出方式时展开。</p>
           </section>}
         </div>

@@ -27,13 +27,19 @@ export interface RuntimeResultRepository extends RuntimePersistenceContract, Run
   getFileRecord(fileRecordId: string): FileRecord | undefined
 }
 
-export interface IngestedRuntimeResult {
-  readonly artifactReturn: ArtifactReturn
-  readonly draftRevision: ArtifactRevision
-  readonly fileRecord: FileRecord
-  readonly baseStale: boolean
-  readonly replayed: boolean
-}
+export type IngestedRuntimeResult =
+  | {
+      readonly kind: 'revise'
+      readonly artifactReturn: ArtifactReturn
+      readonly draftRevision: ArtifactRevision
+      readonly fileRecord: FileRecord
+      readonly baseStale: boolean
+      readonly replayed: boolean
+    }
+  | {
+      readonly kind: 'analyze'
+      readonly summary: string
+    }
 
 function error(code: string, message: string, retryable = false): RuntimeAdapterError {
   return new RuntimeAdapterError({ code, message, retryable, provider: 'workbuddy' })
@@ -165,7 +171,21 @@ export class RuntimeResultIngestionService {
       throw error(code, envelope.summary ?? envelope.shortSummary ?? envelope.resultSummary ?? 'Provider did not return a reviewable result.')
     }
     if (run.outputIntent !== 'revise' || run.targetArtifactId === undefined || run.targetRevisionId === undefined) {
-      throw error('CONTRACT_UNSUPPORTED', 'Create/analyze returns require return-group ingestion and cannot enter the revise lifecycle.')
+      if (run.outputIntent === 'analyze') {
+        if (envelope.changedFiles.length !== 0) {
+          throw error('CONTRACT_UNSUPPORTED', 'Analyze runs must return zero changed files; provider returned file changes.')
+        }
+        const summary = envelope.summary ?? envelope.resultSummary ?? envelope.shortSummary ?? 'Analysis completed with no file changes.'
+        this.repository.updateRunStatus(run.id, 'completed', syncedAt)
+        return {
+          kind: 'analyze',
+          summary,
+        }
+      }
+      throw error('CONTRACT_UNSUPPORTED', 'Create returns require return-group ingestion which is not yet open; use revise or analyze.')
+    }
+    if (run.outputIntent === 'revise' && (run.targetArtifactId === undefined || run.targetRevisionId === undefined)) {
+      throw error('CONTRACT_UNSUPPORTED', 'Revise Run requires a target Artifact and Base Revision.')
     }
     const changedFile = envelope.changedFiles[0]
     if (envelope.changedFiles.length !== 1 || changedFile === undefined || !['created', 'modified'].includes(changedFile.action)) {
@@ -212,6 +232,7 @@ export class RuntimeResultIngestionService {
         throw error('RUNTIME_STORAGE_CORRUPT', 'Existing ArtifactReturn has incomplete Draft evidence.')
       }
       return {
+        kind: 'revise',
         artifactReturn: existing,
         draftRevision: draft,
         fileRecord,
@@ -260,6 +281,7 @@ export class RuntimeResultIngestionService {
     }
     const persisted = this.repository.createRuntimeDraft(fileRecord, draftRevision, artifactReturn)
     return {
+      kind: 'revise',
       artifactReturn: persisted,
       draftRevision,
       fileRecord,

@@ -81,9 +81,11 @@ export interface AdoptExternalChangeResult {
 
 export interface CreateRuntimeRunInput {
   readonly instruction: string
-  readonly targetArtifactId: string
+  readonly targetArtifactId?: string
   readonly contextArtifactIds?: readonly string[]
   readonly workspaceId?: string
+  readonly outputIntent?: 'create' | 'revise' | 'analyze'
+  readonly requestedProvider?: string
 }
 
 export interface RuntimeRunActionResult {
