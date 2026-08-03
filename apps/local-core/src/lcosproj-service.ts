@@ -1,5 +1,5 @@
-import { mkdir, rename, rm, stat } from 'node:fs/promises'
-import { dirname, isAbsolute, relative, resolve } from 'node:path'
+import { mkdir, readdir, rename, rm, stat } from 'node:fs/promises'
+import { dirname, join, relative, resolve } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 
 import type { ProjectId } from '@local-creative-os/domain'
@@ -32,7 +32,13 @@ export interface LcosprojOpenResult {
   readonly rebound?: { readonly fileRecords: number; readonly current: number; readonly stale: number; readonly missing: number }
 }
 
-const LCOSPROJ_SCHEMA_VERSION = 12
+export interface LcosprojExportAllResult {
+  readonly targetDir: string
+  readonly exported: readonly LcosprojExportResult[]
+  readonly failed: readonly { readonly projectId: string; readonly error: string }[]
+}
+
+const LCOSPROJ_SCHEMA_VERSION = 13
 
 export class LcosprojService {
   constructor(
@@ -45,6 +51,14 @@ export class LcosprojService {
     if (project === undefined) throw new Error('Project not found.')
     const absoluteTarget = resolve(targetPath)
     await mkdir(dirname(absoluteTarget), { recursive: true })
+    // P3：写入中断恢复——清理同目标残留的 .tmp-*（上次崩溃留下的半成品）
+    const staleTmp = await readdir(dirname(absoluteTarget)).catch(() => [] as string[])
+    const baseName = absoluteTarget.split(/[\\/]/).pop() ?? ''
+    for (const name of staleTmp) {
+      if (name.startsWith(`${baseName}.tmp-`)) {
+        await rm(join(dirname(absoluteTarget), name), { force: true }).catch(() => undefined)
+      }
+    }
     const tmpPath = `${absoluteTarget}.tmp-${Date.now().toString(36)}`
     try {
       const fileRepository = new SqliteMetadataRepository(tmpPath)
@@ -114,6 +128,7 @@ export class LcosprojService {
     const meta = this.#readMeta(filePath)
     const absoluteFile = resolve(filePath)
     const tables = this.repository.importProjectTruth(absoluteFile, meta.projectId as ProjectId)
+    this.repository.touchProjectOpened(meta.projectId as ProjectId, new Date().toISOString())
     const project = this.repository.getProject(meta.projectId)
     if (project === undefined) throw new Error('.lcosproj 导入后 Project 未落库。')
     let rebound: LcosprojOpenResult['rebound']
@@ -126,6 +141,25 @@ export class LcosprojService {
       tables,
       ...(rebound === undefined ? {} : { rebound }),
     }
+  }
+
+  async exportAll(targetDir: string, projectIds?: readonly string[]): Promise<LcosprojExportAllResult> {
+    const absoluteDir = resolve(targetDir)
+    await mkdir(absoluteDir, { recursive: true })
+    const projects = projectIds === undefined
+      ? this.repository.listProjects()
+      : projectIds.map((id) => this.repository.getProject(id)).filter((project) => project !== undefined)
+    const exported: LcosprojExportResult[] = []
+    const failed: { readonly projectId: string; readonly error: string }[] = []
+    for (const project of projects) {
+      const safeName = project.name.replace(/[\\/:*?"<>|]/g, '_').trim() || 'project'
+      try {
+        exported.push(await this.exportProject(project.id, join(absoluteDir, `${safeName}.lcosproj`)))
+      } catch (error: unknown) {
+        failed.push({ projectId: String(project.id), error: error instanceof Error ? error.message : String(error) })
+      }
+    }
+    return { targetDir: absoluteDir, exported, failed }
   }
 
   #readMeta(filePath: string): LcosprojMeta {

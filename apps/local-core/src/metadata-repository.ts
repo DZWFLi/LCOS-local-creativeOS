@@ -162,18 +162,19 @@ export class SqliteMetadataRepository {
 
   #migrate(): void {
     const version = this.#database.prepare('PRAGMA user_version').get() as { user_version: number }
-    if (version.user_version === 0) { this.#migrate_001(); this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); this.#migrate_009_from_v8(); this.#migrate_010_from_v9(); this.#migrate_011_from_v10(); this.#migrate_012_from_v11(); return }
+    if (version.user_version === 0) { this.#migrate_001(); this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); this.#migrate_009_from_v8(); this.#migrate_010_from_v9(); this.#migrate_011_from_v10(); this.#migrate_012_from_v11(); this.#migrate_013_from_v12(); return }
     if (version.user_version === 1) { this.#migrate_002_from_v1(); this.#migrate_004_from_v3(); this.#migrate_005_from_v4(); this.#migrate_006_from_v5(); this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); return }
     if (version.user_version === 2) { this.#migrate_003_from_v2(); this.#migrate_004_from_v3(); this.#migrate_005_from_v4(); this.#migrate_006_from_v5(); this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); return }
     if (version.user_version === 3) { this.#migrate_004_from_v3(); this.#migrate_005_from_v4(); this.#migrate_006_from_v5(); this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); return }
     if (version.user_version === 4) { this.#migrate_005_from_v4(); this.#migrate_006_from_v5(); this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); return }
     if (version.user_version === 5) { this.#migrate_006_from_v5(); this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); return }
     if (version.user_version === 6) { this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); return }
-    if (version.user_version === 7) { this.#migrate_008_from_v7(); this.#migrate_009_from_v8(); this.#migrate_010_from_v9(); this.#migrate_011_from_v10(); this.#migrate_012_from_v11(); return }
-    if (version.user_version === 8) { this.#migrate_009_from_v8(); this.#migrate_010_from_v9(); this.#migrate_011_from_v10(); this.#migrate_012_from_v11(); return }
-    if (version.user_version === 9) { this.#migrate_010_from_v9(); this.#migrate_011_from_v10(); this.#migrate_012_from_v11(); return }
-    if (version.user_version === 10) { this.#migrate_011_from_v10(); this.#migrate_012_from_v11(); return }
-    if (version.user_version === 11) { this.#migrate_012_from_v11(); return }
+    if (version.user_version === 7) { this.#migrate_008_from_v7(); this.#migrate_009_from_v8(); this.#migrate_010_from_v9(); this.#migrate_011_from_v10(); this.#migrate_012_from_v11(); this.#migrate_013_from_v12(); return }
+    if (version.user_version === 8) { this.#migrate_009_from_v8(); this.#migrate_010_from_v9(); this.#migrate_011_from_v10(); this.#migrate_012_from_v11(); this.#migrate_013_from_v12(); return }
+    if (version.user_version === 9) { this.#migrate_010_from_v9(); this.#migrate_011_from_v10(); this.#migrate_012_from_v11(); this.#migrate_013_from_v12(); return }
+    if (version.user_version === 10) { this.#migrate_011_from_v10(); this.#migrate_012_from_v11(); this.#migrate_013_from_v12(); return }
+    if (version.user_version === 11) { this.#migrate_012_from_v11(); this.#migrate_013_from_v12(); return }
+    if (version.user_version === 12) { this.#migrate_013_from_v12(); return }
     // v9 = current
   }
 
@@ -730,6 +731,13 @@ export class SqliteMetadataRepository {
     `)
   }
 
+  #migrate_013_from_v12(): void {
+    this.#database.exec(`
+      ALTER TABLE projects ADD COLUMN last_opened_at TEXT;
+      PRAGMA user_version = 13;
+    `)
+  }
+
   // ==================== Graph Save/Load ====================
 
   save(snapshot: ProjectGraphSnapshot): void {
@@ -1030,7 +1038,17 @@ export class SqliteMetadataRepository {
   }
 
   listProjects(): Project[] {
-    return (this.#database.prepare('SELECT * FROM projects').all() as Row[]).map((r) => this.#project(r as Row))
+    return (this.#database.prepare('SELECT * FROM projects ORDER BY COALESCE(last_opened_at, created_at) DESC, id').all() as Row[]).map((r) => this.#project(r as Row))
+  }
+
+  touchProjectOpened(projectId: ProjectId, openedAt: string): Project {
+    const result = this.#database.prepare(
+      'UPDATE projects SET last_opened_at = ?, updated_at = ? WHERE id = ?',
+    ).run(openedAt, openedAt, projectId as SQLInputValue)
+    if (result.changes !== 1) throw new Error('Project not found.')
+    const project = this.getProject(String(projectId))
+    if (project === undefined) throw new Error('Project not found after touch.')
+    return project
   }
 
   createProject(input: {
@@ -2350,15 +2368,15 @@ export class SqliteMetadataRepository {
     }
   }
 
-  get schemaVersion(): number { return 12 }
+  get schemaVersion(): number { return 13 }
 
   // ==================== Private helpers ====================
 
   #upsertProject(value: Project): void {
     this.#database.prepare(`
-      INSERT INTO projects VALUES (?, ?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET name=excluded.name, root_path=excluded.root_path, graph_version=excluded.graph_version, updated_at=excluded.updated_at
-    `).run(value.id as SQLInputValue, value.name, value.rootPath, value.graphVersion as unknown as number, value.createdAt, value.updatedAt)
+      INSERT INTO projects VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET name=excluded.name, root_path=excluded.root_path, graph_version=excluded.graph_version, last_opened_at=excluded.last_opened_at, updated_at=excluded.updated_at
+    `).run(value.id as SQLInputValue, value.name, value.rootPath, value.graphVersion as unknown as number, value.createdAt, value.updatedAt, value.lastOpenedAt ?? null)
   }
 
   #upsertScope(value: Scope, projectId: ProjectId): void {
@@ -2613,7 +2631,7 @@ export class SqliteMetadataRepository {
   // ==================== Row → Entity ====================
 
   #project(row: Row): Project {
-    return { id: row.id as ProjectId, name: String(row.name), rootPath: String(row.root_path), graphVersion: (row.graph_version as number) as GraphVersion, createdAt: String(row.created_at), updatedAt: String(row.updated_at) }
+    return { id: row.id as ProjectId, name: String(row.name), rootPath: String(row.root_path), graphVersion: (row.graph_version as number) as GraphVersion, ...(row.last_opened_at ? { lastOpenedAt: String(row.last_opened_at) } : {}), createdAt: String(row.created_at), updatedAt: String(row.updated_at) }
   }
 
   #scope(row: Row): Scope {

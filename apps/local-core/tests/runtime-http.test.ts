@@ -367,7 +367,7 @@ describe('Runtime HTTP closure', () => {
     expect(exportResponse.status).toBe(201)
     const exportBody = await exportResponse.json() as { value: { path: string; projectId: string; schemaVersion: number } }
     expect(exportBody.value.projectId).toBe(String(snapshot.project.id))
-    expect(exportBody.value.schemaVersion).toBe(12)
+    expect(exportBody.value.schemaVersion).toBe(13)
     expect(existsSync(targetFile)).toBe(true)
 
     const inspectResponse = await fetch(`${baseUrl}/lcosproj/inspect?file=${encodeURIComponent(targetFile)}`)

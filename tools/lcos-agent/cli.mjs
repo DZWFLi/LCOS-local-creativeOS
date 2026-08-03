@@ -75,6 +75,15 @@ try {
       ...jsonBody({ targetPath: required(option("to"), "--to") }),
       timeoutMs: 120_000,
     });
+  } else if (group === "project" && action === "export-all") {
+    result = await coreRequest("/lcosproj/export-all", {
+      method: "POST",
+      ...jsonBody({
+        targetDir: required(option("to"), "--to"),
+        ...(option("ids") ? { projectIds: option("ids").split(",") } : {}),
+      }),
+      timeoutMs: 300_000,
+    });
   } else if (group === "project" && action === "open-file") {
     result = await coreRequest("/lcosproj/open", {
       method: "POST",
@@ -458,6 +467,7 @@ Project truth:
   lcos project inspect <root-path>
   lcos project current [project-id]
   lcos project export <project-id> --to <path.lcosproj>
+  lcos project export-all --to <目录> [--ids id1,id2]
   lcos project open-file <path.lcosproj> [--root <项目根目录>]
   lcos project inspect-file <path.lcosproj>
   lcos workspace list <project-id>

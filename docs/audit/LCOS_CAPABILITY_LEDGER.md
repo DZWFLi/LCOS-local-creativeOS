@@ -34,7 +34,7 @@
 | Source/Managed 边界 | DZ-RUN-11 | ✅ managed 列 + revise Guard |
 | 零点击回收 | DZ-RT-05, DZ-AGENT-10 | 🟡 AutoSync 已加；真 executor 未证明（manual） |
 | waiting_input | DZ-RT-05 | 🔴 阻塞：Bridge 协议无该状态，需扩展+批准 |
-| .lcosproj 工程文件 | DZ-PROJ-08/09/10/11 | 🟡 ADR 已批准；P1 export/open/rebind 实测完成（391 测试+真实项目导出），P2–P4 待续 |
+| .lcosproj 工程文件 | DZ-PROJ-08/09/10/11 | 🟡 ADR 已批准；P1/P2/P4 实测完成（394 测试+7 真实项目导出），P3 长期迁移待续 |
 
 ---
 

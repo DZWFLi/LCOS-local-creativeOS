@@ -129,6 +129,7 @@ function mockClient(overrides: Partial<LocalCoreClient> = {}): LocalCoreClient {
     metadataStatus: unavailable,
     projectGraph: vi.fn(async () => call(snapshot())),
     exportLcosproj: unavailable,
+    exportAllLcosproj: unavailable,
     openLcosproj: unavailable,
     inspectLcosproj: unavailable,
     workspaceMemberships: unavailable,

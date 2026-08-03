@@ -1,7 +1,7 @@
 # ADR：.lcosproj 工程文件 — 真相定位与迁移路径（DZ-PROJ-08~11）
 
 > 日期：2026-08-03
-> 状态：**已批准；P1 施工完成（2026-08-03）** — export/open/inspect/rebind 已实现并实测；P2–P4 待续
+> 状态：**已批准；P1/P2/P4 施工完成（2026-08-03）** — export/open/rebind/export-all/最近打开索引全部实测；P3 的「项目级表彻底迁入 .lcosproj」为长期迁移，未启动
 
 ## P1 完成记录（2026-08-03）
 
@@ -11,6 +11,17 @@
 - API：`POST /projects/:id/export-lcosproj`、`POST /lcosproj/open`、`GET /lcosproj/inspect`
 - CLI：`lcos project export/open-file/inspect-file`；web client 三个对应方法
 - 验证：391 测试全绿；真实项目 `disposable-mvp-sample` 导出 299KB（4 Artifact/4 Run/4 Dispatch/1 Binding/1 Manifest/3 Relations/2 Notes/1 Checkpoint），inspect 回读一致
+
+## P2/P3/P4 完成记录（2026-08-03）
+
+- P2：`projects.last_opened_at`（Schema v13），Catalog 按最近打开排序；lcosproj/open 与项目 open 自动 touch；Project ID 稳定（导入即同 ID）
+- P3：导出前清理同目标残留 `.tmp-*`（写入中断恢复）；无凭证保证已用断言测试锁定（导出文件不含 token/secret/credential/api-key 表或列）
+- P4：`POST /lcosproj/export-all` / `lcos project export-all --to`，一次性升级入口；真实库副本 7 项目全量导出 0 失败（含中文项目名）
+- 验证：394 测试全绿；真实数据副本导出 7 个 `.lcosproj`
+
+## 待续（P3 长期迁移）
+
+- 运行期直接以 `.lcosproj` 为 live store（当前仍以全局库为运行真相，.lcosproj 是可搬迁恢复载体）
 
 ## Context
 

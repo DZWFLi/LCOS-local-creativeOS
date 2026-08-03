@@ -47,6 +47,7 @@ export interface Project {
   readonly name: string
   readonly rootPath: string
   readonly graphVersion: GraphVersion
+  readonly lastOpenedAt?: IsoDateTime
   readonly createdAt: IsoDateTime
   readonly updatedAt: IsoDateTime
 }

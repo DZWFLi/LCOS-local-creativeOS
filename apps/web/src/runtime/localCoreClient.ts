@@ -192,6 +192,7 @@ export interface LocalCoreClient {
   metadataStatus(signal?: AbortSignal): Promise<RuntimeCall<MetadataStoreStatus>>
   projectGraph(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<ProjectGraphSnapshot>>
   exportLcosproj(projectId: string, targetPath: string, signal?: AbortSignal): Promise<RuntimeCall<unknown>>
+  exportAllLcosproj(targetDir: string, projectIds?: readonly string[], signal?: AbortSignal): Promise<RuntimeCall<unknown>>
   openLcosproj(filePath: string, rootPath?: string, signal?: AbortSignal): Promise<RuntimeCall<unknown>>
   inspectLcosproj(filePath: string, signal?: AbortSignal): Promise<RuntimeCall<unknown>>
   workspaceMemberships(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<readonly WorkspaceMembership[]>>
@@ -566,6 +567,17 @@ export function createLocalCoreClient(): LocalCoreClient {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ targetPath }),
+        },
+        decode: decodeResult<unknown>,
+      })
+    },
+    exportAllLcosproj(targetDir, projectIds, signal) {
+      return request('/lcosproj/export-all', {
+        signal,
+        init: {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ targetDir, ...(projectIds === undefined ? {} : { projectIds }) }),
         },
         decode: decodeResult<unknown>,
       })

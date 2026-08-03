@@ -339,7 +339,12 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
       if (method === 'GET' && pathname === '/projects') {
         const result = metadata === undefined
           ? await withAbort(catalog.list(controller.signal), controller.signal)
-          : { ok: true as const, value: metadata.listProjects().map((p) => ({ id: p.id, name: p.name, rootPath: p.rootPath })) }
+          : { ok: true as const, value: metadata.listProjects().map((p) => ({
+              id: p.id,
+              name: p.name,
+              rootPath: p.rootPath,
+              ...(p.lastOpenedAt === undefined ? {} : { lastOpenedAt: p.lastOpenedAt }),
+            })) }
         sendJson(response, result.ok ? 200 : statusForError(result.error.code), result)
         return
       }
@@ -440,6 +445,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
             name,
             rootPath: root.value.normalizedPath,
           })
+          if (intent === 'open') metadata.touchProjectOpened(projectId as ProjectId, new Date().toISOString())
           if (intent === 'open' && body.importExisting === true) {
             const initial = metadata.get(projectId)
             if (initial === undefined) throw new Error('Created Project could not be reloaded for indexing.')
@@ -827,6 +833,30 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
           sendJson(response, 200, { ok: true, value: new LcosprojService(metadata).inspect(filePath) })
         } catch (error: unknown) {
           sendJson(response, 409, failure('CONFLICT', error instanceof Error ? error.message : 'Inspect failed.'))
+        }
+        return
+      }
+
+      const lcosprojExportAllMatch = /^\/lcosproj\/export-all$/.exec(pathname)
+      if (method === 'POST' && lcosprojExportAllMatch !== null) {
+        if (!requireMetadata(metadata, response)) return
+        const input = await readJsonBody(request, controller.signal)
+        if (!isRecord(input) || typeof input.targetDir !== 'string' || !isAbsolutePath(input.targetDir)
+          || (input.projectIds !== undefined && !isStringArray(input.projectIds))
+          || Object.keys(input).some((key) => !['targetDir', 'projectIds'].includes(key))) {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Export-all requires an absolute targetDir.'))
+          return
+        }
+        try {
+          sendJson(response, 201, {
+            ok: true,
+            value: await new LcosprojService(metadata).exportAll(
+              input.targetDir,
+              input.projectIds === undefined ? undefined : input.projectIds as string[],
+            ),
+          })
+        } catch (error: unknown) {
+          sendJson(response, 409, failure('CONFLICT', error instanceof Error ? error.message : 'Export-all failed.'))
         }
         return
       }

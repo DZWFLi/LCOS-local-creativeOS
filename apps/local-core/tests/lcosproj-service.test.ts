@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { existsSync, mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
 
 import { afterEach, describe, expect, it } from 'vitest'
 
@@ -101,7 +102,7 @@ describe('LcosprojService (P1: export/open/rebind)', () => {
 
     const inspected = new LcosprojService(repository).inspect(targetFile)
     expect(inspected.projectId).toBe(String(projectId))
-    expect(inspected.schemaVersion).toBe(12)
+    expect(inspected.schemaVersion).toBe(13)
 
     const targetDb = mkdtempSync(join(tmpdir(), 'lcos-lcosproj-import-'))
     roots.push(targetDb)
@@ -168,5 +169,67 @@ describe('LcosprojService (P1: export/open/rebind)', () => {
     const opened = await new LcosprojService(importedRepository).open(targetFile, movedRoot)
     expect(opened.rebound!.missing).toBeGreaterThan(0)
     expect(importedRepository.getFileRecord(String(originalRecord.id))?.availability).toBe('missing')
+  })
+
+  it('touches lastOpenedAt and orders the catalog as a recent index (P2)', async () => {
+    const dbRoot = mkdtempSync(join(tmpdir(), 'lcos-lcosproj-recent-'))
+    const projectRoot = mkdtempSync(join(tmpdir(), 'lcos-lcosproj-recent-root-'))
+    roots.push(dbRoot, projectRoot)
+    const repository = new SqliteMetadataRepository(join(dbRoot, 'recent.sqlite'))
+    repositories.push(repository)
+    const snapshot = createMvpSampleSnapshot(projectRoot, now)
+    repository.save(snapshot)
+    repository.createProject({ id: 'project-older' as ProjectId, name: '旧项目', rootPath: projectRoot })
+
+    repository.touchProjectOpened(snapshot.project.id, '2026-08-03T14:00:00.000Z')
+    expect(repository.getProject(String(snapshot.project.id))?.lastOpenedAt).toBe('2026-08-03T14:00:00.000Z')
+    expect(repository.listProjects()[0]?.id).toBe(snapshot.project.id)
+  })
+
+  it('exports every project via exportAll with per-project results (P4)', async () => {
+    const dbRoot = mkdtempSync(join(tmpdir(), 'lcos-lcosproj-all-db-'))
+    const projectRoot = mkdtempSync(join(tmpdir(), 'lcos-lcosproj-all-root-'))
+    const targetDir = mkdtempSync(join(tmpdir(), 'lcos-lcosproj-all-out-'))
+    roots.push(dbRoot, projectRoot, targetDir)
+    const repository = new SqliteMetadataRepository(join(dbRoot, 'all.sqlite'))
+    repositories.push(repository)
+    const snapshot = createMvpSampleSnapshot(projectRoot, now)
+    repository.save(snapshot)
+    repository.createProject({ id: 'project-second' as ProjectId, name: '第二项目', rootPath: projectRoot })
+
+    const result = await new LcosprojService(repository).exportAll(targetDir)
+    expect(result.failed).toHaveLength(0)
+    expect(result.exported).toHaveLength(2)
+    expect(existsSync(join(targetDir, 'LCOS MVP Sample.lcosproj'))).toBe(true)
+    expect(existsSync(join(targetDir, '第二项目.lcosproj'))).toBe(true)
+  })
+
+  it('exports no credential-like columns or tables (P3 credential-free)', async () => {
+    const dbRoot = mkdtempSync(join(tmpdir(), 'lcos-lcosproj-secret-db-'))
+    const projectRoot = mkdtempSync(join(tmpdir(), 'lcos-lcosproj-secret-root-'))
+    const targetDir = mkdtempSync(join(tmpdir(), 'lcos-lcosproj-secret-out-'))
+    roots.push(dbRoot, projectRoot, targetDir)
+    const repository = new SqliteMetadataRepository(join(dbRoot, 'secret.sqlite'))
+    repositories.push(repository)
+    const snapshot = createMvpSampleSnapshot(projectRoot, now)
+    repository.save(snapshot)
+    const targetFile = join(targetDir, '项目.lcosproj')
+    await new LcosprojService(repository).exportProject(snapshot.project.id, targetFile)
+
+    const database = new DatabaseSync(targetFile, { readOnly: true })
+    try {
+      const tables = database.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as { name: string }[]
+      const sensitive: string[] = []
+      for (const table of tables) {
+        if (/token|secret|password|credential|api_?key/i.test(table.name)) sensitive.push(table.name)
+        const columns = database.prepare(`PRAGMA table_info(${JSON.stringify(table.name)})`).all() as { name: string }[]
+        for (const column of columns) {
+          if (/token|secret|password|credential|api_?key/i.test(column.name)) sensitive.push(`${table.name}.${column.name}`)
+        }
+      }
+      expect(sensitive).toEqual([])
+    } finally {
+      database.close()
+    }
   })
 })
