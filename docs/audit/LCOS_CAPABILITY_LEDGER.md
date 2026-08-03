@@ -41,7 +41,7 @@
 
 | ID | 简述 | GUI | Core | Bridge | CLI | MCP | Skill | E2E | 状态 |
 |---|---|---|---|---|---|---|---|---|---|
-| RUN-01 | create/revise/analyze 真实产品语义 | 🟡 | ✅ | ✅ | — | — | 🟡 | 🔴 | 🟡 Web 已传 Intent（B-1），浏览器真实链待 F |
+| RUN-01 | create/revise/analyze 真实产品语义 | 🟡 | ✅ | ✅ | ✅ | ✅ | 🟡 | 🔴 | 🟡 Intent 显式必填（D），CLI/MCP 已传，浏览器链待 F |
 | RUN-02 | analyze 零文件 | 🟠 | ✅ | ✅ | — | — | — | 🔴 | 🟠 Core/Bridge 零文件路径成立（B-1），GUI 展示待 F |
 | RUN-03 | create 多 Artifact | 🔴 | ✅ | ✅ | — | — | — | 🔴 | 🟠 Return Group 成立（B-2），GUI/E2E 待 F |
 | RUN-04 | revise 绑定 Target+Base | 🟡 | ✅ | ✅ | — | — | — | 🟡 | 🟡 派发前 Guard 成立（B-3），GUI 消歧缺失 |
@@ -74,17 +74,17 @@
 | ID | 简述 | GUI | Core | Bridge | CLI | MCP | Skill | E2E | 状态 |
 |---|---|---|---|---|---|---|---|---|---|
 | CLI-01 | CLI P0 覆盖 | — | — | — | 🟡 | — | — | — | 🟡 部分命令完整 |
-| CLI-02 | doctor/capabilities | — | — | — | 🔴 | — | — | — | 🔴 lcos doctor 缺失 |
-| CLI-03 | project current/inspect | — | — | — | 🟡 | — | — | — | 🟡 缺 current/inspect/--json |
+| CLI-02 | doctor/capabilities | — | — | — | ✅ | — | — | — | ✅ `lcos doctor` / `lcos capabilities` 实测（D） |
+| CLI-03 | project current/inspect | — | — | — | 🟡 | — | — | — | 🟡 current/inspect/--json 已加（D）；多项目 current 需显式 id |
 | CLI-04 | Artifact inspect/compare | — | — | — | 🔴 | — | — | — | 🔴 缺失 |
 | CLI-05 | Feedback/Decision | — | — | — | 🔴 | — | — | — | 🔴 缺失 |
-| CLI-06 | Run events/cancel | — | — | — | 🟡 | — | — | — | 🟡 缺 events/cancel |
+| CLI-06 | Run events/cancel | — | — | — | 🟡 | — | — | — | 🟡 dry-run 已加（D）；events 需 Event 表（红区），cancel 待决策 |
 | CLI-07 | Checkpoint/Preview | — | — | — | 🔴 | — | — | — | 🔴 缺失 |
 | CLI-08 | GUI-only 边界表 | — | — | — | 🟠 | — | — | — | 🟠 无明确边界 |
-| MCP-01 | Agent 创建 Run | — | — | — | — | 🔴 | — | — | 🔴 MCP 只能读 Run |
-| MCP-02 | Agent 读 GUI Selection | — | — | — | — | 🔴 | — | — | 🔴 Web 未 PUT |
-| MCP-03 | Agent 确认 Revision | — | — | — | — | 🔴 | — | — | 🔴 缺 compare/accept/reject |
-| MCP-04 | Skill 与代码同步 | — | — | — | — | ✅ | 🔴 | — | 🔴 声明能力未兑现 |
+| MCP-01 | Agent 创建 Run | — | — | — | — | ✅ | — | — | ✅ create/dispatch/recover/finalize 实测绑定真实 Bridge（D） |
+| MCP-02 | Agent 读 GUI Selection | — | — | — | — | ✅ | — | — | ✅ 浏览器点选→PUT→CLI 立读实测（D） |
+| MCP-03 | Agent 确认 Revision | — | — | — | — | 🟡 | — | — | 🟡 accept/reject/retry 已加（D）；compare 缺失 |
+| MCP-04 | Skill 与代码同步 | — | — | — | — | 🟡 | 🟡 | — | 🟡 Skill 已同步 Intent/MCP 声明（D）；E2E 一致性待 F |
 
 ## E. Project Truth、文件与 Preview
 

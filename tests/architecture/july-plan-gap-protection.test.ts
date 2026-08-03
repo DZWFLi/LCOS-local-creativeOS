@@ -12,10 +12,9 @@ import { join } from 'node:path'
 
 /* ── helpers ── */
 
-describe('GAP-UI-05: ActiveContext PUT is wired in Core but not consumed by Web', () => {
-  // The Core server.ts line 546-557 shows PUT /active-context is implemented.
-  // But Web App.tsx never calls PUT to sync Canvas selection back to Core.
-  // This test verifies the server route exists so we can't regress the backend side.
+describe('UI-05: ActiveContext write-back from Web to Core (Slice D fix)', () => {
+  // Core PUT /active-context + Web App.tsx selection sync must both exist.
+  // The browser probe tests/e2e/active-context-probe.mjs verifies the real chain.
 
   it('server.ts declares PUT /active-context handler', () => {
     // This is a structural test: if someone accidentally removes the PUT, this catches it.
@@ -32,6 +31,14 @@ describe('GAP-UI-05: ActiveContext PUT is wired in Core but not consumed by Web'
     const store = new ActiveContextStore()
     // Verify update exists — the Core-side contract is intact
     expect(typeof store.update).toBe('function')
+  })
+
+  it('App.tsx writes Canvas selection back through updateActiveContext', async () => {
+    const fs = require('node:fs')
+    const appSrc = fs.readFileSync(
+      join(__dirname, '../../apps/web/src/App.tsx'), 'utf-8'
+    )
+    expect(appSrc).toContain('updateActiveContext')
   })
 })
 
