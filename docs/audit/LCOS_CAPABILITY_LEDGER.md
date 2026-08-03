@@ -41,14 +41,14 @@
 
 | ID | 简述 | GUI | Core | Bridge | CLI | MCP | Skill | E2E | 状态 |
 |---|---|---|---|---|---|---|---|---|---|
-| RUN-01 | create/revise/analyze 真实产品语义 | 🔴 | 🟠 | ✅ | — | — | 🟡 | 🔴 | 🟠 Web 不传，Core 默认 revise |
-| RUN-02 | analyze 零文件 | 🔴 | 🔴 | 🟠 | — | — | — | 🔴 | analyze 仍产生 revise path |
-| RUN-03 | create 多 Artifact | 🔴 | 🔴 | 🟠 | — | — | — | 🔴 | 只接受一个文件 |
-| RUN-04 | revise 绑定 Target+Base | 🟡 | 🟡 | ✅ | — | — | — | 🟡 | GUI 消歧缺失 |
+| RUN-01 | create/revise/analyze 真实产品语义 | 🟡 | ✅ | ✅ | — | — | 🟡 | 🔴 | 🟡 Web 已传 Intent（B-1），浏览器真实链待 F |
+| RUN-02 | analyze 零文件 | 🟠 | ✅ | ✅ | — | — | — | 🔴 | 🟠 Core/Bridge 零文件路径成立（B-1），GUI 展示待 F |
+| RUN-03 | create 多 Artifact | 🔴 | ✅ | ✅ | — | — | — | 🔴 | 🟠 Return Group 成立（B-2），GUI/E2E 待 F |
+| RUN-04 | revise 绑定 Target+Base | 🟡 | ✅ | ✅ | — | — | — | 🟡 | 🟡 派发前 Guard 成立（B-3），GUI 消歧缺失 |
 | RUN-05 | Provider 不覆盖源文件 | ✅ | ✅ | — | — | — | — | ✅ | staging 隔离成立 |
-| RUN-06 | Adapter Registry | 🔴 | 🔴 | — | — | — | — | 🔴 | 硬编码 Markdown |
-| RUN-07 | expectedOutputs 反映真实 | 🔴 | 🔴 | — | — | — | — | 🔴 | 永远一个 text/markdown |
-| RUN-08 | ResultEnvelope 三种 Intent | 🟠 | 🟠 | 🟠 | — | — | — | 🟠 | 只 revise |
+| RUN-06 | Adapter Registry | — | ✅ | — | — | — | — | 🔴 | ✅ Intent×Kind×MIME（B-3），unsupported 派发前失败 |
+| RUN-07 | expectedOutputs 反映真实 | — | ✅ | ✅ | — | — | — | 🔴 | ✅ 三 Intent 各自合同（B-1/2/3） |
+| RUN-08 | ResultEnvelope 三种 Intent | 🟠 | ✅ | ✅ | — | — | — | 🟠 | 🟠 Ingestion 三路成立，浏览器链待 F |
 | RUN-09 | Retry=New Run | 🟡 | 🟡 | — | — | — | — | 🟡 | 基础存在，GUI 未完整 |
 | RUN-10 | RunEvent/Activity | 🔴 | 🔴 | — | — | — | — | 🔴 | 无 durable Event 存储 |
 | RUN-11 | waiting_input 恢复 | 🔴 | 🔴 | — | — | — | — | 🔴 | Fixture 存在，真实未闭合 |
@@ -58,11 +58,11 @@
 
 | ID | 简述 | GUI | Core | Bridge | CLI | MCP | Skill | E2E | 状态 |
 |---|---|---|---|---|---|---|---|---|---|
-| RT-01 | Launcher 管理 Core+Bridge+Web | 🔴 | 🔴 | 🔴 | — | — | — | 🔴 | 43122 无监听 |
-| RT-02 | GUI 关闭 Core/Bridge 仍运行 | 🔴 | 🔴 | — | — | — | — | 🔴 | close=stop |
-| RT-03 | 无 CMD 窗口 | 🔴 | 🔴 | — | — | — | — | 🔴 | npm/cmd 窗口暴露 |
+| RT-01 | Launcher 管理 Core+Bridge+Web | — | ✅ | ✅ | — | — | — | 🔴 | ✅ 实测三端口在线（Slice C） |
+| RT-02 | GUI 关闭 Core/Bridge 仍运行 | — | ✅ | ✅ | — | — | — | 🔴 | ✅ 实测关 GUI 仅停 Web（Slice C） |
+| RT-03 | 无 CMD 窗口 | — | ✅ | ✅ | — | — | — | 🔴 | ✅ 隐藏启动+文件日志（Slice C） |
 | RT-04 | 托盘宿主 | 🔴 | — | — | — | — | — | 🔴 | 无桌面托盘 |
-| RT-05 | Bridge 崩溃恢复 | 🟡 | 🟡 | — | — | — | — | 🟡 | recover 有，常驻 Supervisor 无 |
+| RT-05 | Bridge 崩溃恢复 | — | ✅ | ✅ | — | — | — | 🔴 | ✅ 限次退避重启+崩溃循环保护，实测恢复（Slice C） |
 | RT-06 | Bridge 唯一写路径 | 🟡 | 🟡 | ✅ | — | — | — | 🟡 | Legacy 路径未盘 |
 | RT-07 | Capabilities Handshake | 🟠 | 🟠 | ✅ | — | — | — | 🟠 | GUI/Adapter 未使用 |
 | RT-08 | WorkBuddy 主动取件 | 🟡 | 🟡 | ✅ | ✅ | ✅ | 🟡 | 🟡 | claim/start/submit 有，零点击唤醒未证明 |
