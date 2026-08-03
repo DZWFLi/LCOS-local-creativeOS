@@ -36,18 +36,15 @@ describe('GAP-UI-05: ActiveContext PUT is wired in Core but not consumed by Web'
 })
 
 describe('GAP-RUN-01: Run Intent defaults to revise', () => {
-  // runtime-adapter.ts line 357: taskType = run.outputIntent === 'revise' ? 'markdown_script_revision' : 'creative_run'
-  // When Web omits intent, Core defaults to 'revise', causing analyze runs to produce Markdown drafts.
-
-  it('runtime-adapter assumes revise when no explicit intent', async () => {
-    // Structural check: the adapter source must contain the revise-only branch
+  it('runtime-adapter resolves contracts through the Adapter Registry (Slice B fix)', async () => {
+    // Slice B-3 replaced the revise-only ternary with registry-based resolution.
+    // Positive structural lock: no intent hardcode may return.
     const fs = require('node:fs')
     const adapterSrc = fs.readFileSync(
       join(__dirname, '../../apps/local-core/src/runtime-adapter.ts'), 'utf-8'
     )
-    // We expect this to FAIL when we introduce a proper Intent Registry
-    // Currently it PASSES (confirming the gap exists)
-    expect(adapterSrc).toContain("outputIntent === 'revise' ? 'markdown_script_revision'")
+    expect(adapterSrc).toContain('adapterRegistry.resolve')
+    expect(adapterSrc).not.toContain("outputIntent === 'revise' ? 'markdown_script_revision'")
   })
 
   it('analyze zero-file completion path exists (Slice B fix)', async () => {
@@ -62,26 +59,25 @@ describe('GAP-RUN-01: Run Intent defaults to revise', () => {
   })
 })
 
-describe('GAP-RUN-06: Adapter hardcodes Markdown script-draft', () => {
-  // runtime-adapter.ts line 337: outputPath = `staging/script-draft-${run.id}.md`
-  // runtime-adapter.ts line 388: mediaType: 'text/markdown'
-  // Every run, regardless of intent/format, gets a Markdown draft contract.
-
-  it('output path is hardcoded to script-draft-*.md', async () => {
+describe('RUN-06: Adapter selects contracts via Registry (Slice B fix)', () => {
+  it('runtime-adapter no longer hardcodes the Markdown draft path or media type', async () => {
     const fs = require('node:fs')
     const adapterSrc = fs.readFileSync(
       join(__dirname, '../../apps/local-core/src/runtime-adapter.ts'), 'utf-8'
     )
-    expect(adapterSrc).toContain('script-draft-')
-    expect(adapterSrc).toContain("mediaType: 'text/markdown'")
+    expect(adapterSrc).not.toContain('script-draft-')
+    expect(adapterSrc).not.toContain("mediaType: 'text/markdown'")
+    expect(adapterSrc).toContain('resolveProfile')
   })
 
-  it('no Adapter Registry exists yet', async () => {
-    // The adapter should eventually select by Intent × Workflow × MIME.
-    // Currently there is no registry file.
+  it('Adapter Registry exists and resolves by Intent × Kind × MIME', async () => {
     const fs = require('node:fs')
     const registryPath = join(__dirname, '../../apps/local-core/src/adapter-registry.ts')
-    expect(fs.existsSync(registryPath)).toBe(false)
+    expect(fs.existsSync(registryPath)).toBe(true)
+    const registrySrc = fs.readFileSync(registryPath, 'utf-8')
+    expect(registrySrc).toContain('defaultRuntimeAdapterRegistry')
+    expect(registrySrc).toContain('resolveRevise')
+    expect(registrySrc).toContain('UNSUPPORTED_OUTPUT_FORMAT')
   })
 })
 

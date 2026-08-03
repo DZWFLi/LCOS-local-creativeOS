@@ -6,11 +6,15 @@ import type {
   RuntimePersistenceContract,
 } from '@local-creative-os/contracts'
 import type {
+  ArtifactKind,
   Run,
   RunId,
   RuntimeBinding,
   RuntimeDispatch,
 } from '@local-creative-os/domain'
+
+import type { RuntimeAdapterProfile, RuntimeAdapterRegistry } from './adapter-registry.js'
+import { AdapterUnsupportedError, defaultRuntimeAdapterRegistry } from './adapter-registry.js'
 
 export interface RuntimeExpectedOutputV0 {
   readonly absolutePath: string
@@ -74,7 +78,7 @@ export interface BridgeTaskEnvelopeV1 {
     readonly role: 'primary'
     readonly action: 'created' | 'modified'
     readonly absolutePath: string
-    readonly mediaType: 'text/markdown'
+    readonly mediaType: string
     readonly required: true
   }[]
   readonly outputPolicy: {
@@ -144,8 +148,9 @@ export class RuntimeAdapterError extends Error {
 
 export interface RuntimeProjectReader {
   getProject(projectId: string): { readonly rootPath: string } | undefined
-  getArtifactRevision(revisionId: string): { readonly fileRecordId: string } | undefined
-  getFileRecord(fileRecordId: string): { readonly observedPath: string } | undefined
+  getArtifact(artifactId: string): { readonly id: string; readonly kind: ArtifactKind } | undefined
+  getArtifactRevision(revisionId: string): { readonly fileRecordId: string; readonly artifactId: string } | undefined
+  getFileRecord(fileRecordId: string): { readonly observedPath: string; readonly mimeType: string } | undefined
   getResourceDescriptorByResourceId(projectId: string, resourceId: string): {
     readonly sourceRevisionId: string
     readonly source: { readonly kind: 'file' | 'directory' | 'archive' | 'external' | 'url' }
@@ -206,6 +211,7 @@ export class RuntimeAdapterService {
     private readonly bridge: BridgeRuntimePort,
     private readonly bridgeProjectId: string,
     private readonly now: () => string = () => new Date().toISOString(),
+    private readonly adapterRegistry: RuntimeAdapterRegistry = defaultRuntimeAdapterRegistry,
   ) {
     if (bridgeProjectId.trim() === '') throw new Error('Bridge project routing ID is required.')
   }
@@ -251,6 +257,7 @@ export class RuntimeAdapterService {
       const { envelope } = await this.materialize(run)
       return this.bind(run, await this.bridge.createTask(envelope, this.bridgeProjectId))
     } catch (error: unknown) {
+      if (error instanceof AdapterUnsupportedError) throw error
       const detail = dispatchError(error)
       this.repository.updateRuntimeDispatch({
         ...this.requireDispatch(runId),
@@ -336,7 +343,10 @@ export class RuntimeAdapterService {
     const packPath = resolve(runtimeRoot, 'runtime-input-pack.json')
     const isAnalyze = run.outputIntent === 'analyze'
     const isCreate = run.outputIntent === 'create'
-    const outputPath = isAnalyze || isCreate ? undefined : resolve(runtimeRoot, 'staging', `script-draft-${String(run.id)}.md`)
+    const profile = this.resolveProfile(run, isAnalyze, isCreate)
+    const outputPath = isAnalyze || isCreate
+      ? undefined
+      : resolve(runtimeRoot, 'staging', `${profile.outputName}-${String(run.id)}${profile.fileExtension}`)
     const resultEnvelopePath = resolve(runtimeRoot, 'result', 'result-envelope-v0.json')
     assertWithin(project.rootPath, packPath)
     if (outputPath !== undefined) assertWithin(runtimeRoot, outputPath)
@@ -346,6 +356,22 @@ export class RuntimeAdapterService {
     const expectedOutputs = outputPath === undefined
       ? []
       : [{ absolutePath: outputPath, mode: 'create_new_file' as const }]
+    const constraints = isAnalyze
+      ? [
+          'Do not write any files.',
+          'Return providerStatus review on success.',
+        ]
+      : isCreate
+        ? [
+            'Do not modify source files.',
+            'Write new files only under the staging output root.',
+            'Return providerStatus review on success.',
+          ]
+        : [
+            'Do not modify source files.',
+            'Write only the listed expected output.',
+            'Return providerStatus review on success.',
+          ]
     const parsedManifest = JSON.parse(manifest.canonicalJson) as {
       resourceRefs?: RuntimeInputPackV0['resourceRefs']
     }
@@ -358,15 +384,11 @@ export class RuntimeAdapterService {
       contractVersion: 'runtime-input-pack-v0',
       lcosRunId: String(run.id),
       contextManifest: JSON.parse(manifest.canonicalJson) as unknown,
-      taskType: run.outputIntent === 'revise' ? 'markdown_script_revision' : 'creative_run',
+      taskType: profile.taskType,
       instruction: run.instruction,
       expectedOutputs,
       resultEnvelopePath,
-      constraints: [
-        'Do not modify source files.',
-        'Write only the listed expected output.',
-        'Return providerStatus review on success.',
-      ],
+      constraints,
       ...(resourceRefs === undefined || resourceRefs.length === 0 ? {} : { resourceRefs }),
       ...(resourceFiles === undefined || resourceFiles.length === 0 ? {} : { resourceFiles }),
     }
@@ -381,7 +403,7 @@ export class RuntimeAdapterService {
       outputIntent: run.outputIntent,
       instructions: run.instruction,
       provider: run.requestedProvider,
-      taskType: run.outputIntent === 'revise' ? 'markdown_script_revision' : 'creative_run',
+      taskType: profile.taskType,
       runtimeInputPackPath: packPath,
       outputRoot: resolve(runtimeRoot, 'staging'),
       expectedOutputs: outputPath === undefined
@@ -391,7 +413,7 @@ export class RuntimeAdapterService {
             role: 'primary',
             action: run.outputIntent === 'revise' ? 'modified' : 'created',
             absolutePath: outputPath,
-            mediaType: 'text/markdown',
+            mediaType: profile.mediaType,
             required: true,
           }],
       outputPolicy: {
@@ -405,6 +427,37 @@ export class RuntimeAdapterService {
     }
     const requestFingerprint = createTaskRequestFingerprint(unsigned)
     return { envelope: { ...unsigned, requestFingerprint } }
+  }
+
+  private resolveProfile(
+    run: Run,
+    isAnalyze: boolean,
+    isCreate: boolean,
+  ): RuntimeAdapterProfile {
+    if (isAnalyze) return this.adapterRegistry.resolveAnalyze()
+    if (isCreate) return this.adapterRegistry.resolveCreate()
+    if (run.targetArtifactId === undefined || run.targetRevisionId === undefined) {
+      throw new RuntimeAdapterError({
+        code: 'CONTRACT_UNSUPPORTED',
+        message: 'Revise Run requires a target Artifact and Base Revision before dispatch.',
+        retryable: false,
+        provider: 'workbuddy',
+      })
+    }
+    const artifact = this.repository.getArtifact(String(run.targetArtifactId))
+    const revision = this.repository.getArtifactRevision(String(run.targetRevisionId))
+    const fileRecord = revision === undefined
+      ? undefined
+      : this.repository.getFileRecord(String(revision.fileRecordId))
+    if (artifact === undefined || revision === undefined || fileRecord === undefined) {
+      throw new RuntimeAdapterError({
+        code: 'RUNTIME_STORAGE_CORRUPT',
+        message: 'Revise target evidence is missing.',
+        retryable: false,
+        provider: 'workbuddy',
+      })
+    }
+    return this.adapterRegistry.resolveRevise(artifact, fileRecord)
   }
 
   async #resourcePackFiles(

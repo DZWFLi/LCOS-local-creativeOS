@@ -61,7 +61,7 @@ class FakeBridge implements BridgeRuntimePort {
   }
 }
 
-function setup() {
+function setup(target: number | 'none' = 1) {
   const dbRoot = mkdtempSync(join(tmpdir(), 'lcos-adapter-db-'))
   const projectRoot = mkdtempSync(join(tmpdir(), 'lcos-adapter-project-'))
   roots.push(dbRoot, projectRoot)
@@ -90,8 +90,12 @@ function setup() {
     id: 'run-adapter-one' as Run['id'],
     projectId: snapshot.project.id,
     workspaceId: snapshot.workspaces[0]!.id,
-    targetArtifactId: snapshot.artifacts[1]!.id,
-    targetRevisionId: snapshot.artifactRevisions[1]!.id,
+    ...(target === 'none'
+      ? {}
+      : {
+          targetArtifactId: snapshot.artifacts[target]!.id,
+          targetRevisionId: snapshot.artifactRevisions[target]!.id,
+        }),
     contextManifestId: manifest.id,
     provider: 'workbuddy',
     status: 'created',
@@ -148,8 +152,13 @@ describe('RuntimeAdapterService', () => {
     expect(bridge.envelope).toMatchObject({
       contractVersion: 'bridge-task-v1',
       outputIntent: 'revise',
+      taskType: 'markdown_script_revision',
       outputPolicy: { allowZeroFiles: false, allowAdditionalFiles: false, maxFiles: 1 },
-      expectedOutputs: [expect.objectContaining({ action: 'modified', role: 'primary' })],
+      expectedOutputs: [expect.objectContaining({
+        action: 'modified',
+        role: 'primary',
+        mediaType: 'text/markdown',
+      })],
     })
     const packPath = bridge.envelope!.runtimeInputPackPath
     expect(JSON.parse(readFileSync(packPath, 'utf8'))).toMatchObject({
@@ -158,6 +167,32 @@ describe('RuntimeAdapterService', () => {
       contextManifest: { lockedElements: ['PortaSplit'] },
     })
 
+  })
+
+  it('fails unsupported revise targets BEFORE any Bridge create call', async () => {
+    const { repository, run } = setup(2)
+    const bridge = new FakeBridge()
+    const service = new RuntimeAdapterService(repository, bridge, 'mvp-fast-build', () => now)
+
+    await expect(service.dispatch(run.id)).rejects.toMatchObject({
+      detail: { code: 'UNSUPPORTED_OUTPUT_FORMAT', retryable: false },
+    })
+    expect(bridge.createCalls).toBe(0)
+    expect(repository.getRuntimeBinding(run.id)).toBeUndefined()
+    expect(repository.getRuntimeDispatch(run.id)?.status).toBe('planned')
+  })
+
+  it('fails revise without a target before dispatch', async () => {
+    const { repository, run } = setup('none')
+    const bridge = new FakeBridge()
+    const service = new RuntimeAdapterService(repository, bridge, 'mvp-fast-build', () => now)
+
+    await expect(service.dispatch(run.id)).rejects.toMatchObject({
+      detail: { code: 'CONTRACT_UNSUPPORTED', retryable: false },
+    })
+    expect(bridge.createCalls).toBe(0)
+    expect(repository.getRuntimeBinding(run.id)).toBeUndefined()
+    expect(repository.getRuntimeDispatch(run.id)?.status).toBe('planned')
   })
 
   it('marks an uncertain create as recovery_required and recovers by lookup without another create', async () => {
