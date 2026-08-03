@@ -121,6 +121,18 @@ function lcosListenerPids(ports = [WEB_PORT, CORE_PORT, BRIDGE_PORT]) {
   return raw.split(/\r?\n/).map((line) => Number(line.trim())).filter((pid) => Number.isInteger(pid))
 }
 
+function lcosLauncherPids() {
+  if (process.platform !== 'win32') return []
+  const result = run('powershell.exe', ['-NoProfile', '-Command', [
+    'Get-CimInstance Win32_Process |',
+    'Where-Object { $_.Name -eq "node.exe" -and $_.CommandLine -match "dev-launcher.mjs open" } |',
+    'Select-Object -ExpandProperty ProcessId',
+  ].join(' ')])
+  const raw = result.stdout.trim()
+  if (!raw) return []
+  return raw.split(/\r?\n/).map((line) => Number(line.trim())).filter((pid) => Number.isInteger(pid))
+}
+
 function killTree(pid) {
   if (!isPidRunning(pid)) return
   if (process.platform === 'win32') {
@@ -423,6 +435,14 @@ async function open() {
     console.error(info.status)
     process.exit(1)
   }
+  // 残留自愈：先把本机 LCOS 签名进程（旧栈/崩溃残留）清掉，再检查端口，
+  // 避免“旧进程占着端口导致新栈拒绝启动”的死锁。
+  for (const pid of lcosLauncherPids()) killTree(pid)
+  for (const pid of lcosListenerPids()) killTree(pid)
+  spawnSync('powershell.exe', ['-NoProfile', '-Command', 'Start-Sleep -Milliseconds 800'], {
+    stdio: 'ignore',
+    windowsHide: true,
+  })
   assertPortsFreeOrOwned()
   if (!bridgePythonProbe()) {
     console.error('✗ Light Bridge kernel is not importable.')
