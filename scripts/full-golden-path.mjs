@@ -225,6 +225,10 @@ async function main() {
   })
   console.log('step: revise accepted')
   assert(accepted.currentRevision.status === 'current' && accepted.run.status === 'completed', 'revise accept did not complete the run')
+  const reviseEvents = await coreRequest(`/runs/${encodeURIComponent(reviseRunId)}/events`)
+  const reviseEventTypes = reviseEvents.map((event) => event.type)
+  assert(['run.queued', 'run.started', 'run.review_ready', 'run.completed'].every((type) => reviseEventTypes.includes(type)),
+    `revise event chain is incomplete: ${reviseEventTypes.join(',')}`)
   console.log(`✓ revise run=${reviseRunId} → accepted revision=${accepted.currentRevision.id}`)
 
   // 3. Analyze: zero files
@@ -285,6 +289,20 @@ async function main() {
   assert(firstCreated.run.status === 'completed' && firstCreated.currentRevision.status === 'current', 'create accept failed')
   console.log(`✓ create run=${createRunId} → 2 returns, 1 accepted`)
 
+  // 4b. Cancel: bound run cancelled before the agent claims it
+  const cancelRun = await post(`/projects/${encodeURIComponent(projectId)}/runs`, {
+    instruction: '这次不需要执行，立即取消。',
+    outputIntent: 'revise',
+    targetArtifactId: String(scriptArtifact.id),
+  })
+  const cancelRunId = cancelRun.review.run.id
+  await post(`/runs/${encodeURIComponent(cancelRunId)}/dispatch`, {})
+  const cancelledReview = await post(`/runs/${encodeURIComponent(cancelRunId)}/cancel`, {})
+  assert(cancelledReview.review.run.status === 'cancelled', 'cancel did not cancel the bound Run')
+  const cancelEvents = await coreRequest(`/runs/${encodeURIComponent(cancelRunId)}/events`)
+  assert(cancelEvents.some((event) => event.type === 'run.cancelled'), 'run.cancelled event missing')
+  console.log(`✓ cancel run=${cancelRunId} → cancelled with event`)
+
   // 5. Checkpoint
   console.log('step: checkpoint')
   graph = await coreRequest(`/projects/${encodeURIComponent(projectId)}/graph`)
@@ -326,6 +344,7 @@ async function main() {
     revise: { runId: reviseRunId, returnId: reviseReturn.id, acceptedRevisionId: accepted.currentRevision.id },
     analyze: { runId: analyzeRunId },
     create: { runId: createRunId, returns: review.returns.length, createdFiles: createEvidence.files.map((item) => item.path) },
+    cancel: { runId: cancelRunId },
     checkpoint: checkpoint.id,
     evidenceRoot,
   }, null, 2))

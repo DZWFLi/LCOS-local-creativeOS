@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 
 import type { RunReview } from '@local-creative-os/contracts'
-import type { ProjectId, Run, RunId, RuntimeDispatch } from '@local-creative-os/domain'
+import type { JsonValue, ProjectId, Run, RunEvent, RunId, RuntimeDispatch } from '@local-creative-os/domain'
 
 import { ContextManifestService } from './context-manifest-service.js'
 import { SqliteMetadataRepository } from './metadata-repository.js'
@@ -95,6 +95,7 @@ export class RuntimeApplicationService {
       updatedAt: timestamp,
     }
     this.repository.createRunWithDispatch(run, dispatch)
+    this.emit(run.id, 'run.queued', { outputIntent, projectId: String(projectId) })
     return { review: this.review.getRunReview(run.id) }
   }
 
@@ -121,6 +122,10 @@ export class RuntimeApplicationService {
     return this.providerAction(runId, () => this.adapter.finalize(runId, decision, comment))
   }
 
+  async cancel(runId: RunId): Promise<RuntimeRunActionResult> {
+    return this.providerAction(runId, () => this.adapter.cancel(runId))
+  }
+
   getProjectReviews(projectId: ProjectId, limit = 20): readonly RunReview[] {
     return this.repository.getProjectRuns(projectId, limit)
       .map((run) => this.review.getRunReview(run.id))
@@ -129,7 +134,23 @@ export class RuntimeApplicationService {
   private async providerAction(runId: RunId, action: () => Promise<unknown>): Promise<RuntimeRunActionResult> {
     try {
       await action()
-      return { review: this.review.getRunReview(runId) }
+      const review = this.review.getRunReview(runId)
+      if (review.dispatch.status === 'bound' && (review.run.status === 'queued' || review.run.status === 'running')) {
+        this.emit(runId, 'run.started', { projectId: String(review.run.projectId) })
+      }
+      if (review.presentationPhase === 'review') {
+        this.emit(runId, 'run.review_ready', { projectId: String(review.run.projectId) })
+      }
+      if (review.run.status === 'completed') {
+        this.emit(runId, 'run.completed', { projectId: String(review.run.projectId) })
+      }
+      if (review.run.status === 'cancelled') {
+        this.emit(runId, 'run.cancelled', { projectId: String(review.run.projectId) })
+      }
+      if (review.run.status === 'failed') {
+        this.emit(runId, 'run.failed', { projectId: String(review.run.projectId) })
+      }
+      return { review }
     } catch (error: unknown) {
       if (!(error instanceof RuntimeAdapterError)) throw error
       return {
@@ -137,5 +158,15 @@ export class RuntimeApplicationService {
         providerError: error.detail,
       }
     }
+  }
+
+  private emit(runId: RunId, type: RunEvent['type'], payload: JsonValue = {}): void {
+    this.repository.createRunEvent({
+      id: `event-${randomUUID()}` as RunEvent['id'],
+      runId,
+      type,
+      payload,
+      occurredAt: this.now(),
+    })
   }
 }

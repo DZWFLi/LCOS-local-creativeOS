@@ -12,6 +12,7 @@ import type {
   RuntimeBinding,
   RuntimeDispatch,
 } from '@local-creative-os/domain'
+import { isTerminalRunStatus } from '@local-creative-os/domain'
 
 import type { RuntimeAdapterProfile, RuntimeAdapterRegistry } from './adapter-registry.js'
 import { AdapterUnsupportedError, defaultRuntimeAdapterRegistry } from './adapter-registry.js'
@@ -112,6 +113,7 @@ export interface BridgeRuntimePort {
   getTask?(taskId: string, runId: string): Promise<BridgeTaskIdentity | undefined>
   getResult(taskId: string, runId: string): Promise<BridgeResultEnvelopeV0 | undefined>
   finalizeReview?(taskId: string, decision: 'completed' | 'retrying', comment?: string): Promise<void>
+  cancelTask?(taskId: string, runId: string): Promise<void>
 }
 
 export interface BridgeResultEnvelopeV0 {
@@ -329,6 +331,38 @@ export class RuntimeAdapterService {
       providerStatus: decision,
       lastSyncedAt: timestamp,
       finalizePending: false,
+      updatedAt: timestamp,
+    })
+  }
+
+  async cancel(runId: RunId): Promise<RuntimeBinding> {
+    const run = this.requireRun(runId)
+    if (isTerminalRunStatus(run.status)) {
+      throw new RuntimeAdapterError({
+        code: 'RUN_ALREADY_TERMINAL',
+        message: `Run is already ${run.status}; cancellation is not allowed.`,
+        retryable: false,
+        provider: 'workbuddy',
+      })
+    }
+    const binding = this.repository.getRuntimeBinding(runId)
+    if (binding?.externalTaskId === undefined) {
+      throw new RuntimeAdapterError({
+        code: 'TASK_NOT_FOUND',
+        message: 'RuntimeBinding has no external task to cancel.',
+        retryable: false,
+        provider: 'workbuddy',
+      })
+    }
+    if (this.bridge.cancelTask !== undefined) {
+      await this.bridge.cancelTask(binding.externalTaskId, String(runId))
+    }
+    const timestamp = this.now()
+    this.repository.updateRunStatus(runId, 'cancelled', timestamp)
+    return this.repository.updateRuntimeBinding({
+      ...binding,
+      providerStatus: 'cancelled',
+      lastSyncedAt: timestamp,
       updatedAt: timestamp,
     })
   }

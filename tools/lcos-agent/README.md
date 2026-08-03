@@ -36,6 +36,8 @@ npm run lcos -- project inspect <root-path>
 npm run lcos -- task claim --provider workbuddy --worker buddy-local
 npm run lcos -- task start <task-id> --worker buddy-local
 npm run lcos -- task submit <task-id> <result-envelope.json>
+npm run lcos -- run events <run-id> [--after N]
+npm run lcos -- run cancel <run-id>
 ```
 
 `doctor` 汇总 Core / Bridge / Provider / Contract 状态；`capabilities` 输出 Bridge

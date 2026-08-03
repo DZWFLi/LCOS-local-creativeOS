@@ -15,6 +15,7 @@
     "dev:open": "node scripts/dev-launcher.mjs open",
     "dev:stop": "node scripts/dev-launcher.mjs stop",
     "dev:status": "node scripts/dev-launcher.mjs status",
+    "tray": "powershell -NoProfile -WindowStyle Hidden -File scripts/runtime-host-tray.ps1",
     "dev:target": "node scripts/dev-launcher.mjs target",
     "bridge": "node scripts/light-bridge.mjs",
     "lcos": "node tools/lcos-agent/cli.mjs",

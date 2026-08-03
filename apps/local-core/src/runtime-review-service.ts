@@ -8,7 +8,7 @@ import type {
   RetryRunResult,
   RunReview,
 } from '@local-creative-os/contracts'
-import type { ArtifactReturnId, Run, RunId, RuntimeDispatch } from '@local-creative-os/domain'
+import type { ArtifactReturnId, JsonValue, Run, RunEvent, RunId, RuntimeDispatch } from '@local-creative-os/domain'
 
 import { RuntimeLifecycleConflictError, SqliteMetadataRepository } from './metadata-repository.js'
 
@@ -49,11 +49,15 @@ export class RuntimeReviewService {
   }
 
   accept(returnId: ArtifactReturnId, input: AcceptArtifactReturnInput): AcceptArtifactReturnResult {
-    return this.repository.acceptArtifactReturn(returnId, input.expectedBaseRevisionId, this.now())
+    const result = this.repository.acceptArtifactReturn(returnId, input.expectedBaseRevisionId, this.now())
+    this.emit(result.run.id, 'run.completed', { projectId: String(result.run.projectId), returnId: String(returnId) })
+    return result
   }
 
   reject(returnId: ArtifactReturnId): RejectArtifactReturnResult {
-    return this.repository.rejectArtifactReturn(returnId, this.now())
+    const result = this.repository.rejectArtifactReturn(returnId, this.now())
+    this.emit(result.run.id, 'run.completed', { projectId: String(result.run.projectId), returnId: String(returnId), rejected: true })
+    return result
   }
 
   retry(returnId: ArtifactReturnId, input: RetryRunInput = {}): RetryRunResult {
@@ -91,6 +95,18 @@ export class RuntimeReviewService {
       createdAt: timestamp,
       updatedAt: timestamp,
     }
-    return this.repository.retryArtifactReturn(returnId, run, dispatch, timestamp)
+    const result = this.repository.retryArtifactReturn(returnId, run, dispatch, timestamp)
+    this.emit(run.id, 'run.retry_queued', { projectId: String(run.projectId), retryOfRunId: String(previousRun.id) })
+    return result
+  }
+
+  private emit(runId: RunId, type: RunEvent['type'], payload: JsonValue = {}): void {
+    this.repository.createRunEvent({
+      id: `event-${randomUUID()}` as RunEvent['id'],
+      runId,
+      type,
+      payload,
+      occurredAt: this.now(),
+    })
   }
 }

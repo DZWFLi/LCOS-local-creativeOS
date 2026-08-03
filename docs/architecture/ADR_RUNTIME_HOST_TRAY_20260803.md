@@ -1,7 +1,7 @@
 # ADR：Runtime Host 托盘宿主技术选型（RT-04）
 
 > 日期：2026-08-03
-> 状态：**待批准（Proposed）** — 实现属红区，未经批准不施工
+> 状态：**已批准并实现 v1（Approved & Implemented 2026-08-03）** — `scripts/runtime-host-tray.ps1`
 > 关联工作单：Slice C（RT-04 托盘可唤起、看状态、诊断、重启、完全退出）
 
 ## Context
