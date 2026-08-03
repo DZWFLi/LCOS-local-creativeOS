@@ -187,6 +187,18 @@ export interface LocalCoreClient {
   ), signal?: AbortSignal): Promise<RuntimeCall<ProjectCatalogEntry>>
   metadataStatus(signal?: AbortSignal): Promise<RuntimeCall<MetadataStoreStatus>>
   projectGraph(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<ProjectGraphSnapshot>>
+  createCheckpoint(projectId: string, input: {
+    readonly id: string
+    readonly scopeId: string
+    readonly label: string
+    readonly snapshotJson: unknown
+  }, signal?: AbortSignal): Promise<RuntimeCall<{
+    readonly id: string
+    readonly projectId: string
+    readonly scopeId: string
+    readonly label: string
+    readonly createdAt: string
+  }>>
   updateActiveContext(projectId: string, input: {
     readonly workspaceId?: string
     readonly scopeId: string
@@ -492,6 +504,27 @@ export function createLocalCoreClient(): LocalCoreClient {
       return request(`/projects/${encodeURIComponent(projectId)}/graph`, {
         signal,
         decode: decodeResult<ProjectGraphSnapshot>,
+      })
+    },
+    createCheckpoint(projectId, input, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/checkpoints`, {
+        signal,
+        init: {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            ...input,
+            projectId,
+            createdAt: new Date().toISOString(),
+          }),
+        },
+        decode: decodeResult<{
+          readonly id: string
+          readonly projectId: string
+          readonly scopeId: string
+          readonly label: string
+          readonly createdAt: string
+        }>,
       })
     },
     previewRecords(projectId, signal) {

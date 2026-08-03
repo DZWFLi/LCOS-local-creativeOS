@@ -1598,6 +1598,24 @@ export function App() {
   const deleteSelectedViews = useCallback(() => { deleteNodes(selectedIds) }, [deleteNodes, selectedIds])
   const rememberCanvasPoint = useCallback((point: { x: number; y: number }) => { lastCanvasPointRef.current = point }, [])
 
+  const createCheckpoint = useCallback(async () => {
+    if (!activeProjectId) return
+    setCheckpoint(false)
+    const graphCall = await bridgeRef.current.client.projectGraph(activeProjectId)
+    if (!graphCall.result.ok) {
+      setNotice(`检查点失败：${graphCall.result.error.message}`)
+      return
+    }
+    const call = await bridgeRef.current.client.createCheckpoint(activeProjectId, {
+      id: `checkpoint-${Date.now().toString(36)}`,
+      scopeId: scopeId ?? 'scope-root',
+      label: `手动检查点 ${new Date().toLocaleString()}`,
+      snapshotJson: graphCall.result.value,
+    })
+    if (call.result.ok) setNotice(`检查点已创建：${call.result.value.label}`)
+    else setNotice(`检查点失败：${call.result.error.message}`)
+  }, [activeProjectId, scopeId])
+
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
@@ -1665,7 +1683,7 @@ export function App() {
         setNotice(`已定位「${workbenchNode.title}」`)
       }} onShowResource={workbenchNode.artifactId === undefined ? undefined : () => { setWorkbench(null); setResourceDetailArtifactId(String(workbenchNode.artifactId)) }} />}
       {activeRun && <button className={`run-pill ${activeRun.status}`} onClick={() => { clearSelection(); setWorkRail((current) => ({ ...current, collapsed: false })) }}><Play size={13} /> {activeRun.id} · {runStatusLabel[activeRun.status]}</button>}
-      {checkpoint && <div className="checkpoint"><Check size={15} /> 已形成稳定修改集 <button onClick={() => { setCheckpoint(false); setNotice('检查点已创建') }}>创建检查点</button><button className="quiet" onClick={() => setCheckpoint(false)}>稍后</button></div>}
+      {checkpoint && <div className="checkpoint"><Check size={15} /> 已形成稳定修改集 <button onClick={() => { void createCheckpoint() }}>创建检查点</button><button className="quiet" onClick={() => setCheckpoint(false)}>稍后</button></div>}
       <nav className="scene-title v06-breadcrumbs" aria-label="画布层级">{scopePath.map((scope, index) => {
         const current = index === scopePath.length - 1
         return <button key={scope.id} data-testid={`scope-crumb-${scope.id}`} aria-current={current ? 'page' : undefined} disabled={current} onClick={() => enterScope(scope.id)}>{index > 0 && <span>/</span>}{index === 0 ? activeProject.label : scope.label}</button>

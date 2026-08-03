@@ -129,16 +129,14 @@ describe('GAP-UI-07: Checkpoint button is a toast, not a Core API call', () => {
     expect(serverSrc).toContain('createCheckpoint')
   })
 
-  it('App.tsx Checkpoint button never calls Core API', () => {
-    // When Checkpoint becomes real, the setNotice('检查点已创建') must be replaced
-    // with a Core API call. Until then, this test documents the gap.
+  it('App.tsx Checkpoint button calls the Core API (Slice F fix)', () => {
     const fs = require('node:fs')
     const appSrc = fs.readFileSync(
       join(__dirname, '../../apps/web/src/App.tsx'), 'utf-8'
     )
-    // Currently only a toast — no fetch/POST/Core call near checkpoint
     const hasCheckpointBtn = appSrc.includes('已形成稳定修改集')
     expect(hasCheckpointBtn).toBe(true)
-    // REGRESSION GUARD: when fixed, this search for absence of Core call MUST be updated
+    expect(appSrc).toContain('createCheckpoint(activeProjectId')
+    expect(appSrc).not.toContain("setNotice('检查点已创建')")
   })
 })
