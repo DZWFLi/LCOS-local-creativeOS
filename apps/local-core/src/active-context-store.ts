@@ -6,6 +6,8 @@ export interface ActiveContextInput {
   readonly selectedViewIds: readonly string[]
   readonly pinnedContextIds: readonly string[]
   readonly excludedContextIds: readonly string[]
+  readonly targetArtifactId?: string
+  readonly targetRevisionId?: string
 }
 
 export interface ActiveContextProjection extends ActiveContextInput {
@@ -26,6 +28,11 @@ export interface ActiveContextProjection extends ActiveContextInput {
     readonly kind: string
     readonly revisionId?: string
   }[]
+  readonly targetArtifact?: {
+    readonly artifactId: string
+    readonly title: string
+    readonly revisionId?: string
+  }
 }
 
 export class ActiveContextStore {
@@ -68,6 +75,16 @@ export class ActiveContextStore {
       [...new Set([...input.selectedViewIds, ...input.pinnedContextIds])]
         .filter((viewId) => !excluded.has(viewId)),
     )
+    const targetArtifact = input.targetArtifactId === undefined
+      ? undefined
+      : artifacts.get(input.targetArtifactId)
+    const targetProjection = targetArtifact === undefined
+      ? undefined
+      : {
+          artifactId: String(targetArtifact.id),
+          title: targetArtifact.title,
+          ...(input.targetRevisionId === undefined ? {} : { revisionId: input.targetRevisionId }),
+        }
     return {
       projectId: String(graph.project.id),
       ...(input.workspaceId === undefined ? {} : { workspaceId: input.workspaceId }),
@@ -75,8 +92,11 @@ export class ActiveContextStore {
       selectedViewIds: [...new Set(input.selectedViewIds)],
       pinnedContextIds: [...new Set(input.pinnedContextIds)],
       excludedContextIds: [...new Set(input.excludedContextIds)],
+      ...(input.targetArtifactId === undefined ? {} : { targetArtifactId: input.targetArtifactId }),
+      ...(input.targetRevisionId === undefined ? {} : { targetRevisionId: input.targetRevisionId }),
       selectedArtifacts,
       contextArtifacts,
+      ...(targetProjection === undefined ? {} : { targetArtifact: targetProjection }),
       version,
       updatedAt: new Date().toISOString(),
     }

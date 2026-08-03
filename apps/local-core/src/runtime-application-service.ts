@@ -47,6 +47,12 @@ export class RuntimeApplicationService {
       throw new Error(`${outputIntent} 不允许指定修改目标；只有 revise 可以绑定 Target。`)
     }
     if (outputIntent === 'revise' && input.targetArtifactId === undefined) throw new Error('Revise Run requires an explicit target Artifact.')
+    if (outputIntent === 'revise' && input.targetArtifactId !== undefined) {
+      const target = this.repository.getArtifact(String(input.targetArtifactId))
+      if (target !== undefined && target.managed === false) {
+        throw new Error('外部 Reference 不能作为修改目标；只有受管 Artifact 可以 revise。')
+      }
+    }
     if (outputIntent === 'analyze' && input.resultPolicy !== undefined
       && !['reply_only', 'create_artifact'].includes(input.resultPolicy.type)) {
       throw new Error('analyze 的结果去向只能是直接回复或创建分析 Artifact。')

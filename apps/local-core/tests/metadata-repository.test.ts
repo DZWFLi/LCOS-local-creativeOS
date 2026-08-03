@@ -10,7 +10,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { MetadataForeignKeyConstraintError, SqliteMetadataRepository } from '../src/metadata-repository.js'
 
 const cleanup: string[] = []
-const SCHEMA_VERSION = 11
+const SCHEMA_VERSION = 12
 
 function disposableSnapshot(): ProjectGraphSnapshot {
   const now = '2026-07-24T12:00:00.000Z'
@@ -223,6 +223,55 @@ describe('SqliteMetadataRepository', () => {
     expect(repository.listWorkspaceMembers(workspaceId)).toHaveLength(0)
     expect(repository.listProjectWorkspaceMemberships('disposable-portasplit' as ProjectId).map((item) => String(item.artifactViewId)))
       .toEqual(['view-brief'])
+  })
+
+  it('marks link artifacts unmanaged, saves workspace states and session summaries', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'local-core-v12-'))
+    cleanup.push(directory)
+    const path = join(directory, 'metadata.sqlite')
+    const repository = new SqliteMetadataRepository(path)
+    const snapshot = disposableSnapshot()
+    const linkArtifact: ProjectGraphSnapshot['artifacts'][number] = {
+      id: 'artifact-link' as ProjectGraphSnapshot['artifacts'][number]['id'],
+      projectId: snapshot.project.id,
+      title: '客户反馈.link.md',
+      kind: 'markdown',
+      availability: 'available',
+      createdAt: '2026-08-03T10:00:00.000Z',
+      updatedAt: '2026-08-03T10:00:00.000Z',
+    }
+    snapshot.artifacts = [...snapshot.artifacts, linkArtifact]
+    repository.save(snapshot)
+
+    expect(repository.getArtifact(String(linkArtifact.id))?.managed).toBe(false)
+    const normal = repository.getArtifacts('disposable-portasplit' as ProjectId).find((item) => item.title !== '客户反馈.link.md')
+    expect(normal?.managed).not.toBe(false)
+
+    const workspaceId = 'workspace-main' as WorkspaceId
+    repository.addWorkspaceMembers(workspaceId, ['view-brief' as ArtifactViewId], 'user', '2026-08-03T10:00:01.000Z')
+    const state = repository.createCheckpoint({
+      id: 'state-one' as Checkpoint['id'],
+      projectId: 'disposable-portasplit' as ProjectId,
+      scopeId: 'scope-root' as ProjectGraphSnapshot['scopes'][number]['id'],
+      workspaceId,
+      label: '现场A',
+      snapshotJson: { members: ['view-brief'] },
+      createdAt: '2026-08-03T10:00:02.000Z',
+    })
+    expect(state).toBeUndefined()
+    expect(repository.listWorkspaceStates(workspaceId).map((item) => item.id)).toContain('state-one')
+
+    repository.createSessionSummary({
+      id: 'session-one',
+      projectId: 'disposable-portasplit' as ProjectId,
+      title: '本周',
+      summary: '完成方向整理',
+      runIds: [],
+      handoffRef: 'docs/handoffs/x.md',
+      createdAt: '2026-08-03T10:00:03.000Z',
+      updatedAt: '2026-08-03T10:00:03.000Z',
+    })
+    expect(repository.listSessionSummaries('disposable-portasplit' as ProjectId).map((item) => item.id)).toContain('session-one')
   })
 
   it('migrates from empty, saves metadata, and restores after reopening', async () => {

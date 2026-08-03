@@ -111,6 +111,8 @@ export interface Artifact {
   readonly projectId: ProjectId
   readonly title: string
   readonly kind: ArtifactKind
+  /** 受管 Artifact 可作 revise Target；外部 Reference/Link 为 false。 */
+  readonly managed?: boolean
   readonly availability: ArtifactAvailability
   readonly currentRevisionId?: ArtifactRevisionId
   readonly createdAt: IsoDateTime
@@ -215,9 +217,21 @@ export interface Checkpoint {
   readonly id: CheckpointId
   readonly projectId: ProjectId
   readonly scopeId: ScopeId
+  readonly workspaceId?: WorkspaceId
   readonly label: string
   readonly snapshotJson: JsonValue
   readonly createdAt: IsoDateTime
+}
+
+export interface SessionSummary {
+  readonly id: string
+  readonly projectId: ProjectId
+  readonly title: string
+  readonly summary: string
+  readonly runIds: readonly RunId[]
+  readonly handoffRef?: string
+  readonly createdAt: IsoDateTime
+  readonly updatedAt: IsoDateTime
 }
 
 // ==================== Preview (unchanged) ====================

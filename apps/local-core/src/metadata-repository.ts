@@ -31,6 +31,7 @@ import type {
   RelationId,
   RunEvent,
   RunEventId,
+  SessionSummary,
   Scope,
   ScopeId,
   Workspace,
@@ -161,17 +162,18 @@ export class SqliteMetadataRepository {
 
   #migrate(): void {
     const version = this.#database.prepare('PRAGMA user_version').get() as { user_version: number }
-    if (version.user_version === 0) { this.#migrate_001(); this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); this.#migrate_009_from_v8(); this.#migrate_010_from_v9(); this.#migrate_011_from_v10(); return }
+    if (version.user_version === 0) { this.#migrate_001(); this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); this.#migrate_009_from_v8(); this.#migrate_010_from_v9(); this.#migrate_011_from_v10(); this.#migrate_012_from_v11(); return }
     if (version.user_version === 1) { this.#migrate_002_from_v1(); this.#migrate_004_from_v3(); this.#migrate_005_from_v4(); this.#migrate_006_from_v5(); this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); return }
     if (version.user_version === 2) { this.#migrate_003_from_v2(); this.#migrate_004_from_v3(); this.#migrate_005_from_v4(); this.#migrate_006_from_v5(); this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); return }
     if (version.user_version === 3) { this.#migrate_004_from_v3(); this.#migrate_005_from_v4(); this.#migrate_006_from_v5(); this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); return }
     if (version.user_version === 4) { this.#migrate_005_from_v4(); this.#migrate_006_from_v5(); this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); return }
     if (version.user_version === 5) { this.#migrate_006_from_v5(); this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); return }
     if (version.user_version === 6) { this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); return }
-    if (version.user_version === 7) { this.#migrate_008_from_v7(); this.#migrate_009_from_v8(); this.#migrate_010_from_v9(); this.#migrate_011_from_v10(); return }
-    if (version.user_version === 8) { this.#migrate_009_from_v8(); this.#migrate_010_from_v9(); this.#migrate_011_from_v10(); return }
-    if (version.user_version === 9) { this.#migrate_010_from_v9(); this.#migrate_011_from_v10(); return }
-    if (version.user_version === 10) { this.#migrate_011_from_v10(); return }
+    if (version.user_version === 7) { this.#migrate_008_from_v7(); this.#migrate_009_from_v8(); this.#migrate_010_from_v9(); this.#migrate_011_from_v10(); this.#migrate_012_from_v11(); return }
+    if (version.user_version === 8) { this.#migrate_009_from_v8(); this.#migrate_010_from_v9(); this.#migrate_011_from_v10(); this.#migrate_012_from_v11(); return }
+    if (version.user_version === 9) { this.#migrate_010_from_v9(); this.#migrate_011_from_v10(); this.#migrate_012_from_v11(); return }
+    if (version.user_version === 10) { this.#migrate_011_from_v10(); this.#migrate_012_from_v11(); return }
+    if (version.user_version === 11) { this.#migrate_012_from_v11(); return }
     // v9 = current
   }
 
@@ -710,6 +712,24 @@ export class SqliteMetadataRepository {
     `)
   }
 
+  #migrate_012_from_v11(): void {
+    this.#database.exec(`
+      ALTER TABLE artifacts ADD COLUMN managed INTEGER NOT NULL DEFAULT 1;
+      ALTER TABLE checkpoints ADD COLUMN workspace_id TEXT REFERENCES workspaces(id) ON DELETE SET NULL;
+      CREATE TABLE IF NOT EXISTS session_summaries (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        title TEXT NOT NULL,
+        summary TEXT NOT NULL,
+        run_ids TEXT NOT NULL DEFAULT '[]',
+        handoff_ref TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      PRAGMA user_version = 12;
+    `)
+  }
+
   // ==================== Graph Save/Load ====================
 
   save(snapshot: ProjectGraphSnapshot): void {
@@ -1153,6 +1173,40 @@ export class SqliteMetadataRepository {
     this.#upsertCheckpoint(value)
   }
 
+  listWorkspaceStates(workspaceId: WorkspaceId): readonly Checkpoint[] {
+    return (this.#database.prepare(
+      'SELECT * FROM checkpoints WHERE workspace_id = ? ORDER BY created_at, id',
+    ).all(workspaceId as SQLInputValue) as Row[]).map((row) => this.#checkpoint(row))
+  }
+
+  createSessionSummary(value: SessionSummary): SessionSummary {
+    this.#database.prepare(`
+      INSERT INTO session_summaries (id, project_id, title, summary, run_ids, handoff_ref, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      value.id,
+      value.projectId as SQLInputValue,
+      value.title,
+      value.summary,
+      JSON.stringify(value.runIds),
+      value.handoffRef ?? null,
+      value.createdAt,
+      value.updatedAt,
+    )
+    return value
+  }
+
+  getSessionSummary(summaryId: string): SessionSummary | undefined {
+    const row = this.#database.prepare('SELECT * FROM session_summaries WHERE id = ?').get(summaryId) as Row | undefined
+    return row === undefined ? undefined : this.#sessionSummary(row)
+  }
+
+  listSessionSummaries(projectId: ProjectId): readonly SessionSummary[] {
+    return (this.#database.prepare(
+      'SELECT * FROM session_summaries WHERE project_id = ? ORDER BY created_at DESC, id DESC',
+    ).all(projectId as SQLInputValue) as Row[]).map((row) => this.#sessionSummary(row))
+  }
+
   getFileRecords(projectId: string): FileRecord[] {
     return (this.#database.prepare('SELECT * FROM file_records WHERE project_id = ?').all(projectId as SQLInputValue) as Row[])
       .map((row) => this.#fileRecord(row))
@@ -1590,6 +1644,15 @@ export class SqliteMetadataRepository {
       'SELECT * FROM runs WHERE project_id = ? ORDER BY created_at DESC, id DESC LIMIT ?',
     ).all(projectId as SQLInputValue, safeLimit) as Row[]
     return rows.map((row) => this.#runFromRow(row))
+  }
+
+  listRunsNeedingSync(): readonly Run[] {
+    return (this.#database.prepare(`
+      SELECT r.* FROM runs r
+      JOIN runtime_bindings b ON b.run_id = r.id
+      WHERE r.status IN ('created','queued','running','waiting_input')
+      ORDER BY r.created_at
+    `).all() as Row[]).map((row) => this.#runFromRow(row))
   }
 
   #runFromRow(row: Row): Run {
@@ -2236,7 +2299,7 @@ export class SqliteMetadataRepository {
     }
   }
 
-  get schemaVersion(): number { return 11 }
+  get schemaVersion(): number { return 12 }
 
   // ==================== Private helpers ====================
 
@@ -2275,6 +2338,7 @@ export class SqliteMetadataRepository {
   }
 
   #upsertArtifact(value: Artifact): void {
+    const managed = value.managed === false || value.title.toLocaleLowerCase('en-US').endsWith('.link.md') ? 0 : 1
     this.#runStatement({
       operationType: 'upsert_artifact',
       entityId: String(value.id),
@@ -2284,9 +2348,9 @@ export class SqliteMetadataRepository {
       referencedTable: 'projects',
       referencedId: String(value.projectId),
     }, `
-      INSERT INTO artifacts VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET title=excluded.title, kind=excluded.kind, local_path=excluded.local_path, availability=excluded.availability, current_revision_id=excluded.current_revision_id, updated_at=excluded.updated_at
-    `, [value.id as SQLInputValue, value.projectId as SQLInputValue, value.title, value.kind, '', value.availability, value.currentRevisionId as SQLInputValue ?? null, value.createdAt, value.updatedAt])
+      INSERT INTO artifacts VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET title=excluded.title, kind=excluded.kind, local_path=excluded.local_path, availability=excluded.availability, current_revision_id=excluded.current_revision_id, managed=excluded.managed, updated_at=excluded.updated_at
+    `, [value.id as SQLInputValue, value.projectId as SQLInputValue, value.title, value.kind, '', value.availability, value.currentRevisionId as SQLInputValue ?? null, value.createdAt, value.updatedAt, managed])
   }
 
   #assertArtifactCurrentRevisionUnchanged(value: Artifact): void {
@@ -2472,9 +2536,9 @@ export class SqliteMetadataRepository {
 
   #upsertCheckpoint(value: Checkpoint): void {
     this.#database.prepare(`
-      INSERT INTO checkpoints VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO checkpoints VALUES (?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO NOTHING
-    `).run(value.id as SQLInputValue, value.projectId as SQLInputValue, value.scopeId as SQLInputValue, value.label, JSON.stringify(value.snapshotJson), value.createdAt)
+    `).run(value.id as SQLInputValue, value.projectId as SQLInputValue, value.scopeId as SQLInputValue, value.label, JSON.stringify(value.snapshotJson), value.createdAt, value.workspaceId as SQLInputValue ?? null)
   }
 
   #runStatement(
@@ -2520,7 +2584,7 @@ export class SqliteMetadataRepository {
   }
 
   #artifact(row: Row): Artifact {
-    return { id: row.id as ArtifactId, projectId: row.project_id as ProjectId, title: String(row.title), kind: String(row.kind) as Artifact['kind'], availability: String(row.availability) as Artifact['availability'], ...(row.current_revision_id === null || row.current_revision_id === undefined ? {} : { currentRevisionId: row.current_revision_id as ArtifactRevisionId }), createdAt: String(row.created_at), updatedAt: String(row.updated_at) }
+    return { id: row.id as ArtifactId, projectId: row.project_id as ProjectId, title: String(row.title), kind: String(row.kind) as Artifact['kind'], ...(row.managed === 0 ? { managed: false } : {}), availability: String(row.availability) as Artifact['availability'], ...(row.current_revision_id === null || row.current_revision_id === undefined ? {} : { currentRevisionId: row.current_revision_id as ArtifactRevisionId }), createdAt: String(row.created_at), updatedAt: String(row.updated_at) }
   }
 
   #artifactView(row: Row): ArtifactView {
@@ -2575,7 +2639,20 @@ export class SqliteMetadataRepository {
   }
 
   #checkpoint(row: Row): Checkpoint {
-    return { id: row.id as CheckpointId, projectId: row.project_id as ProjectId, scopeId: (row.scope_id ?? '') as unknown as ScopeId, label: String(row.label ?? ''), snapshotJson: json<Checkpoint['snapshotJson']>(row.snapshot_json as SQLInputValue), createdAt: String(row.created_at) }
+    return { id: row.id as CheckpointId, projectId: row.project_id as ProjectId, scopeId: (row.scope_id ?? '') as unknown as ScopeId, ...(row.workspace_id ? { workspaceId: row.workspace_id as WorkspaceId } : {}), label: String(row.label ?? ''), snapshotJson: json<Checkpoint['snapshotJson']>(row.snapshot_json as SQLInputValue), createdAt: String(row.created_at) }
+  }
+
+  #sessionSummary(row: Row): SessionSummary {
+    return {
+      id: String(row.id),
+      projectId: String(row.project_id) as ProjectId,
+      title: String(row.title),
+      summary: String(row.summary),
+      runIds: JSON.parse(String(row.run_ids)) as readonly RunId[],
+      ...(row.handoff_ref ? { handoffRef: String(row.handoff_ref) } : {}),
+      createdAt: String(row.created_at),
+      updatedAt: String(row.updated_at),
+    }
   }
 }
 

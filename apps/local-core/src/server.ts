@@ -40,6 +40,9 @@ import { ResourceMatcher } from './resources/resource-matcher.js'
 import { ContextManifestService } from './context-manifest-service.js'
 import { RuntimeReviewService } from './runtime-review-service.js'
 import { proposeRun } from './runtime-proposal-service.js'
+import { RuntimeRevisionCompareService } from './runtime-revision-compare-service.js'
+import { WorkspaceStateService } from './workspace-state-service.js'
+import { ProcessProjectionService } from './process-projection-service.js'
 import {
   RuntimeApplicationService,
   type CreateRuntimeRunInput,
@@ -570,7 +573,9 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
           || !isStringArray(input.selectedViewIds)
           || !isStringArray(input.pinnedContextIds)
           || !isStringArray(input.excludedContextIds)
-          || Object.keys(input).some((key) => !['workspaceId', 'scopeId', 'selectedViewIds', 'pinnedContextIds', 'excludedContextIds'].includes(key))) {
+          || (input.targetArtifactId !== undefined && typeof input.targetArtifactId !== 'string')
+          || (input.targetRevisionId !== undefined && typeof input.targetRevisionId !== 'string')
+          || Object.keys(input).some((key) => !['workspaceId', 'scopeId', 'selectedViewIds', 'pinnedContextIds', 'excludedContextIds', 'targetArtifactId', 'targetRevisionId'].includes(key))) {
           sendJson(response, 400, failure('INVALID_ARGUMENT', 'Active Context requires scopeId and string ID arrays.'))
           return
         }
@@ -672,7 +677,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
         return
       }
 
-      const runtimeActionMatch = /^\/runs\/([^/]+)\/(dispatch|recover|sync)$/.exec(pathname)
+  const runtimeActionMatch = /^\/runs\/([^/]+)\/(dispatch|recover|sync)$/.exec(pathname)
       if (method === 'POST' && runtimeActionMatch !== null) {
         if (runtimeApplication === undefined) {
           sendJson(response, 503, failure('UNAVAILABLE', 'Runtime execution service is not configured.'))
@@ -756,6 +761,164 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
         } catch (error: unknown) {
           sendJson(response, 400, failure('INVALID_ARGUMENT', error instanceof Error ? error.message : 'Run proposal failed.'))
         }
+        return
+      }
+
+      const artifactSearchMatch = /^\/projects\/([^/]+)\/artifacts\/search$/.exec(pathname)
+      if (method === 'GET' && artifactSearchMatch !== null) {
+        if (!requireMetadata(metadata, response)) return
+        const projectId = decodeURIComponent(artifactSearchMatch[1] ?? '') as ProjectId
+        const query = (url.searchParams.get('q') ?? '').trim().toLocaleLowerCase('en-US')
+        const matches = metadata.getArtifacts(String(projectId))
+          .filter((artifact) => query.length === 0 || artifact.title.toLocaleLowerCase('en-US').includes(query))
+          .slice(0, 50)
+        sendJson(response, 200, { ok: true, value: matches })
+        return
+      }
+
+      const artifactDetailMatch = /^\/artifacts\/([^/]+)$/.exec(pathname)
+      if (method === 'GET' && artifactDetailMatch !== null) {
+        if (!requireMetadata(metadata, response)) return
+        const artifactId = decodeURIComponent(artifactDetailMatch[1] ?? '')
+        const artifact = metadata.getArtifact(artifactId)
+        if (artifact === undefined) {
+          sendJson(response, 404, failure('NOT_FOUND', 'Artifact not found.'))
+          return
+        }
+        const revisions = metadata.getArtifactRevisions(artifactId)
+        const runById = new Map(
+          metadata.getProjectRuns(artifact.projectId, 100).map((run) => [String(run.id), run]),
+        )
+        sendJson(response, 200, {
+          ok: true,
+          value: {
+            artifact,
+            currentRevisionId: artifact.currentRevisionId,
+            revisions: revisions.map((revision) => ({
+              id: String(revision.id),
+              status: revision.status,
+              source: revision.source,
+              createdAt: revision.createdAt,
+              ...(revision.runId === undefined ? {} : {
+                run: {
+                  id: String(revision.runId),
+                  instruction: runById.get(String(revision.runId))?.instruction ?? null,
+                  provider: runById.get(String(revision.runId))?.provider ?? null,
+                },
+              }),
+            })),
+          },
+        })
+        return
+      }
+
+      const revisionListMatch = /^\/artifacts\/([^/]+)\/revisions$/.exec(pathname)
+      if (method === 'GET' && revisionListMatch !== null) {
+        if (!requireMetadata(metadata, response)) return
+        const artifactId = decodeURIComponent(revisionListMatch[1] ?? '')
+        sendJson(response, 200, { ok: true, value: metadata.getArtifactRevisions(artifactId) })
+        return
+      }
+
+      const revisionCompareMatch = /^\/projects\/([^/]+)\/revisions\/compare$/.exec(pathname)
+      if (method === 'GET' && revisionCompareMatch !== null) {
+        if (!requireMetadata(metadata, response)) return
+        const base = url.searchParams.get('base')
+        const head = url.searchParams.get('head')
+        if (base === null || head === null) {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Compare requires base and head revision ids.'))
+          return
+        }
+        try {
+          sendJson(response, 200, {
+            ok: true,
+            value: await new RuntimeRevisionCompareService(metadata).compare(base, head),
+          })
+        } catch (error: unknown) {
+          sendJson(response, 409, failure('CONFLICT', error instanceof Error ? error.message : 'Compare failed.'))
+        }
+        return
+      }
+
+      const processProjectionMatch = /^\/projects\/([^/]+)\/process-projection$/.exec(pathname)
+      if (method === 'GET' && processProjectionMatch !== null) {
+        if (!requireMetadata(metadata, response)) return
+        const projectId = decodeURIComponent(processProjectionMatch[1] ?? '') as ProjectId
+        sendJson(response, 200, {
+          ok: true,
+          value: new ProcessProjectionService(metadata).project(projectId),
+        })
+        return
+      }
+
+      const workspaceStatesMatch = /^\/workspaces\/([^/]+)\/states$/.exec(pathname)
+      if (workspaceStatesMatch !== null && (method === 'GET' || method === 'POST')) {
+        if (!requireMetadata(metadata, response)) return
+        const workspaceId = decodeURIComponent(workspaceStatesMatch[1] ?? '') as WorkspaceId
+        const service = new WorkspaceStateService(metadata)
+        if (method === 'GET') {
+          sendJson(response, 200, { ok: true, value: service.list(workspaceId) })
+          return
+        }
+        const input = await readJsonBody(request, controller.signal)
+        if (!isRecord(input) || typeof input.name !== 'string'
+          || Object.keys(input).some((key) => !['name'].includes(key))) {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Workspace state save requires name.'))
+          return
+        }
+        try {
+          sendJson(response, 201, { ok: true, value: service.save(workspaceId, input.name, new Date().toISOString()) })
+        } catch (error: unknown) {
+          sendJson(response, 409, failure('CONFLICT', error instanceof Error ? error.message : 'Workspace state save failed.'))
+        }
+        return
+      }
+
+      const workspaceStateRestoreMatch = /^\/workspaces\/([^/]+)\/states\/([^/]+)\/restore$/.exec(pathname)
+      if (method === 'POST' && workspaceStateRestoreMatch !== null) {
+        if (!requireMetadata(metadata, response)) return
+        const stateId = decodeURIComponent(workspaceStateRestoreMatch[2] ?? '')
+        try {
+          sendJson(response, 200, {
+            ok: true,
+            value: new WorkspaceStateService(metadata).restore(stateId),
+          })
+        } catch (error: unknown) {
+          sendJson(response, 409, failure('CONFLICT', error instanceof Error ? error.message : 'Workspace state restore failed.'))
+        }
+        return
+      }
+
+      const sessionSummariesMatch = /^\/projects\/([^/]+)\/session-summaries$/.exec(pathname)
+      if (sessionSummariesMatch !== null && (method === 'GET' || method === 'POST')) {
+        if (!requireMetadata(metadata, response)) return
+        const projectId = decodeURIComponent(sessionSummariesMatch[1] ?? '') as ProjectId
+        if (method === 'GET') {
+          sendJson(response, 200, { ok: true, value: metadata.listSessionSummaries(projectId) })
+          return
+        }
+        const input = await readJsonBody(request, controller.signal)
+        if (!isRecord(input) || typeof input.title !== 'string' || typeof input.summary !== 'string'
+          || (input.runIds !== undefined && !isStringArray(input.runIds))
+          || (input.handoffRef !== undefined && typeof input.handoffRef !== 'string')
+          || Object.keys(input).some((key) => !['title', 'summary', 'runIds', 'handoffRef'].includes(key))) {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Session summary requires title and summary.'))
+          return
+        }
+        const now = new Date().toISOString()
+        sendJson(response, 201, {
+          ok: true,
+          value: metadata.createSessionSummary({
+            id: `session-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+            projectId,
+            title: input.title,
+            summary: input.summary,
+            runIds: (input.runIds ?? []) as RunId[],
+            ...(input.handoffRef === undefined ? {} : { handoffRef: input.handoffRef }),
+            createdAt: now,
+            updatedAt: now,
+          }),
+        })
         return
       }
 

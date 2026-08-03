@@ -232,7 +232,30 @@ export interface LocalCoreClient {
     readonly selectedViewIds: readonly string[]
     readonly pinnedContextIds: readonly string[]
     readonly excludedContextIds: readonly string[]
+    readonly targetArtifactId?: string
+    readonly targetRevisionId?: string
   }, signal?: AbortSignal): Promise<RuntimeCall<ActiveContextProjection>>
+  artifactSearch(projectId: string, query: string, signal?: AbortSignal): Promise<RuntimeCall<readonly {
+    readonly id: string
+    readonly title: string
+    readonly kind: string
+    readonly managed?: boolean
+    readonly currentRevisionId?: string
+  }[]>>
+  artifactDetail(artifactId: string, signal?: AbortSignal): Promise<RuntimeCall<unknown>>
+  revisionList(artifactId: string, signal?: AbortSignal): Promise<RuntimeCall<readonly unknown[]>>
+  revisionCompare(projectId: string, baseRevisionId: string, headRevisionId: string, signal?: AbortSignal): Promise<RuntimeCall<unknown>>
+  processProjection(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<readonly unknown[]>>
+  saveWorkspaceState(workspaceId: string, name: string, signal?: AbortSignal): Promise<RuntimeCall<unknown>>
+  listWorkspaceStates(workspaceId: string, signal?: AbortSignal): Promise<RuntimeCall<readonly unknown[]>>
+  restoreWorkspaceState(workspaceId: string, stateId: string, signal?: AbortSignal): Promise<RuntimeCall<unknown>>
+  createSessionSummary(projectId: string, input: {
+    readonly title: string
+    readonly summary: string
+    readonly runIds?: readonly string[]
+    readonly handoffRef?: string
+  }, signal?: AbortSignal): Promise<RuntimeCall<unknown>>
+  listSessionSummaries(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<readonly unknown[]>>
   previewRecords(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<readonly PreviewRecord[]>>
   previewContent(projectId: string, previewRecordId: string, signal?: AbortSignal): Promise<RuntimeCall<PreviewContentResult>>
   generatePreview(projectId: string, revisionId: string, previewProfile: string, signal?: AbortSignal): Promise<RuntimeCall<GeneratePreviewResult>>
@@ -639,6 +662,83 @@ export function createLocalCoreClient(): LocalCoreClient {
           body: JSON.stringify(input),
         },
         decode: decodeResult<ActiveContextProjection>,
+      })
+    },
+    artifactSearch(projectId, query, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/artifacts/search?q=${encodeURIComponent(query)}`, {
+        signal,
+        decode: decodeResult<readonly {
+          readonly id: string
+          readonly title: string
+          readonly kind: string
+          readonly managed?: boolean
+          readonly currentRevisionId?: string
+        }[]>,
+      })
+    },
+    artifactDetail(artifactId, signal) {
+      return request(`/artifacts/${encodeURIComponent(artifactId)}`, {
+        signal,
+        decode: decodeResult<unknown>,
+      })
+    },
+    revisionList(artifactId, signal) {
+      return request(`/artifacts/${encodeURIComponent(artifactId)}/revisions`, {
+        signal,
+        decode: decodeResult<readonly unknown[]>,
+      })
+    },
+    revisionCompare(projectId, baseRevisionId, headRevisionId, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/revisions/compare?base=${encodeURIComponent(baseRevisionId)}&head=${encodeURIComponent(headRevisionId)}`, {
+        signal,
+        decode: decodeResult<unknown>,
+      })
+    },
+    processProjection(projectId, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/process-projection`, {
+        signal,
+        decode: decodeResult<readonly unknown[]>,
+      })
+    },
+    saveWorkspaceState(workspaceId, name, signal) {
+      return request(`/workspaces/${encodeURIComponent(workspaceId)}/states`, {
+        signal,
+        init: {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ name }),
+        },
+        decode: decodeResult<unknown>,
+      })
+    },
+    listWorkspaceStates(workspaceId, signal) {
+      return request(`/workspaces/${encodeURIComponent(workspaceId)}/states`, {
+        signal,
+        decode: decodeResult<readonly unknown[]>,
+      })
+    },
+    restoreWorkspaceState(workspaceId, stateId, signal) {
+      return request(`/workspaces/${encodeURIComponent(workspaceId)}/states/${encodeURIComponent(stateId)}/restore`, {
+        signal,
+        init: { method: 'POST' },
+        decode: decodeResult<unknown>,
+      })
+    },
+    createSessionSummary(projectId, input, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/session-summaries`, {
+        signal,
+        init: {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(input),
+        },
+        decode: decodeResult<unknown>,
+      })
+    },
+    listSessionSummaries(projectId, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/session-summaries`, {
+        signal,
+        decode: decodeResult<readonly unknown[]>,
       })
     },
     importCopy(projectId, input, signal) {

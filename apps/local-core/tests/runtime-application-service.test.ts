@@ -4,6 +4,7 @@ import { join } from 'node:path'
 
 import { afterEach, describe, expect, it } from 'vitest'
 
+import type { Artifact } from '@local-creative-os/domain'
 import type {
   BridgeResultEnvelopeV0,
   BridgeRuntimePort,
@@ -199,5 +200,25 @@ describe('RuntimeApplicationService', () => {
       resultPolicy: { type: 'draft_revision_per_target' },
     })
     expect(repository.getRun(result.review.run.id)?.resultPolicy).toEqual({ type: 'draft_revision_per_target' })
+  })
+
+  it('rejects revise targets that are external References (unmanaged artifacts)', async () => {
+    const { repository, service, snapshot } = setup()
+    const linkArtifact: Artifact = {
+      id: 'artifact-link-ref' as Artifact['id'],
+      projectId: snapshot.project.id,
+      title: '外部链接.link.md',
+      kind: 'markdown',
+      managed: false,
+      availability: 'available',
+      createdAt: now,
+      updatedAt: now,
+    }
+    repository.upsertArtifact(linkArtifact)
+    await expect(service.create(snapshot.project.id, {
+      instruction: '修改这个链接。',
+      outputIntent: 'revise',
+      targetArtifactId: String(linkArtifact.id),
+    })).rejects.toThrow(/外部 Reference 不能作为修改目标/)
   })
 })

@@ -8,6 +8,7 @@ import { ContextManifestService } from './context-manifest-service.js'
 import { McpBridgeRuntimeClient } from './bridge-mcp-client.js'
 import { RuntimeAdapterService } from './runtime-adapter.js'
 import { RuntimeApplicationService } from './runtime-application-service.js'
+import { RuntimeAutoSyncService } from './runtime-auto-sync-service.js'
 import { RuntimeResultIngestionService } from './runtime-result-ingestion.js'
 import { RuntimeReviewService } from './runtime-review-service.js'
 
@@ -104,8 +105,15 @@ async function main(): Promise<void> {
   })
   const address = await server.start()
   process.stdout.write(`Local Core Phase 2 listening on http://${address.host}:${address.port}\n`)
+  const autoSync = new RuntimeAutoSyncService(
+    metadataRepository,
+    runtimeApplicationService,
+    Number(process.env.LCOS_AUTO_SYNC_MS ?? 10_000),
+  )
+  autoSync.start()
 
   const shutdown = () => {
+    autoSync.stop()
     void server.close().then(() => {
       metadataRepository.close()
       process.exit(0)

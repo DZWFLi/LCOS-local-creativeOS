@@ -243,4 +243,88 @@ describe('Runtime HTTP closure', () => {
     const providersBody = await providersResponse.json() as { value: { provider: string; availability: string }[] }
     expect(providersBody.value.map((item) => item.provider)).toEqual(['workbuddy', 'codex', 'auto'])
   })
+
+  it('serves revision/process/workspace-state/session backend contracts', async () => {
+    const dbRoot = mkdtempSync(join(tmpdir(), 'lcos-runtime-http-db-'))
+    const projectRoot = mkdtempSync(join(tmpdir(), 'lcos-runtime-http-project-'))
+    roots.push(dbRoot, projectRoot)
+    const repository = new SqliteMetadataRepository(join(dbRoot, 'metadata.sqlite'))
+    repositories.push(repository)
+    const snapshot = createMvpSampleSnapshot(projectRoot, '2026-07-29T19:30:00.000Z')
+    repository.save(snapshot)
+    const bridge = new FakeBridge()
+    const review = new RuntimeReviewService(repository, undefined, () => 'http-four')
+    const application = new RuntimeApplicationService(
+      repository,
+      new ContextManifestService(repository),
+      new RuntimeAdapterService(repository, bridge, 'mvp-fast-build'),
+      new RuntimeResultIngestionService(repository, bridge),
+      review,
+      undefined,
+      () => 'http-four',
+    )
+    const server = createLocalCoreServer({
+      port: 0,
+      metadataRepository: repository,
+      runtimeReviewService: review,
+      runtimeApplicationService: application,
+    })
+    servers.push(server)
+    const address = await server.start()
+    const baseUrl = `http://${address.host}:${address.port}`
+    const artifactId = String(snapshot.artifacts[0]!.id)
+    const revisionId = String(snapshot.artifactRevisions[0]!.id)
+    const workspaceId = String(snapshot.workspaces[0]!.id)
+
+    const searchResponse = await fetch(`${baseUrl}/projects/${snapshot.project.id}/artifacts/search?q=${encodeURIComponent(snapshot.artifacts[0]!.title.slice(0, 3))}`)
+    const searchBody = await searchResponse.json() as { value: { id: string }[] }
+    expect(searchBody.value.map((item) => item.id)).toContain(artifactId)
+
+    const detailResponse = await fetch(`${baseUrl}/artifacts/${encodeURIComponent(artifactId)}`)
+    const detailBody = await detailResponse.json() as { value: { artifact: { id: string }; revisions: { id: string }[] } }
+    expect(detailBody.value.artifact.id).toBe(artifactId)
+    expect(detailBody.value.revisions.map((item) => item.id)).toContain(revisionId)
+
+    const listResponse = await fetch(`${baseUrl}/artifacts/${encodeURIComponent(artifactId)}/revisions`)
+    const listBody = await listResponse.json() as { value: { id: string }[] }
+    expect(listBody.value.map((item) => item.id)).toContain(revisionId)
+
+    const compareResponse = await fetch(`${baseUrl}/projects/${snapshot.project.id}/revisions/compare?base=${encodeURIComponent(revisionId)}&head=${encodeURIComponent(revisionId)}`)
+    expect(compareResponse.status).toBe(200)
+    const compareBody = await compareResponse.json() as { value: { changed: boolean; contentAvailable: boolean } }
+    expect(compareBody.value.changed).toBe(false)
+    expect(compareBody.value.contentAvailable).toBe(true)
+
+    const projectionResponse = await fetch(`${baseUrl}/projects/${snapshot.project.id}/process-projection`)
+    const projectionBody = await projectionResponse.json() as { value: { kind: string }[] }
+    expect(projectionBody.value.some((item) => item.kind === 'revision')).toBe(true)
+
+    const saveStateResponse = await fetch(`${baseUrl}/workspaces/${encodeURIComponent(workspaceId)}/states`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: '现场A' }),
+    })
+    expect(saveStateResponse.status).toBe(201)
+    const saveStateBody = await saveStateResponse.json() as { value: { id: string; workspaceId?: string } }
+    expect(saveStateBody.value.workspaceId).toBe(workspaceId)
+
+    const statesResponse = await fetch(`${baseUrl}/workspaces/${encodeURIComponent(workspaceId)}/states`)
+    const statesBody = await statesResponse.json() as { value: { id: string }[] }
+    expect(statesBody.value.map((item) => item.id)).toContain(saveStateBody.value.id)
+
+    const restoreResponse = await fetch(`${baseUrl}/workspaces/${encodeURIComponent(workspaceId)}/states/${encodeURIComponent(saveStateBody.value.id)}/restore`, {
+      method: 'POST',
+    })
+    expect(restoreResponse.status).toBe(200)
+
+    const sessionResponse = await fetch(`${baseUrl}/projects/${snapshot.project.id}/session-summaries`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ title: '收口', summary: '方向已定', handoffRef: 'docs/x.md' }),
+    })
+    expect(sessionResponse.status).toBe(201)
+    const sessionsResponse = await fetch(`${baseUrl}/projects/${snapshot.project.id}/session-summaries`)
+    const sessionsBody = await sessionsResponse.json() as { value: { title: string }[] }
+    expect(sessionsBody.value.map((item) => item.title)).toContain('收口')
+  })
 })
