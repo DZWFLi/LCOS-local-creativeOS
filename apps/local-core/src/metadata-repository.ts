@@ -147,8 +147,13 @@ export class SqliteMetadataRepository {
     this.#disposableOnly = options.disposableOnly ?? false
     mkdirSync(dirname(this.databasePath), { recursive: true })
     this.#database = new DatabaseSync(this.databasePath)
-    this.#database.exec('PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;')
-    this.#migrate()
+    try {
+      this.#database.exec('PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;')
+      this.#migrate()
+    } catch (error: unknown) {
+      this.#database.close()
+      throw error
+    }
   }
 
   close(): void { this.#database.close() }
@@ -478,6 +483,14 @@ export class SqliteMetadataRepository {
     this.#database.exec(`VACUUM INTO '${backup.replace(/\\/g, '\\\\')}'`)
     this.#database.exec(`
       BEGIN;
+      CREATE TABLE IF NOT EXISTS workspaces (
+        id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        scope_id TEXT NOT NULL, name TEXT NOT NULL, intent TEXT,
+        viewport TEXT NOT NULL, focused_node_ids TEXT NOT NULL DEFAULT '[]',
+        visible_layers TEXT NOT NULL DEFAULT '["core","process"]',
+        context_policy TEXT NOT NULL DEFAULT 'selection-only',
+        updated_at TEXT NOT NULL
+      );
       CREATE TABLE context_manifests (
         id TEXT PRIMARY KEY,
         project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -2921,6 +2934,10 @@ const PRESENTATION_OPS = new Set([
  */
 const PROJECT_TRUTH_TABLES: readonly { readonly table: string; readonly where: string }[] = [
   { table: 'projects', where: 'id = ?' },
+  { table: 'active_contexts', where: 'project_id = ?' },
+  { table: 'context_proposals', where: 'project_id = ?' },
+  { table: 'command_drafts', where: 'project_id = ?' },
+  { table: 'provider_session_bindings', where: 'project_id = ?' },
   { table: 'scopes', where: 'project_id = ?' },
   { table: 'workspaces', where: 'project_id = ?' },
   { table: 'artifacts', where: 'project_id = ?' },
@@ -2963,6 +2980,10 @@ const PROJECT_TRUTH_DELETE_SQL: readonly string[] = [
   'DELETE FROM artifacts WHERE project_id = ?',
   'DELETE FROM workspaces WHERE project_id = ?',
   'DELETE FROM scopes WHERE project_id = ?',
+  'DELETE FROM provider_session_bindings WHERE project_id = ?',
+  'DELETE FROM command_drafts WHERE project_id = ?',
+  'DELETE FROM context_proposals WHERE project_id = ?',
+  'DELETE FROM active_contexts WHERE project_id = ?',
   'DELETE FROM projects WHERE id = ?',
 ]
 

@@ -13,6 +13,7 @@ const ROOT = path.resolve(import.meta.dirname, '..', '..')
 const PORT_LC = 43121
 const PORT_WEB = 5173
 const NOW = new Date().toISOString()
+const E2E_TOKEN = 'e2e-local-token'
 
 function waitForServer(port: number, timeout = 15000): Promise<boolean> {
   const started = Date.now()
@@ -52,6 +53,7 @@ test.beforeAll(async () => {
       ...process.env,
       LOCAL_CORE_DB_PATH: path.join(dbDir, 'phase2.sqlite'),
       LOCAL_CORE_DISABLE_MVP_SAMPLE: '1',
+      LOCAL_CORE_API_TOKEN: E2E_TOKEN,
     },
   })
   const ok = await waitForServer(PORT_LC)
@@ -61,7 +63,7 @@ test.beforeAll(async () => {
   const seedBody = JSON.stringify({ snapshot: { schemaVersion: 3, graphVersion: 1, project: { id: 'project-portasplit', name: 'PortaSplit', rootPath: 'disposable://portasplit', graphVersion: 1, createdAt: NOW, updatedAt: NOW }, scopes: [{ id: 'scope-root', projectId: 'project-portasplit', parentScopeId: null, containerViewId: null, kind: 'root', name: 'Root', createdAt: NOW, updatedAt: NOW }], workspaces: [{ id: 'workspace-main', projectId: 'project-portasplit', scopeId: 'scope-root', name: 'Main', intent: 'build', viewport: { x: 0, y: 0, zoom: 1 }, focusedViewIds: [], visibleLayers: ['core', 'process'], contextPolicy: 'selection-only', updatedAt: NOW }], artifacts: [], artifactViews: [], relations: [], notes: [], fileRecords: [], artifactRevisions: [], checkpoints: [] } })
   const seedResponse = await fetch(`http://127.0.0.1:${PORT_LC}/projects/project-portasplit/graph`, {
     method: 'PUT',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${E2E_TOKEN}` },
     body: seedBody,
   })
   expect(seedResponse.ok).toBe(true)
@@ -117,6 +119,7 @@ test('Restart Local Core → reload page → data persists', async ({ page }) =>
       ...process.env,
       LOCAL_CORE_DB_PATH: path.join(dbDir, 'phase2.sqlite'),
       LOCAL_CORE_DISABLE_MVP_SAMPLE: '1',
+      LOCAL_CORE_API_TOKEN: E2E_TOKEN,
     },
   })
   const ok = await waitForServer(PORT_LC)
@@ -199,21 +202,41 @@ test('imports link and skill folder zero-form; descriptor survives reload (U5)',
       body: JSON.stringify({ url: 'https://example.com/script', title: '示例脚本' }),
     })
     const linkBody = await link.json() as { ok: boolean; value?: { resourceId: string } }
-    const directory = await fetch(`${apiBase}/api/local-core/v1/projects/${projectId}/resources/import-directory`, {
+    const graphResponse = await fetch(`${apiBase}/api/local-core/v1/projects/${projectId}/graph`)
+    const graphBody = await graphResponse.json() as { ok: boolean; value?: { scopes: readonly { id: string }[] } }
+    const scopeId = graphBody.value?.scopes?.[0]?.id ?? 'scope-root'
+    const session = await fetch(`${apiBase}/api/local-core/v1/projects/${projectId}/resource-upload-sessions`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        importRequestId: 'dir-u5',
-        rootName: 'storyboard-skill',
-        files: [{ path: 'SKILL.md', content: skillContent }],
-      }),
+      body: JSON.stringify({ importRequestId: 'dir-u5', rootName: 'storyboard-skill', scopeId, x: 0, y: 0 }),
     })
-    const directoryBody = await directory.json() as { ok: boolean; value?: { resourceId: string }; error?: { message: string } }
+    const sessionBody = await session.json() as { ok: boolean; value?: { sessionId: string }; error?: { message: string } }
+    const sessionId = sessionBody.value?.sessionId ?? ''
+    let directoryStatus = session.status
+    let directoryError = sessionBody.error?.message ?? ''
+    let skillResourceId = ''
+    if (sessionId !== '') {
+      const binary = atob(skillContent)
+      const bytes = new Uint8Array(binary.length)
+      for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index)
+      const uploaded = await fetch(`${apiBase}/api/local-core/v1/projects/${projectId}/resource-upload-sessions/${encodeURIComponent(sessionId)}/files?path=SKILL.md`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/octet-stream' },
+        body: bytes,
+      })
+      const complete = await fetch(`${apiBase}/api/local-core/v1/projects/${projectId}/resource-upload-sessions/${encodeURIComponent(sessionId)}/complete`, {
+        method: 'POST',
+      })
+      const completeBody = await complete.json() as { ok: boolean; value?: { resourceId: string }; error?: { message: string } }
+      directoryStatus = uploaded.ok && complete.ok ? complete.status : (uploaded.ok ? complete.status : uploaded.status)
+      directoryError = completeBody.error?.message ?? ''
+      skillResourceId = completeBody.value?.resourceId ?? ''
+    }
     return {
       linkResourceId: linkBody.value?.resourceId ?? '',
-      skillResourceId: directoryBody.value?.resourceId ?? '',
-      directoryStatus: directory.status,
-      directoryError: directoryBody.error?.message ?? '',
+      skillResourceId,
+      directoryStatus,
+      directoryError,
     }
   }, { projectId: created, apiBase: baseUrl, skillContent: skillBase64 })
   expect(imported.linkResourceId).toMatch(/^resource-/)

@@ -313,7 +313,7 @@ export function App() {
     activeContextVersionRef.current = 0
     restoredDraftContextIdsRef.current = []
     const controller = new AbortController()
-    void bridgeRef.current.client.activeContext(activeProjectId, workspaceId, controller.signal).then((call) => {
+    void bridgeRef.current.client.activeContext(activeProjectId, workspaceId, undefined, controller.signal).then((call) => {
       if (controller.signal.aborted) return
       if (!call.result.ok) {
         setActiveContextError(call.result.error.message)

@@ -346,6 +346,42 @@ describe('SqliteMetadataRepository', () => {
         parent_revision_id TEXT, local_path TEXT NOT NULL, content_hash TEXT NOT NULL,
         source TEXT NOT NULL, run_id TEXT, status TEXT NOT NULL, created_at TEXT NOT NULL
       );
+      CREATE TABLE scopes (
+        id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        parent_scope_id TEXT, container_view_id TEXT,
+        kind TEXT NOT NULL, name TEXT NOT NULL,
+        created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+      );
+      CREATE TABLE workspaces (
+        id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        scope_id TEXT NOT NULL, name TEXT NOT NULL, intent TEXT,
+        viewport TEXT NOT NULL, focused_node_ids TEXT NOT NULL DEFAULT '[]',
+        visible_layers TEXT NOT NULL DEFAULT '["core","process"]',
+        context_policy TEXT NOT NULL DEFAULT 'selection-only',
+        updated_at TEXT NOT NULL
+      );
+      CREATE TABLE artifact_views (
+        id TEXT PRIMARY KEY, artifact_id TEXT NOT NULL REFERENCES artifacts(id) ON DELETE RESTRICT,
+        scope_id TEXT NOT NULL, revision_id TEXT,
+        reference_kind TEXT NOT NULL, position TEXT NOT NULL, size TEXT NOT NULL,
+        display_mode TEXT NOT NULL, collapsed INTEGER NOT NULL DEFAULT 0
+      );
+      CREATE TABLE relations (
+        id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        source_entity_type TEXT NOT NULL, source_entity_id TEXT NOT NULL,
+        target_entity_type TEXT NOT NULL, target_entity_id TEXT NOT NULL,
+        kind TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+      );
+      CREATE TABLE notes (
+        id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        anchor_scope TEXT NOT NULL, artifact_id TEXT, artifact_view_id TEXT, page_index INTEGER,
+        body TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+      );
+      CREATE TABLE checkpoints (
+        id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        scope_id TEXT NOT NULL, label TEXT NOT NULL DEFAULT '',
+        snapshot_json TEXT NOT NULL, created_at TEXT NOT NULL
+      );
       INSERT INTO projects VALUES (
         'disposable-v3', 'Legacy', 'disposable://v3', 1,
         '2026-07-24T00:00:00.000Z', '2026-07-24T00:00:00.000Z'

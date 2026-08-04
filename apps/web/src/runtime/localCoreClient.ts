@@ -280,7 +280,7 @@ export interface LocalCoreClient {
     readonly visibleViewIds?: readonly string[]
     readonly expectedVersion?: number
   }, signal?: AbortSignal): Promise<RuntimeCall<ActiveContextProjection>>
-  activeContext(projectId: string, workspaceId?: string | null, signal?: AbortSignal): Promise<RuntimeCall<ActiveContextProjection>>
+  activeContext(projectId: string, workspaceId?: string | null, afterVersion?: number, signal?: AbortSignal): Promise<RuntimeCall<ActiveContextProjection>>
   getCommandDraft(projectId: string, workspaceId: string | null, composerAnchor: string, signal?: AbortSignal): Promise<RuntimeCall<CommandDraftV1 | null>>
   saveCommandDraft(projectId: string, workspaceId: string | null, composerAnchor: string, input: Omit<CommandDraftV1, 'schemaVersion' | 'projectId' | 'workspaceId' | 'composerAnchor' | 'updatedAt'>, signal?: AbortSignal): Promise<RuntimeCall<CommandDraftV1>>
   deleteCommandDraft(projectId: string, workspaceId: string | null, composerAnchor: string, signal?: AbortSignal): Promise<RuntimeCall<{ readonly deleted: boolean }>>
@@ -795,8 +795,11 @@ export function createLocalCoreClient(): LocalCoreClient {
         decode: decodeResult<ActiveContextProjection>,
       })
     },
-    activeContext(projectId, workspaceId, signal) {
-      const query = workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : ''
+    activeContext(projectId, workspaceId, afterVersion, signal) {
+      const params = new URLSearchParams()
+      if (workspaceId) params.set('workspaceId', workspaceId)
+      if (afterVersion !== undefined) params.set('afterVersion', String(afterVersion))
+      const query = params.toString() ? `?${params.toString()}` : ''
       return request(`/projects/${encodeURIComponent(projectId)}/active-context${query}`, {
         signal,
         decode: decodeResult<ActiveContextProjection>,

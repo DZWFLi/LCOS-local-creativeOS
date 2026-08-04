@@ -38,7 +38,7 @@ export interface LcosprojExportAllResult {
   readonly failed: readonly { readonly projectId: string; readonly error: string }[]
 }
 
-const LCOSPROJ_SCHEMA_VERSION = 13
+const LCOSPROJ_SCHEMA_VERSION = 14
 
 export class LcosprojService {
   constructor(
