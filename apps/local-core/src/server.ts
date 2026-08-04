@@ -1322,12 +1322,24 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
             ...(item.busy === true ? { busy: true } : {}),
           }]
         })
+        const reviews = runtimeApplication.getProjectReviews(input.projectId as ProjectId, 100)
+        const taskStates = new Map<string, { readonly status?: string; readonly leaseExpiresAt?: string }>()
+        for (const review of reviews) {
+          if (review.run.provider !== 'codex') continue
+          try {
+            const state = await runtimeApplication.getCodexTaskState(review.run.id)
+            if (state !== undefined) taskStates.set(String(review.run.id), state)
+          } catch {
+            // 拿不到 Bridge 状态就不派这一条，避免盲派
+          }
+        }
         sendJson(response, 200, {
           ok: true,
           value: planCodexDispatch(
-            runtimeApplication.getProjectReviews(input.projectId as ProjectId, 100),
+            reviews,
             project.rootPath,
             sessions,
+            taskStates,
           ),
         })
         return

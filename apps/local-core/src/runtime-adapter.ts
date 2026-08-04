@@ -106,6 +106,7 @@ export interface BridgeTaskIdentity {
   readonly requestFingerprint: string
   readonly contractVersion: string
   readonly sessionId?: string
+  readonly leaseExpiresAt?: string
 }
 
 export interface BridgeRuntimePort {
@@ -409,6 +410,15 @@ export class RuntimeAdapterService {
       availability: autoReady ? 'manual' : 'offline',
     })
     return known
+  }
+
+  async getCodexTaskState(runId: RunId): Promise<{ readonly status?: string; readonly leaseExpiresAt?: string } | undefined> {
+    const task = await this.bridge.findTaskByRunId(String(runId))
+    if (task === undefined) return undefined
+    return {
+      ...(typeof task.status === 'string' ? { status: task.status } : {}),
+      ...(task.leaseExpiresAt === undefined ? {} : { leaseExpiresAt: task.leaseExpiresAt }),
+    }
   }
 
   private async materialize(run: Run): Promise<{ envelope: BridgeTaskEnvelopeV1 }> {

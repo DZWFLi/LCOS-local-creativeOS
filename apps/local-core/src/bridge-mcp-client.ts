@@ -68,6 +68,7 @@ function normalizeIdentity(task: JsonObject, expected?: {
     throw providerError('CONTRACT_UNSUPPORTED', 'Bridge Task identity is incomplete.', false)
   }
   const sessionId = task.sessionId ?? task.session_id
+  const leaseExpiresAt = task.leaseExpiresAt ?? task.lease_expires_at
   return {
     taskId,
     lcosRunId: runId,
@@ -75,6 +76,7 @@ function normalizeIdentity(task: JsonObject, expected?: {
     requestFingerprint: fingerprint,
     contractVersion,
     ...(typeof sessionId === 'string' && sessionId.length > 0 ? { sessionId } : {}),
+    ...(typeof leaseExpiresAt === 'string' && leaseExpiresAt.length > 0 ? { leaseExpiresAt } : {}),
   }
 }
 

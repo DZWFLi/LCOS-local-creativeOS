@@ -154,6 +154,10 @@ export class RuntimeApplicationService {
     return this.adapter.providersStatus()
   }
 
+  async getCodexTaskState(runId: RunId): Promise<{ readonly status?: string; readonly leaseExpiresAt?: string } | undefined> {
+    return this.adapter.getCodexTaskState(runId)
+  }
+
   getProjectReviews(projectId: ProjectId, limit = 20): readonly RunReview[] {
     return this.repository.getProjectRuns(projectId, limit)
       .map((run) => this.review.getRunReview(run.id))
