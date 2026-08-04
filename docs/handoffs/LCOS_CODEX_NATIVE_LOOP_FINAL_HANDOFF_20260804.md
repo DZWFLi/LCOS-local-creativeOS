@@ -36,7 +36,7 @@
 
 | 合并门 | 结论 |
 |---|---|
-| Codex 是唯一正式合并验收 Executor | ✅ 本轮 Golden Path 以 Codex provider 实测 |
+| Codex 是唯一正式合并验收 Executor | 🟡 脚本模拟（codex provider + claim-by-id）实测通过；**真实 Codex CLI 会话接单未验证** |
 | WorkBuddy 不再阻塞主线 | ✅ 已退出关键路径，只做兼容回归 |
 | LCOS Run 能产生唯一 Codex Task | ✅ provider=codex 信封 → Bridge Task（测试+Golden） |
 | Codex MCP 可列出并原子认领待办 | ✅ list_lcos_pending_runs + claim_lcos_run（kernel 并发测试） |
@@ -61,6 +61,9 @@
 ## 四、未实现 / 已知边界（诚实清单）
 
 - **C3 浏览器 Agent Surface 细项**：?agent=codex 页面模式、Context Proposal Chip、同步状态/冲突 UI、Run 后 Shelf Snapshot 锁定——web client 方法与核心版本/事件已就绪，视觉/交互由 UI vNext 接（本轮未改 UI）
+- **看门狗命令已实测修正**：本机 CLI 为 0.146.0，`--skill` 不存在；正确命令为
+  `codex exec resume <id> "提示"`（送话）与 `codex exec -C <dir> --skip-git-repo-check "提示"`（拉新会话）。
+  真实 Codex 会话接单 E2E 仍待用户配合验证。
 - **Proposal 审计跨重启**：ContextProposalStore 为进程内存储；跨重启审计需 v14 表迁移（红区，待批准）
 - **平台级唤醒**：无 Agent 回合时无法凭空唤醒 Codex Desktop；按 Conditional Go 走「会话内主动检查」口径，UI 不宣传无人值守
 - **waiting_input**：Bridge 协议无该状态，未做（照旧）

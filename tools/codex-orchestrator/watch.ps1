@@ -66,14 +66,14 @@ function Send-ClaimPrompt([string]$sessionId, [string]$runId, [string]$projectId
   }
   $message = "LCOS 接单提示：项目 $projectId 有新待办 run $runId 。请按 lcos-project-context skill 认领并执行。"
   Write-Host "[$(Get-Date -Format HH:mm:ss)] 派单 run $runId -> 会话 $sessionId"
-  & $codex resume $sessionId $message
+  & $codex exec resume $sessionId $message
 }
 
 function Send-SpawnNew([string]$projectRoot, [string]$runId) {
   Write-Host "[$(Get-Date -Format HH:mm:ss)] 拉起新会话执行 run $runId（目录 $projectRoot）"
   Push-Location $projectRoot
   try {
-    & $codex exec --skip-git-repo-check --skill lcos-project-context "处理 LCOS run $runId"
+    & $codex exec -C $projectRoot --skip-git-repo-check "LCOS 接单：处理 run $runId（按 lcos-project-context skill 规则认领执行并提交结果）"
   } finally {
     Pop-Location
   }

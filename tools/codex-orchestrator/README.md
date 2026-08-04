@@ -56,7 +56,10 @@ pwsh -NoProfile -File tools\codex-orchestrator\watch.ps1
 
 - 桌面 App 的对话窗口没有官方推送接口，无法被脚本“塞话”；这类窗口只能靠
   skill 在每个回合主动检查（已有）。
-- `codex resume <id> "提示"` 的行为依赖 CLI 版本；首次使用请先手工验证一条。
+- 已按本机 CLI 实测（codex-cli 0.146.0-alpha.9.2）：
+  - 送话进现有会话：`codex exec resume <会话ID> "提示"`（支持带话续会话）
+  - 拉起新会话：`codex exec -C <目录> --skip-git-repo-check "提示"`
+  - 该版本没有 `--skill` 参数，skill 由会话自身/配置加载，脚本不再传。
 
 ## 和 GUI 不打架的规则
 
