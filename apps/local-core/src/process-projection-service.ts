@@ -1,64 +1,69 @@
 import type { ProjectId } from '@local-creative-os/domain'
+import type { ProcessProjectionV1Item } from '@local-creative-os/contracts'
 
 import type { SqliteMetadataRepository } from './metadata-repository.js'
 
-export interface ProcessProjectionNode {
-  readonly kind: 'run' | 'return' | 'revision' | 'checkpoint'
-  readonly id: string
-  readonly summary: string
-  readonly status: string
-  readonly createdAt: string
-}
-
 /**
- * Process Projection（4.8/6.4）：从既有真相投影过程视图，不建平行存储。
+ * Canvas Process Projection：只投影最多 3 个真实 Run。
+ * Revision、Checkpoint 和旧 Run 属于 Activity/Workbench，不进入默认 Canvas。
  */
 export class ProcessProjectionService {
   constructor(private readonly repository: SqliteMetadataRepository) {}
 
-  project(projectId: ProjectId): readonly ProcessProjectionNode[] {
-    const nodes: ProcessProjectionNode[] = []
-    const runs = this.repository.getProjectRuns(projectId, 100)
-    for (const run of runs) {
-      nodes.push({
+  project(projectId: ProjectId): readonly ProcessProjectionV1Item[] {
+    const runs = this.repository.getProjectRuns(projectId, 20)
+    const active = runs.filter((run) => !['completed', 'failed', 'cancelled'].includes(run.status))
+    const recentTerminal = runs.filter((run) => ['completed', 'failed', 'cancelled'].includes(run.status))
+    const visibleRuns = [...active, ...recentTerminal].slice(0, 3)
+    const views = this.repository.getArtifactViewsByProject(String(projectId))
+    const viewIdsByArtifact = new Map<string, string[]>()
+    for (const view of views) {
+      const artifactId = String(view.artifactId)
+      viewIdsByArtifact.set(artifactId, [...(viewIdsByArtifact.get(artifactId) ?? []), String(view.id)])
+    }
+    const viewsForArtifacts = (artifactIds: Iterable<string>) => [...new Set([...artifactIds].flatMap((id) => viewIdsByArtifact.get(id) ?? []))]
+
+    const projected: ProcessProjectionV1Item[] = visibleRuns.map((run) => {
+      const targetArtifactIds = run.targetArtifactId === undefined ? [] : [String(run.targetArtifactId)]
+      const manifest = this.repository.getContextManifest(run.contextManifestId)
+      const contextArtifactIds = manifest === undefined ? [] : artifactIdsFromManifest(manifest.canonicalJson)
+      const outputArtifactIds = this.repository.getArtifactReturns(run.id).map((item) => String(item.targetArtifactId))
+      return {
+        schemaVersion: 1,
         kind: 'run',
-        id: String(run.id),
-        summary: run.instruction.slice(0, 80),
+        id: `projection-${String(run.id)}`,
+        runId: String(run.id),
+        title: `Run · ${String(run.id)}`,
+        summary: run.shortSummary ?? run.resultSummary ?? run.instruction.slice(0, 120),
         status: run.status,
+        provider: run.provider,
+        contextViewIds: viewsForArtifacts(contextArtifactIds.filter((id) => !targetArtifactIds.includes(id))),
+        targetViewIds: viewsForArtifacts(targetArtifactIds),
+        outputViewIds: viewsForArtifacts(outputArtifactIds),
         createdAt: run.createdAt,
-      })
-      const returns = this.repository.getArtifactReturns(run.id)
-      for (const artifactReturn of returns) {
-        nodes.push({
-          kind: 'return',
-          id: String(artifactReturn.id),
-          summary: `${artifactReturn.action} · ${artifactReturn.status}`,
-          status: artifactReturn.status,
-          createdAt: artifactReturn.createdAt,
-        })
+      }
+    })
+    return projected.reverse()
+  }
+}
+
+function artifactIdsFromManifest(canonicalJson: string): string[] {
+  try {
+    const ids = new Set<string>()
+    const visit = (value: unknown): void => {
+      if (Array.isArray(value)) {
+        value.forEach(visit)
+        return
+      }
+      if (typeof value !== 'object' || value === null) return
+      for (const [key, child] of Object.entries(value)) {
+        if (key === 'artifactId' && typeof child === 'string') ids.add(child)
+        else visit(child)
       }
     }
-    const artifacts = this.repository.getArtifacts(String(projectId))
-    for (const artifact of artifacts) {
-      for (const revision of this.repository.getArtifactRevisions(String(artifact.id)).slice(-6)) {
-        nodes.push({
-          kind: 'revision',
-          id: String(revision.id),
-          summary: `${artifact.title} · ${revision.status}${revision.runId === undefined ? '' : ` · ${String(revision.runId)}`}`,
-          status: revision.status,
-          createdAt: revision.createdAt,
-        })
-      }
-    }
-    for (const checkpoint of this.repository.getCheckpoints(String(projectId))) {
-      nodes.push({
-        kind: 'checkpoint',
-        id: String(checkpoint.id),
-        summary: checkpoint.label,
-        status: 'saved',
-        createdAt: checkpoint.createdAt,
-      })
-    }
-    return nodes.sort((left, right) => left.createdAt.localeCompare(right.createdAt))
+    visit(JSON.parse(canonicalJson) as unknown)
+    return [...ids]
+  } catch {
+    return []
   }
 }

@@ -1,4 +1,5 @@
 import type { RunStatus } from '../model'
+import type { ProcessProjectionV1Item } from '@local-creative-os/contracts'
 
 export interface ArtifactRevisionProvenance {
   readonly id: string
@@ -177,30 +178,27 @@ export function parseWorkspaceStates(value: unknown): WorkspaceStateSummary[] {
   }).toSorted((left, right) => String(right.createdAt ?? '').localeCompare(String(left.createdAt ?? '')))
 }
 
-export function parseProcessProjection(value: unknown): ProcessProjectionItem[] {
-  return arrayFrom(value, ['items', 'events', 'processes', 'projection']).flatMap((item, index) => {
+export function parseProcessProjection(value: readonly ProcessProjectionV1Item[] | unknown): ProcessProjectionItem[] {
+  return arrayFrom(value, ['items', 'events', 'processes', 'projection']).flatMap((item) => {
     const record = asRecord(item)
     if (!record) return []
-    const run = nested(record, ['run', 'sourceRun'])
-    const id = readString(record, ['id', 'eventId', 'projectionId', 'runId']) ?? readString(run, ['id', 'runId'])
-    if (!id) return []
-    const runId = readString(record, ['runId', 'run_id', 'sourceRunId']) ?? readString(run, ['id', 'runId']) ?? id
-    const summary = readString(record, ['summary', 'prompt', 'instruction', 'description', 'message'])
-      ?? readString(run, ['summary', 'prompt', 'instruction', 'description'])
-      ?? '执行记录'
-    const kind = readString(record, ['kind', 'type', 'eventType']) ?? 'Run'
-    const statusText = readString(record, ['status', 'state', 'phase']) ?? readString(run, ['status', 'state', 'phase'])
+    if (readNumber(record, ['schemaVersion']) !== 1 || readString(record, ['kind']) !== 'run') return []
+    const id = readString(record, ['id'])
+    const runId = readString(record, ['runId'])
+    if (!id || !runId) return []
+    const summary = readString(record, ['summary']) ?? '执行记录'
+    const statusText = readString(record, ['status'])
     return [{
-      id: `projection-${id}`,
-      title: readString(record, ['title', 'name', 'label']) ?? `${kind} · ${runId}`,
+      id,
+      title: readString(record, ['title']) ?? `Run · ${runId}`,
       summary,
       status: normalizeRunStatus(statusText),
-      createdAt: readString(record, ['createdAt', 'created_at', 'timestamp']) ?? readString(run, ['createdAt', 'created_at']),
+      createdAt: readString(record, ['createdAt']),
       runId,
-      provider: readString(record, ['provider', 'requestedProvider', 'executedBy']) ?? readString(run, ['provider', 'requestedProvider']),
-      contextViewIds: readStringArray(record, ['contextViewIds', 'contextIds', 'inputViewIds', 'inputs']),
-      targetViewIds: readStringArray(record, ['targetViewIds', 'editTargetViewIds', 'targetIds', 'targets']),
-      outputViewIds: readStringArray(record, ['outputViewIds', 'resultViewIds', 'outputs']),
+      provider: readString(record, ['provider']),
+      contextViewIds: readStringArray(record, ['contextViewIds']),
+      targetViewIds: readStringArray(record, ['targetViewIds']),
+      outputViewIds: readStringArray(record, ['outputViewIds']),
     } satisfies ProcessProjectionItem]
   })
 }

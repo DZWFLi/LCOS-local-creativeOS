@@ -9,6 +9,7 @@ import type {
   MutationResult,
   ProjectCatalogEntry,
   ProjectGraphSnapshot,
+  ProcessProjectionV1Item,
   PreviewRecord,
   RejectArtifactReturnResult,
   ImportResourceResultV1,
@@ -270,7 +271,7 @@ export interface LocalCoreClient {
   artifactDetail(artifactId: string, signal?: AbortSignal): Promise<RuntimeCall<unknown>>
   revisionList(artifactId: string, signal?: AbortSignal): Promise<RuntimeCall<readonly unknown[]>>
   revisionCompare(projectId: string, baseRevisionId: string, headRevisionId: string, signal?: AbortSignal): Promise<RuntimeCall<unknown>>
-  processProjection(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<readonly unknown[]>>
+  processProjection(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<readonly ProcessProjectionV1Item[]>>
   saveWorkspaceState(workspaceId: string, name: string, signal?: AbortSignal): Promise<RuntimeCall<unknown>>
   listWorkspaceStates(workspaceId: string, signal?: AbortSignal): Promise<RuntimeCall<readonly unknown[]>>
   restoreWorkspaceState(workspaceId: string, stateId: string, signal?: AbortSignal): Promise<RuntimeCall<unknown>>
@@ -778,7 +779,7 @@ export function createLocalCoreClient(): LocalCoreClient {
     processProjection(projectId, signal) {
       return request(`/projects/${encodeURIComponent(projectId)}/process-projection`, {
         signal,
-        decode: decodeResult<readonly unknown[]>,
+        decode: decodeResult<readonly ProcessProjectionV1Item[]>,
       })
     },
     saveWorkspaceState(workspaceId, name, signal) {

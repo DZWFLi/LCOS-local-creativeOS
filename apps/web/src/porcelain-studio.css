@@ -466,7 +466,7 @@
 
 .app-shell.porcelain-studio-v2 .capability-search input {
   color: var(--ps-text);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 500;
 }
 
@@ -2578,7 +2578,7 @@
   --composer-border: rgba(34, 43, 55, .10);
   position: absolute;
   z-index: 72;
-  width: 520px;
+  width: clamp(420px, 38vw, 500px);
   max-width: calc(100vw - 96px);
   transform: scale(var(--selection-composer-scale, 1));
   transform-origin: top left;
@@ -2590,6 +2590,67 @@
   backdrop-filter: blur(18px) saturate(1.08);
   color: var(--ps-text-strong);
 }
+
+.app-shell.porcelain-studio-v2 .selection-context-shelf {
+  display: grid;
+  gap: 5px;
+  padding: 9px 11px 2px;
+}
+
+.app-shell.porcelain-studio-v2 .selection-context-chips {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: thin;
+}
+
+.app-shell.porcelain-studio-v2 .context-chip,
+.app-shell.porcelain-studio-v2 .context-add-menu > summary {
+  min-height: 27px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  max-width: 150px;
+  padding: 0 8px;
+  border: 1px solid rgba(79, 155, 150, .17);
+  border-radius: 9px;
+  background: rgba(79, 155, 150, .07);
+  color: #346f6b;
+  font-size: 11px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.app-shell.porcelain-studio-v2 .context-chip > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app-shell.porcelain-studio-v2 .context-chip.is-target { border-color: rgba(115, 66, 226, .18); background: rgba(115, 66, 226, .07); color: #6742b9; cursor: default; }
+.app-shell.porcelain-studio-v2 .context-chip small { font-size: 11px; opacity: .62; }
+.app-shell.porcelain-studio-v2 .selection-context-shelf > small { color: var(--ps-text-faint); font-size: 12px; line-height: 1.35; }
+
+.app-shell.porcelain-studio-v2 .context-add-menu,
+.app-shell.porcelain-studio-v2 .composer-menu { position: relative; }
+.app-shell.porcelain-studio-v2 .context-add-menu > summary { border-color: rgba(34, 43, 55, .08); background: rgba(34, 43, 55, .025); color: var(--ps-text-muted); list-style: none; }
+.app-shell.porcelain-studio-v2 .context-add-menu > summary::-webkit-details-marker,
+.app-shell.porcelain-studio-v2 .composer-menu > summary::-webkit-details-marker { display: none; }
+.app-shell.porcelain-studio-v2 .context-add-menu > div {
+  position: absolute;
+  z-index: 8;
+  left: 0;
+  top: calc(100% + 6px);
+  width: 230px;
+  max-height: 210px;
+  overflow: auto;
+  padding: 6px;
+  border: 1px solid rgba(34, 43, 55, .10);
+  border-radius: 12px;
+  background: rgba(255,255,253,.99);
+  box-shadow: 0 12px 30px rgba(25,31,41,.14);
+}
+.app-shell.porcelain-studio-v2 .context-add-menu > div button { width: 100%; display: flex; align-items: center; gap: 7px; padding: 8px; border: 0; border-radius: 8px; background: transparent; color: var(--ps-text-strong); font-size: 11px; text-align: left; cursor: pointer; }
+.app-shell.porcelain-studio-v2 .context-add-menu > div button:hover { background: rgba(79,155,150,.08); }
+.app-shell.porcelain-studio-v2 .context-add-menu > div p { margin: 8px; color: var(--ps-text-faint); font-size: 10px; }
 
 .app-shell.porcelain-studio-v2 .selection-composer-header {
   min-height: 48px;
@@ -2620,13 +2681,13 @@
   align-items: center;
   gap: 5px;
   color: var(--ps-text-faint);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
 }
 
 .app-shell.porcelain-studio-v2 .selection-composer-header strong {
   color: var(--ps-text-strong);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 650;
 }
 
@@ -2683,14 +2744,14 @@
 }
 
 .app-shell.porcelain-studio-v2 .selection-provenance b {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 650;
 }
 
 .app-shell.porcelain-studio-v2 .selection-provenance span {
   overflow: hidden;
   color: rgba(38, 42, 52, .55);
-  font-size: 9px;
+  font-size: 11px;
   line-height: 1.4;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2714,7 +2775,7 @@
   outline: none;
   background: transparent;
   color: var(--ps-text-strong);
-  font: 500 12px/1.55 var(--ps-font-ui, inherit);
+  font: 500 14px/1.55 var(--ps-font-ui, inherit);
 }
 
 .app-shell.porcelain-studio-v2 .selection-composer-input textarea::placeholder {
@@ -2761,6 +2822,46 @@
   padding: 7px 9px 9px;
   border-top: 1px solid rgba(34, 43, 55, .06);
 }
+
+.app-shell.porcelain-studio-v2 .selection-composer-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; }
+.app-shell.porcelain-studio-v2 .composer-menu { min-width: 0; flex: 1 1 0; }
+.app-shell.porcelain-studio-v2 .composer-menu.target-option { flex: 1.25 1 0; }
+.app-shell.porcelain-studio-v2 .composer-menu > summary {
+  min-height: 39px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 7px;
+  border: 1px solid rgba(34,43,55,.075);
+  border-radius: 10px;
+  background: rgba(34,43,55,.025);
+  list-style: none;
+  cursor: pointer;
+}
+.app-shell.porcelain-studio-v2 .composer-menu > summary > span:nth-child(2) { min-width: 0; display: grid; gap: 1px; }
+.app-shell.porcelain-studio-v2 .composer-menu > summary small { overflow: hidden; color: var(--ps-text-faint); font-size: 11px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.app-shell.porcelain-studio-v2 .composer-menu > summary b { overflow: hidden; color: var(--ps-text-strong); font-size: 13px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.app-shell.porcelain-studio-v2 .composer-menu-icon { width: 25px; height: 25px; display: grid; place-items: center; flex: none; border-radius: 8px; background: rgba(115,66,226,.07); color: #6742b9; }
+.app-shell.porcelain-studio-v2 .composer-menu-popover {
+  position: absolute;
+  z-index: 9;
+  left: 0;
+  bottom: calc(100% + 7px);
+  width: 240px;
+  padding: 6px;
+  border: 1px solid rgba(34,43,55,.10);
+  border-radius: 13px;
+  background: rgba(255,255,253,.99);
+  box-shadow: 0 14px 34px rgba(25,31,41,.15);
+}
+.app-shell.porcelain-studio-v2 .composer-menu-popover button { width: 100%; display: grid; grid-template-columns: auto minmax(0,1fr); align-items: center; gap: 8px; padding: 7px; border: 0; border-radius: 9px; background: transparent; color: var(--ps-text-strong); text-align: left; cursor: pointer; }
+.app-shell.porcelain-studio-v2 .composer-menu-popover button:hover,
+.app-shell.porcelain-studio-v2 .composer-menu-popover button[aria-checked="true"] { background: rgba(115,66,226,.065); }
+.app-shell.porcelain-studio-v2 .composer-menu-popover button:disabled { opacity: .42; cursor: not-allowed; }
+.app-shell.porcelain-studio-v2 .composer-menu-popover button > span:last-child { min-width: 0; display: grid; gap: 2px; }
+.app-shell.porcelain-studio-v2 .composer-menu-popover b { font-size: 13px; font-weight: 650; }
+.app-shell.porcelain-studio-v2 .composer-menu-popover small { color: var(--ps-text-faint); font-size: 11px; line-height: 1.35; }
 
 .app-shell.porcelain-studio-v2 .selection-composer-options label,
 .app-shell.porcelain-studio-v2 .global-composer-options label {

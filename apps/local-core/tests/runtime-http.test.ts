@@ -296,8 +296,9 @@ describe('Runtime HTTP closure', () => {
     expect(compareBody.value.contentAvailable).toBe(true)
 
     const projectionResponse = await fetch(`${baseUrl}/projects/${snapshot.project.id}/process-projection`)
-    const projectionBody = await projectionResponse.json() as { value: { kind: string }[] }
-    expect(projectionBody.value.some((item) => item.kind === 'revision')).toBe(true)
+    expect(projectionResponse.status).toBe(200)
+    const projectionBody = await projectionResponse.json() as { value: { kind: string; schemaVersion: number }[] }
+    expect(projectionBody.value).toEqual([])
 
     const saveStateResponse = await fetch(`${baseUrl}/workspaces/${encodeURIComponent(workspaceId)}/states`, {
       method: 'POST',

@@ -11,10 +11,33 @@
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
-$repoRoot = if ($env:LCOS_REPO_ROOT) { $env:LCOS_REPO_ROOT } else { (Get-Location).Path }
+# Keep executable string literals ASCII-only because `powershell.exe` 5.1 reads
+# UTF-8-without-BOM scripts using the system ANSI codepage. JSON escapes preserve
+# localized labels without making script parsing locale-dependent.
+$labels = ConvertFrom-Json '{"open":"\u6253\u5f00 GUI","status":"\u72b6\u6001\u5feb\u7167","restart":"\u91cd\u542f Core + Bridge","exit":"\u5b8c\u5168\u9000\u51fa","statusTitle":"LCOS \u72b6\u6001\u5feb\u7167\uff08\u5df2\u590d\u5236\u5230\u526a\u8d34\u677f\uff09","restartFailed":"LCOS \u91cd\u542f\u5931\u8d25"}'
+
+$repoRoot = if ($env:LCOS_REPO_ROOT) {
+  [System.IO.Path]::GetFullPath($env:LCOS_REPO_ROOT)
+} else {
+  [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
+}
 $logDir = Join-Path $repoRoot ".codex-runtime\logs"
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 $statusLog = Join-Path $logDir "tray-status.log"
+
+# Keep one tray owner. Multiple NotifyIcon processes are confusing and can race
+# each other when stopping/restarting the same Runtime Host.
+$mutex = New-Object System.Threading.Mutex($false, "Local\LCOS_Runtime_Host_Tray_v1")
+$ownsMutex = $false
+try {
+  $ownsMutex = $mutex.WaitOne(0, $false)
+} catch [System.Threading.AbandonedMutexException] {
+  $ownsMutex = $true
+}
+if (-not $ownsMutex) {
+  $mutex.Dispose()
+  exit 0
+}
 
 function Invoke-LcosDev([string]$script, [string]$label) {
   $out = Join-Path $logDir "tray-$label.out.log"
@@ -22,6 +45,18 @@ function Invoke-LcosDev([string]$script, [string]$label) {
   Start-Process -FilePath "npm.cmd" -ArgumentList @("run", $script) `
     -WorkingDirectory $repoRoot -WindowStyle Hidden `
     -RedirectStandardOutput $out -RedirectStandardError $err | Out-Null
+}
+
+function Invoke-LcosDevAndWait([string]$script, [string]$label, [int]$timeoutMs = 30000) {
+  $out = Join-Path $logDir "tray-$label.out.log"
+  $err = Join-Path $logDir "tray-$label.err.log"
+  $process = Start-Process -FilePath "npm.cmd" -ArgumentList @("run", $script) `
+    -WorkingDirectory $repoRoot -WindowStyle Hidden -PassThru `
+    -RedirectStandardOutput $out -RedirectStandardError $err
+  if (-not $process.WaitForExit($timeoutMs)) {
+    throw "LCOS command timed out: npm run $script"
+  }
+  return $process.ExitCode
 }
 
 function Invoke-LcosStatusSnapshot {
@@ -36,7 +71,7 @@ function Invoke-LcosStatusSnapshot {
   if (Test-Path $err) { $snapshot += (Get-Content $err -Raw) }
   Add-Content -Path $statusLog -Value ("[{0}]`n{1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $snapshot)
   try { Set-Clipboard -Value $snapshot } catch { }
-  [System.Windows.Forms.MessageBox]::Show($snapshot, "LCOS 状态快照（已复制到剪贴板）", `
+  [System.Windows.Forms.MessageBox]::Show($snapshot, $labels.statusTitle, `
     [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information) | Out-Null
 }
 
@@ -45,24 +80,32 @@ $tray.Icon = [System.Drawing.SystemIcons]::Application
 $tray.Text = "LCOS Runtime Host"
 
 $menu = New-Object System.Windows.Forms.ContextMenuStrip
-$openItem = $menu.Items.Add("打开 GUI")
-$statusItem = $menu.Items.Add("状态快照")
-$restartItem = $menu.Items.Add("重启 Core + Bridge")
-$exitItem = $menu.Items.Add("完全退出")
+$openItem = $menu.Items.Add($labels.open)
+$statusItem = $menu.Items.Add($labels.status)
+$restartItem = $menu.Items.Add($labels.restart)
+$exitItem = $menu.Items.Add($labels.exit)
 
 $openItem.Add_Click({
+  Invoke-LcosDev "dev:open" "open"
+})
+$tray.Add_DoubleClick({
   Invoke-LcosDev "dev:open" "open"
 })
 $statusItem.Add_Click({
   Invoke-LcosStatusSnapshot
 })
 $restartItem.Add_Click({
-  Invoke-LcosDev "dev:stop" "restart-stop"
-  Start-Sleep -Seconds 2
-  Invoke-LcosDev "dev:open" "restart-open"
+  try {
+    $exitCode = Invoke-LcosDevAndWait "dev:stop" "restart-stop"
+    if ($exitCode -ne 0) { throw "dev:stop failed with exit code $exitCode" }
+    Invoke-LcosDev "dev:open" "restart-open"
+  } catch {
+    [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, $labels.restartFailed, `
+      [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null
+  }
 })
 $exitItem.Add_Click({
-  Invoke-LcosDev "dev:stop" "exit-stop"
+  try { Invoke-LcosDevAndWait "dev:stop" "exit-stop" | Out-Null } catch { }
   $tray.Visible = $false
   $tray.Dispose()
   [System.Windows.Forms.Application]::Exit()
@@ -71,4 +114,11 @@ $exitItem.Add_Click({
 $tray.ContextMenuStrip = $menu
 $tray.Visible = $true
 
-[System.Windows.Forms.Application]::Run()
+try {
+  [System.Windows.Forms.Application]::Run()
+} finally {
+  $tray.Visible = $false
+  $tray.Dispose()
+  if ($ownsMutex) { $mutex.ReleaseMutex() }
+  $mutex.Dispose()
+}

@@ -585,4 +585,21 @@ describe('SqliteMetadataRepository', () => {
     expect(restored!.artifactRevisions).toHaveLength(1)
     expect(restored!.checkpoints).toHaveLength(1)
   })
+
+  it('forbids generic artifact mutation from changing Current Revision', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'local-core-current-guard-'))
+    cleanup.push(directory)
+    const repository = new SqliteMetadataRepository(join(directory, 'metadata.sqlite'))
+    const snapshot = disposableSnapshot()
+    repository.save(snapshot)
+    const artifact = repository.getArtifact('artifact-brief')!
+
+    expect(() => repository.upsertArtifact({
+      ...artifact,
+      currentRevisionId: 'rev-bypass' as typeof artifact.currentRevisionId,
+      updatedAt: '2026-07-24T16:00:00.000Z',
+    })).toThrow('currentRevisionId may only change through an explicit Revision lifecycle.')
+    expect(repository.getArtifact('artifact-brief')?.currentRevisionId).toBe('rev-1')
+    repository.close()
+  })
 })

@@ -42,7 +42,7 @@ import { inferTargetContext, moveBetweenTargetAndContext, setPrimaryTarget } fro
 import { defaultProjectCatalog, fixtureStateForProject } from './qa-fixtures/projectFixtures'
 import { createChildScopeFromSelection, removeScopeTree } from './state/canvasScopes'
 import type { ActiveContextProjection } from './runtime/localCoreClient'
-import { parseArtifactRevisions, parseProcessProjection, parseSessionSummaries, parseWorkspaceStates, type ArtifactRevisionProvenance, type WorkspaceStateSummary } from './runtime/projectionAdapters'
+import { parseArtifactRevisions, parseProcessProjection, parseWorkspaceStates, type ArtifactRevisionProvenance, type WorkspaceStateSummary } from './runtime/projectionAdapters'
 import { WorkspaceStatesDialog } from './features/workspace/WorkspaceStatesDialog'
 
 const MVP_SAMPLE_PROJECT_ID = 'disposable-mvp-sample'
@@ -210,10 +210,11 @@ export function App() {
   const activeWorkspaceFrames = useMemo(() => workspaceId ? workspaceFrames.filter((frame) => frame.workspaceId === workspaceId) : [], [workspaceFrames, workspaceId])
   const relationNodes = useMemo(() => selectedId ? edges.filter((edge) => edge.from === selectedId || edge.to === selectedId).map((edge) => nodes.find((node) => node.id === (edge.from === selectedId ? edge.to : edge.from))).filter((node): node is CanvasNode => Boolean(node)) : [], [edges, nodes, selectedId])
   const nodeInfoRelationCount = useMemo(() => nodeInfoId ? edges.filter((edge) => edge.from === nodeInfoId || edge.to === nodeInfoId).length : 0, [edges, nodeInfoId])
-  const selectionContextIds = useMemo(() => {
-    if (selectedIds.length !== 1) return [...selectedIds]
-    return Array.from(new Set([selectedIds[0], ...relationNodes.map((node) => node.id)]))
-  }, [relationNodes, selectedIds])
+  const defaultSelectionContextIds = useMemo(() => selectedIds.length !== 1
+    ? [...selectedIds]
+    : Array.from(new Set([selectedIds[0], ...relationNodes.map((node) => node.id)])), [relationNodes, selectedIds])
+  const selectionContextIds = useMemo(() => Array.from(new Set([...defaultSelectionContextIds, ...pinnedContextIds]))
+    .filter((id) => !excludedContextIds.includes(id)), [defaultSelectionContextIds, excludedContextIds, pinnedContextIds])
   const globalContextIds = useMemo(() => {
     if (activeWorkspace) return nodes.filter((node) => node.workspaceIds?.includes(activeWorkspace.id)).map((node) => node.id)
     return scopeNodes.map((node) => node.id)
@@ -258,7 +259,11 @@ export function App() {
     objectUrls.current.forEach((url) => URL.revokeObjectURL(url))
     objectUrls.current.clear()
   }, [])
-  useEffect(() => { setManualInference(null) }, [scopeId, selectedIds.join(',')])
+  useEffect(() => {
+    setManualInference(null)
+    setPinnedContextIds([])
+    setExcludedContextIds([])
+  }, [scopeId, selectedIds.join(',')])
   useEffect(() => {
     setRunProposal(null)
     setSelectionBaseRevision(null)
@@ -340,8 +345,8 @@ export function App() {
         ...(workspaceId === null ? {} : { workspaceId }),
         scopeId,
         selectedViewIds: selectedIds,
-        pinnedContextIds: selectedIds.length === 1 ? relationNodes.map((node) => node.id) : [],
-        excludedContextIds: [],
+        pinnedContextIds,
+        excludedContextIds,
         ...(selectionTargetNode?.artifactId ? { targetArtifactId: selectionTargetNode.artifactId } : {}),
         ...((selectionBaseRevision?.id ?? selectionTargetNode?.revisionId) ? { targetRevisionId: selectionBaseRevision?.id ?? selectionTargetNode?.revisionId } : {}),
       }, controller.signal).then((call) => {
@@ -357,7 +362,7 @@ export function App() {
       window.clearTimeout(timeout)
       controller.abort()
     }
-  }, [activeProjectId, bootMode, relationNodes, scopeId, selectedIds, selectionBaseRevision?.id, selectionTargetNode?.artifactId, selectionTargetNode?.revisionId, workspaceId])
+  }, [activeProjectId, bootMode, excludedContextIds, pinnedContextIds, scopeId, selectedIds, selectionBaseRevision?.id, selectionTargetNode?.artifactId, selectionTargetNode?.revisionId, workspaceId])
   useEffect(() => {
     const bridge = bridgeRef.current
     bridge.isAvailable().then((available) => {
@@ -427,17 +432,13 @@ export function App() {
 
   const syncProcessProjection = useCallback(async () => {
     if (bootMode !== 'runtime') return
-    const [processCall, sessionCall] = await Promise.all([
-      bridgeRef.current.client.processProjection(activeProjectId),
-      bridgeRef.current.client.listSessionSummaries(activeProjectId),
-    ])
-    if (!processCall.result.ok && !sessionCall.result.ok) return
+    const processCall = await bridgeRef.current.client.processProjection(activeProjectId)
+    if (!processCall.result.ok) return
     const projection = parseProcessProjection(processCall.result.ok ? processCall.result.value : [])
-    const sessionSummaries = parseSessionSummaries(sessionCall.result.ok ? sessionCall.result.value : [])
     setGraph((current) => {
       const baseNodes = current.nodes.filter((node) => !node.id.startsWith('projection-') && !node.id.startsWith('session-summary-'))
       const baseEdges = current.edges.filter((edge) => !edge.id.startsWith('projection-edge-') && !edge.id.startsWith('session-summary-edge-'))
-      if (!projection.length && !sessionSummaries.length) return { nodes: baseNodes, edges: baseEdges }
+      if (!projection.length) return { nodes: baseNodes, edges: baseEdges }
       const contentNodes = baseNodes.filter((node) => node.kind !== 'process' && (node.scopeId ?? scopeId) === scopeId)
       const left = contentNodes.length ? Math.min(...contentNodes.map((node) => node.x)) : 160
       const bottom = contentNodes.length ? Math.max(...contentNodes.map((node) => node.y + node.height)) : 360
@@ -465,29 +466,7 @@ export function App() {
         managed: false,
         runtimeTransient: true,
       }))
-      const processRows = Math.max(1, Math.ceil(projectedNodes.length / 4))
-      const summaryNodes: CanvasNode[] = sessionSummaries.map((item, index) => ({
-        id: item.id,
-        kind: 'process',
-        title: `Session · ${item.title}`,
-        subtitle: item.handoffRef ? `对话总结 · ${item.handoffRef}` : '对话总结 · 可用于跨 Session 继续',
-        commandText: item.summary,
-        x: left + (index % 3) * (processDimensions.width + 38),
-        y: bottom + 128 + processRows * (processDimensions.height + 48) + Math.floor(index / 3) * (processDimensions.height + 48),
-        ...processDimensions,
-        displayMode: 'standard',
-        scopeId,
-        sourceRunId: item.runIds[0],
-        sourcePrompt: item.summary,
-        sourceProvider: 'Session Summary',
-        contextCount: item.runIds.length,
-        targetCount: 0,
-        outputCount: 0,
-        createdAt: item.createdAt,
-        managed: false,
-        runtimeTransient: true,
-      }))
-      const availableIds = new Set([...baseNodes, ...projectedNodes, ...summaryNodes].map((node) => node.id))
+      const availableIds = new Set([...baseNodes, ...projectedNodes].map((node) => node.id))
       const projectedEdges = projection.flatMap((item) => {
         const edgesToRun = [...new Set([...item.contextViewIds, ...item.targetViewIds])]
           .filter((viewId) => availableIds.has(viewId))
@@ -507,12 +486,7 @@ export function App() {
           }))
         return [...edgesToRun, ...edgesFromRun]
       })
-      const processNodeByRunId = new Map(projection.flatMap((item) => item.runId ? [[item.runId, item.id] as const] : []))
-      const summaryEdges = sessionSummaries.flatMap((item) => item.runIds.flatMap((runId, index) => {
-        const processNodeId = processNodeByRunId.get(runId)
-        return processNodeId ? [{ id: `session-summary-edge-${item.id}-${index}`, from: processNodeId, to: item.id, kind: 'reference' as const }] : []
-      }))
-      return { nodes: [...baseNodes, ...projectedNodes, ...summaryNodes], edges: [...baseEdges, ...projectedEdges, ...summaryEdges] }
+      return { nodes: [...baseNodes, ...projectedNodes], edges: [...baseEdges, ...projectedEdges] }
     })
   }, [activeProjectId, bootMode, scopeId, setGraph])
 
@@ -2082,14 +2056,14 @@ export function App() {
   }, [activeRun, applyRuntimeReview, globalComposerText, selectionComposerText, setGraph, startRunFrom])
 
   const toggleContext = useCallback((id: string) => {
-    if (inference.contextIds.includes(id)) {
+    if (selectionContextIds.includes(id)) {
       setExcludedContextIds((current) => Array.from(new Set([...current, id])))
       setPinnedContextIds((current) => current.filter((item) => item !== id))
     } else {
       setPinnedContextIds((current) => Array.from(new Set([...current, id])))
       setExcludedContextIds((current) => current.filter((item) => item !== id))
     }
-  }, [inference.contextIds])
+  }, [selectionContextIds])
 
   const selectPrimaryTarget = useCallback((id: string) => setManualInference(setPrimaryTarget(inference, id, selectedIds)), [inference, selectedIds])
   const moveRole = useCallback((id: string, role: 'target' | 'context') => setManualInference(moveBetweenTargetAndContext(inference, id, role, nodes)), [inference, nodes])
@@ -2224,6 +2198,7 @@ export function App() {
         onPresentationInteractionChange={handlePresentationInteractionChange}
         onPresentationCommit={handlePresentationCommit}
         selectionComposer={selectedIds.length ? {
+          contextIds: selectionContextIds,
           prompt: selectionComposerText,
           intent: selectionIntent,
           provider: selectionProvider,
@@ -2249,6 +2224,7 @@ export function App() {
           onProviderChange: setSelectionProvider,
           onResultPolicyChange: setSelectionResultPolicy,
           onTargetChange: (targetId) => { setSelectionTargetId(targetId); setSelectionBaseRevision(null) },
+          onToggleContext: toggleContext,
           onSend: requestSelectionRun,
           onAddToWorkspace: addSelectionToActiveWorkspace,
           onRemoveFromWorkspace: removeSelectionFromActiveWorkspace,

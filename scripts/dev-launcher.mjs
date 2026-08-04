@@ -133,6 +133,18 @@ function lcosLauncherPids() {
   return raw.split(/\r?\n/).map((line) => Number(line.trim())).filter((pid) => Number.isInteger(pid))
 }
 
+function lcosTrayPids() {
+  if (process.platform !== 'win32') return []
+  const result = run('powershell.exe', ['-NoProfile', '-Command', [
+    'Get-CimInstance Win32_Process |',
+    'Where-Object { $_.ProcessId -ne $PID -and $_.Name -eq "powershell.exe" -and $_.CommandLine -match "-File.+runtime-host-tray.ps1" } |',
+    'Select-Object -ExpandProperty ProcessId',
+  ].join(' ')])
+  const raw = result.stdout.trim()
+  if (!raw) return []
+  return raw.split(/\r?\n/).map((line) => Number(line.trim())).filter((pid) => Number.isInteger(pid))
+}
+
 function killTree(pid) {
   if (!isPidRunning(pid)) return
   if (process.platform === 'win32') {
@@ -146,7 +158,7 @@ function ownedPidsFromState() {
   const state = readJson(STATE_FILE)
   const pids = []
   if (state && state.cwd === process.cwd()) {
-    pids.push(state.browserPid, state.launcherPid, state.webPid, state.corePid, state.bridgePid)
+    pids.push(state.browserPid, state.launcherPid, state.webPid, state.corePid, state.bridgePid, state.trayPid)
   }
   if (existsSync(LEGACY_DEV_STACK_PID_FILE)) {
     const pid = Number(readFileSync(LEGACY_DEV_STACK_PID_FILE, 'utf8').trim())
@@ -290,6 +302,27 @@ function spawnBridge(environment = {}) {
   return child
 }
 
+function spawnTray() {
+  if (process.platform !== 'win32') return null
+  const outFd = openSync(join(LOG_DIR, 'tray-host.out.log'), 'a')
+  const errFd = openSync(join(LOG_DIR, 'tray-host.err.log'), 'a')
+  const child = spawn('powershell.exe', [
+    '-NoProfile',
+    '-WindowStyle', 'Hidden',
+    '-File', join(process.cwd(), 'scripts/runtime-host-tray.ps1'),
+  ], {
+    cwd: process.cwd(),
+    stdio: ['ignore', outFd, errFd],
+    windowsHide: true,
+    env: { ...process.env, LCOS_REPO_ROOT: process.cwd() },
+  })
+  child.once('exit', () => {
+    try { closeSync(outFd) } catch {}
+    try { closeSync(errFd) } catch {}
+  })
+  return child
+}
+
 function bridgePythonProbe() {
   const result = run('python', ['-c', 'import lcos_bridge; print("ok")'], {
     env: {
@@ -385,7 +418,7 @@ function printStatus() {
   console.log(`Working tree: ${info.status ? 'dirty' : 'clean'}`)
   if (info.status) console.log(info.status)
   console.log(`State file: ${existsSync(STATE_FILE) ? STATE_FILE : '(none)'}`)
-  console.log(`Recorded PIDs: ${state ? JSON.stringify({ launcherPid: state.launcherPid, corePid: state.corePid, webPid: state.webPid, bridgePid: state.bridgePid, browserPid: state.browserPid }) : '(none)'}`)
+  console.log(`Recorded PIDs: ${state ? JSON.stringify({ launcherPid: state.launcherPid, corePid: state.corePid, webPid: state.webPid, bridgePid: state.bridgePid, browserPid: state.browserPid, trayPid: state.trayPid }) : '(none)'}`)
   console.log('Ports:')
   for (const port of [WEB_PORT, CORE_PORT, BRIDGE_PORT]) {
     const owner = owners.find((item) => Number(item.LocalPort) === port)
@@ -467,6 +500,7 @@ async function open() {
     webPid: null,
     bridgePid: null,
     browserPid: null,
+    trayPid: lcosTrayPids()[0] ?? null,
     coreRestarts: 0,
     webRestarts: 0,
     bridgeRestarts: 0,
@@ -575,6 +609,17 @@ async function open() {
     console.error(error.message)
     stopAll()
     process.exit(1)
+  }
+
+  if (state.trayPid === null) {
+    const tray = spawnTray()
+    if (tray?.pid) {
+      state.trayPid = tray.pid
+      writeState(state)
+      console.log(`✓ Runtime Host tray pid=${tray.pid}`)
+    }
+  } else {
+    console.log(`✓ Runtime Host tray already running pid=${state.trayPid}`)
   }
 
   const browser = openBrowserWindow()

@@ -277,6 +277,21 @@ export interface RuntimeProviderStatus {
   readonly outputIntents?: readonly string[]
 }
 
+export interface ProcessProjectionV1Item {
+  readonly schemaVersion: 1
+  readonly kind: 'run'
+  readonly id: string
+  readonly runId: string
+  readonly title: string
+  readonly summary: string
+  readonly status: Run['status']
+  readonly provider: Run['provider']
+  readonly contextViewIds: readonly string[]
+  readonly targetViewIds: readonly string[]
+  readonly outputViewIds: readonly string[]
+  readonly createdAt: string
+}
+
 export type {
   WorkspaceMembership,
   WorkspaceMembershipSource,

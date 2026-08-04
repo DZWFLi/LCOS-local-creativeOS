@@ -26,6 +26,7 @@ interface Props {
   onPresentationCommit?: (kind: 'node-move' | 'node-resize' | 'workspace-group-move') => void
   selectionComposer?: {
     prompt: string
+    contextIds: string[]
     intent: RunOutputIntent
     provider: string
     resultPolicy: ComposerResultPolicy
@@ -42,6 +43,7 @@ interface Props {
     onProviderChange: (value: string) => void
     onResultPolicyChange: (value: ComposerResultPolicy) => void
     onTargetChange: (value: string | null) => void
+    onToggleContext: (id: string) => void
     onSend: () => void
     onAddToWorkspace: () => void
     onRemoveFromWorkspace: () => void
@@ -488,7 +490,6 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
       {selectionComposer && selectedBounds && camera.zoom > .28 && <SelectionComposer
         nodes={nodes}
         selectedIds={selectedIds}
-        linkedCount={selectedIds.length === 1 ? edges.filter((edge) => edge.from === selectedIds[0] || edge.to === selectedIds[0]).length : 0}
         zoom={camera.zoom}
         x={selectedBounds.x}
         y={selectedBounds.y + selectedBounds.height + 18 / Math.max(.24, camera.zoom)}

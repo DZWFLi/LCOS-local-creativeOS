@@ -17,19 +17,22 @@ describe('vNext direct context composer contract', () => {
   })
 
   it('keeps intent, provider, result policy and edit target independent', () => {
-    expect(composer).toContain('范式')
-    expect(composer).toContain('Agent')
-    expect(composer).toContain('结果')
+    expect(composer).toContain('工作方式')
+    expect(composer).toContain('执行者')
+    expect(composer).toContain('结果去向')
     expect(composer).toContain('编辑对象')
+    expect(composer).toContain('composer-menu-popover')
     expect(app).toContain('targetRevisionId')
     expect(app).toContain('resultPolicy: { type: resultPolicy }')
   })
 
-  it('uses single+linked context and strict multi-selection context', () => {
-    expect(app).toContain("if (selectedIds.length !== 1) return [...selectedIds]")
+  it('makes inferred and explicitly added context visible and removable', () => {
+    expect(app).toContain('defaultSelectionContextIds')
     expect(app).toContain('relationNodes.map((node) => node.id)')
-    expect(composer).toContain('当前对象 +')
-    expect(composer).toContain('严格使用已选')
+    expect(app).toContain('onToggleContext: toggleContext')
+    expect(composer).toContain('本次 Agent 可见上下文')
+    expect(composer).toContain('这里显示什么，Agent 就只读取什么')
+    expect(composer).toContain('context-chip')
   })
 
   it('keeps the right rail as workspace/canvas global context', () => {

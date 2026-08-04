@@ -1299,7 +1299,13 @@ export class SqliteMetadataRepository {
   }
 
   getArtifactViewsByProject(projectId: string): ArtifactView[] {
-    return (this.#database.prepare('SELECT * FROM artifact_views WHERE project_id = ?').all(projectId as SQLInputValue) as Row[]).map((r) => this.#artifactView(r))
+    return (this.#database.prepare(`
+      SELECT artifact_views.*
+      FROM artifact_views
+      JOIN artifacts ON artifacts.id = artifact_views.artifact_id
+      WHERE artifacts.project_id = ?
+      ORDER BY artifact_views.id
+    `).all(projectId as SQLInputValue) as Row[]).map((r) => this.#artifactView(r))
   }
 
   getPreviewRecord(previewRecordId: string): PreviewRecord | undefined {

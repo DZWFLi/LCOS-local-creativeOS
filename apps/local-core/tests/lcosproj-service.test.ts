@@ -181,8 +181,8 @@ describe('LcosprojService (P1: export/open/rebind)', () => {
     repository.save(snapshot)
     repository.createProject({ id: 'project-older' as ProjectId, name: '旧项目', rootPath: projectRoot })
 
-    repository.touchProjectOpened(snapshot.project.id, '2026-08-03T14:00:00.000Z')
-    expect(repository.getProject(String(snapshot.project.id))?.lastOpenedAt).toBe('2026-08-03T14:00:00.000Z')
+    repository.touchProjectOpened(snapshot.project.id, '2099-08-03T14:00:00.000Z')
+    expect(repository.getProject(String(snapshot.project.id))?.lastOpenedAt).toBe('2099-08-03T14:00:00.000Z')
     expect(repository.listProjects()[0]?.id).toBe(snapshot.project.id)
   })
 
