@@ -30,10 +30,12 @@ export function planCodexDispatch(
   projectRoot: string,
   sessions: readonly CodexDispatchSessionInput[],
 ): readonly CodexDispatchPlanItem[] {
+  const alreadyHandled = new Set(['claimed', 'running', 'review', 'completed', 'failed', 'cancelled', 'timeout'])
   const pending = runs.filter((review) =>
     review.run.provider === 'codex'
     && ['created', 'queued', 'running'].includes(review.run.status)
-    && review.dispatch.status === 'bound')
+    && review.dispatch.status === 'bound'
+    && !alreadyHandled.has(String(review.binding?.providerStatus ?? '')))
   const available = sessions.find((session) => session.sessionId && !session.busy)
   const thinking = sessions.length > 0 && available === undefined
 
