@@ -1,8 +1,8 @@
 # ADR 提案：LCOS Runtime 红区闭环与生产安全边界
 
-> 日期：2026-08-04  
-> 状态：Proposed，等待 Dz 分片批准  
-> 范围：`waiting_input`、自动接单、断线恢复、Safe Write、Artifact Return、Accept / Reject / Retry  
+> 日期：2026-08-04
+> 状态：Proposed，等待 Dz 分片批准
+> 范围：`waiting_input`、自动接单、断线恢复、Safe Write、Artifact Return、Accept / Reject / Retry
 > 原则：本文件只冻结方案，不授权实现。
 
 ## 1. 变更原因
