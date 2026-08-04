@@ -3,6 +3,8 @@ import type { RunReview } from '@local-creative-os/contracts'
 export interface CodexDispatchSessionInput {
   readonly sessionId: string
   readonly guiActive?: boolean
+  /** 会话正在思考/回复中（由看门狗按会话文件最近写入判断）。 */
+  readonly busy?: boolean
 }
 
 export type CodexDispatchDecision = 'dispatch_existing' | 'spawn_new' | 'wait'
@@ -19,8 +21,8 @@ export interface CodexDispatchPlanItem {
 
 /**
  * Core 判断 Codex 任务的派单方式：
- * - 有可用 CLI 会话（未标 GUI 占用）→ 送进现有会话；
- * - 只有 GUI 占用会话 → 等待（不抢、也不重复开会话）；
+ * - 有会话且空闲（未在思考）→ 送进现有会话，哪怕窗口开着；
+ * - 会话正在思考 → 等待（不打断）；
  * - 完全没有注册会话 → 拉起新会话。
  */
 export function planCodexDispatch(
@@ -32,8 +34,8 @@ export function planCodexDispatch(
     review.run.provider === 'codex'
     && ['created', 'queued', 'running'].includes(review.run.status)
     && review.dispatch.status === 'bound')
-  const available = sessions.find((session) => session.sessionId && !session.guiActive)
-  const allBusy = sessions.length > 0 && available === undefined
+  const available = sessions.find((session) => session.sessionId && !session.busy)
+  const thinking = sessions.length > 0 && available === undefined
 
   return pending.map((review) => {
     const runId = String(review.run.id)
@@ -47,13 +49,13 @@ export function planCodexDispatch(
         reason: '已注册可用的 CLI 会话，直接派单。',
       }
     }
-    if (allBusy) {
+    if (thinking) {
       return {
         runId,
         outputIntent: review.run.outputIntent,
         instruction: review.run.instruction.slice(0, 200),
         decision: 'wait' as const,
-        reason: '项目会话正被 GUI 占用，等待空闲；不抢话也不重复开会话。',
+        reason: '项目会话正在思考/回复中，等它空闲再接活。',
       }
     }
     return {

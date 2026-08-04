@@ -701,6 +701,24 @@ describe('Runtime HTTP closure', () => {
       body: JSON.stringify({ projectId: String(snapshot.project.id), sessions: [{ sessionId: 'gui-session', guiActive: true }] }),
     })
     const busyOnlyBody = await busyOnly.json() as { value: { runId: string; decision: string }[] }
-    expect(busyOnlyBody.value[0]).toMatchObject({ runId, decision: 'wait' })
+    // 空闲 GUI 会话也可以接活：guiActive 不拦路，只有思考中才等待
+    expect(busyOnlyBody.value[0]).toMatchObject({ runId, decision: 'dispatch_existing' })
+
+    const thinking = await fetch(`${baseUrl}/runtime/codex-dispatch-plan`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ projectId: String(snapshot.project.id), sessions: [{ sessionId: 'thinking-session', busy: true }] }),
+    })
+    const thinkingBody = await thinking.json() as { value: { runId: string; decision: string }[] }
+    expect(thinkingBody.value[0]).toMatchObject({ runId, decision: 'wait' })
+
+    const idleGui = await fetch(`${baseUrl}/runtime/codex-dispatch-plan`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ projectId: String(snapshot.project.id), sessions: [{ sessionId: 'idle-gui-session', guiActive: true, busy: false }] }),
+    })
+    const idleGuiBody = await idleGui.json() as { value: { runId: string; decision: string; sessionId: string }[] }
+    // 用户语义：没有在思考的空闲 GUI 会话也可以接活
+    expect(idleGuiBody.value[0]).toMatchObject({ runId, decision: 'dispatch_existing', sessionId: 'idle-gui-session' })
   })
 })

@@ -78,7 +78,13 @@ function Get-DispatchPlan([string]$projectId, [array]$sessions) {
   $token = (Get-Content $tokenFile -Raw).Trim()
   $body = @{
     projectId = $projectId
-    sessions = @($sessions | ForEach-Object { @{ sessionId = $_.sessionId; guiActive = [bool]$_.guiActive } })
+    sessions = @($sessions | ForEach-Object {
+      @{
+        sessionId = $_.sessionId
+        guiActive = [bool]$_.guiActive
+        busy = (Get-SessionBusy $_.sessionId)
+      }
+    })
   } | ConvertTo-Json -Depth 5
   try {
     $response = Invoke-RestMethod -Uri "http://127.0.0.1:43121/runtime/codex-dispatch-plan" -Method POST `
@@ -100,7 +106,7 @@ function Save-State($state) {
   $state | ConvertTo-Json -Depth 6 | Set-Content -Path $stateFile -Encoding UTF8
 }
 
-function Test-SessionBusy([string]$sessionId) {
+function Get-SessionBusy([string]$sessionId) {
   # 最近 10 秒内会话文件被写过 → 说明 GUI/另一个进程正在用，跳过，避免抢写
   try {
     $sessionDir = Join-Path $env:USERPROFILE '.codex\sessions'
@@ -138,7 +144,7 @@ try {
           if ($lastDispatch -and ((Get-Date) - [datetime]$lastDispatch).TotalMilliseconds -lt $cooldownMs) { continue }
           if ($item.decision -eq 'dispatch_existing') {
             $sessionId = [string]$item.sessionId
-            if (Test-SessionBusy $sessionId) {
+            if (Get-SessionBusy $sessionId) {
               Write-Host "[$(Get-Date -Format HH:mm:ss)] $projectId 会话正在写入（GUI 使用中），本轮跳过 run $runId"
               continue
             }

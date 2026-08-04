@@ -1319,6 +1319,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
           return [{
             sessionId: item.sessionId,
             ...(item.guiActive === true ? { guiActive: true } : {}),
+            ...(item.busy === true ? { busy: true } : {}),
           }]
         })
         sendJson(response, 200, {
