@@ -74,4 +74,24 @@ describe('ContextManifestService', () => {
       title: 'Brief',
     }))
   })
+
+  it('freezes an explicitly selected Base Revision instead of silently using Current', async () => {
+    const sampleRoot = mkdtempSync(join(tmpdir(), 'lcos-manifest-base-'))
+    const databaseRoot = mkdtempSync(join(tmpdir(), 'lcos-manifest-base-db-'))
+    temporaryDirectories.push(sampleRoot, databaseRoot)
+    const repository = new SqliteMetadataRepository(join(databaseRoot, 'metadata.sqlite'))
+    repositories.push(repository)
+    const snapshot = createMvpSampleSnapshot(sampleRoot, '2026-07-29T00:00:00.000Z')
+    repository.save(snapshot)
+    const target = snapshot.artifacts.find((artifact) => artifact.title === 'Script')!
+    const base = snapshot.artifactRevisions.find((revision) => String(revision.artifactId) === String(target.id))!
+
+    const manifest = await new ContextManifestService(repository).build(MVP_SAMPLE_PROJECT_ID, {
+      targetArtifactId: String(target.id),
+      targetRevisionId: String(base.id),
+    })
+
+    expect(manifest.target?.revisionId).toBe(String(base.id))
+    expect(manifest.currentRevision?.revisionId).toBe(String(base.id))
+  })
 })

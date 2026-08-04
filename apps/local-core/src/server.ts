@@ -800,10 +800,12 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
             || typeof input.outputIntent !== 'string'
             || !['create', 'revise', 'analyze'].includes(input.outputIntent)
             || (input.targetArtifactId !== undefined && typeof input.targetArtifactId !== 'string')
+            || (input.targetRevisionId !== undefined && typeof input.targetRevisionId !== 'string')
             || (input.contextArtifactIds !== undefined && !isStringArray(input.contextArtifactIds))
             || (input.workspaceId !== undefined && typeof input.workspaceId !== 'string')
             || (input.requestedProvider !== undefined && !['workbuddy', 'codex'].includes(String(input.requestedProvider)))
-            || Object.keys(input).some((key) => !['instruction', 'targetArtifactId', 'contextArtifactIds', 'workspaceId', 'outputIntent', 'requestedProvider'].includes(key))) {
+            || (input.resultPolicy !== undefined && (!isRecord(input.resultPolicy) || typeof input.resultPolicy.type !== 'string'))
+            || Object.keys(input).some((key) => !['instruction', 'targetArtifactId', 'targetRevisionId', 'contextArtifactIds', 'workspaceId', 'outputIntent', 'requestedProvider', 'resultPolicy'].includes(key))) {
             sendJson(response, 400, failure('INVALID_ARGUMENT', 'Run requires instruction and outputIntent (create|revise|analyze); revise also requires an explicit target.'))
             return
           }

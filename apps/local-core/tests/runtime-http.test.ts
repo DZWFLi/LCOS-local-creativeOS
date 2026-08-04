@@ -83,6 +83,8 @@ describe('Runtime HTTP closure', () => {
         instruction: 'Create a new Markdown draft.',
         outputIntent: 'revise',
         targetArtifactId: target.id,
+        targetRevisionId: target.currentRevisionId,
+        resultPolicy: { type: 'draft_revision_per_target' },
       }),
     })
     expect(createdResponse.status).toBe(201)
@@ -90,7 +92,12 @@ describe('Runtime HTTP closure', () => {
       ok: true,
       value: {
         review: {
-          run: { id: 'run-http-one', status: 'created' },
+          run: {
+            id: 'run-http-one',
+            status: 'created',
+            targetRevisionId: target.currentRevisionId,
+            resultPolicy: { type: 'draft_revision_per_target' },
+          },
           dispatch: { status: 'planned' },
         },
       },

@@ -40,18 +40,49 @@ $stateFile = Join-Path $stateDir 'orchestrator-state.json'
 $cooldownMs = [long]($env:LCOS_ORCHESTRATOR_COOLDOWN_MS ?? 120000)
 $recentWriteGuardMs = [long]($env:LCOS_ORCHESTRATOR_WRITE_GUARD_MS ?? 10000)
 $tokenFile = Join-Path $repo '.codex-runtime\local-core-token'
+$runOnce = $env:LCOS_ORCHESTRATOR_ONCE -eq '1'
+$dryRun = $env:LCOS_ORCHESTRATOR_DRY_RUN -eq '1'
 
 if (Test-Path $lockFile) {
-  Write-Error "已有看门狗在运行（$lockFile）。如需重启请先删除该锁文件。"
-  exit 1
+  $ownerPid = 0
+  [void][int]::TryParse((Get-Content $lockFile -Raw -ErrorAction SilentlyContinue).Trim(), [ref]$ownerPid)
+  if ($ownerPid -gt 0 -and (Get-Process -Id $ownerPid -ErrorAction SilentlyContinue)) {
+    Write-Error "已有看门狗在运行（PID $ownerPid）。"
+    exit 1
+  }
+  Remove-Item $lockFile -Force -ErrorAction SilentlyContinue
 }
-Set-Content -Path $lockFile -Value (Get-Date -Format o)
+Set-Content -Path $lockFile -Value $PID
 
 function Get-Registry {
   if (-not (Test-Path $registryPath)) {
-    throw "找不到会话注册表：$registryPath（参考 sessions.example.json）"
+    return @{ projects = @{} }
   }
   return (Get-Content $registryPath -Raw | ConvertFrom-Json)
+}
+
+function Get-CoreProjects {
+  if (-not (Test-Path $tokenFile)) {
+    Write-Host "[$(Get-Date -Format HH:mm:ss)] 没有 Local Core token，无法发现项目"
+    return @()
+  }
+  try {
+    $token = (Get-Content $tokenFile -Raw).Trim()
+    $response = Invoke-RestMethod -Uri 'http://127.0.0.1:43121/projects' -Method GET `
+      -Headers @{ authorization = "Bearer $token" } -TimeoutSec 15
+    return @($response.value)
+  } catch {
+    Write-Host "[$(Get-Date -Format HH:mm:ss)] 获取项目目录失败：$($_.Exception.Message)"
+    return @()
+  }
+}
+
+function Get-RegisteredSessions($registry, [string]$projectId) {
+  $property = $registry.projects.PSObject.Properties[$projectId]
+  if (-not $property) { return @() }
+  $raw = $property.Value
+  if ($raw.sessionId) { return @($raw) }
+  return @($raw | Where-Object { $_.sessionId -and $_.sessionId -notlike '*…*' })
 }
 
 function Send-ClaimPrompt([string]$sessionId, [string]$runId, [string]$projectId, [string]$taskId) {
@@ -71,6 +102,10 @@ function Send-ClaimPrompt([string]$sessionId, [string]$runId, [string]$projectId
 
 function Send-AutoPrompt([string]$projectRoot, [string]$runId, [string]$projectId, [string]$sessionId, [string]$taskId) {
   $message = "LCOS 接单提示：项目 $projectId 有新待办 run $runId 。请按 lcos-project-context skill 认领并执行。"
+  if ($dryRun) {
+    Write-Host "[$(Get-Date -Format HH:mm:ss)] DRY RUN：将派单 run $runId -> $($sessionId ?? "$projectRoot 最近会话")"
+    return
+  }
   if ($sessionId) {
     if ($taskId) {
       try {
@@ -121,8 +156,20 @@ function Get-DispatchPlan([string]$projectId, [array]$sessions) {
 }
 
 function Get-State {
-  if (-not (Test-Path $stateFile)) { return @{ lastDispatchBySession = @{} } }
-  try { return (Get-Content $stateFile -Raw | ConvertFrom-Json) } catch { return @{ lastDispatchBySession = @{} } }
+  $dispatches = @{}
+  if (Test-Path $stateFile) {
+    try {
+      $stored = Get-Content $stateFile -Raw | ConvertFrom-Json
+      if ($stored.lastDispatchByRun) {
+        foreach ($entry in $stored.lastDispatchByRun.PSObject.Properties) {
+          $dispatches[$entry.Name] = [string]$entry.Value
+        }
+      }
+    } catch {
+      Write-Host "[$(Get-Date -Format HH:mm:ss)] 状态文件不可读，将重建：$($_.Exception.Message)"
+    }
+  }
+  return @{ lastDispatchByRun = $dispatches }
 }
 
 function Save-State($state) {
@@ -135,7 +182,8 @@ function Get-SessionBusy([string]$sessionId) {
   try {
     $sessionDir = Join-Path $env:USERPROFILE '.codex\sessions'
     if (Test-Path $sessionDir) {
-      $sessionFile = Get-ChildItem $sessionDir -Filter "$sessionId*" -ErrorAction SilentlyContinue |
+      if ($sessionId -notmatch '^[a-zA-Z0-9-]+$') { return $true }
+      $sessionFile = Get-ChildItem $sessionDir -Recurse -File -Filter "*$sessionId*.jsonl" -ErrorAction SilentlyContinue |
         Sort-Object LastWriteTime -Descending | Select-Object -First 1
       if ($sessionFile -and ((Get-Date) - $sessionFile.LastWriteTime).TotalMilliseconds -lt $recentWriteGuardMs) {
         return $true
@@ -145,27 +193,23 @@ function Get-SessionBusy([string]$sessionId) {
   return $false
 }
 
-Write-Host "LCOS 看门狗启动：每 ${interval}s 检查；注册表 $registryPath"
+Write-Host "LCOS 看门狗启动：每 ${interval}s 检查；Core 自动发现项目；注册表为可选覆盖"
 try {
   while ($true) {
     $registry = Get-Registry
-    $projects = $registry.projects.PSObject.Properties
-    foreach ($entry in $projects) {
-      $projectId = $entry.Name
+    $projects = Get-CoreProjects
+    foreach ($project in $projects) {
+      $projectId = [string]$project.id
       if ($env:LCOS_ORCHESTRATOR_PROJECTS -and ($env:LCOS_ORCHESTRATOR_PROJECTS -split ',' -notcontains $projectId)) { continue }
-      $rawSession = $entry.Value
-      if ($rawSession.sessionId) {
-        $sessions = @($rawSession)
-      } else {
-        $sessions = @($rawSession | Where-Object { $_.sessionId -and $_.sessionId -notlike '*…*' })
-      }
+      $sessions = Get-RegisteredSessions $registry $projectId
       $state = Get-State
       try {
         $plan = Get-DispatchPlan $projectId $sessions
         foreach ($item in $plan) {
           $runId = [string]$item.runId
-          $lastDispatch = $state.lastDispatchByRun.$runId
+          $lastDispatch = $state.lastDispatchByRun[$runId]
           if ($lastDispatch -and ((Get-Date) - [datetime]$lastDispatch).TotalMilliseconds -lt $cooldownMs) { continue }
+          $dispatched = $false
           if ($item.decision -eq 'dispatch_existing') {
             $sessionId = [string]$item.sessionId
             if ($sessionId -and (Get-SessionBusy $sessionId)) {
@@ -173,19 +217,23 @@ try {
               continue
             }
             Send-AutoPrompt ([string]$item.projectRoot) $runId $projectId $sessionId ([string]$item.taskId)
+            $dispatched = $true
           } elseif ($item.decision -eq 'spawn_new') {
             Send-AutoPrompt ([string]$item.projectRoot) $runId $projectId '' ([string]$item.taskId)
+            $dispatched = $true
           } else {
             Write-Host "[$(Get-Date -Format HH:mm:ss)] $projectId run $runId 等待：$($item.reason)"
           }
-          if (-not $state.lastDispatchByRun) { $state.lastDispatchByRun = @{} }
-          $state.lastDispatchByRun.$runId = (Get-Date -Format o)
-          Save-State $state
+          if ($dispatched -and -not $dryRun) {
+            $state.lastDispatchByRun[$runId] = (Get-Date -Format o)
+            Save-State $state
+          }
         }
       } catch {
         Write-Host "[$(Get-Date -Format HH:mm:ss)] 检查 $projectId 失败：$($_.Exception.Message)"
       }
     }
+    if ($runOnce) { break }
     Start-Sleep -Seconds $interval
   }
 } finally {

@@ -120,7 +120,17 @@ export class ContextManifestService {
     const revisionById = new Map(graph.artifactRevisions.map((revision) => [String(revision.id), revision]))
     const fileRecordById = new Map(graph.fileRecords.map((record) => [String(record.id), record]))
     const target = this.#selectTarget(graph, input.targetArtifactId)
-    const targetRevision = target?.currentRevisionId === undefined ? undefined : revisionById.get(String(target.currentRevisionId))
+    const requestedTargetRevision = input.targetRevisionId === undefined
+      ? undefined
+      : revisionById.get(String(input.targetRevisionId))
+    if (input.targetRevisionId !== undefined && requestedTargetRevision === undefined) {
+      throw new Error(`Target Revision not found: ${input.targetRevisionId}`)
+    }
+    if (requestedTargetRevision !== undefined && String(requestedTargetRevision.artifactId) !== String(target?.id)) {
+      throw new Error('Target Revision does not belong to the selected Artifact.')
+    }
+    const targetRevision = requestedTargetRevision
+      ?? (target?.currentRevisionId === undefined ? undefined : revisionById.get(String(target.currentRevisionId)))
     const targetFile = targetRevision === undefined ? undefined : fileRecordById.get(String(targetRevision.fileRecordId))
     const targetRef = target && targetRevision && targetFile ? artifactRef(target, targetRevision, targetFile) : null
 

@@ -14,6 +14,7 @@ import { ResourceMatcher } from './resources/resource-matcher.js'
 export interface CreateRuntimeRunInput {
   readonly instruction: string
   readonly targetArtifactId?: string
+  readonly targetRevisionId?: string
   readonly contextArtifactIds?: readonly string[]
   readonly workspaceId?: string
   readonly outputIntent: 'create' | 'revise' | 'analyze'
@@ -47,6 +48,9 @@ export class RuntimeApplicationService {
       throw new Error(`${outputIntent} 不允许指定修改目标；只有 revise 可以绑定 Target。`)
     }
     if (outputIntent === 'revise' && input.targetArtifactId === undefined) throw new Error('Revise Run requires an explicit target Artifact.')
+    if (outputIntent !== 'revise' && input.targetRevisionId !== undefined) {
+      throw new Error(`${outputIntent} 不允许指定 Base Revision；只有 revise 可以绑定 Base Revision。`)
+    }
     if (outputIntent === 'revise' && input.targetArtifactId !== undefined) {
       const target = this.repository.getArtifact(String(input.targetArtifactId))
       if (target !== undefined && target.managed === false) {
@@ -82,6 +86,7 @@ export class RuntimeApplicationService {
     const resourceRefs = this.matcher.toManifestRefs(matches.filter((match) => match.layer !== 'suggested'), descriptors)
     const manifest = await this.manifests.build(projectId, {
       ...(input.targetArtifactId === undefined ? {} : { targetArtifactId: input.targetArtifactId }),
+      ...(input.targetRevisionId === undefined ? {} : { targetRevisionId: input.targetRevisionId }),
       ...(input.contextArtifactIds === undefined ? {} : { contextArtifactIds: input.contextArtifactIds }),
       requestedOutput: 'Markdown Script Revision',
       ...(resourceRefs.length === 0 ? {} : { resourceRefs }),

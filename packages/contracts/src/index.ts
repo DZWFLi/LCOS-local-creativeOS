@@ -168,6 +168,7 @@ export interface ContextManifestV0 {
 
 export interface BuildContextManifestV0Input {
   readonly targetArtifactId?: string
+  readonly targetRevisionId?: string
   readonly contextArtifactIds?: readonly string[]
   readonly requestedOutput?: string
   readonly resourceRefs?: readonly ManifestResourceRefV0[]

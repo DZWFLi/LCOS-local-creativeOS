@@ -58,8 +58,12 @@ Copy-Item tools\codex-orchestrator\sessions.example.json tools\codex-orchestrato
 pwsh -NoProfile -File tools\codex-orchestrator\watch.ps1
 ```
 
+项目默认从 Local Core 的 `/projects` 自动发现；`sessions.json` 只用于可选的精确会话绑定，
+缺失时不会阻止启动。
+
 环境变量（可选）：`LCOS_ORCHESTRATOR_INTERVAL`（秒）、`LCOS_ORCHESTRATOR_PROJECTS`、
-`CODEX_BIN`。
+`CODEX_BIN`。诊断时可设置 `LCOS_ORCHESTRATOR_ONCE=1` 只检查一轮，配合
+`LCOS_ORCHESTRATOR_DRY_RUN=1` 验证派单计划而不调用 Codex。
 
 ## 限制
 
