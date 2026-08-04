@@ -242,6 +242,12 @@ try {
     });
   } else if (group === "run" && action === "list") {
     result = await coreRequest(`/projects/${encodeURIComponent(required(positional[0], "project id"))}/runs?limit=${encodeURIComponent(option("limit") || "20")}`);
+  } else if (group === "run" && action === "pending") {
+    const projectId = required(positional[0], "project id");
+    const reviews = await coreRequest(`/projects/${encodeURIComponent(projectId)}/runs?limit=${encodeURIComponent(option("limit") || "100")}`);
+    result = reviews.filter((item) =>
+      ["created", "queued", "running"].includes(item.run?.status)
+      && item.dispatch?.status === "bound");
   } else if (group === "run" && action === "create") {
     const projectId = required(positional[0], "project id");
     const instruction = required(option("instruction"), "--instruction");
@@ -571,6 +577,7 @@ Project truth:
   lcos session list <project-id>
   lcos manifest build <project-id> [--target <artifact-id>] [--output <description>]
   lcos run list <project-id> [--limit 20]
+  lcos run pending <project-id> [--limit 100]
   lcos run create <project-id> --instruction "..." [--target artifact-id] [--output create|revise|analyze] [--provider workbuddy|codex] [--dry-run]
   lcos run propose <project-id> --prompt "..."
   lcos run dispatch <run-id>

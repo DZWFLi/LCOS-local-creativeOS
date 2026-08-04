@@ -71,6 +71,15 @@ submit_lcos_result / fail_lcos_run
 Codex 建议增删 Context 只能走 `propose_lcos_context_change`，用户 Accept 后才生效；
 Running Run 的冻结 Manifest 不随实时 Selection 变化。
 
+### 收到看门狗派单提示
+
+当用户消息以「LCOS 接单提示」开头时，说明 LCOS 看门狗把一个待办送到了本会话：
+
+1. 从消息中取出 `run <id>` 与项目名；如本会话未绑定该项目，先 `bind_lcos_project`；
+2. `claim_lcos_run(runId, workerId)` → `get_lcos_run_context(runId)` → `start_lcos_run`；
+3. 按冻结 Manifest 执行（只写 Staging），提交 `submit_lcos_result` 或 `fail_lcos_run`；
+4. 结束后简短汇报，不再重复扫描其他待办（一次回合只处理派单这一条）。
+
 Pulled-task flow (no LCOS run creation):
 
 ```text
