@@ -303,6 +303,45 @@ async function main() {
   assert(cancelEvents.some((event) => event.type === 'run.cancelled'), 'run.cancelled event missing')
   console.log(`✓ cancel run=${cancelRunId} → cancelled with event`)
 
+  // 4c. Codex provider loop: claim-by-id + start + submit + sync
+  const codexRun = await post(`/projects/${encodeURIComponent(projectId)}/runs`, {
+    instruction: '用 Codex 分析一次节奏问题。',
+    outputIntent: 'analyze',
+    requestedProvider: 'codex',
+  })
+  const codexRunId = codexRun.review.run.id
+  await post(`/runs/${encodeURIComponent(codexRunId)}/dispatch`, {})
+  const codexTaskResponse = await bridgeRequest(`/v1/tasks/by-run/${encodeURIComponent(codexRunId)}`)
+  const codexTask = codexTaskResponse.task ?? codexTaskResponse
+  const codexTaskId = codexTask.taskId ?? codexTask.task_id
+  assert(codexTaskId !== undefined, 'codex task was not created')
+  assert(String(codexTask.provider).toLowerCase() === 'codex', 'codex task provider mismatch')
+  const codexClaimed = await bridgeRequest(`/v1/tasks/${encodeURIComponent(codexTaskId)}/claim`, {
+    method: 'POST',
+    body: JSON.stringify({ provider: 'codex', workerId: 'codex-agent' }),
+  })
+  const codexClaimTask = codexClaimed.task ?? codexClaimed
+  assert(['claimed', 'running'].includes(String(codexClaimTask.status)), 'codex claim-by-id failed')
+  await bridgeRequest(`/v1/tasks/${encodeURIComponent(codexTaskId)}/running`, {
+    method: 'POST',
+    body: JSON.stringify({ workerId: 'codex-agent' }),
+  })
+  await bridgeRequest(`/v1/tasks/${encodeURIComponent(codexTaskId)}/result`, {
+    method: 'POST',
+    body: JSON.stringify({
+      contractVersion: 'bridge-result-v1',
+      taskId: codexTaskId,
+      lcosRunId: codexRunId,
+      providerStatus: 'review',
+      summary: 'Codex 分析完成：节奏三段。',
+      changedFiles: [],
+    }),
+  })
+  await post(`/runs/${encodeURIComponent(codexRunId)}/sync`, {})
+  const codexReview = await coreRequest(`/runs/${encodeURIComponent(codexRunId)}/review`)
+  assert(codexReview.run.status === 'completed', 'codex run did not complete')
+  console.log(`✓ codex analyze run=${codexRunId} → completed via claim-by-id`)
+
   // 5. Checkpoint
   console.log('step: checkpoint')
   graph = await coreRequest(`/projects/${encodeURIComponent(projectId)}/graph`)
@@ -345,6 +384,7 @@ async function main() {
     analyze: { runId: analyzeRunId },
     create: { runId: createRunId, returns: review.returns.length, createdFiles: createEvidence.files.map((item) => item.path) },
     cancel: { runId: cancelRunId },
+    codex: { runId: codexRunId },
     checkpoint: checkpoint.id,
     evidenceRoot,
   }, null, 2))

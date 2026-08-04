@@ -53,6 +53,24 @@ create_lcos_run(projectId, instruction, outputIntent, targetArtifactId?)
 → accept_lcos_return / reject_lcos_return / retry_lcos_return
 ```
 
+### Codex native loop（会话内主动接单）
+
+```text
+bind_lcos_project(projectId)          // 会话绑定：doctor + 项目 + ActiveContext 快照
+get_lcos_active_context(projectId)    // 读取当前选择 / Target / Context
+list_lcos_pending_runs(projectId)     // 本会话每个回合最多检查一次
+claim_lcos_run(runId, workerId)       // 原子认领（provider=codex 隔离）
+get_lcos_run_context(runId)           // 冻结 Manifest，不是实时 ActiveContext
+start_lcos_run(runId, workerId)
+heartbeat_lcos_run(runId, workerId)   // 有界续租，不无限轮询
+submit_lcos_result / fail_lcos_run
+```
+
+主动检查时机：会话首次绑定后、用户每次发言后、完成一个 LCOS Run 后、用户明确要求时。
+禁止无限后台轮询；一次 Agent 回合最多检查一次。
+Codex 建议增删 Context 只能走 `propose_lcos_context_change`，用户 Accept 后才生效；
+Running Run 的冻结 Manifest 不随实时 Selection 变化。
+
 Pulled-task flow (no LCOS run creation):
 
 ```text
@@ -152,6 +170,8 @@ http://127.0.0.1:5173/?agent=1&project=<projectId>
 - **Bridge Task is execution truth, not LCOS Artifact Truth.** returned files remain Pending until Local Core processes them.
 - **Loopback only.** All MCP tools enforce `127.0.0.1` / `localhost` / `[::1]` in client.mjs.
 - **No direct SQLite.** Neither the MCP proxy nor the agent touches SQLite directly.
+- **Context proposals are reviewable.** Codex never applies Context/Target changes directly; `accept_lcos_context_proposal` is the only path.
+- **No silent context expansion.** Shelf 未显示的对象不得进入本次 Context；建议也必须可见可拒。
 
 ## 9. Testing
 
