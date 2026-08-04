@@ -2034,6 +2034,77 @@
   background: var(--ps-surface-inset);
 }
 
+.app-shell.porcelain-studio-v2 .agent-context-surface .agent-sync-badge {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin: 4px 0 8px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  background: var(--ps-surface-inset);
+  color: var(--ps-text-faint);
+}
+.app-shell.porcelain-studio-v2 .agent-context-surface .agent-sync-badge.synced { color: var(--ps-accent); }
+.app-shell.porcelain-studio-v2 .agent-context-surface .agent-sync-badge.syncing { color: #9a7b2f; }
+.app-shell.porcelain-studio-v2 .agent-context-surface .agent-sync-badge.conflict { color: #a34e47; }
+.app-shell.porcelain-studio-v2 .agent-context-surface .agent-sync-badge button { border: 0; background: transparent; color: inherit; cursor: pointer; }
+
+.app-shell.porcelain-studio-v2 .agent-context-surface .agent-run-lock {
+  margin-bottom: 8px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  line-height: 1.45;
+  color: var(--ps-accent);
+  background: var(--ps-accent-softer);
+}
+
+.app-shell.porcelain-studio-v2 .agent-context-surface .agent-surface-section {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--ps-border);
+}
+.app-shell.porcelain-studio-v2 .agent-context-surface .agent-surface-section h4 {
+  margin: 0 0 6px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--ps-text-faint);
+}
+.app-shell.porcelain-studio-v2 .agent-context-surface .agent-context-empty {
+  margin: 0;
+  font-size: 10.5px;
+}
+
+.app-shell.porcelain-studio-v2 .agent-context-surface .agent-proposal-chip {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 8px;
+  padding: 8px;
+  border-radius: 10px;
+  background: var(--ps-surface-inset);
+}
+.app-shell.porcelain-studio-v2 .agent-context-surface .agent-proposal-chip strong {
+  display: block;
+  font-size: 10.5px;
+}
+.app-shell.porcelain-studio-v2 .agent-context-surface .agent-proposal-chip small {
+  display: block;
+  margin-top: 2px;
+}
+.app-shell.porcelain-studio-v2 .agent-context-surface .agent-proposal-actions {
+  display: flex;
+  gap: 6px;
+}
+.app-shell.porcelain-studio-v2 .agent-context-surface .agent-proposal-actions button {
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--ps-border);
+  font-size: 10px;
+  cursor: pointer;
+}
+
 /* -------------------------------------------------------------------------- */
 /* Editorial Spatial Lab — node anatomy, studio mats and revision stacks      */
 /* -------------------------------------------------------------------------- */

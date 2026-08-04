@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { Command, Play } from 'lucide-react'
-import type { ContextManifestV0, RunProposalResult, RunReview, RuntimeProviderStatus, WorkspaceMembership } from '@local-creative-os/contracts'
+import type { ContextChangeProposalV1, ContextManifestV0, RunProposalResult, RunReview, RuntimeProviderStatus, WorkspaceMembership } from '@local-creative-os/contracts'
 import { makePerformanceFixture } from './qa-fixtures/fixtures'
 import type { ActiveRun, Camera, CanvasNode, CanvasScope, NodeDisplayMode, NodeLayer, PersistedPrototypeState, ProjectPackage, ScopeKind, TargetContextInference, WorkRailPreferences, Workspace, WorkspaceIntent } from './model'
 import { nodeMeta, runStatusLabel } from './model'
@@ -87,7 +87,7 @@ function fileNameFromPath(path: string): string {
 
 export function App() {
   const launchSearchParams = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search)
-  const agentMode = launchSearchParams?.get('agent') === '1'
+  const agentMode = launchSearchParams?.get('agent') === '1' || launchSearchParams?.get('agent') === 'codex'
   const qaSearchParams = typeof window === 'undefined' || !import.meta.env.DEV ? null : new URLSearchParams(window.location.search)
   const queryState = qaSearchParams?.get('state') ?? ''
   const perfCount = Number(qaSearchParams?.get('perf') ?? 0)
@@ -156,6 +156,9 @@ export function App() {
   const [resourceDetailArtifactId, setResourceDetailArtifactId] = useState<string | null>(null)
   const [activeContextProjection, setActiveContextProjection] = useState<ActiveContextProjection | null>(null)
   const [activeContextError, setActiveContextError] = useState<string | null>(null)
+  const [contextSync, setContextSync] = useState<'syncing' | 'synced' | 'conflict'>('synced')
+  const [contextProposals, setContextProposals] = useState<ContextChangeProposalV1[]>([])
+  const [pendingCodexCount, setPendingCodexCount] = useState(0)
   const [workspaceStatesOpen, setWorkspaceStatesOpen] = useState(false)
   const [workspaceStatesWorkspaceId, setWorkspaceStatesWorkspaceId] = useState<string | null>(null)
   const [workspaceStates, setWorkspaceStates] = useState<WorkspaceStateSummary[]>([])
@@ -341,6 +344,7 @@ export function App() {
     if (bootMode !== 'runtime') return
     const controller = new AbortController()
     const timeout = window.setTimeout(() => {
+      setContextSync('syncing')
       void bridgeRef.current.client.updateActiveContext(activeProjectId, {
         ...(workspaceId === null ? {} : { workspaceId }),
         scopeId,
@@ -353,8 +357,18 @@ export function App() {
         if (call.result.ok) {
           setActiveContextProjection(call.result.value)
           setActiveContextError(null)
+          setContextSync('synced')
         } else {
           setActiveContextError(call.result.error.message)
+          if (call.result.error.code === 'ACTIVE_CONTEXT_CONFLICT') {
+            setContextSync('conflict')
+            void bridgeRef.current.client.activeContext(activeProjectId).then((refresh) => {
+              if (refresh.result.ok) {
+                setActiveContextProjection(refresh.result.value)
+                setContextSync('synced')
+              }
+            })
+          }
         }
       })
     }, 150)
@@ -363,6 +377,60 @@ export function App() {
       controller.abort()
     }
   }, [activeProjectId, bootMode, excludedContextIds, pinnedContextIds, scopeId, selectedIds, selectionBaseRevision?.id, selectionTargetNode?.artifactId, selectionTargetNode?.revisionId, workspaceId])
+
+  useEffect(() => {
+    if (!agentMode || !activeProjectId || bootMode !== 'runtime') return
+    const timer = window.setInterval(() => {
+      void bridgeRef.current.client.listContextProposals(activeProjectId).then((call) => {
+        if (call.result.ok) setContextProposals(call.result.value as ContextChangeProposalV1[])
+      })
+      void bridgeRef.current.client.projectRunReviews(activeProjectId, 100).then((call) => {
+        if (!call.result.ok) return
+        const pending = (call.result.value as readonly {
+          run: { provider?: string; status: string }
+          dispatch: { status: string }
+          binding?: { providerStatus?: string }
+        }[]).filter((review) =>
+          review.run.provider === 'codex'
+          && ['created', 'queued', 'running'].includes(review.run.status)
+          && review.dispatch.status === 'bound'
+          && !['claimed', 'running', 'review', 'completed', 'failed', 'cancelled', 'timeout'].includes(String(review.binding?.providerStatus ?? '')))
+        setPendingCodexCount(pending.length)
+      })
+    }, 3_000)
+    return () => window.clearInterval(timer)
+  }, [activeProjectId, agentMode, bootMode])
+
+  const refreshActiveContext = useCallback(() => {
+    if (!activeProjectId) return
+    void bridgeRef.current.client.activeContext(activeProjectId).then((call) => {
+      if (call.result.ok) {
+        setActiveContextProjection(call.result.value)
+        setContextSync('synced')
+        setActiveContextError(null)
+      } else {
+        setActiveContextError(call.result.error.message)
+      }
+    })
+  }, [activeProjectId])
+
+  const resolveContextProposal = useCallback((proposalId: string, decision: 'accept' | 'reject') => {
+    if (!activeProjectId) return
+    const call = decision === 'accept'
+      ? bridgeRef.current.client.acceptContextProposal(activeProjectId, proposalId)
+      : bridgeRef.current.client.rejectContextProposal(activeProjectId, proposalId)
+    void call.then((result) => {
+      if (result.result.ok) {
+        setNotice(decision === 'accept' ? '已接受 Codex 提案，Context 已更新' : '已拒绝 Codex 提案')
+        void bridgeRef.current.client.listContextProposals(activeProjectId).then((list) => {
+          if (list.result.ok) setContextProposals(list.result.value as ContextChangeProposalV1[])
+        })
+        refreshActiveContext()
+      } else {
+        setNotice(`提案处理失败：${result.result.error.message}`)
+      }
+    })
+  }, [activeProjectId, refreshActiveContext])
   useEffect(() => {
     const bridge = bridgeRef.current
     bridge.isAvailable().then((available) => {
@@ -2291,6 +2359,13 @@ export function App() {
         projection={activeContextProjection}
         selectedNodes={selectedNodes}
         error={activeContextError}
+        syncState={contextSync}
+        proposals={contextProposals}
+        pendingRuns={pendingCodexCount}
+        runLocked={activeRun ? { id: activeRun.id, contextCount: activeRun.contextIds.length } : null}
+        onAcceptProposal={(proposalId) => resolveContextProposal(proposalId, 'accept')}
+        onRejectProposal={(proposalId) => resolveContextProposal(proposalId, 'reject')}
+        onRefresh={refreshActiveContext}
       />}
       {nodeInfoNode && <NodeInfoPopover node={nodeInfoNode} camera={camera} relationCount={nodeInfoRelationCount} onClose={() => setNodeInfoId(null)} onRelations={() => { selectNode(nodeInfoNode.id); setNodeInfoId(null); setNotice(`${nodeInfoRelationCount} 个关联已在画布中高亮`) }} onPreview={(node) => { setNodeInfoId(null); setWorkbench({ nodeId: node.id, focus: 'preview' }) }} onShowResource={(node) => { setNodeInfoId(null); setResourceDetailArtifactId(String(node.artifactId)) }} onRevisions={(node) => { setNodeInfoId(null); setWorkbench({ nodeId: node.id, focus: 'revisions' }) }} />}
       {workbenchNode && <ArtifactWorkbench node={workbenchNode} projectId={activeProjectId} client={bridgeRef.current.client} relationCount={workbenchRelationCount} focus={workbench?.focus ?? 'preview'} onFocusChange={(focus) => setWorkbench((current) => current ? { ...current, focus } : current)} onClose={() => setWorkbench(null)} onLocate={() => {
@@ -2332,19 +2407,43 @@ function AgentContextSurface({
   projection,
   selectedNodes,
   error,
+  syncState,
+  proposals,
+  pendingRuns,
+  runLocked,
+  onAcceptProposal,
+  onRejectProposal,
+  onRefresh,
 }: {
   readonly projectLabel: string
   readonly workspaceLabel: string
   readonly projection: ActiveContextProjection | null
   readonly selectedNodes: readonly CanvasNode[]
   readonly error: string | null
+  readonly syncState: 'syncing' | 'synced' | 'conflict'
+  readonly proposals: readonly ContextChangeProposalV1[]
+  readonly pendingRuns: number
+  readonly runLocked: { readonly id: string; readonly contextCount: number } | null
+  readonly onAcceptProposal: (proposalId: string) => void
+  readonly onRejectProposal: (proposalId: string) => void
+  readonly onRefresh: () => void
 }) {
+  const syncLabel = syncState === 'conflict'
+    ? '冲突：画布已被其它端修改'
+    : syncState === 'syncing'
+      ? '同步中…'
+      : projection
+        ? `已同步 v${projection.version}`
+        : '未连接'
+  const pendingProposals = proposals.filter((proposal) => proposal.status === 'pending')
   return <aside className="agent-context-surface" data-testid="agent-context-surface" aria-label="Agent visual context">
     <header>
       <span className={`agent-context-live ${error ? 'error' : ''}`} />
       <div><strong>Agent Context</strong><small>{error ? 'Local Core unavailable' : 'Live from Canvas'}</small></div>
       <code>v{projection?.version ?? 0}</code>
     </header>
+    <div className={`agent-sync-badge ${syncState}`}><span>{syncLabel}</span><button type="button" className="icon-only pressable" onClick={onRefresh} title="刷新上下文">⟳</button></div>
+    {runLocked && <div className="agent-run-lock">Run {runLocked.id} 已锁定本次 Context（{runLocked.contextCount} 项）；继续修改只影响下一次 Run。</div>}
     <dl>
       <div><dt>Project</dt><dd>{projectLabel}</dd></div>
       <div><dt>Workspace</dt><dd>{workspaceLabel}</dd></div>
@@ -2354,6 +2453,24 @@ function AgentContextSurface({
     {selectedNodes.length > 0
       ? <ul>{selectedNodes.slice(0, 5).map((node) => <li key={node.id}><span className={`agent-kind kind-${node.kind}`} />{node.title}</li>)}</ul>
       : <p>在画布中选择内容，Agent 将通过 LCOS MCP 读取同一份 Active Context。</p>}
+    <section className="agent-surface-section">
+      <h4>Codex 待确认提案（{pendingProposals.length}）</h4>
+      {pendingProposals.length === 0
+        ? <p className="agent-context-empty">无待确认提案</p>
+        : pendingProposals.map((proposal) => (
+            <div key={proposal.proposalId} className="agent-proposal-chip" data-testid={`agent-proposal-${proposal.proposalId}`}>
+              <div><strong>{proposal.reason}</strong><small>加入 {proposal.addViewIds.length} · 移除 {proposal.removeViewIds.length}{proposal.targetViewId ? ' · 改目标' : ''}</small></div>
+              <div className="agent-proposal-actions">
+                <button type="button" className="pressable" onClick={() => onAcceptProposal(proposal.proposalId)}>接受</button>
+                <button type="button" className="quiet pressable" onClick={() => onRejectProposal(proposal.proposalId)}>拒绝</button>
+              </div>
+            </div>
+          ))}
+    </section>
+    <section className="agent-surface-section">
+      <h4>Codex 待办</h4>
+      <p className="agent-context-empty">{pendingRuns > 0 ? `${pendingRuns} 条待执行（看门狗会敲门或拉起新会话）` : '暂无待办'}</p>
+    </section>
     {error && <p className="agent-context-error">{error}</p>}
   </aside>
 }

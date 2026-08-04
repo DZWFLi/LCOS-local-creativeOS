@@ -151,6 +151,7 @@ function mockClient(overrides: Partial<LocalCoreClient> = {}): LocalCoreClient {
     listSessionSummaries: unavailable,
     createCheckpoint: unavailable,
     updateActiveContext: unavailable,
+    activeContext: unavailable,
     proposeContextChange: unavailable,
     acceptContextProposal: unavailable,
     rejectContextProposal: unavailable,

@@ -261,6 +261,7 @@ export interface LocalCoreClient {
     readonly targetArtifactId?: string
     readonly targetRevisionId?: string
   }, signal?: AbortSignal): Promise<RuntimeCall<ActiveContextProjection>>
+  activeContext(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<ActiveContextProjection>>
   proposeContextChange(projectId: string, input: {
     readonly baseContextVersion: number
     readonly addViewIds: readonly string[]
@@ -753,6 +754,12 @@ export function createLocalCoreClient(): LocalCoreClient {
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify(input),
         },
+        decode: decodeResult<ActiveContextProjection>,
+      })
+    },
+    activeContext(projectId, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/active-context`, {
+        signal,
         decode: decodeResult<ActiveContextProjection>,
       })
     },
