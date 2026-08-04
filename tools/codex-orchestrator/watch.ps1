@@ -35,6 +35,10 @@ if (-not $codex) {
 }
 if (-not $codex) { throw '找不到 codex.exe；请设置 CODEX_BIN 环境变量。' }
 $lockFile = Join-Path $env:TEMP 'lcos-orchestrator.lock'
+$stateDir = Join-Path $repo '.codex-runtime'
+$stateFile = Join-Path $stateDir 'orchestrator-state.json'
+$cooldownMs = [long]($env:LCOS_ORCHESTRATOR_COOLDOWN_MS ?? 120000)
+$recentWriteGuardMs = [long]($env:LCOS_ORCHESTRATOR_WRITE_GUARD_MS ?? 10000)
 
 if (Test-Path $lockFile) {
   Write-Error "已有看门狗在运行（$lockFile）。如需重启请先删除该锁文件。"
@@ -69,6 +73,31 @@ function Send-ClaimPrompt([string]$sessionId, [string]$runId, [string]$projectId
   & $codex resume $sessionId $message
 }
 
+function Get-State {
+  if (-not (Test-Path $stateFile)) { return @{ lastDispatchBySession = @{} } }
+  try { return (Get-Content $stateFile -Raw | ConvertFrom-Json) } catch { return @{ lastDispatchBySession = @{} } }
+}
+
+function Save-State($state) {
+  New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
+  $state | ConvertTo-Json -Depth 6 | Set-Content -Path $stateFile -Encoding UTF8
+}
+
+function Test-SessionBusy([string]$sessionId) {
+  # 最近 10 秒内会话文件被写过 → 说明 GUI/另一个进程正在用，跳过，避免抢写
+  try {
+    $sessionDir = Join-Path $env:USERPROFILE '.codex\sessions'
+    if (Test-Path $sessionDir) {
+      $sessionFile = Get-ChildItem $sessionDir -Filter "$sessionId*" -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTime -Descending | Select-Object -First 1
+      if ($sessionFile -and ((Get-Date) - $sessionFile.LastWriteTime).TotalMilliseconds -lt $recentWriteGuardMs) {
+        return $true
+      }
+    }
+  } catch { }
+  return $false
+}
+
 Write-Host "LCOS 看门狗启动：每 ${interval}s 检查；注册表 $registryPath"
 try {
   while ($true) {
@@ -79,10 +108,23 @@ try {
       if ($env:LCOS_ORCHESTRATOR_PROJECTS -and ($env:LCOS_ORCHESTRATOR_PROJECTS -split ',' -notcontains $projectId)) { continue }
       $sessionId = $entry.Value.sessionId
       if (-not $sessionId -or $sessionId -like '*…*') { continue }
+      if ($entry.Value.guiActive) {
+        Write-Host "[$(Get-Date -Format HH:mm:ss)] $projectId 标记为 GUI 会话，跳过派单"
+        continue
+      }
+      $state = Get-State
+      $lastDispatch = $state.lastDispatchBySession.$sessionId
+      if ($lastDispatch -and ((Get-Date) - [datetime]$lastDispatch).TotalMilliseconds -lt $cooldownMs) { continue }
+      if (Test-SessionBusy $sessionId) {
+        Write-Host "[$(Get-Date -Format HH:mm:ss)] $projectId 会话正在写入（GUI 使用中），本轮跳过"
+        continue
+      }
       try {
         $pending = Get-PendingRuns $projectId
         foreach ($run in $pending) {
           Send-ClaimPrompt $sessionId ([string]$run.run.id) $projectId
+          $state.lastDispatchBySession.$sessionId = (Get-Date -Format o)
+          Save-State $state
         }
       } catch {
         Write-Host "[$(Get-Date -Format HH:mm:ss)] 检查 $projectId 失败：$($_.Exception.Message)"

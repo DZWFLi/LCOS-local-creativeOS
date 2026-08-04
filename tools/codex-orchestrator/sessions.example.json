@@ -2,7 +2,8 @@
   "projects": {
     "disposable-mvp-sample": {
       "sessionId": "019f…（你正常项目对话的 codex resume 会话 ID）",
-      "cwd": "E:\\Codex 项目\\OS开发\\.worktrees\\mvp-fast-build"
+      "cwd": "E:\\Codex 项目\\OS开发\\.worktrees\\mvp-fast-build",
+      "guiActive": false
     }
   }
 }

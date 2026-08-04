@@ -39,3 +39,15 @@ pwsh -NoProfile -File tools\codex-orchestrator\watch.ps1
 - 桌面 App 的对话窗口没有官方推送接口，无法被脚本“塞话”；这类窗口只能靠
   skill 在每个回合主动检查（已有）。
 - `codex resume <id> "提示"` 的行为依赖 CLI 版本；首次使用请先手工验证一条。
+
+## 和 GUI 不打架的规则
+
+- **一个会话只能有一个主人**：被派单的会话请用 CLI 开，别同时在桌面 App 里开着
+  同一个会话；两边读写同一套会话文件，会互相抢。
+- 注册表里可给某项目标 `"guiActive": true`，看门狗会完全跳过它。
+- 看门狗内置两道护栏：
+  1. 会话文件最近 10 秒内有写入（说明 GUI/另一个进程正在用）→ 本轮跳过；
+  2. 同一会话 120 秒内不重复派单（防止任务还没干完就连续塞提示）。
+- 冷却和写入阈值可用 `LCOS_ORCHESTRATOR_COOLDOWN_MS` /
+  `LCOS_ORCHESTRATOR_WRITE_GUARD_MS` 调整。
+- 派单记录存在 `.codex-runtime/orchestrator-state.json`（已忽略，不提交）。
