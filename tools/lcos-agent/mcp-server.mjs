@@ -7,6 +7,9 @@ const tools = [
   tool("open_lcos", "Return the loopback URL for the LCOS visual project canvas.", {
     projectId: { type: "string" },
   }),
+  tool("bind_lcos_project", "Bind this Codex session to an LCOS project and report doctor/context snapshot.", {
+    projectId: { type: "string" },
+  }, ["projectId"]),
   tool("list_lcos_projects", "List Local Core projects.", {}),
   tool("get_lcos_project", "Read the canonical Project Graph snapshot.", {
     projectId: { type: "string" },
@@ -14,6 +17,32 @@ const tools = [
   tool("get_lcos_active_context", "Read the latest stable Canvas selection and resolved artifacts.", {
     projectId: { type: "string" },
   }, ["projectId"]),
+  tool("watch_lcos_active_context", "Short-poll ActiveContext until version advances beyond afterVersion (max 1s hold).", {
+    projectId: { type: "string" },
+    afterVersion: { type: "number" },
+  }, ["projectId", "afterVersion"]),
+  tool("get_lcos_run_context", "Read the frozen ContextManifest for one Run (never live ActiveContext).", {
+    runId: { type: "string" },
+  }, ["runId"]),
+  tool("list_lcos_pending_runs", "List Runs that still need a Codex executor (created/queued/running, bound).", {
+    projectId: { type: "string" },
+  }, ["projectId"]),
+  tool("claim_lcos_run", "Atomically claim the Bridge Task of one Codex Run (provider-isolated).", {
+    runId: { type: "string" },
+    workerId: { type: "string" },
+  }, ["runId", "workerId"]),
+  tool("start_lcos_run", "Mark the claimed Codex Run Task as running.", {
+    runId: { type: "string" },
+    workerId: { type: "string" },
+  }, ["runId", "workerId"]),
+  tool("heartbeat_lcos_run", "Renew the lease of the running Codex Run Task.", {
+    runId: { type: "string" },
+    workerId: { type: "string" },
+  }, ["runId", "workerId"]),
+  tool("fail_lcos_run", "Submit a structured failed result for a Codex Run Task.", {
+    runId: { type: "string" },
+    summary: { type: "string" },
+  }, ["runId", "summary"]),
   tool("list_lcos_workspace_members", "List canonical Workspace memberships for a project.", {
     projectId: { type: "string" },
   }, ["projectId"]),
@@ -166,6 +195,82 @@ async function handle({ id, method, params }) {
       break;
     case "get_lcos_active_context":
       value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/active-context`);
+      break;
+    case "bind_lcos_project":
+      {
+        const projectId = required(args.projectId, "projectId");
+        const graph = await coreRequest(`/projects/${encodeURIComponent(projectId)}/graph`);
+        const active = await coreRequest(`/projects/${encodeURIComponent(projectId)}/active-context`);
+        value = { projectId, project: graph.project, activeContext: active };
+      }
+      break;
+    case "watch_lcos_active_context":
+      value = await coreRequest(
+        `/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/active-context?afterVersion=${Number(args.afterVersion ?? 0)}`
+      );
+      break;
+    case "get_lcos_run_context":
+      {
+        const runId = required(args.runId, "runId");
+        const review = await coreRequest(`/runs/${encodeURIComponent(runId)}/review`);
+        value = await coreRequest(
+          `/projects/${encodeURIComponent(review.run.projectId)}/context-manifests/v0/${encodeURIComponent(review.run.contextManifestId)}`
+        );
+      }
+      break;
+    case "list_lcos_pending_runs":
+      {
+        const projectId = required(args.projectId, "projectId");
+        const reviews = await coreRequest(`/projects/${encodeURIComponent(projectId)}/runs?limit=100`);
+        value = reviews.filter((item) =>
+          ["created", "queued", "running"].includes(item.run?.status)
+          && item.dispatch?.status === "bound");
+      }
+      break;
+    case "claim_lcos_run":
+      {
+        const runId = required(args.runId, "runId");
+        const task = await codexTaskForRun(runId);
+        value = await bridgeRequest(`/v1/tasks/${encodeURIComponent(task.taskId)}/claim`, {
+          method: "POST",
+          ...jsonBody({ provider: "codex", workerId: required(args.workerId, "workerId") }),
+        });
+      }
+      break;
+    case "start_lcos_run":
+      {
+        const task = await codexTaskForRun(required(args.runId, "runId"));
+        value = await bridgeRequest(`/v1/tasks/${encodeURIComponent(task.taskId)}/running`, {
+          method: "POST",
+          ...jsonBody({ workerId: required(args.workerId, "workerId") }),
+        });
+      }
+      break;
+    case "heartbeat_lcos_run":
+      {
+        const task = await codexTaskForRun(required(args.runId, "runId"));
+        value = await bridgeRequest(`/v1/tasks/${encodeURIComponent(task.taskId)}/heartbeat`, {
+          method: "POST",
+          ...jsonBody({ workerId: required(args.workerId, "workerId") }),
+        });
+      }
+      break;
+    case "fail_lcos_run":
+      {
+        const runId = required(args.runId, "runId");
+        const task = await codexTaskForRun(runId);
+        value = await bridgeRequest(`/v1/tasks/${encodeURIComponent(task.taskId)}/result`, {
+          method: "POST",
+          ...jsonBody({
+            contractVersion: "bridge-result-v1",
+            taskId: task.taskId,
+            lcosRunId: task.lcosRunId ?? runId,
+            providerStatus: "failed",
+            summary: args.summary ?? "Task failed.",
+            changedFiles: [],
+          }),
+        });
+      }
       break;
     case "list_lcos_workspace_members":
       value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/workspace-memberships`);
@@ -364,6 +469,18 @@ function tool(name, description, properties, required = []) {
 function required(value, name) {
   if (typeof value !== "string" || !value) throw new Error(`${name} is required`);
   return value;
+}
+
+async function codexTaskForRun(runId) {
+  const response = await bridgeRequest(`/v1/tasks/by-run/${encodeURIComponent(runId)}`);
+  const task = response?.task ?? response;
+  const taskId = task?.taskId ?? task?.task_id;
+  if (!taskId) throw new Error(`TASK_NOT_FOUND: no Bridge Task for run ${runId}.`);
+  const provider = String(task?.provider ?? task?.provider ?? "unknown").toLowerCase();
+  if (provider !== "codex") {
+    throw new Error(`PROVIDER_MISMATCH: run ${runId} task provider is ${provider}, expected codex.`);
+  }
+  return { taskId, lcosRunId: task?.lcosRunId ?? task?.lcos_run_id ?? runId };
 }
 
 function reply(id, result) {

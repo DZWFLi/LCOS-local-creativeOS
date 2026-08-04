@@ -511,4 +511,50 @@ describe('Runtime HTTP closure', () => {
     expect(pollBody.value.version).toBe(2)
     expect(elapsed).toBeGreaterThanOrEqual(900)
   })
+
+  it('serves frozen ContextManifest by id (get_lcos_run_context)', async () => {
+    const dbRoot = mkdtempSync(join(tmpdir(), 'lcos-runtime-http-db-'))
+    const projectRoot = mkdtempSync(join(tmpdir(), 'lcos-runtime-http-project-'))
+    roots.push(dbRoot, projectRoot)
+    const repository = new SqliteMetadataRepository(join(dbRoot, 'metadata.sqlite'))
+    repositories.push(repository)
+    const snapshot = createMvpSampleSnapshot(projectRoot, '2026-07-29T19:30:00.000Z')
+    repository.save(snapshot)
+    const bridge = new FakeBridge()
+    const review = new RuntimeReviewService(repository, undefined, () => 'http-eight')
+    const application = new RuntimeApplicationService(
+      repository,
+      new ContextManifestService(repository),
+      new RuntimeAdapterService(repository, bridge, 'mvp-fast-build'),
+      new RuntimeResultIngestionService(repository, bridge),
+      review,
+      undefined,
+      () => 'http-eight',
+    )
+    const server = createLocalCoreServer({
+      port: 0,
+      metadataRepository: repository,
+      runtimeReviewService: review,
+      runtimeApplicationService: application,
+      contextManifestService: new ContextManifestService(repository),
+    })
+    servers.push(server)
+    const address = await server.start()
+    const baseUrl = `http://${address.host}:${address.port}`
+    const artifactId = String(snapshot.artifacts[0]!.id)
+
+    const buildResponse = await fetch(`${baseUrl}/projects/${snapshot.project.id}/context-manifests/v0`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ contextArtifactIds: [artifactId] }),
+    })
+    expect(buildResponse.status).toBe(200)
+    const built = await buildResponse.json() as { value: { id: string } }
+
+    const getResponse = await fetch(`${baseUrl}/projects/${snapshot.project.id}/context-manifests/v0/${encodeURIComponent(built.value.id)}`)
+    expect(getResponse.status).toBe(200)
+    const got = await getResponse.json() as { value: { id: string; projectId: string } }
+    expect(got.value.id).toBe(built.value.id)
+    expect(got.value.projectId).toBe(String(snapshot.project.id))
+  })
 })

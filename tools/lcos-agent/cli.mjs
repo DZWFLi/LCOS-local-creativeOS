@@ -274,6 +274,46 @@ try {
     result = await coreRequest(`/runs/${encodeURIComponent(required(positional[0], "run id"))}/review`);
   } else if (group === "run" && action === "sync") {
     result = await coreRequest(`/runs/${encodeURIComponent(required(positional[0], "run id"))}/sync`, { method: "POST", ...jsonBody({}) });
+  } else if (group === "run" && action === "claim") {
+    const runId = required(positional[0], "run id");
+    const task = await bridgeTaskForRun(runId);
+    result = await bridgeRequest(`/v1/tasks/${encodeURIComponent(task.taskId)}/claim`, {
+      method: "POST",
+      ...jsonBody({ provider: "codex", workerId: option("worker") || "local-codex" }),
+    });
+  } else if (group === "run" && action === "start") {
+    const task = await bridgeTaskForRun(required(positional[0], "run id"));
+    result = await bridgeRequest(`/v1/tasks/${encodeURIComponent(task.taskId)}/running`, {
+      method: "POST",
+      ...jsonBody({ workerId: option("worker") || "local-codex" }),
+    });
+  } else if (group === "run" && action === "heartbeat") {
+    const task = await bridgeTaskForRun(required(positional[0], "run id"));
+    result = await bridgeRequest(`/v1/tasks/${encodeURIComponent(task.taskId)}/heartbeat`, {
+      method: "POST",
+      ...jsonBody({ workerId: option("worker") || "local-codex" }),
+    });
+  } else if (group === "run" && action === "fail") {
+    const runId = required(positional[0], "run id");
+    const task = await bridgeTaskForRun(runId);
+    result = await bridgeRequest(`/v1/tasks/${encodeURIComponent(task.taskId)}/result`, {
+      method: "POST",
+      ...jsonBody({
+        contractVersion: "bridge-result-v1",
+        taskId: task.taskId,
+        lcosRunId: task.lcosRunId ?? runId,
+        providerStatus: "failed",
+        summary: option("summary") || "Task failed.",
+        changedFiles: [],
+      }),
+    });
+  } else if (group === "run" && action === "context") {
+    const runId = required(positional[0], "run id");
+    const review = await coreRequest(`/runs/${encodeURIComponent(runId)}/review`);
+    result = await coreRequest(`/projects/${encodeURIComponent(review.run.projectId)}/context-manifests/v0/${encodeURIComponent(review.run.contextManifestId)}`);
+  } else if (group === "context" && action === "watch") {
+    const projectId = required(positional[0], "project id");
+    result = await coreRequest(`/projects/${encodeURIComponent(projectId)}/active-context?afterVersion=${Number(option("after") || 0)}`);
   } else if (group === "run" && action === "cancel") {
     result = await coreRequest(`/runs/${encodeURIComponent(required(positional[0], "run id"))}/cancel`, { method: "POST", ...jsonBody({}) });
   } else if (group === "run" && action === "events") {
@@ -424,6 +464,18 @@ async function probe(requestPromise) {
   }
 }
 
+async function bridgeTaskForRun(runId) {
+  const response = await bridgeRequest(`/v1/tasks/by-run/${encodeURIComponent(runId)}`);
+  const task = response?.task ?? response;
+  const taskId = task?.taskId ?? task?.task_id;
+  if (!taskId) throw new Error(`TASK_NOT_FOUND: no Bridge Task for run ${runId}.`);
+  const provider = String(task?.provider ?? "unknown").toLowerCase();
+  if (provider !== "codex") {
+    throw new Error(`PROVIDER_MISMATCH: run ${runId} task provider is ${provider}, expected codex.`);
+  }
+  return { taskId, lcosRunId: task?.lcosRunId ?? task?.lcos_run_id ?? runId };
+}
+
 function required(value, label) {
   if (!value) throw new Error(`${label} is required`);
   return value;
@@ -478,6 +530,7 @@ Project truth:
   lcos workspace restore-state <workspace-id> <state-id>
   lcos selection get <project-id>
   lcos context get <project-id>
+  lcos context watch <project-id> [--after N]
   lcos context search <project-id> [--q 关键词]
   lcos context add <project-id> <view...>
   lcos context remove <project-id> <view...>
@@ -500,6 +553,11 @@ Project truth:
   lcos run sync <run-id>
   lcos run cancel <run-id>
   lcos run events <run-id> [--after N]
+  lcos run claim <run-id> [--worker local-codex]
+  lcos run start <run-id> [--worker local-codex]
+  lcos run heartbeat <run-id> [--worker local-codex]
+  lcos run fail <run-id> [--summary "..."]
+  lcos run context <run-id>
   lcos run accept <artifact-return-id> --base-revision <revision-id>
   lcos run reject <artifact-return-id>
   lcos run retry <artifact-return-id> [--instruction "..."]

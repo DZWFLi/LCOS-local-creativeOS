@@ -235,11 +235,27 @@ def create_app(service: BridgeService) -> FastAPI:
         task = service.claim_next(input_value.provider, input_value.worker_id)
         return {"ok": True, "task": None if task is None else _task_dict(task)}
 
+    @app.post("/v1/tasks/{task_id}/claim")
+    def claim_task_by_id(task_id: str, input_value: ClaimInput) -> dict[str, Any]:
+        return {
+            "ok": True,
+            "task": _task_dict(
+                service.claim_task_by_id(task_id, input_value.provider, input_value.worker_id)
+            ),
+        }
+
     @app.post("/v1/tasks/{task_id}/running")
     def start_task(task_id: str, input_value: StartInput) -> dict[str, Any]:
         return {
             "ok": True,
             "task": _task_dict(service.start(task_id, input_value.worker_id)),
+        }
+
+    @app.post("/v1/tasks/{task_id}/heartbeat")
+    def heartbeat_task(task_id: str, input_value: StartInput) -> dict[str, Any]:
+        return {
+            "ok": True,
+            "task": _task_dict(service.heartbeat(task_id, input_value.worker_id or "worker")),
         }
 
     @app.post("/v1/tasks/{task_id}/result")
@@ -305,6 +321,8 @@ def create_app(service: BridgeService) -> FastAPI:
                 "cancel_task",
                 "finalize_task_review",
                 "get_capabilities",
+                "claim_task_by_id",
+                "heartbeat_task",
             ]
             return JSONResponse(
                 headers=headers,
@@ -383,9 +401,30 @@ def create_app(service: BridgeService) -> FastAPI:
                     "ok": True,
                     "task": None if task is None else _mcp_task_dict(task),
                 }
+            elif name == "claim_task_by_id":
+                value = {
+                    "ok": True,
+                    **_mcp_task_dict(
+                        service.claim_task_by_id(
+                            str(args.get("task_id", "")),
+                            str(args.get("provider") or "workbuddy"),
+                            str(args.get("worker_id") or args.get("worker") or "worker"),
+                        )
+                    ),
+                }
             elif name == "start_task":
                 task = service.start(str(args.get("task_id", "")), args.get("worker_id"))
                 value = {"ok": True, **_mcp_task_dict(task)}
+            elif name == "heartbeat_task":
+                value = {
+                    "ok": True,
+                    **_mcp_task_dict(
+                        service.heartbeat(
+                            str(args.get("task_id", "")),
+                            str(args.get("worker_id") or args.get("worker") or "worker"),
+                        )
+                    ),
+                }
             elif name == "submit_result":
                 task_id = str(args.get("task_id", ""))
                 task = service.get_task(task_id)

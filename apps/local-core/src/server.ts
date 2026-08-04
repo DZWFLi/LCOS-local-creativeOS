@@ -763,6 +763,20 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
         return
       }
 
+      const manifestOneMatch = /^\/projects\/([^/]+)\/context-manifests\/v0\/([^/]+)$/.exec(pathname)
+      if (method === 'GET' && manifestOneMatch !== null) {
+        if (!requireMetadata(metadata, response)) return
+        const projectId = decodeURIComponent(manifestOneMatch[1] ?? '')
+        const manifestId = decodeURIComponent(manifestOneMatch[2] ?? '')
+        const manifest = metadata.getContextManifest(manifestId as never)
+        if (manifest === undefined || String(manifest.projectId) !== projectId) {
+          sendJson(response, 404, failure('NOT_FOUND', 'ContextManifest not found.'))
+          return
+        }
+        sendJson(response, 200, { ok: true, value: manifest })
+        return
+      }
+
       const runProposeMatch = /^\/projects\/([^/]+)\/runs\/propose$/.exec(pathname)
       if (method === 'POST' && runProposeMatch !== null) {
         const projectId = decodeURIComponent(runProposeMatch[1] ?? '')

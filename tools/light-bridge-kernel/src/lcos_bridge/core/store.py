@@ -248,6 +248,63 @@ class SQLiteTaskStore:
                     connection.execute("ROLLBACK")
                 raise
 
+    def claim_task_by_id(self, task_id: str, provider: str, worker_id: str, lease_seconds: int = 120) -> BridgeTask:
+        now = utc_now()
+        expires = (datetime.now(timezone.utc) + timedelta(seconds=max(10, lease_seconds))).isoformat().replace("+00:00", "Z")
+        with self._connection() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                row = connection.execute(
+                    """
+                    SELECT * FROM bridge_tasks
+                    WHERE task_id = ? AND provider = ?
+                      AND (status = ? OR (status IN (?, ?) AND lease_expires_at < ?))
+                    """,
+                    (
+                        task_id,
+                        provider,
+                        ProviderStatus.QUEUED.value,
+                        ProviderStatus.CLAIMED.value,
+                        ProviderStatus.RUNNING.value,
+                        now,
+                    ),
+                ).fetchone()
+                if row is None:
+                    connection.execute("COMMIT")
+                    raise BridgeError(
+                        "TASK_NOT_CLAIMABLE",
+                        "Task is not claimable for this provider.",
+                        retryable=False,
+                        http_status=409,
+                    )
+                connection.execute(
+                    """
+                    UPDATE bridge_tasks
+                    SET status = ?, provider_status = ?, claimed_by = ?, lease_expires_at = ?,
+                        last_heartbeat_at = ?, attempt_count = attempt_count + 1, updated_at = ?
+                    WHERE task_id = ?
+                    """,
+                    (
+                        ProviderStatus.CLAIMED.value,
+                        ProviderStatus.CLAIMED.value,
+                        worker_id,
+                        expires,
+                        now,
+                        now,
+                        task_id,
+                    ),
+                )
+                updated = connection.execute(
+                    "SELECT * FROM bridge_tasks WHERE task_id = ?", (task_id,)
+                ).fetchone()
+                connection.execute("COMMIT")
+                assert updated is not None
+                return self._row_to_task(updated)
+            except Exception:
+                if connection.in_transaction:
+                    connection.execute("ROLLBACK")
+                raise
+
     def heartbeat(self, task_id: str, worker_id: str, lease_seconds: int = 120) -> BridgeTask:
         task = self._require(task_id)
         if task.claimed_by != worker_id or task.status not in {ProviderStatus.CLAIMED, ProviderStatus.RUNNING}:

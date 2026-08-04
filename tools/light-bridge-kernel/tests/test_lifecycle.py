@@ -43,6 +43,34 @@ def test_claim_lease_heartbeat_and_expiry(tmp_path):
     assert heartbeated.last_heartbeat_at is not None
     with pytest.raises(BridgeError):
         service.start(claimed.task_id, "worker-b")
+
+
+def test_claim_by_id_is_atomic_provider_isolated_and_idempotent(tmp_path):
+    path = tmp_path / "bridge.sqlite3"
+    service = BridgeService(SQLiteTaskStore(path))
+    service.create_task(make_create_envelope().model_copy(update={"provider": "codex"}))
+    task = service.get_by_run_id("run-create-1")
+    assert task is not None
+
+    claimed = service.claim_task_by_id(task.task_id, "codex", "codex-agent", 30)
+    assert claimed.claimed_by == "codex-agent"
+    assert claimed.attempt_count == 1
+
+    # 同一 Task 并发认领：不同 worker 必须失败
+    with pytest.raises(BridgeError):
+        service.claim_task_by_id(task.task_id, "codex", "other-agent", 30)
+
+    # Provider 隔离：workbuddy 不能认领 codex Task
+    service2 = BridgeService(SQLiteTaskStore(path))
+    service2.create_task(
+        make_create_envelope().model_copy(
+            update={"provider": "codex", "lcos_run_id": "run-create-2", "idempotency_key": "run-create-2"}
+        )
+    )
+    task2 = service2.get_by_run_id("run-create-2")
+    assert task2 is not None
+    with pytest.raises(BridgeError):
+        service2.claim_task_by_id(task2.task_id, "workbuddy", "buddy-agent", 30)
     with sqlite3.connect(path) as connection:
         connection.execute("UPDATE bridge_tasks SET lease_expires_at='2000-01-01T00:00:00Z' WHERE task_id=?", (claimed.task_id,))
     reclaimed = service.claim_next("codex", "worker-b", 30)

@@ -62,6 +62,10 @@ class BridgeService:
         self.providers.get(provider)
         return self.store.claim_next(provider, worker_id, lease_seconds)
 
+    def claim_task_by_id(self, task_id: str, provider: str, worker_id: str, lease_seconds: int = 120) -> BridgeTask:
+        self.providers.get(provider)
+        return self.store.claim_task_by_id(task_id, provider, worker_id, lease_seconds)
+
     def heartbeat(self, task_id: str, worker_id: str, lease_seconds: int = 120) -> BridgeTask:
         return self.store.heartbeat(task_id, worker_id, lease_seconds)
 
