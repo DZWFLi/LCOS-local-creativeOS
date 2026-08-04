@@ -6,6 +6,10 @@ const source = readFileSync(
   join(__dirname, '../../tools/codex-orchestrator/watch.ps1'),
   'utf8',
 )
+const skillInstaller = readFileSync(
+  join(__dirname, '../../scripts/install-lcos-codex-skill.mjs'),
+  'utf8',
+)
 
 describe('Codex orchestrator operational guards', () => {
   it('discovers projects from Local Core without requiring sessions.json', () => {
@@ -30,5 +34,12 @@ describe('Codex orchestrator operational guards', () => {
     expect(source).toContain('Get-Process -Id $ownerPid')
     expect(source).toContain('lastDispatchByRun = $dispatches')
     expect(source).not.toContain('lastDispatchBySession = @{}')
+  })
+
+  it('installs the canonical LCOS skill globally without overwriting unmanaged skills', () => {
+    expect(skillInstaller).toContain("join(codexHome, 'skills')")
+    expect(skillInstaller).toContain("'packages', 'skills', 'lcos-project-context', 'SKILL.md'")
+    expect(skillInstaller).toContain('Refusing to overwrite an unmanaged Codex skill')
+    expect(skillInstaller).toContain('managed-by-lcos.json')
   })
 })

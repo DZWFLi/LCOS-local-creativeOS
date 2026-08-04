@@ -27,7 +27,17 @@ describe('Runtime Host entrypoints', () => {
     expect(source).toContain('function spawnTray()')
     expect(source).toContain('trayPid: lcosTrayPids()[0] ?? null')
     expect(source).toContain('state.trayPid = tray.pid')
-    expect(source).toContain('state.bridgePid, state.trayPid')
+    expect(source).toContain('state.bridgePid, state.orchestratorPid, state.trayPid')
+    expect(source).toContain('ensureCodexSkill()')
+  })
+
+  it('starts and owns the Codex orchestrator with the Runtime Host', () => {
+    const source = readFileSync(join(repositoryRoot, 'scripts/dev-launcher.mjs'), 'utf8')
+
+    expect(source).toContain('function spawnCodexOrchestrator()')
+    expect(source).toContain("startService('orchestrator')")
+    expect(source).toContain('state.orchestratorPid = services.orchestrator.pid')
+    expect(source).toContain('state.bridgePid, state.orchestratorPid, state.trayPid')
   })
 
   it('does not put non-ASCII menu literals in a Windows PowerShell 5.1 script', () => {

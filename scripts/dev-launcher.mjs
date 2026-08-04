@@ -158,7 +158,7 @@ function ownedPidsFromState() {
   const state = readJson(STATE_FILE)
   const pids = []
   if (state && state.cwd === process.cwd()) {
-    pids.push(state.browserPid, state.launcherPid, state.webPid, state.corePid, state.bridgePid, state.trayPid)
+    pids.push(state.browserPid, state.launcherPid, state.webPid, state.corePid, state.bridgePid, state.orchestratorPid, state.trayPid)
   }
   if (existsSync(LEGACY_DEV_STACK_PID_FILE)) {
     const pid = Number(readFileSync(LEGACY_DEV_STACK_PID_FILE, 'utf8').trim())
@@ -323,6 +323,26 @@ function spawnTray() {
   return child
 }
 
+function spawnCodexOrchestrator() {
+  const shell = process.platform === 'win32' ? 'pwsh.exe' : 'pwsh'
+  const outFd = openSync(join(LOG_DIR, 'codex-orchestrator.out.log'), 'a')
+  const errFd = openSync(join(LOG_DIR, 'codex-orchestrator.err.log'), 'a')
+  const child = spawn(shell, [
+    '-NoProfile',
+    '-File', join(process.cwd(), 'tools/codex-orchestrator/watch.ps1'),
+  ], {
+    cwd: process.cwd(),
+    stdio: ['ignore', outFd, errFd],
+    windowsHide: true,
+    env: { ...process.env, LCOS_ORCHESTRATOR_REPO: process.cwd() },
+  })
+  child.once('exit', () => {
+    try { closeSync(outFd) } catch {}
+    try { closeSync(errFd) } catch {}
+  })
+  return child
+}
+
 function bridgePythonProbe() {
   const result = run('python', ['-c', 'import lcos_bridge; print("ok")'], {
     env: {
@@ -418,7 +438,7 @@ function printStatus() {
   console.log(`Working tree: ${info.status ? 'dirty' : 'clean'}`)
   if (info.status) console.log(info.status)
   console.log(`State file: ${existsSync(STATE_FILE) ? STATE_FILE : '(none)'}`)
-  console.log(`Recorded PIDs: ${state ? JSON.stringify({ launcherPid: state.launcherPid, corePid: state.corePid, webPid: state.webPid, bridgePid: state.bridgePid, browserPid: state.browserPid, trayPid: state.trayPid }) : '(none)'}`)
+  console.log(`Recorded PIDs: ${state ? JSON.stringify({ launcherPid: state.launcherPid, corePid: state.corePid, webPid: state.webPid, bridgePid: state.bridgePid, orchestratorPid: state.orchestratorPid, browserPid: state.browserPid, trayPid: state.trayPid }) : '(none)'}`)
   console.log('Ports:')
   for (const port of [WEB_PORT, CORE_PORT, BRIDGE_PORT]) {
     const owner = owners.find((item) => Number(item.LocalPort) === port)
@@ -452,6 +472,16 @@ function assertTarget(info) {
   }
 }
 
+function ensureCodexSkill() {
+  const result = run(process.execPath, [join(process.cwd(), 'scripts/install-lcos-codex-skill.mjs')])
+  if (!result.ok) {
+    console.error('Refusing to start without the LCOS Codex skill.')
+    console.error(result.stderr || result.stdout)
+    process.exit(1)
+  }
+  if (result.stdout.trim()) console.log(result.stdout.trim())
+}
+
 let stopping = false
 
 async function open() {
@@ -468,6 +498,7 @@ async function open() {
     console.error(info.status)
     process.exit(1)
   }
+  ensureCodexSkill()
   // 残留自愈：先把本机 LCOS 签名进程（旧栈/崩溃残留）清掉，再检查端口，
   // 避免“旧进程占着端口导致新栈拒绝启动”的死锁。
   for (const pid of lcosLauncherPids()) {
@@ -499,14 +530,17 @@ async function open() {
     corePid: null,
     webPid: null,
     bridgePid: null,
+    orchestratorPid: null,
     browserPid: null,
     trayPid: lcosTrayPids()[0] ?? null,
     coreRestarts: 0,
     webRestarts: 0,
     bridgeRestarts: 0,
+    orchestratorRestarts: 0,
     lastCoreRestartAt: null,
     lastWebRestartAt: null,
     lastBridgeRestartAt: null,
+    lastOrchestratorRestartAt: null,
   }
   writeState(state)
 
@@ -514,23 +548,28 @@ async function open() {
     core: { healthUrl: CORE_HEALTH_URL, pid: null, pendingRestart: false, manualStop: false, restarts: 0, restartWindowStart: 0, healthFails: 0, lastRestartAt: null },
     web: { healthUrl: WEB_URL, pid: null, pendingRestart: false, manualStop: false, restarts: 0, restartWindowStart: 0, healthFails: 0, lastRestartAt: null },
     bridge: { healthUrl: BRIDGE_HEALTH_URL, pid: null, pendingRestart: false, manualStop: false, restarts: 0, restartWindowStart: 0, healthFails: 0, lastRestartAt: null },
+    orchestrator: { healthUrl: null, pid: null, pendingRestart: false, manualStop: false, restarts: 0, restartWindowStart: 0, healthFails: 0, lastRestartAt: null },
   }
   const spawners = {
     core: () => spawnLogged('dev:local-core', 'local-core', environment),
     web: () => spawnLogged('dev:web', 'web', environment),
     bridge: () => spawnBridge(environment),
+    orchestrator: () => spawnCodexOrchestrator(),
   }
 
   function refreshState() {
     state.corePid = services.core.pid
     state.webPid = services.web.pid
     state.bridgePid = services.bridge.pid
+    state.orchestratorPid = services.orchestrator.pid
     state.coreRestarts = services.core.restarts
     state.webRestarts = services.web.restarts
     state.bridgeRestarts = services.bridge.restarts
+    state.orchestratorRestarts = services.orchestrator.restarts
     state.lastCoreRestartAt = services.core.lastRestartAt
     state.lastWebRestartAt = services.web.lastRestartAt
     state.lastBridgeRestartAt = services.bridge.lastRestartAt
+    state.lastOrchestratorRestartAt = services.orchestrator.lastRestartAt
     writeState(state)
   }
 
@@ -603,6 +642,8 @@ async function open() {
     console.log(`✓ Light Bridge ${BRIDGE_PORT}`)
     await waitForHttp(CORE_HEALTH_URL, 30_000)
     console.log(`✓ Local Core ${CORE_PORT}`)
+    startService('orchestrator')
+    console.log(`✓ Codex orchestrator pid=${services.orchestrator.pid}`)
     await waitForHttp(WEB_URL, 30_000)
     console.log(`✓ Web ${WEB_PORT}`)
   } catch (error) {

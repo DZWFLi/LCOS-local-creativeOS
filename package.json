@@ -20,6 +20,7 @@
     "bridge": "node scripts/light-bridge.mjs",
     "lcos": "node tools/lcos-agent/cli.mjs",
     "lcos:mcp": "node tools/lcos-agent/mcp-server.mjs",
+    "lcos:install-skill": "node scripts/install-lcos-codex-skill.mjs",
     "test:lcos-mcp-e2e": "node scripts/lcos-mcp-bridge-e2e.mjs",
     "check:v061-static": "node scripts/validate-v061-static.mjs",
     "check:local-core": "npm run check --workspace @local-creative-os/local-core",

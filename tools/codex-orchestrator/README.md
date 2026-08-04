@@ -50,7 +50,9 @@ Copy-Item tools\codex-orchestrator\sessions.example.json tools\codex-orchestrato
 # 编辑 sessions.json，填真实 projectId 和会话 ID（codex resume 不带参数可列出）
 ```
 
-4. 那个项目对话里有 `lcos-project-context` skill（收到“接单提示”后会认领执行）。
+4. Launcher 会把仓库权威版本 `packages/skills/lcos-project-context/SKILL.md`
+   同步到 `$CODEX_HOME/skills/lcos-project-context`；也可手工执行 `npm run lcos:install-skill`。
+   安装器只更新带 LCOS 管理标记的副本，不覆盖用户自建的同名 Skill。
 
 ## 启动
 
