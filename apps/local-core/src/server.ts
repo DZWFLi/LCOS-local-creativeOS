@@ -51,6 +51,7 @@ import {
   type CreateRuntimeRunInput,
 } from './runtime-application-service.js'
 import { ActiveContextConflictError, ActiveContextStore, type ActiveContextInput } from './active-context-store.js'
+import { ContextProposalStore } from './context-proposal-store.js'
 import { selectNativeDirectory, type DirectoryPickerInput, type DirectoryPickerResult } from './native-directory-picker.js'
 import { indexProjectRoot, inspectProjectRoot } from './project-root-indexer.js'
 
@@ -94,6 +95,7 @@ export interface LocalCoreServerOptions {
   readonly runtimeApplicationService?: RuntimeApplicationService
   readonly previewCacheRoot?: string
   readonly activeContextStore?: ActiveContextStore
+  readonly contextProposalStore?: ContextProposalStore
   readonly apiToken?: string
   readonly allowedOrigins?: readonly string[]
   readonly directoryPicker?: (input: DirectoryPickerInput) => Promise<DirectoryPickerResult>
@@ -274,6 +276,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
   const runtimeReview = options.runtimeReviewService ?? (metadata === undefined ? undefined : new RuntimeReviewService(metadata))
   const runtimeApplication = options.runtimeApplicationService
   const activeContext = options.activeContextStore ?? new ActiveContextStore()
+  const contextProposals = options.contextProposalStore ?? new ContextProposalStore(activeContext)
   const previewWorker = options.previewWorkerService
     ?? (metadata === undefined ? undefined : new PreviewWorkerService(metadata, {
       cacheService: new PreviewCacheService(metadata, {
@@ -615,6 +618,109 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
             return
           }
           throw error
+        }
+        return
+      }
+
+      const contextProposalListMatch = /^\/projects\/([^/]+)\/context-proposals$/.exec(pathname)
+      if (contextProposalListMatch !== null && (method === 'GET' || method === 'POST')) {
+        if (!requireMetadata(metadata, response)) return
+        const projectId = decodeURIComponent(contextProposalListMatch[1] ?? '')
+        if (!requireProject(projectId, metadata, response)) return
+        const graph = metadata.get(projectId)
+        if (graph === undefined) {
+          sendJson(response, 404, failure('NOT_FOUND', 'Project graph not found.'))
+          return
+        }
+        if (method === 'GET') {
+          sendJson(response, 200, { ok: true, value: contextProposals.list(projectId) })
+          return
+        }
+        const input = await readJsonBody(request, controller.signal)
+        if (!isRecord(input) || typeof input.baseContextVersion !== 'number'
+          || !isStringArray(input.addViewIds) || !isStringArray(input.removeViewIds)
+          || typeof input.reason !== 'string'
+          || (input.targetViewId !== undefined && typeof input.targetViewId !== 'string')
+          || Object.keys(input).some((key) => !['baseContextVersion', 'addViewIds', 'removeViewIds', 'targetViewId', 'reason'].includes(key))) {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Proposal requires baseContextVersion, addViewIds, removeViewIds and reason.'))
+          return
+        }
+        try {
+          const current = activeContext.get(projectId, graph)
+          const proposal = contextProposals.create(projectId, {
+            baseContextVersion: input.baseContextVersion,
+            addViewIds: input.addViewIds,
+            removeViewIds: input.removeViewIds,
+            ...(typeof input.targetViewId === 'string' ? { targetViewId: input.targetViewId } : {}),
+            reason: input.reason,
+          }, current)
+          sendJson(response, 201, { ok: true, value: proposal })
+        } catch (error: unknown) {
+          sendJson(response, 409, failure('CONFLICT', error instanceof Error ? error.message : 'Proposal creation failed.'))
+        }
+        return
+      }
+
+      const contextProposalActionMatch = /^\/projects\/([^/]+)\/context-proposals\/([^/]+)\/(accept|reject)$/.exec(pathname)
+      if (method === 'POST' && contextProposalActionMatch !== null) {
+        if (!requireMetadata(metadata, response)) return
+        const projectId = decodeURIComponent(contextProposalActionMatch[1] ?? '')
+        const proposalId = decodeURIComponent(contextProposalActionMatch[2] ?? '')
+        const action = contextProposalActionMatch[3]
+        if (!requireProject(projectId, metadata, response)) return
+        const graph = metadata.get(projectId)
+        if (graph === undefined) {
+          sendJson(response, 404, failure('NOT_FOUND', 'Project graph not found.'))
+          return
+        }
+        try {
+          if (action === 'reject') {
+            sendJson(response, 200, { ok: true, value: contextProposals.reject(projectId, proposalId) })
+            return
+          }
+          const proposal = contextProposals.get(projectId, proposalId)
+          if (proposal === undefined) throw new Error('PROPOSAL_NOT_FOUND')
+          const current = activeContext.get(projectId, graph)
+          if (current.version !== proposal.baseContextVersion) {
+            sendJson(response, 409, {
+              ok: false,
+              error: {
+                code: 'CONTEXT_STALE',
+                message: `Proposal base version ${proposal.baseContextVersion} is stale; current ${current.version}.`,
+                retryable: false,
+                origin: 'runtime',
+              },
+            })
+            contextProposals.markStale(projectId, proposalId)
+            return
+          }
+          const viewsById = new Map(graph.artifactViews.map((view) => [String(view.id), view]))
+          const removed = new Set(proposal.removeViewIds)
+          const pinned = [...new Set([
+            ...current.pinnedContextIds.filter((viewId) => !removed.has(viewId)),
+            ...proposal.addViewIds,
+          ])]
+          const targetView = proposal.targetViewId === undefined ? undefined : viewsById.get(proposal.targetViewId)
+          const targetArtifactId = targetView === undefined
+            ? (current.targetArtifactId ?? undefined)
+            : String(targetView.artifactId)
+          const targetRevisionId = targetView?.revisionId === undefined
+            ? (current.targetRevisionId ?? undefined)
+            : String(targetView.revisionId)
+          const updated = activeContext.update(projectId, graph, {
+            scopeId: current.scopeId ?? '',
+            selectedViewIds: current.selectedViewIds,
+            pinnedContextIds: pinned,
+            excludedContextIds: current.excludedContextIds,
+            ...(targetArtifactId === undefined ? {} : { targetArtifactId }),
+            ...(targetRevisionId === undefined ? {} : { targetRevisionId }),
+            expectedVersion: current.version,
+            updatedBy: 'codex',
+          })
+          contextProposals.accept(projectId, proposalId)
+          sendJson(response, 200, { ok: true, value: { proposal: contextProposals.get(projectId, proposalId), activeContext: updated } })
+        } catch (error: unknown) {
+          sendJson(response, 409, failure('CONFLICT', error instanceof Error ? error.message : 'Proposal action failed.'))
         }
         return
       }

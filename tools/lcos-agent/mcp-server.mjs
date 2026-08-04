@@ -69,6 +69,25 @@ const tools = [
     editTargets: { type: "array", items: { type: "object" } },
     resultPolicy: { type: "object" },
   }, ["projectId", "prompt"]),
+  tool("propose_lcos_context_change", "Codex proposes a Context/Target change; it never applies until the user accepts.", {
+    projectId: { type: "string" },
+    baseContextVersion: { type: "number" },
+    addViewIds: { type: "array", items: { type: "string" } },
+    removeViewIds: { type: "array", items: { type: "string" } },
+    targetViewId: { type: "string" },
+    reason: { type: "string" },
+  }, ["projectId", "baseContextVersion", "addViewIds", "removeViewIds", "reason"]),
+  tool("accept_lcos_context_proposal", "User accepts a pending Codex context proposal; ActiveContext version advances.", {
+    projectId: { type: "string" },
+    proposalId: { type: "string" },
+  }, ["projectId", "proposalId"]),
+  tool("reject_lcos_context_proposal", "User rejects a pending Codex context proposal (audit kept).", {
+    projectId: { type: "string" },
+    proposalId: { type: "string" },
+  }, ["projectId", "proposalId"]),
+  tool("list_lcos_context_proposals", "List pending/resolved Codex context proposals for a project.", {
+    projectId: { type: "string" },
+  }, ["projectId"]),
   tool("list_lcos_runtime_providers", "Read Provider capability and availability before sending.", {}, []),
   tool("build_lcos_context_manifest", "Freeze an immutable ContextManifest from Project Truth.", {
     projectId: { type: "string" },
@@ -307,6 +326,33 @@ async function handle({ id, method, params }) {
           resultPolicy: args.resultPolicy || { type: "reply_only" },
         }),
       });
+      break;
+    case "propose_lcos_context_change":
+      value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/context-proposals`, {
+        method: "POST",
+        ...jsonBody({
+          baseContextVersion: Number(args.baseContextVersion),
+          addViewIds: args.addViewIds || [],
+          removeViewIds: args.removeViewIds || [],
+          ...(args.targetViewId ? { targetViewId: args.targetViewId } : {}),
+          reason: required(args.reason, "reason"),
+        }),
+      });
+      break;
+    case "accept_lcos_context_proposal":
+      value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/context-proposals/${encodeURIComponent(required(args.proposalId, "proposalId"))}/accept`, {
+        method: "POST",
+        ...jsonBody({}),
+      });
+      break;
+    case "reject_lcos_context_proposal":
+      value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/context-proposals/${encodeURIComponent(required(args.proposalId, "proposalId"))}/reject`, {
+        method: "POST",
+        ...jsonBody({}),
+      });
+      break;
+    case "list_lcos_context_proposals":
+      value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/context-proposals`);
       break;
     case "list_lcos_runtime_providers":
       value = await coreRequest("/runtime/providers");

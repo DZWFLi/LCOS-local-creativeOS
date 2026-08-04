@@ -557,4 +557,83 @@ describe('Runtime HTTP closure', () => {
     expect(got.value.id).toBe(built.value.id)
     expect(got.value.projectId).toBe(String(snapshot.project.id))
   })
+
+  it('keeps Codex context proposals reviewable: create/accept/reject/stale', async () => {
+    const dbRoot = mkdtempSync(join(tmpdir(), 'lcos-runtime-http-db-'))
+    const projectRoot = mkdtempSync(join(tmpdir(), 'lcos-runtime-http-project-'))
+    roots.push(dbRoot, projectRoot)
+    const repository = new SqliteMetadataRepository(join(dbRoot, 'metadata.sqlite'))
+    repositories.push(repository)
+    const snapshot = createMvpSampleSnapshot(projectRoot, '2026-07-29T19:30:00.000Z')
+    repository.save(snapshot)
+    const bridge = new FakeBridge()
+    const review = new RuntimeReviewService(repository, undefined, () => 'http-nine')
+    const application = new RuntimeApplicationService(
+      repository,
+      new ContextManifestService(repository),
+      new RuntimeAdapterService(repository, bridge, 'mvp-fast-build'),
+      new RuntimeResultIngestionService(repository, bridge),
+      review,
+      undefined,
+      () => 'http-nine',
+    )
+    const server = createLocalCoreServer({
+      port: 0,
+      metadataRepository: repository,
+      runtimeReviewService: review,
+      runtimeApplicationService: application,
+    })
+    servers.push(server)
+    const address = await server.start()
+    const baseUrl = `http://${address.host}:${address.port}`
+    const scopeId = String(snapshot.scopes[0]!.id)
+    const viewA = String(snapshot.artifactViews[0]!.id)
+    const viewB = String(snapshot.artifactViews[1]!.id)
+    const putContext = (body: Record<string, unknown>) => fetch(`${baseUrl}/projects/${snapshot.project.id}/active-context`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ scopeId, selectedViewIds: [viewA], pinnedContextIds: [], excludedContextIds: [], ...body }),
+    })
+    const first = await (await putContext({})).json() as { value: { version: number } }
+
+    const createProposal = await fetch(`${baseUrl}/projects/${snapshot.project.id}/context-proposals`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ baseContextVersion: first.value.version, addViewIds: [viewB], removeViewIds: [], reason: '加入第二份参考' }),
+    })
+    expect(createProposal.status).toBe(201)
+    const created = await createProposal.json() as { value: { proposalId: string; status: string } }
+    expect(created.value.status).toBe('pending')
+
+    const accept = await fetch(`${baseUrl}/projects/${snapshot.project.id}/context-proposals/${created.value.proposalId}/accept`, {
+      method: 'POST',
+    })
+    expect(accept.status).toBe(200)
+    const accepted = await accept.json() as { value: { proposal: { status: string }; activeContext: { version: number; pinnedContextIds: string[]; updatedBy: string } } }
+    expect(accepted.value.proposal.status).toBe('accepted')
+    expect(accepted.value.activeContext.version).toBe(first.value.version + 1)
+    expect(accepted.value.activeContext.pinnedContextIds).toContain(viewB)
+    expect(accepted.value.activeContext.updatedBy).toBe('codex')
+
+    const reject = await fetch(`${baseUrl}/projects/${snapshot.project.id}/context-proposals/${created.value.proposalId}/reject`, {
+      method: 'POST',
+    })
+    expect(reject.status).toBe(409)
+
+    const second = await (await putContext({ expectedVersion: 2 })).json() as { value: { version: number } }
+    const staleProposal = await fetch(`${baseUrl}/projects/${snapshot.project.id}/context-proposals`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ baseContextVersion: second.value.version, addViewIds: [viewA], removeViewIds: [], reason: '过期测试' }),
+    })
+    const staleProposalBody = await staleProposal.json() as { value: { proposalId: string } }
+    const acceptedAgain = await fetch(`${baseUrl}/projects/${snapshot.project.id}/context-proposals/${staleProposalBody.value.proposalId}/accept`, { method: 'POST' })
+    expect(acceptedAgain.status).toBe(200)
+    const staleAccept = await fetch(`${baseUrl}/projects/${snapshot.project.id}/context-proposals`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ baseContextVersion: 1, addViewIds: [viewB], removeViewIds: [], reason: '旧版本' }),
+    })
+    expect(staleAccept.status).toBe(409)
+  })
 })

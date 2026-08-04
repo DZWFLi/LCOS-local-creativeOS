@@ -261,6 +261,16 @@ export interface LocalCoreClient {
     readonly targetArtifactId?: string
     readonly targetRevisionId?: string
   }, signal?: AbortSignal): Promise<RuntimeCall<ActiveContextProjection>>
+  proposeContextChange(projectId: string, input: {
+    readonly baseContextVersion: number
+    readonly addViewIds: readonly string[]
+    readonly removeViewIds: readonly string[]
+    readonly targetViewId?: string
+    readonly reason: string
+  }, signal?: AbortSignal): Promise<RuntimeCall<unknown>>
+  acceptContextProposal(projectId: string, proposalId: string, signal?: AbortSignal): Promise<RuntimeCall<unknown>>
+  rejectContextProposal(projectId: string, proposalId: string, signal?: AbortSignal): Promise<RuntimeCall<unknown>>
+  listContextProposals(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<readonly unknown[]>>
   artifactSearch(projectId: string, query: string, signal?: AbortSignal): Promise<RuntimeCall<readonly {
     readonly id: string
     readonly title: string
@@ -744,6 +754,37 @@ export function createLocalCoreClient(): LocalCoreClient {
           body: JSON.stringify(input),
         },
         decode: decodeResult<ActiveContextProjection>,
+      })
+    },
+    proposeContextChange(projectId, input, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/context-proposals`, {
+        signal,
+        init: {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(input),
+        },
+        decode: decodeResult<unknown>,
+      })
+    },
+    acceptContextProposal(projectId, proposalId, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/context-proposals/${encodeURIComponent(proposalId)}/accept`, {
+        signal,
+        init: { method: 'POST' },
+        decode: decodeResult<unknown>,
+      })
+    },
+    rejectContextProposal(projectId, proposalId, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/context-proposals/${encodeURIComponent(proposalId)}/reject`, {
+        signal,
+        init: { method: 'POST' },
+        decode: decodeResult<unknown>,
+      })
+    },
+    listContextProposals(projectId, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/context-proposals`, {
+        signal,
+        decode: decodeResult<readonly unknown[]>,
       })
     },
     artifactSearch(projectId, query, signal) {

@@ -314,6 +314,29 @@ try {
   } else if (group === "context" && action === "watch") {
     const projectId = required(positional[0], "project id");
     result = await coreRequest(`/projects/${encodeURIComponent(projectId)}/active-context?afterVersion=${Number(option("after") || 0)}`);
+  } else if (group === "context" && action === "propose") {
+    const projectId = required(positional[0], "project id");
+    const active = await coreRequest(`/projects/${encodeURIComponent(projectId)}/active-context`);
+    result = await coreRequest(`/projects/${encodeURIComponent(projectId)}/context-proposals`, {
+      method: "POST",
+      ...jsonBody({
+        baseContextVersion: active.version,
+        addViewIds: (option("add") || "").split(",").filter(Boolean),
+        removeViewIds: (option("remove") || "").split(",").filter(Boolean),
+        ...(option("target") ? { targetViewId: option("target") } : {}),
+        reason: required(option("reason"), "--reason"),
+      }),
+    });
+  } else if (group === "context" && action === "accept") {
+    const projectId = required(positional[0], "project id");
+    const proposalId = required(positional[1], "proposal id");
+    result = await coreRequest(`/projects/${encodeURIComponent(projectId)}/context-proposals/${encodeURIComponent(proposalId)}/accept`, { method: "POST", ...jsonBody({}) });
+  } else if (group === "context" && action === "reject") {
+    const projectId = required(positional[0], "project id");
+    const proposalId = required(positional[1], "proposal id");
+    result = await coreRequest(`/projects/${encodeURIComponent(projectId)}/context-proposals/${encodeURIComponent(proposalId)}/reject`, { method: "POST", ...jsonBody({}) });
+  } else if (group === "context" && action === "proposals") {
+    result = await coreRequest(`/projects/${encodeURIComponent(required(positional[0], "project id"))}/context-proposals`);
   } else if (group === "run" && action === "cancel") {
     result = await coreRequest(`/runs/${encodeURIComponent(required(positional[0], "run id"))}/cancel`, { method: "POST", ...jsonBody({}) });
   } else if (group === "run" && action === "events") {
@@ -534,6 +557,10 @@ Project truth:
   lcos context search <project-id> [--q 关键词]
   lcos context add <project-id> <view...>
   lcos context remove <project-id> <view...>
+  lcos context propose <project-id> --reason "..." [--add v1,v2] [--remove v3] [--target v4]
+  lcos context accept <project-id> <proposal-id>
+  lcos context reject <project-id> <proposal-id>
+  lcos context proposals <project-id>
   lcos target set <project-id> <artifact-id> [--revision id]
   lcos target clear <project-id>
   lcos artifact inspect <artifact-id>
