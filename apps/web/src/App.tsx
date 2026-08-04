@@ -123,15 +123,11 @@ export function App() {
   const [dockCollapsed, setDockCollapsed] = useState(true)
   const [miniMapCollapsed, setMiniMapCollapsed] = useState(false)
   const [globalComposerText, setGlobalComposerText] = useState('')
-  const [globalIntent, setGlobalIntent] = useState<RunOutputIntent>('analyze')
   const [globalProvider, setGlobalProvider] = useState('auto')
-  const [globalResultPolicy, setGlobalResultPolicy] = useState<ComposerResultPolicy>('reply_only')
-  const [globalTargetId, setGlobalTargetId] = useState<string | null>(null)
+  const [globalCreateAsNewNode, setGlobalCreateAsNewNode] = useState(false)
   const [selectionComposerText, setSelectionComposerText] = useState(() => queryState === 'confirm' ? '根据第二轮客户反馈调整构图，拉开产品与雕像距离，优化人物比例，保留 0–6 秒缓慢拉镜和三句字幕。' : '')
-  const [selectionIntent, setSelectionIntent] = useState<RunOutputIntent>('analyze')
   const [selectionProvider, setSelectionProvider] = useState('auto')
-  const [selectionResultPolicy, setSelectionResultPolicy] = useState<ComposerResultPolicy>('create_artifact')
-  const [selectionTargetId, setSelectionTargetId] = useState<string | null>(null)
+  const [selectionCreateAsNewNode, setSelectionCreateAsNewNode] = useState(false)
   const [selectionBaseRevision, setSelectionBaseRevision] = useState<ArtifactRevisionProvenance | null>(null)
   const [runtimeProviders, setRuntimeProviders] = useState<readonly RuntimeProviderStatus[]>([])
   const [runProposal, setRunProposal] = useState<RunProposalResult | null>(null)
@@ -180,6 +176,10 @@ export function App() {
   const activeProjectIdRef = useRef(activeProjectId)
   const restoredRunProjectRef = useRef<string | null>(null)
   const runtimeSyncBusyRef = useRef(false)
+  const draftHydratedKeyRef = useRef<string | null>(null)
+  const activeContextHydratedKeyRef = useRef<string | null>(null)
+  const activeContextVersionRef = useRef(0)
+  const restoredDraftContextIdsRef = useRef<string[]>([])
 
   const activeProject = projects.find((project) => project.id === activeProjectId) ?? projects[0]
   const activeWorkspace = workspaceId ? workspaces.find((workspace) => workspace.id === workspaceId) ?? null : null
@@ -222,11 +222,8 @@ export function App() {
     if (activeWorkspace) return nodes.filter((node) => node.workspaceIds?.includes(activeWorkspace.id)).map((node) => node.id)
     return scopeNodes.map((node) => node.id)
   }, [activeWorkspace, nodes, scopeNodes])
-  const globalTargetCandidates = useMemo(() => globalContextIds
-    .map((id) => nodes.find((node) => node.id === id))
-    .filter((node): node is CanvasNode => Boolean(node?.managed === true && node.artifactId && node.revisionId)), [globalContextIds, nodes])
-  const globalTargetNode = globalTargetId ? nodes.find((node) => node.id === globalTargetId) ?? null : null
-  const selectionTargetNode = selectionTargetId ? nodes.find((node) => node.id === selectionTargetId) ?? null : null
+  const selectionEditableNodes = useMemo(() => selectedNodes.filter((node) => node.managed === true && node.artifactId && node.revisionId), [selectedNodes])
+  const selectionTargetNode = !selectionCreateAsNewNode && selectionEditableNodes.length === 1 ? selectionEditableNodes[0] ?? null : null
   const runBusy = Boolean(activeRun && ['queued', 'running'].includes(activeRun.status))
   const capabilities = useMemo(() => capabilitiesFor(dataSource), [dataSource])
 
@@ -264,28 +261,11 @@ export function App() {
   }, [])
   useEffect(() => {
     setManualInference(null)
-    setPinnedContextIds([])
-    setExcludedContextIds([])
   }, [scopeId, selectedIds.join(',')])
   useEffect(() => {
     setRunProposal(null)
     setSelectionBaseRevision(null)
-    setSelectionComposerText('')
-    if (!selectedNodes.length) {
-      setSelectionTargetId(null)
-      return
-    }
-    const editable = selectedNodes.filter((node) => node.managed === true && node.artifactId && node.revisionId)
-    if (selectedNodes.length === 1 && editable.length === 1) {
-      setSelectionTargetId(editable[0].id)
-      setSelectionIntent('revise')
-      setSelectionResultPolicy('draft_revision_per_target')
-      return
-    }
-    setSelectionTargetId(null)
-    setSelectionIntent('analyze')
-    setSelectionResultPolicy('create_artifact')
-  }, [selectedIds.join(','), scopeId]) // selection identity owns the default; user changes survive typing
+  }, [selectedIds.join(','), scopeId, selectionCreateAsNewNode])
   useEffect(() => {
     if (!singleSelectedNode?.revisionId) return
     const fallback: ArtifactRevisionProvenance | null = (singleSelectedNode.sourceRunId || singleSelectedNode.sourcePrompt || singleSelectedNode.sourceProvider)
@@ -302,7 +282,7 @@ export function App() {
       : null
     if (fallback) {
       setSelectionBaseRevision(fallback)
-      if (fallback.prompt) setSelectionComposerText(fallback.prompt)
+      if (fallback.prompt) setSelectionComposerText((current) => current || fallback.prompt || '')
     }
     if (bootMode !== 'runtime' || !singleSelectedNode.artifactId) return
     const controller = new AbortController()
@@ -319,69 +299,159 @@ export function App() {
       const revision = revisions.find((item) => item.id === singleSelectedNode.revisionId)
       if (!revision) return
       setSelectionBaseRevision(revision)
-      if (revision.prompt) setSelectionComposerText(revision.prompt)
+      if (revision.prompt) setSelectionComposerText((current) => current || revision.prompt || '')
       if (revision.provider && runtimeProviders.some((provider) => provider.provider === revision.provider && provider.availability !== 'offline')) setSelectionProvider(revision.provider)
     })
     return () => controller.abort()
   }, [bootMode, runtimeProviders, singleSelectedNode?.artifactId, singleSelectedNode?.id, singleSelectedNode?.revisionId])
-  useEffect(() => { setRunProposal(null) }, [selectionBaseRevision?.id, selectionComposerText, selectionIntent, selectionProvider, selectionResultPolicy, selectionTargetId])
-  useEffect(() => {
-    if (globalIntent === 'analyze') setGlobalResultPolicy((current) => current === 'draft_revision_per_target' || current === 'create_collection' ? 'reply_only' : current)
-    if (globalIntent === 'create') {
-      setGlobalResultPolicy((current) => current === 'reply_only' || current === 'draft_revision_per_target' ? 'create_artifact' : current)
-      setGlobalTargetId(null)
-    }
-    if (globalIntent === 'revise') {
-      setGlobalResultPolicy('draft_revision_per_target')
-      setGlobalTargetId((current) => current && globalTargetCandidates.some((node) => node.id === current) ? current : globalTargetCandidates[0]?.id ?? null)
-    }
-  }, [globalIntent, globalTargetCandidates])
-  useEffect(() => {
-    if (globalTargetId && !globalTargetCandidates.some((node) => node.id === globalTargetId)) setGlobalTargetId(null)
-  }, [globalTargetCandidates, globalTargetId])
+  useEffect(() => { setRunProposal(null) }, [selectionBaseRevision?.id, selectionComposerText, selectionProvider, selectionCreateAsNewNode])
 
   useEffect(() => {
     if (bootMode !== 'runtime') return
+    const key = `${activeProjectId}::${workspaceId ?? '__project_overview__'}`
+    activeContextHydratedKeyRef.current = null
+    activeContextVersionRef.current = 0
+    restoredDraftContextIdsRef.current = []
+    const controller = new AbortController()
+    void bridgeRef.current.client.activeContext(activeProjectId, workspaceId, controller.signal).then((call) => {
+      if (controller.signal.aborted) return
+      if (!call.result.ok) {
+        setActiveContextError(call.result.error.message)
+        activeContextHydratedKeyRef.current = key
+        return
+      }
+      const value = call.result.value
+      setActiveContextProjection(value)
+      activeContextVersionRef.current = value.version
+      setPinnedContextIds(Array.from(new Set([...value.pinnedContextIds, ...restoredDraftContextIdsRef.current])))
+      setExcludedContextIds([...value.excludedContextIds])
+      if (value.scopeId === scopeId) setSelectedIds([...value.selectedViewIds])
+      if (value.viewport) setCamera({ x: value.viewport.x, y: value.viewport.y, zoom: value.viewport.zoom })
+      setActiveContextError(null)
+      setContextSync('synced')
+      activeContextHydratedKeyRef.current = key
+    })
+    return () => controller.abort()
+  }, [activeProjectId, bootMode, scopeId, workspaceId])
+
+  useEffect(() => {
+    if (bootMode !== 'runtime') return
+    const key = `${activeProjectId}::${workspaceId ?? '__project_overview__'}`
+    draftHydratedKeyRef.current = null
+    const controller = new AbortController()
+    void Promise.all([
+      bridgeRef.current.client.getCommandDraft(activeProjectId, workspaceId, 'selection', controller.signal),
+      bridgeRef.current.client.getCommandDraft(activeProjectId, workspaceId, 'global', controller.signal),
+    ]).then(([selectionCall, globalCall]) => {
+      if (controller.signal.aborted) return
+      if (selectionCall.result.ok && selectionCall.result.value) {
+        const draft = selectionCall.result.value
+        setSelectionComposerText(draft.prompt)
+        setSelectionProvider(draft.provider)
+        setSelectionCreateAsNewNode(draft.createAsNewNode)
+        restoredDraftContextIdsRef.current = [...draft.contextViewIds]
+        setPinnedContextIds((current) => Array.from(new Set([...current, ...draft.contextViewIds])))
+      }
+      if (globalCall.result.ok && globalCall.result.value) {
+        setGlobalComposerText(globalCall.result.value.prompt)
+        setGlobalProvider(globalCall.result.value.provider)
+        setGlobalCreateAsNewNode(globalCall.result.value.createAsNewNode)
+      }
+      draftHydratedKeyRef.current = key
+    })
+    return () => controller.abort()
+  }, [activeProjectId, bootMode, workspaceId])
+
+  useEffect(() => {
+    if (bootMode !== 'runtime') return
+    const key = `${activeProjectId}::${workspaceId ?? '__project_overview__'}`
+    if (draftHydratedKeyRef.current !== key) return
+    const controller = new AbortController()
+    const timer = window.setTimeout(() => {
+      if (!selectionComposerText.trim()) {
+        void bridgeRef.current.client.deleteCommandDraft(activeProjectId, workspaceId, 'selection', controller.signal)
+        return
+      }
+      void bridgeRef.current.client.saveCommandDraft(activeProjectId, workspaceId, 'selection', {
+        prompt: selectionComposerText,
+        contextViewIds: selectionContextIds,
+        provider: selectionProvider,
+        createAsNewNode: selectionCreateAsNewNode,
+      }, controller.signal)
+    }, 250)
+    return () => { window.clearTimeout(timer); controller.abort() }
+  }, [activeProjectId, bootMode, selectionComposerText, selectionContextIds, selectionCreateAsNewNode, selectionProvider, workspaceId])
+
+  useEffect(() => {
+    if (bootMode !== 'runtime') return
+    const key = `${activeProjectId}::${workspaceId ?? '__project_overview__'}`
+    if (draftHydratedKeyRef.current !== key) return
+    const controller = new AbortController()
+    const timer = window.setTimeout(() => {
+      if (!globalComposerText.trim()) {
+        void bridgeRef.current.client.deleteCommandDraft(activeProjectId, workspaceId, 'global', controller.signal)
+        return
+      }
+      void bridgeRef.current.client.saveCommandDraft(activeProjectId, workspaceId, 'global', {
+        prompt: globalComposerText,
+        contextViewIds: globalContextIds,
+        provider: globalProvider,
+        createAsNewNode: globalCreateAsNewNode,
+      }, controller.signal)
+    }, 250)
+    return () => { window.clearTimeout(timer); controller.abort() }
+  }, [activeProjectId, bootMode, globalComposerText, globalContextIds, globalCreateAsNewNode, globalProvider, workspaceId])
+
+  useEffect(() => {
+    if (bootMode !== 'runtime') return
+    const key = `${activeProjectId}::${workspaceId ?? '__project_overview__'}`
+    if (activeContextHydratedKeyRef.current !== key) return
     const controller = new AbortController()
     const timeout = window.setTimeout(() => {
       setContextSync('syncing')
+      const expectedVersion = activeContextVersionRef.current
       void bridgeRef.current.client.updateActiveContext(activeProjectId, {
         ...(workspaceId === null ? {} : { workspaceId }),
         scopeId,
         selectedViewIds: selectedIds,
         pinnedContextIds,
         excludedContextIds,
+        viewport: { x: camera.x, y: camera.y, zoom: camera.zoom },
+        visibleViewIds: visibleNodes.map((node) => node.id),
+        ...(expectedVersion === undefined ? {} : { expectedVersion }),
         ...(selectionTargetNode?.artifactId ? { targetArtifactId: selectionTargetNode.artifactId } : {}),
         ...((selectionBaseRevision?.id ?? selectionTargetNode?.revisionId) ? { targetRevisionId: selectionBaseRevision?.id ?? selectionTargetNode?.revisionId } : {}),
       }, controller.signal).then((call) => {
         if (call.result.ok) {
           setActiveContextProjection(call.result.value)
+          activeContextVersionRef.current = call.result.value.version
           setActiveContextError(null)
           setContextSync('synced')
         } else {
           setActiveContextError(call.result.error.message)
           if (call.result.error.code === 'ACTIVE_CONTEXT_CONFLICT') {
             setContextSync('conflict')
-            void bridgeRef.current.client.activeContext(activeProjectId).then((refresh) => {
+            void bridgeRef.current.client.activeContext(activeProjectId, workspaceId).then((refresh) => {
               if (refresh.result.ok) {
                 setActiveContextProjection(refresh.result.value)
+                activeContextVersionRef.current = refresh.result.value.version
                 setContextSync('synced')
               }
             })
           }
         }
       })
-    }, 150)
+    }, 250)
     return () => {
       window.clearTimeout(timeout)
       controller.abort()
     }
-  }, [activeProjectId, bootMode, excludedContextIds, pinnedContextIds, scopeId, selectedIds, selectionBaseRevision?.id, selectionTargetNode?.artifactId, selectionTargetNode?.revisionId, workspaceId])
+  }, [activeProjectId, bootMode, camera.x, camera.y, camera.zoom, excludedContextIds, pinnedContextIds, scopeId, selectedIds, selectionBaseRevision?.id, selectionTargetNode?.artifactId, selectionTargetNode?.revisionId, visibleNodes, workspaceId])
 
   useEffect(() => {
     if (!agentMode || !activeProjectId || bootMode !== 'runtime') return
     const timer = window.setInterval(() => {
-      void bridgeRef.current.client.listContextProposals(activeProjectId).then((call) => {
+      void bridgeRef.current.client.listContextProposals(activeProjectId, workspaceId).then((call) => {
         if (call.result.ok) setContextProposals(call.result.value as ContextChangeProposalV1[])
       })
       void bridgeRef.current.client.projectRunReviews(activeProjectId, 100).then((call) => {
@@ -399,20 +469,21 @@ export function App() {
       })
     }, 3_000)
     return () => window.clearInterval(timer)
-  }, [activeProjectId, agentMode, bootMode])
+  }, [activeProjectId, agentMode, bootMode, workspaceId])
 
   const refreshActiveContext = useCallback(() => {
     if (!activeProjectId) return
-    void bridgeRef.current.client.activeContext(activeProjectId).then((call) => {
+    void bridgeRef.current.client.activeContext(activeProjectId, workspaceId).then((call) => {
       if (call.result.ok) {
         setActiveContextProjection(call.result.value)
+        activeContextVersionRef.current = call.result.value.version
         setContextSync('synced')
         setActiveContextError(null)
       } else {
         setActiveContextError(call.result.error.message)
       }
     })
-  }, [activeProjectId])
+  }, [activeProjectId, workspaceId])
 
   const resolveContextProposal = useCallback((proposalId: string, decision: 'accept' | 'reject') => {
     if (!activeProjectId) return
@@ -422,7 +493,7 @@ export function App() {
     void call.then((result) => {
       if (result.result.ok) {
         setNotice(decision === 'accept' ? '已接受 Codex 提案，Context 已更新' : '已拒绝 Codex 提案')
-        void bridgeRef.current.client.listContextProposals(activeProjectId).then((list) => {
+        void bridgeRef.current.client.listContextProposals(activeProjectId, workspaceId).then((list) => {
           if (list.result.ok) setContextProposals(list.result.value as ContextChangeProposalV1[])
         })
         refreshActiveContext()
@@ -430,7 +501,7 @@ export function App() {
         setNotice(`提案处理失败：${result.result.error.message}`)
       }
     })
-  }, [activeProjectId, refreshActiveContext])
+  }, [activeProjectId, refreshActiveContext, workspaceId])
   useEffect(() => {
     const bridge = bridgeRef.current
     bridge.isAvailable().then((available) => {
@@ -1668,6 +1739,15 @@ export function App() {
     })
   }, [activeProjectId, activeRun, applyRuntimeReview, bootMode, nodes, scopeId, setGraph])
 
+  const clearPersistedCommandDrafts = useCallback(() => {
+    restoredDraftContextIdsRef.current = []
+    if (bootMode !== 'runtime') return
+    void Promise.all([
+      bridgeRef.current.client.deleteCommandDraft(activeProjectId, workspaceId, 'selection'),
+      bridgeRef.current.client.deleteCommandDraft(activeProjectId, workspaceId, 'global'),
+    ])
+  }, [activeProjectId, bootMode, workspaceId])
+
   const startRunFrom = useCallback((command: string, targetIds: string[], contextIds: string[], intent: RunOutputIntent = 'revise', requestedProvider = 'auto', resultPolicy: ComposerResultPolicy = intent === 'revise' ? 'draft_revision_per_target' : 'create_artifact', proposalSummary?: string, targetRevisionIdOverride?: string) => {
     if (!command.trim()) return
     const target = nodes.find((node) => node.id === targetIds[0])
@@ -1753,6 +1833,7 @@ export function App() {
         setNodeInfoId(null)
         setSelectionComposerText('')
         setGlobalComposerText('')
+        clearPersistedCommandDrafts()
         applyRuntimeReview(review, runtimeRun, providerError?.message)
         setNotice(providerError
           ? `Run 已保存为 planned，派发需要恢复：${providerError.message}`
@@ -1775,8 +1856,9 @@ export function App() {
     setActiveRun({ id, status: 'queued', command, targetIds, contextIds, processNodeId, commandId: createId('command'), contextSnapshotId: createId('context-snapshot'), reviewStatus: 'idle', inputResolved: false, changedFiles: [], createdAt: new Date().toISOString(), baseRevisionId: targetRevisionId, provider: requestedProvider, outputIntent: intent, resultPolicy, proposalSummary })
     setSelectionComposerText('')
     setGlobalComposerText('')
+    clearPersistedCommandDrafts()
     setNotice('参考快照、指令和执行记录已自动保存')
-  }, [activeProjectId, applyRuntimeReview, bootMode, nodes, scopeId, setGraph, workspaceId])
+  }, [activeProjectId, applyRuntimeReview, bootMode, clearPersistedCommandDrafts, nodes, scopeId, setGraph, workspaceId])
 
   const requestComposerFocus = useCallback(() => {
     const focusComposer = () => {
@@ -1802,37 +1884,40 @@ export function App() {
   const requestSelectionRun = useCallback(() => {
     const prompt = selectionComposerText.trim()
     if (!prompt) { setNotice('先写一句你希望本地 Agent 完成的工作'); return }
-    if (!selectedIds.length) { setNotice('先选择要进入上下文的内容'); return }
+    if (!selectedIds.length) { setNotice('先选择要给 Agent 参考的内容'); return }
     const selectedProviderStatus = selectionProvider === 'auto' ? null : runtimeProviders.find((provider) => provider.provider === selectionProvider)
-    if (selectedProviderStatus?.availability === 'offline') { setNotice(`Agent ${selectionProvider} 当前离线，换一个执行者再发送`); return }
-    const target = selectionIntent === 'revise' ? selectionTargetNode : null
-    const baseRevisionId = selectionBaseRevision?.id ?? target?.revisionId
-    if (selectionIntent === 'revise' && (!target?.artifactId || !baseRevisionId || target.managed !== true)) {
-      setNotice('修改需要选择一个受管内容作为编辑对象；外部引用只能用于分析或创建')
+    if (selectedProviderStatus && !['ready', 'busy'].includes(selectedProviderStatus.availability)) { setNotice(`Agent ${selectionProvider} 当前不能自动执行，换一个再发送`); return }
+    if (!selectionCreateAsNewNode && selectionEditableNodes.length > 1) {
+      setNotice('有多个内容都可能被修改。请点一下真正要改的内容，或打开“结果作为新节点”。')
       return
     }
+
+    const target = selectionCreateAsNewNode ? null : selectionTargetNode
+    const baseRevisionId = target ? (selectionBaseRevision?.id ?? target.revisionId) : undefined
+    const fallbackIntent: RunOutputIntent = selectionCreateAsNewNode ? 'create' : target ? 'revise' : 'analyze'
+    const fallbackPolicy: ComposerResultPolicy = fallbackIntent === 'create' ? 'create_artifact' : fallbackIntent === 'revise' ? 'draft_revision_per_target' : 'reply_only'
     const contextNodes = selectionContextIds
       .filter((id) => id !== target?.id)
       .map((id) => nodes.find((node) => node.id === id))
       .filter((node): node is CanvasNode => Boolean(node?.artifactId && node.revisionId))
     const targetIds = target ? [target.id] : []
     const contextIds = contextNodes.map((node) => node.id)
+
     if (bootMode !== 'runtime') {
-      startRunFrom(prompt, targetIds, contextIds, selectionIntent, selectionProvider, selectionResultPolicy, undefined, baseRevisionId)
+      startRunFrom(prompt, targetIds, contextIds, fallbackIntent, selectionProvider, fallbackPolicy, undefined, baseRevisionId)
       return
     }
-    setNotice('正在确认上下文、目标与结果去向…')
+    setNotice('Agent 正在理解要求并确认本次操作…')
     void bridgeRef.current.client.proposeRun(activeProjectId, {
       ...(workspaceId ? { workspaceId } : {}),
       prompt,
-      intent: selectionIntent,
       requestedProvider: selectionProvider,
+      createAsNewNode: selectionCreateAsNewNode,
       contextItems: contextNodes.map((node, order) => ({ artifactId: node.artifactId!, revisionId: node.revisionId!, order })),
       editTargets: target && baseRevisionId ? [{ artifactId: target.artifactId!, baseRevisionId }] : [],
-      resultPolicy: { type: selectionResultPolicy },
     }).then((call) => {
       if (!call.result.ok) {
-        setNotice(`执行提案失败：${call.result.error.message}`)
+        setNotice(`Agent 计划未通过安全校验：${call.result.error.message}`)
         return
       }
       const proposal = call.result.value
@@ -1852,45 +1937,39 @@ export function App() {
         baseRevisionId,
       )
     })
-  }, [activeProjectId, bootMode, nodes, selectionBaseRevision?.id, selectionComposerText, selectionContextIds, selectionIntent, selectionProvider, selectionResultPolicy, selectionTargetNode, selectedIds.length, startRunFrom, runtimeProviders, workspaceId])
+  }, [activeProjectId, bootMode, nodes, selectionBaseRevision?.id, selectionComposerText, selectionContextIds, selectionCreateAsNewNode, selectionProvider, selectionTargetNode, selectionEditableNodes.length, selectedIds.length, startRunFrom, runtimeProviders, workspaceId])
 
   const requestGlobalRun = useCallback(() => {
     const prompt = globalComposerText.trim()
     if (!prompt) { setNotice('先写一句要对当前工作空间做什么'); return }
     const selectedProviderStatus = globalProvider === 'auto' ? null : runtimeProviders.find((provider) => provider.provider === globalProvider)
-    if (selectedProviderStatus?.availability === 'offline') { setNotice(`Agent ${globalProvider} 当前离线，换一个执行者再发送`); return }
-    const target = globalIntent === 'revise' ? globalTargetNode : null
-    if (globalIntent === 'revise' && (!target?.artifactId || !target.revisionId || target.managed !== true)) {
-      setNotice('全局修改需要选择一个受管内容作为编辑对象')
-      return
-    }
+    if (selectedProviderStatus && !['ready', 'busy'].includes(selectedProviderStatus.availability)) { setNotice(`Agent ${globalProvider} 当前不能自动执行，换一个再发送`); return }
     const contextNodes = globalContextIds
-      .filter((id) => id !== target?.id)
       .map((id) => nodes.find((node) => node.id === id))
       .filter((node): node is CanvasNode => Boolean(node?.artifactId && node.revisionId))
-    const targetIds = target ? [target.id] : []
     const contextIds = contextNodes.map((node) => node.id)
-    const summary = `${activeWorkspace ? activeWorkspace.label : activeScope.label} · 全局上下文 ${contextIds.length} 项`
+    const fallbackIntent: RunOutputIntent = globalCreateAsNewNode ? 'create' : 'analyze'
+    const fallbackPolicy: ComposerResultPolicy = globalCreateAsNewNode ? 'create_artifact' : 'reply_only'
+    const summary = `${activeWorkspace ? activeWorkspace.label : activeScope.label} · ${contextIds.length} 项参考`
     if (bootMode !== 'runtime') {
-      startRunFrom(prompt, targetIds, contextIds, globalIntent, globalProvider, globalResultPolicy, summary)
+      startRunFrom(prompt, [], contextIds, fallbackIntent, globalProvider, fallbackPolicy, summary)
       return
     }
-    setNotice('正在确认全局上下文、编辑对象与结果去向…')
+    setNotice('Agent 正在理解要求并确认本次操作…')
     void bridgeRef.current.client.proposeRun(activeProjectId, {
       ...(workspaceId ? { workspaceId } : {}),
       prompt,
-      intent: globalIntent,
       requestedProvider: globalProvider,
+      createAsNewNode: globalCreateAsNewNode,
       contextItems: contextNodes.map((node, order) => ({ artifactId: node.artifactId!, revisionId: node.revisionId!, order })),
-      editTargets: target ? [{ artifactId: target.artifactId!, baseRevisionId: target.revisionId! }] : [],
-      resultPolicy: { type: globalResultPolicy },
+      editTargets: [],
     }).then((call) => {
-      if (!call.result.ok) { setNotice(`执行提案失败：${call.result.error.message}`); return }
+      if (!call.result.ok) { setNotice(`Agent 计划未通过安全校验：${call.result.error.message}`); return }
       const proposal = call.result.value
       if (proposal.ambiguity) { setNotice(proposal.ambiguity.question); return }
-      startRunFrom(proposal.proposal.prompt, targetIds, contextIds, proposal.proposal.intent, proposal.proposal.requestedProvider, proposal.proposal.resultPolicy.type, proposal.summary)
+      startRunFrom(proposal.proposal.prompt, [], contextIds, proposal.proposal.intent, proposal.proposal.requestedProvider, proposal.proposal.resultPolicy.type, proposal.summary)
     })
-  }, [activeProjectId, activeScope.label, activeWorkspace, bootMode, globalComposerText, globalContextIds, globalIntent, globalProvider, globalResultPolicy, globalTargetNode, nodes, runtimeProviders, startRunFrom, workspaceId])
+  }, [activeProjectId, activeScope.label, activeWorkspace, bootMode, globalComposerText, globalContextIds, globalCreateAsNewNode, globalProvider, nodes, runtimeProviders, startRunFrom, workspaceId])
 
   const returnArtifact = useCallback((run: ActiveRun) => {
     const target = nodes.find((node) => node.id === run.targetIds[0])
@@ -1922,6 +2001,25 @@ export function App() {
         ? '结果已摄取为 Draft，等待你的决定'
         : call.result.value.providerError?.message ?? `状态：${call.result.value.review.presentationPhase}`)
     }).finally(() => { runtimeSyncBusyRef.current = false })
+  }, [activeRun, applyRuntimeReview])
+
+  const cancelActiveRun = useCallback(() => {
+    if (!activeRun || !['queued', 'running'].includes(activeRun.status)) return
+    if (!activeRun.runtime) {
+      setActiveRun((current) => current?.id === activeRun.id ? { ...current, status: 'cancelled' } : current)
+      setNotice('任务已撤回；之后返回的结果不会成为待确认版本')
+      return
+    }
+    setNotice(`正在撤回 ${activeRun.id}…`)
+    void bridgeRef.current.client.cancelRuntimeRun(activeRun.id).then((call) => {
+      if (!call.result.ok) {
+        setNotice(`撤回失败：${call.result.error.message}`)
+        return
+      }
+      applyRuntimeReview(call.result.value.review, activeRun, call.result.value.providerError?.message)
+      setActiveRun((current) => current?.id === activeRun.id ? { ...current, status: 'cancelled' } : current)
+      setNotice('任务已撤回；迟到结果只保留审计，不会进入当前版本')
+    })
   }, [activeRun, applyRuntimeReview])
 
   useEffect(() => {
@@ -2047,10 +2145,8 @@ export function App() {
       return
     }
     setSelectedIds([workbenchNode.id])
-    setSelectionTargetId(workbenchNode.id)
     setSelectionBaseRevision(revision)
-    setSelectionIntent('revise')
-    setSelectionResultPolicy('draft_revision_per_target')
+    setSelectionCreateAsNewNode(false)
     if (revision.provider && runtimeProviders.some((provider) => provider.provider === revision.provider)) setSelectionProvider(revision.provider)
     setSelectionComposerText(revision.prompt ?? '')
     setWorkbench(null)
@@ -2268,10 +2364,8 @@ export function App() {
         selectionComposer={selectedIds.length ? {
           contextIds: selectionContextIds,
           prompt: selectionComposerText,
-          intent: selectionIntent,
           provider: selectionProvider,
-          resultPolicy: selectionResultPolicy,
-          targetId: selectionTargetId,
+          createAsNewNode: selectionCreateAsNewNode,
           ...(selectionBaseRevision ? { baseRevision: selectionBaseRevision } : {}),
           providers: runtimeProviders,
           activeWorkspace,
@@ -2280,18 +2374,8 @@ export function App() {
           ...(runProposal?.summary ? { proposalSummary: runProposal.summary } : {}),
           ...(runProposal?.ambiguity?.question ? { ambiguityQuestion: runProposal.ambiguity.question } : {}),
           onPromptChange: setSelectionComposerText,
-          onIntentChange: (intent) => {
-            setSelectionIntent(intent)
-            if (intent === 'analyze') { setSelectionResultPolicy('reply_only'); setSelectionTargetId(null); setSelectionBaseRevision(null) }
-            if (intent === 'create') { setSelectionResultPolicy('create_artifact'); setSelectionTargetId(null); setSelectionBaseRevision(null) }
-            if (intent === 'revise') {
-              setSelectionResultPolicy('draft_revision_per_target')
-              setSelectionTargetId((current) => current ?? selectedNodes.find((node) => node.managed === true && node.artifactId && node.revisionId)?.id ?? null)
-            }
-          },
           onProviderChange: setSelectionProvider,
-          onResultPolicyChange: setSelectionResultPolicy,
-          onTargetChange: (targetId) => { setSelectionTargetId(targetId); setSelectionBaseRevision(null) },
+          onCreateAsNewNodeChange: (value) => { setSelectionCreateAsNewNode(value); setSelectionBaseRevision(null) },
           onToggleContext: toggleContext,
           onSend: requestSelectionRun,
           onAddToWorkspace: addSelectionToActiveWorkspace,
@@ -2329,20 +2413,15 @@ export function App() {
         composerText={globalComposerText}
         composerRef={composerRef}
         composerFocusRequest={composerFocusRequest}
-        intent={globalIntent}
         provider={globalProvider}
-        resultPolicy={globalResultPolicy}
-        targetId={globalTargetId}
+        createAsNewNode={globalCreateAsNewNode}
         providers={runtimeProviders}
-        targetCandidates={globalTargetCandidates}
         onRequestComposerFocus={requestComposerFocus}
         onCollapse={() => setWorkRail((current) => ({ ...current, collapsed: true }))}
         onExpand={() => setWorkRail((current) => ({ ...current, collapsed: false }))}
         onComposerChange={setGlobalComposerText}
-        onIntentChange={setGlobalIntent}
         onProviderChange={setGlobalProvider}
-        onResultPolicyChange={setGlobalResultPolicy}
-        onTargetChange={setGlobalTargetId}
+        onCreateAsNewNodeChange={setGlobalCreateAsNewNode}
         onSend={requestGlobalRun}
         onSaveWorkspaceState={() => saveCurrentWorkspaceState()}
         onOpenWorkspaceStates={() => openWorkspaceStates()}
@@ -2350,6 +2429,7 @@ export function App() {
         onReject={rejectRun}
         onRetry={retryRun}
         onSyncRun={syncRuntimeRun}
+        onCancelRun={cancelActiveRun}
         onContinueModify={continueModify}
         onShowRun={clearSelection}
       />

@@ -1,20 +1,15 @@
-import type { CreateRunProposal, RunProposalResult } from '@local-creative-os/contracts'
+import type { AgentExecutionPlanV1, CreateRunProposal, RunProposalResult } from '@local-creative-os/contracts'
 
 /**
- * Phase 0 Proposal 服务（6.2）：把 selection + prompt 归纳成可见的一行摘要与
- * 默认 Proposal。当前为确定性规则实现；模型可用时替换判断源，但契约不变。
+ * GUI fallback：只根据“新节点开关”和明确单一编辑目标生成安全默认值。
+ * 创作语义由 Agent/Skill 生成 AgentExecutionPlanV1；Core 不解析自然语言。
  * Proposal 不是执行记录：真正发送后才冻结 ContextManifest。
  */
 
-const ANALYZE_HINTS = /分析|检查|评估|总结|梳理|节奏|问题|建议|对比/
-const CREATE_HINTS = /创建|生成|新建|写一份|起草|设计|产出|做一份/
-const REVISE_HINTS = /修改|改|优化|调整|润色|继续|扩写|精简|修复/
-
-function inferIntent(prompt: string, editTargetCount: number): CreateRunProposal['intent'] {
-  if (REVISE_HINTS.test(prompt)) return 'revise'
-  if (CREATE_HINTS.test(prompt)) return 'create'
-  if (ANALYZE_HINTS.test(prompt)) return 'analyze'
-  return editTargetCount > 0 ? 'revise' : 'analyze'
+function inferIntent(input: { readonly createAsNewNode?: boolean; readonly editTargetCount: number }): CreateRunProposal['intent'] {
+  if (input.createAsNewNode === true) return 'create'
+  if (input.editTargetCount === 1) return 'revise'
+  return 'analyze'
 }
 
 function defaultResultPolicy(intent: CreateRunProposal['intent']): CreateRunProposal['resultPolicy'] {
@@ -47,12 +42,14 @@ export type ProposeRunInput =
   & {
     readonly intent?: CreateRunProposal['intent']
     readonly resultPolicy?: CreateRunProposal['resultPolicy']
+    readonly createAsNewNode?: boolean
+    readonly decisionSource?: 'agent' | 'fallback'
   }
 
 export function proposeRun(input: ProposeRunInput): RunProposalResult {
   const prompt = input.prompt.trim()
   if (prompt.length === 0) throw new Error('Run prompt is required.')
-  const intent = input.intent ?? inferIntent(prompt, input.editTargets.length)
+  const intent = input.intent ?? inferIntent({ ...(input.createAsNewNode === undefined ? {} : { createAsNewNode: input.createAsNewNode }), editTargetCount: input.editTargets.length })
 
   // Domain Guard（6.3）：analyze 禁止写目标文件；create 只能新建。
   let editTargets = input.editTargets
@@ -91,12 +88,48 @@ export function proposeRun(input: ProposeRunInput): RunProposalResult {
 
   const summary = oneLineSummary(proposal)
   const ambiguity = intent === 'revise' && editTargets.length === 0
-    ? { question: '你希望修改哪个对象？请选择一个目标，或把这些对象全部作为参考。' }
-    : undefined
+    ? { question: 'Agent 还不能确定要修改哪一项。请只保留一个主要对象，或打开“结果作为新节点”。' }
+    : intent === 'revise' && editTargets.length > 1
+      ? { question: '有多个同等修改目标。请只保留一个主要对象，其他内容继续作为参考。' }
+      : undefined
   return {
     proposal,
     summary,
     confidence: ambiguity === undefined ? 'high' : 'low',
+    decisionSource: input.decisionSource ?? 'fallback',
     ...(ambiguity === undefined ? {} : { ambiguity }),
+  }
+}
+
+
+/**
+ * Agent/Skill 已完成语义理解后的最小 Core Guard。
+ * 这里只校验对象合同和 Run 生命周期组合，不重新解释自然语言。
+ */
+export function validateAgentExecutionPlan(input: AgentExecutionPlanV1): AgentExecutionPlanV1 {
+  if (input.schemaVersion !== 1) throw new Error('Agent Plan schemaVersion must be 1.')
+  const humanSummary = input.humanSummary.trim()
+  if (!humanSummary || humanSummary.length > 500) throw new Error('Agent Plan humanSummary must be 1–500 characters.')
+  if (!Array.isArray(input.risks) || input.risks.some((risk) => typeof risk !== 'string' || risk.length > 500)) {
+    throw new Error('Agent Plan risks must be short strings.')
+  }
+  if (typeof input.requiresConfirmation !== 'boolean') throw new Error('Agent Plan requiresConfirmation must be boolean.')
+  const guarded = proposeRun({
+    projectId: input.projectId,
+    ...(input.workspaceId === undefined ? {} : { workspaceId: input.workspaceId }),
+    prompt: input.prompt,
+    intent: input.intent,
+    requestedProvider: input.requestedProvider,
+    contextItems: input.contextItems,
+    editTargets: input.editTargets,
+    resultPolicy: input.resultPolicy,
+    decisionSource: 'agent',
+  }).proposal
+  return {
+    schemaVersion: 1,
+    ...guarded,
+    humanSummary,
+    risks: [...input.risks],
+    requiresConfirmation: input.requiresConfirmation,
   }
 }

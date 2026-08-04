@@ -13,12 +13,9 @@ import {
   RotateCcw,
   Send,
   Sparkles,
-  Target,
 } from 'lucide-react'
 import type { ActiveRun, CanvasNode, Workspace } from '../../model'
 import { runStatusLabel } from '../../model'
-import type { RunOutputIntent } from '../../runtime/v07UiContracts'
-import type { ComposerResultPolicy } from '../canvas/SelectionComposer'
 import { deriveWorkRailMode, isRunBusy, type WorkRailMode } from '../../state/workRailMode'
 import { PreviewSurface } from './PreviewSurface'
 
@@ -34,20 +31,15 @@ interface Props {
   composerText: string
   composerRef: RefObject<HTMLTextAreaElement | null>
   composerFocusRequest: number
-  intent: RunOutputIntent
   provider: string
-  resultPolicy: ComposerResultPolicy
-  targetId: string | null
+  createAsNewNode: boolean
   providers: readonly RuntimeProviderStatus[]
-  targetCandidates: readonly CanvasNode[]
   onRequestComposerFocus: () => void
   onCollapse: () => void
   onExpand: () => void
   onComposerChange: (value: string) => void
-  onIntentChange: (value: RunOutputIntent) => void
   onProviderChange: (value: string) => void
-  onResultPolicyChange: (value: ComposerResultPolicy) => void
-  onTargetChange: (value: string | null) => void
+  onCreateAsNewNodeChange: (value: boolean) => void
   onSend: () => void
   onSaveWorkspaceState: () => void
   onOpenWorkspaceStates: () => void
@@ -55,21 +47,9 @@ interface Props {
   onReject: () => void
   onRetry: () => void
   onSyncRun: () => void
+  onCancelRun: () => void
   onContinueModify: () => void
   onShowRun: () => void
-}
-
-const intentLabels: Record<RunOutputIntent, string> = {
-  analyze: '分析',
-  create: '创建',
-  revise: '修改',
-}
-
-const resultLabels: Record<ComposerResultPolicy, string> = {
-  reply_only: '仅返回对话',
-  create_artifact: '新建内容',
-  create_collection: '新建集合',
-  draft_revision_per_target: '新版本',
 }
 
 export function WorkRail(props: Props) {
@@ -110,7 +90,7 @@ export function WorkRail(props: Props) {
         : mode === 'review' && props.activeRun && primary
           ? <ReviewState node={primary} run={props.activeRun} onAccept={props.onAccept} onReject={props.onReject} onRetry={props.onRetry} onContinueModify={props.onContinueModify} />
           : mode === 'run' && props.activeRun
-            ? <RunState run={props.activeRun} nodes={props.nodes} onRetry={props.onRetry} onSync={props.onSyncRun} />
+            ? <RunState run={props.activeRun} nodes={props.nodes} onRetry={props.onRetry} onSync={props.onSyncRun} onCancel={props.onCancelRun} />
             : mode === 'completed' && props.activeRun
               ? <CompletedState run={props.activeRun} nodes={props.nodes} onSaveWorkspaceState={props.onSaveWorkspaceState} />
               : <RailIdleState contextLabel={props.contextLabel} contextCount={props.contextCount} />}
@@ -129,7 +109,7 @@ function WorkRailHeader({ mode, activeRun, contextLabel, contextCount, onSaveWor
   onCollapse: () => void
 }) {
   const followsRun = Boolean(activeRun && ['run', 'waiting-input', 'review', 'completed'].includes(mode))
-  const title = followsRun && activeRun ? `${activeRun.id} · ${runStatusLabel[activeRun.status]}` : '全局 Agent'
+  const title = followsRun && activeRun ? `Agent 任务 · ${runStatusLabel[activeRun.status]}` : '全局 Agent'
   const meta = followsRun
     ? mode === 'review' ? '结果确认' : mode === 'waiting-input' ? '需要你的确认' : '当前任务'
     : `${contextLabel} · ${contextCount} 项上下文`
@@ -152,16 +132,19 @@ function RailIdleState({ contextLabel, contextCount }: { contextLabel: string; c
   </div>
 }
 
-function RunState({ run, nodes, onRetry, onSync }: { run: ActiveRun; nodes: CanvasNode[]; onRetry: () => void; onSync: () => void }) {
+function RunState({ run, nodes, onRetry, onSync, onCancel }: { run: ActiveRun; nodes: CanvasNode[]; onRetry: () => void; onSync: () => void; onCancel: () => void }) {
   const targets = run.targetIds.map((id) => nodes.find((node) => node.id === id)).filter((node): node is CanvasNode => Boolean(node))
+  const stages: ActiveRun['status'][] = run.status === 'cancelled'
+    ? ['queued', 'running', 'cancelled']
+    : ['queued', 'running', 'waiting_input', 'review', 'completed']
   return <div className="rail-section run-state" data-testid="rail-run">
-    <div className={`run-hero status-${run.status}`}><span><Play size={16} fill="currentColor" /></span><div><small>{run.id}</small><h3>{runStatusLabel[run.status]}</h3><p>{run.command}</p></div></div>
-    <div className="run-contract-summary"><span>{run.outputIntent ?? 'analyze'}</span><span>{run.provider ?? 'auto'}</span><span>{run.resultPolicy ?? 'reply_only'}</span></div>
+    <div className={`run-hero status-${run.status}`}><span><Play size={16} fill="currentColor" /></span><div><small>本地 Agent 任务</small><h3>{runStatusLabel[run.status]}</h3><p>{run.command}</p></div></div>
     {run.proposalSummary && <p className="run-proposal-summary">{run.proposalSummary}</p>}
-    <ol className="run-stages">{['queued','running','waiting_input','review','completed'].map((status, index) => <li className={status === run.status ? 'active' : ''} key={status}><span>{index + 1}</span>{runStatusLabel[status as ActiveRun['status']]}</li>)}</ol>
-    <section className="run-targets"><h4>{targets.length ? '编辑对象' : '执行范围'}</h4>{targets.length ? targets.map((node) => <b key={node.id}>{node.title}</b>) : <p>{run.contextIds.length} 项上下文，无直接覆盖目标。</p>}</section>
-    <section className="changed-files"><h4>变化文件</h4>{run.changedFiles.length ? run.changedFiles.map((file) => <b key={file}>{file}</b>) : <p>执行器返回后显示文件变化。</p>}</section>
+    <ol className="run-stages">{stages.map((status, index) => <li className={status === run.status ? 'active' : ''} key={status}><span>{index + 1}</span>{runStatusLabel[status]}</li>)}</ol>
+    <section className="run-targets"><h4>{targets.length ? '将修改的内容' : '参考范围'}</h4>{targets.length ? targets.map((node) => <b key={node.id}>{node.title}</b>) : <p>{run.contextIds.length} 项上下文，无直接覆盖目标。</p>}</section>
+    <section className="changed-files"><h4>文件变化</h4>{run.changedFiles.length ? run.changedFiles.map((file) => <b key={file}>{file}</b>) : <p>Agent 返回后会显示文件变化。</p>}</section>
     {run.runtime && <button className="rail-secondary pressable" onClick={onSync}><RefreshCw size={14} />刷新执行状态</button>}
+    {['queued', 'running'].includes(run.status) && <button className="rail-secondary danger pressable" data-testid="cancel-runtime" onClick={onCancel}>撤回任务</button>}
     {run.providerError && <p className="rail-empty-copy">{run.providerError}</p>}
     {run.status === 'failed' && <button className="rail-primary pressable" onClick={onRetry}><RotateCcw size={14} />重新执行</button>}
   </div>
@@ -169,29 +152,29 @@ function RunState({ run, nodes, onRetry, onSync }: { run: ActiveRun; nodes: Canv
 
 function WaitingState({ run, onSync }: { run: ActiveRun; onSync: () => void }) {
   return <div className="rail-section waiting-state" data-testid="rail-waiting-input">
-    <div className="waiting-hero"><CircleAlert size={19} /><div><small>{run.id} · 执行器暂停</small><h3>等待输入协议尚未开放</h3><p>LCOS 不会伪造选项。补充要求请在结果节点下方重新发起，或刷新真实 Runtime 状态。</p></div></div>
-    <section className="review-summary"><h4>当前指令</h4><ul><li>{run.command}</li><li>Agent：{run.provider ?? 'auto'}</li><li>Current 与历史 Revision 均未改变。</li></ul></section>
+    <div className="waiting-hero"><CircleAlert size={19} /><div><small>Agent 已暂停</small><h3>这次任务需要补充信息</h3><p>你的原内容和任务记录都已保留。可以补充要求后再试，或刷新当前处理状态。</p></div></div>
+    <section className="review-summary"><h4>当前指令</h4><ul><li>{run.command}</li><li>Agent：{run.provider ?? 'auto'}</li><li>当前版本和历史版本都没有被改动。</li></ul></section>
     {run.runtime && <button className="rail-secondary pressable" onClick={onSync}><RefreshCw size={14} />刷新执行状态</button>}
   </div>
 }
 
 function ReviewState({ node, run, onAccept, onReject, onRetry, onContinueModify }: { node: CanvasNode; run: ActiveRun; onAccept: () => void; onReject: () => void; onRetry: () => void; onContinueModify: () => void }) {
   return <div className="rail-section review-state" data-testid="rail-review">
-    <div className="review-heading"><GitCompareArrows size={18} /><div><small>{run.id} · 结果已返回</small><h3>确认这次修改</h3><p>本地 Agent 已返回新的 Draft，原 Current 尚未改变。</p></div></div>
+    <div className="review-heading"><GitCompareArrows size={18} /><div><small>Agent 结果已返回</small><h3>确认这次修改</h3><p>新的待确认版本已经准备好，当前版本尚未改变。</p></div></div>
     <div className="review-previews"><PreviewSurface node={{ ...node, kind: 'working', title: '当前版本', draft: false }} variant="before" /><PreviewSurface node={node} variant="after" /></div>
-    <section className="review-summary"><h4>本次执行</h4><ul><li>{run.command}</li><li>新版本：{node.revisionId ?? node.title}</li><li>接受后才会切换 Current；拒绝会保留审计记录。</li></ul></section>
-    <section className="changed-files"><h4>变化文件</h4>{run.changedFiles.map((file) => <b key={file}>{file}</b>)}</section>
-    <button className="rail-primary pressable" data-testid="accept-current" onClick={onAccept}><Check size={15} />接受为当前版本</button>
+    <section className="review-summary"><h4>本次执行</h4><ul><li>{run.command}</li><li>新版本：{node.revisionId ?? node.title}</li><li>只有使用这个版本后，当前版本才会切换；放弃结果仍会保留过程记录。</li></ul></section>
+    <section className="changed-files"><h4>文件变化</h4>{run.changedFiles.map((file) => <b key={file}>{file}</b>)}</section>
+    <button className="rail-primary pressable" data-testid="accept-current" onClick={onAccept}><Check size={15} />使用这个版本</button>
     <button className="rail-secondary pressable" data-testid="continue-modify" onClick={onContinueModify}>补充修改要求</button>
     <button className="rail-secondary pressable" data-testid="retry-runtime" onClick={onRetry}><RotateCcw size={14} />重新执行</button>
-    <button className="rail-secondary danger pressable" data-testid="reject-runtime" onClick={onReject}>拒绝此版本</button>
+    <button className="rail-secondary danger pressable" data-testid="reject-runtime" onClick={onReject}>放弃这个结果</button>
   </div>
 }
 
 function CompletedState({ run, nodes, onSaveWorkspaceState }: { run: ActiveRun; nodes: CanvasNode[]; onSaveWorkspaceState: () => void }) {
   const current = run.pendingArtifactId ? nodes.find((node) => node.id === run.pendingArtifactId) : null
   return <div className="rail-section completed-state" data-testid="rail-completed">
-    <div className="completed-hero"><Check size={19} /><div><small>{run.id}</small><h3>结果已归位</h3><p>{current?.title ?? run.changedFiles[0] ?? '本次结果'} 已写入项目过程与版本记录。</p></div></div>
+    <div className="completed-hero"><Check size={19} /><div><small>Agent 任务</small><h3>结果已归位</h3><p>{current?.title ?? run.changedFiles[0] ?? '本次结果'} 已写入项目过程与版本记录。</p></div></div>
     <section className="review-summary"><h4>接下来</h4><ul><li>继续在节点下方输入下一轮修改</li><li>在 Canvas 中查看 Run、Prompt 与版本来源</li><li>需要阶段留档时保存当前工作现场</li></ul></section>
     <button className="rail-secondary pressable" onClick={onSaveWorkspaceState}><History size={14} />保存当前工作现场</button>
   </div>
@@ -199,25 +182,18 @@ function CompletedState({ run, nodes, onSaveWorkspaceState }: { run: ActiveRun; 
 
 function Composer(props: Props & { mode: WorkRailMode }) {
   const busy = isRunBusy(props.activeRun)
-  const selectedProvider = props.providers.find((item) => item.provider === props.provider)
-  const providerUnavailable = selectedProvider?.availability === 'offline'
-  const reviseWithoutTarget = props.intent === 'revise' && !props.targetId
-  const disabled = !props.composerText.trim() || busy || providerUnavailable || reviseWithoutTarget
-  const placeholder = busy ? '当前任务执行中，可以先记录下一步想法……' : props.mode === 'review' ? '继续告诉 Agent 还要怎么改……' : `对${props.contextLabel}提问、分析、创建或修改……`
-  const availablePolicies = props.intent === 'analyze'
-    ? ['reply_only', 'create_artifact'] as const
-    : props.intent === 'create'
-      ? ['create_artifact', 'create_collection'] as const
-      : ['draft_revision_per_target'] as const
+  const automaticProviders = props.providers.filter((item) => item.provider !== 'auto' && item.executionMode === 'automatic' && ['ready', 'busy'].includes(item.availability))
+  const selectedProvider = props.provider === 'auto' ? null : automaticProviders.find((item) => item.provider === props.provider)
+  const providerUnavailable = automaticProviders.length === 0 || (props.provider !== 'auto' && selectedProvider === undefined)
+  const disabled = !props.composerText.trim() || busy || providerUnavailable
+  const placeholder = busy ? '当前任务执行中，可以先记录下一步想法……' : props.mode === 'review' ? '继续告诉 Agent 还要怎么改……' : `告诉 Agent 你想对${props.contextLabel}做什么……`
   const reason = busy
-    ? `${props.activeRun?.id ?? '任务'} 正在执行，完成或需要确认时工作栏会自动切换。`
+    ? `${props.activeRun?.id ?? '任务'} 正在处理，输入内容会自动保存。`
     : providerUnavailable
-      ? '所选 Agent 当前离线，不能发送。'
-      : reviseWithoutTarget
-        ? '修改需要先选择一个受管内容作为编辑对象。'
-        : `${props.contextLabel}内 ${props.contextCount} 项将进入本次上下文。`
+      ? '本地 Agent 暂不可用；输入内容已保存，可在诊断页恢复服务。'
+      : `${props.contextLabel}内 ${props.contextCount} 项可作为参考；Agent 会自行判断如何使用。`
   return <footer className={`work-rail-composer global-context-composer ${busy ? 'is-busy' : ''}`} data-testid="work-rail-composer">
-    <div className="composer-context-line"><span><Sparkles size={12} />范围：{props.contextLabel}</span><span>{props.contextCount} 项</span>{props.intent === 'revise' && <span><Target size={12} />{props.targetCandidates.find((node) => node.id === props.targetId)?.title ?? '待选编辑对象'}</span>}</div>
+    <div className="composer-context-line"><span><Sparkles size={12} />{props.contextLabel}</span><span>{props.contextCount} 项参考</span></div>
     <div className="composer-box"><textarea data-testid="work-rail-composer-input" ref={props.composerRef} value={props.composerText} onChange={(event) => props.onComposerChange(event.target.value)} onKeyDown={(event) => {
       if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
         event.preventDefault()
@@ -225,12 +201,10 @@ function Composer(props: Props & { mode: WorkRailMode }) {
         event.nativeEvent.stopImmediatePropagation()
         if (!disabled) props.onSend()
       }
-    }} placeholder={placeholder} /><button className="pressable" disabled={disabled} aria-label="发送指令" title={busy ? '当前任务执行中' : '立即执行 · Ctrl/Cmd+Enter'} onClick={props.onSend}><Send size={16} /></button></div>
-    <div className="global-composer-options">
-      <label><span>范式</span><select value={props.intent} onChange={(event) => props.onIntentChange(event.target.value as RunOutputIntent)}>{(['analyze', 'create', 'revise'] as const).map((value) => <option key={value} value={value}>{intentLabels[value]}</option>)}</select><ChevronDown size={11} /></label>
-      <label><span>Agent</span><select value={props.provider} onChange={(event) => props.onProviderChange(event.target.value)}>{props.providers.map((item) => <option key={item.provider} value={item.provider} disabled={item.availability === 'offline'}>{item.provider === 'workbuddy' ? 'WorkBuddy' : item.provider === 'codex' ? 'Codex' : 'Auto'} · {item.availability}</option>)}</select><ChevronDown size={11} /></label>
-      <label><span>结果</span><select value={props.resultPolicy} onChange={(event) => props.onResultPolicyChange(event.target.value as ComposerResultPolicy)}>{availablePolicies.map((value) => <option key={value} value={value}>{resultLabels[value]}</option>)}</select><ChevronDown size={11} /></label>
-      {props.intent === 'revise' && <label className="global-target-option"><span>编辑对象</span><select value={props.targetId ?? ''} onChange={(event) => props.onTargetChange(event.target.value || null)}><option value="">选择受管内容</option>{props.targetCandidates.map((node) => <option key={node.id} value={node.id}>{node.title} · {node.revisionLabel ?? 'Current'}</option>)}</select><ChevronDown size={11} /></label>}
+    }} placeholder={placeholder} /><button className="pressable" disabled={disabled} aria-label="发送指令" title={busy ? '当前任务执行中' : '发送 · Ctrl/Cmd+Enter'} onClick={props.onSend}><Send size={16} /></button></div>
+    <div className="global-composer-options simple-composer-options">
+      <label><span>Agent</span><select disabled={automaticProviders.length === 0} value={automaticProviders.length === 0 ? 'unavailable' : automaticProviders.some((item) => item.provider === props.provider) ? props.provider : 'auto'} onChange={(event) => props.onProviderChange(event.target.value)}>{automaticProviders.length === 0 ? <option value="unavailable">暂无可用 Agent</option> : <><option value="auto">自动选择</option>{automaticProviders.map((item) => <option key={item.provider} value={item.provider}>{item.provider === 'workbuddy' ? 'WorkBuddy' : 'Codex'}{item.availability === 'busy' ? ' · 排队中' : ''}</option>)}</>}</select><ChevronDown size={11} /></label>
+      <label className="create-new-node-toggle"><input type="checkbox" checked={props.createAsNewNode} onChange={(event) => props.onCreateAsNewNodeChange(event.target.checked)} /><span>结果作为新节点</span></label>
     </div>
     <div className="composer-footer"><span>{reason}</span><kbd>C</kbd><span>聚焦输入</span></div>
   </footer>

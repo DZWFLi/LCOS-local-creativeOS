@@ -2,13 +2,12 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import type { RuntimeProviderStatus } from '@local-creative-os/contracts'
 import { Copy, CopyPlus, FolderTree, Grip, LayoutGrid, Trash2 } from 'lucide-react'
 import type { Camera, CanvasEdge, CanvasNode, NodeDisplayMode, RunStatus, Workspace, WorkspaceFrameVM } from '../../model'
-import type { RunOutputIntent } from '../../runtime/v07UiContracts'
 import { applyWheelGesture, getSelectionBounds, nodeDensity } from './canvasGeometry'
 import { getPendingZoneBounds } from './canvasLayout'
 import type { LayoutPreviewItem } from './scopeLayout'
 import { CanvasNodeVisual, nodeVisualFamily } from './CanvasNodeVisual'
 import { NodeContextToolbar } from './NodeContextToolbar'
-import { SelectionComposer, type ComposerResultPolicy } from './SelectionComposer'
+import { SelectionComposer } from './SelectionComposer'
 import type { ArtifactRevisionProvenance } from '../../runtime/projectionAdapters'
 
 interface Props {
@@ -27,10 +26,8 @@ interface Props {
   selectionComposer?: {
     prompt: string
     contextIds: string[]
-    intent: RunOutputIntent
     provider: string
-    resultPolicy: ComposerResultPolicy
-    targetId: string | null
+    createAsNewNode: boolean
     baseRevision?: ArtifactRevisionProvenance
     providers: readonly RuntimeProviderStatus[]
     activeWorkspace: Workspace | null
@@ -39,10 +36,8 @@ interface Props {
     proposalSummary?: string
     ambiguityQuestion?: string
     onPromptChange: (value: string) => void
-    onIntentChange: (value: RunOutputIntent) => void
     onProviderChange: (value: string) => void
-    onResultPolicyChange: (value: ComposerResultPolicy) => void
-    onTargetChange: (value: string | null) => void
+    onCreateAsNewNodeChange: (value: boolean) => void
     onToggleContext: (id: string) => void
     onSend: () => void
     onAddToWorkspace: () => void
@@ -57,6 +52,10 @@ interface Props {
 type DragCandidate = { id: string; startX: number; startY: number; offsetX: number; offsetY: number; group: Array<{ id: string; dx: number; dy: number }> }
 type ResizeCandidate = { id: string; startX: number; startY: number; width: number; height: number; moved: boolean }
 type WorkspaceDragCandidate = { workspaceId: string; startX: number; startY: number; members: Array<{ id: string; x: number; y: number }>; moved: boolean }
+
+function additiveSelection(event: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean }): boolean {
+  return event.shiftKey || event.ctrlKey || event.metaKey
+}
 
 export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edges, setEdges, camera, setCamera, selectedId, selectedIds, selectedEdgeId, setSelectedEdgeId, pendingId, runId, runStatus, spaceHeld, locked = false, layoutPreview, workspaceFrames = [], workspaceMemberNodes = nodes, activeWorkspaceId = null, onWorkspaceActivate, onPresentationInteractionChange, onPresentationCommit, selectionComposer, onSelect, onClearSelection, onMarqueeSelect, onSelectEdge, onDoubleClick, onDetails, onRequestAi, onCreateNodeFromAnchor, onFilesDropped, onArrangeSelection, onCopySelection, onDuplicateSelection, onCreateScopeFromSelection, onDeleteSelection, onPointerWorldChange, onSpaceCreate }: Props) {
   const canvasRef = useRef<HTMLDivElement | null>(null)
@@ -324,7 +323,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
         const h = node.height * camera.zoom
         return x < right && x + w > left && y < bottom && y + h > top
       }).map((node) => node.id)
-      onMarqueeSelect(ids, event.shiftKey)
+      onMarqueeSelect(ids, additiveSelection(event))
       marquee.current = null
       setMarqueeRect(null)
       return
@@ -377,7 +376,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
     if (event.button === 0 && blankCanvas) {
       onSelectEdge(null)
       setLinkModeId(null)
-      if (!event.shiftKey) onClearSelection()
+      if (!additiveSelection(event)) onClearSelection()
       marquee.current = { startX: event.clientX, startY: event.clientY, currentX: event.clientX, currentY: event.clientY }
       setMarqueeRect({ left: event.clientX, top: event.clientY, width: 0, height: 0 })
     }
@@ -520,7 +519,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
           setLinkPoint(null)
           return
         }
-        onSelect(node.id, event.shiftKey)
+        onSelect(node.id, additiveSelection(event))
         const groupIds = selectedIds.includes(node.id) && selectedIds.length > 1 ? selectedIds : [node.id]
         dragCandidate.current = { id: node.id, startX: event.clientX, startY: event.clientY, offsetX: (event.clientX - event.currentTarget.getBoundingClientRect().left) / camera.zoom, offsetY: (event.clientY - event.currentTarget.getBoundingClientRect().top) / camera.zoom, group: groupIds.map((id) => { const member = nodes.find((item) => item.id === id)!; return { id, dx: member.x - node.x, dy: member.y - node.y } }) }
       }} onClick={() => {
@@ -567,7 +566,7 @@ function CanvasCard({ node, density, zoom, showDetails, runId, runStatus, select
 }) {
   const visualFamily = nodeVisualFamily(node)
   const revisionStack = (node.revisionCount ?? 0) > 1
-  return <div data-node-id={node.id} data-node-kind={node.kind} data-node-visual-family={visualFamily} data-node-current={node.current || undefined} data-node-draft={node.draft || undefined} data-node-historical={node.historical || undefined} data-revision-count={node.revisionCount} data-result-group={node.resultGroupId} data-node-runtime={node.runtimeState} data-run-status={node.runStatus} data-artifact-id={node.artifactId} data-revision-id={node.revisionId} data-file-record-id={node.fileRecordId} data-current-revision={node.followsCurrentRevision || undefined} data-preview-status={node.previewStatus} data-view-of={node.viewOf} data-scope-id={node.scopeId} data-position-locked={node.positionLocked || undefined} data-context-only={node.contextOnly || undefined} data-testid={`canvas-node-${node.id}`} role="button" tabIndex={0} aria-disabled={node.disabled || undefined} className={`canvas-node node-family-${node.kind} visual-family-${visualFamily} density-${density} ${node.kind} ${revisionStack ? 'revision-stack' : ''} ${selected ? 'selected' : ''} ${multiSelected ? 'multi-selected' : ''} ${linkMode ? 'link-mode' : ''} ${pending ? 'pending' : ''} ${dragging ? 'dragging' : ''} ${resizing ? 'resizing' : ''} ${workspaceMember ? 'workspace-active-member' : ''} ${node.error ? 'error' : ''} ${node.disabled ? 'disabled' : ''} ${node.positionLocked ? 'position-locked' : ''}`} style={{ left: node.x, top: node.y, width: node.width, height: node.height, '--node-ui-scale': String(1 / Math.max(.2, zoom)), '--canvas-zoom': String(zoom) } as React.CSSProperties} onPointerDown={(event) => { if (!node.disabled) onPointerDown(event) }} onClick={(event) => { event.stopPropagation(); if (!node.disabled) onClick(event.shiftKey) }}>
+  return <div data-node-id={node.id} data-node-kind={node.kind} data-node-visual-family={visualFamily} data-node-current={node.current || undefined} data-node-draft={node.draft || undefined} data-node-historical={node.historical || undefined} data-revision-count={node.revisionCount} data-result-group={node.resultGroupId} data-node-runtime={node.runtimeState} data-run-status={node.runStatus} data-artifact-id={node.artifactId} data-revision-id={node.revisionId} data-file-record-id={node.fileRecordId} data-current-revision={node.followsCurrentRevision || undefined} data-preview-status={node.previewStatus} data-view-of={node.viewOf} data-scope-id={node.scopeId} data-position-locked={node.positionLocked || undefined} data-context-only={node.contextOnly || undefined} data-testid={`canvas-node-${node.id}`} role="button" tabIndex={0} aria-disabled={node.disabled || undefined} className={`canvas-node node-family-${node.kind} visual-family-${visualFamily} density-${density} ${node.kind} ${revisionStack ? 'revision-stack' : ''} ${selected ? 'selected' : ''} ${multiSelected ? 'multi-selected' : ''} ${linkMode ? 'link-mode' : ''} ${pending ? 'pending' : ''} ${dragging ? 'dragging' : ''} ${resizing ? 'resizing' : ''} ${workspaceMember ? 'workspace-active-member' : ''} ${node.error ? 'error' : ''} ${node.disabled ? 'disabled' : ''} ${node.positionLocked ? 'position-locked' : ''}`} style={{ left: node.x, top: node.y, width: node.width, height: node.height, '--node-ui-scale': String(1 / Math.max(.2, zoom)), '--canvas-zoom': String(zoom) } as React.CSSProperties} onPointerDown={(event) => { if (!node.disabled) onPointerDown(event) }} onClick={(event) => { event.stopPropagation(); if (!node.disabled) onClick(additiveSelection(event)) }}>
     {selected && !multiSelected && <NodeContextToolbar zoom={zoom} onAi={onRequestAi} onRelation={onToggleLinkMode} onDuplicate={onDuplicateSelection} />}
     <button data-testid={`anchor-in-${node.id}`} className="anchor anchor-in" aria-label={`连接到 ${node.title}`} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()} />
     <button data-testid={`anchor-out-${node.id}`} className="anchor anchor-out" aria-label={`从 ${node.title} 建立连接`} onPointerDown={onLinkStart} onClick={(event) => event.stopPropagation()} />

@@ -1,14 +1,14 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
-describe('vNext direct context composer contract', () => {
+describe('Gate F plain-language composer contract', () => {
   const readSource = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8').replaceAll('\r\n', '\n')
   const app = readSource('../src/App.tsx')
   const composer = readSource('../src/features/canvas/SelectionComposer.tsx')
   const rail = readSource('../src/features/workrail/WorkRail.tsx')
   const canvas = readSource('../src/features/canvas/ProjectCanvas.tsx')
 
-  it('launches runs directly from the selected context without RunConfirmDialog', () => {
+  it('launches runs directly from selected context without a technical confirmation page', () => {
     expect(app).not.toContain('<RunConfirmDialog')
     expect(app).toContain('selectionComposer={selectedIds.length ?')
     expect(app).toContain('onSend: requestSelectionRun')
@@ -16,23 +16,31 @@ describe('vNext direct context composer contract', () => {
     expect(composer).toContain('Ctrl/Cmd+Enter')
   })
 
-  it('keeps intent, provider, result policy and edit target independent', () => {
-    expect(composer).toContain('工作方式')
-    expect(composer).toContain('执行者')
-    expect(composer).toContain('结果去向')
-    expect(composer).toContain('编辑对象')
-    expect(composer).toContain('composer-menu-popover')
-    expect(app).toContain('targetRevisionId')
-    expect(app).toContain('resultPolicy: { type: resultPolicy }')
+  it('shows only user decisions and hides internal run parameters', () => {
+    expect(composer).toContain('告诉 Agent 你想做什么')
+    expect(composer).toContain('结果作为新节点')
+    expect(composer).toContain('label="Agent"')
+    expect(composer).not.toContain('工作方式')
+    expect(composer).not.toContain('结果去向')
+    expect(composer).not.toContain('编辑对象')
+    expect(rail).not.toContain('outputIntent')
+    expect(rail).not.toContain('Result Policy')
   })
 
-  it('makes inferred and explicitly added context visible and removable', () => {
+  it('makes selected and explicitly added context visible and removable', () => {
     expect(app).toContain('defaultSelectionContextIds')
     expect(app).toContain('relationNodes.map((node) => node.id)')
     expect(app).toContain('onToggleContext: toggleContext')
-    expect(composer).toContain('本次 Agent 可见上下文')
-    expect(composer).toContain('这里显示什么，Agent 就只读取什么')
+    expect(composer).toContain('给 Agent 参考的内容')
     expect(composer).toContain('context-chip')
+    expect(composer).toContain('添加')
+  })
+
+  it('persists command drafts instead of clearing them on selection changes', () => {
+    expect(app).toContain("getCommandDraft(activeProjectId, workspaceId, 'selection'")
+    expect(app).toContain("saveCommandDraft(activeProjectId, workspaceId, 'selection'")
+    expect(app).toContain("deleteCommandDraft(activeProjectId, workspaceId, 'selection'")
+    expect(app).not.toContain("setSelectionComposerText('')\n  }, [selectedIds.join(',')")
   })
 
   it('keeps the right rail as workspace/canvas global context', () => {

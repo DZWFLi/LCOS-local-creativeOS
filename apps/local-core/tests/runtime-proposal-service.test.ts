@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { proposeRun, type ProposeRunInput } from '../src/runtime-proposal-service.js'
+import { proposeRun, validateAgentExecutionPlan, type ProposeRunInput } from '../src/runtime-proposal-service.js'
 
 function base(overrides: Partial<ProposeRunInput> = {}): ProposeRunInput {
   return {
@@ -9,57 +9,84 @@ function base(overrides: Partial<ProposeRunInput> = {}): ProposeRunInput {
     requestedProvider: 'auto',
     contextItems: [{ artifactId: 'a1', revisionId: 'r1', order: 1 }],
     editTargets: [],
-    resultPolicy: { type: 'reply_only' },
     ...overrides,
   }
 }
 
-describe('Runtime Proposal Service (Phase 0)', () => {
-  it('infers analyze intent and keeps reply_only result policy', () => {
-    const result = proposeRun(base())
+describe('Runtime Proposal Service (Gate F)', () => {
+  it('uses only obvious UI facts for fallback intent', () => {
+    const analyze = proposeRun(base())
+    expect(analyze.proposal.intent).toBe('analyze')
+    expect(analyze.proposal.resultPolicy).toEqual({ type: 'reply_only' })
+    expect(analyze.decisionSource).toBe('fallback')
+
+    const create = proposeRun(base({ createAsNewNode: true }))
+    expect(create.proposal.intent).toBe('create')
+    expect(create.proposal.resultPolicy).toEqual({ type: 'create_artifact' })
+
+    const revise = proposeRun(base({
+      editTargets: [{ artifactId: 'script', baseRevisionId: 'rev-current' }],
+    }))
+    expect(revise.proposal.intent).toBe('revise')
+    expect(revise.proposal.resultPolicy).toEqual({ type: 'draft_revision_per_target' })
+  })
+
+  it('does not use prompt keywords as a second semantic decision engine', () => {
+    const result = proposeRun(base({ prompt: '创建新文件并修改一下脚本' }))
     expect(result.proposal.intent).toBe('analyze')
-    expect(result.proposal.resultPolicy).toEqual({ type: 'reply_only' })
-    expect(result.confidence).toBe('high')
-    expect(result.summary).toContain('分析')
   })
 
-  it('infers create intent and defaults to create_artifact', () => {
-    const result = proposeRun(base({ prompt: '根据这些参考创建一份新脚本', resultPolicy: { type: 'create_artifact' } }))
-    expect(result.proposal.intent).toBe('create')
-    expect(result.proposal.resultPolicy).toEqual({ type: 'create_artifact' })
-  })
-
-  it('infers revise from explicit edit targets and emits a visible one-line summary', () => {
-    const result = proposeRun(base({
+  it('validates an Agent-authored plan without reinterpreting its creative intent', () => {
+    const plan = validateAgentExecutionPlan({
+      schemaVersion: 1,
+      projectId: 'project-proposal',
       prompt: '把开场压缩到三秒',
+      intent: 'revise',
+      requestedProvider: 'codex',
+      contextItems: [{ artifactId: 'a1', revisionId: 'r1', order: 1 }],
       editTargets: [{ artifactId: 'script', baseRevisionId: 'rev-current' }],
       resultPolicy: { type: 'draft_revision_per_target' },
-    }))
-    expect(result.proposal.intent).toBe('revise')
-    expect(result.summary).toContain('script')
-    expect(result.summary).toContain('Draft Revision')
+      humanSummary: '将修改《脚本》，并参考 1 项内容。',
+      risks: [],
+      requiresConfirmation: false,
+    })
+    expect(plan.intent).toBe('revise')
+    expect(plan.humanSummary).toContain('脚本')
   })
 
-  it('asks a minimal question when revise has no target', () => {
-    const result = proposeRun(base({ prompt: '帮我改一下这个', resultPolicy: { type: 'draft_revision_per_target' } }))
+  it('rejects unsafe or internally inconsistent Agent plans', () => {
+    expect(() => validateAgentExecutionPlan({
+      schemaVersion: 1,
+      projectId: 'project-proposal',
+      prompt: '分析',
+      intent: 'analyze',
+      requestedProvider: 'codex',
+      contextItems: [],
+      editTargets: [{ artifactId: 'script', baseRevisionId: 'rev-current' }],
+      resultPolicy: { type: 'reply_only' },
+      humanSummary: '分析脚本。',
+      risks: [],
+      requiresConfirmation: false,
+    })).toThrow(/analyze 不允许/)
+
+    expect(() => validateAgentExecutionPlan({
+      schemaVersion: 1,
+      projectId: 'project-proposal',
+      prompt: '创建',
+      intent: 'create',
+      requestedProvider: 'codex',
+      contextItems: [],
+      editTargets: [],
+      resultPolicy: { type: 'draft_revision_per_target' },
+      humanSummary: '创建新内容。',
+      risks: [],
+      requiresConfirmation: false,
+    })).toThrow(/create 的结果去向/)
+  })
+
+  it('returns a minimal ambiguity only when fallback revise lacks a valid single target', () => {
+    const result = proposeRun(base({ intent: 'revise', resultPolicy: { type: 'draft_revision_per_target' } }))
     expect(result.confidence).toBe('low')
-    expect(result.ambiguity?.question).toContain('修改哪个对象')
-  })
-
-  it('rejects analyze with edit targets and create with edit targets', () => {
-    expect(() => proposeRun(base({ editTargets: [{ artifactId: 'a', baseRevisionId: 'r' }] })))
-      .toThrow(/analyze 不允许/)
-    expect(() => proposeRun(base({
-      prompt: '创建新文件',
-      editTargets: [{ artifactId: 'a', baseRevisionId: 'r' }],
-      resultPolicy: { type: 'create_artifact' },
-    }))).toThrow(/create 只能创建新 Artifact/)
-  })
-
-  it('rejects result policies that violate the intent guard', () => {
-    expect(() => proposeRun(base({ prompt: '修改一下', resultPolicy: { type: 'reply_only' } })))
-      .toThrow(/revise 的结果去向/)
-    expect(() => proposeRun(base({ resultPolicy: { type: 'create_collection' } })))
-      .toThrow(/analyze 的结果去向/)
+    expect(result.ambiguity?.question).toContain('修改哪一项')
   })
 })

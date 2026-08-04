@@ -10,6 +10,7 @@ import type {
   ContractError,
   BuildContextManifestV0Input,
   AcceptArtifactReturnInput,
+  AgentExecutionPlanV1,
   MutationBatch,
   Note,
   Project,
@@ -20,6 +21,8 @@ import type {
   Workspace,
   ValidateProjectRootInput,
   CreateRunProposal,
+  CommandDraftV1,
+  ProviderSessionBindingV1,
 } from '@local-creative-os/contracts'
 import type { ArtifactReturnId, ArtifactRevisionId, ArtifactViewId, FileRecordId, ProjectId, RunId, WorkspaceId } from '@local-creative-os/domain'
 
@@ -40,7 +43,7 @@ import { ResourceReader } from './resources/resource-reader.js'
 import { ResourceMatcher } from './resources/resource-matcher.js'
 import { ContextManifestService } from './context-manifest-service.js'
 import { RuntimeReviewService } from './runtime-review-service.js'
-import { proposeRun } from './runtime-proposal-service.js'
+import { proposeRun, validateAgentExecutionPlan } from './runtime-proposal-service.js'
 import { RuntimeRevisionCompareService } from './runtime-revision-compare-service.js'
 import { WorkspaceStateService } from './workspace-state-service.js'
 import { ProcessProjectionService } from './process-projection-service.js'
@@ -276,8 +279,8 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
   const contextManifest = options.contextManifestService ?? (metadata === undefined ? undefined : new ContextManifestService(metadata))
   const runtimeReview = options.runtimeReviewService ?? (metadata === undefined ? undefined : new RuntimeReviewService(metadata))
   const runtimeApplication = options.runtimeApplicationService
-  const activeContext = options.activeContextStore ?? new ActiveContextStore()
-  const contextProposals = options.contextProposalStore ?? new ContextProposalStore(activeContext)
+  const activeContext = options.activeContextStore ?? new ActiveContextStore(metadata)
+  const contextProposals = options.contextProposalStore ?? new ContextProposalStore(metadata)
   const previewWorker = options.previewWorkerService
     ?? (metadata === undefined ? undefined : new PreviewWorkerService(metadata, {
       cacheService: new PreviewCacheService(metadata, {
@@ -565,6 +568,97 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
         return
       }
 
+      const commandDraftMatch = /^\/projects\/([^/]+)\/command-drafts\/([^/]+)$/.exec(pathname)
+      if (commandDraftMatch !== null && ['GET', 'PUT', 'DELETE'].includes(method)) {
+        if (!requireMetadata(metadata, response)) return
+        const projectId = decodeURIComponent(commandDraftMatch[1] ?? '')
+        const composerAnchor = decodeURIComponent(commandDraftMatch[2] ?? '')
+        if (!requireProject(projectId, metadata, response)) return
+        const workspaceParam = url.searchParams.get('workspaceId')
+        const workspaceId = workspaceParam === null || workspaceParam === '' ? null : workspaceParam
+        if (method === 'GET') {
+          sendJson(response, 200, { ok: true, value: metadata.getCommandDraft(projectId, workspaceId, composerAnchor) ?? null })
+          return
+        }
+        if (method === 'DELETE') {
+          metadata.deleteCommandDraft(projectId, workspaceId, composerAnchor)
+          sendJson(response, 200, { ok: true, value: { deleted: true } })
+          return
+        }
+        const input = await readJsonBody(request, controller.signal)
+        if (!isRecord(input)
+          || typeof input.prompt !== 'string' || input.prompt.length > 200_000
+          || !isStringArray(input.contextViewIds)
+          || typeof input.provider !== 'string'
+          || typeof input.createAsNewNode !== 'boolean'
+          || (input.workspaceId !== undefined && input.workspaceId !== null && typeof input.workspaceId !== 'string')
+          || Object.keys(input).some((key) => !['workspaceId', 'prompt', 'contextViewIds', 'provider', 'createAsNewNode'].includes(key))) {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Command Draft requires prompt, contextViewIds, provider and createAsNewNode.'))
+          return
+        }
+        const value: CommandDraftV1 = {
+          schemaVersion: 1,
+          projectId,
+          workspaceId: input.workspaceId === undefined ? workspaceId : input.workspaceId as string | null,
+          composerAnchor,
+          prompt: input.prompt,
+          contextViewIds: input.contextViewIds,
+          provider: input.provider,
+          createAsNewNode: input.createAsNewNode,
+          updatedAt: new Date().toISOString(),
+        }
+        metadata.saveCommandDraft(value)
+        sendJson(response, 200, { ok: true, value })
+        return
+      }
+
+      const providerSessionMatch = /^\/projects\/([^/]+)\/provider-sessions\/(codex|workbuddy)$/.exec(pathname)
+      if (providerSessionMatch !== null && ['GET', 'PUT', 'DELETE'].includes(method)) {
+        if (!requireMetadata(metadata, response)) return
+        const projectId = decodeURIComponent(providerSessionMatch[1] ?? '')
+        const provider = providerSessionMatch[2] as 'codex' | 'workbuddy'
+        if (!requireProject(projectId, metadata, response)) return
+        if (method === 'GET') {
+          sendJson(response, 200, { ok: true, value: metadata.getProviderSessionBinding(projectId, provider) ?? null })
+          return
+        }
+        if (method === 'DELETE') {
+          metadata.deleteProviderSessionBinding(projectId, provider)
+          sendJson(response, 200, { ok: true, value: { deleted: true } })
+          return
+        }
+        const input = await readJsonBody(request, controller.signal)
+        if (!isRecord(input)
+          || typeof input.externalSessionId !== 'string' || input.externalSessionId.length < 1 || input.externalSessionId.length > 256
+          || !['manual', 'watchdog'].includes(String(input.origin))
+          || !['active', 'stale', 'closed'].includes(String(input.status))
+          || (input.lastRunId !== undefined && typeof input.lastRunId !== 'string')
+          || (input.leaseOwner !== undefined && typeof input.leaseOwner !== 'string')
+          || (input.leaseExpiresAt !== undefined && typeof input.leaseExpiresAt !== 'string')
+          || (input.failureCount !== undefined && (!Number.isInteger(input.failureCount) || Number(input.failureCount) < 0))
+          || Object.keys(input).some((key) => !['externalSessionId', 'origin', 'status', 'lastSeenAt', 'lastRunId', 'leaseOwner', 'leaseExpiresAt', 'failureCount'].includes(key))) {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Provider Session Binding is invalid.'))
+          return
+        }
+        const now = new Date().toISOString()
+        const value: ProviderSessionBindingV1 = {
+          projectId,
+          provider,
+          externalSessionId: input.externalSessionId,
+          origin: input.origin as ProviderSessionBindingV1['origin'],
+          status: input.status as ProviderSessionBindingV1['status'],
+          lastSeenAt: typeof input.lastSeenAt === 'string' ? input.lastSeenAt : now,
+          ...(typeof input.lastRunId === 'string' ? { lastRunId: input.lastRunId } : {}),
+          ...(typeof input.leaseOwner === 'string' ? { leaseOwner: input.leaseOwner } : {}),
+          ...(typeof input.leaseExpiresAt === 'string' ? { leaseExpiresAt: input.leaseExpiresAt } : {}),
+          failureCount: typeof input.failureCount === 'number' ? input.failureCount : 0,
+          updatedAt: now,
+        }
+        metadata.saveProviderSessionBinding(value)
+        sendJson(response, 200, { ok: true, value })
+        return
+      }
+
       const activeContextMatch = /^\/projects\/([^/]+)\/active-context$/.exec(pathname)
       if ((method === 'GET' || method === 'PUT') && activeContextMatch !== null) {
         if (!requireMetadata(metadata, response)) return
@@ -576,17 +670,19 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
           return
         }
         if (method === 'GET') {
+          const workspaceId = url.searchParams.get('workspaceId')
+          const normalizedWorkspaceId = workspaceId === null || workspaceId === '' ? null : workspaceId
           const afterRaw = url.searchParams.get('afterVersion')
           const afterVersion = afterRaw === null ? undefined : Number(afterRaw)
           if (afterRaw !== null && (!Number.isInteger(afterVersion) || (afterVersion ?? -1) < 0)) {
             sendJson(response, 400, failure('INVALID_ARGUMENT', 'afterVersion must be a non-negative integer.'))
             return
           }
-          if (afterVersion !== undefined && activeContext.get(projectId, graph).version <= afterVersion) {
+          if (afterVersion !== undefined && activeContext.get(projectId, graph, normalizedWorkspaceId).version <= afterVersion) {
             // 短轮询：最多等待 1 秒再返回当前版本（watch_lcos_active_context）
             await new Promise((resolve) => setTimeout(resolve, 1_000))
           }
-          sendJson(response, 200, { ok: true, value: activeContext.get(projectId, graph) })
+          sendJson(response, 200, { ok: true, value: activeContext.get(projectId, graph, normalizedWorkspaceId) })
           return
         }
         let input: unknown
@@ -602,9 +698,11 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
           || !isStringArray(input.excludedContextIds)
           || (input.targetArtifactId !== undefined && typeof input.targetArtifactId !== 'string')
           || (input.targetRevisionId !== undefined && typeof input.targetRevisionId !== 'string')
+          || (input.visibleViewIds !== undefined && !isStringArray(input.visibleViewIds))
+          || (input.viewport !== undefined && (!isRecord(input.viewport) || typeof input.viewport.x !== 'number' || typeof input.viewport.y !== 'number' || typeof input.viewport.zoom !== 'number'))
           || (input.expectedVersion !== undefined && typeof input.expectedVersion !== 'number')
           || (input.updatedBy !== undefined && !['web', 'codex', 'core'].includes(String(input.updatedBy)))
-          || Object.keys(input).some((key) => !['workspaceId', 'scopeId', 'selectedViewIds', 'pinnedContextIds', 'excludedContextIds', 'targetArtifactId', 'targetRevisionId', 'expectedVersion', 'updatedBy'].includes(key))) {
+          || Object.keys(input).some((key) => !['workspaceId', 'scopeId', 'selectedViewIds', 'pinnedContextIds', 'excludedContextIds', 'targetArtifactId', 'targetRevisionId', 'visibleViewIds', 'viewport', 'expectedVersion', 'updatedBy'].includes(key))) {
           sendJson(response, 400, failure('INVALID_ARGUMENT', 'Active Context requires scopeId and string ID arrays.'))
           return
         }
@@ -634,21 +732,24 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
           return
         }
         if (method === 'GET') {
-          sendJson(response, 200, { ok: true, value: contextProposals.list(projectId) })
+          sendJson(response, 200, { ok: true, value: contextProposals.list(projectId, url.searchParams.has('workspaceId') ? url.searchParams.get('workspaceId') : undefined) })
           return
         }
         const input = await readJsonBody(request, controller.signal)
         if (!isRecord(input) || typeof input.baseContextVersion !== 'number'
           || !isStringArray(input.addViewIds) || !isStringArray(input.removeViewIds)
           || typeof input.reason !== 'string'
+          || (input.workspaceId !== undefined && typeof input.workspaceId !== 'string')
           || (input.targetViewId !== undefined && typeof input.targetViewId !== 'string')
-          || Object.keys(input).some((key) => !['baseContextVersion', 'addViewIds', 'removeViewIds', 'targetViewId', 'reason'].includes(key))) {
+          || Object.keys(input).some((key) => !['workspaceId', 'baseContextVersion', 'addViewIds', 'removeViewIds', 'targetViewId', 'reason'].includes(key))) {
           sendJson(response, 400, failure('INVALID_ARGUMENT', 'Proposal requires baseContextVersion, addViewIds, removeViewIds and reason.'))
           return
         }
         try {
-          const current = activeContext.get(projectId, graph)
+          const proposalWorkspaceId = typeof input.workspaceId === 'string' ? input.workspaceId : null
+          const current = activeContext.get(projectId, graph, proposalWorkspaceId)
           const proposal = contextProposals.create(projectId, {
+            ...(proposalWorkspaceId === null ? {} : { workspaceId: proposalWorkspaceId }),
             baseContextVersion: input.baseContextVersion,
             addViewIds: input.addViewIds,
             removeViewIds: input.removeViewIds,
@@ -681,7 +782,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
           }
           const proposal = contextProposals.get(projectId, proposalId)
           if (proposal === undefined) throw new Error('PROPOSAL_NOT_FOUND')
-          const current = activeContext.get(projectId, graph)
+          const current = activeContext.get(projectId, graph, proposal.workspaceId)
           if (current.version !== proposal.baseContextVersion) {
             sendJson(response, 409, {
               ok: false,
@@ -709,10 +810,12 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
             ? (current.targetRevisionId ?? undefined)
             : String(targetView.revisionId)
           const updated = activeContext.update(projectId, graph, {
+            ...(proposal.workspaceId === null ? {} : { workspaceId: proposal.workspaceId }),
             scopeId: current.scopeId ?? '',
             selectedViewIds: current.selectedViewIds,
             pinnedContextIds: pinned,
             excludedContextIds: current.excludedContextIds,
+            ...(current.viewport === undefined ? {} : { viewport: { x: current.viewport.x, y: current.viewport.y, zoom: current.viewport.zoom }, visibleViewIds: current.viewport.visibleViewIds }),
             ...(targetArtifactId === undefined ? {} : { targetArtifactId }),
             ...(targetRevisionId === undefined ? {} : { targetRevisionId }),
             expectedVersion: current.version,
@@ -886,6 +989,34 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
         return
       }
 
+      const validateAgentPlanMatch = /^\/projects\/([^/]+)\/runs\/validate-plan$/.exec(pathname)
+      if (method === 'POST' && validateAgentPlanMatch !== null) {
+        const projectId = decodeURIComponent(validateAgentPlanMatch[1] ?? '')
+        const input = await readJsonBody(request, controller.signal)
+        if (!isRecord(input)
+          || input.schemaVersion !== 1
+          || typeof input.prompt !== 'string'
+          || !['analyze', 'create', 'revise'].includes(String(input.intent))
+          || typeof input.requestedProvider !== 'string'
+          || !Array.isArray(input.contextItems)
+          || !Array.isArray(input.editTargets)
+          || !isRecord(input.resultPolicy)
+          || typeof input.humanSummary !== 'string'
+          || !isStringArray(input.risks)
+          || typeof input.requiresConfirmation !== 'boolean'
+          || Object.keys(input).some((key) => !['schemaVersion', 'workspaceId', 'prompt', 'intent', 'requestedProvider', 'contextItems', 'editTargets', 'resultPolicy', 'humanSummary', 'risks', 'requiresConfirmation'].includes(key))) {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Agent Plan contract is invalid.'))
+          return
+        }
+        try {
+          const value = validateAgentExecutionPlan({ ...input, projectId } as unknown as AgentExecutionPlanV1)
+          sendJson(response, 200, { ok: true, value })
+        } catch (error: unknown) {
+          sendJson(response, 400, failure('VALIDATION', error instanceof Error ? error.message : 'Agent Plan validation failed.'))
+        }
+        return
+      }
+
       const runProposeMatch = /^\/projects\/([^/]+)\/runs\/propose$/.exec(pathname)
       if (method === 'POST' && runProposeMatch !== null) {
         const projectId = decodeURIComponent(runProposeMatch[1] ?? '')
@@ -895,9 +1026,10 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
           || typeof input.requestedProvider !== 'string'
           || !Array.isArray(input.contextItems)
           || !Array.isArray(input.editTargets)
-          || !isRecord(input.resultPolicy)
-          || Object.keys(input).some((key) => !['workspaceId', 'prompt', 'intent', 'requestedProvider', 'contextItems', 'editTargets', 'resultPolicy'].includes(key))) {
-          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Run proposal requires prompt, requestedProvider, contextItems, editTargets and resultPolicy.'))
+          || (input.resultPolicy !== undefined && !isRecord(input.resultPolicy))
+          || (input.createAsNewNode !== undefined && typeof input.createAsNewNode !== 'boolean')
+          || Object.keys(input).some((key) => !['workspaceId', 'prompt', 'intent', 'requestedProvider', 'contextItems', 'editTargets', 'resultPolicy', 'createAsNewNode', 'decisionSource'].includes(key))) {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Run proposal requires prompt, requestedProvider, contextItems and editTargets.'))
           return
         }
         try {
@@ -908,10 +1040,12 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
               ...(typeof input.workspaceId === 'string' ? { workspaceId: input.workspaceId } : {}),
               prompt: input.prompt,
               ...(typeof input.intent === 'string' ? { intent: input.intent as 'analyze' | 'create' | 'revise' } : {}),
+              ...(typeof input.createAsNewNode === 'boolean' ? { createAsNewNode: input.createAsNewNode } : {}),
+              ...(input.decisionSource === 'agent' ? { decisionSource: 'agent' as const } : {}),
               requestedProvider: input.requestedProvider,
               contextItems: input.contextItems as CreateRunProposal['contextItems'],
               editTargets: input.editTargets as CreateRunProposal['editTargets'],
-              resultPolicy: input.resultPolicy as CreateRunProposal['resultPolicy'],
+              ...(isRecord(input.resultPolicy) ? { resultPolicy: input.resultPolicy as unknown as CreateRunProposal['resultPolicy'] } : {}),
             }),
           })
         } catch (error: unknown) {
@@ -1316,7 +1450,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
           sendJson(response, 404, failure('NOT_FOUND', 'Project not found.'))
           return
         }
-        const sessions = (input.sessions as unknown[] | undefined ?? []).flatMap((item) => {
+        const suppliedSessions = (input.sessions as unknown[] | undefined ?? []).flatMap((item) => {
           if (!isRecord(item) || typeof item.sessionId !== 'string') return []
           return [{
             sessionId: item.sessionId,
@@ -1324,6 +1458,15 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
             ...(item.busy === true ? { busy: true } : {}),
           }]
         })
+        const preferredBinding = metadata.getProviderSessionBinding(input.projectId, 'codex')
+        const suppliedById = new Map(suppliedSessions.map((session) => [session.sessionId, session]))
+        const preferredSession = preferredBinding?.status === 'active'
+          ? { sessionId: preferredBinding.externalSessionId, ...(suppliedById.get(preferredBinding.externalSessionId) ?? {}) }
+          : undefined
+        const sessions = [
+          ...(preferredSession === undefined ? [] : [preferredSession]),
+          ...suppliedSessions.filter((session) => session.sessionId !== preferredSession?.sessionId),
+        ]
         const reviews = runtimeApplication.getProjectReviews(input.projectId as ProjectId, 100)
         const taskStates = new Map<string, { readonly status?: string; readonly leaseExpiresAt?: string }>()
         for (const review of reviews) {

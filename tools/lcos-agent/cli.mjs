@@ -9,6 +9,35 @@ const option = (name) => {
   return index < 0 ? undefined : rest[index + 1];
 };
 const positional = rest.filter((value, index) => !value.startsWith("--") && !rest[index - 1]?.startsWith("--"));
+const activeContextPath = (projectId, afterVersion) => {
+  const query = new URLSearchParams();
+  if (option("workspace")) query.set("workspaceId", option("workspace"));
+  if (afterVersion !== undefined) query.set("afterVersion", String(afterVersion));
+  const encoded = encodeURIComponent(projectId);
+  return `/projects/${encoded}/active-context${query.size ? `?${query}` : ""}`;
+};
+const contextProposalsPath = (projectId) => {
+  const query = new URLSearchParams();
+  if (option("workspace")) query.set("workspaceId", option("workspace"));
+  return `/projects/${encodeURIComponent(projectId)}/context-proposals${query.size ? `?${query}` : ""}`;
+};
+
+const activeContextMutation = (active, patch = {}) => ({
+  ...(option("workspace") ? { workspaceId: option("workspace") } : {}),
+  scopeId: active.scopeId || "",
+  selectedViewIds: active.selectedViewIds ?? [],
+  pinnedContextIds: active.pinnedContextIds ?? [],
+  excludedContextIds: active.excludedContextIds ?? [],
+  ...(active.viewport ? {
+    viewport: { x: active.viewport.x, y: active.viewport.y, zoom: active.viewport.zoom },
+    visibleViewIds: active.viewport.visibleViewIds ?? [],
+  } : {}),
+  ...(active.targetArtifactId ? { targetArtifactId: active.targetArtifactId } : {}),
+  ...(active.targetRevisionId ? { targetRevisionId: active.targetRevisionId } : {}),
+  expectedVersion: active.version,
+  updatedBy: "codex",
+  ...patch,
+});
 let exitCode = 0;
 
 try {
@@ -120,80 +149,94 @@ try {
   } else if (group === "run" && action === "propose") {
     const projectId = required(positional[0], "project id");
     const prompt = required(option("prompt"), "--prompt");
+    const active = await coreRequest(activeContextPath(projectId));
+    const contextItems = (active.contextItems ?? []).flatMap((item, order) => item.revisionId ? [{ artifactId: item.artifactId, revisionId: item.revisionId, order }] : []);
+    const editTargets = active.targetArtifactId && active.targetRevisionId
+      ? [{ artifactId: active.targetArtifactId, baseRevisionId: active.targetRevisionId }]
+      : [];
     result = await coreRequest(`/projects/${encodeURIComponent(projectId)}/runs/propose`, {
       method: "POST",
       ...jsonBody({
+        ...(option("workspace") ? { workspaceId: option("workspace") } : {}),
         prompt,
         requestedProvider: option("provider") || "auto",
-        contextItems: [],
-        editTargets: [],
-        resultPolicy: { type: "reply_only" },
+        createAsNewNode: rest.includes("--new-node"),
+        contextItems,
+        editTargets,
       }),
+    });
+  } else if (group === "run" && action === "validate-plan") {
+    const projectId = required(positional[0], "project id");
+    const planPath = required(positional[1], "agent plan json path");
+    const plan = JSON.parse(await readFile(planPath, "utf8"));
+    result = await coreRequest(`/projects/${encodeURIComponent(projectId)}/runs/validate-plan`, {
+      method: "POST",
+      ...jsonBody(plan),
     });
   } else if (group === "providers") {
     result = await coreRequest("/runtime/providers");
   } else if (group === "context" && action === "get") {
-    result = await coreRequest(`/projects/${encodeURIComponent(required(positional[0], "project id"))}/active-context`);
+    result = await coreRequest(activeContextPath(required(positional[0], "project id")));
   } else if (group === "selection" && action === "get") {
-    result = await coreRequest(`/projects/${encodeURIComponent(required(positional[0], "project id"))}/active-context`);
+    result = await coreRequest(activeContextPath(required(positional[0], "project id")));
   } else if (group === "context" && action === "search") {
     const projectId = required(positional[0], "project id");
     result = await coreRequest(`/projects/${encodeURIComponent(projectId)}/artifacts/search?q=${encodeURIComponent(option("q") || "")}`);
   } else if (group === "target" && action === "set") {
     const projectId = required(positional[0], "project id");
     const artifactId = required(positional[1], "artifact id");
-    const active = await coreRequest(`/projects/${encodeURIComponent(projectId)}/active-context`);
-    result = await coreRequest(`/projects/${encodeURIComponent(projectId)}/active-context`, {
+    const active = await coreRequest(activeContextPath(projectId));
+    result = await coreRequest(activeContextPath(projectId), {
       method: "PUT",
-      ...jsonBody({
-        scopeId: active.scopeId,
-        selectedViewIds: active.selectedViewIds ?? [],
-        pinnedContextIds: active.pinnedContextIds ?? [],
-        excludedContextIds: active.excludedContextIds ?? [],
+      ...jsonBody(activeContextMutation(active, {
         targetArtifactId: artifactId,
         ...(option("revision") ? { targetRevisionId: option("revision") } : {}),
-      }),
+      })),
     });
   } else if (group === "target" && action === "clear") {
     const projectId = required(positional[0], "project id");
-    const active = await coreRequest(`/projects/${encodeURIComponent(projectId)}/active-context`);
-    result = await coreRequest(`/projects/${encodeURIComponent(projectId)}/active-context`, {
+    const active = await coreRequest(activeContextPath(projectId));
+    result = await coreRequest(activeContextPath(projectId), {
       method: "PUT",
       ...jsonBody({
-        scopeId: active.scopeId,
+        ...(option("workspace") ? { workspaceId: option("workspace") } : {}),
+        scopeId: active.scopeId || "",
         selectedViewIds: active.selectedViewIds ?? [],
         pinnedContextIds: active.pinnedContextIds ?? [],
         excludedContextIds: active.excludedContextIds ?? [],
+        ...(active.viewport ? { viewport: { x: active.viewport.x, y: active.viewport.y, zoom: active.viewport.zoom }, visibleViewIds: active.viewport.visibleViewIds ?? [] } : {}),
+        expectedVersion: active.version,
+        updatedBy: "codex",
       }),
     });
   } else if (group === "context" && action === "add") {
     const projectId = required(positional[0], "project id");
     const viewIds = positional.slice(1);
     if (viewIds.length === 0) throw new Error("context add requires at least one view id");
-    const active = await coreRequest(`/projects/${encodeURIComponent(projectId)}/active-context`);
-    result = await coreRequest(`/projects/${encodeURIComponent(projectId)}/active-context`, {
+    const active = await coreRequest(activeContextPath(projectId));
+    result = await coreRequest(activeContextPath(projectId), {
       method: "PUT",
-      ...jsonBody({
-        scopeId: active.scopeId,
-        selectedViewIds: active.selectedViewIds ?? [],
+      ...jsonBody(activeContextMutation(active, {
         pinnedContextIds: [...new Set([...(active.pinnedContextIds ?? []), ...viewIds])],
-        excludedContextIds: active.excludedContextIds ?? [],
-      }),
+        excludedContextIds: (active.excludedContextIds ?? []).filter((id) => !viewIds.includes(id)),
+      })),
     });
   } else if (group === "context" && action === "remove") {
     const projectId = required(positional[0], "project id");
     const viewIds = positional.slice(1);
     if (viewIds.length === 0) throw new Error("context remove requires at least one view id");
-    const active = await coreRequest(`/projects/${encodeURIComponent(projectId)}/active-context`);
+    const active = await coreRequest(activeContextPath(projectId));
     const removed = new Set(viewIds);
-    result = await coreRequest(`/projects/${encodeURIComponent(projectId)}/active-context`, {
+    result = await coreRequest(activeContextPath(projectId), {
       method: "PUT",
-      ...jsonBody({
-        scopeId: active.scopeId,
+      ...jsonBody(activeContextMutation(active, {
         selectedViewIds: (active.selectedViewIds ?? []).filter((id) => !removed.has(id)),
         pinnedContextIds: (active.pinnedContextIds ?? []).filter((id) => !removed.has(id)),
-        excludedContextIds: active.excludedContextIds ?? [],
-      }),
+        excludedContextIds: [...new Set([...(active.excludedContextIds ?? []), ...viewIds])],
+        ...(active.targetArtifactId && (active.contextItems ?? []).some((item) => removed.has(item.viewId) && item.artifactId === active.targetArtifactId)
+          ? { targetArtifactId: undefined, targetRevisionId: undefined }
+          : {}),
+      })),
     });
   } else if (group === "artifact" && action === "inspect") {
     result = await coreRequest(`/artifacts/${encodeURIComponent(required(positional[0], "artifact id"))}`);
@@ -216,6 +259,28 @@ try {
     const workspaceId = required(positional[0], "workspace id");
     const stateId = required(positional[1], "state id");
     result = await coreRequest(`/workspaces/${encodeURIComponent(workspaceId)}/states/${encodeURIComponent(stateId)}/restore`, { method: "POST", ...jsonBody({}) });
+  } else if (group === "provider-session" && action === "get") {
+    const projectId = required(positional[0], "project id");
+    const provider = option("provider") || "codex";
+    result = await coreRequest(`/projects/${encodeURIComponent(projectId)}/provider-sessions/${encodeURIComponent(provider)}`);
+  } else if (group === "provider-session" && action === "set") {
+    const projectId = required(positional[0], "project id");
+    const provider = option("provider") || "codex";
+    result = await coreRequest(`/projects/${encodeURIComponent(projectId)}/provider-sessions/${encodeURIComponent(provider)}`, {
+      method: "PUT",
+      ...jsonBody({
+        externalSessionId: required(option("session"), "--session"),
+        origin: option("origin") || "manual",
+        status: option("status") || "active",
+        lastSeenAt: new Date().toISOString(),
+        ...(option("run") ? { lastRunId: option("run") } : {}),
+        failureCount: Number(option("failures") || 0),
+      }),
+    });
+  } else if (group === "provider-session" && action === "clear") {
+    const projectId = required(positional[0], "project id");
+    const provider = option("provider") || "codex";
+    result = await coreRequest(`/projects/${encodeURIComponent(projectId)}/provider-sessions/${encodeURIComponent(provider)}`, { method: "DELETE" });
   } else if (group === "session" && action === "summarize") {
     const projectId = required(positional[0], "project id");
     result = await coreRequest(`/projects/${encodeURIComponent(projectId)}/session-summaries`, {
@@ -231,7 +296,7 @@ try {
     result = await coreRequest(`/projects/${encodeURIComponent(required(positional[0], "project id"))}/session-summaries`);
   } else if (group === "manifest" && action === "build") {
     const projectId = required(positional[0], "project id");
-    const active = await coreRequest(`/projects/${encodeURIComponent(projectId)}/active-context`);
+    const active = await coreRequest(activeContextPath(projectId));
     result = await coreRequest(`/projects/${encodeURIComponent(projectId)}/context-manifests/v0`, {
       method: "POST",
       ...jsonBody({
@@ -319,13 +384,14 @@ try {
     result = await coreRequest(`/projects/${encodeURIComponent(review.run.projectId)}/context-manifests/v0/${encodeURIComponent(review.run.contextManifestId)}`);
   } else if (group === "context" && action === "watch") {
     const projectId = required(positional[0], "project id");
-    result = await coreRequest(`/projects/${encodeURIComponent(projectId)}/active-context?afterVersion=${Number(option("after") || 0)}`);
+    result = await coreRequest(activeContextPath(projectId, Number(option("after") || 0)));
   } else if (group === "context" && action === "propose") {
     const projectId = required(positional[0], "project id");
-    const active = await coreRequest(`/projects/${encodeURIComponent(projectId)}/active-context`);
-    result = await coreRequest(`/projects/${encodeURIComponent(projectId)}/context-proposals`, {
+    const active = await coreRequest(activeContextPath(projectId));
+    result = await coreRequest(contextProposalsPath(projectId), {
       method: "POST",
       ...jsonBody({
+        ...(option("workspace") ? { workspaceId: option("workspace") } : {}),
         baseContextVersion: active.version,
         addViewIds: (option("add") || "").split(",").filter(Boolean),
         removeViewIds: (option("remove") || "").split(",").filter(Boolean),
@@ -342,7 +408,7 @@ try {
     const proposalId = required(positional[1], "proposal id");
     result = await coreRequest(`/projects/${encodeURIComponent(projectId)}/context-proposals/${encodeURIComponent(proposalId)}/reject`, { method: "POST", ...jsonBody({}) });
   } else if (group === "context" && action === "proposals") {
-    result = await coreRequest(`/projects/${encodeURIComponent(required(positional[0], "project id"))}/context-proposals`);
+    result = await coreRequest(contextProposalsPath(required(positional[0], "project id")));
   } else if (group === "run" && action === "cancel") {
     result = await coreRequest(`/runs/${encodeURIComponent(required(positional[0], "run id"))}/cancel`, { method: "POST", ...jsonBody({}) });
   } else if (group === "run" && action === "events") {
@@ -558,12 +624,12 @@ Project truth:
   lcos workspace save-state <workspace-id> --name "现场名"
   lcos workspace restore-state <workspace-id> <state-id>
   lcos selection get <project-id>
-  lcos context get <project-id>
-  lcos context watch <project-id> [--after N]
+  lcos context get <project-id> [--workspace id]
+  lcos context watch <project-id> [--workspace id] [--after N]
   lcos context search <project-id> [--q 关键词]
   lcos context add <project-id> <view...>
   lcos context remove <project-id> <view...>
-  lcos context propose <project-id> --reason "..." [--add v1,v2] [--remove v3] [--target v4]
+  lcos context propose <project-id> [--workspace id] --reason "..." [--add v1,v2] [--remove v3] [--target v4]
   lcos context accept <project-id> <proposal-id>
   lcos context reject <project-id> <proposal-id>
   lcos context proposals <project-id>
@@ -573,13 +639,17 @@ Project truth:
   lcos revision list <artifact-id>
   lcos revision compare <project-id> <base-revision-id> <head-revision-id>
   lcos process projection <project-id>
+  lcos provider-session get <project-id> [--provider codex|workbuddy]
+  lcos provider-session set <project-id> --session <id> [--provider codex|workbuddy] [--origin manual|watchdog]
+  lcos provider-session clear <project-id> [--provider codex|workbuddy]
   lcos session summarize <project-id> --summary "..." [--title 标题] [--runs a,b] [--handoff ref]
   lcos session list <project-id>
   lcos manifest build <project-id> [--target <artifact-id>] [--output <description>]
   lcos run list <project-id> [--limit 20]
   lcos run pending <project-id> [--limit 100]
   lcos run create <project-id> --instruction "..." [--target artifact-id] [--output create|revise|analyze] [--provider workbuddy|codex] [--dry-run]
-  lcos run propose <project-id> --prompt "..."
+  lcos run propose <project-id> --prompt "..." [--workspace id] [--new-node]
+  lcos run validate-plan <project-id> <agent-plan.json>
   lcos run dispatch <run-id>
   lcos run recover <run-id>
   lcos run finalize <run-id> [--decision completed|retrying] [--comment "..."]

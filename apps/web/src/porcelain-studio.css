@@ -3624,3 +3624,29 @@
   font-size: 7.5px !important;
   font-weight: 650;
 }
+
+/* Gate F: Composer 只展示用户真实决策。 */
+.app-shell.porcelain-studio-v2 .simple-composer-options {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.app-shell.porcelain-studio-v2 .create-new-node-toggle {
+  min-height: 39px;
+  height: auto;
+  padding: 5px 9px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.app-shell.porcelain-studio-v2 .create-new-node-toggle input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: #6742b9;
+}
+
+.app-shell.porcelain-studio-v2 .create-new-node-toggle > span {
+  color: var(--ps-text-strong);
+  font-size: 11px;
+  white-space: nowrap;
+}

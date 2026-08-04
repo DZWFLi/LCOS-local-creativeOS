@@ -59,6 +59,16 @@ class FakeBridge implements BridgeRuntimePort {
   async getResult(): Promise<BridgeResultEnvelopeV0 | undefined> {
     return undefined
   }
+
+  async getCapabilities() {
+    return {
+      primaryContractVersion: 'bridge-task-v1',
+      providers: [
+        { provider: 'workbuddy', executionMode: 'pull', outputIntents: ['create', 'revise', 'analyze'], contractVersions: ['bridge-task-v1'] },
+        { provider: 'codex', executionMode: 'pull', outputIntents: ['create', 'revise', 'analyze'], contractVersions: ['bridge-task-v1'] },
+      ],
+    }
+  }
 }
 
 function setup(target: number | 'none' = 1) {
@@ -262,4 +272,22 @@ describe('RuntimeAdapterService', () => {
     const service = new RuntimeAdapterService(repository, new FakeBridge(), 'mvp-fast-build', () => now)
     await expect(service.sync(run.id)).rejects.toBeInstanceOf(RuntimeAdapterError)
   })
+  it('only advertises Runtime Host managed providers as automatic', async () => {
+    const { repository } = setup()
+    const bridge = new FakeBridge()
+    const service = new RuntimeAdapterService(
+      repository,
+      bridge,
+      'mvp-fast-build',
+      () => now,
+      undefined,
+      new Set(['codex']),
+    )
+
+    const statuses = await service.providersStatus()
+    expect(statuses.find((item) => item.provider === 'codex')).toMatchObject({ availability: 'ready', executionMode: 'automatic' })
+    expect(statuses.find((item) => item.provider === 'workbuddy')).toMatchObject({ availability: 'manual', executionMode: 'manual' })
+    expect(statuses.find((item) => item.provider === 'auto')).toMatchObject({ availability: 'ready', executionMode: 'automatic' })
+  })
+
 })

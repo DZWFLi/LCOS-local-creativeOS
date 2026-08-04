@@ -267,7 +267,26 @@ export interface RunProposalResult {
   readonly proposal: CreateRunProposal
   readonly summary: string
   readonly confidence: 'high' | 'low'
+  readonly decisionSource?: 'agent' | 'fallback'
   readonly ambiguity?: { readonly question: string }
+}
+
+/** 用户界面只提交自然语言、上下文与两个真实决策；语义计划可由 Agent/Skill 覆盖。 */
+export interface AgentPlanRequestV1 {
+  readonly projectId: string
+  readonly workspaceId?: string
+  readonly prompt: string
+  readonly requestedProvider: string | 'auto'
+  readonly createAsNewNode: boolean
+  readonly contextItems: readonly RunProposalContextItem[]
+  readonly editTargets: readonly RunProposalEditTarget[]
+}
+
+export interface AgentExecutionPlanV1 extends CreateRunProposal {
+  readonly schemaVersion: 1
+  readonly humanSummary: string
+  readonly risks: readonly string[]
+  readonly requiresConfirmation: boolean
 }
 
 export type RuntimeProviderAvailability = 'ready' | 'busy' | 'offline' | 'manual'
@@ -275,8 +294,11 @@ export type RuntimeProviderAvailability = 'ready' | 'busy' | 'offline' | 'manual
 export interface RuntimeProviderStatus {
   readonly provider: 'workbuddy' | 'codex' | 'auto'
   readonly availability: RuntimeProviderAvailability
+  /** Only automatic providers are shown in the ordinary Composer. */
+  readonly executionMode?: 'automatic' | 'manual'
   readonly contractVersion?: string
   readonly outputIntents?: readonly string[]
+  readonly reason?: string
 }
 
 // ==================== Codex Native Loop (C0 frozen contracts) ====================
@@ -292,12 +314,39 @@ export interface AgentContextItem {
   readonly previewRef?: string
 }
 
+export interface CanvasContextViewportV1 {
+  readonly x: number
+  readonly y: number
+  readonly zoom: number
+  readonly visibleViewIds: readonly string[]
+}
+
+export interface CanvasContextNodeV1 extends AgentContextItem {
+  readonly x: number
+  readonly y: number
+  readonly width: number
+  readonly height: number
+  readonly status?: string
+  readonly summary?: string
+}
+
+export interface CanvasContextRelationV1 {
+  readonly id: string
+  readonly sourceArtifactId: string
+  readonly targetArtifactId: string
+  readonly kind: string
+}
+
 export interface ActiveContextV2 {
   readonly schemaVersion: 2
   readonly projectId: string
   readonly workspaceId: string | null
   readonly scopeId: string | null
   readonly selectedViewIds: readonly string[]
+  readonly selectionOrder?: readonly string[]
+  readonly viewport?: CanvasContextViewportV1
+  readonly nodes?: readonly CanvasContextNodeV1[]
+  readonly relations?: readonly CanvasContextRelationV1[]
   readonly targetArtifactId: string | null
   readonly targetRevisionId: string | null
   readonly pinnedContextIds: readonly string[]
@@ -313,6 +362,7 @@ export type ContextChangeProposalStatus = 'pending' | 'accepted' | 'rejected' | 
 export interface ContextChangeProposalV1 {
   readonly proposalId: string
   readonly projectId: string
+  readonly workspaceId: string | null
   readonly baseContextVersion: number
   readonly addViewIds: readonly string[]
   readonly removeViewIds: readonly string[]
@@ -320,6 +370,32 @@ export interface ContextChangeProposalV1 {
   readonly reason: string
   readonly createdBy: 'codex'
   readonly status: ContextChangeProposalStatus
+}
+
+export interface CommandDraftV1 {
+  readonly schemaVersion: 1
+  readonly projectId: string
+  readonly workspaceId: string | null
+  readonly composerAnchor: string
+  readonly prompt: string
+  readonly contextViewIds: readonly string[]
+  readonly provider: string
+  readonly createAsNewNode: boolean
+  readonly updatedAt: string
+}
+
+export interface ProviderSessionBindingV1 {
+  readonly projectId: string
+  readonly provider: 'codex' | 'workbuddy'
+  readonly externalSessionId: string
+  readonly origin: 'manual' | 'watchdog'
+  readonly status: 'active' | 'stale' | 'closed'
+  readonly lastSeenAt: string
+  readonly lastRunId?: string
+  readonly leaseOwner?: string
+  readonly leaseExpiresAt?: string
+  readonly failureCount: number
+  readonly updatedAt: string
 }
 
 /** Codex Provider Task Profile：Bridge Task 的 Codex 契约面，不内嵌项目真相。 */

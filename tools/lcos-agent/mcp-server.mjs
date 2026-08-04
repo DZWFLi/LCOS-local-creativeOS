@@ -2,25 +2,49 @@
 import readline from "node:readline";
 import { coreRequest, bridgeRequest, jsonBody } from "./lib/client.mjs";
 
-const SERVER = { name: "local-creative-os", version: "0.1.0" };
+const SERVER = { name: "local-creative-os", version: "0.2.0" };
+const activeContextPath = (projectId, workspaceId, afterVersion) => {
+  const query = new URLSearchParams();
+  if (workspaceId) query.set("workspaceId", workspaceId);
+  if (afterVersion !== undefined) query.set("afterVersion", String(afterVersion));
+  return `/projects/${encodeURIComponent(projectId)}/active-context${query.size ? `?${query}` : ""}`;
+};
+const contextProposalsPath = (projectId, workspaceId) => {
+  const query = new URLSearchParams();
+  if (workspaceId) query.set("workspaceId", workspaceId);
+  return `/projects/${encodeURIComponent(projectId)}/context-proposals${query.size ? `?${query}` : ""}`;
+};
 const tools = [
   tool("open_lcos", "Return the loopback URL for the LCOS visual project canvas.", {
     projectId: { type: "string" },
   }),
-  tool("bind_lcos_project", "Bind this Codex session to an LCOS project and report doctor/context snapshot.", {
+  tool("bind_lcos_project", "Bind this Codex session to an LCOS Project + optional Workspace and return the current CanvasContextSnapshot.", {
     projectId: { type: "string" },
+    workspaceId: { type: "string" },
   }, ["projectId"]),
   tool("list_lcos_projects", "List Local Core projects.", {}),
   tool("get_lcos_project", "Read the canonical Project Graph snapshot.", {
     projectId: { type: "string" },
   }, ["projectId"]),
-  tool("get_lcos_active_context", "Read the latest stable Canvas selection and resolved artifacts.", {
+  tool("get_lcos_active_context", "Read the versioned Project + Workspace CanvasContextSnapshot from Local Core.", {
     projectId: { type: "string" },
+    workspaceId: { type: "string" },
   }, ["projectId"]),
-  tool("watch_lcos_active_context", "Short-poll ActiveContext until version advances beyond afterVersion (max 1s hold).", {
+  tool("watch_lcos_active_context", "Short-poll one Project + Workspace ActiveContext until version advances (max 1s hold).", {
     projectId: { type: "string" },
+    workspaceId: { type: "string" },
     afterVersion: { type: "number" },
   }, ["projectId", "afterVersion"]),
+  tool("apply_lcos_context_command", "Apply an explicit reversible Context/Focus command using ActiveContext compare-and-swap. Use only when the user explicitly requested the change; otherwise submit a proposal.", {
+    projectId: { type: "string" },
+    workspaceId: { type: "string" },
+    expectedVersion: { type: "number" },
+    addViewIds: { type: "array", items: { type: "string" } },
+    removeViewIds: { type: "array", items: { type: "string" } },
+    focusViewId: { type: "string" },
+    targetViewId: { type: "string" },
+    clearTarget: { type: "boolean" },
+  }, ["projectId", "expectedVersion"]),
   tool("get_lcos_run_context", "Read the frozen ContextManifest for one Run (never live ActiveContext).", {
     runId: { type: "string" },
   }, ["runId"]),
@@ -60,17 +84,24 @@ const tools = [
     viewId: { type: "string" },
     toWorkspaceId: { type: "string" },
   }, ["workspaceId", "viewId", "toWorkspaceId"]),
-  tool("propose_lcos_run", "Build a visible one-line Run proposal from selection and prompt.", {
+  tool("propose_lcos_run", "Create a human-readable proposal. Agent may provide a full semantic plan; otherwise Core only applies obvious UI defaults.", {
     projectId: { type: "string" },
+    workspaceId: { type: "string" },
     prompt: { type: "string" },
     intent: { type: "string", enum: ["analyze", "create", "revise"] },
     requestedProvider: { type: "string" },
+    createAsNewNode: { type: "boolean" },
     contextItems: { type: "array", items: { type: "object" } },
     editTargets: { type: "array", items: { type: "object" } },
     resultPolicy: { type: "object" },
   }, ["projectId", "prompt"]),
+  tool("validate_lcos_agent_plan", "Validate a structured Agent Plan without reinterpreting the user's creative intent.", {
+    projectId: { type: "string" },
+    plan: { type: "object" },
+  }, ["projectId", "plan"]),
   tool("propose_lcos_context_change", "Codex proposes a Context/Target change; it never applies until the user accepts.", {
     projectId: { type: "string" },
+    workspaceId: { type: "string" },
     baseContextVersion: { type: "number" },
     addViewIds: { type: "array", items: { type: "string" } },
     removeViewIds: { type: "array", items: { type: "string" } },
@@ -85,12 +116,29 @@ const tools = [
     projectId: { type: "string" },
     proposalId: { type: "string" },
   }, ["projectId", "proposalId"]),
-  tool("list_lcos_context_proposals", "List pending/resolved Codex context proposals for a project.", {
+  tool("list_lcos_context_proposals", "List pending/resolved Codex context proposals for one Project + Workspace.", {
     projectId: { type: "string" },
+    workspaceId: { type: "string" },
   }, ["projectId"]),
+  tool("get_lcos_provider_session", "Read the preferred provider session binding for a project.", {
+    projectId: { type: "string" },
+    provider: { type: "string", enum: ["codex", "workbuddy"] },
+  }, ["projectId", "provider"]),
+  tool("set_lcos_provider_session", "Register or refresh a project provider session binding.", {
+    projectId: { type: "string" },
+    provider: { type: "string", enum: ["codex", "workbuddy"] },
+    externalSessionId: { type: "string" },
+    origin: { type: "string", enum: ["manual", "watchdog"] },
+    lastRunId: { type: "string" },
+  }, ["projectId", "provider", "externalSessionId"]),
+  tool("clear_lcos_provider_session", "Clear a stale/closed provider session binding.", {
+    projectId: { type: "string" },
+    provider: { type: "string", enum: ["codex", "workbuddy"] },
+  }, ["projectId", "provider"]),
   tool("list_lcos_runtime_providers", "Read Provider capability and availability before sending.", {}, []),
   tool("build_lcos_context_manifest", "Freeze an immutable ContextManifest from Project Truth.", {
     projectId: { type: "string" },
+    workspaceId: { type: "string" },
     targetArtifactId: { type: "string" },
     requestedOutput: { type: "string" },
   }, ["projectId"]),
@@ -194,7 +242,7 @@ async function handle({ id, method, params }) {
       protocolVersion: params?.protocolVersion || "2025-11-25",
       capabilities: { tools: {} },
       serverInfo: SERVER,
-      instructions: "Read LCOS Project Truth and ActiveContext before acting. A Run uses an immutable ContextManifest; never treat live selection changes as silent mutations to a running task.",
+      instructions: "Read the Project + Workspace CanvasContextSnapshot before acting. Generate a structured Agent Plan, let Core validate safety/lifecycle, and never mutate a running Run's frozen ContextManifest.",
     });
   }
   if (method === "ping") return reply(id, {});
@@ -213,20 +261,61 @@ async function handle({ id, method, params }) {
       value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/graph`);
       break;
     case "get_lcos_active_context":
-      value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/active-context`);
+      value = await coreRequest(activeContextPath(required(args.projectId, "projectId"), args.workspaceId));
       break;
     case "bind_lcos_project":
       {
         const projectId = required(args.projectId, "projectId");
         const graph = await coreRequest(`/projects/${encodeURIComponent(projectId)}/graph`);
-        const active = await coreRequest(`/projects/${encodeURIComponent(projectId)}/active-context`);
+        const active = await coreRequest(activeContextPath(projectId, args.workspaceId));
         value = { projectId, project: graph.project, activeContext: active };
       }
       break;
     case "watch_lcos_active_context":
-      value = await coreRequest(
-        `/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/active-context?afterVersion=${Number(args.afterVersion ?? 0)}`
-      );
+      value = await coreRequest(activeContextPath(
+        required(args.projectId, "projectId"),
+        args.workspaceId,
+        Number(args.afterVersion ?? 0),
+      ));
+      break;
+    case "apply_lcos_context_command":
+      {
+        const projectId = required(args.projectId, "projectId");
+        const current = await coreRequest(activeContextPath(projectId, args.workspaceId));
+        const views = new Map((current.nodes || []).map((node) => [node.viewId, node]));
+        const removed = new Set(args.removeViewIds || []);
+        const pinned = [...new Set([...(current.pinnedContextIds || []).filter((id) => !removed.has(id)), ...(args.addViewIds || [])])];
+        const selectedViewIds = args.focusViewId ? [args.focusViewId] : current.selectedViewIds || [];
+        let targetArtifactId = current.targetArtifactId || undefined;
+        let targetRevisionId = current.targetRevisionId || undefined;
+        if (args.clearTarget) {
+          targetArtifactId = undefined;
+          targetRevisionId = undefined;
+        } else if (args.targetViewId) {
+          const target = views.get(args.targetViewId);
+          if (!target) throw new Error(`VIEW_NOT_IN_CONTEXT_SNAPSHOT: ${args.targetViewId}`);
+          targetArtifactId = target.artifactId;
+          targetRevisionId = target.revisionId;
+        }
+        value = await coreRequest(activeContextPath(projectId, args.workspaceId), {
+          method: "PUT",
+          ...jsonBody({
+            ...(args.workspaceId ? { workspaceId: args.workspaceId } : {}),
+            scopeId: current.scopeId || "",
+            selectedViewIds,
+            pinnedContextIds: pinned,
+            excludedContextIds: current.excludedContextIds || [],
+            ...(current.viewport ? {
+              viewport: { x: current.viewport.x, y: current.viewport.y, zoom: current.viewport.zoom },
+              visibleViewIds: current.viewport.visibleViewIds || [],
+            } : {}),
+            ...(targetArtifactId ? { targetArtifactId } : {}),
+            ...(targetRevisionId ? { targetRevisionId } : {}),
+            expectedVersion: Number(args.expectedVersion),
+            updatedBy: "codex",
+          }),
+        });
+      }
       break;
     case "get_lcos_run_context":
       {
@@ -318,19 +407,28 @@ async function handle({ id, method, params }) {
       value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/runs/propose`, {
         method: "POST",
         ...jsonBody({
+          ...(args.workspaceId ? { workspaceId: args.workspaceId } : {}),
           prompt: required(args.prompt, "prompt"),
-          ...(args.intent ? { intent: args.intent } : {}),
+          ...(args.intent ? { intent: args.intent, decisionSource: "agent" } : {}),
           requestedProvider: args.requestedProvider || "auto",
+          ...(typeof args.createAsNewNode === "boolean" ? { createAsNewNode: args.createAsNewNode } : {}),
           contextItems: args.contextItems || [],
           editTargets: args.editTargets || [],
-          resultPolicy: args.resultPolicy || { type: "reply_only" },
+          ...(args.resultPolicy ? { resultPolicy: args.resultPolicy } : {}),
         }),
       });
       break;
+    case "validate_lcos_agent_plan":
+      value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/runs/validate-plan`, {
+        method: "POST",
+        ...jsonBody(args.plan),
+      });
+      break;
     case "propose_lcos_context_change":
-      value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/context-proposals`, {
+      value = await coreRequest(contextProposalsPath(required(args.projectId, "projectId"), args.workspaceId), {
         method: "POST",
         ...jsonBody({
+          ...(args.workspaceId ? { workspaceId: args.workspaceId } : {}),
           baseContextVersion: Number(args.baseContextVersion),
           addViewIds: args.addViewIds || [],
           removeViewIds: args.removeViewIds || [],
@@ -352,7 +450,26 @@ async function handle({ id, method, params }) {
       });
       break;
     case "list_lcos_context_proposals":
-      value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/context-proposals`);
+      value = await coreRequest(contextProposalsPath(required(args.projectId, "projectId"), args.workspaceId));
+      break;
+    case "get_lcos_provider_session":
+      value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/provider-sessions/${encodeURIComponent(required(args.provider, "provider"))}`);
+      break;
+    case "set_lcos_provider_session":
+      value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/provider-sessions/${encodeURIComponent(required(args.provider, "provider"))}`, {
+        method: "PUT",
+        ...jsonBody({
+          externalSessionId: required(args.externalSessionId, "externalSessionId"),
+          origin: args.origin || "manual",
+          status: "active",
+          lastSeenAt: new Date().toISOString(),
+          ...(args.lastRunId ? { lastRunId: args.lastRunId } : {}),
+          failureCount: 0,
+        }),
+      });
+      break;
+    case "clear_lcos_provider_session":
+      value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/provider-sessions/${encodeURIComponent(required(args.provider, "provider"))}`, { method: "DELETE" });
       break;
     case "list_lcos_runtime_providers":
       value = await coreRequest("/runtime/providers");
@@ -360,7 +477,7 @@ async function handle({ id, method, params }) {
     case "build_lcos_context_manifest":
       {
         const projectId = required(args.projectId, "projectId");
-        const active = await coreRequest(`/projects/${encodeURIComponent(projectId)}/active-context`);
+        const active = await coreRequest(activeContextPath(projectId, args.workspaceId));
         value = await coreRequest(`/projects/${encodeURIComponent(projectId)}/context-manifests/v0`, {
         method: "POST",
         ...jsonBody({

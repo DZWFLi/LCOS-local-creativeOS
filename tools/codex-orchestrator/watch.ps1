@@ -4,9 +4,9 @@
 
 .DESCRIPTION
   - 不拉起子对话；不占 Agent 回合（脚本本身零 Agent 开销）。
-  - 每 N 秒轮询 `lcos run pending`；发现待办后，按 sessions.json 找到该项目
-    正常对话的 session id，执行 `codex resume <session-id> "LCOS 接单提示…"`，
-    该提示会作为一条用户消息进入那个对话，由它自己的 skill 完成 claim/start/执行/提交。
+  - 每 N 秒向 Local Core 请求增量派单计划；Core 优先使用 projectId + provider 的正式 Session Binding。
+  - 有首选 Session 时执行 `codex exec resume <session-id>`；失效后只允许降级新建一次并原子替换绑定。
+  - sessions.json 仅作为旧版手动绑定兼容来源，不再是正式真相。
   - 仅支持 CLI 会话（有稳定 session id）。桌面 App 窗口无官方推送接口。
 
 .CONFIG
@@ -53,6 +53,55 @@ if (Test-Path $lockFile) {
   Remove-Item $lockFile -Force -ErrorAction SilentlyContinue
 }
 Set-Content -Path $lockFile -Value $PID
+
+function Get-CoreToken {
+  if (-not (Test-Path $tokenFile)) { return $null }
+  $value = (Get-Content $tokenFile -Raw -ErrorAction SilentlyContinue).Trim()
+  if (-not $value) { return $null }
+  return $value
+}
+
+function Save-CoreSessionBinding([string]$projectId, [string]$sessionId, [string]$runId, [string]$origin = 'watchdog', [string]$status = 'active', [int]$failureCount = 0) {
+  $token = Get-CoreToken
+  if (-not $token -or -not $sessionId) { return }
+  try {
+    $now = (Get-Date -Format o)
+    $body = @{
+      externalSessionId = $sessionId
+      origin = $origin
+      status = $status
+      lastSeenAt = $now
+      lastRunId = $runId
+      failureCount = $failureCount
+    } | ConvertTo-Json
+    Invoke-RestMethod -Uri "http://127.0.0.1:43121/projects/$([uri]::EscapeDataString($projectId))/provider-sessions/codex" -Method PUT `
+      -Headers @{ authorization = "Bearer $token" } -ContentType 'application/json' -Body $body -TimeoutSec 10 | Out-Null
+  } catch {
+    Write-Host "[$(Get-Date -Format HH:mm:ss)] Session Binding 保存失败：$($_.Exception.Message)"
+  }
+}
+
+function Get-LatestCodexSessionId([datetime]$since) {
+  try {
+    $sessionDir = Join-Path $env:USERPROFILE '.codex\sessions'
+    if (-not (Test-Path $sessionDir)) { return $null }
+    $candidate = Get-ChildItem $sessionDir -Recurse -File -Filter '*.jsonl' -ErrorAction SilentlyContinue |
+      Where-Object { $_.LastWriteTime -ge $since.AddSeconds(-5) } |
+      Sort-Object LastWriteTime -Descending |
+      Select-Object -First 1
+    if (-not $candidate) { return $null }
+    $match = [regex]::Match($candidate.Name, '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}')
+    if ($match.Success) { return $match.Value }
+    return $null
+  } catch {
+    return $null
+  }
+}
+
+function Invoke-CodexCommand([string[]]$arguments) {
+  & $codex @arguments | ForEach-Object { Write-Host $_ }
+  return $LASTEXITCODE
+}
 
 function Get-Registry {
   if (-not (Test-Path $registryPath)) {
@@ -101,32 +150,45 @@ function Send-ClaimPrompt([string]$sessionId, [string]$runId, [string]$projectId
 }
 
 function Send-AutoPrompt([string]$projectRoot, [string]$runId, [string]$projectId, [string]$sessionId, [string]$taskId) {
-  $message = "LCOS 接单提示：项目 $projectId 有新待办 run $runId 。请按 lcos-project-context skill 认领并执行。"
+  $message = "LCOS 接单提示：项目 $projectId 有新待办 run $runId 。请按 lcos-project-context skill 读取当前 Canvas Context，认领并执行。"
   if ($dryRun) {
-    Write-Host "[$(Get-Date -Format HH:mm:ss)] DRY RUN：将派单 run $runId -> $($sessionId ?? "$projectRoot 最近会话")"
-    return
+    Write-Host "[$(Get-Date -Format HH:mm:ss)] DRY RUN：将派单 run $runId -> $($sessionId ?? "$projectRoot 首选会话")"
+    return [pscustomobject]@{ Success = $true; SessionId = $sessionId; CreatedNew = $false }
   }
-  if ($sessionId) {
-    if ($taskId) {
-      try {
-        $directBody = @{ sessionId = $sessionId } | ConvertTo-Json
-        Invoke-RestMethod -Uri "http://127.0.0.1:43122/v1/tasks/$taskId/direct" -Method POST `
-          -ContentType 'application/json' -Body $directBody -TimeoutSec 10 | Out-Null
-      } catch {
-        Write-Host "[$(Get-Date -Format HH:mm:ss)] 定向 task $taskId 失败：$($_.Exception.Message)"
-      }
+  if ($taskId -and $sessionId) {
+    try {
+      $directBody = @{ sessionId = $sessionId } | ConvertTo-Json
+      Invoke-RestMethod -Uri "http://127.0.0.1:43122/v1/tasks/$taskId/direct" -Method POST `
+        -ContentType 'application/json' -Body $directBody -TimeoutSec 10 | Out-Null
+    } catch {
+      Write-Host "[$(Get-Date -Format HH:mm:ss)] 定向 task $taskId 失败：$($_.Exception.Message)"
     }
-    Write-Host "[$(Get-Date -Format HH:mm:ss)] 派单 run $runId -> 会话 $sessionId"
-    & $codex exec resume $sessionId $message
-    return
   }
-  # 零注册模式：自动续上该目录最近一个会话；没有会话则拉起新的
+
+  if ($sessionId) {
+    Write-Host "[$(Get-Date -Format HH:mm:ss)] 派单 run $runId -> 首选会话 $sessionId"
+    $exitCode = Invoke-CodexCommand @('exec', 'resume', $sessionId, $message)
+    if ($exitCode -eq 0) {
+      return [pscustomobject]@{ Success = $true; SessionId = $sessionId; CreatedNew = $false }
+    }
+    Write-Host "[$(Get-Date -Format HH:mm:ss)] 首选会话失效，允许降级创建一次新会话"
+    Save-CoreSessionBinding $projectId $sessionId $runId 'watchdog' 'stale' 1
+  }
+
+  # 无有效正式绑定时，先尝试该目录最近会话；失败后只创建一次新会话。
+  $startedAt = Get-Date
   Write-Host "[$(Get-Date -Format HH:mm:ss)] 自动派单 run $runId -> $projectRoot 最近会话"
-  & $codex exec -C $projectRoot resume --last $message
-  if ($LASTEXITCODE -ne 0) {
-    Write-Host "[$(Get-Date -Format HH:mm:ss)] 无历史会话，拉起新会话执行 run $runId"
-    & $codex exec -C $projectRoot --skip-git-repo-check "LCOS 接单：处理 run $runId（按 lcos-project-context skill 规则认领执行并提交结果）"
+  $exitCode = Invoke-CodexCommand @('exec', '-C', $projectRoot, 'resume', '--last', $message)
+  if ($exitCode -ne 0) {
+    Write-Host "[$(Get-Date -Format HH:mm:ss)] 无可恢复会话，创建一次新会话执行 run $runId"
+    $startedAt = Get-Date
+    $exitCode = Invoke-CodexCommand @('exec', '-C', $projectRoot, '--skip-git-repo-check', "LCOS 接单：处理 run $runId（按 lcos-project-context skill 规则认领执行并提交结果）")
   }
+  if ($exitCode -ne 0) {
+    return [pscustomobject]@{ Success = $false; SessionId = $null; CreatedNew = $false }
+  }
+  $resolvedSessionId = Get-LatestCodexSessionId $startedAt
+  return [pscustomobject]@{ Success = $true; SessionId = $resolvedSessionId; CreatedNew = $true }
 }
 
 function Get-DispatchPlan([string]$projectId, [array]$sessions) {
@@ -216,11 +278,17 @@ try {
               Write-Host "[$(Get-Date -Format HH:mm:ss)] $projectId 会话正在写入（GUI 使用中），本轮跳过 run $runId"
               continue
             }
-            Send-AutoPrompt ([string]$item.projectRoot) $runId $projectId $sessionId ([string]$item.taskId)
-            $dispatched = $true
+            $dispatchResult = Send-AutoPrompt ([string]$item.projectRoot) $runId $projectId $sessionId ([string]$item.taskId)
+            $dispatched = [bool]$dispatchResult.Success
+            if ($dispatched -and $dispatchResult.SessionId) {
+              Save-CoreSessionBinding $projectId ([string]$dispatchResult.SessionId) $runId 'watchdog' 'active' 0
+            }
           } elseif ($item.decision -eq 'spawn_new') {
-            Send-AutoPrompt ([string]$item.projectRoot) $runId $projectId '' ([string]$item.taskId)
-            $dispatched = $true
+            $dispatchResult = Send-AutoPrompt ([string]$item.projectRoot) $runId $projectId '' ([string]$item.taskId)
+            $dispatched = [bool]$dispatchResult.Success
+            if ($dispatched -and $dispatchResult.SessionId) {
+              Save-CoreSessionBinding $projectId ([string]$dispatchResult.SessionId) $runId 'watchdog' 'active' 0
+            }
           } else {
             Write-Host "[$(Get-Date -Format HH:mm:ss)] $projectId run $runId 等待：$($item.reason)"
           }

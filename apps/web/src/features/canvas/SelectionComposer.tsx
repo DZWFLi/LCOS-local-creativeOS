@@ -1,8 +1,7 @@
 import type { CSSProperties, ReactNode } from 'react'
-import { ArrowUp, Bot, Brain, ChevronDown, CornerDownRight, FilePenLine, Files, FolderInput, History, Layers3, MessageSquareText, PencilLine, Plus, Sparkles, Target, WandSparkles, X } from 'lucide-react'
+import { ArrowUp, Bot, ChevronDown, FolderInput, History, Layers3, Plus, Sparkles, Target, X } from 'lucide-react'
 import type { RuntimeProviderStatus } from '@local-creative-os/contracts'
 import type { CanvasNode, Workspace } from '../../model'
-import type { RunOutputIntent } from '../../runtime/v07UiContracts'
 import type { ArtifactRevisionProvenance } from '../../runtime/projectionAdapters'
 
 export type ComposerResultPolicy = 'reply_only' | 'create_artifact' | 'create_collection' | 'draft_revision_per_target'
@@ -15,10 +14,8 @@ interface Props {
   x: number
   y: number
   prompt: string
-  intent: RunOutputIntent
   provider: string
-  resultPolicy: ComposerResultPolicy
-  targetId: string | null
+  createAsNewNode: boolean
   baseRevision?: ArtifactRevisionProvenance
   providers: readonly RuntimeProviderStatus[]
   activeWorkspace: Workspace | null
@@ -27,10 +24,8 @@ interface Props {
   proposalSummary?: string
   ambiguityQuestion?: string
   onPromptChange: (value: string) => void
-  onIntentChange: (value: RunOutputIntent) => void
   onProviderChange: (value: string) => void
-  onResultPolicyChange: (value: ComposerResultPolicy) => void
-  onTargetChange: (value: string | null) => void
+  onCreateAsNewNodeChange: (value: boolean) => void
   onToggleContext: (id: string) => void
   onSend: () => void
   onAddToWorkspace: () => void
@@ -39,25 +34,11 @@ interface Props {
   onClose: () => void
 }
 
-const intentLabels: Record<RunOutputIntent, string> = {
-  analyze: '分析',
-  create: '创建',
-  revise: '修改',
-}
-
-const resultLabels: Record<ComposerResultPolicy, string> = {
-  reply_only: '仅返回对话',
-  create_artifact: '新建内容',
-  create_collection: '新建集合',
-  draft_revision_per_target: '新版本',
-}
-
 interface MenuOption<Value extends string> {
   value: Value
   label: string
   description: string
   icon: ReactNode
-  disabled?: boolean
 }
 
 function ComposerMenu<Value extends string>(props: {
@@ -65,13 +46,12 @@ function ComposerMenu<Value extends string>(props: {
   value: Value
   options: readonly MenuOption<Value>[]
   onChange: (value: Value) => void
-  className?: string
 }) {
   const selected = props.options.find((option) => option.value === props.value) ?? props.options[0]
-  return <details className={`composer-menu ${props.className ?? ''}`}>
+  return <details className="composer-menu">
     <summary><span className="composer-menu-icon">{selected?.icon}</span><span><small>{props.label}</small><b>{selected?.label}</b></span><ChevronDown size={12} /></summary>
     <div className="composer-menu-popover" role="menu">
-      {props.options.map((option) => <button key={option.value} type="button" role="menuitemradio" aria-checked={option.value === props.value} disabled={option.disabled} onClick={(event) => {
+      {props.options.map((option) => <button key={option.value} type="button" role="menuitemradio" aria-checked={option.value === props.value} onClick={(event) => {
         props.onChange(option.value)
         event.currentTarget.closest('details')?.removeAttribute('open')
       }}>
@@ -84,15 +64,16 @@ function ComposerMenu<Value extends string>(props: {
 
 export function SelectionComposer(props: Props) {
   const selected = props.selectedIds.map((id) => props.nodes.find((node) => node.id === id)).filter((node): node is CanvasNode => Boolean(node))
-  const visibleContextIds = Array.from(new Set([...(props.targetId ? [props.targetId] : []), ...props.contextIds]))
+  const visibleContextIds = Array.from(new Set(props.contextIds))
   const contexts = visibleContextIds.map((id) => props.nodes.find((node) => node.id === id)).filter((node): node is CanvasNode => Boolean(node))
   const contextCandidates = props.nodes.filter((node) => node.kind !== 'process' && !visibleContextIds.includes(node.id))
   const editable = selected.filter((node) => node.managed === true && node.artifactId && node.revisionId)
-  const target = props.targetId ? selected.find((node) => node.id === props.targetId) ?? null : null
+  const inferredTarget = !props.createAsNewNode && editable.length === 1 ? editable[0] : null
   const allInWorkspace = Boolean(props.activeWorkspace && selected.length && selected.every((node) => node.workspaceIds?.includes(props.activeWorkspace!.id)))
-  const selectedProvider = props.provider === 'auto' ? null : props.providers.find((item) => item.provider === props.provider) ?? null
-  const providerBlocked = selectedProvider?.availability === 'offline'
-  const disabled = props.busy || providerBlocked || !props.prompt.trim() || (props.intent === 'revise' && target === null)
+  const automaticProviders = props.providers.filter((item) => item.provider !== 'auto' && item.executionMode === 'automatic' && ['ready', 'busy'].includes(item.availability))
+  const selectedProvider = props.provider === 'auto' ? null : automaticProviders.find((item) => item.provider === props.provider) ?? null
+  const providerBlocked = automaticProviders.length === 0 || (props.provider !== 'auto' && selectedProvider === null)
+  const disabled = props.busy || providerBlocked || !props.prompt.trim()
   const provenanceNode = selected.length === 1 ? selected[0] : null
   const provenance = props.baseRevision ?? ((provenanceNode?.historical || provenanceNode?.sourceRunId) ? {
     id: provenanceNode.revisionId ?? 'unknown',
@@ -104,38 +85,22 @@ export function SelectionComposer(props: Props) {
     current: Boolean(provenanceNode.current),
     draft: Boolean(provenanceNode.draft),
   } : null)
-  const availableIntents = editable.length ? ['analyze', 'create', 'revise'] as const : ['analyze', 'create'] as const
-  const availablePolicies = props.intent === 'analyze'
-    ? ['reply_only', 'create_artifact'] as const
-    : props.intent === 'create'
-      ? ['create_artifact', 'create_collection'] as const
-      : ['draft_revision_per_target'] as const
-  const intentOptions: readonly MenuOption<RunOutputIntent>[] = availableIntents.map((value) => ({
-    value,
-    label: intentLabels[value],
-    description: value === 'analyze' ? '判断与归纳，不要求生成文件' : value === 'create' ? '基于参考创建新的内容' : '基于指定版本生成 Draft',
-    icon: value === 'analyze' ? <Brain size={14} /> : value === 'create' ? <WandSparkles size={14} /> : <PencilLine size={14} />,
-  }))
-  const providerOptions: readonly MenuOption<string>[] = [
-    { value: 'auto', label: '自动选择', description: '由 LCOS 选择可用执行者', icon: <Sparkles size={14} /> },
-    ...props.providers.filter((item) => item.provider !== 'auto').map((item) => ({
+  const providerOptions: readonly MenuOption<string>[] = automaticProviders.length ? [
+    { value: 'auto', label: '自动选择', description: '使用当前可自动执行的本地 Agent', icon: <Sparkles size={14} /> },
+    ...automaticProviders.map((item) => ({
       value: item.provider,
       label: item.provider === 'workbuddy' ? 'WorkBuddy' : 'Codex',
-      description: item.availability === 'ready' ? '可自动执行' : item.availability === 'busy' ? '当前忙碌' : item.availability === 'offline' ? '当前离线' : '需要本地 Agent 接取',
+      description: item.availability === 'ready' ? '可自动执行' : '当前忙碌，任务会排队',
       icon: <Bot size={14} />,
-      disabled: item.availability === 'offline',
     })),
-  ]
-  const resultOptions: readonly MenuOption<ComposerResultPolicy>[] = availablePolicies.map((value) => ({
-    value,
-    label: resultLabels[value],
-    description: value === 'reply_only' ? '结果只进入 Run Activity' : value === 'create_artifact' ? '创建一个新内容对象' : value === 'create_collection' ? '允许返回多个新内容' : '不覆盖 Current，生成待确认版本',
-    icon: value === 'reply_only' ? <MessageSquareText size={14} /> : value === 'draft_revision_per_target' ? <FilePenLine size={14} /> : <Files size={14} />,
-  }))
-  const targetOptions: readonly MenuOption<string>[] = [
-    { value: '', label: '不设编辑对象', description: '仅分析或创建时使用', icon: <Target size={14} />, disabled: props.intent === 'revise' },
-    ...editable.map((node) => ({ value: node.id, label: node.title, description: node.id === props.targetId && props.baseRevision ? props.baseRevision.label : node.revisionLabel ?? 'Current', icon: <FilePenLine size={14} /> })),
-  ]
+  ] : [{ value: 'unavailable', label: '暂无可用 Agent', description: '请先启动本地 Agent 服务', icon: <Bot size={14} /> }]
+  const actionSummary = props.createAsNewNode
+    ? `将参考 ${contexts.length} 项内容，并把结果放成新节点。`
+    : inferredTarget
+      ? `将修改《${inferredTarget.title}》，并参考另外 ${Math.max(0, contexts.filter((node) => node.id !== inferredTarget.id).length)} 项内容。`
+      : editable.length > 1
+        ? `Agent 将从 ${editable.length} 个可修改内容中判断目标；有歧义时再询问。`
+        : `Agent 将先理解要求；需要产出文件时会建议作为新节点。`
 
   return <section
     className="selection-composer"
@@ -146,7 +111,7 @@ export function SelectionComposer(props: Props) {
   >
     <header className="selection-composer-header">
       <div>
-        <span><Layers3 size={12} />本次 Agent 可见上下文</span>
+        <span><Layers3 size={12} />给 Agent 参考的内容</span>
         <strong>{selected.length === 1 ? selected[0]?.title : selected.slice(0, 2).map((node) => node.title).join('、')}{selected.length > 2 ? ` 等 ${selected.length} 项` : ''}</strong>
       </div>
       <div className="selection-composer-header-actions">
@@ -161,26 +126,25 @@ export function SelectionComposer(props: Props) {
           </select>
           <ChevronDown size={11} />
         </label>}
-        <button type="button" className="icon-only" aria-label="关闭选区输入" onClick={props.onClose}><X size={13} /></button>
+        <button type="button" className="icon-only" aria-label="关闭输入框" onClick={props.onClose}><X size={13} /></button>
       </div>
     </header>
 
     {provenance && <div className="selection-provenance">
       <History size={12} />
-      <div><b>{provenance.label}{provenance.runId ? ` · ${provenance.runId}` : ''}{provenance.provider ? ` · ${provenance.provider}` : ''}</b><span>{provenance.prompt ?? '将基于这个 Revision 创建新的 Draft，不会覆盖历史版本。'}</span></div>
+      <div><b>{provenance.label}{provenance.provider ? ` · ${provenance.provider}` : ''}</b><span>{provenance.prompt ?? 'Agent 会基于这个版本工作；原版本不会被静默覆盖。'}</span></div>
     </div>}
 
-    <div className="selection-context-shelf" aria-label="本次 Run 上下文">
+    <div className="selection-context-shelf" aria-label="给 Agent 参考的内容">
       <div className="selection-context-chips">
-        {contexts.map((node) => node.id === props.targetId
-          ? <span key={node.id} className="context-chip is-target" title="当前编辑对象会作为 Base Revision 进入 Run"><Target size={11} /><span>{node.title}</span><small>目标</small></span>
+        {contexts.map((node) => inferredTarget?.id === node.id
+          ? <span key={node.id} className="context-chip is-target" title="系统当前推断为要修改的内容"><Target size={11} /><span>{node.title}</span><small>将修改</small></span>
           : <button key={node.id} type="button" className="context-chip" title={`移除 ${node.title}`} onClick={() => props.onToggleContext(node.id)}><Layers3 size={11} /><span>{node.title}</span><X size={10} /></button>)}
         <details className="context-add-menu">
-          <summary title="加入上下文"><Plus size={12} />加入参考</summary>
+          <summary title="添加参考内容"><Plus size={12} />添加</summary>
           <div>{contextCandidates.length ? contextCandidates.map((node) => <button key={node.id} type="button" onClick={(event) => { props.onToggleContext(node.id); event.currentTarget.closest('details')?.removeAttribute('open') }}><Plus size={11} /><span>{node.title}</span></button>) : <p>当前画布没有更多可加入内容</p>}</div>
         </details>
       </div>
-      <small>{contexts.some((node) => node.id !== props.targetId) ? `当前显示 ${contexts.filter((node) => node.id !== props.targetId).length} 个参考；移除后不会发送给 Agent。` : '这里显示什么，Agent 就只读取什么。'}</small>
     </div>
 
     <div className="selection-composer-input">
@@ -188,7 +152,7 @@ export function SelectionComposer(props: Props) {
         data-testid="selection-composer-input"
         value={props.prompt}
         onChange={(event) => props.onPromptChange(event.target.value)}
-        placeholder={props.intent === 'revise' ? '告诉本地 Agent 需要怎么修改…' : props.intent === 'create' ? '描述要基于这些内容创建什么…' : '告诉本地 Agent 要分析、归纳或判断什么…'}
+        placeholder="告诉 Agent 你想做什么……"
         onKeyDown={(event) => {
           if ((event.metaKey || event.ctrlKey) && event.key === 'Enter' && !disabled) {
             event.preventDefault()
@@ -196,17 +160,18 @@ export function SelectionComposer(props: Props) {
           }
         }}
       />
-      <button type="button" className="selection-send" disabled={disabled} onClick={props.onSend} title={providerBlocked ? '所选 Agent 当前离线' : disabled ? '补全指令与编辑对象后执行' : '开始 Run · Ctrl/Cmd+Enter'}><ArrowUp size={16} /></button>
+      <button type="button" className="selection-send" disabled={disabled} onClick={props.onSend} title={providerBlocked ? '本地 Agent 暂不可用，请查看诊断状态' : disabled ? '先写下你想让 Agent 做什么' : '发送 · Ctrl/Cmd+Enter'}><ArrowUp size={16} /></button>
     </div>
 
-    {props.proposalSummary && <div className="proposal-summary"><Sparkles size={11} />{props.proposalSummary}</div>}
-    {props.ambiguityQuestion && <div className="proposal-ambiguity"><CornerDownRight size={11} />{props.ambiguityQuestion}</div>}
+    <div className="proposal-summary"><Sparkles size={11} />{props.proposalSummary ?? actionSummary}</div>
+    {props.ambiguityQuestion && <div className="proposal-ambiguity"><Target size={11} />{props.ambiguityQuestion}</div>}
 
-    <footer className="selection-composer-options">
-      <ComposerMenu label="工作方式" value={props.intent} options={intentOptions} onChange={props.onIntentChange} />
-      <ComposerMenu label="执行者" value={props.provider} options={providerOptions} onChange={props.onProviderChange} />
-      <ComposerMenu label="结果去向" value={props.resultPolicy} options={resultOptions} onChange={props.onResultPolicyChange} />
-      {editable.length > 0 && <ComposerMenu className="target-option" label="编辑对象" value={props.targetId ?? ''} options={targetOptions} onChange={(value) => props.onTargetChange(value || null)} />}
+    <footer className="selection-composer-options simple-composer-options">
+      <ComposerMenu label="Agent" value={providerOptions.some((item) => item.value === props.provider) ? props.provider : providerOptions[0]!.value} options={providerOptions} onChange={providerBlocked ? () => undefined : props.onProviderChange} />
+      <label className="create-new-node-toggle">
+        <input type="checkbox" checked={props.createAsNewNode} onChange={(event) => props.onCreateAsNewNodeChange(event.target.checked)} />
+        <span>结果作为新节点</span>
+      </label>
     </footer>
   </section>
 }

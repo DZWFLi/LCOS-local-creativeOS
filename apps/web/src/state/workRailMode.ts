@@ -19,7 +19,7 @@ interface DeriveWorkRailModeInput {
 export function deriveWorkRailMode({ activeRun, pendingNode }: DeriveWorkRailModeInput): WorkRailMode {
   if (activeRun?.status === 'waiting_input') return 'waiting-input'
   if (activeRun?.status === 'review' && pendingNode) return 'review'
-  if (activeRun && ['queued', 'running', 'failed'].includes(activeRun.status)) return 'run'
+  if (activeRun && ['queued', 'running', 'failed', 'cancelled'].includes(activeRun.status)) return 'run'
   if (activeRun?.status === 'completed') return 'completed'
   return 'workspace'
 }

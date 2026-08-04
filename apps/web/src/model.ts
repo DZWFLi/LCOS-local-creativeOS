@@ -2,7 +2,7 @@ export type NodeKind = 'source' | 'working' | 'generated' | 'context' | 'process
 export type NodeLayer = 'core' | 'process'
 export type NodeDisplayMode = 'compact' | 'standard' | 'expanded'
 export type WorkspaceIntent = 'understand' | 'explore' | 'build' | 'decide' | null
-export type RunStatus = 'queued' | 'running' | 'waiting_input' | 'review' | 'completed' | 'failed'
+export type RunStatus = 'queued' | 'running' | 'waiting_input' | 'review' | 'completed' | 'failed' | 'cancelled'
 export type ArtifactReviewStatus = 'idle' | 'pending' | 'accepted'
 export type ScopeKind = 'root' | 'collection' | 'context' | 'delivery'
 export type PreviewAvailability = 'not-generated' | 'ready' | 'failed' | 'unsupported'
@@ -192,6 +192,7 @@ export const runStatusLabel: Record<RunStatus, string> = {
   review: '结果待确认',
   completed: '已完成',
   failed: '执行失败',
+  cancelled: '已撤回',
 }
 
 export const nodeDisplayModeLabel: Record<NodeDisplayMode, string> = {

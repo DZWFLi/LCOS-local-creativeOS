@@ -56,7 +56,8 @@ export function planCodexDispatch(
   const available = sessions.find((session) => session.sessionId && !session.busy)
   const thinking = sessions.length > 0 && available === undefined
 
-  return pending.map((review) => {
+  // 同一 Project + Provider 默认串行，只派发队首 Run，避免同一 Codex Session 并发污染上下文。
+  return pending.slice(0, 1).map((review) => {
     const runId = String(review.run.id)
     if (available !== undefined) {
       return {

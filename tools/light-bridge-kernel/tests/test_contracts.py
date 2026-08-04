@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from lcos_bridge.canonical.models import TaskEnvelopeV1
+from lcos_bridge.canonical.models import ChangedFileV1, TaskEnvelopeV1
 from tests.helpers import make_analyze_envelope, make_create_envelope, make_revise_envelope
 
 
@@ -39,3 +39,22 @@ def test_expected_output_cannot_escape_output_root():
     payload["expectedOutputs"][0]["absolutePath"] = "C:\\outside\\bad.md"
     with pytest.raises(ValidationError):
         TaskEnvelopeV1.model_validate(payload)
+
+
+def test_changed_file_accepts_and_normalizes_optional_content_hash():
+    changed_file = ChangedFileV1.model_validate({
+        "path": "C:\\project\\output.md",
+        "action": "modified",
+        "contentHash": "A" * 64,
+    })
+    assert changed_file.content_hash == "a" * 64
+    assert changed_file.model_dump(mode="json", by_alias=True)["contentHash"] == "a" * 64
+
+
+def test_changed_file_rejects_invalid_content_hash():
+    with pytest.raises(ValidationError):
+        ChangedFileV1.model_validate({
+            "path": "C:\\project\\output.md",
+            "action": "modified",
+            "contentHash": "not-a-sha256",
+        })

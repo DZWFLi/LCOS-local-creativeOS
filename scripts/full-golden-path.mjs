@@ -359,7 +359,11 @@ async function main() {
   // 6. Core restart recovery
   console.log('step: kill core')
   const coreChild = children[children.length - 1]
-  spawnSync('taskkill.exe', ['/pid', String(coreChild.pid), '/t', '/f'], { stdio: 'ignore', windowsHide: true })
+  if (process.platform === 'win32') {
+    spawnSync('taskkill.exe', ['/pid', String(coreChild.pid), '/t', '/f'], { stdio: 'ignore', windowsHide: true })
+  } else {
+    coreChild.kill('SIGTERM')
+  }
   console.log('step: wait core down')
   await new Promise((resolveWait) => setTimeout(resolveWait, 1_500))
   assert(!(await waitHealth(`${CORE_URL}/health`, 3_000)), 'core should be down after kill')

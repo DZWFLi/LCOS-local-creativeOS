@@ -214,6 +214,7 @@ class ChangedFileV1(BaseModel):
     action: ChangedFileAction
     role: str | None = None
     media_type: str | None = Field(default=None, alias="mediaType")
+    content_hash: str | None = Field(default=None, alias="contentHash")
 
     @field_validator("path")
     @classmethod
@@ -221,6 +222,16 @@ class ChangedFileV1(BaseModel):
         if not looks_absolute(value):
             raise ValueError("changed file path must be absolute")
         return value
+
+    @field_validator("content_hash")
+    @classmethod
+    def validate_optional_content_hash(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.lower()
+        if len(normalized) != 64 or any(character not in "0123456789abcdef" for character in normalized):
+            raise ValueError("changed file contentHash must be a SHA-256 hex digest")
+        return normalized
 
 
 class TaskEnvelopeV1(BaseModel):

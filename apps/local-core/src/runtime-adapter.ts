@@ -222,6 +222,15 @@ function dispatchError(error: unknown): RuntimeProviderError {
   }
 }
 
+export type AutomaticRuntimeProvider = 'workbuddy' | 'codex'
+
+function automaticProvidersFromEnvironment(): ReadonlySet<AutomaticRuntimeProvider> {
+  const values: AutomaticRuntimeProvider[] = []
+  if (process.env.LCOS_CODEX_AUTO_EXECUTION === '1') values.push('codex')
+  if (process.env.LCOS_WORKBUDDY_AUTO_EXECUTION === '1') values.push('workbuddy')
+  return new Set(values)
+}
+
 export class RuntimeAdapterService {
   constructor(
     private readonly repository: RuntimePersistenceContract & RuntimeProjectReader,
@@ -229,6 +238,7 @@ export class RuntimeAdapterService {
     private readonly bridgeProjectId: string,
     private readonly now: () => string = () => new Date().toISOString(),
     private readonly adapterRegistry: RuntimeAdapterRegistry = defaultRuntimeAdapterRegistry,
+    private readonly automaticProviders: ReadonlySet<AutomaticRuntimeProvider> = automaticProvidersFromEnvironment(),
   ) {
     if (bridgeProjectId.trim() === '') throw new Error('Bridge project routing ID is required.')
   }
@@ -395,19 +405,24 @@ export class RuntimeAdapterService {
         known.push({ provider, availability: bridgeOnline ? 'offline' : 'offline' })
         continue
       }
-      // 7.2 Gate：零点击 executor 未证明前，不显示 Ready。
       const contractVersion = row.contractVersions?.[0] ?? caps?.primaryContractVersion
+      const automatic = this.automaticProviders.has(provider)
       known.push({
         provider,
-        availability: bridgeOnline ? 'manual' : 'offline',
+        availability: bridgeOnline ? (automatic ? 'ready' : 'manual') : 'offline',
+        executionMode: automatic ? 'automatic' : 'manual',
         ...(contractVersion === undefined ? {} : { contractVersion }),
         ...(row.outputIntents === undefined ? {} : { outputIntents: row.outputIntents }),
+        ...(!automatic ? { reason: '未检测到由 LCOS Runtime Host 托管的自动执行器。' } : {}),
       })
     }
-    const autoReady = known.some((item) => item.availability === 'ready' || item.availability === 'manual')
+    const automaticReady = known.some((item) => item.executionMode === 'automatic' && ['ready', 'busy'].includes(item.availability))
+    const manualAvailable = known.some((item) => item.availability === 'manual')
     known.push({
       provider: 'auto',
-      availability: autoReady ? 'manual' : 'offline',
+      availability: automaticReady ? 'ready' : manualAvailable ? 'manual' : 'offline',
+      executionMode: automaticReady ? 'automatic' : 'manual',
+      ...(!automaticReady ? { reason: '暂无由 LCOS Runtime Host 托管的自动执行器。' } : {}),
     })
     return known
   }

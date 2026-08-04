@@ -1,7 +1,11 @@
 import type {
   AcceptArtifactReturnInput,
   AcceptArtifactReturnResult,
+  AgentExecutionPlanV1,
   ContractError,
+  CommandDraftV1,
+  ContextChangeProposalV1,
+  ProviderSessionBindingV1,
   ContextManifestV0,
   HealthStatus,
   MetadataStoreStatus,
@@ -110,9 +114,18 @@ export interface RuntimeRunActionResult {
 
 export interface ActiveContextProjection {
   readonly projectId: string
-  readonly workspaceId?: string
-  readonly scopeId: string
+  readonly workspaceId: string | null
+  readonly scopeId: string | null
   readonly selectedViewIds: readonly string[]
+  readonly selectionOrder?: readonly string[]
+  readonly viewport?: { readonly x: number; readonly y: number; readonly zoom: number; readonly visibleViewIds: readonly string[] }
+  readonly nodes?: readonly {
+    readonly viewId: string; readonly artifactId: string; readonly revisionId?: string
+    readonly title: string; readonly kind: string; readonly managed?: boolean
+    readonly x: number; readonly y: number; readonly width: number; readonly height: number
+    readonly status?: string; readonly summary?: string
+  }[]
+  readonly relations?: readonly { readonly id: string; readonly sourceArtifactId: string; readonly targetArtifactId: string; readonly kind: string }[]
   readonly pinnedContextIds: readonly string[]
   readonly excludedContextIds: readonly string[]
   readonly version: number
@@ -227,14 +240,17 @@ export interface LocalCoreClient {
     readonly viewId: string
     readonly toWorkspaceId: string
   }, signal?: AbortSignal): Promise<RuntimeCall<readonly WorkspaceMembership[]>>
+  validateAgentPlan(projectId: string, plan: Omit<AgentExecutionPlanV1, 'projectId'>, signal?: AbortSignal): Promise<RuntimeCall<AgentExecutionPlanV1>>
   proposeRun(projectId: string, input: {
     readonly workspaceId?: string
     readonly prompt: string
     readonly intent?: 'analyze' | 'create' | 'revise'
     readonly requestedProvider: string | 'auto'
+    readonly createAsNewNode?: boolean
+    readonly decisionSource?: 'agent' | 'fallback'
     readonly contextItems: readonly { readonly artifactId: string; readonly revisionId: string; readonly order: number }[]
     readonly editTargets: readonly { readonly artifactId: string; readonly baseRevisionId: string }[]
-    readonly resultPolicy: {
+    readonly resultPolicy?: {
       readonly type: 'reply_only' | 'create_artifact' | 'create_collection' | 'draft_revision_per_target'
       readonly format?: string
     }
@@ -260,18 +276,28 @@ export interface LocalCoreClient {
     readonly excludedContextIds: readonly string[]
     readonly targetArtifactId?: string
     readonly targetRevisionId?: string
+    readonly viewport?: { readonly x: number; readonly y: number; readonly zoom: number }
+    readonly visibleViewIds?: readonly string[]
+    readonly expectedVersion?: number
   }, signal?: AbortSignal): Promise<RuntimeCall<ActiveContextProjection>>
-  activeContext(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<ActiveContextProjection>>
+  activeContext(projectId: string, workspaceId?: string | null, signal?: AbortSignal): Promise<RuntimeCall<ActiveContextProjection>>
+  getCommandDraft(projectId: string, workspaceId: string | null, composerAnchor: string, signal?: AbortSignal): Promise<RuntimeCall<CommandDraftV1 | null>>
+  saveCommandDraft(projectId: string, workspaceId: string | null, composerAnchor: string, input: Omit<CommandDraftV1, 'schemaVersion' | 'projectId' | 'workspaceId' | 'composerAnchor' | 'updatedAt'>, signal?: AbortSignal): Promise<RuntimeCall<CommandDraftV1>>
+  deleteCommandDraft(projectId: string, workspaceId: string | null, composerAnchor: string, signal?: AbortSignal): Promise<RuntimeCall<{ readonly deleted: boolean }>>
+  getProviderSession(projectId: string, provider: 'codex' | 'workbuddy', signal?: AbortSignal): Promise<RuntimeCall<ProviderSessionBindingV1 | null>>
+  saveProviderSession(projectId: string, provider: 'codex' | 'workbuddy', input: Omit<ProviderSessionBindingV1, 'projectId' | 'provider' | 'updatedAt'>, signal?: AbortSignal): Promise<RuntimeCall<ProviderSessionBindingV1>>
+  deleteProviderSession(projectId: string, provider: 'codex' | 'workbuddy', signal?: AbortSignal): Promise<RuntimeCall<{ readonly deleted: boolean }>>
   proposeContextChange(projectId: string, input: {
+    readonly workspaceId?: string
     readonly baseContextVersion: number
     readonly addViewIds: readonly string[]
     readonly removeViewIds: readonly string[]
     readonly targetViewId?: string
     readonly reason: string
-  }, signal?: AbortSignal): Promise<RuntimeCall<unknown>>
+  }, signal?: AbortSignal): Promise<RuntimeCall<ContextChangeProposalV1>>
   acceptContextProposal(projectId: string, proposalId: string, signal?: AbortSignal): Promise<RuntimeCall<unknown>>
   rejectContextProposal(projectId: string, proposalId: string, signal?: AbortSignal): Promise<RuntimeCall<unknown>>
-  listContextProposals(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<readonly unknown[]>>
+  listContextProposals(projectId: string, workspaceId?: string | null, signal?: AbortSignal): Promise<RuntimeCall<readonly ContextChangeProposalV1[]>>
   artifactSearch(projectId: string, query: string, signal?: AbortSignal): Promise<RuntimeCall<readonly {
     readonly id: string
     readonly title: string
@@ -302,6 +328,7 @@ export interface LocalCoreClient {
   projectRunReviews(projectId: string, limit?: number, signal?: AbortSignal): Promise<RuntimeCall<readonly RunReview[]>>
   dispatchRuntimeRun(runId: string, signal?: AbortSignal): Promise<RuntimeCall<RuntimeRunActionResult>>
   recoverRuntimeRun(runId: string, signal?: AbortSignal): Promise<RuntimeCall<RuntimeRunActionResult>>
+  cancelRuntimeRun(runId: string, signal?: AbortSignal): Promise<RuntimeCall<RuntimeRunActionResult>>
   syncRuntimeRun(runId: string, signal?: AbortSignal): Promise<RuntimeCall<RuntimeRunActionResult>>
   finalizeRuntimeRun(runId: string, decision: 'completed' | 'retrying', comment?: string, signal?: AbortSignal): Promise<RuntimeCall<RuntimeRunActionResult>>
   getRunReview(runId: string, signal?: AbortSignal): Promise<RuntimeCall<RunReview>>
@@ -684,6 +711,17 @@ export function createLocalCoreClient(): LocalCoreClient {
         decode: decodeResult<readonly WorkspaceMembership[]>,
       })
     },
+    validateAgentPlan(projectId, plan, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/runs/validate-plan`, {
+        signal,
+        init: {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(plan),
+        },
+        decode: decodeResult<AgentExecutionPlanV1>,
+      })
+    },
     proposeRun(projectId, input, signal) {
       return request(`/projects/${encodeURIComponent(projectId)}/runs/propose`, {
         signal,
@@ -757,11 +795,48 @@ export function createLocalCoreClient(): LocalCoreClient {
         decode: decodeResult<ActiveContextProjection>,
       })
     },
-    activeContext(projectId, signal) {
-      return request(`/projects/${encodeURIComponent(projectId)}/active-context`, {
+    activeContext(projectId, workspaceId, signal) {
+      const query = workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : ''
+      return request(`/projects/${encodeURIComponent(projectId)}/active-context${query}`, {
         signal,
         decode: decodeResult<ActiveContextProjection>,
       })
+    },
+    getCommandDraft(projectId, workspaceId, composerAnchor, signal) {
+      const query = workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : ''
+      return request(`/projects/${encodeURIComponent(projectId)}/command-drafts/${encodeURIComponent(composerAnchor)}${query}`, {
+        signal,
+        decode: decodeResult<CommandDraftV1 | null>,
+      })
+    },
+    saveCommandDraft(projectId, workspaceId, composerAnchor, input, signal) {
+      const query = workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : ''
+      return request(`/projects/${encodeURIComponent(projectId)}/command-drafts/${encodeURIComponent(composerAnchor)}${query}`, {
+        signal,
+        init: { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...input, workspaceId }) },
+        decode: decodeResult<CommandDraftV1>,
+      })
+    },
+    deleteCommandDraft(projectId, workspaceId, composerAnchor, signal) {
+      const query = workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : ''
+      return request(`/projects/${encodeURIComponent(projectId)}/command-drafts/${encodeURIComponent(composerAnchor)}${query}`, {
+        signal,
+        init: { method: 'DELETE' },
+        decode: decodeResult<{ readonly deleted: boolean }>,
+      })
+    },
+    getProviderSession(projectId, provider, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/provider-sessions/${provider}`, { signal, decode: decodeResult<ProviderSessionBindingV1 | null> })
+    },
+    saveProviderSession(projectId, provider, input, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/provider-sessions/${provider}`, {
+        signal,
+        init: { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) },
+        decode: decodeResult<ProviderSessionBindingV1>,
+      })
+    },
+    deleteProviderSession(projectId, provider, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/provider-sessions/${provider}`, { signal, init: { method: 'DELETE' }, decode: decodeResult<{ readonly deleted: boolean }> })
     },
     proposeContextChange(projectId, input, signal) {
       return request(`/projects/${encodeURIComponent(projectId)}/context-proposals`, {
@@ -771,7 +846,7 @@ export function createLocalCoreClient(): LocalCoreClient {
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify(input),
         },
-        decode: decodeResult<unknown>,
+        decode: decodeResult<ContextChangeProposalV1>,
       })
     },
     acceptContextProposal(projectId, proposalId, signal) {
@@ -788,10 +863,11 @@ export function createLocalCoreClient(): LocalCoreClient {
         decode: decodeResult<unknown>,
       })
     },
-    listContextProposals(projectId, signal) {
-      return request(`/projects/${encodeURIComponent(projectId)}/context-proposals`, {
+    listContextProposals(projectId, workspaceId, signal) {
+      const query = workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : ''
+      return request(`/projects/${encodeURIComponent(projectId)}/context-proposals${query}`, {
         signal,
-        decode: decodeResult<readonly unknown[]>,
+        decode: decodeResult<readonly ContextChangeProposalV1[]>,
       })
     },
     artifactSearch(projectId, query, signal) {
@@ -928,6 +1004,14 @@ export function createLocalCoreClient(): LocalCoreClient {
     },
     recoverRuntimeRun(runId, signal) {
       return request(`/runs/${encodeURIComponent(runId)}/recover`, {
+        signal,
+        timeoutMs: 15_000,
+        init: { method: 'POST' },
+        decode: decodeResult<RuntimeRunActionResult>,
+      })
+    },
+    cancelRuntimeRun(runId, signal) {
+      return request(`/runs/${encodeURIComponent(runId)}/cancel`, {
         signal,
         timeoutMs: 15_000,
         init: { method: 'POST' },

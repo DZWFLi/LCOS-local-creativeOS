@@ -143,6 +143,24 @@ describe('RuntimeApplicationService', () => {
     expect(events.map((event) => event.sequence)).toEqual([1, 2])
   })
 
+  it('does not duplicate lifecycle events while polling an unchanged Run', async () => {
+    const { repository, service, snapshot } = setup()
+    const target = snapshot.artifacts.find((artifact) => artifact.kind === 'markdown')!
+    const result = await service.create(snapshot.project.id, {
+      instruction: 'Revise the script.',
+      outputIntent: 'revise',
+      targetArtifactId: String(target.id),
+    })
+    const runId = result.review.run.id
+    await service.dispatch(runId)
+
+    await service.sync(runId)
+    await service.sync(runId)
+
+    const started = repository.getRunEvents(runId).filter((event) => event.type === 'run.started')
+    expect(started).toHaveLength(1)
+  })
+
   it('cancels a bound Run through the Bridge and records run.cancelled', async () => {
     const { bridge, repository, service, snapshot } = setup()
     const target = snapshot.artifacts.find((artifact) => artifact.kind === 'markdown')!

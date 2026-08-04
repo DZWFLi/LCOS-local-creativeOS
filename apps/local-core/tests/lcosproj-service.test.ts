@@ -102,7 +102,7 @@ describe('LcosprojService (P1: export/open/rebind)', () => {
 
     const inspected = new LcosprojService(repository).inspect(targetFile)
     expect(inspected.projectId).toBe(String(projectId))
-    expect(inspected.schemaVersion).toBe(13)
+    expect(inspected.schemaVersion).toBe(14)
 
     const targetDb = mkdtempSync(join(tmpdir(), 'lcos-lcosproj-import-'))
     roots.push(targetDb)

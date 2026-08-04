@@ -170,21 +170,24 @@ export class RuntimeApplicationService {
 
   private async providerAction(runId: RunId, action: () => Promise<unknown>): Promise<RuntimeRunActionResult> {
     try {
+      const before = this.review.getRunReview(runId)
       await action()
       const review = this.review.getRunReview(runId)
-      if (review.dispatch.status === 'bound' && (review.run.status === 'queued' || review.run.status === 'running')) {
+      if (before.dispatch.status !== 'bound'
+        && review.dispatch.status === 'bound'
+        && (review.run.status === 'queued' || review.run.status === 'running')) {
         this.emit(runId, 'run.started', { projectId: String(review.run.projectId) })
       }
-      if (review.presentationPhase === 'review') {
+      if (before.presentationPhase !== 'review' && review.presentationPhase === 'review') {
         this.emit(runId, 'run.review_ready', { projectId: String(review.run.projectId) })
       }
-      if (review.run.status === 'completed') {
+      if (before.run.status !== 'completed' && review.run.status === 'completed') {
         this.emit(runId, 'run.completed', { projectId: String(review.run.projectId) })
       }
-      if (review.run.status === 'cancelled') {
+      if (before.run.status !== 'cancelled' && review.run.status === 'cancelled') {
         this.emit(runId, 'run.cancelled', { projectId: String(review.run.projectId) })
       }
-      if (review.run.status === 'failed') {
+      if (before.run.status !== 'failed' && review.run.status === 'failed') {
         this.emit(runId, 'run.failed', { projectId: String(review.run.projectId) })
       }
       return { review }

@@ -24,9 +24,11 @@ describe('C3 Agent visual context surface', () => {
 
   it('client exposes activeContext GET and proposal APIs', () => {
     const client = readFileSync(join(webRoot, 'runtime', 'localCoreClient.ts'), 'utf8')
-    expect(client).toContain('activeContext(projectId')
+    expect(client).toContain('activeContext(projectId, workspaceId')
     expect(client).toContain('proposeContextChange')
     expect(client).toContain('acceptContextProposal')
     expect(client).toContain('rejectContextProposal')
+    expect(client).toContain('afterVersion')
+    expect(client).toContain('workspaceId')
   })
 })

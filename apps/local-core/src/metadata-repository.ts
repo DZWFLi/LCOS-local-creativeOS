@@ -41,6 +41,10 @@ import type {
 } from '@local-creative-os/domain'
 import type {
   AcceptArtifactReturnResult,
+  ActiveContextV2,
+  CommandDraftV1,
+  ContextChangeProposalV1,
+  ProviderSessionBindingV1,
   MutationBatch,
   PersistedContextManifestV0,
   ProjectGraphSnapshot,
@@ -161,22 +165,24 @@ export class SqliteMetadataRepository {
   // ==================== Migration ====================
 
   #migrate(): void {
-    const version = this.#database.prepare('PRAGMA user_version').get() as { user_version: number }
-    if (version.user_version === 0) { this.#migrate_001(); this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); this.#migrate_009_from_v8(); this.#migrate_010_from_v9(); this.#migrate_011_from_v10(); this.#migrate_012_from_v11(); this.#migrate_013_from_v12(); return }
-    if (version.user_version === 1) { this.#migrate_002_from_v1(); this.#migrate_004_from_v3(); this.#migrate_005_from_v4(); this.#migrate_006_from_v5(); this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); return }
-    if (version.user_version === 2) { this.#migrate_003_from_v2(); this.#migrate_004_from_v3(); this.#migrate_005_from_v4(); this.#migrate_006_from_v5(); this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); return }
-    if (version.user_version === 3) { this.#migrate_004_from_v3(); this.#migrate_005_from_v4(); this.#migrate_006_from_v5(); this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); return }
-    if (version.user_version === 4) { this.#migrate_005_from_v4(); this.#migrate_006_from_v5(); this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); return }
-    if (version.user_version === 5) { this.#migrate_006_from_v5(); this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); return }
-    if (version.user_version === 6) { this.#migrate_007_from_v6(); this.#migrate_008_from_v7(); return }
-    if (version.user_version === 7) { this.#migrate_008_from_v7(); this.#migrate_009_from_v8(); this.#migrate_010_from_v9(); this.#migrate_011_from_v10(); this.#migrate_012_from_v11(); this.#migrate_013_from_v12(); return }
-    if (version.user_version === 8) { this.#migrate_009_from_v8(); this.#migrate_010_from_v9(); this.#migrate_011_from_v10(); this.#migrate_012_from_v11(); this.#migrate_013_from_v12(); return }
-    if (version.user_version === 9) { this.#migrate_010_from_v9(); this.#migrate_011_from_v10(); this.#migrate_012_from_v11(); this.#migrate_013_from_v12(); return }
-    if (version.user_version === 10) { this.#migrate_011_from_v10(); this.#migrate_012_from_v11(); this.#migrate_013_from_v12(); return }
-    if (version.user_version === 11) { this.#migrate_012_from_v11(); this.#migrate_013_from_v12(); return }
-    if (version.user_version === 12) { this.#migrate_013_from_v12(); return }
-    // v9 = current
+    let current = Number((this.#database.prepare('PRAGMA user_version').get() as { user_version: number }).user_version)
+    if (current === 0) { this.#migrate_001(); current = 6 }
+    if (current === 1) { this.#migrate_002_from_v1(); current = 3 }
+    if (current === 2) { this.#migrate_003_from_v2(); current = 3 }
+    if (current === 3) { this.#migrate_004_from_v3(); current = 4 }
+    if (current === 4) { this.#migrate_005_from_v4(); current = 5 }
+    if (current === 5) { this.#migrate_006_from_v5(); current = 6 }
+    if (current === 6) { this.#migrate_007_from_v6(); current = 7 }
+    if (current === 7) { this.#migrate_008_from_v7(); current = 8 }
+    if (current === 8) { this.#migrate_009_from_v8(); current = 9 }
+    if (current === 9) { this.#migrate_010_from_v9(); current = 10 }
+    if (current === 10) { this.#migrate_011_from_v10(); current = 11 }
+    if (current === 11) { this.#migrate_012_from_v11(); current = 12 }
+    if (current === 12) { this.#migrate_013_from_v12(); current = 13 }
+    if (current === 13) { this.#migrate_014_from_v13(); current = 14 }
+    if (current !== 14) throw new Error(`Unsupported metadata schema version ${current}.`)
   }
+
 
   #migrate_001(): void {
     this.#database.exec(`
@@ -735,6 +741,58 @@ export class SqliteMetadataRepository {
     this.#database.exec(`
       ALTER TABLE projects ADD COLUMN last_opened_at TEXT;
       PRAGMA user_version = 13;
+    `)
+  }
+
+  #migrate_014_from_v13(): void {
+    this.#database.exec(`
+      BEGIN;
+      CREATE TABLE IF NOT EXISTS active_contexts (
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        workspace_key TEXT NOT NULL,
+        version INTEGER NOT NULL CHECK(version >= 0),
+        projection_json TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY(project_id, workspace_key)
+      );
+      CREATE TABLE IF NOT EXISTS context_proposals (
+        proposal_id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        workspace_key TEXT NOT NULL,
+        status TEXT NOT NULL CHECK(status IN ('pending','accepted','rejected','stale')),
+        proposal_json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_context_proposals_project_status
+        ON context_proposals(project_id, workspace_key, status, created_at);
+      CREATE TABLE IF NOT EXISTS command_drafts (
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        workspace_key TEXT NOT NULL,
+        composer_anchor TEXT NOT NULL,
+        prompt TEXT NOT NULL,
+        context_view_ids_json TEXT NOT NULL DEFAULT '[]',
+        provider TEXT NOT NULL DEFAULT 'auto',
+        create_as_new_node INTEGER NOT NULL DEFAULT 0 CHECK(create_as_new_node IN (0,1)),
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY(project_id, workspace_key, composer_anchor)
+      );
+      CREATE TABLE IF NOT EXISTS provider_session_bindings (
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        provider TEXT NOT NULL CHECK(provider IN ('codex','workbuddy')),
+        external_session_id TEXT NOT NULL,
+        origin TEXT NOT NULL CHECK(origin IN ('manual','watchdog')),
+        status TEXT NOT NULL CHECK(status IN ('active','stale','closed')),
+        last_seen_at TEXT NOT NULL,
+        last_run_id TEXT,
+        lease_owner TEXT,
+        lease_expires_at TEXT,
+        failure_count INTEGER NOT NULL DEFAULT 0 CHECK(failure_count >= 0),
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY(project_id, provider)
+      );
+      PRAGMA user_version = 14;
+      COMMIT;
     `)
   }
 
@@ -2374,7 +2432,7 @@ export class SqliteMetadataRepository {
     }
   }
 
-  get schemaVersion(): number { return 13 }
+  get schemaVersion(): number { return 14 }
 
   // ==================== Private helpers ====================
 
@@ -2729,9 +2787,124 @@ export class SqliteMetadataRepository {
       updatedAt: String(row.updated_at),
     }
   }
+
+  getActiveContext(projectId: string, workspaceId: string | null): ActiveContextV2 | undefined {
+    const row = this.#database.prepare(`SELECT projection_json FROM active_contexts WHERE project_id = ? AND workspace_key = ?`).get(projectId, metadataWorkspaceKey(workspaceId)) as Row | undefined
+    return row === undefined ? undefined : json<ActiveContextV2>(row.projection_json as SQLInputValue)
+  }
+
+  saveActiveContext(value: ActiveContextV2): void {
+    this.#database.prepare(`
+      INSERT INTO active_contexts(project_id, workspace_key, version, projection_json, updated_at)
+      VALUES(?, ?, ?, ?, ?)
+      ON CONFLICT(project_id, workspace_key) DO UPDATE SET
+        version = excluded.version,
+        projection_json = excluded.projection_json,
+        updated_at = excluded.updated_at
+    `).run(value.projectId, metadataWorkspaceKey(value.workspaceId), value.version, JSON.stringify(value), value.updatedAt)
+  }
+
+  getCommandDraft(projectId: string, workspaceId: string | null, composerAnchor: string): CommandDraftV1 | undefined {
+    const row = this.#database.prepare(`SELECT * FROM command_drafts WHERE project_id = ? AND workspace_key = ? AND composer_anchor = ?`).get(projectId, metadataWorkspaceKey(workspaceId), composerAnchor) as Row | undefined
+    if (row === undefined) return undefined
+    return {
+      schemaVersion: 1,
+      projectId,
+      workspaceId,
+      composerAnchor,
+      prompt: String(row.prompt),
+      contextViewIds: json<readonly string[]>(row.context_view_ids_json as SQLInputValue),
+      provider: String(row.provider),
+      createAsNewNode: Number(row.create_as_new_node) === 1,
+      updatedAt: String(row.updated_at),
+    }
+  }
+
+  saveCommandDraft(value: CommandDraftV1): void {
+    this.#database.prepare(`
+      INSERT INTO command_drafts(project_id, workspace_key, composer_anchor, prompt, context_view_ids_json, provider, create_as_new_node, updated_at)
+      VALUES(?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(project_id, workspace_key, composer_anchor) DO UPDATE SET
+        prompt = excluded.prompt,
+        context_view_ids_json = excluded.context_view_ids_json,
+        provider = excluded.provider,
+        create_as_new_node = excluded.create_as_new_node,
+        updated_at = excluded.updated_at
+    `).run(value.projectId, metadataWorkspaceKey(value.workspaceId), value.composerAnchor, value.prompt, JSON.stringify(value.contextViewIds), value.provider, value.createAsNewNode ? 1 : 0, value.updatedAt)
+  }
+
+  deleteCommandDraft(projectId: string, workspaceId: string | null, composerAnchor: string): void {
+    this.#database.prepare(`DELETE FROM command_drafts WHERE project_id = ? AND workspace_key = ? AND composer_anchor = ?`).run(projectId, metadataWorkspaceKey(workspaceId), composerAnchor)
+  }
+
+  saveContextProposal(value: ContextChangeProposalV1): void {
+    const now = new Date().toISOString()
+    this.#database.prepare(`
+      INSERT INTO context_proposals(proposal_id, project_id, workspace_key, status, proposal_json, created_at, updated_at)
+      VALUES(?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(proposal_id) DO UPDATE SET status = excluded.status, proposal_json = excluded.proposal_json, updated_at = excluded.updated_at
+    `).run(value.proposalId, value.projectId, metadataWorkspaceKey(value.workspaceId), value.status, JSON.stringify(value), now, now)
+  }
+
+  getContextProposal(projectId: string, proposalId: string): ContextChangeProposalV1 | undefined {
+    const row = this.#database.prepare(`SELECT proposal_json FROM context_proposals WHERE project_id = ? AND proposal_id = ?`).get(projectId, proposalId) as Row | undefined
+    return row === undefined ? undefined : json<ContextChangeProposalV1>(row.proposal_json as SQLInputValue)
+  }
+
+  listContextProposals(projectId: string, workspaceId?: string | null): readonly ContextChangeProposalV1[] {
+    const rows = workspaceId === undefined
+      ? this.#database.prepare(`SELECT proposal_json FROM context_proposals WHERE project_id = ? ORDER BY created_at DESC`).all(projectId) as Row[]
+      : this.#database.prepare(`SELECT proposal_json FROM context_proposals WHERE project_id = ? AND workspace_key = ? ORDER BY created_at DESC`).all(projectId, metadataWorkspaceKey(workspaceId)) as Row[]
+    return rows.map((row) => json<ContextChangeProposalV1>(row.proposal_json as SQLInputValue))
+  }
+
+  getProviderSessionBinding(projectId: string, provider: 'codex' | 'workbuddy'): ProviderSessionBindingV1 | undefined {
+    const row = this.#database.prepare(`SELECT * FROM provider_session_bindings WHERE project_id = ? AND provider = ?`).get(projectId, provider) as Row | undefined
+    if (row === undefined) return undefined
+    return {
+      projectId,
+      provider,
+      externalSessionId: String(row.external_session_id),
+      origin: String(row.origin) as ProviderSessionBindingV1['origin'],
+      status: String(row.status) as ProviderSessionBindingV1['status'],
+      lastSeenAt: String(row.last_seen_at),
+      ...(row.last_run_id ? { lastRunId: String(row.last_run_id) } : {}),
+      ...(row.lease_owner ? { leaseOwner: String(row.lease_owner) } : {}),
+      ...(row.lease_expires_at ? { leaseExpiresAt: String(row.lease_expires_at) } : {}),
+      failureCount: Number(row.failure_count),
+      updatedAt: String(row.updated_at),
+    }
+  }
+
+  saveProviderSessionBinding(value: ProviderSessionBindingV1): void {
+    this.#database.prepare(`
+      INSERT INTO provider_session_bindings(project_id, provider, external_session_id, origin, status, last_seen_at, last_run_id, lease_owner, lease_expires_at, failure_count, updated_at)
+      VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(project_id, provider) DO UPDATE SET
+        external_session_id = excluded.external_session_id,
+        origin = excluded.origin,
+        status = excluded.status,
+        last_seen_at = excluded.last_seen_at,
+        last_run_id = excluded.last_run_id,
+        lease_owner = excluded.lease_owner,
+        lease_expires_at = excluded.lease_expires_at,
+        failure_count = excluded.failure_count,
+        updated_at = excluded.updated_at
+    `).run(value.projectId, value.provider, value.externalSessionId, value.origin, value.status, value.lastSeenAt, value.lastRunId ?? null, value.leaseOwner ?? null, value.leaseExpiresAt ?? null, value.failureCount, value.updatedAt)
+  }
+
+  deleteProviderSessionBinding(projectId: string, provider: 'codex' | 'workbuddy'): void {
+    this.#database.prepare(`DELETE FROM provider_session_bindings WHERE project_id = ? AND provider = ?`).run(projectId, provider)
+  }
 }
 
 // ==================== Module helpers ====================
+
+
+function metadataWorkspaceKey(workspaceId: string | null | undefined): string {
+  return workspaceId ?? '__project_overview__'
+}
+
 
 /** Presentation-only ops — do NOT advance graphVersion. */
 const PRESENTATION_OPS = new Set([

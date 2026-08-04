@@ -78,4 +78,29 @@ describe('Codex dispatch plan follows Bridge task state machine', () => {
     const plan = planCodexDispatch([review()], 'C:\\project', [], new Map())
     expect(plan).toHaveLength(0)
   })
+  it('waits when the preferred project session is busy', () => {
+    const plan = planCodexDispatch(
+      [review()],
+      'C:\\project',
+      [{ sessionId: 'session-one', busy: true }],
+      states([['run-codex-1', { status: 'assigned' }]]),
+    )
+    expect(plan[0]?.decision).toBe('wait')
+  })
+
+  it('serializes multiple pending Runs for one Project + Provider', () => {
+    const plan = planCodexDispatch(
+      [review(), review({ id: 'run-codex-2' as never })],
+      'C:\\project',
+      [{ sessionId: 'session-one', busy: false }],
+      states([
+        ['run-codex-1', { status: 'assigned' }],
+        ['run-codex-2', { status: 'assigned' }],
+      ]),
+    )
+    expect(plan).toHaveLength(1)
+    expect(plan[0]?.runId).toBe('run-codex-1')
+    expect(plan[0]?.sessionId).toBe('session-one')
+  })
+
 })
