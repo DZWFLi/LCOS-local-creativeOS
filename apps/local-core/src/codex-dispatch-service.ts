@@ -66,6 +66,7 @@ export function planCodexDispatch(
         instruction: review.run.instruction.slice(0, 200),
         decision: 'dispatch_existing' as const,
         sessionId: available.sessionId,
+        projectRoot,
         reason: '已注册可用的 CLI 会话，直接派单。',
       }
     }

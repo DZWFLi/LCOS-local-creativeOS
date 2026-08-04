@@ -69,13 +69,28 @@ function Send-ClaimPrompt([string]$sessionId, [string]$runId, [string]$projectId
   & $codex exec resume $sessionId $message
 }
 
-function Send-SpawnNew([string]$projectRoot, [string]$runId) {
-  Write-Host "[$(Get-Date -Format HH:mm:ss)] 拉起新会话执行 run $runId（目录 $projectRoot）"
-  Push-Location $projectRoot
-  try {
+function Send-AutoPrompt([string]$projectRoot, [string]$runId, [string]$projectId, [string]$sessionId, [string]$taskId) {
+  $message = "LCOS 接单提示：项目 $projectId 有新待办 run $runId 。请按 lcos-project-context skill 认领并执行。"
+  if ($sessionId) {
+    if ($taskId) {
+      try {
+        $directBody = @{ sessionId = $sessionId } | ConvertTo-Json
+        Invoke-RestMethod -Uri "http://127.0.0.1:43122/v1/tasks/$taskId/direct" -Method POST `
+          -ContentType 'application/json' -Body $directBody -TimeoutSec 10 | Out-Null
+      } catch {
+        Write-Host "[$(Get-Date -Format HH:mm:ss)] 定向 task $taskId 失败：$($_.Exception.Message)"
+      }
+    }
+    Write-Host "[$(Get-Date -Format HH:mm:ss)] 派单 run $runId -> 会话 $sessionId"
+    & $codex exec resume $sessionId $message
+    return
+  }
+  # 零注册模式：自动续上该目录最近一个会话；没有会话则拉起新的
+  Write-Host "[$(Get-Date -Format HH:mm:ss)] 自动派单 run $runId -> $projectRoot 最近会话"
+  & $codex exec -C $projectRoot resume --last $message
+  if ($LASTEXITCODE -ne 0) {
+    Write-Host "[$(Get-Date -Format HH:mm:ss)] 无历史会话，拉起新会话执行 run $runId"
     & $codex exec -C $projectRoot --skip-git-repo-check "LCOS 接单：处理 run $runId（按 lcos-project-context skill 规则认领执行并提交结果）"
-  } finally {
-    Pop-Location
   }
 }
 
@@ -153,13 +168,13 @@ try {
           if ($lastDispatch -and ((Get-Date) - [datetime]$lastDispatch).TotalMilliseconds -lt $cooldownMs) { continue }
           if ($item.decision -eq 'dispatch_existing') {
             $sessionId = [string]$item.sessionId
-            if (Get-SessionBusy $sessionId) {
+            if ($sessionId -and (Get-SessionBusy $sessionId)) {
               Write-Host "[$(Get-Date -Format HH:mm:ss)] $projectId 会话正在写入（GUI 使用中），本轮跳过 run $runId"
               continue
             }
-            Send-ClaimPrompt $sessionId $runId $projectId ([string]$item.taskId)
+            Send-AutoPrompt ([string]$item.projectRoot) $runId $projectId $sessionId ([string]$item.taskId)
           } elseif ($item.decision -eq 'spawn_new') {
-            Send-SpawnNew ([string]$item.projectRoot) $runId
+            Send-AutoPrompt ([string]$item.projectRoot) $runId $projectId '' ([string]$item.taskId)
           } else {
             Write-Host "[$(Get-Date -Format HH:mm:ss)] $projectId run $runId 等待：$($item.reason)"
           }

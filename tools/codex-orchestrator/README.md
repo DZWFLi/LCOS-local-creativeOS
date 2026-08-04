@@ -33,15 +33,24 @@ Core 给出结论：送进现有 CLI 会话 / 拉起新会话 / 先等着。
 
 ## 前提
 
-1. 你项目里的正常 Codex 对话是 **CLI 会话**（用 `codex resume` 能列出 ID）。
-2. 把 项目ID → 会话ID 记进注册表：
+### 零注册模式（推荐，什么都不用配）
+
+1. 你项目里的正常 Codex 对话是 **CLI 会话**，并且**在项目目录里开**（你平时就是这样用的）。
+2. 看门狗用 `codex exec -C <项目目录> resume --last "接单提示"` 自动续上“最近那个会话”，
+   不需要知道会话 ID、不需要填任何注册表。
+3. 如果那个目录从没开过会话，看门狗会自动退到 `codex exec -C <项目目录> "接单提示"` 拉起新会话。
+
+### 可选：注册一次（获得“不打断思考”保护）
+
+把 项目ID → 会话ID 记进注册表后，看门狗能精确找到会话，并检查它“在不在思考”，
+思考中就等、空闲才敲门；零注册模式没有这层保护（可能打扰正在忙的最近会话）。
 
 ```powershell
 Copy-Item tools\codex-orchestrator\sessions.example.json tools\codex-orchestrator\sessions.json
 # 编辑 sessions.json，填真实 projectId 和会话 ID（codex resume 不带参数可列出）
 ```
 
-3. 那个项目对话里有 `lcos-project-context` skill（收到“接单提示”后会认领执行）。
+4. 那个项目对话里有 `lcos-project-context` skill（收到“接单提示”后会认领执行）。
 
 ## 启动
 
