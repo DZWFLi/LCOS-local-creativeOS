@@ -46,6 +46,7 @@ import { WorkspaceStateService } from './workspace-state-service.js'
 import { ProcessProjectionService } from './process-projection-service.js'
 import { LcosprojService } from './lcosproj-service.js'
 import { createTextArtifact } from './text-artifact-service.js'
+import { planCodexDispatch } from './codex-dispatch-service.js'
 import {
   RuntimeApplicationService,
   type CreateRuntimeRunInput,
@@ -1291,6 +1292,43 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
         } catch (error: unknown) {
           sendJson(response, 503, failure('UNAVAILABLE', error instanceof Error ? error.message : 'Provider status unavailable.'))
         }
+        return
+      }
+
+      const codexDispatchPlanMatch = /^\/runtime\/codex-dispatch-plan$/.exec(pathname)
+      if (method === 'POST' && codexDispatchPlanMatch !== null) {
+        if (!requireMetadata(metadata, response)) return
+        if (runtimeApplication === undefined) {
+          sendJson(response, 503, failure('UNAVAILABLE', 'Runtime execution service is not configured.'))
+          return
+        }
+        const input = await readJsonBody(request, controller.signal)
+        if (!isRecord(input) || typeof input.projectId !== 'string'
+          || (input.sessions !== undefined && !Array.isArray(input.sessions))
+          || Object.keys(input).some((key) => !['projectId', 'sessions'].includes(key))) {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Dispatch plan requires projectId and optional sessions array.'))
+          return
+        }
+        const project = metadata.getProject(input.projectId)
+        if (project === undefined) {
+          sendJson(response, 404, failure('NOT_FOUND', 'Project not found.'))
+          return
+        }
+        const sessions = (input.sessions as unknown[] | undefined ?? []).flatMap((item) => {
+          if (!isRecord(item) || typeof item.sessionId !== 'string') return []
+          return [{
+            sessionId: item.sessionId,
+            ...(item.guiActive === true ? { guiActive: true } : {}),
+          }]
+        })
+        sendJson(response, 200, {
+          ok: true,
+          value: planCodexDispatch(
+            runtimeApplication.getProjectReviews(input.projectId as ProjectId, 100),
+            project.rootPath,
+            sessions,
+          ),
+        })
         return
       }
 

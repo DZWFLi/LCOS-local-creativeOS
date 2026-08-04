@@ -39,6 +39,7 @@ $stateDir = Join-Path $repo '.codex-runtime'
 $stateFile = Join-Path $stateDir 'orchestrator-state.json'
 $cooldownMs = [long]($env:LCOS_ORCHESTRATOR_COOLDOWN_MS ?? 120000)
 $recentWriteGuardMs = [long]($env:LCOS_ORCHESTRATOR_WRITE_GUARD_MS ?? 10000)
+$tokenFile = Join-Path $repo '.codex-runtime\local-core-token'
 
 if (Test-Path $lockFile) {
   Write-Error "已有看门狗在运行（$lockFile）。如需重启请先删除该锁文件。"
@@ -53,24 +54,40 @@ function Get-Registry {
   return (Get-Content $registryPath -Raw | ConvertFrom-Json)
 }
 
-function Get-PendingRuns([string]$projectId) {
-  Push-Location $repo
+function Send-ClaimPrompt([string]$sessionId, [string]$runId, [string]$projectId) {
+  $message = "LCOS 接单提示：项目 $projectId 有新待办 run $runId 。请按 lcos-project-context skill 认领并执行。"
+  Write-Host "[$(Get-Date -Format HH:mm:ss)] 派单 run $runId -> 会话 $sessionId"
+  & $codex resume $sessionId $message
+}
+
+function Send-SpawnNew([string]$projectRoot, [string]$runId) {
+  Write-Host "[$(Get-Date -Format HH:mm:ss)] 拉起新会话执行 run $runId（目录 $projectRoot）"
+  Push-Location $projectRoot
   try {
-    $raw = & npm.cmd run lcos -- run pending $projectId 2>$null
-    $line = ($raw | Out-String).Trim()
-    if (-not $line) { return @() }
-    $parsed = $line | ConvertFrom-Json
-    if (-not $parsed) { return @() }
-    return @($parsed)
+    & $codex exec --skip-git-repo-check --skill lcos-project-context "处理 LCOS run $runId"
   } finally {
     Pop-Location
   }
 }
 
-function Send-ClaimPrompt([string]$sessionId, [string]$runId, [string]$projectId) {
-  $message = "LCOS 接单提示：项目 $projectId 有新待办 run $runId 。请按 lcos-project-context skill 认领并执行。"
-  Write-Host "[$(Get-Date -Format HH:mm:ss)] 派单 run $runId -> 会话 $sessionId"
-  & $codex resume $sessionId $message
+function Get-DispatchPlan([string]$projectId, [array]$sessions) {
+  if (-not (Test-Path $tokenFile)) {
+    Write-Host "[$(Get-Date -Format HH:mm:ss)] 没有 Local Core token，跳过 $projectId"
+    return @()
+  }
+  $token = (Get-Content $tokenFile -Raw).Trim()
+  $body = @{
+    projectId = $projectId
+    sessions = @($sessions | ForEach-Object { @{ sessionId = $_.sessionId; guiActive = [bool]$_.guiActive } })
+  } | ConvertTo-Json -Depth 5
+  try {
+    $response = Invoke-RestMethod -Uri "http://127.0.0.1:43121/runtime/codex-dispatch-plan" -Method POST `
+      -Headers @{ authorization = "Bearer $token" } -ContentType 'application/json' -Body $body -TimeoutSec 15
+    return @($response.value)
+  } catch {
+    Write-Host "[$(Get-Date -Format HH:mm:ss)] 获取派单计划失败：$($_.Exception.Message)"
+    return @()
+  }
 }
 
 function Get-State {
@@ -106,24 +123,33 @@ try {
     foreach ($entry in $projects) {
       $projectId = $entry.Name
       if ($env:LCOS_ORCHESTRATOR_PROJECTS -and ($env:LCOS_ORCHESTRATOR_PROJECTS -split ',' -notcontains $projectId)) { continue }
-      $sessionId = $entry.Value.sessionId
-      if (-not $sessionId -or $sessionId -like '*…*') { continue }
-      if ($entry.Value.guiActive) {
-        Write-Host "[$(Get-Date -Format HH:mm:ss)] $projectId 标记为 GUI 会话，跳过派单"
-        continue
+      $rawSession = $entry.Value
+      if ($rawSession.sessionId) {
+        $sessions = @($rawSession)
+      } else {
+        $sessions = @($rawSession | Where-Object { $_.sessionId -and $_.sessionId -notlike '*…*' })
       }
       $state = Get-State
-      $lastDispatch = $state.lastDispatchBySession.$sessionId
-      if ($lastDispatch -and ((Get-Date) - [datetime]$lastDispatch).TotalMilliseconds -lt $cooldownMs) { continue }
-      if (Test-SessionBusy $sessionId) {
-        Write-Host "[$(Get-Date -Format HH:mm:ss)] $projectId 会话正在写入（GUI 使用中），本轮跳过"
-        continue
-      }
       try {
-        $pending = Get-PendingRuns $projectId
-        foreach ($run in $pending) {
-          Send-ClaimPrompt $sessionId ([string]$run.run.id) $projectId
-          $state.lastDispatchBySession.$sessionId = (Get-Date -Format o)
+        $plan = Get-DispatchPlan $projectId $sessions
+        foreach ($item in $plan) {
+          $runId = [string]$item.runId
+          $lastDispatch = $state.lastDispatchByRun.$runId
+          if ($lastDispatch -and ((Get-Date) - [datetime]$lastDispatch).TotalMilliseconds -lt $cooldownMs) { continue }
+          if ($item.decision -eq 'dispatch_existing') {
+            $sessionId = [string]$item.sessionId
+            if (Test-SessionBusy $sessionId) {
+              Write-Host "[$(Get-Date -Format HH:mm:ss)] $projectId 会话正在写入（GUI 使用中），本轮跳过 run $runId"
+              continue
+            }
+            Send-ClaimPrompt $sessionId $runId $projectId
+          } elseif ($item.decision -eq 'spawn_new') {
+            Send-SpawnNew ([string]$item.projectRoot) $runId
+          } else {
+            Write-Host "[$(Get-Date -Format HH:mm:ss)] $projectId run $runId 等待：$($item.reason)"
+          }
+          if (-not $state.lastDispatchByRun) { $state.lastDispatchByRun = @{} }
+          $state.lastDispatchByRun.$runId = (Get-Date -Format o)
           Save-State $state
         }
       } catch {

@@ -636,4 +636,71 @@ describe('Runtime HTTP closure', () => {
     })
     expect(staleAccept.status).toBe(409)
   })
+
+  it('lets Core decide Codex dispatch: existing session / spawn new / wait', async () => {
+    const dbRoot = mkdtempSync(join(tmpdir(), 'lcos-runtime-http-db-'))
+    const projectRoot = mkdtempSync(join(tmpdir(), 'lcos-runtime-http-project-'))
+    roots.push(dbRoot, projectRoot)
+    const repository = new SqliteMetadataRepository(join(dbRoot, 'metadata.sqlite'))
+    repositories.push(repository)
+    const snapshot = createMvpSampleSnapshot(projectRoot, '2026-07-29T19:30:00.000Z')
+    repository.save(snapshot)
+    const bridge = new FakeBridge()
+    const review = new RuntimeReviewService(repository, undefined, () => 'http-ten')
+    const application = new RuntimeApplicationService(
+      repository,
+      new ContextManifestService(repository),
+      new RuntimeAdapterService(repository, bridge, 'mvp-fast-build'),
+      new RuntimeResultIngestionService(repository, bridge),
+      review,
+      undefined,
+      () => 'http-ten',
+    )
+    const server = createLocalCoreServer({
+      port: 0,
+      metadataRepository: repository,
+      runtimeReviewService: review,
+      runtimeApplicationService: application,
+    })
+    servers.push(server)
+    const address = await server.start()
+    const baseUrl = `http://${address.host}:${address.port}`
+
+    const created = await fetch(`${baseUrl}/projects/${snapshot.project.id}/runs`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        instruction: 'Codex 分析一次。',
+        outputIntent: 'analyze',
+        requestedProvider: 'codex',
+      }),
+    })
+    const createdBody = await created.json() as { value: { review: { run: { id: string } } } }
+    const runId = createdBody.value.review.run.id
+    await fetch(`${baseUrl}/runs/${encodeURIComponent(runId)}/dispatch`, { method: 'POST', body: '{}' })
+
+    const withSession = await fetch(`${baseUrl}/runtime/codex-dispatch-plan`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ projectId: String(snapshot.project.id), sessions: [{ sessionId: 'proj-session' }] }),
+    })
+    const withSessionBody = await withSession.json() as { value: { runId: string; decision: string; sessionId: string }[] }
+    expect(withSessionBody.value[0]).toMatchObject({ runId, decision: 'dispatch_existing', sessionId: 'proj-session' })
+
+    const withoutSession = await fetch(`${baseUrl}/runtime/codex-dispatch-plan`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ projectId: String(snapshot.project.id), sessions: [] }),
+    })
+    const withoutSessionBody = await withoutSession.json() as { value: { runId: string; decision: string; projectRoot: string }[] }
+    expect(withoutSessionBody.value[0]).toMatchObject({ runId, decision: 'spawn_new', projectRoot })
+
+    const busyOnly = await fetch(`${baseUrl}/runtime/codex-dispatch-plan`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ projectId: String(snapshot.project.id), sessions: [{ sessionId: 'gui-session', guiActive: true }] }),
+    })
+    const busyOnlyBody = await busyOnly.json() as { value: { runId: string; decision: string }[] }
+    expect(busyOnlyBody.value[0]).toMatchObject({ runId, decision: 'wait' })
+  })
 })
