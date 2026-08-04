@@ -72,6 +72,7 @@ export interface ContractError {
     | 'PROJECT_ROOT_NOT_DIRECTORY'
     | 'PROJECT_ROOT_NOT_READABLE'
     | 'PATH_OUTSIDE_ALLOWED_ROOT'
+    | 'ACTIVE_CONTEXT_CONFLICT'
     | 'ABORTED'
     | 'INTERNAL'
   readonly message: string
@@ -275,6 +276,63 @@ export interface RuntimeProviderStatus {
   readonly availability: RuntimeProviderAvailability
   readonly contractVersion?: string
   readonly outputIntents?: readonly string[]
+}
+
+// ==================== Codex Native Loop (C0 frozen contracts) ====================
+
+/** Agent 可读取的受控上下文项：只含摘要与引用，不泄露任意绝对路径。 */
+export interface AgentContextItem {
+  readonly viewId: string
+  readonly artifactId: string
+  readonly revisionId?: string
+  readonly title: string
+  readonly kind: string
+  readonly managed?: boolean
+  readonly previewRef?: string
+}
+
+export interface ActiveContextV2 {
+  readonly schemaVersion: 2
+  readonly projectId: string
+  readonly workspaceId: string | null
+  readonly scopeId: string | null
+  readonly selectedViewIds: readonly string[]
+  readonly targetArtifactId: string | null
+  readonly targetRevisionId: string | null
+  readonly pinnedContextIds: readonly string[]
+  readonly excludedContextIds: readonly string[]
+  readonly contextItems: readonly AgentContextItem[]
+  readonly version: number
+  readonly updatedAt: string
+  readonly updatedBy: 'web' | 'codex' | 'core'
+}
+
+export type ContextChangeProposalStatus = 'pending' | 'accepted' | 'rejected' | 'stale'
+
+export interface ContextChangeProposalV1 {
+  readonly proposalId: string
+  readonly projectId: string
+  readonly baseContextVersion: number
+  readonly addViewIds: readonly string[]
+  readonly removeViewIds: readonly string[]
+  readonly targetViewId?: string
+  readonly reason: string
+  readonly createdBy: 'codex'
+  readonly status: ContextChangeProposalStatus
+}
+
+/** Codex Provider Task Profile：Bridge Task 的 Codex 契约面，不内嵌项目真相。 */
+export interface CodexTaskV1Profile {
+  readonly provider: 'codex'
+  readonly projectId: string
+  readonly lcosRunId: string
+  readonly contextManifestId: string
+  readonly taskType: 'creative_run' | 'markdown_script_revision'
+  readonly outputIntent: 'analyze' | 'create' | 'revise'
+  readonly expectedOutputs: readonly { readonly absolutePath: string; readonly mode: 'create_new_file' }[]
+  readonly targetArtifactId?: string
+  readonly baseRevisionId?: string
+  readonly idempotencyKey: string
 }
 
 export interface ProcessProjectionV1Item {

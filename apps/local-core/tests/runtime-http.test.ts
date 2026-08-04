@@ -447,4 +447,68 @@ describe('Runtime HTTP closure', () => {
     const proposeBody = await proposeResponse.json() as { value: { proposal: { contextItems: { artifactId: string }[] } } }
     expect(proposeBody.value.proposal.contextItems.map((item) => item.artifactId)).toContain(created.value.artifactId)
   })
+
+  it('freezes ActiveContextV2 versioning: monotonic version, expectedVersion conflict, afterVersion poll', async () => {
+    const dbRoot = mkdtempSync(join(tmpdir(), 'lcos-runtime-http-db-'))
+    const projectRoot = mkdtempSync(join(tmpdir(), 'lcos-runtime-http-project-'))
+    roots.push(dbRoot, projectRoot)
+    const repository = new SqliteMetadataRepository(join(dbRoot, 'metadata.sqlite'))
+    repositories.push(repository)
+    const snapshot = createMvpSampleSnapshot(projectRoot, '2026-07-29T19:30:00.000Z')
+    repository.save(snapshot)
+    const bridge = new FakeBridge()
+    const review = new RuntimeReviewService(repository, undefined, () => 'http-seven')
+    const application = new RuntimeApplicationService(
+      repository,
+      new ContextManifestService(repository),
+      new RuntimeAdapterService(repository, bridge, 'mvp-fast-build'),
+      new RuntimeResultIngestionService(repository, bridge),
+      review,
+      undefined,
+      () => 'http-seven',
+    )
+    const server = createLocalCoreServer({
+      port: 0,
+      metadataRepository: repository,
+      runtimeReviewService: review,
+      runtimeApplicationService: application,
+    })
+    servers.push(server)
+    const address = await server.start()
+    const baseUrl = `http://${address.host}:${address.port}`
+    const scopeId = String(snapshot.scopes[0]!.id)
+    const viewA = String(snapshot.artifactViews[0]!.id)
+    const viewB = String(snapshot.artifactViews[1]!.id)
+    const put = (body: Record<string, unknown>) => fetch(`${baseUrl}/projects/${snapshot.project.id}/active-context`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ scopeId, selectedViewIds: [viewA], pinnedContextIds: [], excludedContextIds: [], ...body }),
+    })
+
+    const first = await put({ updatedBy: 'web' })
+    expect(first.status).toBe(200)
+    const firstBody = await first.json() as { value: { version: number; schemaVersion: number; contextItems: { viewId: string }[]; updatedBy: string } }
+    expect(firstBody.value.version).toBe(1)
+    expect(firstBody.value.schemaVersion).toBe(2)
+    expect(firstBody.value.updatedBy).toBe('web')
+    expect(firstBody.value.contextItems.map((item) => item.viewId)).toContain(viewA)
+
+    const second = await put({ selectedViewIds: [viewB], expectedVersion: 1, updatedBy: 'codex' })
+    const secondBody = await second.json() as { value: { version: number; updatedBy: string } }
+    expect(second.status).toBe(200)
+    expect(secondBody.value.version).toBe(2)
+    expect(secondBody.value.updatedBy).toBe('codex')
+
+    const conflict = await put({ selectedViewIds: [viewA], expectedVersion: 1 })
+    expect(conflict.status).toBe(409)
+    const conflictBody = await conflict.json() as { error: { code: string } }
+    expect(conflictBody.error.code).toBe('ACTIVE_CONTEXT_CONFLICT')
+
+    const started = Date.now()
+    const poll = await fetch(`${baseUrl}/projects/${snapshot.project.id}/active-context?afterVersion=2`)
+    const elapsed = Date.now() - started
+    const pollBody = await poll.json() as { value: { version: number } }
+    expect(pollBody.value.version).toBe(2)
+    expect(elapsed).toBeGreaterThanOrEqual(900)
+  })
 })

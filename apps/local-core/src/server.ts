@@ -50,7 +50,7 @@ import {
   RuntimeApplicationService,
   type CreateRuntimeRunInput,
 } from './runtime-application-service.js'
-import { ActiveContextStore, type ActiveContextInput } from './active-context-store.js'
+import { ActiveContextConflictError, ActiveContextStore, type ActiveContextInput } from './active-context-store.js'
 import { selectNativeDirectory, type DirectoryPickerInput, type DirectoryPickerResult } from './native-directory-picker.js'
 import { indexProjectRoot, inspectProjectRoot } from './project-root-indexer.js'
 
@@ -572,6 +572,16 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
           return
         }
         if (method === 'GET') {
+          const afterRaw = url.searchParams.get('afterVersion')
+          const afterVersion = afterRaw === null ? undefined : Number(afterRaw)
+          if (afterRaw !== null && (!Number.isInteger(afterVersion) || (afterVersion ?? -1) < 0)) {
+            sendJson(response, 400, failure('INVALID_ARGUMENT', 'afterVersion must be a non-negative integer.'))
+            return
+          }
+          if (afterVersion !== undefined && activeContext.get(projectId, graph).version <= afterVersion) {
+            // 短轮询：最多等待 1 秒再返回当前版本（watch_lcos_active_context）
+            await new Promise((resolve) => setTimeout(resolve, 1_000))
+          }
           sendJson(response, 200, { ok: true, value: activeContext.get(projectId, graph) })
           return
         }
@@ -588,14 +598,24 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
           || !isStringArray(input.excludedContextIds)
           || (input.targetArtifactId !== undefined && typeof input.targetArtifactId !== 'string')
           || (input.targetRevisionId !== undefined && typeof input.targetRevisionId !== 'string')
-          || Object.keys(input).some((key) => !['workspaceId', 'scopeId', 'selectedViewIds', 'pinnedContextIds', 'excludedContextIds', 'targetArtifactId', 'targetRevisionId'].includes(key))) {
+          || (input.expectedVersion !== undefined && typeof input.expectedVersion !== 'number')
+          || (input.updatedBy !== undefined && !['web', 'codex', 'core'].includes(String(input.updatedBy)))
+          || Object.keys(input).some((key) => !['workspaceId', 'scopeId', 'selectedViewIds', 'pinnedContextIds', 'excludedContextIds', 'targetArtifactId', 'targetRevisionId', 'expectedVersion', 'updatedBy'].includes(key))) {
           sendJson(response, 400, failure('INVALID_ARGUMENT', 'Active Context requires scopeId and string ID arrays.'))
           return
         }
-        sendJson(response, 200, {
-          ok: true,
-          value: activeContext.update(projectId, graph, input as unknown as ActiveContextInput),
-        })
+        try {
+          sendJson(response, 200, {
+            ok: true,
+            value: activeContext.update(projectId, graph, input as unknown as ActiveContextInput),
+          })
+        } catch (error: unknown) {
+          if (error instanceof ActiveContextConflictError) {
+            sendJson(response, 409, failure(error.code, error.message))
+            return
+          }
+          throw error
+        }
         return
       }
 
