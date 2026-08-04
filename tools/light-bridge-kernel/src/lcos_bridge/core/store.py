@@ -204,45 +204,85 @@ class SQLiteTaskStore:
             ).fetchone()
         return None if row is None else self._row_to_task(row)
 
+    def direct_task(self, task_id: str, session_id: str) -> BridgeTask:
+        """把任务定向给某个会话：排队认领不能抢走；该会话可定向认领。"""
+        with self._connection() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                row = connection.execute(
+                    "SELECT * FROM bridge_tasks WHERE task_id = ?", (task_id,)
+                ).fetchone()
+                if row is None:
+                    connection.execute("COMMIT")
+                    raise BridgeError("TASK_NOT_FOUND", "Task was not found.", retryable=False, http_status=404)
+                task = self._row_to_task(row)
+                if task.claimed_by is not None and task.claimed_by != session_id:
+                    raise BridgeError(
+                        "LEASE_CONFLICT",
+                        "Task is already claimed by another worker.",
+                        retryable=False,
+                        http_status=409,
+                    )
+                connection.execute(
+                    "INSERT OR REPLACE INTO bridge_meta (key, value) VALUES (?, ?)",
+                    (f"dispatch_target:{task_id}", session_id),
+                )
+                connection.execute("COMMIT")
+                return self._require(task_id)
+            except Exception:
+                if connection.in_transaction:
+                    connection.execute("ROLLBACK")
+                raise
+
+    def _dispatch_target(self, connection, task_id: str) -> str | None:
+        row = connection.execute(
+            "SELECT value FROM bridge_meta WHERE key = ?",
+            (f"dispatch_target:{task_id}",),
+        ).fetchone()
+        return None if row is None else str(row["value"])
+
     def claim_next(self, provider: str, worker_id: str, lease_seconds: int = 120) -> BridgeTask | None:
         now = utc_now()
         expires = (datetime.now(timezone.utc) + timedelta(seconds=max(10, lease_seconds))).isoformat().replace("+00:00", "Z")
         with self._connection() as connection:
             connection.execute("BEGIN IMMEDIATE")
             try:
-                row = connection.execute(
+                rows = connection.execute(
                     """
                     SELECT * FROM bridge_tasks
                     WHERE provider = ? AND (status = ? OR (status IN (?, ?) AND lease_expires_at < ?))
                     ORDER BY created_at ASC
-                    LIMIT 1
                     """,
                     (provider, ProviderStatus.QUEUED.value, ProviderStatus.CLAIMED.value, ProviderStatus.RUNNING.value, now),
-                ).fetchone()
-                if row is None:
+                ).fetchall()
+                for row in rows:
+                    # 已定向给其它会话的任务，排队认领不能抢
+                    target = self._dispatch_target(connection, str(row["task_id"]))
+                    if target is not None and target != worker_id:
+                        continue
+                    connection.execute(
+                        """
+                        UPDATE bridge_tasks
+                        SET status = ?, provider_status = ?, claimed_by = ?, lease_expires_at = ?,
+                            last_heartbeat_at = ?, attempt_count = attempt_count + 1, updated_at = ?
+                        WHERE task_id = ?
+                        """,
+                        (
+                            ProviderStatus.CLAIMED.value,
+                            ProviderStatus.CLAIMED.value,
+                            worker_id,
+                            expires, now, now,
+                            row["task_id"],
+                        ),
+                    )
+                    updated = connection.execute(
+                        "SELECT * FROM bridge_tasks WHERE task_id = ?", (row["task_id"],)
+                    ).fetchone()
                     connection.execute("COMMIT")
-                    return None
-                connection.execute(
-                    """
-                    UPDATE bridge_tasks
-                    SET status = ?, provider_status = ?, claimed_by = ?, lease_expires_at = ?,
-                        last_heartbeat_at = ?, attempt_count = attempt_count + 1, updated_at = ?
-                    WHERE task_id = ?
-                    """,
-                    (
-                        ProviderStatus.CLAIMED.value,
-                        ProviderStatus.CLAIMED.value,
-                        worker_id,
-                        expires, now, now,
-                        row["task_id"],
-                    ),
-                )
-                updated = connection.execute(
-                    "SELECT * FROM bridge_tasks WHERE task_id = ?", (row["task_id"],)
-                ).fetchone()
+                    assert updated is not None
+                    return self._row_to_task(updated)
                 connection.execute("COMMIT")
-                assert updated is not None
-                return self._row_to_task(updated)
+                return None
             except Exception:
                 if connection.in_transaction:
                     connection.execute("ROLLBACK")
@@ -274,6 +314,15 @@ class SQLiteTaskStore:
                     raise BridgeError(
                         "TASK_NOT_CLAIMABLE",
                         "Task is not claimable for this provider.",
+                        retryable=False,
+                        http_status=409,
+                    )
+                target = self._dispatch_target(connection, task_id)
+                if target is not None and target != worker_id:
+                    connection.execute("COMMIT")
+                    raise BridgeError(
+                        "TASK_DIRECTED_ELSEWHERE",
+                        "Task is directed to another session.",
                         retryable=False,
                         http_status=409,
                     )

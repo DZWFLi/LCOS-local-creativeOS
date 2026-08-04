@@ -7,10 +7,16 @@ export interface CodexDispatchSessionInput {
   readonly busy?: boolean
 }
 
+export interface CodexTaskState {
+  readonly status?: string
+  readonly leaseExpiresAt?: string
+}
+
 export type CodexDispatchDecision = 'dispatch_existing' | 'spawn_new' | 'wait'
 
 export interface CodexDispatchPlanItem {
   readonly runId: string
+  readonly taskId?: string
   readonly outputIntent: string
   readonly instruction: string
   readonly decision: CodexDispatchDecision
@@ -29,13 +35,24 @@ export function planCodexDispatch(
   runs: readonly RunReview[],
   projectRoot: string,
   sessions: readonly CodexDispatchSessionInput[],
+  taskStates: ReadonlyMap<string, CodexTaskState>,
 ): readonly CodexDispatchPlanItem[] {
-  const alreadyHandled = new Set(['claimed', 'running', 'review', 'completed', 'failed', 'cancelled', 'timeout'])
+  const now = Date.now()
+  const isClaimable = (state: CodexTaskState | undefined): boolean => {
+    if (state === undefined) return false
+    const status = String(state.status ?? '')
+    if (['assigned', 'queued'].includes(status)) return true
+    if (['claimed', 'running'].includes(status)) {
+      return state.leaseExpiresAt !== undefined
+        && new Date(state.leaseExpiresAt).getTime() < now
+    }
+    return false
+  }
   const pending = runs.filter((review) =>
     review.run.provider === 'codex'
     && ['created', 'queued', 'running'].includes(review.run.status)
     && review.dispatch.status === 'bound'
-    && !alreadyHandled.has(String(review.binding?.providerStatus ?? '')))
+    && isClaimable(taskStates.get(String(review.run.id))))
   const available = sessions.find((session) => session.sessionId && !session.busy)
   const thinking = sessions.length > 0 && available === undefined
 
@@ -44,6 +61,7 @@ export function planCodexDispatch(
     if (available !== undefined) {
       return {
         runId,
+        ...(review.binding?.externalTaskId === undefined ? {} : { taskId: String(review.binding.externalTaskId) }),
         outputIntent: review.run.outputIntent,
         instruction: review.run.instruction.slice(0, 200),
         decision: 'dispatch_existing' as const,
@@ -54,6 +72,7 @@ export function planCodexDispatch(
     if (thinking) {
       return {
         runId,
+        ...(review.binding?.externalTaskId === undefined ? {} : { taskId: String(review.binding.externalTaskId) }),
         outputIntent: review.run.outputIntent,
         instruction: review.run.instruction.slice(0, 200),
         decision: 'wait' as const,
@@ -62,6 +81,7 @@ export function planCodexDispatch(
     }
     return {
       runId,
+      ...(review.binding?.externalTaskId === undefined ? {} : { taskId: String(review.binding.externalTaskId) }),
       outputIntent: review.run.outputIntent,
       instruction: review.run.instruction.slice(0, 200),
       decision: 'spawn_new' as const,

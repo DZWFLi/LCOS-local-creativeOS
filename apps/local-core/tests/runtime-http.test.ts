@@ -721,10 +721,11 @@ describe('Runtime HTTP closure', () => {
     // 用户语义：没有在思考的空闲 GUI 会话也可以接活
     expect(idleGuiBody.value[0]).toMatchObject({ runId, decision: 'dispatch_existing', sessionId: 'idle-gui-session' })
 
-    // 已被认领的任务不再派单（防止冷却期后重复派）
-    const binding = repository.getRuntimeBinding(runId as never)
-    if (binding !== undefined) {
-      repository.updateRuntimeBinding({ ...binding, providerStatus: 'claimed', updatedAt: '2026-08-04T12:00:00.000Z' })
+    // 已被认领（Bridge 状态）且租约未过期 → 不再派
+    bridge.task = {
+      ...bridge.task!,
+      status: 'claimed',
+      leaseExpiresAt: new Date(Date.now() + 60_000).toISOString(),
     }
     const claimedPlan = await fetch(`${baseUrl}/runtime/codex-dispatch-plan`, {
       method: 'POST',
@@ -733,5 +734,19 @@ describe('Runtime HTTP closure', () => {
     })
     const claimedPlanBody = await claimedPlan.json() as { value: unknown[] }
     expect(claimedPlanBody.value).toHaveLength(0)
+
+    // 租约过期 → 按 Bridge 状态机重新可派（防任务卡死）
+    bridge.task = {
+      ...bridge.task!,
+      status: 'claimed',
+      leaseExpiresAt: new Date(Date.now() - 1_000).toISOString(),
+    }
+    const expiredPlan = await fetch(`${baseUrl}/runtime/codex-dispatch-plan`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ projectId: String(snapshot.project.id), sessions: [] }),
+    })
+    const expiredPlanBody = await expiredPlan.json() as { value: { runId: string; decision: string }[] }
+    expect(expiredPlanBody.value[0]).toMatchObject({ runId, decision: 'spawn_new' })
   })
 })

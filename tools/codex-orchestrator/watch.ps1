@@ -54,7 +54,16 @@ function Get-Registry {
   return (Get-Content $registryPath -Raw | ConvertFrom-Json)
 }
 
-function Send-ClaimPrompt([string]$sessionId, [string]$runId, [string]$projectId) {
+function Send-ClaimPrompt([string]$sessionId, [string]$runId, [string]$projectId, [string]$taskId) {
+  if ($taskId) {
+    try {
+      $directBody = @{ sessionId = $sessionId } | ConvertTo-Json
+      Invoke-RestMethod -Uri "http://127.0.0.1:43122/v1/tasks/$taskId/direct" -Method POST `
+        -ContentType 'application/json' -Body $directBody -TimeoutSec 10 | Out-Null
+    } catch {
+      Write-Host "[$(Get-Date -Format HH:mm:ss)] 定向 task $taskId 失败：$($_.Exception.Message)"
+    }
+  }
   $message = "LCOS 接单提示：项目 $projectId 有新待办 run $runId 。请按 lcos-project-context skill 认领并执行。"
   Write-Host "[$(Get-Date -Format HH:mm:ss)] 派单 run $runId -> 会话 $sessionId"
   & $codex resume $sessionId $message
@@ -148,7 +157,7 @@ try {
               Write-Host "[$(Get-Date -Format HH:mm:ss)] $projectId 会话正在写入（GUI 使用中），本轮跳过 run $runId"
               continue
             }
-            Send-ClaimPrompt $sessionId $runId $projectId
+            Send-ClaimPrompt $sessionId $runId $projectId ([string]$item.taskId)
           } elseif ($item.decision -eq 'spawn_new') {
             Send-SpawnNew ([string]$item.projectRoot) $runId
           } else {

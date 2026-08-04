@@ -34,8 +34,8 @@ def test_restart_recovers_same_task(tmp_path):
 def test_claim_lease_heartbeat_and_expiry(tmp_path):
     path = tmp_path / "bridge.sqlite3"
     service = BridgeService(SQLiteTaskStore(path))
-    service.create_task(make_create_envelope().model_copy(update={"provider": "codex"}))
-    claimed = service.claim_next("codex", "worker-a", 30)
+    service.create_task(make_create_envelope().model_copy(update={"provider": "workbuddy"}))
+    claimed = service.claim_next("workbuddy", "worker-a", 30)
     assert claimed is not None
     assert claimed.attempt_count == 1
     assert claimed.lease_expires_at is not None
@@ -43,6 +43,27 @@ def test_claim_lease_heartbeat_and_expiry(tmp_path):
     assert heartbeated.last_heartbeat_at is not None
     with pytest.raises(BridgeError):
         service.start(claimed.task_id, "worker-b")
+
+
+def test_codex_tasks_respect_dispatch_target(tmp_path):
+    path = tmp_path / "bridge.sqlite3"
+    service = BridgeService(SQLiteTaskStore(path))
+    service.create_task(make_create_envelope().model_copy(update={"provider": "codex"}))
+    task = service.get_by_run_id("run-create-1")
+    assert task is not None
+    # 定向给 session-a：其它会话排队认领抢不走，定向会话可认领
+    service.direct_task(task.task_id, "session-a")
+    assert service.claim_next("codex", "session-b", 30) is None
+    claimed = service.claim_task_by_id(task.task_id, "codex", "session-a", 30)
+    assert claimed.claimed_by == "session-a"
+    # 未定向任务：codex 排队认领仍然可用（不是一刀切禁用）
+    service.create_task(
+        make_create_envelope().model_copy(
+            update={"provider": "codex", "lcos_run_id": "run-create-2", "idempotency_key": "run-create-2"}
+        )
+    )
+    queued = service.claim_next("codex", "session-c", 30)
+    assert queued is not None and queued.lcos_run_id == "run-create-2"
 
 
 def test_claim_by_id_is_atomic_provider_isolated_and_idempotent(tmp_path):

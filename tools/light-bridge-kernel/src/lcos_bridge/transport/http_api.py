@@ -30,6 +30,11 @@ class StartInput(BaseModel):
     worker_id: str | None = Field(default=None, alias="workerId")
 
 
+class DirectInput(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+    session_id: str = Field(alias="sessionId")
+
+
 class FinalizeInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     decision: str
@@ -244,6 +249,13 @@ def create_app(service: BridgeService) -> FastAPI:
             ),
         }
 
+    @app.post("/v1/tasks/{task_id}/direct")
+    def direct_task(task_id: str, input_value: DirectInput) -> dict[str, Any]:
+        return {
+            "ok": True,
+            "task": _task_dict(service.direct_task(task_id, input_value.session_id)),
+        }
+
     @app.post("/v1/tasks/{task_id}/running")
     def start_task(task_id: str, input_value: StartInput) -> dict[str, Any]:
         return {
@@ -323,6 +335,7 @@ def create_app(service: BridgeService) -> FastAPI:
                 "get_capabilities",
                 "claim_task_by_id",
                 "heartbeat_task",
+                "direct_task",
             ]
             return JSONResponse(
                 headers=headers,
@@ -409,6 +422,16 @@ def create_app(service: BridgeService) -> FastAPI:
                             str(args.get("task_id", "")),
                             str(args.get("provider") or "workbuddy"),
                             str(args.get("worker_id") or args.get("worker") or "worker"),
+                        )
+                    ),
+                }
+            elif name == "direct_task":
+                value = {
+                    "ok": True,
+                    **_mcp_task_dict(
+                        service.direct_task(
+                            str(args.get("task_id", "")),
+                            str(args.get("session_id") or args.get("sessionId") or ""),
                         )
                     ),
                 }
