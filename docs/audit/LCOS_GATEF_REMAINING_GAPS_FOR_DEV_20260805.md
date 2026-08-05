@@ -38,6 +38,40 @@
    网格模式按层级即时排列（可拖拽换位），两种模式可随时切换互不覆盖；
 4. 避免的坑：不要把导入做成静态快照/截图，也不要每个视图各存一份副本。
 
+### 轻量导入设计（线性原始 → 视图派生，不烧 token）
+
+对话本质是时间线，章节/决策是**呈现形态**，不是导入成本。分层设计：
+
+```text
+L0 原始入库（零 token）：jsonl 纯解析 → 消息/工具调用/文件引用按时间序进 SQLite
+   + FTS5 全文索引；文件引用复用现有文件节点；导入=解析，不调模型
+L1 结构派生（零 token）：规则切章（回合边界/新指令出现/文件引用密度/超长消息分段）
+   → 章节只是分组视图，不存为新真相
+L2 按需小标注（极省）：仅当用户要看“章节标题/关键决策”时，让本地 Agent 跑一次
+   小任务（每章 5 字标题 + 决策 3 条），存为轻量标注；不做全量压缩
+L3 语义索引（后置可选）：本地 embedding（Ollama/llama.cpp/bge-small）→ sqlite-vec
+   存向量，FTS5 + 向量混合检索；异步后台建索引，不阻塞导入
+```
+
+用户把时间线上的消息手动“钉选/升级”为决策节点 = 免费且高信噪比的结构化方式。
+
+### 可借鉴的开源项目（GitHub 实证）
+
+```text
+loregraph                  直接读 Claude Code JSONL / aider 历史建记忆图谱（零依赖 Rust）——格式解析照抄
+llmchat-knowledge-converter ChatGPT/Claude 导出 → Obsidian 可消费图谱 + FTS + embedding——转换管线照抄
+basic-memory               Markdown + MCP + SQLite 实体/观察/关系图——本地存储骨架照抄
+sovereign-brain            SQLite + sqlite-vec + Ollama embedding，typed/weighted edges——语义层照抄
+sqlite-memory（sqliteai）   SQLite 扩展：FTS5 + 向量混合检索 + 本地 embedding（llama.cpp）——检索层照抄
+sqlite-vec（asg017）        纯 C 零依赖的 SQLite 向量扩展（vec0 虚拟表 + KNN）——L3 的具体存储件
+localmind                  Ollama + 单 SQLite 文件：BM25 + 向量 + 图三重混合召回——整体检索组合最接近本方案
+Graphiti（FalkorDB）        时间感知知识图谱，边带时间与来源——只抄“边带时间”思想，不抄重架构
+lcm-core                   SQLite 消息库 + FTS5 + 多级压缩——压缩思想按需取用
+```
+
+结论：不新建“对话压缩管线”，采用“原始时间线入库 + 规则/视图派生 + 按需小标注 +
+可选本地语义索引”，全部本地、增量、可导出。
+
 ### 待定项（需要原型回答）
 
 - 导入粒度：整段 / 章节 / 消息；
