@@ -51,13 +51,13 @@ e6164b90d2cc735f1182bd9404173566ab75ae8ae0b4a1274b3effa24543daea  apps/local-cor
 381fa52b7e523c2038c3d0bc0552140c025bc91fd343c6a095dd72d1d8be9fd6  apps/local-core/src/resources/url-security.ts
 3ccc34860a16ddc5e1c1aade5675e8bb3d3f78aad6f0321d382417657bab80b0  apps/local-core/src/resources/zip-reader.ts
 34d5783932ea703ec8cb63d14eb383e2054c133e59cfd61ac546dfa7a2072e04  apps/local-core/src/runtime-adapter.ts
-1b8743e7ecc0a6dc2572485b649f470a1be31c90bbf9cb5e3420a045470caa31  apps/local-core/src/runtime-application-service.ts
+49fe6211748e572d3894a50d110dfedc535ed438ba095fb4ff5f2b03da187d63  apps/local-core/src/runtime-application-service.ts
 f7b2c114c5cf8f59bed0a122212dd1cf585ed862f3a07d5d75978e5e2556a5b6  apps/local-core/src/runtime-auto-sync-service.ts
 4fbd7417c554885f188c91cf4037b9b1f3911ba06fc37a40cc2e6e72118ca51d  apps/local-core/src/runtime-proposal-service.ts
 ec89ac8d106f3cb0dd8e4a06a6fd1961176cc5be0461f7b8534530a1da1f44eb  apps/local-core/src/runtime-result-ingestion.ts
 c0de7bb163a04a5e797195f625f6dc18802c18f90abc86e42fd5cb497fe56583  apps/local-core/src/runtime-review-service.ts
 09941c1164e9e2e98234476574549a5916cfd9e433f8b6af3641c1bf652fb425  apps/local-core/src/runtime-revision-compare-service.ts
-fbea3788f26d3813817ad1aad1c7703dcfca905c14b0e71565c20439786064c8  apps/local-core/src/server.ts
+f5ea91f9a47123b2e8f0ae8e3672623b2f10c00cde3e8c6540600420d4ae48c6  apps/local-core/src/server.ts
 67917aa0a0b19ab5e15697155681a43eb3aa6e7d27b08f0d807970326062a1d0  apps/local-core/src/text-artifact-service.ts
 bd5a3481609ccd687653eafda442c94ab19489e05bc006e8e7505bd178f279c1  apps/local-core/src/workspace-state-service.ts
 b23af27872b4a285e6b824846be75addc84f59aefcd3a1bd7311a6be64fe663d  apps/local-core/tests/active-context-store.test.ts

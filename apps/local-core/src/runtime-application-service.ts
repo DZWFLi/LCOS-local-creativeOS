@@ -19,7 +19,7 @@ export interface CreateRuntimeRunInput {
   readonly workspaceId?: string
   readonly outputIntent: 'create' | 'revise' | 'analyze'
   readonly resultPolicy?: RunResultPolicy
-  readonly requestedProvider?: 'workbuddy' | 'codex'
+  readonly requestedProvider?: 'workbuddy' | 'codex' | 'auto'
 }
 
 export interface RuntimeRunActionResult {
@@ -96,6 +96,13 @@ export class RuntimeApplicationService {
     }
     const timestamp = this.now()
     const suffix = this.createId()
+    const requestedProvider = input.requestedProvider ?? 'workbuddy'
+    const autoProvider = (await this.providers()).find((entry) =>
+          entry.executionMode === 'automatic' && entry.availability === 'ready'
+          && (entry.provider === 'codex' || entry.provider === 'workbuddy'))
+    const provider: Run['provider'] = requestedProvider === 'auto'
+      ? (autoProvider?.provider === 'codex' ? 'codex' : 'workbuddy')
+      : requestedProvider
     const run: Run = {
       id: `run-${suffix}` as Run['id'],
       projectId,
@@ -103,8 +110,8 @@ export class RuntimeApplicationService {
       ...(manifest.target === null ? {} : { targetArtifactId: manifest.target.artifactId as NonNullable<Run['targetArtifactId']> }),
       ...(manifest.currentRevision === null ? {} : { targetRevisionId: manifest.currentRevision.revisionId as NonNullable<Run['targetRevisionId']> }),
       contextManifestId: manifest.id,
-      provider: input.requestedProvider ?? 'workbuddy',
-      requestedProvider: input.requestedProvider ?? 'workbuddy',
+      provider,
+      requestedProvider: provider,
       outputIntent,
       returnGroupId: `return-group-${suffix}`,
       ...(input.resultPolicy === undefined ? {} : { resultPolicy: input.resultPolicy }),
