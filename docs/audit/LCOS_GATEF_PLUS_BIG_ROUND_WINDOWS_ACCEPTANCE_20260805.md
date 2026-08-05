@@ -163,3 +163,14 @@ py -m pytest tools/light-bridge-kernel/tests -q
 npm run test:e2e
 node scripts/probe-mcp-server.mjs <launcher-cmd>   # MCP 服务器侧握手自检
 ```
+
+## 10. 补充验收（B6/B7 与 GUI→Core 合同审计）
+
+```text
+B6 长 Prompt + 重启恢复：通过（2790 字 analyze；强杀 Core 后 launcher 自动重启，
+  Run 仍 completed，会话绑定 019fd215 不丢）
+B7 选中→发送：通过（3 步；修复了 Composer 发 Run 400——GUI 发 requestedProvider=auto，
+  Core 原只认 workbuddy|codex，已改为接受并解析）
+GUI↔Core 合同全量审计：见 docs/audit/LCOS_GUI_CORE_CONTRACT_MISMATCH_AUDIT_20260805.md
+  （除 auto 外未发现其它错位）
+```

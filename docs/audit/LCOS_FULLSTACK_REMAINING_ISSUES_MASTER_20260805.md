@@ -65,8 +65,8 @@ docs/architecture/LCOS_MCP_BRIDGE_DECOUPLING_DESIGN_20260805.md
 | B3 running 撤回进程树 | 🟡 部分 | 排队中取消通过；运行中取消未实测 |
 | B4 浏览器 1s 同步 | 🟡 部分 | Agent 面板版本同步可见（v812/v819）；无逐毫秒测量 |
 | B5 Obsidian UI 点选 | 🟡 部分 | smoke 覆盖；原生目录选择仍无法 headless |
-| B6 长 Prompt 端到端恢复 | ❌ 未测 | 本轮未覆盖 |
-| B7 选中到发送 ≤3 动作 | ❌ 未测 | 未做手工测量 |
+| B6 长 Prompt 端到端恢复 | ✅ 已测 | 2790 字 analyze 完成；强杀 Core 重启后 Run/会话绑定不丢 |
+| B7 选中到发送 ≤3 动作 | ✅ 已测 | 3 步实测；顺带修复 Composer 发 Run 400（requestedProvider=auto 未被 Core 接受） |
 | 对话 Session 导入 | ✅ 已实现 | L0-L3 + GUI 入口 + 案例样本，smoke 全过；Agent 驱动仍依赖 MCP 关闭 A1 |
 | 自然语言上下文指令 | 🟡 部分 | Skill/CLI/REST 全链真实可用；MCP 工具面未通 |
 | waiting_input | ✅ 已解决 | 提问→回答→同会话续跑→completed，真实复测通过 |
