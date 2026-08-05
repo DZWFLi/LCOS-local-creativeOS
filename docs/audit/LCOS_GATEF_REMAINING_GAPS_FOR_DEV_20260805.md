@@ -38,7 +38,7 @@
 | 文件夹扫描与项目索引 | Core 有 | 确认页、自动分组、节点合集与布局 |
 | 对话导入 Session | 无 | 按范围把对话整理成画布上的会话节点/章节锚点（新方向） |
 | 托盘 Runtime Host | 脚本存在、曾修编码 | Windows 实机验收：单实例、自启动、退出、恢复、状态菜单 |
-| Eagle/Obsidian/IMA/收藏夹连接器 | 无 | 统一资源连接器（远期） |
+| Obsidian 连接器（第一优先） | 无 | 本地 Vault 目录扫描 + Markdown 只读导入；统一 Connector Port + 先落一个真实连接器（Eagle/IMA/收藏夹后置） |
 
 ## 三、Gate F 已补、不需要再做（防止重复开发）
 
@@ -71,7 +71,47 @@
 Codex 必须是第一个真实通过全部 P0/P1 场景的本地 Agent；
 不允许用模拟 Agent、脚本 claim 或“CLI 命令存在”代替真实浏览器上下文与自动执行闭环。
 
-## 五、附：离 tldraw 式实时交互的开发差距（对照）
+## 五、已确认的产品默认值与新增要求（2026-08-05 用户拍板）
+
+执行原则：**让本地 Agent 多介入，减少用户的束缚和决策层**。
+
+### 产品默认值（已确认，直接采用）
+
+1. waiting_input：允许自由文本 + 可选选项；不自动超时取消，只提示“仍在等待”。
+2. 自动修正：只自动修正一次，只处理白名单结构化错误。
+3. screenshotRef：按需当前视口截图，仅作 Observation 补充，不进 Canvas Truth。
+4. Windows：文件关联 / 托盘 / 安装器归 Gate W，本轮不阻塞。
+
+### 连接器优先级（已确认）
+
+第一优先 = **Obsidian**（本地 Vault 目录 + Markdown，先做只读统一 Connector Port + 一个真实连接器）；
+Eagle / IMA / 浏览器收藏夹后置。
+
+### 新增要求：开源 Skill 借鉴研究
+
+开发方需要调研当前开源、可借鉴的本地 Agent Skill 实现（例如 tldraw agent-template、
+Anthropic 官方/社区 Skill 仓库、主流 Codex/Claude Skills 集合），产出一份《可借鉴清单》：
+
+```text
+每项包含：来源 / 能力 / LCOS 可借鉴点 / 落地建议
+宗旨：减少用户束缚和决策层（用户说得越少，Agent 接管越多）
+```
+
+并从中选择 1–2 项直接改进 LCOS 的 `lcos-project-context` Skill，作为本轮交付之一。
+
+### 对话导入样本（已备好）
+
+真实创意项目样本已整理并完成导入/导出实证：
+
+```text
+样本目录：C:\Users\1\Desktop\LCOS_DevSupport_20260805\creative-project-sample
+内容：brief.md / script.md / README.md / notes.json（预置 5 节点 + 2 Workspace + 4 关系）/ refs/ 3 张图
+导入：已导入 LCOS 画布（8 个 Artifact / 8 个 View）
+导出：creative-project-sample.lcosproj（schemaVersion 14，可再次打开恢复）
+来源：美的项目（Core Crew 冰箱篇三维预演线），由真实对话 019fcfe0 整理
+```
+
+## 六、附：离 tldraw 式实时交互的开发差距（对照）
 
 > 参考：MVP 对话中 GPT 原判断——“LCOS 已经有 tldraw 式 Agent Canvas 的数据入口，
 > 但还没有观察—行动循环”。下表为其后 Gate F 入库并实机验证后的更新状态。
