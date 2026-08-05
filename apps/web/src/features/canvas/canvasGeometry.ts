@@ -46,6 +46,31 @@ export function fitBounds(bounds: Bounds, viewportWidth: number, viewportHeight:
   }
 }
 
+/** 判断某相机下是否存在至少一个节点落在视口内（用于校验持久化相机是否仍有效）。 */
+export function cameraSeesAnyNode(camera: Camera, nodes: readonly { x: number; y: number; width: number; height: number }[], viewportWidth: number, viewportHeight: number): boolean {
+  return nodes.some((node) => {
+    const left = camera.x + node.x * camera.zoom
+    const right = camera.x + (node.x + node.width) * camera.zoom
+    const top = camera.y + node.y * camera.zoom
+    const bottom = camera.y + (node.y + node.height) * camera.zoom
+    return right > 0 && left < viewportWidth && bottom > 0 && top < viewportHeight
+  })
+}
+
+/** 内容节点与视口相交的比例（用于判断持久化相机是否仍能有效展示内容）。 */
+export function cameraContentRatio(camera: Camera, nodes: readonly { x: number; y: number; width: number; height: number }[], viewportWidth: number, viewportHeight: number): number {
+  if (nodes.length === 0) return 0
+  let visible = 0
+  for (const node of nodes) {
+    const left = camera.x + node.x * camera.zoom
+    const right = camera.x + (node.x + node.width) * camera.zoom
+    const top = camera.y + node.y * camera.zoom
+    const bottom = camera.y + (node.y + node.height) * camera.zoom
+    if (right > 0 && left < viewportWidth && bottom > 0 && top < viewportHeight) visible += 1
+  }
+  return visible / nodes.length
+}
+
 export function revealNode(camera: Camera, node: Pick<CanvasNode, 'x' | 'y' | 'width' | 'height'>, viewportWidth: number, viewportHeight: number, margins: SafeInsets = { left: 250, right: 42, top: 70, bottom: 56 }): Camera {
   const left = camera.x + node.x * camera.zoom
   const right = camera.x + (node.x + node.width) * camera.zoom

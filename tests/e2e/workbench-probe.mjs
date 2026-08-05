@@ -10,8 +10,8 @@ const projectId = 'disposable-mvp-sample'
 const browser = await chromium.launch({ headless: true })
 try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 860 } })
-  await page.goto(`http://127.0.0.1:5173/?project=${projectId}`, { waitUntil: 'networkidle' })
-  await page.waitForSelector('[data-node-id]', { timeout: 20_000 })
+  await page.goto(`http://127.0.0.1:5173/?project=${projectId}`, { waitUntil: 'domcontentloaded' })
+  await page.waitForSelector('[data-node-id="view-brief"]', { timeout: 20_000 })
 
   // Prefer a file node (has fileRecordId / preview) over process nodes.
   const target = await page.$$eval('[data-node-id]', (elements) => {

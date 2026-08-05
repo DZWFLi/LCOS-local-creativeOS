@@ -31,7 +31,7 @@ import { buildWorkspaceFrames } from './state/workspaceFrames'
 import { RuntimeBridge, type DataSource, type SaveStatus } from './runtime/runtimeBridge'
 import { selectRuntimeProject } from './runtime/runtimeProjectSelection'
 import { createWorkspaceRecord, duplicateWorkspaceRecord, moveWorkspaceRecord, removeWorkspaceRecord, toggleWorkspaceLayer, updateWorkspaceRecord } from './state/workspaceState'
-import { fitBounds, getSelectionBounds, nodeDimensions, revealNode } from './features/canvas/canvasGeometry'
+import { cameraContentRatio, fitBounds, getSelectionBounds, nodeDimensions, revealNode } from './features/canvas/canvasGeometry'
 import { findPendingReturnPosition } from './features/canvas/canvasLayout'
 import { applyScopeLayout, proposeScopeLayout, type LayoutPreviewItem } from './features/canvas/scopeLayout'
 import { arrangeSelectedNodes } from './features/canvas/selectionLayout'
@@ -330,7 +330,30 @@ export function App() {
       setPinnedContextIds(Array.from(new Set([...value.pinnedContextIds, ...restoredDraftContextIdsRef.current])))
       setExcludedContextIds([...value.excludedContextIds])
       if (value.scopeId === scopeId) setSelectedIds([...value.selectedViewIds])
-      if (value.viewport) setCamera({ x: value.viewport.x, y: value.viewport.y, zoom: value.viewport.zoom })
+      if (value.viewport) {
+        const candidate = { x: value.viewport.x, y: value.viewport.y, zoom: value.viewport.zoom }
+        const contentNodes = (value.nodes ?? []).filter((node) => node.kind !== 'process')
+        const contentRatio = contentNodes.length > 0
+          ? cameraContentRatio(candidate, contentNodes, window.innerWidth, window.innerHeight)
+          : 0
+        if (contentRatio >= 0.5) {
+          setCamera(candidate)
+        } else if (contentNodes.length > 0) {
+          // 恢复的相机已失效（节点全在视口外）：按节点包围盒重新适配，避免打开项目看到空画布。
+          const bounds = contentNodes.reduce((acc, node) => ({
+            left: Math.min(acc.left, node.x),
+            top: Math.min(acc.top, node.y),
+            right: Math.max(acc.right, node.x + node.width),
+            bottom: Math.max(acc.bottom, node.y + node.height),
+          }), { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity })
+          setCamera(fitBounds(
+            { x: bounds.left, y: bounds.top, width: bounds.right - bounds.left, height: bounds.bottom - bounds.top },
+            window.innerWidth,
+            window.innerHeight,
+            74,
+          ))
+        }
+      }
       setActiveContextError(null)
       setContextSync('synced')
       activeContextHydratedKeyRef.current = key
@@ -772,6 +795,36 @@ export function App() {
 
   useEffect(() => { cameraRef.current = camera }, [camera])
   useEffect(() => { activeProjectIdRef.current = activeProjectId }, [activeProjectId])
+
+  // 相机“总闸”：项目打开后的短窗口内，无论相机来自 ActiveContext、localStorage 还是
+  // Workspace，只要当前作用域有节点且相机下没有任何节点可见，就按节点包围盒重新适配，
+  // 避免持久化的陈旧相机让用户打开项目看到空画布（点不到节点）。
+  // 窗口（8s）过后不再自动移动相机，避免和用户手动平移/缩放打架。
+  const cameraValidityKey = `${activeProjectId}::${scopeId ?? '__overview__'}`
+  const cameraHealWindowRef = useRef<Record<string, number>>({})
+  useEffect(() => {
+    if (bootMode !== 'runtime' || scopeNodes.length === 0) return
+    const now = Date.now()
+    if (cameraHealWindowRef.current[cameraValidityKey] === undefined) {
+      cameraHealWindowRef.current[cameraValidityKey] = now
+    }
+    const contentNodes = scopeNodes.filter((node) => node.kind !== 'process')
+    const visibleCandidates = contentNodes.length > 0 ? contentNodes : scopeNodes
+    if (cameraContentRatio(cameraRef.current, visibleCandidates, window.innerWidth, window.innerHeight) >= 0.5) return
+    if (now - cameraHealWindowRef.current[cameraValidityKey] > 8_000) return
+    const bounds = visibleCandidates.reduce((acc, node) => ({
+      left: Math.min(acc.left, node.x),
+      top: Math.min(acc.top, node.y),
+      right: Math.max(acc.right, node.x + node.width),
+      bottom: Math.max(acc.bottom, node.y + node.height),
+    }), { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity })
+    setCamera(fitBounds(
+      { x: bounds.left, y: bounds.top, width: bounds.right - bounds.left, height: bounds.bottom - bounds.top },
+      window.innerWidth,
+      window.innerHeight,
+      74,
+    ))
+  }, [bootMode, cameraValidityKey, scopeNodes, camera, setCamera])
 
   useEffect(() => {
     if (performanceFixture) return

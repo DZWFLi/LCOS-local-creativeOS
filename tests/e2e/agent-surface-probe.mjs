@@ -10,7 +10,7 @@ const token = readFileSync('.codex-runtime/local-core-token', 'utf8').trim()
 const browser = await chromium.launch({ headless: true })
 try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 860 } })
-  await page.goto(`http://127.0.0.1:5173/?agent=codex&project=${projectId}`, { waitUntil: 'networkidle' })
+  await page.goto(`http://127.0.0.1:5173/?agent=codex&project=${projectId}`, { waitUntil: 'domcontentloaded' })
   await page.waitForSelector('[data-testid="agent-context-surface"]', { timeout: 20_000 })
   const versionText = await page.locator('[data-testid="agent-context-surface"] code').textContent()
   console.log(`surface visible, version=${versionText}`)

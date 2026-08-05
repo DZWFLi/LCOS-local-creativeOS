@@ -6,8 +6,9 @@ try {
   const errors = []
   page.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`))
   page.on('console', (msg) => { if (msg.type() === 'error') errors.push(`console: ${msg.text()}`) })
-  await page.goto('http://127.0.0.1:5173/?project=disposable-mvp-sample', { waitUntil: 'networkidle' })
-  await page.waitForSelector('[data-node-id]', { timeout: 20_000 })
+  await page.goto('http://127.0.0.1:5173/?project=disposable-mvp-sample', { waitUntil: 'domcontentloaded' })
+  // 等待 runtime 画布数据就绪（fixture 占位节点会被替换，过早操作会命中 detached DOM）
+  await page.waitForSelector('[data-node-id="view-brief"]', { timeout: 20_000 })
 
   const nodeIds = await page.$$eval('[data-node-id]', (els) => els.map((el) => el.getAttribute('data-node-id')).filter(Boolean))
   console.log('nodes:', nodeIds.slice(0, 8).join(', '))
@@ -28,9 +29,9 @@ try {
   console.log(`errors=${errors.length ? errors.join(' | ') : 'none'}`)
 
   // agent=codex 视图单点 + 遮挡检查
-  await page.goto('http://127.0.0.1:5173/?agent=codex&project=disposable-mvp-sample', { waitUntil: 'networkidle' })
-  await page.waitForSelector('[data-node-id]', { timeout: 20_000 })
-  const agentNode = (await page.$$eval('[data-node-id]', (els) => els.map((el) => el.getAttribute('data-node-id')).filter(Boolean)))[0]
+  await page.goto('http://127.0.0.1:5173/?agent=codex&project=disposable-mvp-sample', { waitUntil: 'domcontentloaded' })
+  await page.waitForSelector('[data-node-id="view-brief"]', { timeout: 20_000 })
+  const agentNode = 'view-brief'
   if (agentNode) {
     const box = await page.locator(`[data-node-id="${agentNode}"]`).boundingBox()
     const hit = box ? await page.evaluate(({ x, y }) => {
