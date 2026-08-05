@@ -50,11 +50,53 @@ docs/architecture/LCOS_MCP_BRIDGE_DECOUPLING_DESIGN_20260805.md
 引导完成，全程无 ai_bridge / 8920 / sessions.json 手工编辑 / fnm shim 依赖
 （同文档 §8）。
 
+## 0.2 大轮验收后状态总览（2026-08-05 实机证据）
+
+> 证据来源：`docs/audit/LCOS_GATEF_PLUS_BIG_ROUND_WINDOWS_ACCEPTANCE_20260805.md`
+
+| 原问题 | 状态 | 说明 |
+|---|---|---|
+| A1 MCP 真实会话加载 | ❌ 阻塞 | LCOS 双 MCP server 握手正常；卡在 Codex CLI 0.147 exec 不加载配置 MCP（`rmcp_client` 已废、`mcp_2026_07_28` 启用仍无工具、exec 无 MCP 开关）。Agent 显式 REST 兜底完成闭环 |
+| A2 看门狗同步阻塞 | ✅ 已解决 | Node 异步看门狗：跨项目并发 2、同项目串行、超时/进程树/重试/冷却；smoke + 真实 5 Run 验证 |
+| A3 run.started 10s 语义 | 🟡 未复测 | 真实事件链正常；语义文档未更新 |
+| A4 相机常量集中 | 🟡 未做 | 本轮未触碰 |
+| B1 连续 5 Run | ✅ 已解决 | 同一项目 5 个真实 Run，会话 `019fd215` 全程未跳 |
+| B2 revise/create 变体 | ✅ 已解决 | 真实 create 两文件 + 真实 revise Draft，均接受收口 |
+| B3 running 撤回进程树 | 🟡 部分 | 排队中取消通过；运行中取消未实测 |
+| B4 浏览器 1s 同步 | 🟡 部分 | Agent 面板版本同步可见（v812/v819）；无逐毫秒测量 |
+| B5 Obsidian UI 点选 | 🟡 部分 | smoke 覆盖；原生目录选择仍无法 headless |
+| B6 长 Prompt 端到端恢复 | ❌ 未测 | 本轮未覆盖 |
+| B7 选中到发送 ≤3 动作 | ❌ 未测 | 未做手工测量 |
+| 对话 Session 导入 | ✅ 已实现 | L0-L3 + GUI 入口 + 案例样本，smoke 全过；Agent 驱动仍依赖 MCP 关闭 A1 |
+| 自然语言上下文指令 | 🟡 部分 | Skill/CLI/REST 全链真实可用；MCP 工具面未通 |
+| waiting_input | ✅ 已解决 | 提问→回答→同会话续跑→completed，真实复测通过 |
+| 小错误自动修正一次 | 🟡 部分 | 架构/Skill 合同过；真实触发未复测 |
+| 会话首选/失效只新建一次 | ✅ 基本解决 | 5 Run 同会话；`sessionInvalid` 标记疑似误报，待开发确认 |
+| UI 术语降噪/右侧单工作台 | 🟡 部分 | 术语继续降噪；右侧单工作台未完成 |
+| 多选 Target/Context 识别 | 🟡 未复测 | 真实 Skill 识别未验证 |
+| `.lcosproj` 日常化 | 🟡 部分 | GUI 入口（打开/导出/备份/会话绑定）+ 浏览器 smoke 已过；Windows 文件关联仍 Gate W |
+| 批量导出工程 | ✅ 已解决 | export-all + 项目工具入口 |
+| Run Event Activity UI | 🟡 入口已加 | Activity/Recovery/stale 入口已补，未手工验收 |
+| Runtime Recovery GUI | 🟡 入口已加 | 未手工验收 |
+| Watcher / stale UI | 🟡 入口已加 | 未手工验收 |
+| Checkpoint 项目时间线 | 🟡 部分 | WorkspaceStates 已有；时间线/对比未做 |
+| Preview 统一 Viewer/外部打开 | 🟡 部分 | PreviewSurface 有；外部打开缺 |
+| Handoff Context Pack | 🟡 部分 | Markdown 导出有；文件级 zip 包缺 |
+| 文件夹扫描确认页/自动分组 | 🟡 部分 | 创建流程有；确认页/分组预览未手工验收 |
+| 托盘 Runtime Host 生命周期 | 🟡 部分 | 托盘在跑；全生命周期未测 |
+| Eagle/Obsidian/IMA/收藏夹 | 🟡 部分 | Obsidian 只读完成；其余无 |
+| tldraw 读层 | ✅ 大幅补强 | Snapshot + 视口外 Cluster + recentChanges + SVG Observation + screenshotRef |
+| tldraw 信号层 | 🟡 部分 | afterVersion + Agent 面板同步已验；无 SSE |
+| tldraw 写层 | ✅ 大幅补强 | select/focus/move/viewport/relation/workspace/preview 已实现并过 MCP E2E |
+| tldraw 闭环层 | 🟡 部分 | 真实 5 Run 闭环成立；工具面仍走 REST 兜底（MCP 未通） |
+| 全新机器单命令部署 | 🟡 部分 | bootstrap npm.cmd 坑已修、本机通过；干净 VM 未跑 |
+| L3 真实 Ollama / native sqlite-vec | ❌ 未验证 | 本机无 Ollama；BLOB fallback 工作 |
+
 ## 1. A 类：开发必须修（验收遗留）
 
 | # | 问题 | 现状 | 要求 |
 |---|---|---|---|
-| A1 | **MCP 未进真实 Codex 会话** | 注册成功（`codex mcp get` enabled），但真实 `codex exec` 会话内没有 `local-creative-os` 工具；Agent 显式上报走 REST fallback；已定位根因线索：command 为 fnm 临时 node 路径 + 遗留 `ai_bridge` 未清理 | 见 `LCOS_MCP_COMPLETION_HELP_20260805.md`：稳定 command、清 ai_bridge、显式超时、真实会话验收六条全过 |
+| A1 | **MCP 未进真实 Codex 会话** | 注册与服务器侧已就绪（稳定 launcher、双角色、握手/E2E 全过），但真实 `codex exec` 0.147 会话仍无工具；根因升级为 Codex CLI MCP 客户端加载（`rmcp_client` 已废、`mcp_2026_07_28` 启用无效、exec 无 MCP 开关） | 开发确认目标 CLI 正确加载开关/配置格式后，真实会话列工具 + 只读调用通过才关闭 |
 | A2 | **看门狗单线程同步等待 runner** | runner 已强制退出（不再阻塞主循环），但主循环仍是单线程同步等待，架构脆弱（本轮已实际卡死一次） | 改异步 / 加超时护栏：一个 runner 卡住不得阻塞后续 Run；加回归测试覆盖“runner 不退出”场景 |
 | A3 | **`run.started` 依赖 10s 自动同步** | 极短任务可能跳过 started 事件（UI 不依赖事件，可接受，但语义不稳） | 明确事件语义或缩短窗口；至少写文档说明 |
 | A4 | **相机可见性常量分散** | 本轮已把过程/投影节点排除出相机判定，但“主内容最少可见比例”建议作为 UI 常量集中管理 | 集中常量 + 单测覆盖 |
