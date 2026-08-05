@@ -89,6 +89,10 @@ c) 安装后自检：用写入的 command+args 实际 spawn 一次 server 并完
    失败则回滚配置并报错，不静默写成功。
 ```
 
+这同时也是**全新机器部署**的前置要求：LCOS 必须能在“从未装过任何类似东西”的
+电脑上单命令引导完成，MCP 配置不得依赖安装时 shell 的临时路径（详见
+`docs/architecture/LCOS_MCP_BRIDGE_DECOUPLING_DESIGN_20260805.md` §8）。
+
 ### P0-2 清理遗留 ai_bridge
 
 ```text

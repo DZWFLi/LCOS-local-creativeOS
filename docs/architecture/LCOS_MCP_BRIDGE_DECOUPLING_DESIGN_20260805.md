@@ -147,3 +147,97 @@ Step 6  验收：真实 codex exec 会话内工具按角色出现；Bridge 无 /
 - config.toml 改动先备份（安装器已有备份机制）；
 - 每一步独立提交、独立验收；不通过就不进下一步。
 ```
+
+## 8. 全新机器部署要求（老 Bridge 完全退役，LCOS 单包承担全部功能）
+
+> 决策来源：Dz——“希望新的 LCOS 部署到任何一台先前没装过类似东西的电脑上，
+> 都能承担起老 bridge 和它自己的功能”。
+
+目标：把包拷到一台**从未装过任何类似东西**的 Windows 电脑，一条命令完成
+Core + Bridge + MCP + Skill + CLI + Web 全通；老 bridge 不用装、不用迁、
+也不许残留。
+
+### 8.1 自包含运行环境
+
+```text
+1. 不依赖 PATH 里某个特定 node / python 版本；发现不到就明确报错并给出安装指引
+   （Gate W 可打包内置运行时）；
+2. 绝对禁止把“安装时所在 shell 的临时 node 路径”（fnm multishell shim）写进
+   MCP 配置——这是本轮实测定位的 A1 根因之一，也是全新机器部署的硬伤；
+3. 包内自带 package-lock.json，全新机器 npm ci 可复现依赖。
+```
+
+### 8.2 单命令引导（bootstrap）
+
+```text
+1. 检测/初始化 .codex-runtime（token、SQLite schema、日志目录）；
+2. 安装/校验 Skill（整树 hash 幂等）；
+3. 注册/校验唯一 MCP（local-creative-os），并备份后清理任何 ai_bridge 残留；
+4. 启动 Core(43121) + Bridge(43122) + Web，看门狗按需；
+5. 全程输出“医生”检查表：运行时可发现 → Core 健康 → Bridge 健康 → MCP 配置
+   → Skill 哈希 → CLI 可用 → 浏览器 URL；失败项给修复动作，不给裸报错。
+```
+
+### 8.3 老 Bridge 完全退役
+
+```text
+1. Light Bridge 承担老 ai_bridge 全部功能：task 生命周期、waiting_input、
+   worker run-once/watch、V0 兼容查询；
+2. 新机器不装、不启动、不配置 ai_bridge；旧机器由安装器备份并移除其 MCP 配置；
+3. 迁移完成后删除 tools/ai-bridge-runtime 与一切 8920 端口引用；
+4. 不再出现“先装老 bridge 再装新 LCOS”的依赖链。
+```
+
+### 8.4 全新机器验收（干净机器 / 干净用户目录）
+
+```text
+1. doctor 全绿；
+2. codex exec 真实会话内看到唯一 MCP 的 58 个工具并成功调用只读工具；
+3. 创建项目 → 导入文件 → 建 Run → 真实执行 → 结果回画布；
+4. 重启后全部可恢复；
+5. 全程不出现 ai_bridge / 8920 / sessions.json 手工编辑 / fnm shim 路径；
+6. 验收脚本把检查项写成可复现清单，作为每次部署的回归基线。
+```
+
+## 9. 决策：老 bridge 不做环境依赖（选“退役替代”）
+
+> 候选对比由 Dz 提出：要么新 LCOS 单包承担老 bridge 功能（A），
+> 要么把老 bridge 变成新机器的环境依赖（B）。结论：**选 A**。
+
+### 9.1 对比
+
+```text
+方案 A：退役替代（选）
+  新机器零前置；单一任务真相（Light Bridge）；故障面最小；
+  Light Bridge 已覆盖老 bridge 全部功能（task 生命周期 / waiting_input /
+  worker run-once/watch / V0 兼容查询），切换成本可控；
+  安装器负责旧机器配置迁移，新机器根本不接触老组件。
+
+方案 B：老 bridge 作为环境依赖（否）
+  每台新机器多一个硬前置：先装老 bridge、装对版本、起对端口；
+  两套任务状态 / 两套端口 / 两套 MCP 并存 = 双真相；
+  新机器部署失败率更高、排障更难；
+  更关键：老 bridge 本身正是本轮问题源（fnm shim、8920 残留、
+  config.toml 混杂），把它变成新系统地基等于把不可靠因素固化。
+```
+
+### 9.2 可靠性判断
+
+```text
+可靠性 = 单一真相 + 明确边界 + 可复现引导。
+方案 B 的“复用”没有换来可靠性，只是把退役中的组件升级成硬依赖；
+方案 A 的“重写覆盖”换来的是：安装一遍、一套端口、一个 MCP、一份状态。
+```
+
+### 9.3 迁移策略（降低切换风险）
+
+```text
+迁移期：把老 bridge 当“兼容输入”，不当“运行时依赖”
+  - 旧机器：安装器备份 config.toml / 旧任务数据，Light Bridge V0 兼容查询
+    继续可读旧 Task；
+  - 新机器：不装、不启动、不配置 ai_bridge；
+  - 完成迁移后：删除 tools/ai-bridge-runtime 与所有 8920 端口引用。
+
+例外：若未来老 bridge 被第三方外部系统接管（不在仓库内），再按
+“外部系统依赖”单独评估；本决策不因此改变。
+```

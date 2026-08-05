@@ -46,6 +46,10 @@ local-creative-os stdio）收敛为唯一一张，Bridge 只留 REST，工具按
 docs/architecture/LCOS_MCP_BRIDGE_DECOUPLING_DESIGN_20260805.md
 ```
 
+还包含**全新机器可部署**：LCOS 单包承担老 bridge 与自身全部功能，干净电脑一条命令
+引导完成，全程无 ai_bridge / 8920 / sessions.json 手工编辑 / fnm shim 依赖
+（同文档 §8）。
+
 ## 1. A 类：开发必须修（验收遗留）
 
 | # | 问题 | 现状 | 要求 |
@@ -163,7 +167,8 @@ docs/testing/fixtures/conversation-import-sample/session-p0-slice.jsonl（854KB 
 ## 6. 开发优先级建议
 
 ```text
-P0-1  MCP 完全完善（A1 关闭；指引见 LCOS_MCP_COMPLETION_HELP_20260805.md）——最高优先
+P0-1  MCP 完全完善（A1 关闭；修通 + 解耦 + 全新机器单命令部署；指引见
+       LCOS_MCP_COMPLETION_HELP_20260805.md 与 LCOS_MCP_BRIDGE_DECOUPLING_DESIGN）——最高优先
 P0-2  A2：看门狗异步化 + 超时护栏
 P0-3  B1/B2：真实连续 5 Run + revise/create 变体跑满
 P0-4  对话 Session 导入 Phase 0（前置条件：P0-1 已过；见独立项目描述）
