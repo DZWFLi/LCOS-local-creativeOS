@@ -247,6 +247,18 @@ lcm-core                   SQLite 消息库 + FTS5 + 多级压缩——压缩思
 验收：80MB 量级 jsonl 可导入不卡死；重启后节点/视图/搜索可恢复；导入过程零模型调用
 （日志可证）；命中项目内文件的引用生成 relation。
 
+### 随包案例样本（开发直接用）
+
+```text
+docs/testing/fixtures/conversation-import-sample/session-p0-slice.jsonl
+  854KB 真实 Codex 会话切片（本机长线程 019fb7d4 的 2026-08-05 P0 讨论段）
+  包含：用户需求 / 助手设计答复 / web_search / 工具调用 / compacted 事件
+  期望结果：1 个会话节点 + 4 个规则章节 + 2 个可钉选决策 + 3 个文件引用
+  格式说明与 L0 解析规则见同目录 README.md
+```
+
+Phase 0 验收必须用这份样本跑通“导入 → 章节 → 搜索 → 钉选决策”全链。
+
 ### Phase 1
 
 ```text

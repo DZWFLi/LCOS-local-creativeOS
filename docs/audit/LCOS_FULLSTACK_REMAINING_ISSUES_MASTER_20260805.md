@@ -63,6 +63,39 @@ B 类：功能做了但真实闭环未跑满 / 用户视角缺口仍存在
 | 托盘 Runtime Host | 脚本存在、曾修编码 | Windows 实机验收：单实例、自启动、退出、恢复、状态菜单 |
 | Eagle/Obsidian/IMA/收藏夹连接器 | Obsidian 只读已做，其余无 | 统一资源连接器（远期；Obsidian 先按只读验收） |
 
+## 3.1 重点：已开发但没有入口 / 半入口的能力（完整盘点）
+
+> 口径：后端 / CLI / MCP 已有能力，但 GUI 没有入口或只有半入口。开发补齐入口时
+> 以此表为准，避免“能力其实能用，用户却找不到”的隐形浪费。
+> 入口现状经 `apps/web/src` 全量检索确认，2026-08-05。
+
+| 能力 | 后端/CLI/MCP 现状 | GUI 入口现状 | 建议最小入口 |
+|---|---|---|---|
+| `.lcosproj` 导出/另存/打开 | POST `/projects/:id/export-lcosproj`、`/lcosproj/open`，CLI `project export / open-file` | 🔴 无（`localCoreClient` 有方法，UI 无引用） | 项目页“导出工程 / 打开工程”；双击与 Windows 文件关联归 Gate W |
+| 批量导出工程 | POST `/lcosproj/export-all`，CLI `project export-all` | 🔴 无 | 项目管理页“备份 / 迁移”按钮 |
+| Run Event 时间线 | GET `/runs/:id/events`，CLI `run events` | 🔴 无 | Activity 面板：人话任务过程、去重、错误定位 |
+| Runtime Recovery | POST `/runs/:id/recover`，CLI `run recover` | 🔴 无（App 只把 failed 映射成状态，没有按钮） | Run 失败/卡住时“重新连接 / 继续任务”按钮 + 人话解释 |
+| Provider Session 查看/绑定 | GET/PUT/DELETE `/provider-sessions`，CLI `provider-session get/set/clear` | 🔴 无（此前要手动改 sessions.json） | 设置/诊断页：查看首选会话、绑定、失效重建 |
+| Artifact 搜索 | GET `/projects/:id/artifacts/search` | 🔴 无 UI 引用 | 画布搜索框 / 命令菜单搜索节点 |
+| Codex Dispatch Plan 预览 | POST `/runtime/codex-dispatch-plan` | 🔴 无 | 派单前调试信息（用哪个会话/看门狗计划），低优先级 |
+| 会话摘要列表/管理 | GET/POST `/session-summaries`，CLI `session summarize/list` | 🟡 部分：画布有 `session-summary-*` 节点渲染；无管理（重命名/删除）入口 | Inspector 内编辑/删除会话摘要 |
+| 文件夹扫描确认页/自动分组 | POST `/project-roots/inspect` + 创建时 `importExisting` | 🟡 部分：创建流程有；确认页/分组预览/节点合集缺 | 导入确认对话框：文件数/类型预览、是否自动分组 |
+| Watcher / stale 冲突处理 | FileObservationService + 相关 API（Core 有测试） | 🟡 部分：预览缓存有 | UI 外部变化提示 + 重新读取/冲突处理 |
+| Checkpoint 时间线 | workspace states API + CLI `save-state / restore-state` | 🟡 部分：WorkspaceDock 保存/历史按钮有 | 项目时间线、命名、恢复与对比 |
+| Preview 统一 Viewer/外部打开 | preview-cache + renderer registry | 🟡 部分：PreviewSurface 右侧栏有 | 统一查看器 + “外部打开”按钮 |
+| Handoff Context Pack | context-manifests v0 + HandoffDialog | 🟡 部分：HandoffDialog 可复制/下载 Markdown；缺文件级 Context Pack | Context Pack（zip）导出入口 |
+| Obsidian 连接器 | CLI/MCP + ObsidianImportDialog | 🟡 有入口，但原生目录选择无法 headless，真实 UI 点选未验收 | 实机点选验收一次（readOnly 已由 smoke 覆盖） |
+| 资源理解/重分析 | resource descriptor/reanalyze API | 🟢 ResourceDetailDialog 有重分析按钮 | 无需新增 |
+| Universal Resource Import（URL/上传/归档） | resource-upload-sessions / import-url | 🟢 CapabilityPopover → Universal Import 面板有 | 无需新增 |
+| Workspace 状态保存/恢复 | workspace states API | 🟢 WorkspaceDock 有 | 无需新增 |
+| CommandDraft / Context Proposal / ActiveContext | API + CLI + MCP | 🟢 Composer / Agent 模式卡片有 | 无需新增 |
+
+对话 Session 导入整体为 🔴 无（P0 新需求），输入样本随包提供：
+
+```text
+docs/testing/fixtures/conversation-import-sample/session-p0-slice.jsonl（854KB 真实切片）
+```
+
 ## 4. D 类：离 tldraw 式实时交互的差距（量化）
 
 ```text
