@@ -132,6 +132,14 @@ lcos-executor 的任何工具；Agent 显式上报“没有 MCP，走 CLI/REST �
 ```text
 本机未安装 Ollama；native DLL 未加载（BLOB cosine fallback 工作，增量索引、
 混合评分、任务恢复均已通过 smoke）。真实模型 embedding 与 KNN 留待有 Ollama 的机器。
+
+2026-08-05 补充：已尝试安装（winget / 官方安装包直连 / 代理 / BITS 多路），
+安装包 1,490,000,000+ 字节且本机网络仅 100–200KB/s，单次会话无法拉完；
+C 盘可用空间仅 3GB，安装与模型存放建议放 E 盘。
+下载脚本已就绪（scripts/download-ollama.ps1 / download-ollama-loop.ps1 /
+start-ollama-download.ps1），网络允许后即可继续：ollama pull nomic-embed-text →
+node scripts/install-sqlite-vec.mjs → LCOS_REQUIRE_SQLITE_VEC=1 + LCOS_OLLAMA_EMBED_MODEL
+跑 smoke:conversation-semantic。
 ```
 
 ### 7.3 其它未满项

@@ -90,7 +90,7 @@ docs/architecture/LCOS_MCP_BRIDGE_DECOUPLING_DESIGN_20260805.md
 | tldraw 写层 | ✅ 大幅补强 | select/focus/move/viewport/relation/workspace/preview 已实现并过 MCP E2E |
 | tldraw 闭环层 | 🟡 部分 | 真实 5 Run 闭环成立；工具面仍走 REST 兜底（MCP 未通） |
 | 全新机器单命令部署 | 🟡 部分 | bootstrap npm.cmd 坑已修、本机通过；干净 VM 未跑 |
-| L3 真实 Ollama / native sqlite-vec | ❌ 未验证 | 本机无 Ollama；BLOB fallback 工作 |
+| L3 真实 Ollama / native sqlite-vec | ❌ 网络受阻 | 安装包 1.49GB、本机网络 100–200KB/s；下载脚本就绪；C 盘仅 3GB，模型建议放 E 盘；BLOB fallback 工作 |
 
 ## 1. A 类：开发必须修（验收遗留）
 
