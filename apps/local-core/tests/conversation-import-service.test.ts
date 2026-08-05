@@ -42,7 +42,7 @@ describe('ConversationImportService', () => {
       expect(result.sections).toHaveLength(2)
       const hits = await service.search('conversation-project', 'Bridge 解耦', { semantic: false, limit: 10 })
       expect(hits.length).toBeGreaterThan(0)
-      expect(hits[0]?.source).toBe('fts5')
+      expect(hits[0]?.reasons).toContain('fts5')
       const projection = service.getProjection('conversation-project', result.session.id)
       expect(projection?.messages).toBeUndefined()
       expect(projection?.sections).toHaveLength(2)

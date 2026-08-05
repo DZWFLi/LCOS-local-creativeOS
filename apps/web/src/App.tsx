@@ -2180,11 +2180,12 @@ export function App() {
         setRunEventsError(call.result.error.message)
       } else {
         setRunEventsError(null)
-        if (call.result.value.length > 0) {
-          runEventSequenceRef.current = Math.max(runEventSequenceRef.current ?? 0, ...call.result.value.map((event) => event.sequence))
+        const events = call.result.value
+        if (events.length > 0) {
+          runEventSequenceRef.current = Math.max(runEventSequenceRef.current ?? 0, ...events.map((event) => event.sequence))
           setRunEvents((current) => {
             const bySequence = new Map(current.map((event) => [event.sequence, event]))
-            for (const event of call.result.value) bySequence.set(event.sequence, event)
+            for (const event of events) bySequence.set(event.sequence, event)
             return [...bySequence.values()].sort((left, right) => left.sequence - right.sequence)
           })
         }

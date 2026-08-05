@@ -6,6 +6,7 @@ const root = join(__dirname, '../..')
 const skill = readFileSync(join(root, 'packages/skills/lcos-project-context/SKILL.md'), 'utf8')
 const mcp = readFileSync(join(root, 'tools/lcos-agent/mcp-server.mjs'), 'utf8')
 const orchestrator = readFileSync(join(root, 'tools/codex-orchestrator/watch.ps1'), 'utf8')
+const watch = readFileSync(join(root, 'tools/codex-orchestrator/watch.mjs'), 'utf8')
 const runner = readFileSync(join(root, 'tools/codex-orchestrator/run-codex-task.mjs'), 'utf8')
 
 const declaredTools = [
@@ -49,7 +50,8 @@ describe('LCOS Codex Skill contract', () => {
     expect(skill).toContain('Never guess the newest JSONL file')
     expect(orchestrator).not.toContain('Get-LatestCodexSessionId')
     expect(orchestrator).not.toContain('resume --last')
-    expect(orchestrator).toContain('run-codex-task.mjs')
+    expect(orchestrator).toContain('watch.mjs')
+    expect(watch).toContain('run-codex-task.mjs')
     expect(runner).toContain('session_id')
     expect(runner).toContain('resolvedSessionId')
     expect(runner).not.toContain('resume --last')
