@@ -1,3 +1,0 @@
-"""
-AI Bridge — Services package
-"""

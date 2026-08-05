@@ -85,7 +85,6 @@ try {
     LOCAL_CORE_DB_PATH: join(databaseRoot, 'metadata.sqlite'),
     LOCAL_CORE_MVP_SAMPLE_ROOT: sampleRoot,
     LOCAL_CORE_TEST_PORT: '43123',
-    LOCAL_CORE_BRIDGE_MCP_URL: 'http://127.0.0.1:43122/mcp',
     LOCAL_CORE_BRIDGE_CONTRACT_MODE: 'auto',
     LOCAL_CORE_BRIDGE_PROJECT_ID: 'mvp-fast-build',
   })

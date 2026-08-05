@@ -10,6 +10,10 @@ const EXCLUDED_FILES = new Set([
   MANIFEST_NAME,
   ".dev-launcher/target.json",
 ]);
+const EXCLUDED_PREFIXES = [
+  "tests/e2e/output/",
+  "OS",
+];
 const GENERATED_SEGMENTS = new Set([
   ".git",
   ".dev-launcher",
@@ -45,6 +49,7 @@ const TEXT_FILENAMES = new Set([
 function isExcluded(file) {
   const normalized = file.split(path.sep).join("/");
   if (EXCLUDED_FILES.has(normalized)) return true;
+  if (EXCLUDED_PREFIXES.some((prefix) => normalized.startsWith(prefix))) return true;
   const segments = normalized.split("/");
   if (segments.some((segment) => GENERATED_SEGMENTS.has(segment) || segment.endsWith(".egg-info"))) return true;
   if (EXCLUDED_SUFFIXES.some((suffix) => normalized.endsWith(suffix))) return true;

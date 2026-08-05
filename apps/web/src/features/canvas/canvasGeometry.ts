@@ -10,6 +10,7 @@ const PRECISION_ZOOM_MULTIPLIER = 0.35
 export const MIN_CANVAS_ZOOM = 0.25
 export const MAX_CANVAS_ZOOM = 2
 export const CANVAS_ZOOM_STEP = 0.05
+export const MIN_RESTORED_CAMERA_CONTENT_RATIO = 0.5
 const NO_INSETS: SafeInsets = { left: 0, right: 0, top: 0, bottom: 0 }
 
 export function zoomCameraAt(camera: Camera, zoom: number, anchorX: number, anchorY: number): Camera {

@@ -1,4 +1,4 @@
-import { FilePlus2, FolderInput, Link2, PackageOpen, Search, Sparkles, Upload, X } from 'lucide-react'
+import { FilePlus2, FolderInput, Link2, PackageOpen, Search, Sparkles, Upload, Wrench, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CanvasNode } from '../../model'
 import type { V07CapabilitySet } from '../../runtime/v07UiContracts'
@@ -12,6 +12,7 @@ interface Props {
   onAddLink: () => void
   onUniversalImport: () => void
   onHandoff: () => void
+  onProjectTools: () => void
   onOpenComposer: () => void
   onSelectNode: (id: string) => void
 }
@@ -50,14 +51,15 @@ export function CapabilityPopover(props: Props) {
           <button className="capability-card pressable" onClick={props.onCreateObject}><FilePlus2 size={15} /><span><b>新建内容</b><small>文本 / 内容集合</small></span></button>
           <button className="capability-card pressable" disabled={!props.capabilities.linkReference.enabled} title={props.capabilities.linkReference.reason} onClick={props.onAddLink}><Link2 size={15} /><span><b>链接参考</b><small>网页与在线资料</small></span></button>
           <button className="capability-card pressable" onClick={props.onUniversalImport}><FolderInput size={15} /><span><b>通用导入</b><small>文件 / 文件夹 / ZIP</small></span></button>
-          <button className="capability-card pressable" disabled={!props.capabilities.contextManifest.enabled} title={props.capabilities.contextManifest.reason} onClick={props.onHandoff}><PackageOpen size={15} /><span><b>生成 Handoff</b><small>Context Manifest</small></span></button>
+          <button className="capability-card pressable" disabled={!props.capabilities.contextManifest.enabled} title={props.capabilities.contextManifest.reason} onClick={props.onHandoff}><PackageOpen size={15} /><span><b>交接当前上下文</b><small>下载或复制 Context Pack</small></span></button>
+          <button className="capability-card pressable" onClick={props.onProjectTools}><Wrench size={15} /><span><b>项目工具</b><small>搜索、备份、工程文件</small></span></button>
         </div>
         <input ref={input} hidden multiple type="file" onChange={(event) => { const files = [...(event.currentTarget.files ?? [])]; if (files.length) props.onImport(files); event.currentTarget.value = '' }} />
       </section>
       <section>
         <h3>工作流</h3>
         <button className="capability-row pressable" disabled={!props.capabilities.runWorkflow.enabled} title={props.capabilities.runWorkflow.reason} onClick={props.onOpenComposer}><Sparkles size={14} /><span><b>使用当前选择调用 Agent</b><small>{props.capabilities.runWorkflow.enabled ? '在选区下方输入，范式与 Agent 自由选择' : props.capabilities.runWorkflow.reason}</small></span></button>
-        <button className="capability-row pressable" disabled={!props.capabilities.contextManifest.enabled} title={props.capabilities.contextManifest.reason} onClick={props.onHandoff}><PackageOpen size={14} /><span><b>Build Context Manifest</b><small>从 Project Truth 构建</small></span></button>
+        <button className="capability-row pressable" disabled={!props.capabilities.contextManifest.enabled} title={props.capabilities.contextManifest.reason} onClick={props.onHandoff}><PackageOpen size={14} /><span><b>交给另一个对话</b><small>从当前选择生成可追溯上下文</small></span></button>
       </section>
       <section>
         <h3>最近资产</h3>

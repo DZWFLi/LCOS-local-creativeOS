@@ -1,8 +1,19 @@
 #!/usr/bin/env node
-import readline from "node:readline";
-import { coreRequest, bridgeRequest, jsonBody } from "./lib/client.mjs";
+import { open, writeFile } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
+import { basename, resolve } from "node:path";
+import { coreRequest, jsonBody } from "./lib/client.mjs";
+import { serveStdioMcp } from "./lib/mcp-stdio-runtime.mjs";
 
-const SERVER = { name: "local-creative-os", version: "0.2.0" };
+const ROLE = process.env.LCOS_MCP_ROLE === "executor" ? "executor" : "agent";
+const SERVER = { name: ROLE === "executor" ? "lcos-executor" : "local-creative-os", version: "0.5.0" };
+const SUPPORTED_PROTOCOL_VERSIONS = ["2025-11-25", "2025-06-18", "2024-11-05"];
+const CONVERSATION_CHUNK_BYTES = 4 * 1024 * 1024;
+const EXECUTOR_TOOL_NAMES = new Set([
+  "get_lcos_run_context",
+  "claim_lcos_run", "start_lcos_run", "heartbeat_lcos_run", "fail_lcos_run", "request_lcos_user_input",
+  "claim_lcos_task", "start_lcos_task", "get_lcos_task", "get_lcos_task_by_run", "submit_lcos_result", "cancel_lcos_task",
+]);
 const activeContextPath = (projectId, workspaceId, afterVersion) => {
   const query = new URLSearchParams();
   if (workspaceId) query.set("workspaceId", workspaceId);
@@ -78,6 +89,31 @@ const tools = [
     y: { type: "number" },
     baseVersion: { type: "number" },
   }, ["projectId", "viewId", "x", "y", "baseVersion"]),
+  tool("set_lcos_viewport", "Move the Agent browser camera without changing Project semantic truth. This updates only versioned navigation context.", {
+    projectId: { type: "string" },
+    workspaceId: { type: "string" },
+    x: { type: "number" },
+    y: { type: "number" },
+    zoom: { type: "number" },
+    visibleViewIds: { type: "array", items: { type: "string" } },
+  }, ["projectId", "x", "y", "zoom"]),
+  tool("create_lcos_relation", "Create one canonical Artifact-to-Artifact relation between two Canvas Views. Use only for a user-authorized semantic relation.", {
+    projectId: { type: "string" },
+    sourceViewId: { type: "string" },
+    targetViewId: { type: "string" },
+    kind: { type: "string" },
+  }, ["projectId", "sourceViewId", "targetViewId", "kind"]),
+  tool("open_lcos_preview", "Focus a Canvas View and return its latest preview metadata. Optionally generate a thumbnail through Local Core.", {
+    projectId: { type: "string" },
+    workspaceId: { type: "string" },
+    viewId: { type: "string" },
+    generate: { type: "boolean" },
+    includeContent: { type: "boolean" },
+  }, ["projectId", "viewId"]),
+  tool("get_lcos_canvas_observation", "Render an on-demand SVG visual supplement from the structured Canvas snapshot. The SVG is untrusted observation data, not Project Truth.", {
+    projectId: { type: "string" },
+    workspaceId: { type: "string" },
+  }, ["projectId"]),
   tool("get_lcos_run_context", "Read the frozen ContextManifest for one Run (never live ActiveContext).", {
     runId: { type: "string" },
   }, ["runId"]),
@@ -265,6 +301,38 @@ const tools = [
     x: { type: "number" },
     y: { type: "number" },
   }, ["projectId", "scanId", "relativePaths", "scopeId"]),
+  tool("import_lcos_conversation", "Import an explicitly user-provided Codex JSONL conversation as a raw timeline. Parsing and FTS5 indexing are local and do not call a model.", {
+    projectId: { type: "string" },
+    filePath: { type: "string" },
+    scopeId: { type: "string" },
+    workspaceId: { type: "string" },
+    title: { type: "string" },
+  }, ["projectId", "filePath", "scopeId"]),
+  tool("import_lcos_manual_conversation", "Import a manually supplied conversation timeline. Entries stay linear and are indexed without model calls.", {
+    projectId: { type: "string" },
+    scopeId: { type: "string" },
+    workspaceId: { type: "string" },
+    title: { type: "string" },
+    entries: { type: "array", items: { type: "object" } },
+  }, ["projectId", "scopeId", "entries"]),
+  tool("export_lcos_conversation", "Export one conversation projection to an explicit local JSON file. Raw messages are included only when requested.", {
+    projectId: { type: "string" },
+    conversationId: { type: "string" },
+    outputPath: { type: "string" },
+    includeMessages: { type: "boolean" },
+  }, ["projectId", "conversationId", "outputPath"]),
+  tool("list_lcos_conversations", "List imported conversation timelines for one Project.", { projectId: { type: "string" } }, ["projectId"]),
+  tool("get_lcos_conversation", "Read one conversation outline, pinned decisions and recent messages.", { projectId: { type: "string" }, conversationId: { type: "string" } }, ["projectId", "conversationId"]),
+  tool("search_lcos_conversations", "Search raw conversation messages with FTS5 and optional local semantic index.", { projectId: { type: "string" }, query: { type: "string" }, semantic: { type: "boolean" }, limit: { type: "number" } }, ["projectId", "query"]),
+  tool("read_lcos_conversation_messages", "Read a page of raw timeline messages.", { projectId: { type: "string" }, conversationId: { type: "string" }, offset: { type: "number" }, limit: { type: "number" }, pinnedOnly: { type: "boolean" } }, ["projectId", "conversationId"]),
+  tool("list_lcos_conversation_sections", "List the zero-token rule-derived sections for one conversation.", { projectId: { type: "string" }, conversationId: { type: "string" } }, ["projectId", "conversationId"]),
+  tool("refresh_lcos_conversation_sections", "Rebuild only unlocked rule-derived sections. User-locked sections and titles are preserved.", { projectId: { type: "string" }, conversationId: { type: "string" } }, ["projectId", "conversationId"]),
+  tool("rename_lcos_conversation_section", "Rename and lock one conversation section so later rule refreshes do not overwrite it.", { projectId: { type: "string" }, conversationId: { type: "string" }, sectionId: { type: "string" }, title: { type: "string" }, lockedByUser: { type: "boolean" } }, ["projectId", "conversationId", "sectionId", "title"]),
+  tool("read_lcos_conversation_section", "Read a section and its exact source messages for on-demand annotation.", { projectId: { type: "string" }, conversationId: { type: "string" }, sectionId: { type: "string" } }, ["projectId", "conversationId", "sectionId"]),
+  tool("annotate_lcos_conversation_section", "Store a small source-hash-guarded section annotation.", { projectId: { type: "string" }, conversationId: { type: "string" }, sectionId: { type: "string" }, sourceHash: { type: "string" }, title: { type: "string" }, decisions: { type: "array", items: { type: "string" } }, todos: { type: "array", items: { type: "string" } }, involvedFiles: { type: "array", items: { type: "string" } } }, ["projectId", "conversationId", "sectionId", "sourceHash", "title"]),
+  tool("pin_lcos_conversation_message", "Promote one raw message to a high-signal Decision node on Canvas.", { projectId: { type: "string" }, conversationId: { type: "string" }, messageId: { type: "string" }, scopeId: { type: "string" }, workspaceId: { type: "string" }, title: { type: "string" }, summary: { type: "string" }, x: { type: "number" }, y: { type: "number" } }, ["projectId", "conversationId", "messageId", "scopeId"]),
+  tool("get_lcos_conversation_semantic_index", "Read Ollama/sqlite-vec semantic index status.", { projectId: { type: "string" } }, ["projectId"]),
+  tool("build_lcos_conversation_semantic_index", "Build or refresh the optional local semantic index without blocking raw import.", { projectId: { type: "string" }, model: { type: "string" }, sessionId: { type: "string" }, force: { type: "boolean" }, batchSize: { type: "number" } }, ["projectId"]),
   tool("lcos_resource_list", "List imported resources and their understanding status.", {
     projectId: { type: "string" },
   }, ["projectId"]),
@@ -288,29 +356,21 @@ const tools = [
   }, ["projectId", "instruction"]),
 ];
 
-const lines = readline.createInterface({ input: process.stdin, crlfDelay: Infinity });
-lines.on("line", (line) => {
-  if (!line.trim()) return;
-  let message;
-  try { message = JSON.parse(line); } catch { return; }
-  void handle(message).catch((error) => replyError(message.id, -32603, error instanceof Error ? error.message : String(error)));
+const visibleTools = tools.filter((item) => ROLE === "executor" ? EXECUTOR_TOOL_NAMES.has(item.name) : !EXECUTOR_TOOL_NAMES.has(item.name));
+
+serveStdioMcp({
+  serverInfo: SERVER,
+  instructions: ROLE === "executor"
+    ? "This server is only for provider execution: claim, start, heartbeat, request input, submit, fail or cancel. Project and Canvas operations belong to local-creative-os."
+    : "Read the Project + Workspace CanvasContextSnapshot before acting. Generate a structured Agent Plan, let Core validate safety/lifecycle, and never mutate a running Run's frozen ContextManifest.",
+  protocolVersions: SUPPORTED_PROTOCOL_VERSIONS,
+  tools: visibleTools,
+  callTool: invokeTool,
 });
 
-async function handle({ id, method, params }) {
-  if (method === "initialize") {
-    return reply(id, {
-      protocolVersion: params?.protocolVersion || "2025-11-25",
-      capabilities: { tools: {} },
-      serverInfo: SERVER,
-      instructions: "Read the Project + Workspace CanvasContextSnapshot before acting. Generate a structured Agent Plan, let Core validate safety/lifecycle, and never mutate a running Run's frozen ContextManifest.",
-    });
-  }
-  if (method === "ping") return reply(id, {});
-  if (method === "tools/list") return reply(id, { tools });
-  if (method !== "tools/call") return id === undefined ? undefined : replyError(id, -32601, "Method not found");
-  const args = params?.arguments || {};
+async function invokeTool(requestedTool, args) {
   let value;
-  switch (params?.name) {
+  switch (requestedTool) {
     case "open_lcos":
       value = { url: `http://127.0.0.1:5173/?agent=1${args.projectId ? `&project=${encodeURIComponent(args.projectId)}` : ""}` };
       break;
@@ -412,6 +472,90 @@ async function handle({ id, method, params }) {
         }),
       });
       break;
+    case "set_lcos_viewport": {
+      const projectId = required(args.projectId, "projectId");
+      const active = await coreRequest(activeContextPath(projectId, args.workspaceId));
+      const zoom = Number(args.zoom);
+      if (!Number.isFinite(zoom) || zoom < 0.05 || zoom > 8) throw new Error("VIEWPORT_ZOOM_OUT_OF_RANGE");
+      value = await coreRequest(activeContextPath(projectId, args.workspaceId), {
+        method: "PUT",
+        ...jsonBody(activeContextMutation(active, args.workspaceId, {
+          viewport: { x: Number(args.x), y: Number(args.y), zoom },
+          visibleViewIds: Array.isArray(args.visibleViewIds) ? args.visibleViewIds : [],
+        })),
+      });
+      break;
+    }
+    case "create_lcos_relation": {
+      const projectId = required(args.projectId, "projectId");
+      const sourceViewId = required(args.sourceViewId, "sourceViewId");
+      const targetViewId = required(args.targetViewId, "targetViewId");
+      if (sourceViewId === targetViewId) throw new Error("RELATION_SELF_REFERENCE_NOT_ALLOWED");
+      const graph = await coreRequest(`/projects/${encodeURIComponent(projectId)}/graph`);
+      const sourceView = graph.artifactViews?.find((view) => String(view.id) === sourceViewId);
+      const targetView = graph.artifactViews?.find((view) => String(view.id) === targetViewId);
+      if (!sourceView || !targetView) throw new Error("RELATION_VIEW_NOT_FOUND");
+      const relationId = `rel-${randomUUID()}`;
+      const now = new Date().toISOString();
+      value = await coreRequest(`/projects/${encodeURIComponent(projectId)}/relations/${encodeURIComponent(relationId)}`, {
+        method: "PUT",
+        ...jsonBody({
+          id: relationId,
+          projectId,
+          sourceEntityType: "artifact",
+          sourceEntityId: String(sourceView.artifactId),
+          targetEntityType: "artifact",
+          targetEntityId: String(targetView.artifactId),
+          kind: required(args.kind, "kind").trim(),
+          createdAt: now,
+          updatedAt: now,
+        }),
+      });
+      break;
+    }
+    case "open_lcos_preview": {
+      const projectId = required(args.projectId, "projectId");
+      const viewId = required(args.viewId, "viewId");
+      const graph = await coreRequest(`/projects/${encodeURIComponent(projectId)}/graph`);
+      const view = graph.artifactViews?.find((item) => String(item.id) === viewId);
+      if (!view) throw new Error("PREVIEW_VIEW_NOT_FOUND");
+      const revisionId = view.revisionId;
+      if (!revisionId) throw new Error("PREVIEW_REVISION_NOT_FOUND");
+      const active = await coreRequest(activeContextPath(projectId, args.workspaceId));
+      await coreRequest(activeContextPath(projectId, args.workspaceId), {
+        method: "PUT",
+        ...jsonBody(activeContextMutation(active, args.workspaceId, { selectedViewIds: [viewId] })),
+      });
+      let records = await coreRequest(`/projects/${encodeURIComponent(projectId)}/preview-records`);
+      let record = records.find((item) => String(item.revisionId) === String(revisionId) && item.previewProfile === "thumbnail");
+      if ((!record || record.status !== "ready") && args.generate === true) {
+        record = await coreRequest(`/projects/${encodeURIComponent(projectId)}/previews`, {
+          method: "POST",
+          ...jsonBody({ revisionId: String(revisionId), previewProfile: "thumbnail" }),
+          timeoutMs: 120_000,
+        });
+        records = await coreRequest(`/projects/${encodeURIComponent(projectId)}/preview-records`);
+        record = records.find((item) => String(item.revisionId) === String(revisionId) && item.previewProfile === "thumbnail") || record;
+      }
+      const content = args.includeContent === true && record?.status === "ready"
+        ? await coreRequest(`/projects/${encodeURIComponent(projectId)}/preview-records/${encodeURIComponent(String(record.id))}/content`)
+        : undefined;
+      value = {
+        viewId,
+        revisionId: String(revisionId),
+        record: record ?? null,
+        ...(content === undefined ? {} : { content }),
+        browserUrl: `http://127.0.0.1:5173/?agent=1&project=${encodeURIComponent(projectId)}&focus=${encodeURIComponent(viewId)}`,
+      };
+      break;
+    }
+    case "get_lcos_canvas_observation": {
+      const projectId = required(args.projectId, "projectId");
+      const query = new URLSearchParams();
+      if (args.workspaceId) query.set("workspaceId", args.workspaceId);
+      value = await coreRequest(`/projects/${encodeURIComponent(projectId)}/canvas-observation${query.size ? `?${query}` : ""}`);
+      break;
+    }
     case "get_lcos_run_context":
       {
         const runId = required(args.runId, "runId");
@@ -434,7 +578,7 @@ async function handle({ id, method, params }) {
       {
         const runId = required(args.runId, "runId");
         const task = await codexTaskForRun(runId);
-        value = await bridgeRequest(`/v1/tasks/${encodeURIComponent(task.taskId)}/claim`, {
+        value = await coreRequest(`/executor/tasks/${encodeURIComponent(task.taskId)}/claim`, {
           method: "POST",
           ...jsonBody({ provider: "codex", workerId: required(args.workerId, "workerId") }),
         });
@@ -443,7 +587,7 @@ async function handle({ id, method, params }) {
     case "start_lcos_run":
       {
         const task = await codexTaskForRun(required(args.runId, "runId"));
-        value = await bridgeRequest(`/v1/tasks/${encodeURIComponent(task.taskId)}/running`, {
+        value = await coreRequest(`/executor/tasks/${encodeURIComponent(task.taskId)}/running`, {
           method: "POST",
           ...jsonBody({ workerId: required(args.workerId, "workerId") }),
         });
@@ -452,7 +596,7 @@ async function handle({ id, method, params }) {
     case "heartbeat_lcos_run":
       {
         const task = await codexTaskForRun(required(args.runId, "runId"));
-        value = await bridgeRequest(`/v1/tasks/${encodeURIComponent(task.taskId)}/heartbeat`, {
+        value = await coreRequest(`/executor/tasks/${encodeURIComponent(task.taskId)}/heartbeat`, {
           method: "POST",
           ...jsonBody({ workerId: required(args.workerId, "workerId") }),
         });
@@ -462,7 +606,7 @@ async function handle({ id, method, params }) {
       {
         const runId = required(args.runId, "runId");
         const task = await codexTaskForRun(runId);
-        value = await bridgeRequest(`/v1/tasks/${encodeURIComponent(task.taskId)}/result`, {
+        value = await coreRequest(`/executor/tasks/${encodeURIComponent(task.taskId)}/result`, {
           method: "POST",
           ...jsonBody({
             contractVersion: "bridge-result-v1",
@@ -582,7 +726,7 @@ async function handle({ id, method, params }) {
     case "request_lcos_user_input": {
       const runId = required(args.runId, "runId");
       const task = await codexTaskForRun(runId);
-      value = await bridgeRequest(`/v1/tasks/${encodeURIComponent(task.taskId)}/result`, {
+      value = await coreRequest(`/executor/tasks/${encodeURIComponent(task.taskId)}/result`, {
         method: "POST",
         ...jsonBody({
           contractVersion: "bridge-result-v1",
@@ -688,7 +832,7 @@ async function handle({ id, method, params }) {
       });
       break;
     case "claim_lcos_task":
-      value = await bridgeRequest("/v1/tasks/claim-next", {
+      value = await coreRequest("/executor/tasks/claim-next", {
         method: "POST",
         ...jsonBody({
           provider: required(args.provider, "provider"),
@@ -697,25 +841,25 @@ async function handle({ id, method, params }) {
       });
       break;
     case "start_lcos_task":
-      value = await bridgeRequest(`/v1/tasks/${encodeURIComponent(required(args.task_id, "task_id"))}/running`, {
+      value = await coreRequest(`/executor/tasks/${encodeURIComponent(required(args.task_id, "task_id"))}/running`, {
         method: "POST",
         ...jsonBody({ workerId: args.worker_id || null }),
       });
       break;
     case "get_lcos_task":
-      value = await bridgeRequest(`/v1/tasks/${encodeURIComponent(required(args.task_id, "task_id"))}`);
+      value = await coreRequest(`/executor/tasks/${encodeURIComponent(required(args.task_id, "task_id"))}`);
       break;
     case "get_lcos_task_by_run":
-      value = await bridgeRequest(`/v1/tasks/by-run/${encodeURIComponent(required(args.lcos_run_id, "lcos_run_id"))}`);
+      value = await coreRequest(`/executor/runs/${encodeURIComponent(required(args.lcos_run_id, "lcos_run_id"))}/task`);
       break;
     case "submit_lcos_result":
-      value = await bridgeRequest(`/v1/tasks/${encodeURIComponent(required(args.task_id, "task_id"))}/result`, {
+      value = await coreRequest(`/executor/tasks/${encodeURIComponent(required(args.task_id, "task_id"))}/result`, {
         method: "POST",
         ...jsonBody(args.result),
       });
       break;
     case "cancel_lcos_task":
-      value = await bridgeRequest(`/v1/tasks/${encodeURIComponent(required(args.task_id, "task_id"))}/cancel`, {
+      value = await coreRequest(`/executor/tasks/${encodeURIComponent(required(args.task_id, "task_id"))}/cancel`, {
         method: "POST",
         ...jsonBody({}),
       });
@@ -740,6 +884,84 @@ async function handle({ id, method, params }) {
         }),
         timeoutMs: 180_000,
       });
+      break;
+    case "import_lcos_conversation":
+      value = await importConversationFile({
+        projectId: required(args.projectId, "projectId"),
+        filePath: required(args.filePath, "filePath"),
+        scopeId: required(args.scopeId, "scopeId"),
+        ...(args.workspaceId ? { workspaceId: String(args.workspaceId) } : {}),
+        ...(args.title ? { title: String(args.title) } : {}),
+      });
+      break;
+    case "import_lcos_manual_conversation":
+      value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/conversations/import-manual`, {
+        method: "POST",
+        ...jsonBody({
+          scopeId: required(args.scopeId, "scopeId"),
+          ...(args.workspaceId ? { workspaceId: String(args.workspaceId) } : {}),
+          ...(args.title ? { title: String(args.title) } : {}),
+          entries: Array.isArray(args.entries) ? args.entries : [],
+        }),
+        timeoutMs: 600_000,
+      });
+      break;
+    case "export_lcos_conversation": {
+      const projectId = required(args.projectId, "projectId");
+      const conversationId = required(args.conversationId, "conversationId");
+      const outputPath = resolve(required(args.outputPath, "outputPath"));
+      const exported = await coreRequest(`/projects/${encodeURIComponent(projectId)}/conversations/${encodeURIComponent(conversationId)}/export?includeMessages=${args.includeMessages === false ? "false" : "true"}`, { timeoutMs: 120_000 });
+      await writeFile(outputPath, `${JSON.stringify(exported, null, 2)}\n`, { encoding: "utf8", flag: "wx" });
+      value = { outputPath, conversationId, rawTimelineIncluded: args.includeMessages !== false };
+      break;
+    }
+    case "list_lcos_conversations":
+      value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/conversations`);
+      break;
+    case "get_lcos_conversation":
+      value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/conversations/${encodeURIComponent(required(args.conversationId, "conversationId"))}`);
+      break;
+    case "search_lcos_conversations": {
+      const query = new URLSearchParams({ q: required(args.query, "query") });
+      if (args.semantic === false) query.set("semantic", "false");
+      if (args.limit !== undefined) query.set("limit", String(args.limit));
+      value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/conversations/search?${query}`);
+      break;
+    }
+    case "read_lcos_conversation_messages": {
+      const query = new URLSearchParams();
+      if (args.offset !== undefined) query.set("offset", String(args.offset));
+      if (args.limit !== undefined) query.set("limit", String(args.limit));
+      if (args.pinnedOnly === true) query.set("pinnedOnly", "true");
+      value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/conversations/${encodeURIComponent(required(args.conversationId, "conversationId"))}/messages?${query}`);
+      break;
+    }
+    case "list_lcos_conversation_sections":
+      value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/conversations/${encodeURIComponent(required(args.conversationId, "conversationId"))}/sections`);
+      break;
+    case "refresh_lcos_conversation_sections":
+      value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/conversations/${encodeURIComponent(required(args.conversationId, "conversationId"))}/sections/refresh`, { method: "POST", ...jsonBody({}) });
+      break;
+    case "rename_lcos_conversation_section":
+      value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/conversations/${encodeURIComponent(required(args.conversationId, "conversationId"))}/sections/${encodeURIComponent(required(args.sectionId, "sectionId"))}`, {
+        method: "PATCH",
+        ...jsonBody({ title: required(args.title, "title"), lockedByUser: args.lockedByUser !== false }),
+      });
+      break;
+    case "read_lcos_conversation_section":
+      value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/conversations/${encodeURIComponent(required(args.conversationId, "conversationId"))}/sections/${encodeURIComponent(required(args.sectionId, "sectionId"))}/source`);
+      break;
+    case "annotate_lcos_conversation_section":
+      value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/conversations/${encodeURIComponent(required(args.conversationId, "conversationId"))}/sections/${encodeURIComponent(required(args.sectionId, "sectionId"))}/annotation`, { method: "POST", ...jsonBody({ sourceHash: required(args.sourceHash, "sourceHash"), title: required(args.title, "title"), decisions: args.decisions || [], todos: args.todos || [], involvedFiles: args.involvedFiles || [], annotatedBy: "agent" }) });
+      break;
+    case "pin_lcos_conversation_message":
+      value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/conversations/${encodeURIComponent(required(args.conversationId, "conversationId"))}/messages/${encodeURIComponent(required(args.messageId, "messageId"))}/pin`, { method: "POST", ...jsonBody({ scopeId: required(args.scopeId, "scopeId"), ...(args.workspaceId ? { workspaceId: args.workspaceId } : {}), ...(args.title ? { title: args.title } : {}), ...(args.summary ? { summary: args.summary } : {}), ...(Number.isFinite(args.x) ? { x: args.x } : {}), ...(Number.isFinite(args.y) ? { y: args.y } : {}) }) });
+      break;
+    case "get_lcos_conversation_semantic_index":
+      value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/conversations/semantic-index`);
+      break;
+    case "build_lcos_conversation_semantic_index":
+      value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/conversations/semantic-index`, { method: "POST", ...jsonBody({ ...(args.model ? { model: args.model } : {}), ...(args.sessionId ? { sessionId: args.sessionId } : {}), ...(typeof args.force === "boolean" ? { force: args.force } : {}), ...(args.batchSize !== undefined ? { batchSize: args.batchSize } : {}) }), timeoutMs: 300_000 });
       break;
     case "lcos_resource_list":
       value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/resources`);
@@ -769,13 +991,65 @@ async function handle({ id, method, params }) {
       });
       break;
     default:
-      return replyError(id, -32602, `Unknown tool: ${params?.name || ""}`);
+      throw new Error(`Unknown tool: ${requestedTool}`);
   }
-  return reply(id, {
+  return {
     content: [{ type: "text", text: JSON.stringify(value, null, 2) }],
     structuredContent: value,
-  });
+  };
 }
+
+async function importConversationFile({ projectId, filePath, scopeId, workspaceId, title }) {
+  const absolutePath = resolve(filePath);
+  const handle = await open(absolutePath, "r");
+  try {
+    const stat = await handle.stat();
+    if (!stat.isFile()) throw new Error("Conversation source must be a regular file.");
+    if (stat.size <= 0 || stat.size > 512 * 1024 * 1024) throw new Error("Conversation source must be 1 byte to 512 MiB.");
+    const created = await coreRequest(`/projects/${encodeURIComponent(projectId)}/conversation-import-sessions`, {
+      method: "POST",
+      ...jsonBody({
+        sourceKind: "codex",
+        sourceFileName: basename(absolutePath),
+        expectedBytes: stat.size,
+        scopeId,
+        ...(workspaceId ? { workspaceId } : {}),
+        ...(title ? { title } : {}),
+      }),
+    });
+    const upload = created?.id ? created : created?.value ?? created;
+    const uploadId = upload?.id;
+    if (!uploadId) throw new Error("Local Core did not return a conversation import session ID.");
+    const fileHash = createHash("sha256");
+    let position = 0;
+    let chunkIndex = 0;
+    while (position < stat.size) {
+      const size = Math.min(CONVERSATION_CHUNK_BYTES, stat.size - position);
+      const buffer = Buffer.allocUnsafe(size);
+      const { bytesRead } = await handle.read(buffer, 0, size, position);
+      if (bytesRead <= 0) throw new Error(`Unexpected end of file at byte ${position}.`);
+      const bytes = buffer.subarray(0, bytesRead);
+      fileHash.update(bytes);
+      const chunkHash = createHash("sha256").update(bytes).digest("hex");
+      await coreRequest(`/projects/${encodeURIComponent(projectId)}/conversation-import-sessions/${encodeURIComponent(uploadId)}/chunks/${chunkIndex}`, {
+        method: "PUT",
+        headers: { "content-type": "application/octet-stream", "x-content-sha256": chunkHash },
+        body: bytes,
+        timeoutMs: 180_000,
+      });
+      position += bytesRead;
+      chunkIndex += 1;
+    }
+    return coreRequest(`/projects/${encodeURIComponent(projectId)}/conversation-import-sessions/${encodeURIComponent(uploadId)}/complete`, {
+      method: "POST",
+      ...jsonBody({ expectedChunks: chunkIndex, expectedContentHash: fileHash.digest("hex") }),
+      timeoutMs: 900_000,
+    });
+  } finally {
+    await handle.close();
+  }
+}
+
 
 function tool(name, description, properties, required = []) {
   return { name, description, inputSchema: { type: "object", properties, additionalProperties: false, ...(required.length ? { required } : {}) } };
@@ -787,7 +1061,7 @@ function required(value, name) {
 }
 
 async function codexTaskForRun(runId) {
-  const response = await bridgeRequest(`/v1/tasks/by-run/${encodeURIComponent(runId)}`);
+  const response = await coreRequest(`/executor/runs/${encodeURIComponent(runId)}/task`);
   const task = response?.task ?? response;
   const taskId = task?.taskId ?? task?.task_id;
   if (!taskId) throw new Error(`TASK_NOT_FOUND: no Bridge Task for run ${runId}.`);
@@ -798,10 +1072,3 @@ async function codexTaskForRun(runId) {
   return { taskId, lcosRunId: task?.lcosRunId ?? task?.lcos_run_id ?? runId };
 }
 
-function reply(id, result) {
-  process.stdout.write(`${JSON.stringify({ jsonrpc: "2.0", id, result })}\n`);
-}
-
-function replyError(id, code, message) {
-  process.stdout.write(`${JSON.stringify({ jsonrpc: "2.0", id, error: { code, message } })}\n`);
-}

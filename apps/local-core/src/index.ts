@@ -5,7 +5,7 @@ import { createLocalCoreServer, LOCAL_CORE_DEV_PORT } from './server.js'
 import { SqliteMetadataRepository } from './metadata-repository.js'
 import { ensureMvpSampleProject } from './mvp-sample-project.js'
 import { ContextManifestService } from './context-manifest-service.js'
-import { McpBridgeRuntimeClient } from './bridge-mcp-client.js'
+import { RestBridgeRuntimeClient } from './bridge-rest-client.js'
 import { RuntimeAdapterService } from './runtime-adapter.js'
 import { RuntimeApplicationService } from './runtime-application-service.js'
 import { RuntimeAutoSyncService } from './runtime-auto-sync-service.js'
@@ -43,7 +43,7 @@ export {
   RuntimeAdapterError,
   RuntimeAdapterService,
 } from './runtime-adapter.js'
-export { McpBridgeRuntimeClient } from './bridge-mcp-client.js'
+export { RestBridgeRuntimeClient } from './bridge-rest-client.js'
 export { RuntimeResultIngestionService } from './runtime-result-ingestion.js'
 export { RuntimeReviewService } from './runtime-review-service.js'
 export { RuntimeApplicationService } from './runtime-application-service.js'
@@ -82,11 +82,9 @@ async function main(): Promise<void> {
       ?? fileURLToPath(new URL('../.data/mvp-sample-project', import.meta.url))
     ensureMvpSampleProject(metadataRepository, sampleRoot)
   }
-  const bridge = new McpBridgeRuntimeClient(
-    process.env.LOCAL_CORE_BRIDGE_MCP_URL ?? 'http://127.0.0.1:43122/mcp',
+  const bridge = new RestBridgeRuntimeClient(
+    process.env.LCOS_BRIDGE_URL ?? 'http://127.0.0.1:43122',
     fetch,
-    process.env.LOCAL_CORE_BRIDGE_SESSION_ID,
-    parseBridgeContractMode(process.env.LOCAL_CORE_BRIDGE_CONTRACT_MODE),
   )
   const bridgeProjectId = process.env.LOCAL_CORE_BRIDGE_PROJECT_ID ?? 'mvp-fast-build'
   const runtimeReviewService = new RuntimeReviewService(metadataRepository)
@@ -129,12 +127,6 @@ async function main(): Promise<void> {
   }
   process.once('SIGINT', shutdown)
   process.once('SIGTERM', shutdown)
-}
-
-function parseBridgeContractMode(value: string | undefined): 'auto' | 'canonical' | 'legacy' {
-  if (value === undefined || value === '' || value === 'auto') return 'auto'
-  if (value === 'canonical' || value === 'legacy') return value
-  throw new Error('LOCAL_CORE_BRIDGE_CONTRACT_MODE must be auto, canonical, or legacy.')
 }
 
 const entryUrl = process.argv[1] === undefined ? undefined : pathToFileURL(process.argv[1]).href

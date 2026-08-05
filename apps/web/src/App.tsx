@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { Command, Play } from 'lucide-react'
-import type { ContextChangeProposalV1, ContextManifestV0, ObsidianVaultScanV1, RunProposalResult, RunReview, RuntimeProviderStatus, WorkspaceMembership } from '@local-creative-os/contracts'
+import type { ContextChangeProposalV1, ContextManifestV0, ObsidianVaultScanV1, RunEvent, RunProposalResult, RunReview, RuntimeProviderStatus, WorkspaceMembership } from '@local-creative-os/contracts'
 import { makePerformanceFixture } from './qa-fixtures/fixtures'
 import type { ActiveRun, Camera, CanvasNode, CanvasScope, NodeDisplayMode, NodeLayer, PersistedPrototypeState, ProjectPackage, ScopeKind, TargetContextInference, WorkRailPreferences, Workspace, WorkspaceIntent } from './model'
 import { nodeMeta, runStatusLabel } from './model'
@@ -9,6 +9,7 @@ import type { ComposerResultPolicy } from './features/canvas/SelectionComposer'
 import { CanvasMiniMap } from './features/canvas/CanvasMiniMap'
 import { WorkRail } from './features/workrail/WorkRail'
 import { ProjectDrive } from './features/project/ProjectDrive'
+import { ProjectToolsDialog } from './features/project/ProjectToolsDialog'
 import { WorkspaceDock } from './features/workspace/WorkspaceDock'
 import { WorkspaceDialog } from './features/workspace/WorkspaceDialog'
 import { ConfirmDialog } from './features/ui/ConfirmDialog'
@@ -24,6 +25,7 @@ import { LinkReferenceDialog } from './features/create/LinkReferenceDialog'
 import { UniversalImportPanel, type DirectoryEntryInput } from './features/resources/UniversalImportPanel'
 import { ResourceDetailDialog } from './features/resources/ResourceDetailDialog'
 import { ObsidianImportDialog } from './features/resources/ObsidianImportDialog'
+import { ConversationContextDialog } from './features/conversations/ConversationContextDialog'
 import { capabilitiesFor, type LinkReferenceInput, type RunOutputIntent } from './runtime/v07UiContracts'
 import { clearPrototypeState, loadProjectCatalog, loadPrototypeState, saveProjectCatalog, savePrototypeState } from './state/prototypeStorage'
 import { clearProjectNavigationState, loadProjectNavigationState, saveProjectNavigationState } from './state/projectNavigation'
@@ -31,7 +33,7 @@ import { buildWorkspaceFrames } from './state/workspaceFrames'
 import { RuntimeBridge, type DataSource, type SaveStatus } from './runtime/runtimeBridge'
 import { selectRuntimeProject } from './runtime/runtimeProjectSelection'
 import { createWorkspaceRecord, duplicateWorkspaceRecord, moveWorkspaceRecord, removeWorkspaceRecord, toggleWorkspaceLayer, updateWorkspaceRecord } from './state/workspaceState'
-import { cameraContentRatio, fitBounds, getSelectionBounds, nodeDimensions, revealNode } from './features/canvas/canvasGeometry'
+import { cameraContentRatio, fitBounds, getSelectionBounds, MIN_RESTORED_CAMERA_CONTENT_RATIO, nodeDimensions, revealNode } from './features/canvas/canvasGeometry'
 import { findPendingReturnPosition } from './features/canvas/canvasLayout'
 import { applyScopeLayout, proposeScopeLayout, type LayoutPreviewItem } from './features/canvas/scopeLayout'
 import { arrangeSelectedNodes } from './features/canvas/selectionLayout'
@@ -150,6 +152,8 @@ export function App() {
   const [capabilityOpen, setCapabilityOpen] = useState(false)
   const [linkDialogOpen, setLinkDialogOpen] = useState(false)
   const [importPanelOpen, setImportPanelOpen] = useState(false)
+  const [conversationDialogOpen, setConversationDialogOpen] = useState(false)
+  const [projectToolsOpen, setProjectToolsOpen] = useState(false)
   const [resourceDetailArtifactId, setResourceDetailArtifactId] = useState<string | null>(null)
   const [obsidianScan, setObsidianScan] = useState<ObsidianVaultScanV1 | null>(null)
   const [obsidianBusy, setObsidianBusy] = useState(false)
@@ -166,6 +170,9 @@ export function App() {
   const [workspaceStateSaving, setWorkspaceStateSaving] = useState(false)
   const [workspaceStateRestoringId, setWorkspaceStateRestoringId] = useState<string | null>(null)
   const [workspaceStatesError, setWorkspaceStatesError] = useState<string | undefined>()
+  const [runEvents, setRunEvents] = useState<readonly RunEvent[]>([])
+  const [runEventsError, setRunEventsError] = useState<string | null>(null)
+  const [runtimeRecovering, setRuntimeRecovering] = useState(false)
 
   const objectUrls = useRef<Set<string>>(new Set())
   const clipboardRef = useRef<CanvasClipboardPayload | null>(null)
@@ -184,6 +191,7 @@ export function App() {
   const activeContextHydratedKeyRef = useRef<string | null>(null)
   const activeContextVersionRef = useRef(0)
   const restoredDraftContextIdsRef = useRef<string[]>([])
+  const runEventSequenceRef = useRef<number | undefined>(undefined)
 
   const activeProject = projects.find((project) => project.id === activeProjectId) ?? projects[0]
   const activeWorkspace = workspaceId ? workspaces.find((workspace) => workspace.id === workspaceId) ?? null : null
@@ -336,7 +344,7 @@ export function App() {
         const contentRatio = contentNodes.length > 0
           ? cameraContentRatio(candidate, contentNodes, window.innerWidth, window.innerHeight)
           : 0
-        if (contentRatio >= 0.5) {
+        if (contentRatio >= MIN_RESTORED_CAMERA_CONTENT_RATIO) {
           setCamera(candidate)
         } else if (contentNodes.length > 0) {
           // 恢复的相机已失效（节点全在视口外）：按节点包围盒重新适配，避免打开项目看到空画布。
@@ -810,7 +818,7 @@ export function App() {
     }
     const contentNodes = scopeNodes.filter((node) => node.kind !== 'process')
     const visibleCandidates = contentNodes.length > 0 ? contentNodes : scopeNodes
-    if (cameraContentRatio(cameraRef.current, visibleCandidates, window.innerWidth, window.innerHeight) >= 0.5) return
+    if (cameraContentRatio(cameraRef.current, visibleCandidates, window.innerWidth, window.innerHeight) >= MIN_RESTORED_CAMERA_CONTENT_RATIO) return
     if (now - cameraHealWindowRef.current[cameraValidityKey] > 8_000) return
     const bounds = visibleCandidates.reduce((acc, node) => ({
       left: Math.min(acc.left, node.x),
@@ -1198,7 +1206,7 @@ export function App() {
     loadWorkspaceStates(targetWorkspaceId)
   }, [loadWorkspaceStates, workspaceId, workspaces])
 
-  const saveCurrentWorkspaceState = useCallback((requestedWorkspaceId?: string) => {
+  const saveCurrentWorkspaceState = useCallback((requestedWorkspaceId?: string, customName?: string) => {
     const targetWorkspaceId = requestedWorkspaceId ?? workspaceStatesWorkspaceId ?? workspaceId
     const targetWorkspace = workspaces.find((workspace) => workspace.id === targetWorkspaceId)
     if (!targetWorkspaceId || !targetWorkspace) { setNotice('先激活一个工作空间，再保存工作现场'); return }
@@ -1206,7 +1214,7 @@ export function App() {
       setNotice(`Demo 模式未写入「${targetWorkspace.label}」工作现场`)
       return
     }
-    const name = `${targetWorkspace.label} · ${new Date().toLocaleString()}`
+    const name = customName?.trim() || `${targetWorkspace.label} · ${new Date().toLocaleString()}`
     setWorkspaceStateSaving(true)
     void bridgeRef.current.client.saveWorkspaceState(targetWorkspaceId, name).then((call) => {
       if (call.result.ok) {
@@ -2010,6 +2018,25 @@ export function App() {
     setNotice('参考快照、指令和执行记录已自动保存')
   }, [activeProjectId, applyRuntimeReview, bootMode, clearPersistedCommandDrafts, nodes, scopeId, setGraph, workspaceId])
 
+  const requestConversationSectionAnnotation = useCallback((input: { readonly conversationId: string; readonly sectionId: string; readonly sectionTitle: string }) => {
+    const prompt = [
+      '请为 LCOS 对话章节生成一次按需小标注。',
+      `Project ID: ${activeProjectId}`,
+      `Conversation ID: ${input.conversationId}`,
+      `Section ID: ${input.sectionId}`,
+      `当前章节标题: ${input.sectionTitle}`,
+      '',
+      '必须通过 local-creative-os MCP：',
+      '1. 调用 read_lcos_conversation_section 读取原始消息和 sourceHash；',
+      '2. 生成一个尽量不超过 5 个汉字的短标题；',
+      '3. 提取最多 3 条关键决策、最多 3 条待办和涉及文件；',
+      '4. 调用 annotate_lcos_conversation_section，并原样使用读取到的 sourceHash；',
+      '5. 不改原始时间线，不生成文件，不覆盖用户锁定的章节标题。',
+    ].join('\n')
+    setConversationDialogOpen(false)
+    startRunFrom(prompt, [], [], 'analyze', 'auto', 'reply_only', `提炼对话章节「${input.sectionTitle}」`)
+  }, [activeProjectId, startRunFrom])
+
   const requestComposerFocus = useCallback(() => {
     const focusComposer = () => {
       const composer = selectedIds.length
@@ -2135,6 +2162,60 @@ export function App() {
     setCamera((current) => revealNode(current, generated, viewport?.width ?? 1000, viewport?.height ?? 820, safeInsets))
     setNotice('结果已自动归位，工作栏已进入版本确认')
   }, [nodes, safeInsets, scopeId, setGraph])
+
+
+  useEffect(() => {
+    if (!activeRun?.runtime) {
+      runEventSequenceRef.current = undefined
+      setRunEvents([])
+      setRunEventsError(null)
+      return
+    }
+    let cancelled = false
+    let timer = 0
+    const load = async (): Promise<void> => {
+      const call = await bridgeRef.current.client.runEvents(activeRun.id, runEventSequenceRef.current)
+      if (cancelled) return
+      if (!call.result.ok) {
+        setRunEventsError(call.result.error.message)
+      } else {
+        setRunEventsError(null)
+        if (call.result.value.length > 0) {
+          runEventSequenceRef.current = Math.max(runEventSequenceRef.current ?? 0, ...call.result.value.map((event) => event.sequence))
+          setRunEvents((current) => {
+            const bySequence = new Map(current.map((event) => [event.sequence, event]))
+            for (const event of call.result.value) bySequence.set(event.sequence, event)
+            return [...bySequence.values()].sort((left, right) => left.sequence - right.sequence)
+          })
+        }
+      }
+      if (!cancelled && !['completed', 'cancelled', 'failed'].includes(activeRun.status)) {
+        timer = window.setTimeout(() => { void load() }, 2_000)
+      }
+    }
+    runEventSequenceRef.current = undefined
+    setRunEvents([])
+    setRunEventsError(null)
+    void load()
+    return () => {
+      cancelled = true
+      if (timer) window.clearTimeout(timer)
+    }
+  }, [activeRun?.id, activeRun?.runtime, activeRun?.status])
+
+  const recoverActiveRun = useCallback(() => {
+    if (!activeRun?.runtime || runtimeRecovering) return
+    setRuntimeRecovering(true)
+    setNotice('正在重新连接本地 Agent，并恢复这个任务…')
+    void bridgeRef.current.client.recoverRuntimeRun(activeRun.id).then((call) => {
+      if (!call.result.ok) {
+        setNotice(`暂时无法恢复：${humanizeRuntimeMessage(call.result.error.message)}`)
+        return
+      }
+      applyRuntimeReview(call.result.value.review, activeRun, call.result.value.providerError?.message)
+      setNotice(humanizeRuntimeMessage(call.result.value.providerError?.message) || '任务已重新连接，将继续从已有记录恢复')
+    }).finally(() => { setRuntimeRecovering(false) })
+  }, [activeRun, applyRuntimeReview, runtimeRecovering])
 
 
   const syncRuntimeRun = useCallback(() => {
@@ -2486,6 +2567,32 @@ export function App() {
     return () => { window.removeEventListener('keydown', handler); window.removeEventListener('keyup', release) }
   }, [arrangeSelection, clearSelection, copySelection, createDialogOpen, deleteNodes, duplicateSelection, capabilityOpen, nodeInfoId, workbench, layoutPreview, openNative, pasteClipboard, projectCreateOpen, redo, requestComposerFocus, requestGlobalRun, requestSelectionRun, scopeCreateOpen, selectedEdgeId, selectedId, selectedIds, selectedNodes, setEdges, undo])
 
+
+  const refreshProjectCatalog = useCallback(() => {
+    void bridgeRef.current.loadCatalog().then((catalog) => {
+      if (catalog.source !== 'runtime') {
+        setNotice('项目列表暂时无法刷新，请重新启动 LCOS 后再试。')
+        return
+      }
+      setProjects([...catalog.projects])
+      saveProjectCatalog([...catalog.projects])
+      setProjectOpen(false)
+    })
+  }, [])
+
+  const selectArtifactFromTools = useCallback((artifactId: string) => {
+    const node = nodes.find((item) => String(item.artifactId) === artifactId)
+    if (node === undefined) {
+      setNotice('内容存在于项目中，但当前画布没有对应视图。可以在项目总览中创建或定位视图。')
+      return
+    }
+    if (node.scopeId && node.scopeId !== scopeId) setScopeId(node.scopeId)
+    selectNode(node.id)
+    const viewport = document.querySelector<HTMLElement>('[data-testid="canvas"]')?.getBoundingClientRect()
+    setCamera((current) => revealNode(current, node, viewport?.width ?? 1000, viewport?.height ?? 820, safeInsets))
+    setNotice(`已定位「${node.title}」`)
+  }, [nodes, safeInsets, scopeId, selectNode])
+
   if (!projectOpen) return <>
     {notice && <div data-testid="toast" className="notice" role="status" aria-live="polite">{notice}</div>}
     <ProjectDrive projects={projects} openProjectIds={openProjectIds} onOpen={openProject} onCreate={() => setProjectCreateOpen(true)} />
@@ -2499,7 +2606,7 @@ export function App() {
   return <main className="app-shell v05 v051 v052 v053 v056 v0561 v06 v06-phase2 v06-phase3 v061 v07 v071 porcelain-studio-v2" data-testid="creative-os-app">
     <V07TopBar projects={projects} openProjectIds={openProjectIds} activeProjectId={activeProjectId} scopePath={scopePath} saveStatus={saveStatus} runStatus={activeRun?.status ?? null} workRailCollapsed={workRail.collapsed} onOpenDrive={() => setProjectOpen(false)} onOpenProject={openProject} onCloseProject={closeProjectTab} onOpenScope={enterScope} onToggleWorkRail={() => setWorkRail((current) => ({ ...current, collapsed: !current.collapsed }))} />
     <section className={`scene intent-${effectiveWorkspace.intent ?? 'blank'}`} style={sceneStyle} data-project-id={activeProjectId} data-scope-id={scopeId} data-workspace-id={workspaceId ?? 'project-overview'} data-workspace-intent={effectiveWorkspace.intent ?? 'blank'}>
-      {capabilityOpen && <CapabilityPopover capabilities={capabilities} nodes={scopeNodes} onClose={() => setCapabilityOpen(false)} onImport={(files) => { const point = lastCanvasPointRef.current ?? { x: 180, y: 160 }; dropFiles(files, point.x, point.y); setCapabilityOpen(false) }} onCreateObject={() => { setCapabilityOpen(false); setCreateDialogOpen(true) }} onAddLink={() => { setCapabilityOpen(false); setLinkDialogOpen(true) }} onUniversalImport={() => { setCapabilityOpen(false); setImportPanelOpen(true) }} onHandoff={() => { setCapabilityOpen(false); void openHandoff() }} onOpenComposer={() => { setCapabilityOpen(false); requestComposerFocus() }} onSelectNode={(id) => { selectNode(id); setCapabilityOpen(false) }} />}
+      {capabilityOpen && <CapabilityPopover capabilities={capabilities} nodes={scopeNodes} onClose={() => setCapabilityOpen(false)} onImport={(files) => { const point = lastCanvasPointRef.current ?? { x: 180, y: 160 }; dropFiles(files, point.x, point.y); setCapabilityOpen(false) }} onCreateObject={() => { setCapabilityOpen(false); setCreateDialogOpen(true) }} onAddLink={() => { setCapabilityOpen(false); setLinkDialogOpen(true) }} onUniversalImport={() => { setCapabilityOpen(false); setImportPanelOpen(true) }} onHandoff={() => { setCapabilityOpen(false); void openHandoff() }} onProjectTools={() => { setCapabilityOpen(false); setProjectToolsOpen(true) }} onOpenComposer={() => { setCapabilityOpen(false); requestComposerFocus() }} onSelectNode={(id) => { selectNode(id); setCapabilityOpen(false) }} />}
       <WorkspaceDock workspaces={scopeWorkspaces} activeId={workspaceId} collapsed={dockCollapsed} onCollapsedChange={setDockCollapsed} capabilitiesOpen={capabilityOpen} onOpenCapabilities={() => setCapabilityOpen((value) => !value)} onOverview={activateOverview} onChange={changeWorkspace} onLocate={locateWorkspace} onAddWorkspace={() => setWorkspaceEditor({ mode: 'create' })} onEditWorkspace={(id) => setWorkspaceEditor({ mode: 'edit', id })} onDuplicateWorkspace={duplicateWorkspace} onDeleteWorkspace={deleteWorkspace} onMoveWorkspace={moveWorkspace} onSaveWorkspaceState={saveCurrentWorkspaceState} onOpenWorkspaceStates={openWorkspaceStates} runStatus={activeRun?.status ?? null} />
       <ProjectCanvas
         nodes={visibleNodes}
@@ -2593,6 +2700,10 @@ export function App() {
         onRetry={retryRun}
         onSyncRun={syncRuntimeRun}
         onCancelRun={cancelActiveRun}
+        runEvents={runEvents}
+        runEventsError={runEventsError}
+        runtimeRecovering={runtimeRecovering}
+        onRecoverRun={recoverActiveRun}
         onAnswerInput={answerActiveRunInput}
         onContinueModify={continueModify}
         onShowRun={clearSelection}
@@ -2612,13 +2723,14 @@ export function App() {
         onRefresh={refreshActiveContext}
       />}
       {nodeInfoNode && <NodeInfoPopover node={nodeInfoNode} camera={camera} relationCount={nodeInfoRelationCount} onClose={() => setNodeInfoId(null)} onRelations={() => { selectNode(nodeInfoNode.id); setNodeInfoId(null); setNotice(`${nodeInfoRelationCount} 个关联已在画布中高亮`) }} onPreview={(node) => { setNodeInfoId(null); setWorkbench({ nodeId: node.id, focus: 'preview' }) }} onShowResource={(node) => { setNodeInfoId(null); setResourceDetailArtifactId(String(node.artifactId)) }} onRevisions={(node) => { setNodeInfoId(null); setWorkbench({ nodeId: node.id, focus: 'revisions' }) }} />}
+      <ProjectToolsDialog open={projectToolsOpen} project={activeProject} projects={projects} client={bridgeRef.current.client} onClose={() => setProjectToolsOpen(false)} onProjectOpened={refreshProjectCatalog} onSelectArtifact={selectArtifactFromTools} onNotice={setNotice} />
       {workbenchNode && <ArtifactWorkbench node={workbenchNode} projectId={activeProjectId} client={bridgeRef.current.client} relationCount={workbenchRelationCount} focus={workbench?.focus ?? 'preview'} onFocusChange={(focus) => setWorkbench((current) => current ? { ...current, focus } : current)} onClose={() => setWorkbench(null)} onLocate={() => {
         selectNode(workbenchNode.id)
         setNodeInfoId(null)
         const viewport = document.querySelector<HTMLElement>('[data-testid="canvas"]')?.getBoundingClientRect()
         setCamera(revealNode(camera, workbenchNode, viewport?.width ?? 1000, viewport?.height ?? 820))
         setNotice(`已定位「${workbenchNode.title}」`)
-      }} onUseRevision={useHistoricalRevision} onShowResource={workbenchNode.artifactId === undefined ? undefined : () => { setWorkbench(null); setResourceDetailArtifactId(String(workbenchNode.artifactId)) }} />}
+      }} onUseRevision={useHistoricalRevision} onShowResource={workbenchNode.artifactId === undefined ? undefined : () => { setWorkbench(null); setResourceDetailArtifactId(String(workbenchNode.artifactId)) }} onRefreshFile={workbenchNode.fileRecordId === undefined ? undefined : () => refreshSource(workbenchNode)} onAdoptExternalChange={workbenchNode.fileRecordId === undefined || workbenchNode.fileAvailability !== 'stale' ? undefined : () => adoptExternalChange(workbenchNode)} />}
       {activeRun && <button className={`run-pill ${activeRun.status}`} title={activeRun.id} onClick={() => { clearSelection(); setWorkRail((current) => ({ ...current, collapsed: false })) }}><Play size={13} /> Agent 任务 · {runStatusLabel[activeRun.status]}</button>}
       <nav className="scene-title v06-breadcrumbs" aria-label="画布层级">{scopePath.map((scope, index) => {
         const current = index === scopePath.length - 1
@@ -2634,12 +2746,13 @@ export function App() {
       {confirmWorkspaceId && <ConfirmDialog title="删除这个工作空间？" description="只删除工作空间定义，不删除内容、节点、本地文件或 Camera。" onCancel={() => setConfirmWorkspaceId(null)} onConfirm={confirmDeleteWorkspace} />}
       <HandoffDialog open={handoffOpen} loading={handoffLoading} manifest={handoffManifest} error={handoffError} onClose={() => setHandoffOpen(false)} onCopy={() => { void copyHandoff() }} onDownload={downloadHandoff} />
       <LinkReferenceDialog open={linkDialogOpen} onClose={() => setLinkDialogOpen(false)} onCreate={createLinkReference} />
-      <UniversalImportPanel open={importPanelOpen} onClose={() => setImportPanelOpen(false)} onFiles={(files) => { const point = lastCanvasPointRef.current ?? { x: 180, y: 160 }; dropFiles([...files], point.x, point.y) }} onDirectory={(rootName, files, note) => { void handleImportDirectory(rootName, files, note) }} onArchive={(file, note) => { void handleImportArchive(file, note) }} onOpenLink={() => setLinkDialogOpen(true)} onOpenObsidian={handleOpenObsidian} />
+      <UniversalImportPanel open={importPanelOpen} onClose={() => setImportPanelOpen(false)} onFiles={(files) => { const point = lastCanvasPointRef.current ?? { x: 180, y: 160 }; dropFiles([...files], point.x, point.y) }} onDirectory={(rootName, files, note) => { void handleImportDirectory(rootName, files, note) }} onArchive={(file, note) => { void handleImportArchive(file, note) }} onOpenLink={() => setLinkDialogOpen(true)} onOpenObsidian={handleOpenObsidian} onOpenConversations={() => setConversationDialogOpen(true)} />
+      <ConversationContextDialog open={conversationDialogOpen} projectId={activeProjectId} scopeId={scopeId} {...(workspaceId === null ? {} : { workspaceId })} client={bridgeRef.current.client} onClose={() => setConversationDialogOpen(false)} onImported={() => { setNotice('对话上下文已更新'); void openProject(activeProjectId) }} onFocusArtifact={selectArtifactFromTools} onRequestSectionAnnotation={requestConversationSectionAnnotation} />
       <ObsidianImportDialog scan={obsidianScan} busy={obsidianBusy} error={obsidianError} onClose={() => { setObsidianScan(null); setObsidianError(null) }} onImport={handleImportObsidian} />
       {resourceDetailArtifactId !== null && <ResourceDetailDialog open projectId={activeProjectId} artifactId={resourceDetailArtifactId} client={bridgeRef.current.client} onClose={() => setResourceDetailArtifactId(null)} onChanged={() => { void refreshResourceStatuses() }} />}
       {workspaceStatesOpen && workspaceStatesWorkspaceId && (() => {
         const stateWorkspace = workspaces.find((workspace) => workspace.id === workspaceStatesWorkspaceId)
-        return stateWorkspace ? <WorkspaceStatesDialog workspace={stateWorkspace} states={workspaceStates} loading={workspaceStatesLoading} saving={workspaceStateSaving} restoringId={workspaceStateRestoringId} error={workspaceStatesError} onClose={() => setWorkspaceStatesOpen(false)} onRefresh={() => loadWorkspaceStates(workspaceStatesWorkspaceId)} onSave={() => saveCurrentWorkspaceState(workspaceStatesWorkspaceId)} onRestore={restoreSavedWorkspaceState} /> : null
+        return stateWorkspace ? <WorkspaceStatesDialog workspace={stateWorkspace} states={workspaceStates} loading={workspaceStatesLoading} saving={workspaceStateSaving} restoringId={workspaceStateRestoringId} error={workspaceStatesError} onClose={() => setWorkspaceStatesOpen(false)} onRefresh={() => loadWorkspaceStates(workspaceStatesWorkspaceId)} onSave={(name) => saveCurrentWorkspaceState(workspaceStatesWorkspaceId, name)} onRestore={restoreSavedWorkspaceState} /> : null
       })()}
       <button className="prototype-reset" onClick={() => { clearPrototypeState(activeProjectId); clearProjectNavigationState(activeProjectId); window.location.reload() }}>重置演示数据</button>
     </section>
@@ -2698,6 +2811,14 @@ function AgentContextSurface({
     {selectedNodes.length > 0
       ? <ul>{selectedNodes.slice(0, 5).map((node) => <li key={node.id}><span className={`agent-kind kind-${node.kind}`} />{node.title}</li>)}</ul>
       : <p>在画布中选择内容，Agent 会读取同一份画布选择和参考内容。</p>}
+    {(projection?.offscreenClusters?.length ?? 0) > 0 && <section className="agent-surface-section">
+      <h4>视口外内容</h4>
+      <div className="agent-offscreen-clusters">{projection!.offscreenClusters!.slice(0, 6).map((cluster) => <span key={cluster.key} title={`${cluster.viewIds.length} 个可定位视图`}>{cluster.kind} · {cluster.count}</span>)}</div>
+    </section>}
+    {(projection?.recentChanges?.length ?? 0) > 0 && <section className="agent-surface-section">
+      <h4>最近变化</h4>
+      <ul className="agent-context-changes">{projection!.recentChanges!.slice(-4).reverse().map((change) => <li key={`${change.version}-${change.kind}-${change.occurredAt}`}><span>{change.summary}</span><small>v{change.version}</small></li>)}</ul>
+    </section>}
     <section className="agent-surface-section">
       <h4>Agent 建议（{pendingProposals.length}）</h4>
       {pendingProposals.length === 0

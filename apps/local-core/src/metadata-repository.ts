@@ -1,4 +1,4 @@
-import { mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { dirname, resolve } from 'node:path'
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite'
@@ -188,7 +188,10 @@ export class SqliteMetadataRepository {
     if (current === 12) { this.#migrate_013_from_v12(); current = 13 }
     if (current === 13) { this.#migrate_014_from_v13(); current = 14 }
     if (current === 14) { this.#migrate_015_from_v14(); current = 15 }
-    if (current !== 15) throw new Error(`Unsupported metadata schema version ${current}.`)
+    if (current === 15) { this.#migrate_016_from_v15(); current = 16 }
+    if (current === 16) { this.#migrate_017_from_v16(); current = 17 }
+    if (current === 17) { this.#migrate_018_from_v17(); current = 18 }
+    if (current !== 18) throw new Error(`Unsupported metadata schema version ${current}.`)
   }
 
 
@@ -832,6 +835,219 @@ export class SqliteMetadataRepository {
       CREATE INDEX IF NOT EXISTS idx_run_input_requests_run_status
         ON run_input_requests(run_id, status, created_at);
       PRAGMA user_version = 15;
+      COMMIT;
+    `)
+  }
+
+  #migrate_016_from_v15(): void {
+    this.#database.exec(`
+      BEGIN;
+      CREATE TABLE IF NOT EXISTS conversation_import_sessions (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        source_kind TEXT NOT NULL CHECK(source_kind IN ('codex','chatgpt','claude','manual')),
+        title TEXT NOT NULL,
+        source_file_name TEXT NOT NULL,
+        expected_bytes INTEGER,
+        received_bytes INTEGER NOT NULL DEFAULT 0,
+        received_chunks INTEGER NOT NULL DEFAULT 0,
+        workspace_id TEXT,
+        scope_id TEXT NOT NULL,
+        status TEXT NOT NULL CHECK(status IN ('receiving','parsing','ready','failed')),
+        staging_path TEXT NOT NULL,
+        conversation_id TEXT REFERENCES conversation_sessions(id) ON DELETE SET NULL,
+        last_error TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS conversation_import_chunks (
+        import_session_id TEXT NOT NULL REFERENCES conversation_import_sessions(id) ON DELETE CASCADE,
+        chunk_index INTEGER NOT NULL CHECK(chunk_index >= 0),
+        size INTEGER NOT NULL CHECK(size >= 0),
+        content_hash TEXT NOT NULL,
+        chunk_path TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY(import_session_id, chunk_index)
+      );
+      CREATE TABLE IF NOT EXISTS conversation_sessions (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        provider TEXT NOT NULL,
+        source_kind TEXT NOT NULL CHECK(source_kind IN ('codex','chatgpt','claude','manual')),
+        title TEXT NOT NULL,
+        message_count INTEGER NOT NULL DEFAULT 0,
+        section_count INTEGER NOT NULL DEFAULT 0,
+        status TEXT NOT NULL CHECK(status IN ('receiving','parsing','ready','failed')),
+        source_content_hash TEXT,
+        source_file_name TEXT,
+        source_path TEXT,
+        origin_meta_json TEXT NOT NULL DEFAULT '{}',
+        conversation_artifact_id TEXT REFERENCES artifacts(id) ON DELETE SET NULL,
+        conversation_view_id TEXT REFERENCES artifact_views(id) ON DELETE SET NULL,
+        imported_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_conversation_sessions_project
+        ON conversation_sessions(project_id, updated_at DESC);
+      CREATE TABLE IF NOT EXISTS conversation_messages (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL REFERENCES conversation_sessions(id) ON DELETE CASCADE,
+        seq INTEGER NOT NULL CHECK(seq >= 0),
+        role TEXT NOT NULL CHECK(role IN ('user','assistant','tool','system','event')),
+        event_kind TEXT NOT NULL,
+        source_event_id TEXT,
+        content_text TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        tool_name TEXT,
+        tool_call_json TEXT,
+        file_refs_json TEXT NOT NULL DEFAULT '[]',
+        parent_id TEXT,
+        pinned_as_decision INTEGER NOT NULL DEFAULT 0 CHECK(pinned_as_decision IN (0,1)),
+        decision_artifact_id TEXT REFERENCES artifacts(id) ON DELETE SET NULL,
+        content_hash TEXT NOT NULL,
+        UNIQUE(session_id, seq),
+        UNIQUE(session_id, content_hash, created_at, role)
+      );
+      CREATE INDEX IF NOT EXISTS idx_conversation_messages_session_seq
+        ON conversation_messages(session_id, seq);
+      CREATE TABLE IF NOT EXISTS conversation_sections (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL REFERENCES conversation_sessions(id) ON DELETE CASCADE,
+        seq INTEGER NOT NULL CHECK(seq >= 0),
+        kind TEXT NOT NULL CHECK(kind IN ('turn','instruction','tool_cluster','long_message')),
+        title TEXT NOT NULL,
+        start_seq INTEGER NOT NULL,
+        end_seq INTEGER NOT NULL,
+        locked_by_user INTEGER NOT NULL DEFAULT 0 CHECK(locked_by_user IN (0,1)),
+        derived_at TEXT NOT NULL,
+        UNIQUE(session_id, seq)
+      );
+      CREATE INDEX IF NOT EXISTS idx_conversation_sections_session_range
+        ON conversation_sections(session_id, start_seq, end_seq);
+      CREATE TABLE IF NOT EXISTS conversation_section_annotations (
+        section_id TEXT PRIMARY KEY REFERENCES conversation_sections(id) ON DELETE CASCADE,
+        source_hash TEXT NOT NULL,
+        title TEXT NOT NULL,
+        decisions_json TEXT NOT NULL DEFAULT '[]',
+        todos_json TEXT NOT NULL DEFAULT '[]',
+        involved_files_json TEXT NOT NULL DEFAULT '[]',
+        status TEXT NOT NULL CHECK(status IN ('none','ready','failed')),
+        annotated_by TEXT NOT NULL CHECK(annotated_by IN ('agent','user')),
+        annotated_at TEXT NOT NULL
+      );
+      CREATE VIRTUAL TABLE IF NOT EXISTS conversation_messages_fts USING fts5(
+        message_id UNINDEXED,
+        session_id UNINDEXED,
+        project_id UNINDEXED,
+        role,
+        content_text,
+        tokenize='unicode61 remove_diacritics 2'
+      );
+      CREATE TABLE IF NOT EXISTS conversation_embedding_jobs (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        session_id TEXT REFERENCES conversation_sessions(id) ON DELETE CASCADE,
+        provider TEXT NOT NULL DEFAULT 'ollama',
+        model TEXT NOT NULL,
+        status TEXT NOT NULL CHECK(status IN ('pending','running','ready','partial','failed')),
+        attempt_count INTEGER NOT NULL DEFAULT 0,
+        indexed_messages INTEGER NOT NULL DEFAULT 0,
+        stale_messages INTEGER NOT NULL DEFAULT 0,
+        dimensions INTEGER,
+        backend TEXT NOT NULL CHECK(backend IN ('sqlite-vec','sqlite-blob-fallback')),
+        last_error TEXT,
+        lease_owner TEXT,
+        lease_expires_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_conversation_embedding_jobs_project
+        ON conversation_embedding_jobs(project_id, status, updated_at);
+      CREATE TABLE IF NOT EXISTS conversation_embeddings (
+        message_id TEXT NOT NULL REFERENCES conversation_messages(id) ON DELETE CASCADE,
+        model TEXT NOT NULL,
+        dimensions INTEGER NOT NULL,
+        content_hash TEXT NOT NULL,
+        embedding_blob BLOB NOT NULL,
+        indexed_at TEXT NOT NULL,
+        PRIMARY KEY(message_id, model)
+      );
+      PRAGMA user_version = 16;
+      COMMIT;
+    `)
+  }
+
+  #migrate_017_from_v16(): void {
+    this.#database.exec(`
+      BEGIN;
+      DELETE FROM conversation_messages_fts;
+      INSERT INTO conversation_messages_fts(message_id, session_id, project_id, role, content_text)
+      SELECT m.id, m.session_id, s.project_id, m.role, m.content_text
+      FROM conversation_messages m JOIN conversation_sessions s ON s.id = m.session_id;
+      CREATE TRIGGER IF NOT EXISTS conversation_messages_fts_insert AFTER INSERT ON conversation_messages BEGIN
+        INSERT INTO conversation_messages_fts(message_id, session_id, project_id, role, content_text)
+        SELECT NEW.id, NEW.session_id, s.project_id, NEW.role, NEW.content_text
+        FROM conversation_sessions s WHERE s.id = NEW.session_id;
+      END;
+      CREATE TRIGGER IF NOT EXISTS conversation_messages_fts_update AFTER UPDATE OF role, content_text, session_id ON conversation_messages BEGIN
+        DELETE FROM conversation_messages_fts WHERE message_id = OLD.id;
+        INSERT INTO conversation_messages_fts(message_id, session_id, project_id, role, content_text)
+        SELECT NEW.id, NEW.session_id, s.project_id, NEW.role, NEW.content_text
+        FROM conversation_sessions s WHERE s.id = NEW.session_id;
+      END;
+      CREATE TRIGGER IF NOT EXISTS conversation_messages_fts_delete AFTER DELETE ON conversation_messages BEGIN
+        DELETE FROM conversation_messages_fts WHERE message_id = OLD.id;
+      END;
+      PRAGMA user_version = 17;
+      COMMIT;
+    `)
+  }
+
+
+  #migrate_018_from_v17(): void {
+    const backupPath = `${this.databasePath}.v17.bak`
+    if (!existsSync(backupPath)) {
+      this.#database.exec(`VACUUM INTO '${backupPath.replaceAll("'", "''")}'`)
+    }
+    this.#database.exec(`
+      BEGIN;
+      ALTER TABLE conversation_sessions ADD COLUMN parsed_line_count INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE conversation_sessions ADD COLUMN invalid_line_count INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE conversation_sessions ADD COLUMN ignored_event_count INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE conversation_sessions ADD COLUMN duplicate_event_count INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE conversation_sessions ADD COLUMN matched_file_reference_count INTEGER NOT NULL DEFAULT 0;
+
+      ALTER TABLE conversation_messages ADD COLUMN embedding_input_hash TEXT;
+      ALTER TABLE conversation_messages ADD COLUMN embedding_version TEXT;
+
+      ALTER TABLE conversation_embedding_jobs ADD COLUMN index_version TEXT NOT NULL DEFAULT 'message-v1';
+      ALTER TABLE conversation_embedding_jobs ADD COLUMN force_rebuild INTEGER NOT NULL DEFAULT 0 CHECK(force_rebuild IN (0,1));
+      ALTER TABLE conversation_embedding_jobs ADD COLUMN batch_size INTEGER NOT NULL DEFAULT 16 CHECK(batch_size BETWEEN 1 AND 64);
+      ALTER TABLE conversation_embedding_jobs ADD COLUMN next_attempt_at TEXT;
+
+      ALTER TABLE conversation_embeddings ADD COLUMN input_hash TEXT;
+      ALTER TABLE conversation_embeddings ADD COLUMN embedding_version TEXT NOT NULL DEFAULT 'legacy-v0';
+      UPDATE conversation_embeddings SET input_hash=content_hash WHERE input_hash IS NULL;
+
+      CREATE TABLE conversation_file_references (
+        id TEXT PRIMARY KEY,
+        message_id TEXT NOT NULL REFERENCES conversation_messages(id) ON DELETE CASCADE,
+        ordinal INTEGER NOT NULL CHECK(ordinal >= 0),
+        raw TEXT NOT NULL,
+        normalized TEXT,
+        artifact_id TEXT REFERENCES artifacts(id) ON DELETE SET NULL,
+        relation_id TEXT REFERENCES relations(id) ON DELETE SET NULL,
+        in_project INTEGER NOT NULL DEFAULT 0 CHECK(in_project IN (0,1)),
+        created_at TEXT NOT NULL,
+        UNIQUE(message_id, ordinal)
+      );
+      CREATE INDEX idx_conversation_file_refs_message
+        ON conversation_file_references(message_id, ordinal);
+      CREATE INDEX idx_conversation_file_refs_artifact
+        ON conversation_file_references(artifact_id, message_id);
+
+      PRAGMA user_version = 18;
       COMMIT;
     `)
   }
@@ -2505,7 +2721,7 @@ export class SqliteMetadataRepository {
     }
   }
 
-  get schemaVersion(): number { return 15 }
+  get schemaVersion(): number { return 18 }
 
   // ==================== Private helpers ====================
 
@@ -3091,6 +3307,12 @@ const PROJECT_TRUTH_TABLES: readonly { readonly table: string; readonly where: s
   { table: 'artifact_revisions', where: 'artifact_id IN (SELECT id FROM artifacts WHERE project_id = ?)' },
   { table: 'artifact_views', where: 'artifact_id IN (SELECT id FROM artifacts WHERE project_id = ?)' },
   { table: 'relations', where: 'project_id = ?' },
+  { table: 'conversation_sessions', where: 'project_id = ?' },
+  { table: 'conversation_messages', where: 'session_id IN (SELECT id FROM conversation_sessions WHERE project_id = ?) AND pinned_as_decision = 1' },
+  { table: 'conversation_file_references', where: 'message_id IN (SELECT m.id FROM conversation_messages m JOIN conversation_sessions s ON s.id = m.session_id WHERE s.project_id = ? AND m.pinned_as_decision = 1)' },
+  { table: 'conversation_sections', where: 'session_id IN (SELECT id FROM conversation_sessions WHERE project_id = ?)' },
+  { table: 'conversation_section_annotations', where: 'section_id IN (SELECT cs.id FROM conversation_sections cs JOIN conversation_sessions s ON s.id = cs.session_id WHERE s.project_id = ?)' },
+  { table: 'conversation_messages_fts', where: 'message_id IN (SELECT m.id FROM conversation_messages m JOIN conversation_sessions s ON s.id = m.session_id WHERE s.project_id = ? AND m.pinned_as_decision = 1)' },
   { table: 'notes', where: 'project_id = ?' },
   { table: 'checkpoints', where: 'project_id = ?' },
   { table: 'context_manifests', where: 'project_id = ?' },
@@ -3109,6 +3331,12 @@ const PROJECT_TRUTH_TABLES: readonly { readonly table: string; readonly where: s
  * 导入前按反向 FK 顺序清空目标库中该项目的旧行。
  */
 const PROJECT_TRUTH_DELETE_SQL: readonly string[] = [
+  'DELETE FROM conversation_file_references WHERE message_id IN (SELECT m.id FROM conversation_messages m JOIN conversation_sessions s ON s.id = m.session_id WHERE s.project_id = ?)',
+  'DELETE FROM conversation_messages_fts WHERE message_id IN (SELECT m.id FROM conversation_messages m JOIN conversation_sessions s ON s.id = m.session_id WHERE s.project_id = ?)',
+  'DELETE FROM conversation_section_annotations WHERE section_id IN (SELECT cs.id FROM conversation_sections cs JOIN conversation_sessions s ON s.id = cs.session_id WHERE s.project_id = ?)',
+  'DELETE FROM conversation_sections WHERE session_id IN (SELECT id FROM conversation_sessions WHERE project_id = ?)',
+  'DELETE FROM conversation_messages WHERE session_id IN (SELECT id FROM conversation_sessions WHERE project_id = ?)',
+  'DELETE FROM conversation_sessions WHERE project_id = ?',
   'DELETE FROM workspace_memberships WHERE workspace_id IN (SELECT id FROM workspaces WHERE project_id = ?)',
   'DELETE FROM run_input_requests WHERE run_id IN (SELECT id FROM runs WHERE project_id = ?)',
   'DELETE FROM run_events WHERE run_id IN (SELECT id FROM runs WHERE project_id = ?)',

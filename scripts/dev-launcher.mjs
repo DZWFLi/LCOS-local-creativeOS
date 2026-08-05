@@ -529,7 +529,7 @@ async function open() {
     process.exit(1)
   }
   const localCoreToken = randomBytes(32).toString('base64url')
-  const environment = { LOCAL_CORE_API_TOKEN: localCoreToken, LCOS_CODEX_AUTO_EXECUTION: '1' }
+  const environment = { LOCAL_CORE_API_TOKEN: localCoreToken, LCOS_CODEX_AUTO_EXECUTION: '1', LCOS_REPO_ROOT: process.cwd() }
   writeFileSync(CORE_TOKEN_FILE, `${localCoreToken}\n`, 'utf8')
   const state = {
     cwd: process.cwd(),

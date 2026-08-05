@@ -177,7 +177,6 @@ async function main() {
     LOCAL_CORE_API_TOKEN: token,
     LOCAL_CORE_DISABLE_MVP_SAMPLE: '1',
     LOCAL_CORE_TEST_PORT: String(CORE_PORT),
-    LOCAL_CORE_BRIDGE_MCP_URL: `${BRIDGE_URL}/mcp`,
   }
   const spawnCore = () => start(process.execPath, ['apps/local-core/dist/index.js'], coreEnv)
   spawnCore()

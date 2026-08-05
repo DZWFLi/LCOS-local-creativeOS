@@ -25,7 +25,7 @@ function start(script) {
     cwd: process.cwd(),
     stdio: 'inherit',
     windowsHide: true,
-    env: { ...process.env, LOCAL_CORE_API_TOKEN: localCoreToken },
+    env: { ...process.env, LOCAL_CORE_API_TOKEN: localCoreToken, LCOS_REPO_ROOT: process.cwd() },
   })
   children.add(child)
   child.once('exit', (code, signal) => {

@@ -338,6 +338,42 @@ export interface CanvasContextRelationV1 {
   readonly kind: string
 }
 
+/** Compact structural summary for nodes outside the current viewport. */
+export interface CanvasContextClusterV1 {
+  readonly key: string
+  readonly scopeId: string
+  readonly kind: string
+  readonly count: number
+  readonly viewIds: readonly string[]
+  readonly bounds: { readonly x: number; readonly y: number; readonly width: number; readonly height: number }
+}
+
+
+/** Recent local navigation/context change, retained as a bounded projection rather than Project semantic truth. */
+export interface CanvasContextRecentChangeV1 {
+  readonly version: number
+  readonly kind: 'selection' | 'context' | 'target' | 'viewport'
+  readonly summary: string
+  readonly occurredAt: string
+  readonly updatedBy: 'web' | 'codex' | 'core'
+}
+
+/** On-demand visual supplement derived from the structured Canvas snapshot. */
+export interface CanvasObservationV1 {
+  readonly schemaVersion: 1
+  readonly projectId: string
+  readonly workspaceId: string | null
+  readonly contextVersion: number
+  readonly screenshotRef: string
+  readonly contentHash: string
+  readonly mimeType: 'image/svg+xml'
+  readonly encoding: 'base64'
+  readonly data: string
+  readonly width: number
+  readonly height: number
+  readonly generatedAt: string
+}
+
 export interface ActiveContextV2 {
   readonly schemaVersion: 2
   readonly projectId: string
@@ -348,6 +384,8 @@ export interface ActiveContextV2 {
   readonly viewport?: CanvasContextViewportV1
   readonly nodes?: readonly CanvasContextNodeV1[]
   readonly relations?: readonly CanvasContextRelationV1[]
+  readonly offscreenClusters?: readonly CanvasContextClusterV1[]
+  readonly recentChanges?: readonly CanvasContextRecentChangeV1[]
   readonly targetArtifactId: string | null
   readonly targetRevisionId: string | null
   readonly pinnedContextIds: readonly string[]
@@ -673,3 +711,7 @@ export type {
   ResourceConnectorAccessV1,
   ResourceConnectorCapabilityV1,
 } from './connectors.js'
+
+export * from './conversations.js'
+export * from './resources.js'
+export * from './connectors.js'

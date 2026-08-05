@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0
+
+- Removed the public Bridge MCP endpoint.
+- Removed optional conversation/session continuity models from Bridge.
+- Kept Bridge as a REST-only provider task gateway.
+- Executor MCP now reaches Bridge only through Local Core.
+
 ## 0.2.0
 
 - 新增 `create | revise | analyze` Output Intent；

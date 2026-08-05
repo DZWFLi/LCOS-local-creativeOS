@@ -7,6 +7,16 @@ import type {
   ContextChangeProposalV1,
   ProviderSessionBindingV1,
   ContextManifestV0,
+  ConversationExportV1,
+  ConversationImportSessionV1,
+  ConversationMessageV1,
+  ConversationProjectionV1,
+  ConversationSearchHitV1,
+  ConversationSectionAnnotationV1,
+  ConversationSectionV1,
+  ConversationSemanticIndexStatusV1,
+  ConversationSessionV1,
+  CompleteConversationImportResultV1,
   HealthStatus,
   MetadataStoreStatus,
   MutationBatch,
@@ -22,6 +32,7 @@ import type {
   Result,
   RetryRunInput,
   RetryRunResult,
+  RunEvent,
   RunReview,
   RunInputRequestV1,
   RunProposalResult,
@@ -128,6 +139,8 @@ export interface ActiveContextProjection {
     readonly status?: string; readonly summary?: string
   }[]
   readonly relations?: readonly { readonly id: string; readonly sourceArtifactId: string; readonly targetArtifactId: string; readonly kind: string }[]
+  readonly offscreenClusters?: readonly { readonly key: string; readonly scopeId: string; readonly kind: string; readonly count: number; readonly viewIds: readonly string[]; readonly bounds: { readonly x: number; readonly y: number; readonly width: number; readonly height: number } }[]
+  readonly recentChanges?: readonly { readonly version: number; readonly kind: 'selection' | 'context' | 'target' | 'viewport'; readonly summary: string; readonly occurredAt: string; readonly updatedBy: 'web' | 'codex' | 'core' }[]
   readonly pinnedContextIds: readonly string[]
   readonly excludedContextIds: readonly string[]
   readonly version: number
@@ -213,6 +226,21 @@ export interface LocalCoreClient {
     readonly y: number
     readonly note?: string
   }, signal?: AbortSignal): Promise<RuntimeCall<ImportResourceResultV1>>
+  createConversationImportSession(projectId: string, input: { readonly sourceKind: 'codex'; readonly title?: string; readonly sourceFileName: string; readonly expectedBytes?: number; readonly workspaceId?: string; readonly scopeId: string }, signal?: AbortSignal): Promise<RuntimeCall<ConversationImportSessionV1>>
+  uploadConversationChunk(projectId: string, importSessionId: string, chunkIndex: number, bytes: Blob, contentHash?: string, signal?: AbortSignal): Promise<RuntimeCall<ConversationImportSessionV1>>
+  completeConversationImport(projectId: string, importSessionId: string, input: { readonly expectedChunks: number; readonly expectedContentHash?: string }, signal?: AbortSignal): Promise<RuntimeCall<CompleteConversationImportResultV1>>
+  importManualConversation(projectId: string, input: { readonly title?: string; readonly scopeId: string; readonly workspaceId?: string; readonly entries: readonly { readonly role: 'user' | 'assistant' | 'tool' | 'system'; readonly contentText: string; readonly createdAt?: string; readonly toolName?: string }[] }, signal?: AbortSignal): Promise<RuntimeCall<CompleteConversationImportResultV1>>
+  conversations(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<readonly ConversationSessionV1[]>>
+  conversationProjection(projectId: string, conversationId: string, signal?: AbortSignal): Promise<RuntimeCall<ConversationProjectionV1>>
+  exportConversation(projectId: string, conversationId: string, includeMessages?: boolean, signal?: AbortSignal): Promise<RuntimeCall<ConversationExportV1>>
+  conversationMessages(projectId: string, conversationId: string, input?: { readonly offset?: number; readonly limit?: number }, signal?: AbortSignal): Promise<RuntimeCall<readonly ConversationMessageV1[]>>
+  searchConversations(projectId: string, query: string, input?: { readonly semantic?: boolean; readonly limit?: number }, signal?: AbortSignal): Promise<RuntimeCall<readonly ConversationSearchHitV1[]>>
+  updateConversationSection(projectId: string, conversationId: string, sectionId: string, input: { readonly title?: string; readonly lockedByUser?: boolean }, signal?: AbortSignal): Promise<RuntimeCall<ConversationSectionV1>>
+  refreshConversationSections(projectId: string, conversationId: string, signal?: AbortSignal): Promise<RuntimeCall<readonly ConversationSectionV1[]>>
+  annotateConversationSection(projectId: string, conversationId: string, sectionId: string, input: { readonly sourceHash: string; readonly title: string; readonly decisions: readonly string[]; readonly todos: readonly string[]; readonly involvedFiles: readonly string[]; readonly annotatedBy?: 'agent' | 'user' }, signal?: AbortSignal): Promise<RuntimeCall<ConversationSectionAnnotationV1>>
+  pinConversationMessage(projectId: string, conversationId: string, messageId: string, input: { readonly title?: string; readonly summary?: string; readonly scopeId: string; readonly workspaceId?: string; readonly x?: number; readonly y?: number }, signal?: AbortSignal): Promise<RuntimeCall<ConversationMessageV1>>
+  conversationSemanticStatus(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<ConversationSemanticIndexStatusV1>>
+  buildConversationSemanticIndex(projectId: string, input?: { readonly model?: string; readonly sessionId?: string; readonly force?: boolean; readonly batchSize?: number }, signal?: AbortSignal): Promise<RuntimeCall<ConversationSemanticIndexStatusV1>>
   createProject(input: {
     readonly name: string
   } & (
@@ -236,6 +264,8 @@ export interface LocalCoreClient {
     readonly title: string
   }>>
   exportLcosproj(projectId: string, targetPath: string, signal?: AbortSignal): Promise<RuntimeCall<unknown>>
+  downloadLcosproj(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<{ readonly fileName: string; readonly blob: Blob }>>
+  openLcosprojUpload(file: File, signal?: AbortSignal): Promise<RuntimeCall<unknown>>
   exportAllLcosproj(targetDir: string, projectIds?: readonly string[], signal?: AbortSignal): Promise<RuntimeCall<unknown>>
   openLcosproj(filePath: string, rootPath?: string, signal?: AbortSignal): Promise<RuntimeCall<unknown>>
   inspectLcosproj(filePath: string, signal?: AbortSignal): Promise<RuntimeCall<unknown>>
@@ -335,6 +365,7 @@ export interface LocalCoreClient {
   buildContextManifest(projectId: string, input?: { readonly targetArtifactId?: string; readonly contextArtifactIds?: readonly string[]; readonly requestedOutput?: string }, signal?: AbortSignal): Promise<RuntimeCall<ContextManifestV0>>
   createRuntimeRun(projectId: string, input: CreateRuntimeRunInput, signal?: AbortSignal): Promise<RuntimeCall<RuntimeRunActionResult>>
   projectRunReviews(projectId: string, limit?: number, signal?: AbortSignal): Promise<RuntimeCall<readonly RunReview[]>>
+  runEvents(runId: string, afterSequence?: number, signal?: AbortSignal): Promise<RuntimeCall<readonly RunEvent[]>>
   dispatchRuntimeRun(runId: string, signal?: AbortSignal): Promise<RuntimeCall<RuntimeRunActionResult>>
   recoverRuntimeRun(runId: string, signal?: AbortSignal): Promise<RuntimeCall<RuntimeRunActionResult>>
   cancelRuntimeRun(runId: string, signal?: AbortSignal): Promise<RuntimeCall<RuntimeRunActionResult>>
@@ -455,6 +486,57 @@ async function request<Value>(
   }
 }
 
+
+async function requestBlob(path: string, signal?: AbortSignal): Promise<RuntimeCall<{ readonly fileName: string; readonly blob: Blob }>> {
+  const startedAt = performance.now()
+  const requestedAt = new Date().toISOString()
+  const controller = new AbortController()
+  let timedOut = false
+  const timeout = globalThis.setTimeout(() => { timedOut = true; controller.abort() }, 120_000)
+  const abort = () => controller.abort()
+  signal?.addEventListener('abort', abort, { once: true })
+  try {
+    const response = await fetch(`${LOCAL_CORE_API_PREFIX}${path}`, {
+      signal: controller.signal,
+      headers: { accept: 'application/vnd.local-creative-os.project, application/octet-stream' },
+    })
+    if (!response.ok) {
+      const body: unknown = await response.json().catch(() => null)
+      const decoded = decodeResult<never>(body)
+      return {
+        result: decoded.ok ? { ok: false, error: runtimeError('UNAVAILABLE', `Local Core returned HTTP ${response.status}.`, true) } : decoded,
+        origin: 'runtime',
+        latencyMs: Math.round((performance.now() - startedAt) * 10) / 10,
+        requestedAt,
+      }
+    }
+    const disposition = response.headers.get('content-disposition') ?? ''
+    const encoded = /filename\*=UTF-8''([^;]+)/i.exec(disposition)?.[1]
+    const quoted = /filename="([^"]+)"/i.exec(disposition)?.[1]
+    let fileName = quoted ?? 'project.lcosproj'
+    if (encoded !== undefined) {
+      try { fileName = decodeURIComponent(encoded) } catch { /* keep fallback */ }
+    }
+    return {
+      result: { ok: true, value: { fileName, blob: await response.blob() } },
+      origin: 'runtime',
+      latencyMs: Math.round((performance.now() - startedAt) * 10) / 10,
+      requestedAt,
+    }
+  } catch (error: unknown) {
+    const aborted = error instanceof DOMException && error.name === 'AbortError'
+    return {
+      result: { ok: false, error: runtimeError(aborted ? 'ABORTED' : 'UNAVAILABLE', timedOut ? '工程导出超时。' : aborted ? '工程导出已取消。' : '本地项目服务暂时不可用。', !aborted) },
+      origin: 'runtime',
+      latencyMs: Math.round((performance.now() - startedAt) * 10) / 10,
+      requestedAt,
+    }
+  } finally {
+    globalThis.clearTimeout(timeout)
+    signal?.removeEventListener('abort', abort)
+  }
+}
+
 function decodeHealth(value: unknown): Result<HealthStatus> {
   if (isHealthStatus(value)) return { ok: true, value }
   if (isFailure(value)) return value
@@ -517,6 +599,35 @@ export function createLocalCoreClient(): LocalCoreClient {
         decode: decodeResult<{ readonly fileCount: number; readonly directoryCount: number; readonly totalBytes: number; readonly skipped: readonly string[]; readonly requiresConfirmation: boolean }>,
       })
     },
+    createConversationImportSession(projectId, input, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/conversation-import-sessions`, { signal, init: { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) }, decode: decodeResult<ConversationImportSessionV1> })
+    },
+    uploadConversationChunk(projectId, importSessionId, chunkIndex, bytes, contentHash, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/conversation-import-sessions/${encodeURIComponent(importSessionId)}/chunks/${encodeURIComponent(String(chunkIndex))}`, { signal, timeoutMs: 30_000, init: { method: 'PUT', headers: { 'content-type': 'application/octet-stream', ...(contentHash === undefined ? {} : { 'x-content-sha256': contentHash }) }, body: bytes }, decode: decodeResult<ConversationImportSessionV1> })
+    },
+    completeConversationImport(projectId, importSessionId, input, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/conversation-import-sessions/${encodeURIComponent(importSessionId)}/complete`, { signal, timeoutMs: 120_000, init: { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) }, decode: decodeResult<CompleteConversationImportResultV1> })
+    },
+    importManualConversation(projectId, input, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/conversations/import-manual`, { signal, timeoutMs: 120_000, init: { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) }, decode: decodeResult<CompleteConversationImportResultV1> })
+    },
+    conversations(projectId, signal) { return request(`/projects/${encodeURIComponent(projectId)}/conversations`, { signal, decode: decodeResult<readonly ConversationSessionV1[]> }) },
+    conversationProjection(projectId, conversationId, signal) { return request(`/projects/${encodeURIComponent(projectId)}/conversations/${encodeURIComponent(conversationId)}`, { signal, decode: decodeResult<ConversationProjectionV1> }) },
+    exportConversation(projectId, conversationId, includeMessages = true, signal) { return request(`/projects/${encodeURIComponent(projectId)}/conversations/${encodeURIComponent(conversationId)}/export?includeMessages=${includeMessages ? 'true' : 'false'}`, { signal, timeoutMs: 120_000, decode: decodeResult<ConversationExportV1> }) },
+    conversationMessages(projectId, conversationId, input = {}, signal) {
+      const params = new URLSearchParams(); if (input.offset !== undefined) params.set('offset', String(input.offset)); if (input.limit !== undefined) params.set('limit', String(input.limit))
+      return request(`/projects/${encodeURIComponent(projectId)}/conversations/${encodeURIComponent(conversationId)}/messages${params.size ? `?${params}` : ''}`, { signal, decode: decodeResult<readonly ConversationMessageV1[]> })
+    },
+    searchConversations(projectId, queryText, input = {}, signal) {
+      const params = new URLSearchParams({ q: queryText }); if (input.semantic !== undefined) params.set('semantic', String(input.semantic)); if (input.limit !== undefined) params.set('limit', String(input.limit))
+      return request(`/projects/${encodeURIComponent(projectId)}/conversations/search?${params}`, { signal, timeoutMs: input.semantic ? 30_000 : undefined, decode: decodeResult<readonly ConversationSearchHitV1[]> })
+    },
+    updateConversationSection(projectId, conversationId, sectionId, input, signal) { return request(`/projects/${encodeURIComponent(projectId)}/conversations/${encodeURIComponent(conversationId)}/sections/${encodeURIComponent(sectionId)}`, { signal, init: { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) }, decode: decodeResult<ConversationSectionV1> }) },
+    refreshConversationSections(projectId, conversationId, signal) { return request(`/projects/${encodeURIComponent(projectId)}/conversations/${encodeURIComponent(conversationId)}/sections/refresh`, { signal, init: { method: 'POST' }, decode: decodeResult<readonly ConversationSectionV1[]> }) },
+    annotateConversationSection(projectId, conversationId, sectionId, input, signal) { return request(`/projects/${encodeURIComponent(projectId)}/conversations/${encodeURIComponent(conversationId)}/sections/${encodeURIComponent(sectionId)}/annotation`, { signal, timeoutMs: 30_000, init: { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) }, decode: decodeResult<ConversationSectionAnnotationV1> }) },
+    pinConversationMessage(projectId, conversationId, messageId, input, signal) { return request(`/projects/${encodeURIComponent(projectId)}/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/pin`, { signal, init: { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) }, decode: decodeResult<ConversationMessageV1> }) },
+    conversationSemanticStatus(projectId, signal) { return request(`/projects/${encodeURIComponent(projectId)}/conversations/semantic-index`, { signal, decode: decodeResult<ConversationSemanticIndexStatusV1> }) },
+    buildConversationSemanticIndex(projectId, input = {}, signal) { return request(`/projects/${encodeURIComponent(projectId)}/conversations/semantic-index`, { signal, timeoutMs: 120_000, init: { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) }, decode: decodeResult<ConversationSemanticIndexStatusV1> }) },
     createProject(input, signal) {
       return request('/projects', {
         signal,
@@ -672,6 +783,19 @@ export function createLocalCoreClient(): LocalCoreClient {
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ targetPath }),
         },
+        decode: decodeResult<unknown>,
+      })
+    },
+    downloadLcosproj(projectId, signal) {
+      return requestBlob(`/projects/${encodeURIComponent(projectId)}/export-lcosproj-file`, signal)
+    },
+    openLcosprojUpload(file, signal) {
+      const body = new FormData()
+      body.set('file', file, file.name)
+      return request('/lcosproj/open-upload', {
+        signal,
+        timeoutMs: 120_000,
+        init: { method: 'POST', body },
         decode: decodeResult<unknown>,
       })
     },
@@ -1022,6 +1146,13 @@ export function createLocalCoreClient(): LocalCoreClient {
       return request(`/projects/${encodeURIComponent(projectId)}/runs?limit=${encodeURIComponent(String(limit))}`, {
         signal,
         decode: decodeResult<readonly RunReview[]>,
+      })
+    },
+    runEvents(runId, afterSequence, signal) {
+      const query = afterSequence === undefined ? '' : `?after=${encodeURIComponent(String(afterSequence))}`
+      return request(`/runs/${encodeURIComponent(runId)}/events${query}`, {
+        signal,
+        decode: decodeResult<readonly RunEvent[]>,
       })
     },
     dispatchRuntimeRun(runId, signal) {

@@ -500,22 +500,3 @@ class BridgeTask(BaseModel):
     result: ResultEnvelope | None = None
     input_request: InputRequestV1 | None = Field(default=None, alias="inputRequest")
     input_response: InputResponseV1 | None = Field(default=None, alias="inputResponse")
-
-
-class ConversationRef(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, populate_by_name=True)
-
-    provider: str
-    external_session_id: str = Field(alias="externalSessionId")
-    source_ref: str = Field(alias="sourceRef")
-    title: str | None = None
-
-
-class ConversationSnapshot(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, populate_by_name=True)
-
-    conversation: ConversationRef
-    summary: str
-    fidelity: Literal["full", "partial", "summary_only"]
-    loss_reasons: tuple[str, ...] = Field(default_factory=tuple, alias="lossReasons")
-    captured_at: str = Field(default_factory=utc_now, alias="capturedAt")

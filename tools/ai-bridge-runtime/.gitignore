@@ -1,8 +1,0 @@
-.runtime/
-__pycache__/
-*.py[cod]
-.env
-.env.*
-*.token
-*_private.json
-runtime-snapshot/

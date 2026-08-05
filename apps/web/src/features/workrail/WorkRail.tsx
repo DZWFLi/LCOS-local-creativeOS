@@ -1,5 +1,5 @@
 import { useEffect, useState, type RefObject } from 'react'
-import type { RuntimeProviderStatus } from '@local-creative-os/contracts'
+import type { RunEvent, RuntimeProviderStatus } from '@local-creative-os/contracts'
 import {
   Check,
   ChevronDown,
@@ -48,6 +48,10 @@ interface Props {
   onRetry: () => void
   onSyncRun: () => void
   onCancelRun: () => void
+  runEvents: readonly RunEvent[]
+  runEventsError: string | null
+  runtimeRecovering: boolean
+  onRecoverRun: () => void
   onAnswerInput: (input: { readonly requestId: string; readonly text?: string; readonly selectedOptions?: readonly string[] }) => void
   onContinueModify: () => void
   onShowRun: () => void
@@ -91,10 +95,11 @@ export function WorkRail(props: Props) {
         : mode === 'review' && props.activeRun && primary
           ? <ReviewState node={primary} run={props.activeRun} onAccept={props.onAccept} onReject={props.onReject} onRetry={props.onRetry} onContinueModify={props.onContinueModify} />
           : mode === 'run' && props.activeRun
-            ? <RunState run={props.activeRun} nodes={props.nodes} onRetry={props.onRetry} onSync={props.onSyncRun} onCancel={props.onCancelRun} />
+            ? <RunState run={props.activeRun} nodes={props.nodes} onRetry={props.onRetry} onSync={props.onSyncRun} onCancel={props.onCancelRun} onRecover={props.onRecoverRun} recovering={props.runtimeRecovering} />
             : mode === 'completed' && props.activeRun
               ? <CompletedState run={props.activeRun} nodes={props.nodes} onSaveWorkspaceState={props.onSaveWorkspaceState} />
               : <RailIdleState contextLabel={props.contextLabel} contextCount={props.contextCount} />}
+      {props.activeRun && <RunActivity events={props.runEvents} error={props.runEventsError} />}
     </div>
     <Composer {...props} mode={mode} />
   </aside>
@@ -133,7 +138,7 @@ function RailIdleState({ contextLabel, contextCount }: { contextLabel: string; c
   </div>
 }
 
-function RunState({ run, nodes, onRetry, onSync, onCancel }: { run: ActiveRun; nodes: CanvasNode[]; onRetry: () => void; onSync: () => void; onCancel: () => void }) {
+function RunState({ run, nodes, onRetry, onSync, onCancel, onRecover, recovering }: { run: ActiveRun; nodes: CanvasNode[]; onRetry: () => void; onSync: () => void; onCancel: () => void; onRecover: () => void; recovering: boolean }) {
   const targets = run.targetIds.map((id) => nodes.find((node) => node.id === id)).filter((node): node is CanvasNode => Boolean(node))
   const stages: ActiveRun['status'][] = run.status === 'cancelled'
     ? ['queued', 'running', 'cancelled']
@@ -146,8 +151,9 @@ function RunState({ run, nodes, onRetry, onSync, onCancel }: { run: ActiveRun; n
     <section className="changed-files"><h4>文件变化</h4>{run.changedFiles.length ? run.changedFiles.map((file) => <b key={file}>{file}</b>) : <p>Agent 返回后会显示文件变化。</p>}</section>
     {run.runtime && <button className="rail-secondary pressable" onClick={onSync}><RefreshCw size={14} />刷新执行状态</button>}
     {['queued', 'running'].includes(run.status) && <button className="rail-secondary danger pressable" data-testid="cancel-runtime" onClick={onCancel}>撤回任务</button>}
-    {run.providerError && <p className="rail-empty-copy">{run.providerError}</p>}
-    {run.status === 'failed' && <button className="rail-primary pressable" onClick={onRetry}><RotateCcw size={14} />重新执行</button>}
+    {run.providerError && <p className="rail-empty-copy">{humanizeRunError(run.providerError)}</p>}
+    {run.runtime && (run.status === 'failed' || Boolean(run.providerError)) && <button className="rail-primary pressable" disabled={recovering} onClick={onRecover}><RefreshCw size={14} />{recovering ? '正在重新连接…' : '重新连接并继续任务'}</button>}
+    {run.status === 'failed' && <button className="rail-secondary pressable" onClick={onRetry}><RotateCcw size={14} />重新执行为新任务</button>}
   </div>
 }
 
@@ -190,6 +196,39 @@ function CompletedState({ run, nodes, onSaveWorkspaceState }: { run: ActiveRun; 
     <section className="review-summary"><h4>接下来</h4><ul><li>继续在节点下方输入下一轮要求</li><li>在 Canvas 中查看任务与版本来源</li><li>需要阶段留档时保存当前工作现场</li></ul></section>
     <button className="rail-secondary pressable" onClick={onSaveWorkspaceState}><History size={14} />保存当前工作现场</button>
   </div>
+}
+
+
+const RUN_EVENT_LABELS: Record<RunEvent['type'], string> = {
+  'run.queued': '任务已进入等待队列',
+  'run.started': 'Agent 已开始处理',
+  'run.waiting_input': 'Agent 正在等待你的补充',
+  'run.input_resolved': '补充信息已收到',
+  'run.review_ready': '结果已经返回，等待确认',
+  'run.completed': '任务已经完成',
+  'run.failed': '任务未能完成',
+  'run.cancel_requested': '已发出撤回请求',
+  'run.cancelled': '任务已撤回',
+  'run.retry_queued': '已创建新的重试任务',
+}
+
+function RunActivity({ events, error }: { events: readonly RunEvent[]; error: string | null }) {
+  const visible = events.slice(-8).reverse()
+  return <section className="rail-section run-activity" data-testid="run-activity">
+    <h3>任务过程</h3>
+    {visible.length === 0
+      ? <p className="rail-empty-copy">任务开始后，这里会显示关键进度。</p>
+      : <ol>{visible.map((event) => <li key={String(event.id)}><span>{new Date(String(event.occurredAt)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span><b>{RUN_EVENT_LABELS[event.type]}</b></li>)}</ol>}
+    {error && <p className="rail-empty-copy">暂时无法读取任务过程，当前任务本身不受影响。</p>}
+  </section>
+}
+
+function humanizeRunError(message: string): string {
+  if (/offline|unavailable|ECONNREFUSED|fetch failed|bridge/i.test(message)) return '本地 Agent 连接暂时中断。任务记录和已返回结果都已保留，可以重新连接后继续。'
+  if (/timeout|timed out/i.test(message)) return 'Agent 响应时间过长，本次任务可以从已有记录继续恢复。'
+  if (/session|resume/i.test(message)) return '原来的 Agent 会话暂时无法继续，系统会优先恢复；确实失效时才会创建一次新会话。'
+  if (/stale|version|conflict/i.test(message)) return '项目内容已经发生变化，需要重新读取最新版本后继续。'
+  return message
 }
 
 function Composer(props: Props & { mode: WorkRailMode }) {

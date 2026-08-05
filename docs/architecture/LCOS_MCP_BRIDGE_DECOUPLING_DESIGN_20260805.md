@@ -1,3 +1,5 @@
+> **状态说明：本文是前置设计草案。最终拍板与实现以 `ADR_GATEF_PLUS_MCP_BRIDGE_CONTEXT_IMPORT_20260805.md` 为准。**
+
 # LCOS MCP 与 Bridge 解耦设计（不再混在一起）
 
 > 日期：2026-08-05

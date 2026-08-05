@@ -1,7 +1,8 @@
 import { createHash, randomUUID, timingSafeEqual } from 'node:crypto'
-import { readFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
-import { isAbsolute } from 'node:path'
+import { tmpdir } from 'node:os'
+import { basename, isAbsolute, join } from 'node:path'
 
 import type {
   Artifact,
@@ -24,6 +25,13 @@ import type {
   CommandDraftV1,
   ProviderSessionBindingV1,
   ImportResourceResultV1,
+  CreateConversationImportSessionInputV1,
+  CompleteConversationImportInputV1,
+  ImportManualConversationInputV1,
+  AnnotateConversationSectionInputV1,
+  PinConversationMessageInputV1,
+  BuildConversationSemanticIndexInputV1,
+  CanvasObservationV1,
 } from '@local-creative-os/contracts'
 import type { ArtifactReturnId, ArtifactRevisionId, ArtifactViewId, FileRecordId, ProjectId, RunId, WorkspaceId } from '@local-creative-os/domain'
 
@@ -61,15 +69,37 @@ import { selectNativeDirectory, type DirectoryPickerInput, type DirectoryPickerR
 import { indexProjectRoot, inspectProjectRoot } from './project-root-indexer.js'
 import { ObsidianConnectorSessionStore, ObsidianReadOnlyConnector } from './connectors/obsidian-connector.js'
 import { ResourceConnectorRegistry } from './connectors/connector-port.js'
+import { ConversationImportService } from './conversation-import-service.js'
 
 const LOOPBACK_HOST = '127.0.0.1'
 const MAX_BODY_BYTES = 1 * 1024 * 1024 // 1 MiB
 const MAX_IMPORT_BODY_BYTES = 26 * 1024 * 1024 // 25 MiB file + multipart overhead
 const MAX_DOCUMENT_PREVIEW_BYTES = 50 * 1024 * 1024
+const MAX_LCOSPROJ_BODY_BYTES = 128 * 1024 * 1024
 const FORBIDDEN_BROWSER_PATH_FIELDS = new Set(['path', 'absolutePath', 'targetPath', 'observedPath', 'rootPath'])
 
 function isAbsolutePath(value: string): boolean {
   return isAbsolute(value)
+}
+
+function internalBridgeOrigin(): string {
+  const value = process.env.LCOS_BRIDGE_URL ?? 'http://127.0.0.1:43122'
+  const url = new URL(value)
+  if (!['127.0.0.1', 'localhost', '[::1]', '::1'].includes(url.hostname)) {
+    throw new Error('Light Bridge must use a loopback URL.')
+  }
+  return url.origin
+}
+
+async function bridgeProxy(path: string, input: { readonly method?: string; readonly body?: unknown }, signal: AbortSignal): Promise<{ readonly status: number; readonly body: unknown }> {
+  const response = await fetch(new URL(path, `${internalBridgeOrigin()}/`), {
+    method: input.method ?? 'GET',
+    signal,
+    headers: { accept: 'application/json', ...(input.body === undefined ? {} : { 'content-type': 'application/json' }) },
+    ...(input.body === undefined ? {} : { body: JSON.stringify(input.body) }),
+  })
+  const body = await response.json().catch(() => ({ ok: false, error: { code: 'BRIDGE_PROTOCOL_ERROR', message: `Light Bridge returned HTTP ${response.status}.` } }))
+  return { status: response.status, body }
 }
 function publicResourceImportResult(value: ImportResourceResultV1): ImportResourceResultV1 {
   return {
@@ -121,6 +151,7 @@ export interface LocalCoreServerOptions {
   readonly obsidianConnector?: ObsidianReadOnlyConnector
   readonly obsidianSessions?: ObsidianConnectorSessionStore
   readonly connectorRegistry?: ResourceConnectorRegistry
+  readonly conversationImportService?: ConversationImportService
 }
 
 export interface LocalCoreAddress {
@@ -140,6 +171,18 @@ function sendJson(response: ServerResponse, statusCode: number, value: unknown):
     'cache-control': 'no-store',
   })
   response.end(JSON.stringify(value))
+}
+
+
+function sendBinary(response: ServerResponse, statusCode: number, bytes: Buffer, fileName: string, contentType = 'application/octet-stream'): void {
+  const asciiName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_') || 'download.bin'
+  response.writeHead(statusCode, {
+    'content-type': contentType,
+    'content-length': String(bytes.length),
+    'content-disposition': `attachment; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
+    'cache-control': 'no-store',
+  })
+  response.end(bytes)
 }
 
 function formatMetadataError(error: unknown, fallback: string): string {
@@ -302,6 +345,8 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
   const obsidian = options.obsidianConnector ?? new ObsidianReadOnlyConnector()
   const obsidianSessions = options.obsidianSessions ?? new ObsidianConnectorSessionStore()
   const connectorRegistry = options.connectorRegistry ?? new ResourceConnectorRegistry([obsidian])
+  const ownsConversationService = options.conversationImportService === undefined && metadata !== undefined
+  const conversations = options.conversationImportService ?? (metadata === undefined ? undefined : new ConversationImportService(metadata))
   const previewWorker = options.previewWorkerService
     ?? (metadata === undefined ? undefined : new PreviewWorkerService(metadata, {
       cacheService: new PreviewCacheService(metadata, {
@@ -440,6 +485,205 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
           sendJson(response, 409, failure('CONFLICT', error instanceof Error ? error.message : 'Obsidian 笔记导入失败。'))
         }
         return
+      }
+
+      // ---- Executor Gateway (the only MCP-facing path to Light Bridge) ----
+      if (method === 'GET' && pathname === '/executor/health') {
+        const result = await bridgeProxy('/health', {}, controller.signal)
+        sendJson(response, result.status, result.body); return
+      }
+      if (method === 'GET' && pathname === '/executor/capabilities') {
+        const result = await bridgeProxy('/v1/capabilities', {}, controller.signal)
+        sendJson(response, result.status, result.body); return
+      }
+      if (method === 'POST' && pathname === '/executor/tasks/claim-next') {
+        const body = await readJsonBody(request, controller.signal)
+        const result = await bridgeProxy('/v1/tasks/claim-next', { method: 'POST', body }, controller.signal)
+        sendJson(response, result.status, result.body); return
+      }
+      const executorTaskMatch = /^\/executor\/tasks\/([^/]+)$/.exec(pathname)
+      const executorTaskActionMatch = /^\/executor\/tasks\/([^/]+)\/(claim|running|heartbeat|result|cancel)$/.exec(pathname)
+      const executorRunTaskMatch = /^\/executor\/runs\/([^/]+)\/task$/.exec(pathname)
+      if (method === 'GET' && executorTaskMatch !== null) {
+        const result = await bridgeProxy(`/v1/tasks/${encodeURIComponent(decodeURIComponent(executorTaskMatch[1] ?? ''))}`, {}, controller.signal)
+        sendJson(response, result.status, result.body); return
+      }
+      if (method === 'GET' && executorRunTaskMatch !== null) {
+        const result = await bridgeProxy(`/v1/tasks/by-run/${encodeURIComponent(decodeURIComponent(executorRunTaskMatch[1] ?? ''))}`, {}, controller.signal)
+        sendJson(response, result.status, result.body); return
+      }
+      if (method === 'POST' && executorTaskActionMatch !== null) {
+        const taskId = encodeURIComponent(decodeURIComponent(executorTaskActionMatch[1] ?? ''))
+        const action = executorTaskActionMatch[2] ?? ''
+        const body = await readJsonBody(request, controller.signal)
+        const result = await bridgeProxy(`/v1/tasks/${taskId}/${action}`, { method: 'POST', body }, controller.signal)
+        sendJson(response, result.status, result.body); return
+      }
+
+      // ---- Conversation Context Import / Timeline ----
+      const conversationImportCreateMatch = /^\/projects\/([^/]+)\/conversation-import-sessions$/.exec(pathname)
+      const conversationImportOneMatch = /^\/projects\/([^/]+)\/conversation-import-sessions\/([^/]+)$/.exec(pathname)
+      const conversationImportChunkMatch = /^\/projects\/([^/]+)\/conversation-import-sessions\/([^/]+)\/chunks\/(\d+)$/.exec(pathname)
+      const conversationImportCompleteMatch = /^\/projects\/([^/]+)\/conversation-import-sessions\/([^/]+)\/complete$/.exec(pathname)
+      const manualConversationImportMatch = /^\/projects\/([^/]+)\/conversations\/import-manual$/.exec(pathname)
+      const conversationsListMatch = /^\/projects\/([^/]+)\/conversations$/.exec(pathname)
+      const conversationOneMatch = /^\/projects\/([^/]+)\/conversations\/([^/]+)$/.exec(pathname)
+      const conversationExportMatch = /^\/projects\/([^/]+)\/conversations\/([^/]+)\/export$/.exec(pathname)
+      const conversationMessagesMatch = /^\/projects\/([^/]+)\/conversations\/([^/]+)\/messages$/.exec(pathname)
+      const conversationSearchMatch = /^\/projects\/([^/]+)\/conversations\/search$/.exec(pathname)
+      const conversationSectionsMatch = /^\/projects\/([^/]+)\/conversations\/([^/]+)\/sections$/.exec(pathname)
+      const conversationSectionsRefreshMatch = /^\/projects\/([^/]+)\/conversations\/([^/]+)\/sections\/refresh$/.exec(pathname)
+      const conversationSectionOneMatch = /^\/projects\/([^/]+)\/conversations\/([^/]+)\/sections\/([^/]+)$/.exec(pathname)
+      const conversationSectionSourceMatch = /^\/projects\/([^/]+)\/conversations\/([^/]+)\/sections\/([^/]+)\/source$/.exec(pathname)
+      const conversationSectionAnnotateMatch = /^\/projects\/([^/]+)\/conversations\/([^/]+)\/sections\/([^/]+)\/annotation$/.exec(pathname)
+      const conversationMessagePinMatch = /^\/projects\/([^/]+)\/conversations\/([^/]+)\/messages\/([^/]+)\/pin$/.exec(pathname)
+      const conversationSemanticMatch = /^\/projects\/([^/]+)\/conversations\/semantic-index$/.exec(pathname)
+
+      const requireConversations = (): ConversationImportService | undefined => {
+        if (conversations === undefined) sendJson(response, 503, failure('UNAVAILABLE', '对话上下文服务暂不可用。'))
+        return conversations
+      }
+      const routeProject = (match: RegExpExecArray): string | undefined => {
+        const projectId = decodeURIComponent(match[1] ?? '')
+        if (!requireMetadata(metadata, response) || !requireProject(projectId, metadata, response)) return undefined
+        return projectId
+      }
+
+      if (method === 'POST' && conversationImportCreateMatch !== null) {
+        const service = requireConversations(); if (service === undefined) return
+        const projectId = routeProject(conversationImportCreateMatch); if (projectId === undefined) return
+        const body = await readJsonBody(request, controller.signal) as CreateConversationImportSessionInputV1
+        try { sendJson(response, 201, { ok: true, value: await service.createImportSession(projectId, body) }) }
+        catch (error: unknown) { sendJson(response, 400, failure('INVALID_ARGUMENT', error instanceof Error ? error.message : '无法创建对话导入任务。')) }
+        return
+      }
+      if (method === 'GET' && conversationImportOneMatch !== null) {
+        const service = requireConversations(); if (service === undefined) return
+        const projectId = routeProject(conversationImportOneMatch); if (projectId === undefined) return
+        const value = service.getImportSession(projectId, decodeURIComponent(conversationImportOneMatch[2] ?? ''))
+        sendJson(response, value === undefined ? 404 : 200, value === undefined ? failure('NOT_FOUND', '对话导入任务不存在。') : { ok: true, value })
+        return
+      }
+      if (method === 'PUT' && conversationImportChunkMatch !== null) {
+        const service = requireConversations(); if (service === undefined) return
+        const projectId = routeProject(conversationImportChunkMatch); if (projectId === undefined) return
+        const bytes = await readRawBody(request, controller.signal, 4 * 1024 * 1024)
+        try {
+          const value = await service.appendChunk(projectId, decodeURIComponent(conversationImportChunkMatch[2] ?? ''), Number(conversationImportChunkMatch[3]), bytes, typeof request.headers['x-content-sha256'] === 'string' ? request.headers['x-content-sha256'] : undefined)
+          sendJson(response, 200, { ok: true, value })
+        } catch (error: unknown) { sendJson(response, 409, failure('CONFLICT', error instanceof Error ? error.message : '对话分片上传失败。')) }
+        return
+      }
+      if (method === 'POST' && conversationImportCompleteMatch !== null) {
+        const service = requireConversations(); if (service === undefined) return
+        const projectId = routeProject(conversationImportCompleteMatch); if (projectId === undefined) return
+        const body = await readJsonBody(request, controller.signal) as CompleteConversationImportInputV1
+        try { sendJson(response, 201, { ok: true, value: await service.completeImport(projectId, decodeURIComponent(conversationImportCompleteMatch[2] ?? ''), body) }) }
+        catch (error: unknown) { sendJson(response, 409, failure('CONFLICT', error instanceof Error ? error.message : '对话导入失败。')) }
+        return
+      }
+      if (method === 'POST' && manualConversationImportMatch !== null) {
+        const service = requireConversations(); if (service === undefined) return
+        const projectId = routeProject(manualConversationImportMatch); if (projectId === undefined) return
+        const body = await readJsonBody(request, controller.signal) as ImportManualConversationInputV1
+        try { sendJson(response, 201, { ok: true, value: await service.importManual(projectId, body) }) }
+        catch (error: unknown) { sendJson(response, 400, failure('INVALID_ARGUMENT', error instanceof Error ? error.message : '手动时间线导入失败。')) }
+        return
+      }
+      if (method === 'GET' && conversationsListMatch !== null) {
+        const service = requireConversations(); if (service === undefined) return
+        const projectId = routeProject(conversationsListMatch); if (projectId === undefined) return
+        sendJson(response, 200, { ok: true, value: service.list(projectId) }); return
+      }
+      if (method === 'GET' && conversationSearchMatch !== null) {
+        const service = requireConversations(); if (service === undefined) return
+        const projectId = routeProject(conversationSearchMatch); if (projectId === undefined) return
+        const query = url.searchParams.get('q') ?? ''
+        const semantic = url.searchParams.get('semantic') !== 'false'
+        try { sendJson(response, 200, { ok: true, value: await service.search(projectId, query, { semantic, limit: Number(url.searchParams.get('limit') ?? 20), ...(url.searchParams.get('model') ? { model: url.searchParams.get('model')! } : {}) }) }) }
+        catch (error: unknown) { sendJson(response, 400, failure('INVALID_ARGUMENT', error instanceof Error ? error.message : '对话搜索失败。')) }
+        return
+      }
+      if (method === 'GET' && conversationExportMatch !== null) {
+        const service = requireConversations(); if (service === undefined) return
+        const projectId = routeProject(conversationExportMatch); if (projectId === undefined) return
+        try { sendJson(response, 200, { ok: true, value: service.exportConversation(projectId, decodeURIComponent(conversationExportMatch[2] ?? ''), url.searchParams.get('includeMessages') !== 'false') }) }
+        catch (error: unknown) { sendJson(response, 404, failure('NOT_FOUND', error instanceof Error ? error.message : '对话不存在。')) }
+        return
+      }
+      if (method === 'GET' && conversationOneMatch !== null) {
+        const service = requireConversations(); if (service === undefined) return
+        const projectId = routeProject(conversationOneMatch); if (projectId === undefined) return
+        const value = service.getProjection(projectId, decodeURIComponent(conversationOneMatch[2] ?? ''))
+        sendJson(response, value === undefined ? 404 : 200, value === undefined ? failure('NOT_FOUND', '对话不存在。') : { ok: true, value }); return
+      }
+      if (method === 'GET' && conversationMessagesMatch !== null) {
+        const service = requireConversations(); if (service === undefined) return
+        const projectId = routeProject(conversationMessagesMatch); if (projectId === undefined) return
+        const conversationId = decodeURIComponent(conversationMessagesMatch[2] ?? '')
+        if (service.getProjection(projectId, conversationId) === undefined) { sendJson(response, 404, failure('NOT_FOUND', '对话不存在。')); return }
+        sendJson(response, 200, { ok: true, value: service.getMessages(conversationId, { offset: Number(url.searchParams.get('offset') ?? 0), limit: Number(url.searchParams.get('limit') ?? 100), pinnedOnly: url.searchParams.get('pinnedOnly') === 'true' }) }); return
+      }
+      if (method === 'POST' && conversationSectionsRefreshMatch !== null) {
+        const service = requireConversations(); if (service === undefined) return
+        const projectId = routeProject(conversationSectionsRefreshMatch); if (projectId === undefined) return
+        try { sendJson(response, 200, { ok: true, value: service.refreshSections(projectId, decodeURIComponent(conversationSectionsRefreshMatch[2] ?? '')) }) }
+        catch (error: unknown) { sendJson(response, 409, failure('CONFLICT', error instanceof Error ? error.message : '章节重新整理失败。')) }
+        return
+      }
+      if (conversationSectionsMatch !== null) {
+        const service = requireConversations(); if (service === undefined) return
+        const projectId = routeProject(conversationSectionsMatch); if (projectId === undefined) return
+        const conversationId = decodeURIComponent(conversationSectionsMatch[2] ?? '')
+        try {
+          const value = method === 'POST' ? service.refreshSections(projectId, conversationId) : method === 'GET' ? service.getSections(conversationId) : undefined
+          if (value === undefined) { sendJson(response, 405, failure('INVALID_ARGUMENT', '不支持的章节操作。')); return }
+          sendJson(response, 200, { ok: true, value })
+        } catch (error: unknown) { sendJson(response, 409, failure('CONFLICT', error instanceof Error ? error.message : '章节操作失败。')) }
+        return
+      }
+      if ((method === 'GET' || method === 'PATCH') && conversationSectionOneMatch !== null) {
+        const service = requireConversations(); if (service === undefined) return
+        const projectId = routeProject(conversationSectionOneMatch); if (projectId === undefined) return
+        const conversationId = decodeURIComponent(conversationSectionOneMatch[2] ?? ''); const sectionId = decodeURIComponent(conversationSectionOneMatch[3] ?? '')
+        try {
+          const value = method === 'PATCH' ? service.updateSection(projectId, conversationId, sectionId, await readJsonBody(request, controller.signal) as { title?: string; lockedByUser?: boolean }) : service.getSections(conversationId).find((item) => item.id === sectionId)
+          sendJson(response, value === undefined ? 404 : 200, value === undefined ? failure('NOT_FOUND', '章节不存在。') : { ok: true, value })
+        } catch (error: unknown) { sendJson(response, 409, failure('CONFLICT', error instanceof Error ? error.message : '章节更新失败。')) }
+        return
+      }
+      if (method === 'GET' && conversationSectionSourceMatch !== null) {
+        const service = requireConversations(); if (service === undefined) return
+        const projectId = routeProject(conversationSectionSourceMatch); if (projectId === undefined) return
+        const conversationId = decodeURIComponent(conversationSectionSourceMatch[2] ?? '')
+        if (service.getProjection(projectId, conversationId) === undefined) { sendJson(response, 404, failure('NOT_FOUND', '对话不存在。')); return }
+        try { sendJson(response, 200, { ok: true, value: service.getSectionSource(conversationId, decodeURIComponent(conversationSectionSourceMatch[3] ?? '')) }) }
+        catch (error: unknown) { sendJson(response, 404, failure('NOT_FOUND', error instanceof Error ? error.message : '章节不存在。')) }
+        return
+      }
+      if (method === 'POST' && conversationSectionAnnotateMatch !== null) {
+        const service = requireConversations(); if (service === undefined) return
+        const projectId = routeProject(conversationSectionAnnotateMatch); if (projectId === undefined) return
+        try { sendJson(response, 200, { ok: true, value: service.annotateSection(projectId, decodeURIComponent(conversationSectionAnnotateMatch[2] ?? ''), decodeURIComponent(conversationSectionAnnotateMatch[3] ?? ''), await readJsonBody(request, controller.signal) as AnnotateConversationSectionInputV1) }) }
+        catch (error: unknown) { sendJson(response, 409, failure('CONFLICT', error instanceof Error ? error.message : '章节标注失败。')) }
+        return
+      }
+      if (method === 'POST' && conversationMessagePinMatch !== null) {
+        const service = requireConversations(); if (service === undefined) return
+        const projectId = routeProject(conversationMessagePinMatch); if (projectId === undefined) return
+        try { sendJson(response, 201, { ok: true, value: await service.pinMessage(projectId, decodeURIComponent(conversationMessagePinMatch[2] ?? ''), decodeURIComponent(conversationMessagePinMatch[3] ?? ''), await readJsonBody(request, controller.signal) as PinConversationMessageInputV1) }) }
+        catch (error: unknown) { sendJson(response, 409, failure('CONFLICT', error instanceof Error ? error.message : '无法提升为决策节点。')) }
+        return
+      }
+      if (conversationSemanticMatch !== null) {
+        const service = requireConversations(); if (service === undefined) return
+        const projectId = routeProject(conversationSemanticMatch); if (projectId === undefined) return
+        if (method === 'GET') { sendJson(response, 200, { ok: true, value: service.getSemanticIndexStatus(projectId) }); return }
+        if (method === 'POST') {
+          try { sendJson(response, 202, { ok: true, value: service.queueSemanticIndex(projectId, await readJsonBody(request, controller.signal) as BuildConversationSemanticIndexInputV1) }) }
+          catch (error: unknown) { sendJson(response, 503, failure('UNAVAILABLE', error instanceof Error ? error.message : '语义索引暂不可用。')) }
+          return
+        }
       }
 
       if (method === 'GET' && pathname === '/projects') {
@@ -753,6 +997,41 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
           updatedAt: now,
         }
         metadata.saveProviderSessionBinding(value)
+        sendJson(response, 200, { ok: true, value })
+        return
+      }
+
+      const canvasObservationMatch = /^\/projects\/([^/]+)\/canvas-observation$/.exec(pathname)
+      if (method === 'GET' && canvasObservationMatch !== null) {
+        if (!requireMetadata(metadata, response)) return
+        const projectId = decodeURIComponent(canvasObservationMatch[1] ?? '')
+        if (!requireProject(projectId, metadata, response)) return
+        const graph = metadata.get(projectId)
+        if (graph === undefined) {
+          sendJson(response, 404, failure('NOT_FOUND', 'Project graph not found.'))
+          return
+        }
+        const workspaceRaw = url.searchParams.get('workspaceId')
+        const workspaceId = workspaceRaw === null || workspaceRaw === '' ? null : workspaceRaw
+        const snapshot = activeContext.get(projectId, graph, workspaceId)
+        const width = 1280
+        const height = 720
+        const svg = renderCanvasObservationSvg(snapshot, width, height)
+        const contentHash = createHash('sha256').update(svg).digest('hex')
+        const value: CanvasObservationV1 = {
+          schemaVersion: 1,
+          projectId,
+          workspaceId,
+          contextVersion: snapshot.version,
+          screenshotRef: `lcos-canvas://${projectId}/${workspaceId ?? '__project_overview__'}/v${snapshot.version}/${contentHash.slice(0, 16)}`,
+          contentHash,
+          mimeType: 'image/svg+xml',
+          encoding: 'base64',
+          data: Buffer.from(svg, 'utf8').toString('base64'),
+          width,
+          height,
+          generatedAt: new Date().toISOString(),
+        }
         sendJson(response, 200, { ok: true, value })
         return
       }
@@ -1224,6 +1503,48 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
           })
         } catch (error: unknown) {
           sendJson(response, 409, failure('CONFLICT', error instanceof Error ? error.message : 'Text artifact creation failed.'))
+        }
+        return
+      }
+
+      const exportLcosprojDownloadMatch = /^\/projects\/([^/]+)\/export-lcosproj-file$/.exec(pathname)
+      if (method === 'GET' && exportLcosprojDownloadMatch !== null) {
+        if (!requireMetadata(metadata, response)) return
+        const projectId = decodeURIComponent(exportLcosprojDownloadMatch[1] ?? '') as ProjectId
+        const project = requireProject(String(projectId), metadata, response)
+        if (project === undefined) return
+        const tempRoot = await mkdtemp(join(tmpdir(), 'lcosproj-export-'))
+        const safeName = `${project.name.replace(/[\\/:*?"<>|]/g, '_').trim() || 'project'}.lcosproj`
+        const targetPath = join(tempRoot, safeName)
+        try {
+          await new LcosprojService(metadata).exportProject(projectId, targetPath)
+          sendBinary(response, 200, await readFile(targetPath), safeName, 'application/vnd.local-creative-os.project')
+        } catch (error: unknown) {
+          sendJson(response, 409, failure('CONFLICT', error instanceof Error ? error.message : 'Export failed.'))
+        } finally {
+          await rm(tempRoot, { recursive: true, force: true }).catch(() => undefined)
+        }
+        return
+      }
+
+      if (method === 'POST' && pathname === '/lcosproj/open-upload') {
+        if (!requireMetadata(metadata, response)) return
+        const tempRoot = await mkdtemp(join(tmpdir(), 'lcosproj-open-'))
+        try {
+          const raw = await readRawBody(request, controller.signal, MAX_LCOSPROJ_BODY_BYTES)
+          const multipart = parseMultipartImport(request.headers['content-type'], raw)
+          if (!/\.lcosproj$/i.test(multipart.file.fileName)) {
+            sendJson(response, 400, failure('INVALID_ARGUMENT', '请选择 .lcosproj 工程文件。'))
+            return
+          }
+          const safeName = basename(multipart.file.fileName).replace(/[^a-zA-Z0-9._-]/g, '_') || 'project.lcosproj'
+          const filePath = join(tempRoot, safeName)
+          await writeFile(filePath, multipart.file.bytes, { flag: 'wx' })
+          sendJson(response, 200, { ok: true, value: await new LcosprojService(metadata).open(filePath) })
+        } catch (error: unknown) {
+          sendJson(response, error instanceof RangeError ? 413 : 409, failure(error instanceof RangeError ? 'INVALID_ARGUMENT' : 'CONFLICT', error instanceof Error ? error.message : 'Open failed.'))
+        } finally {
+          await rm(tempRoot, { recursive: true, force: true }).catch(() => undefined)
         }
         return
       }
@@ -2151,6 +2472,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
       })
       server = undefined
       currentAddress = undefined
+      if (ownsConversationService) conversations?.close()
     },
 
     address(): LocalCoreAddress | undefined { return currentAddress },
@@ -2163,6 +2485,40 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
 
 type RouteResult = { status: number; body: unknown } | undefined
 
+function escapeSvgText(value: string): string {
+  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;')
+}
+
+function renderCanvasObservationSvg(snapshot: ReturnType<ActiveContextStore['get']>, width: number, height: number): string {
+  const nodes = snapshot.nodes ?? []
+  const byArtifact = new Map(nodes.map((node) => [node.artifactId, node]))
+  const viewport = snapshot.viewport
+  const zoom = viewport?.zoom ?? 1
+  const cameraX = viewport?.x ?? 0
+  const cameraY = viewport?.y ?? 0
+  const screen = (x: number, y: number) => ({ x: x * zoom + cameraX, y: y * zoom + cameraY })
+  const edgeSvg = (snapshot.relations ?? []).flatMap((relation) => {
+    const source = byArtifact.get(relation.sourceArtifactId)
+    const target = byArtifact.get(relation.targetArtifactId)
+    if (source === undefined || target === undefined) return []
+    const from = screen(source.x + source.width / 2, source.y + source.height / 2)
+    const to = screen(target.x + target.width / 2, target.y + target.height / 2)
+    return [`<line x1="${from.x.toFixed(1)}" y1="${from.y.toFixed(1)}" x2="${to.x.toFixed(1)}" y2="${to.y.toFixed(1)}" stroke="#aeb6c2" stroke-width="1.5"/><text x="${((from.x + to.x) / 2).toFixed(1)}" y="${(((from.y + to.y) / 2) - 4).toFixed(1)}" fill="#7d8793" font-size="10" text-anchor="middle">${escapeSvgText(relation.kind)}</text>`]
+  }).join('')
+  const selected = new Set(snapshot.selectedViewIds)
+  const pinned = new Set(snapshot.pinnedContextIds)
+  const nodeSvg = nodes.map((node) => {
+    const point = screen(node.x, node.y)
+    const nodeWidth = Math.max(80, node.width * zoom)
+    const nodeHeight = Math.max(44, node.height * zoom)
+    const border = selected.has(node.viewId) ? '#7055c7' : pinned.has(node.viewId) ? '#3b82b7' : '#aab3bf'
+    const fill = selected.has(node.viewId) ? '#f2efff' : '#ffffff'
+    return `<g data-view-id="${escapeSvgText(node.viewId)}"><rect x="${point.x.toFixed(1)}" y="${point.y.toFixed(1)}" width="${nodeWidth.toFixed(1)}" height="${nodeHeight.toFixed(1)}" rx="10" fill="${fill}" stroke="${border}" stroke-width="${selected.has(node.viewId) ? 2.5 : 1.2}"/><text x="${(point.x + 10).toFixed(1)}" y="${(point.y + 20).toFixed(1)}" fill="#1e2b38" font-size="12" font-family="Segoe UI, sans-serif">${escapeSvgText(node.title.slice(0, 48))}</text><text x="${(point.x + 10).toFixed(1)}" y="${(point.y + 37).toFixed(1)}" fill="#6f7a86" font-size="10" font-family="Segoe UI, sans-serif">${escapeSvgText(`${node.kind}${node.status ? ` · ${node.status}` : ''}`)}</text></g>`
+  }).join('')
+  const clusterSvg = (snapshot.offscreenClusters ?? []).slice(0, 8).map((cluster, index) => `<g><rect x="${width - 220}" y="${20 + index * 30}" width="200" height="22" rx="11" fill="#f3f5f7"/><text x="${width - 210}" y="${35 + index * 30}" fill="#65717d" font-size="10" font-family="Segoe UI, sans-serif">视口外 ${escapeSvgText(cluster.kind)} · ${cluster.count}</text></g>`).join('')
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect width="100%" height="100%" fill="#f7f8f6"/><text x="18" y="24" fill="#52606d" font-size="11" font-family="Segoe UI, sans-serif">LCOS Canvas Observation · v${snapshot.version} · structured truth remains authoritative</text>${edgeSvg}${nodeSvg}${clusterSvg}</svg>`
+}
+
 function validBearerToken(header: string | undefined, expected: string): boolean {
   if (header === undefined || !header.startsWith('Bearer ')) return false
   const actual = Buffer.from(header.slice('Bearer '.length), 'utf8')
@@ -2172,6 +2528,27 @@ function validBearerToken(header: string | undefined, expected: string): boolean
 
 function belongsToProject(value: unknown, projectId: string): value is Record<string, unknown> {
   return isRecord(value) && value.projectId === projectId && !containsForbiddenPathKey(value)
+}
+
+function relationEntityBelongsToProject(
+  metadata: SqliteMetadataRepository,
+  projectId: string,
+  entityType: unknown,
+  entityId: unknown,
+): boolean {
+  if (typeof entityId !== 'string' || entityId.trim() === '') return false
+  if (entityType === 'artifact') return String(metadata.getArtifact(entityId)?.projectId ?? '') === projectId
+  if (entityType === 'note') return String(metadata.getNote(entityId)?.projectId ?? '') === projectId
+  if (entityType === 'scope') return metadata.get(projectId)?.scopes.some((scope) => String(scope.id) === entityId) ?? false
+  return false
+}
+
+function isSafeRelationInput(metadata: SqliteMetadataRepository, projectId: string, value: unknown, relationId: string): value is Relation {
+  if (!belongsToProject(value, projectId) || value.id !== relationId) return false
+  if (typeof value.kind !== 'string' || value.kind.trim() === '' || value.kind.length > 80) return false
+  if (typeof value.createdAt !== 'string' || typeof value.updatedAt !== 'string') return false
+  return relationEntityBelongsToProject(metadata, projectId, value.sourceEntityType, value.sourceEntityId)
+    && relationEntityBelongsToProject(metadata, projectId, value.targetEntityType, value.targetEntityId)
 }
 
 function containsForbiddenPathKey(value: unknown): boolean {
@@ -2350,8 +2727,10 @@ async function handleEntityRoute(
     }
     if (method === 'PUT') {
       const body = await readJsonBody(request, signal)
-      if (!belongsToProject(body, projectId) || body.id !== relId) return { status: 400, body: failure('INVALID_ARGUMENT', 'Relation identity must match the route.') }
-      metadata.upsertRelation(body as unknown as Relation)
+      if (!isSafeRelationInput(metadata, projectId, body, relId)) {
+        return { status: 400, body: failure('INVALID_ARGUMENT', 'Relation identity, endpoints, kind, and route project must be valid.') }
+      }
+      metadata.upsertRelation(body)
       return { status: 200, body: { ok: true, value: body } }
     }
     if (method === 'DELETE') {

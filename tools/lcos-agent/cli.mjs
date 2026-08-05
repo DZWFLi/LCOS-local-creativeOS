@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-import { readFile, readdir, lstat } from "node:fs/promises";
+import { readFile, readdir, lstat, open, writeFile } from "node:fs/promises";
 import { basename, join, relative, sep } from "node:path";
-import { bridgeRequest, coreRequest, jsonBody } from "./lib/client.mjs";
+import { createHash, randomUUID } from "node:crypto";
+import { coreRequest, jsonBody } from "./lib/client.mjs";
 
 const [group = "help", action, ...rest] = process.argv.slice(2);
 const option = (name) => {
@@ -45,9 +46,9 @@ try {
   if (group === "doctor") {
     const [core, bridge] = await Promise.all([
       probe(coreRequest("/health")),
-      probe(bridgeRequest("/health")),
+      probe(coreRequest("/executor/health")),
     ]);
-    const capabilities = bridge.ok ? await probe(bridgeRequest("/v1/capabilities")) : null;
+    const capabilities = bridge.ok ? await probe(coreRequest("/executor/capabilities")) : null;
     const healthy = core.ok && bridge.ok;
     result = {
       healthy,
@@ -57,7 +58,7 @@ try {
     };
     if (!healthy) exitCode = 1;
   } else if (group === "capabilities") {
-    const bridge = await probe(bridgeRequest("/v1/capabilities"));
+    const bridge = await probe(coreRequest("/executor/capabilities"));
     const core = await probe(coreRequest("/health"));
     result = {
       coreHealthy: core.ok,
@@ -348,26 +349,26 @@ try {
   } else if (group === "run" && action === "claim") {
     const runId = required(positional[0], "run id");
     const task = await bridgeTaskForRun(runId);
-    result = await bridgeRequest(`/v1/tasks/${encodeURIComponent(task.taskId)}/claim`, {
+    result = await coreRequest(`/executor/tasks/${encodeURIComponent(task.taskId)}/claim`, {
       method: "POST",
       ...jsonBody({ provider: "codex", workerId: option("worker") || "local-codex" }),
     });
   } else if (group === "run" && action === "start") {
     const task = await bridgeTaskForRun(required(positional[0], "run id"));
-    result = await bridgeRequest(`/v1/tasks/${encodeURIComponent(task.taskId)}/running`, {
+    result = await coreRequest(`/executor/tasks/${encodeURIComponent(task.taskId)}/running`, {
       method: "POST",
       ...jsonBody({ workerId: option("worker") || "local-codex" }),
     });
   } else if (group === "run" && action === "heartbeat") {
     const task = await bridgeTaskForRun(required(positional[0], "run id"));
-    result = await bridgeRequest(`/v1/tasks/${encodeURIComponent(task.taskId)}/heartbeat`, {
+    result = await coreRequest(`/executor/tasks/${encodeURIComponent(task.taskId)}/heartbeat`, {
       method: "POST",
       ...jsonBody({ workerId: option("worker") || "local-codex" }),
     });
   } else if (group === "run" && action === "fail") {
     const runId = required(positional[0], "run id");
     const task = await bridgeTaskForRun(runId);
-    result = await bridgeRequest(`/v1/tasks/${encodeURIComponent(task.taskId)}/result`, {
+    result = await coreRequest(`/executor/tasks/${encodeURIComponent(task.taskId)}/result`, {
       method: "POST",
       ...jsonBody({
         contractVersion: "bridge-result-v1",
@@ -413,6 +414,80 @@ try {
         }],
       }),
     });
+  } else if (group === "canvas" && action === "viewport") {
+    const projectId = required(positional[0], "project id");
+    const active = await coreRequest(activeContextPath(projectId));
+    const zoom = Number(required(option("zoom"), "--zoom"));
+    if (!Number.isFinite(zoom) || zoom < 0.05 || zoom > 8) throw new Error("--zoom must be between 0.05 and 8");
+    result = await coreRequest(activeContextPath(projectId), {
+      method: "PUT",
+      ...jsonBody(activeContextMutation(active, {
+        viewport: {
+          x: Number(required(option("x"), "--x")),
+          y: Number(required(option("y"), "--y")),
+          zoom,
+        },
+        visibleViewIds: (option("visible") || "").split(",").filter(Boolean),
+      })),
+    });
+  } else if (group === "canvas" && action === "observe") {
+    const projectId = required(positional[0], "project id");
+    const query = new URLSearchParams();
+    if (option("workspace")) query.set("workspaceId", option("workspace"));
+    result = await coreRequest(`/projects/${encodeURIComponent(projectId)}/canvas-observation${query.size ? `?${query}` : ""}`);
+  } else if (group === "relation" && action === "create") {
+    const projectId = required(positional[0], "project id");
+    const sourceViewId = required(positional[1], "source view id");
+    const targetViewId = required(positional[2], "target view id");
+    if (sourceViewId === targetViewId) throw new Error("source and target views must be different");
+    const graph = await coreRequest(`/projects/${encodeURIComponent(projectId)}/graph`);
+    const source = graph.artifactViews?.find((view) => String(view.id) === sourceViewId);
+    const target = graph.artifactViews?.find((view) => String(view.id) === targetViewId);
+    if (!source || !target) throw new Error("source or target view was not found in this project");
+    const relationId = `rel-${randomUUID()}`;
+    const now = new Date().toISOString();
+    result = await coreRequest(`/projects/${encodeURIComponent(projectId)}/relations/${encodeURIComponent(relationId)}`, {
+      method: "PUT",
+      ...jsonBody({
+        id: relationId,
+        projectId,
+        sourceEntityType: "artifact",
+        sourceEntityId: String(source.artifactId),
+        targetEntityType: "artifact",
+        targetEntityId: String(target.artifactId),
+        kind: required(option("kind"), "--kind"),
+        createdAt: now,
+        updatedAt: now,
+      }),
+    });
+  } else if (group === "preview" && action === "open") {
+    const projectId = required(positional[0], "project id");
+    const viewId = required(positional[1], "view id");
+    const graph = await coreRequest(`/projects/${encodeURIComponent(projectId)}/graph`);
+    const view = graph.artifactViews?.find((item) => String(item.id) === viewId);
+    if (!view?.revisionId) throw new Error("view or revision not found");
+    const active = await coreRequest(activeContextPath(projectId));
+    await coreRequest(activeContextPath(projectId), {
+      method: "PUT",
+      ...jsonBody(activeContextMutation(active, { selectedViewIds: [viewId] })),
+    });
+    let records = await coreRequest(`/projects/${encodeURIComponent(projectId)}/preview-records`);
+    let record = records.find((item) => String(item.revisionId) === String(view.revisionId) && item.previewProfile === "thumbnail");
+    if ((!record || record.status !== "ready") && rest.includes("--generate")) {
+      await coreRequest(`/projects/${encodeURIComponent(projectId)}/previews`, {
+        method: "POST",
+        ...jsonBody({ revisionId: String(view.revisionId), previewProfile: "thumbnail" }),
+        timeoutMs: 120_000,
+      });
+      records = await coreRequest(`/projects/${encodeURIComponent(projectId)}/preview-records`);
+      record = records.find((item) => String(item.revisionId) === String(view.revisionId) && item.previewProfile === "thumbnail");
+    }
+    result = {
+      viewId,
+      revisionId: String(view.revisionId),
+      record: record ?? null,
+      browserUrl: `http://127.0.0.1:5173/?agent=1&project=${encodeURIComponent(projectId)}&focus=${encodeURIComponent(viewId)}`,
+    };
   } else if (group === "context" && action === "watch") {
     const projectId = required(positional[0], "project id");
     result = await coreRequest(activeContextPath(projectId, Number(option("after") || 0)));
@@ -455,7 +530,7 @@ try {
   } else if (group === "run" && action === "ask") {
     const runId = required(positional[0], "run id");
     const task = await bridgeTaskForRun(runId);
-    result = await bridgeRequest(`/v1/tasks/${encodeURIComponent(task.taskId)}/result`, {
+    result = await coreRequest(`/executor/tasks/${encodeURIComponent(task.taskId)}/result`, {
       method: "POST",
       ...jsonBody({
         contractVersion: "bridge-result-v1",
@@ -494,6 +569,88 @@ try {
     });
   } else if (group === "connector" && action === "list") {
     result = await coreRequest("/connectors");
+  } else if (group === "conversation" && action === "import") {
+    const projectId = required(positional[0], "project id");
+    const filePath = required(positional[1], "conversation JSONL path");
+    const scopeId = required(option("scope"), "--scope");
+    const handle = await open(filePath, "r");
+    try {
+      const info = await handle.stat();
+      const session = await coreRequest(`/projects/${encodeURIComponent(projectId)}/conversation-import-sessions`, {
+        method: "POST",
+        ...jsonBody({ sourceKind: option("source") || "codex", sourceFileName: basename(filePath), expectedBytes: info.size, scopeId, ...(option("workspace") ? { workspaceId: option("workspace") } : {}), ...(option("title") ? { title: option("title") } : {}) }),
+      });
+      const totalHash = createHash("sha256");
+      const chunkSize = 4 * 1024 * 1024;
+      let chunkIndex = 0;
+      for (let offset = 0; offset < info.size; offset += chunkSize) {
+        const buffer = Buffer.alloc(Math.min(chunkSize, info.size - offset));
+        const { bytesRead } = await handle.read(buffer, 0, buffer.length, offset);
+        const bytes = buffer.subarray(0, bytesRead);
+        totalHash.update(bytes);
+        await coreRequest(`/projects/${encodeURIComponent(projectId)}/conversation-import-sessions/${encodeURIComponent(session.id)}/chunks/${chunkIndex}`, {
+          method: "PUT",
+          body: bytes,
+          headers: { "content-type": "application/octet-stream", "x-content-sha256": createHash("sha256").update(bytes).digest("hex") },
+          timeoutMs: 120_000,
+        });
+        chunkIndex += 1;
+      }
+      result = await coreRequest(`/projects/${encodeURIComponent(projectId)}/conversation-import-sessions/${encodeURIComponent(session.id)}/complete`, {
+        method: "POST", ...jsonBody({ expectedChunks: chunkIndex, expectedContentHash: totalHash.digest("hex") }), timeoutMs: 600_000,
+      });
+    } finally { await handle.close(); }
+  } else if (group === "conversation" && action === "import-manual") {
+    const projectId = required(positional[0], "project id");
+    const source = JSON.parse(await readFile(required(positional[1], "manual timeline JSON path"), "utf8"));
+    result = await coreRequest(`/projects/${encodeURIComponent(projectId)}/conversations/import-manual`, { method: "POST", ...jsonBody({ title: option("title"), scopeId: required(option("scope"), "--scope"), ...(option("workspace") ? { workspaceId: option("workspace") } : {}), entries: Array.isArray(source) ? source : source.entries }), timeoutMs: 600_000 });
+  } else if (group === "conversation" && action === "list") {
+    result = await coreRequest(`/projects/${encodeURIComponent(required(positional[0], "project id"))}/conversations`);
+  } else if (group === "conversation" && action === "show") {
+    result = await coreRequest(`/projects/${encodeURIComponent(required(positional[0], "project id"))}/conversations/${encodeURIComponent(required(positional[1], "conversation id"))}`);
+  } else if (group === "conversation" && action === "messages") {
+    const query = new URLSearchParams(); if (option("offset")) query.set("offset", option("offset")); if (option("limit")) query.set("limit", option("limit")); if (rest.includes("--pinned")) query.set("pinnedOnly", "true");
+    result = await coreRequest(`/projects/${encodeURIComponent(required(positional[0], "project id"))}/conversations/${encodeURIComponent(required(positional[1], "conversation id"))}/messages?${query}`);
+  } else if (group === "conversation" && action === "search") {
+    const query = new URLSearchParams({ q: required(option("q"), "--q") }); if (rest.includes("--lexical-only")) query.set("semantic", "false"); if (option("limit")) query.set("limit", option("limit"));
+    result = await coreRequest(`/projects/${encodeURIComponent(required(positional[0], "project id"))}/conversations/search?${query}`);
+  } else if (group === "conversation" && action === "export") {
+    const projectId = required(positional[0], "project id");
+    const conversationId = required(positional[1], "conversation id");
+    const exported = await coreRequest(`/projects/${encodeURIComponent(projectId)}/conversations/${encodeURIComponent(conversationId)}/export?includeMessages=${rest.includes("--without-messages") ? "false" : "true"}`, { timeoutMs: 120_000 });
+    const outputPath = required(option("output"), "--output");
+    await writeFile(outputPath, `${JSON.stringify(exported, null, 2)}
+`, "utf8");
+    result = { ok: true, outputPath, conversationId, rawTimelineIncluded: !rest.includes("--without-messages") };
+  } else if (group === "conversation" && action === "sections") {
+    const projectId = required(positional[0], "project id");
+    const conversationId = required(positional[1], "conversation id");
+    result = await coreRequest(`/projects/${encodeURIComponent(projectId)}/conversations/${encodeURIComponent(conversationId)}/sections${rest.includes("--refresh") ? "/refresh" : ""}`, rest.includes("--refresh") ? { method: "POST" } : {});
+  } else if (group === "conversation" && action === "section-rename") {
+    result = await coreRequest(`/projects/${encodeURIComponent(required(positional[0], "project id"))}/conversations/${encodeURIComponent(required(positional[1], "conversation id"))}/sections/${encodeURIComponent(required(positional[2], "section id"))}`, { method: "PATCH", ...jsonBody({ title: required(option("title"), "--title"), lockedByUser: true }) });
+  } else if (group === "conversation" && action === "annotate") {
+    const projectId = required(positional[0], "project id");
+    const conversationId = required(positional[1], "conversation id");
+    const sectionId = required(positional[2], "section id");
+    let annotation;
+    if (option("data")) annotation = JSON.parse(await readFile(option("data"), "utf8"));
+    else annotation = {
+      sourceHash: required(option("source-hash"), "--source-hash"),
+      title: required(option("title"), "--title"),
+      decisions: (option("decisions") || "").split("|").map((value) => value.trim()).filter(Boolean),
+      todos: (option("todos") || "").split("|").map((value) => value.trim()).filter(Boolean),
+      involvedFiles: (option("files") || "").split("|").map((value) => value.trim()).filter(Boolean),
+      annotatedBy: "agent",
+    };
+    result = await coreRequest(`/projects/${encodeURIComponent(projectId)}/conversations/${encodeURIComponent(conversationId)}/sections/${encodeURIComponent(sectionId)}/annotation`, { method: "POST", ...jsonBody(annotation) });
+  } else if (group === "conversation" && action === "section-source") {
+    result = await coreRequest(`/projects/${encodeURIComponent(required(positional[0], "project id"))}/conversations/${encodeURIComponent(required(positional[1], "conversation id"))}/sections/${encodeURIComponent(required(positional[2], "section id"))}/source`);
+  } else if (group === "conversation" && action === "pin") {
+    result = await coreRequest(`/projects/${encodeURIComponent(required(positional[0], "project id"))}/conversations/${encodeURIComponent(required(positional[1], "conversation id"))}/messages/${encodeURIComponent(required(positional[2], "message id"))}/pin`, { method: "POST", ...jsonBody({ scopeId: required(option("scope"), "--scope"), ...(option("workspace") ? { workspaceId: option("workspace") } : {}), ...(option("title") ? { title: option("title") } : {}), ...(option("summary") ? { summary: option("summary") } : {}), ...(option("x") ? { x: Number(option("x")) } : {}), ...(option("y") ? { y: Number(option("y")) } : {}) }) });
+  } else if (group === "conversation" && action === "index-status") {
+    result = await coreRequest(`/projects/${encodeURIComponent(required(positional[0], "project id"))}/conversations/semantic-index`);
+  } else if (group === "conversation" && action === "index-build") {
+    result = await coreRequest(`/projects/${encodeURIComponent(required(positional[0], "project id"))}/conversations/semantic-index`, { method: "POST", ...jsonBody({ ...(option("model") ? { model: option("model") } : {}), ...(option("session") ? { sessionId: option("session") } : {}), force: rest.includes("--force"), ...(option("batch") ? { batchSize: Number(option("batch")) } : {}) }), timeoutMs: 1800_000 });
   } else if (group === "connector" && action === "obsidian-scan") {
     result = await coreRequest("/connectors/obsidian/select-and-scan", { method: "POST", ...jsonBody({}), timeoutMs: 120_000 });
   } else if (group === "connector" && action === "obsidian-import") {
@@ -603,12 +760,12 @@ try {
       result = await coreRequest(`/projects/${encodeURIComponent(projectId)}/resource-upload-sessions/${encodeURIComponent(session.sessionId)}/complete`, { method: "POST" });
     }
   } else if (group === "task" && action === "claim") {
-    result = await bridgeRequest("/v1/tasks/claim-next", {
+    result = await coreRequest("/executor/tasks/claim-next", {
       method: "POST",
       ...jsonBody({ provider: option("provider") || "workbuddy", workerId: option("worker") || "local-agent" }),
     });
   } else if (group === "task" && action === "start") {
-    result = await bridgeRequest(`/v1/tasks/${encodeURIComponent(required(positional[0], "task id"))}/running`, {
+    result = await coreRequest(`/executor/tasks/${encodeURIComponent(required(positional[0], "task id"))}/running`, {
       method: "POST",
       ...jsonBody({ workerId: option("worker") || "local-agent" }),
     });
@@ -620,12 +777,12 @@ try {
       envelope.summary = envelope.shortSummary;
       delete envelope.shortSummary;
     }
-    result = await bridgeRequest(`/v1/tasks/${encodeURIComponent(taskId)}/result`, {
+    result = await coreRequest(`/executor/tasks/${encodeURIComponent(taskId)}/result`, {
       method: "POST",
       ...jsonBody(envelope),
     });
   } else if (group === "task" && action === "show") {
-    result = await bridgeRequest(`/v1/tasks/${encodeURIComponent(required(positional[0], "task id"))}`);
+    result = await coreRequest(`/executor/tasks/${encodeURIComponent(required(positional[0], "task id"))}`);
   } else if (group === "open") {
     const projectId = action;
     result = { url: `http://127.0.0.1:5173/?agent=1${projectId ? `&project=${encodeURIComponent(projectId)}` : ""}` };
@@ -650,7 +807,7 @@ async function probe(requestPromise) {
 }
 
 async function bridgeTaskForRun(runId) {
-  const response = await bridgeRequest(`/v1/tasks/by-run/${encodeURIComponent(runId)}`);
+  const response = await coreRequest(`/executor/runs/${encodeURIComponent(runId)}/task`);
   const task = response?.task ?? response;
   const taskId = task?.taskId ?? task?.task_id;
   if (!taskId) throw new Error(`TASK_NOT_FOUND: no Bridge Task for run ${runId}.`);
@@ -761,6 +918,20 @@ Project truth:
   lcos context select <project-id> --views view-a,view-b [--workspace id]
   lcos context focus <project-id> <view-id> [--workspace id]
   lcos canvas move <project-id> <view-id> --x N --y N --base-version N
+  lcos conversation import <project-id> <session.jsonl> --scope <scope-id> [--workspace id] [--title 标题] [--source codex]
+  lcos conversation import-manual <project-id> <entries.json> --scope <scope-id> [--workspace id] [--title 标题]
+  lcos conversation list <project-id>
+  lcos conversation show <project-id> <conversation-id>
+  lcos conversation messages <project-id> <conversation-id> [--offset N --limit N --pinned]
+  lcos conversation search <project-id> --q "..." [--lexical-only --limit N]
+  lcos conversation export <project-id> <conversation-id> --output <file.json> [--without-messages]
+  lcos conversation sections <project-id> <conversation-id> [--refresh]
+  lcos conversation section-rename <project-id> <conversation-id> <section-id> --title "新标题"
+  lcos conversation section-source <project-id> <conversation-id> <section-id>
+  lcos conversation annotate <project-id> <conversation-id> <section-id> (--data annotation.json | --source-hash <hash> --title "标题" [--decisions a|b --todos a|b --files a|b])
+  lcos conversation pin <project-id> <conversation-id> <message-id> --scope <scope-id> [--title 标题]
+  lcos conversation index-status <project-id>
+  lcos conversation index-build <project-id> [--model nomic-embed-text --session id --force --batch 32]
   lcos connector obsidian-scan
   lcos connector obsidian-import <project-id> --scan <scan-id> --scope <scope-id> (--paths a.md,b.md | --paths-file paths.json) [--x N --y N]
   lcos resource list <project-id>
@@ -780,6 +951,5 @@ Agent pull:
 
 Environment:
   LCOS_CORE_URL=http://127.0.0.1:43121
-  LCOS_BRIDGE_URL=http://127.0.0.1:43122
 `);
 }

@@ -38,12 +38,12 @@ export interface LcosprojExportAllResult {
   readonly failed: readonly { readonly projectId: string; readonly error: string }[]
 }
 
-const LCOSPROJ_SCHEMA_VERSION = 14
+const LCOSPROJ_SCHEMA_VERSION = 18
 
 export class LcosprojService {
   constructor(
     private readonly repository: SqliteMetadataRepository,
-    private readonly appVersion = '0.7.3',
+    private readonly appVersion = '0.9.0',
   ) {}
 
   async exportProject(projectId: ProjectId, targetPath: string): Promise<LcosprojExportResult> {
@@ -64,6 +64,20 @@ export class LcosprojService {
       const fileRepository = new SqliteMetadataRepository(tmpPath)
       fileRepository.close()
       const tables = this.repository.exportProjectTruth(projectId, tmpPath)
+      // Raw conversation timelines and rebuildable vectors are intentionally not packed by default.
+      // Preserve session metadata, rule sections, annotations and user-pinned messages only.
+      const conversationDatabase = new DatabaseSync(tmpPath)
+      try {
+        conversationDatabase.prepare(`
+          UPDATE conversation_sessions
+          SET source_path = NULL,
+              message_count = (SELECT COUNT(*) FROM conversation_messages m WHERE m.session_id = conversation_sessions.id),
+              origin_meta_json = json_set(COALESCE(origin_meta_json, '{}'), '$.rawTimelineIncluded', json('false'))
+          WHERE project_id = ?
+        `).run(String(projectId))
+      } finally {
+        conversationDatabase.close()
+      }
       const relativePaths: Record<string, string> = {}
       for (const record of this.repository.getFileRecords(String(projectId))) {
         relativePaths[String(record.id)] = relative(project.rootPath, record.observedPath).split('\\').join('/')

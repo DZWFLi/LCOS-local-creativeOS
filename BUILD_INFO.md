@@ -2,7 +2,7 @@
 
 > 归档日期：2026-08-05
 > 分支：`codex/backend-hardening-20260802`
-> HEAD：<打包时自动填充>
+> HEAD：cfe55ca
 
 ## 关键提交
 

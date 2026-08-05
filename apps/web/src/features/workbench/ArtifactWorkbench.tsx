@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Clock3, Crosshair, FileText, GitBranch, History, RotateCcw, ScanSearch, Sparkles, X } from 'lucide-react'
+import { Clock3, Crosshair, FileText, GitBranch, History, RefreshCw, RotateCcw, ScanSearch, Sparkles, X } from 'lucide-react'
 
 import type { CanvasNode } from '../../model'
 import type { LocalCoreClient } from '../../runtime/localCoreClient'
@@ -19,6 +19,8 @@ interface Props {
   onLocate: () => void
   onUseRevision: (revision: ArtifactRevisionProvenance) => void
   onShowResource?: () => void
+  onRefreshFile?: () => void
+  onAdoptExternalChange?: () => void
 }
 
 function formatTime(value?: string): string {
@@ -84,7 +86,7 @@ export function ArtifactWorkbench(props: Props) {
     <aside className="artifact-workbench" data-testid="artifact-workbench" data-kind={node.kind} data-focus={focus} role="complementary" aria-label={`${node.title} 对象工作台`}>
       <header className="workbench-header">
         <div className="workbench-heading">
-          <small>ARTIFACT WORKBENCH · {focus === 'preview' ? descriptor.label : focus === 'revisions' ? '版本与来源' : '对象概览'}</small>
+          <small>内容工作台 · {focus === 'preview' ? descriptor.label : focus === 'revisions' ? '版本与来源' : '内容概览'}</small>
           <h3>{node.title}</h3>
         </div>
         <button className="icon-button pressable" type="button" aria-label="关闭工作台" onClick={props.onClose}><X size={16} /></button>
@@ -109,11 +111,11 @@ export function ArtifactWorkbench(props: Props) {
                   {revisions.map((revision) => <li key={revision.id} className={revision.current ? 'current' : revision.id === node.revisionId ? 'viewing' : ''}>
                     <div className="revision-rail-dot" />
                     <article>
-                      <header><strong>{revision.label}</strong><span>{revision.current ? 'Current' : revision.draft ? 'Draft' : 'Historical'}</span></header>
+                      <header><strong>{revision.label}</strong><span>{revision.current ? '当前版本' : revision.draft ? '待确认版本' : '历史版本'}</span></header>
                       <p>{revision.prompt ?? '该版本没有可显示的原始提示词。'}</p>
                       <dl>
-                        <div><dt>Agent</dt><dd>{revision.provider ?? '未记录'}</dd></div>
-                        <div><dt>Run</dt><dd>{revision.runId ?? '未关联'}</dd></div>
+                        <div><dt>处理者</dt><dd>{revision.provider ?? '未记录'}</dd></div>
+                        <div><dt>Agent 任务</dt><dd>{revision.runId ? '已关联，可在诊断中查看' : '未关联'}</dd></div>
                         <div><dt><Clock3 size={11} />创建</dt><dd>{formatTime(revision.createdAt)}</dd></div>
                       </dl>
                       <footer>
@@ -128,17 +130,19 @@ export function ArtifactWorkbench(props: Props) {
             : <div className="workbench-overview">
                 <dl className="workbench-meta">
                   <div><dt>内容类型</dt><dd>{node.fileType ?? node.kind}</dd></div>
-                  <div><dt>版本状态</dt><dd>{node.historical ? 'Historical' : node.draft ? 'Draft' : node.current ? 'Current' : '—'}</dd></div>
-                  <div><dt>Revision</dt><dd>{node.revisionLabel ?? node.revisionId ?? '—'}</dd></div>
+                  <div><dt>版本状态</dt><dd>{node.historical ? '历史版本' : node.draft ? '待确认版本' : node.current ? '当前版本' : '—'}</dd></div>
+                  <div><dt>版本</dt><dd>{node.revisionLabel ?? (node.revisionId ? '已记录' : '—')}</dd></div>
                   <div><dt>创建时间</dt><dd>{formatTime(node.createdAt)}</dd></div>
-                  <div><dt>来源 Run</dt><dd>{node.sourceRunId ?? '—'}</dd></div>
+                  <div><dt>来源</dt><dd>{node.sourceRunId ? 'Agent 任务' : '人工或外部文件'}</dd></div>
                   <div><dt>关联数量</dt><dd>{props.relationCount}</dd></div>
-                  <div><dt>预览状态</dt><dd>{node.previewStatus ?? 'not-generated'}</dd></div>
-                  <div><dt>文件可用性</dt><dd>{node.fileAvailability ?? '—'}</dd></div>
+                  <div><dt>预览状态</dt><dd>{humanPreviewStatus(node.previewStatus)}</dd></div>
+                  <div><dt>本地文件</dt><dd>{humanFileAvailability(node.fileAvailability)}</dd></div>
                 </dl>
                 <div className="workbench-actions">
                   <button type="button" className="pressable" onClick={props.onLocate}><Crosshair size={13} />在画布中定位</button>
-                  {props.onShowResource !== undefined && <button type="button" className="pressable" onClick={props.onShowResource}><ScanSearch size={13} />资源理解</button>}
+                  {props.onShowResource !== undefined && <button type="button" className="pressable" onClick={props.onShowResource}><ScanSearch size={13} />系统理解</button>}
+                  {props.onRefreshFile !== undefined && <button type="button" className="pressable" onClick={props.onRefreshFile}><RefreshCw size={13} />检查外部变化</button>}
+                  {node.fileAvailability === 'stale' && props.onAdoptExternalChange !== undefined && <button type="button" className="pressable" onClick={props.onAdoptExternalChange}><History size={13} />使用外部版本</button>}
                 </div>
                 <p className="workbench-hint"><GitBranch size={12} />单击节点发起局部 Run；这里负责预览、版本来源与只读检查。</p>
                 <p className="workbench-hint"><FileText size={12} />外部 Reference 只能作为上下文，受管内容才可产生 Draft Revision。</p>
@@ -146,4 +150,20 @@ export function ArtifactWorkbench(props: Props) {
       </main>
     </aside>
   )
+}
+
+
+function humanPreviewStatus(value?: string): string {
+  if (value === 'ready') return '可查看'
+  if (value === 'generating' || value === 'pending') return '正在准备'
+  if (value === 'failed') return '暂时无法预览'
+  return '尚未生成'
+}
+
+function humanFileAvailability(value?: string): string {
+  if (value === 'current') return '与磁盘一致'
+  if (value === 'stale') return '外部已发生变化'
+  if (value === 'missing') return '原文件暂时找不到'
+  if (value === 'unreadable') return '原文件暂时无法读取'
+  return value ? '状态待确认' : '未绑定本地文件'
 }

@@ -81,6 +81,48 @@ try {
   assert.equal(updated.body.value.version, 1)
   assert.deepEqual(updated.body.value.selectionOrder, [firstViewId, secondViewId])
   assert.ok(updated.body.value.nodes.length >= 2)
+  assert.ok(Array.isArray(updated.body.value.offscreenClusters), 'offscreen cluster summary must be projected')
+  assert.ok(Array.isArray(updated.body.value.recentChanges), 'recent canvas changes must be projected')
+  assert.ok(updated.body.value.recentChanges.some((change) => change.kind === 'selection'), 'selection change must be recorded')
+
+  const observation = await request(`/projects/${projectId}/canvas-observation?workspaceId=${encodeURIComponent(workspaceId)}`)
+  assert.equal(observation.response.status, 200)
+  assert.equal(observation.body.value.mimeType, 'image/svg+xml')
+  assert.equal(observation.body.value.contextVersion, 1)
+  assert.match(observation.body.value.screenshotRef, /^lcos-canvas:\/\//)
+  assert.match(Buffer.from(observation.body.value.data, 'base64').toString('utf8'), /LCOS Canvas Observation/)
+
+  const relationId = 'relation-gatef-smoke'
+  const relation = await request(`/projects/${projectId}/relations/${relationId}`, {
+    method: 'PUT',
+    body: JSON.stringify({
+      id: relationId,
+      projectId,
+      sourceEntityType: 'artifact',
+      sourceEntityId: String(firstView.artifactId),
+      targetEntityType: 'artifact',
+      targetEntityId: String(secondView.artifactId),
+      kind: 'reference',
+      createdAt: '2026-08-05T00:00:00.000Z',
+      updatedAt: '2026-08-05T00:00:00.000Z',
+    }),
+  })
+  assert.equal(relation.response.status, 200)
+  const invalidRelation = await request(`/projects/${projectId}/relations/relation-invalid`, {
+    method: 'PUT',
+    body: JSON.stringify({
+      id: 'relation-invalid',
+      projectId,
+      sourceEntityType: 'artifact',
+      sourceEntityId: 'artifact-not-in-project',
+      targetEntityType: 'artifact',
+      targetEntityId: String(secondView.artifactId),
+      kind: 'reference',
+      createdAt: '2026-08-05T00:00:00.000Z',
+      updatedAt: '2026-08-05T00:00:00.000Z',
+    }),
+  })
+  assert.equal(invalidRelation.response.status, 400)
 
   const stale = await request(`/projects/${projectId}/active-context`, {
     method: 'PUT',
@@ -203,7 +245,7 @@ try {
   metadata = undefined
 
   metadata = new SqliteMetadataRepository(databasePath)
-  assert.equal(metadata.schemaVersion, 15)
+  assert.equal(metadata.schemaVersion, 18)
   assert.equal(metadata.getCommandDraft(projectId, workspaceId, 'selection')?.prompt, '把开场缩短到三秒')
   assert.equal(metadata.getProviderSessionBinding(projectId, 'codex')?.externalSessionId, 'session-gatef-smoke')
   assert.equal(metadata.getContextProposal(projectId, proposal.body.value.proposalId)?.status, 'pending')
@@ -215,6 +257,8 @@ try {
     activeContextPersistence: true,
     activeContextCas: true,
     activeContextShortPoll: true,
+    canvasObservation: true,
+    safeRelationCommand: true,
     commandDraftPersistence: true,
     contextProposalPersistence: true,
     providerSessionAffinity: true,

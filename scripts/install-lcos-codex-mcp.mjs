@@ -1,27 +1,36 @@
-import { copyFileSync, existsSync, mkdirSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 
 const repoRoot = resolve(import.meta.dirname, '..')
-const serverPath = join(repoRoot, 'tools', 'lcos-agent', 'mcp-server.mjs')
 const codexHome = resolve(process.env.CODEX_HOME || join(homedir(), '.codex'))
 const configPath = join(codexHome, 'config.toml')
-const serverName = 'local-creative-os'
+const tokenFile = join(repoRoot, '.codex-runtime', 'local-core-token')
+const servers = [
+  {
+    name: 'local-creative-os',
+    script: join(repoRoot, 'tools', 'lcos-agent', process.platform === 'win32' ? 'launch-local-creative-os-mcp.cmd' : 'launch-local-creative-os-mcp.sh'),
+    enabledByDefault: true,
+  },
+  {
+    name: 'lcos-executor',
+    script: join(repoRoot, 'tools', 'lcos-agent', process.platform === 'win32' ? 'launch-lcos-executor-mcp.cmd' : 'launch-lcos-executor-mcp.sh'),
+    enabledByDefault: false,
+  },
+]
 
 function fail(message, detail = '') {
   console.error(message)
   if (detail) console.error(detail)
   process.exit(1)
 }
-
 function findCodex() {
   const explicit = process.env.CODEX_BIN
   if (explicit && existsSync(explicit)) return explicit
   if (process.platform === 'win32') {
     const base = process.env.LOCALAPPDATA && join(process.env.LOCALAPPDATA, 'OpenAI', 'Codex', 'bin')
     if (base && existsSync(base)) {
-      const { readdirSync, statSync } = awaitImportFs()
       const candidates = readdirSync(base)
         .map((name) => join(base, name, 'codex.exe'))
         .filter((path) => existsSync(path))
@@ -31,14 +40,6 @@ function findCodex() {
   }
   return 'codex'
 }
-
-function awaitImportFs() {
-  // Kept synchronous so the installer works in plain `node` without a build step.
-  return requireFs
-}
-
-import * as requireFs from 'node:fs'
-
 function run(codex, args, { allowFailure = false } = {}) {
   const result = spawnSync(codex, args, { encoding: 'utf8', windowsHide: true })
   if (result.error && !allowFailure) fail(`无法执行 Codex CLI：${codex}`, result.error.message)
@@ -47,63 +48,92 @@ function run(codex, args, { allowFailure = false } = {}) {
   }
   return result
 }
-
-if (!existsSync(serverPath)) fail(`LCOS MCP server 不存在：${serverPath}`)
-const codex = findCodex()
-const help = run(codex, ['mcp', 'add', '--help'], { allowFailure: true })
-if ((help.status ?? 1) !== 0 || !`${help.stdout ?? ''}${help.stderr ?? ''}`.includes('mcp add')) {
-  fail('当前 Codex CLI 不支持 `codex mcp add`，未修改任何配置。', `${help.stdout ?? ''}\n${help.stderr ?? ''}`.trim())
-}
-
-mkdirSync(dirname(configPath), { recursive: true })
-if (existsSync(configPath)) {
+function backupConfig() {
+  mkdirSync(dirname(configPath), { recursive: true })
+  if (!existsSync(configPath)) return undefined
   const backup = `${configPath}.lcos-backup-${new Date().toISOString().replace(/[:.]/g, '-')}`
   copyFileSync(configPath, backup)
   console.log(`已备份 Codex 配置：${backup}`)
+  return backup
+}
+function getServer(codex, name) {
+  const result = run(codex, ['mcp', 'get', name, '--json'], { allowFailure: true })
+  if ((result.status ?? 1) !== 0) return undefined
+  try { return JSON.parse(result.stdout) } catch { return undefined }
+}
+function looksManaged(value) {
+  const text = JSON.stringify(value ?? {})
+  return text.includes('lcos-agent') || text.includes('local-creative-os') || text.includes('lcos-executor') || text.includes('127.0.0.1:8920')
+}
+function looksExactLegacyAiBridge(value) {
+  const text = JSON.stringify(value ?? {}).toLowerCase()
+  return text.includes('127.0.0.1:8920')
+    || text.includes('localhost:8920')
+    || text.includes('tools/ai-bridge-runtime')
+    || text.includes('bridge_server.py')
+}
+function removeManaged(codex, name, { exactLegacy = false } = {}) {
+  const existing = getServer(codex, name)
+  if (!existing) return
+  if (exactLegacy && !looksExactLegacyAiBridge(existing)) {
+    console.warn(`保留同名 MCP「${name}」：它不匹配 LCOS 旧 ai_bridge 签名。`)
+    return
+  }
+  if (!exactLegacy && !looksManaged(existing)) {
+    fail(`Codex 中已存在同名 MCP「${name}」，但无法确认由 LCOS 管理。`, `请检查：codex mcp get ${name} --json`)
+  }
+  run(codex, ['mcp', 'remove', name])
+  console.log(`已移除旧 MCP：${name}`)
+}
+function patchServerSection(name, values) {
+  if (!existsSync(configPath)) return
+  let text = readFileSync(configPath, 'utf8')
+  const header = `[mcp_servers.${name}]`
+  const start = text.indexOf(header)
+  if (start < 0) return
+  const after = start + header.length
+  const next = text.indexOf('\n[', after)
+  const end = next < 0 ? text.length : next
+  let section = text.slice(start, end).trimEnd()
+  for (const [key, value] of Object.entries(values)) {
+    const line = `${key} = ${value}`
+    const expression = new RegExp(`(^|\\n)${key}\\s*=.*(?=\\n|$)`)
+    section = expression.test(section)
+      ? section.replace(expression, `$1${line}`)
+      : `${section}\n${line}`
+  }
+  text = text.slice(0, start) + `${section}\n` + text.slice(end)
+  writeFileSync(configPath, text, 'utf8')
 }
 
-const existing = run(codex, ['mcp', 'get', serverName, '--json'], { allowFailure: true })
-if ((existing.status ?? 1) === 0) {
-  const parsed = (() => { try { return JSON.parse(existing.stdout) } catch { return null } })()
-  const transport = parsed?.transport ?? parsed
-  const env = parsed?.env ?? transport?.env ?? {}
-  const tokenFile = join(repoRoot, '.codex-runtime', 'local-core-token')
-  const same = transport?.type === 'stdio'
-    && transport.command === process.execPath
-    && Array.isArray(transport.args)
-    && transport.args.includes(serverPath)
-    && env.LCOS_REPO_ROOT === repoRoot
-    && env.LCOS_CORE_TOKEN_FILE === tokenFile
-    && env.LCOS_CORE_URL === 'http://127.0.0.1:43121'
-    && env.LCOS_BRIDGE_URL === 'http://127.0.0.1:43122'
-  if (same) {
-    console.log(`LCOS MCP 已是最新配置：${serverName}`)
-    process.exit(0)
-  }
-  const serialized = JSON.stringify(parsed ?? {})
-  const looksLikeLegacyLcos = serialized.includes('lcos-agent')
-    || serialized.includes('local-creative-os')
-    || serialized.includes('127.0.0.1:8920/mcp')
-  if (!looksLikeLegacyLcos) {
-    fail(
-      `Codex 中已经存在同名 MCP「${serverName}」，但无法确认它由 LCOS 管理。安装已停止。`,
-      '请检查 `codex mcp get local-creative-os --json`，确认后再手动移除。',
-    )
-  }
-  console.log(`检测到旧版 LCOS MCP，正在备份配置并原位修复：${serverName}`)
-  run(codex, ['mcp', 'remove', serverName])
+for (const server of servers) if (!existsSync(server.script)) fail(`MCP 启动器不存在：${server.script}`)
+const codex = findCodex()
+const help = run(codex, ['mcp', 'add', '--help'], { allowFailure: true })
+if ((help.status ?? 1) !== 0) fail('当前 Codex CLI 不支持 `codex mcp add`。', `${help.stdout ?? ''}\n${help.stderr ?? ''}`.trim())
+backupConfig()
+
+// Only remove the exact retired name. The backup above makes the cleanup reversible.
+removeManaged(codex, 'ai_bridge', { exactLegacy: true })
+for (const server of servers) removeManaged(codex, server.name)
+
+for (const server of servers) {
+  run(codex, [
+    'mcp', 'add', server.name,
+    '--env', 'LCOS_CORE_URL=http://127.0.0.1:43121',
+    '--env', `LCOS_REPO_ROOT=${repoRoot}`,
+    '--env', `LCOS_CORE_TOKEN_FILE=${tokenFile}`,
+    '--', server.script,
+  ])
+  patchServerSection(server.name, {
+    enabled: server.enabledByDefault ? 'true' : 'false',
+    startup_timeout_sec: '60',
+    tool_timeout_sec: '120',
+  })
 }
 
-run(codex, [
-  'mcp', 'add', serverName,
-  '--env', 'LCOS_CORE_URL=http://127.0.0.1:43121',
-  '--env', 'LCOS_BRIDGE_URL=http://127.0.0.1:43122',
-  '--env', `LCOS_REPO_ROOT=${repoRoot}`,
-  '--env', `LCOS_CORE_TOKEN_FILE=${join(repoRoot, '.codex-runtime', 'local-core-token')}`,
-  '--', process.execPath, serverPath,
-])
-
-const verified = run(codex, ['mcp', 'get', serverName, '--json'])
-console.log(`已安装并验证 LCOS MCP：${serverName}`)
-console.log(verified.stdout.trim())
-console.log('请重启 Codex Desktop / CLI 会话，让新 MCP 工具进入会话。')
+for (const server of servers) {
+  const verified = run(codex, ['mcp', 'get', server.name, '--json'])
+  console.log(`已安装：${server.name}（默认${server.enabledByDefault ? '启用' : '关闭'}）`)
+  console.log(verified.stdout.trim())
+}
+console.log('普通 Codex 会话只启用 local-creative-os；LCOS Runner 会临时启用 lcos-executor 并关闭普通工具面。')

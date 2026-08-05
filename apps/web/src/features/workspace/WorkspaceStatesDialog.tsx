@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Clock3, History, LoaderCircle, RotateCcw, Save, X } from 'lucide-react'
 import type { Workspace } from '../../model'
 import type { WorkspaceStateSummary } from '../../runtime/projectionAdapters'
@@ -11,7 +12,7 @@ interface Props {
   error?: string
   onClose: () => void
   onRefresh: () => void
-  onSave: () => void
+  onSave: (name?: string) => void
   onRestore: (stateId: string) => void
 }
 
@@ -22,6 +23,7 @@ function formatTime(value?: string): string {
 }
 
 export function WorkspaceStatesDialog(props: Props) {
+  const [name, setName] = useState('')
   return <div className="workspace-states-backdrop" role="presentation" onPointerDown={props.onClose}>
     <section className="workspace-states-dialog" role="dialog" aria-modal="true" aria-label={`${props.workspace.label} 工作现场`} onPointerDown={(event) => event.stopPropagation()}>
       <header>
@@ -29,7 +31,8 @@ export function WorkspaceStatesDialog(props: Props) {
         <button type="button" className="icon-button pressable" aria-label="关闭工作现场" onClick={props.onClose}><X size={15} /></button>
       </header>
       <div className="workspace-states-actions">
-        <button type="button" className="pressable primary" disabled={props.saving} onClick={props.onSave}>{props.saving ? <LoaderCircle className="spin" size={13} /> : <Save size={13} />}保存当前工作现场</button>
+        <label className="workspace-state-name"><span>现场名称</span><input value={name} onChange={(event) => setName(event.target.value)} placeholder={`${props.workspace.label} · 阶段记录`} /></label>
+        <button type="button" className="pressable primary" disabled={props.saving} onClick={() => { props.onSave(name.trim() || undefined); setName('') }}>{props.saving ? <LoaderCircle className="spin" size={13} /> : <Save size={13} />}保存当前工作现场</button>
         <button type="button" className="pressable" disabled={props.loading} onClick={props.onRefresh}><History size={13} />刷新历史</button>
       </div>
       {props.error && <div className="workspace-states-error">{props.error}</div>}

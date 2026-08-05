@@ -492,3 +492,11 @@ Codex 首次进入仓库时：
 6. 在未获确认前，不进行大范围迁移或产品功能开发。
 
 详细执行规则见 `AGENTS.md` 和 `CODEX_START_HERE.md`。
+
+## Gate F Plus（2026-08-05）
+
+当前 MCP / Bridge / Conversation Context Import 收口入口：
+
+```text
+GATEF_PLUS_BIG_ROUND_START_HERE.md
+```

@@ -1,7 +1,7 @@
 {
   "name": "local-creative-os",
   "private": true,
-  "version": "0.7.3",
+  "version": "0.9.0",
   "type": "module",
   "workspaces": [
     "apps/*",
@@ -48,7 +48,22 @@
     "build:local-core": "npm run build:domain && npm run build --workspace @local-creative-os/local-core",
     "check:gatef-closeout": "node scripts/validate-gatef-closeout.mjs",
     "smoke:obsidian": "npm run build:local-core && node scripts/obsidian-connector-smoke.mjs",
-    "smoke:gatef-closeout": "npm run build:local-core && node scripts/gatef-core-smoke.mjs && node scripts/obsidian-connector-smoke.mjs && node scripts/validate-gatef-closeout.mjs"
+    "smoke:gatef-closeout": "npm run build:local-core && node scripts/gatef-core-smoke.mjs && node scripts/obsidian-connector-smoke.mjs && node scripts/validate-gatef-closeout.mjs",
+    "lcos:install-sqlite-vec": "node scripts/install-sqlite-vec.mjs",
+    "lcos:mcp:executor": "node tools/lcos-agent/mcp-executor-server.mjs",
+    "smoke:conversation": "npm run build:local-core && node scripts/conversation-import-smoke.mjs",
+    "smoke:conversation-large": "npm run build:local-core && node scripts/conversation-large-import-smoke.mjs",
+    "lcos:bootstrap": "node scripts/bootstrap-lcos.mjs",
+    "check:gatef-plus": "node scripts/validate-gatef-plus.mjs",
+    "smoke:gatef-plus": "npm run build:local-core && node scripts/conversation-import-smoke.mjs && node scripts/validate-gatef-plus.mjs",
+    "smoke:conversation-semantic": "npm run build:local-core && node scripts/conversation-semantic-smoke.mjs",
+    "smoke:schema-v18": "npm run build:local-core && node scripts/schema-v18-migration-smoke.mjs",
+    "evidence:gatef-plus": "powershell -ExecutionPolicy Bypass -File scripts/gatef-plus-windows-evidence.ps1",
+    "watchdog": "node tools/codex-orchestrator/watch.mjs",
+    "smoke:watchdog": "node scripts/codex-watchdog-smoke.mjs",
+    "smoke:lcosproj-browser": "npm run build:local-core && node scripts/lcosproj-browser-smoke.mjs",
+    "smoke:gatef-plus-big": "npm run build:local-core && node scripts/validate-gatef-plus.mjs && node scripts/conversation-import-smoke.mjs && node scripts/conversation-import-recovery-smoke.mjs && node scripts/conversation-semantic-smoke.mjs && node scripts/schema-v18-migration-smoke.mjs && node scripts/codex-watchdog-smoke.mjs && node scripts/lcosproj-browser-smoke.mjs && node scripts/gatef-core-smoke.mjs",
+    "smoke:conversation-recovery": "npm run build:local-core && node scripts/conversation-import-recovery-smoke.mjs"
   },
   "dependencies": {
     "lucide-react": "^1.24.0",

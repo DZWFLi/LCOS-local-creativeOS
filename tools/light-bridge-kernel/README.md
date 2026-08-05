@@ -1,4 +1,4 @@
-# LCOS Light Bridge Kernel v0.2.0
+# LCOS Light Bridge Kernel v0.3.0
 
 这是 Local Creative OS 的轻量任务网关。它只负责：
 
@@ -11,6 +11,13 @@ LCOS Run
 ```
 
 它不负责 Project Truth、Artifact、Revision、Current、Accept，也不负责替用户判断 Target。人类已经制造了足够多的“万能中间层”，这里不再添一只。
+
+## v0.3.0 的边界收口
+
+- 删除 Bridge MCP 公共面，只保留 loopback REST；
+- 删除 Session Continuity / Conversation 模型，项目会话绑定归 Local Core；
+- Executor MCP 由 Local Core 暴露并代理 Bridge REST；
+- 保留 Task Lease、waiting_input、ResultEnvelope 与重启恢复。
 
 ## v0.2.0 的核心变化
 
@@ -139,9 +146,9 @@ IDEMPOTENCY_CONFLICT
 - 数据库升级后，旧 V0 Task 仍可查询、提交旧 Result、Finalize；
 - 不存在“V1 失败后自动重发 V0”的危险回退。
 
-## REST / MCP
+## REST
 
-REST：
+Bridge 只提供内部 loopback REST：
 
 ```text
 GET  /health
@@ -154,7 +161,7 @@ POST /v1/tasks/{taskId}/result
 MCP：
 
 ```text
-http://127.0.0.1:43122/mcp
+Bridge 不提供 MCP；执行器工具通过 Local Core 的 `lcos-executor` MCP 调用 REST 网关。
 ```
 
 ## Codex pull worker

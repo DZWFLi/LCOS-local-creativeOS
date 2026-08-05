@@ -2,24 +2,26 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-const source = readFileSync(
-  join(__dirname, '../../tools/codex-orchestrator/watch.ps1'),
-  'utf8',
-)
-const runner = readFileSync(
-  join(__dirname, '../../tools/codex-orchestrator/run-codex-task.mjs'),
-  'utf8',
-)
-const skillInstaller = readFileSync(
-  join(__dirname, '../../scripts/install-lcos-codex-skill.mjs'),
-  'utf8',
-)
+const root = join(__dirname, '../..')
+const source = readFileSync(join(root, 'tools/codex-orchestrator/watch.mjs'), 'utf8')
+const library = readFileSync(join(root, 'tools/codex-orchestrator/watch-lib.mjs'), 'utf8')
+const powershell = readFileSync(join(root, 'tools/codex-orchestrator/watch.ps1'), 'utf8')
+const runner = readFileSync(join(root, 'tools/codex-orchestrator/run-codex-task.mjs'), 'utf8')
+const skillInstaller = readFileSync(join(root, 'scripts/install-lcos-codex-skill.mjs'), 'utf8')
 
 describe('Codex orchestrator operational guards', () => {
-  it('discovers projects from Local Core without requiring sessions.json', () => {
-    expect(source).toContain("Invoke-RestMethod -Uri 'http://127.0.0.1:43121/projects'")
-    expect(source).toContain('return @{ projects = @{} }')
-    expect(source).not.toContain('找不到会话注册表')
+  it('discovers projects and preferred sessions from Local Core without sessions.json', () => {
+    expect(source).toContain("core('/projects')")
+    expect(source).toContain('/provider-sessions/codex')
+    expect(source).not.toContain('sessions.json')
+    expect(source).not.toContain('resume --last')
+  })
+
+  it('keeps one active task per project while allowing bounded cross-project concurrency', () => {
+    expect(source).toContain('new ProjectTaskPool(concurrency)')
+    expect(source).toContain('LCOS_ORCHESTRATOR_CONCURRENCY')
+    expect(library).toContain('#activeProjects')
+    expect(library).toContain("!this.#activeProjects.has(item.projectId)")
   })
 
   it('binds only the session id emitted by the Codex process', () => {
@@ -28,28 +30,37 @@ describe('Codex orchestrator operational guards', () => {
     expect(runner).toContain('thread_id')
     expect(runner).toContain('LCOS_CODEX_RESULT:')
     expect(source).not.toContain('Get-LatestCodexSessionId')
-    expect(source).not.toContain('resume --last')
   })
 
-  it('only records dispatch success after a recoverable Bridge outcome is observed', () => {
+  it('only records success after a recoverable Bridge outcome is observed', () => {
     expect(runner).toContain('closureObserved')
     expect(runner).toContain('closure_not_observed')
     expect(runner).toContain('sessionInvalid')
-    expect(source).toContain('保留首选会话并等待有限重试')
-    expect(source).toContain('首选会话已明确失效')
+    expect(source).toContain('marker?.closureObserved === true')
+    expect(source).toContain("saveBinding(project.id, sessionId, item.runId, 'stale'")
   })
 
-  it('supports non-mutating one-shot diagnostics', () => {
-    expect(source).toContain("$runOnce = $env:LCOS_ORCHESTRATOR_ONCE -eq '1'")
-    expect(source).toContain("$dryRun = $env:LCOS_ORCHESTRATOR_DRY_RUN -eq '1'")
-    expect(source).toContain('if ($runOnce) { break }')
-    expect(source).toContain('if ($dispatched -and -not $dryRun)')
+  it('has a runner timeout, finite retry budget and atomic persisted state', () => {
+    expect(source).toContain('LCOS_ORCHESTRATOR_RUNNER_TIMEOUT_MS')
+    expect(source).toContain('LCOS_ORCHESTRATOR_MAX_ATTEMPTS')
+    expect(source).toContain('exhausted')
+    expect(source).toContain('writeJsonAtomic')
+    expect(library).toContain('.partial')
   })
 
-  it('recovers stale process locks and persists cooldown by run', () => {
-    expect(source).toContain('Get-Process -Id $ownerPid')
-    expect(source).toContain('lastDispatchByRun = $dispatches')
-    expect(source).not.toContain('lastDispatchBySession = @{}')
+  it('supports non-mutating one-shot diagnostics and a thin PowerShell entrypoint', () => {
+    expect(source).toContain('LCOS_ORCHESTRATOR_ONCE')
+    expect(source).toContain('LCOS_ORCHESTRATOR_DRY_RUN')
+    expect(source).toContain('if (once)')
+    expect(powershell).toContain('watch.mjs')
+    expect(powershell).not.toContain('Invoke-RestMethod')
+  })
+
+  it('recovers stale single-instance locks without killing unrelated processes', () => {
+    expect(source).toContain("open(lockFile, 'wx')")
+    expect(source).toContain('process.kill(pid, 0)')
+    expect(source).toContain("rm(lockFile, { force: true })")
+    expect(source).not.toContain('taskkill.exe /IM node.exe')
   })
 
   it('installs the canonical LCOS skill globally without overwriting unmanaged skills', () => {

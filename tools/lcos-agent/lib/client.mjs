@@ -2,15 +2,11 @@ import { readFileSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
 
 const DEFAULT_CORE_URL = "http://127.0.0.1:43121";
-const DEFAULT_BRIDGE_URL = "http://127.0.0.1:43122";
 
 export function coreUrl() {
   return loopbackUrl(process.env.LCOS_CORE_URL || DEFAULT_CORE_URL);
 }
 
-export function bridgeUrl() {
-  return loopbackUrl(process.env.LCOS_BRIDGE_URL || DEFAULT_BRIDGE_URL);
-}
 
 export async function coreRequest(path, init = {}) {
   const token = coreToken();
@@ -40,9 +36,6 @@ function coreToken() {
   return undefined;
 }
 
-export async function bridgeRequest(path, init = {}) {
-  return requestJson(new URL(path, `${bridgeUrl()}/`), init);
-}
 
 export async function requestJson(url, init = {}) {
   const controller = new AbortController();

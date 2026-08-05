@@ -21,9 +21,13 @@ const bridgeUrl = typeof input.bridgeUrl === 'string' ? input.bridgeUrl : 'http:
 const sessionId = typeof input.sessionId === 'string' && input.sessionId.trim() ? input.sessionId.trim() : undefined
 const cancellationPollMs = Number.isFinite(input.cancellationPollMs) ? Math.max(250, Number(input.cancellationPollMs)) : 750
 const gracefulCancelMs = Number.isFinite(input.gracefulCancelMs) ? Math.max(500, Number(input.gracefulCancelMs)) : 3_000
+const mcpRoleOverrides = [
+  '-c', 'mcp_servers.local-creative-os.enabled=false',
+  '-c', 'mcp_servers.lcos-executor.enabled=true',
+]
 const args = sessionId
-  ? ['exec', '--json', '--skip-git-repo-check', '-C', projectRoot, 'resume', sessionId, message]
-  : ['exec', '--json', '-C', projectRoot, '--skip-git-repo-check', message]
+  ? [...mcpRoleOverrides, 'exec', '--json', '--skip-git-repo-check', '-C', projectRoot, 'resume', sessionId, message]
+  : [...mcpRoleOverrides, 'exec', '--json', '-C', projectRoot, '--skip-git-repo-check', message]
 
 let stdout = ''
 let stderr = ''
