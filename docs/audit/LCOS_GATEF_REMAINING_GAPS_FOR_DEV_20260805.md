@@ -71,3 +71,39 @@
 Codex 必须是第一个真实通过全部 P0/P1 场景的本地 Agent；
 不允许用模拟 Agent、脚本 claim 或“CLI 命令存在”代替真实浏览器上下文与自动执行闭环。
 
+## 五、附：离 tldraw 式实时交互的开发差距（对照）
+
+> 参考：MVP 对话中 GPT 原判断——“LCOS 已经有 tldraw 式 Agent Canvas 的数据入口，
+> 但还没有观察—行动循环”。下表为其后 Gate F 入库并实机验证后的更新状态。
+
+| 能力 | 当时判断 | Gate F 后现状 |
+|---|---|---|
+| 用户选择同步到 Core | 已有 | ✅ 更完整：v14 持久化 + CAS + 250ms debounce |
+| Agent 读取 ActiveContext | 已有 | ✅ 加了 `afterVersion` watch（CLI/MCP），数据层可达 1 秒内 |
+| Run 冻结 ContextManifest | 已有 | ✅ |
+| Agent 专用浏览器视图 | 已有基础 | ✅ 基础增强：同步徽章/提案卡片/待办/Run 锁（探针验证） |
+| 自动唤起/接单 Codex | 正在补 | 🟡 看门狗零注册 resume 已实现，真实会话闭环未跑通 |
+| 全局 LCOS Skill | 已安装 | ✅ |
+| 视口内结构化快照 | 未完整实现 | 🟡 大半完成：viewport/可见节点/坐标摘要/关系已有；缺视口外 Cluster 摘要与近期操作 |
+| 画布截图上下文 | 未实现 | ❌ 没做（无 screenshotRef） |
+| 实时 Canvas Event Stream | 未实现 | ❌ 没做；目前用 afterVersion 短轮询替代（拍板可接受，SSE 后置） |
+| Agent Typed Canvas Actions | 未实现 | 🟡 部分：加/移参考、设 Target、聚焦、提案、发 Run 已通；move_view/create_relation/select/加进 Workspace/open_preview 没有 |
+| Agent 移动视口并再次观察 | 未实现 | ❌ 没做 |
+| 连续画布协作循环 | 未实现 | ❌ 没验证（依赖真实闭环） |
+
+### 四层量化
+
+```text
+第 1 层 读（Agent 能读懂画布）      ≈ 70%  差视口外摘要、近期操作、截图
+第 2 层 信号（画布变化通知）        ≈ 40%  有 afterVersion 轮询，无事件流，浏览器面板未接入
+第 3 层 写（Agent 能操作画布）      ≈ 40%  只读 + 少量上下文命令；几何动作全无
+第 4 层 闭环（观察→行动→再观察）   ≈ 10%  真实 Codex 会话一次没跑通
+```
+
+### 最短补法（按顺序）
+
+1. 真实 Codex 接单闭环跑通（第 4 层地基）；
+2. Canvas Context Snapshot 补视口外摘要 + 截图引用（第 1 层补齐）；
+3. Typed Canvas Actions 先做 `focus_views / select_views / move_view` 三个安全几何动作（第 3 层破冰）。
+
+这三样完成后，tldraw 式协作主循环成立，其余为增强。
