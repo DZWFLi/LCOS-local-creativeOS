@@ -9,7 +9,11 @@ const skipInstall = process.argv.includes('--doctor-only')
 const report = []
 
 function command(command, args, options = {}) {
-  return spawnSync(command, args, {
+  const isWindows = process.platform === 'win32'
+  const isCmdShim = isWindows && /\.cmd$/i.test(command)
+  const target = isCmdShim ? (process.env.ComSpec || 'cmd.exe') : command
+  const targetArgs = isCmdShim ? ['/d', '/s', '/c', command, ...args] : args
+  return spawnSync(target, targetArgs, {
     cwd: root,
     encoding: 'utf8',
     windowsHide: true,
