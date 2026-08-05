@@ -22,7 +22,7 @@ const sessionId = typeof input.sessionId === 'string' && input.sessionId.trim() 
 const cancellationPollMs = Number.isFinite(input.cancellationPollMs) ? Math.max(250, Number(input.cancellationPollMs)) : 750
 const gracefulCancelMs = Number.isFinite(input.gracefulCancelMs) ? Math.max(500, Number(input.gracefulCancelMs)) : 3_000
 const args = sessionId
-  ? ['exec', '--json', '-C', projectRoot, 'resume', sessionId, message]
+  ? ['exec', '--json', '--skip-git-repo-check', '-C', projectRoot, 'resume', sessionId, message]
   : ['exec', '--json', '-C', projectRoot, '--skip-git-repo-check', message]
 
 let stdout = ''
@@ -142,7 +142,10 @@ const payload = {
   failureKind,
   sessionId: resolvedSessionId ?? sessionId ?? null,
 }
-process.stdout.write(`
-LCOS_CODEX_RESULT:${JSON.stringify(payload)}
-`)
-process.exitCode = effectiveExitCode
+// codex 的孙进程（如 MCP server）可能继承 stdout 管道，导致事件循环不空、进程不退出；
+// 结果写完后必须强制退出，否则会阻塞看门狗主循环。
+try { child.stdout.destroy() } catch {}
+try { child.stderr.destroy() } catch {}
+process.stdout.write(`\nLCOS_CODEX_RESULT:${JSON.stringify(payload)}\n`, () => {
+  process.exit(effectiveExitCode)
+})
