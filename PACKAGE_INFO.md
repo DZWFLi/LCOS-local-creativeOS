@@ -1,8 +1,11 @@
-# LCOS Fullstack Gate F Final Closeout Candidate
+# LCOS Fullstack Gate F Plus（P0 对话导入设计版）
 
 > 日期：2026-08-05
-> 原始基线：`7cdf8c3e4d19c024d6dc302fc3c486ef277424d5`
-> 目的：真实 Windows / Codex 最终复测前的完整全栈源码候选。
+> 分支：`codex/backend-hardening-20260802`
+> HEAD：`a0ee8ec`（docs: P0 conversation import lightweight design + OSS borrow list）
+> 代码基线：Gate F Final Closeout 入库提交 `6280398` + 实机验收修复
+> `bd5614b / 387c602 / d755fb9 / 788668c`；此后仅新增文档，无代码改动。
+> 目的：给开发的全栈源码候选 + P0 对话导入项目描述 + 剩余问题总账。
 
 ## 包内容
 
@@ -16,6 +19,14 @@ tools/codex-orchestrator
 scripts
 tests
 docs
+```
+
+本轮新增文档：
+
+```text
+docs/product/LCOS_P0_CONVERSATION_IMPORT_PROJECT_BRIEF_20260805.md   # P0 项目描述（Core/MCP/Skill/CLI 接入点）
+docs/audit/LCOS_FULLSTACK_REMAINING_ISSUES_MASTER_20260805.md        # 全栈剩余问题总账（给开发）
+docs/audit/LCOS_GATEF_REMAINING_GAPS_FOR_DEV_20260805.md             # 轻量导入设计 + 开源借鉴清单
 ```
 
 额外包含：
@@ -45,19 +56,26 @@ Python virtualenv / egg-info / pyc
 ## 验证摘要
 
 ```text
-Domain build：PASS
-Local Core build：PASS
-TS/TSX syntax：PASS
-MJS syntax：PASS
-Core schema/HTTP smoke：PASS
-Connector/Obsidian smoke：PASS
-Light Bridge pytest：35/35 PASS
-MCP tools/list：58 tools
-Skill installer / MCP installer / Codex Runner contract smoke：PASS
+本轮为文档增量包，代码基线未变，沿用 Gate F Final Closeout 实机验收成绩：
+lint / typecheck / 单测 387 / 架构 57 / 集成 5 / web build / local-core build /
+smoke / Bridge pytest 35/35 / Core smoke（schema v15）/ Obsidian smoke /
+Golden Path / Playwright E2E 7/7 / 浏览器探针全绿
+
+真实 Codex 场景：A 新会话 analyze ✅ / B 会话复用 3 次 ✅ / E waiting_input ✅
+```
+
+遗留（诚实标注，见总账文档）：
+
+```text
+MCP 注册成功但真实 codex exec 会话未加载工具（显式走 REST fallback）——待开发修通
+看门狗主循环仍为单线程同步等待——待异步化 + 超时护栏
+连续 5 Run 只完成 4 个真实 Run；revise/create 真实变体未跑
 ```
 
 完整 Windows Web 质量链和真实 Codex 会话复测见：
 
 ```text
+docs/audit/LCOS_GATEF_CLOSEOUT_WINDOWS_VERIFICATION_20260805.md
+docs/audit/LCOS_FULLSTACK_REMAINING_ISSUES_MASTER_20260805.md
 docs/testing/GATEF_REAL_MACHINE_TEST_CHECKLIST_20260805.md
 ```

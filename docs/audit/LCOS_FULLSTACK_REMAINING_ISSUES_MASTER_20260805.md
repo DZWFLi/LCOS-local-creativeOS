@@ -1,0 +1,139 @@
+# LCOS 全栈包剩余问题总账（给开发）
+
+> 日期：2026-08-05
+> 输入包：`LCOS_Fullstack_GateF_Final_Closeout_20260805.zip`（已入库提交 `6280398`）
+> 实机验收：`docs/audit/LCOS_GATEF_CLOSEOUT_WINDOWS_VERIFICATION_20260805.md`
+> 能力缺口：`docs/audit/LCOS_GATEF_REMAINING_GAPS_FOR_DEV_20260805.md`
+> 本文件是上述两份的总账，开发只需读这一份 + P0 项目描述即可开工。
+
+## 0. 总体判断
+
+Gate F Final Closeout 候选包通过 Windows 实机质量链与真实 Codex 核心场景
+（A 新会话 / B 会话复用 / E waiting_input 已真实跑通），**但仍有两类问题**：
+
+```text
+A 类：验收中发现、开发必须修（MCP 真实会话、看门狗架构）
+B 类：功能做了但真实闭环未跑满 / 用户视角缺口仍存在
+```
+
+任何“接口有 / 按钮有 / 测试有 / 文档写完成”都不能算完成，见 §7 验收口径。
+
+## 1. A 类：开发必须修（验收遗留）
+
+| # | 问题 | 现状 | 要求 |
+|---|---|---|---|
+| A1 | **MCP 未进真实 Codex 会话** | `lcos:install-mcp` 注册成功（`codex mcp get` 返回配置），但真实 `codex exec` 会话内没有 `local-creative-os` MCP 工具；Agent 显式上报走 REST fallback；另有 `127.0.0.1:8920/mcp` 配置连不上 | 修通 MCP 加载并真实验证：在 codex exec 会话内看到工具、能调用一个只读工具、输出可复现证据。禁止用“REST 等价”当完成 |
+| A2 | **看门狗单线程同步等待 runner** | runner 已强制退出（不再阻塞主循环），但主循环仍是单线程同步等待，架构脆弱（本轮已实际卡死一次） | 改异步 / 加超时护栏：一个 runner 卡住不得阻塞后续 Run；加回归测试覆盖“runner 不退出”场景 |
+| A3 | **`run.started` 依赖 10s 自动同步** | 极短任务可能跳过 started 事件（UI 不依赖事件，可接受，但语义不稳） | 明确事件语义或缩短窗口；至少写文档说明 |
+| A4 | **相机可见性常量分散** | 本轮已把过程/投影节点排除出相机判定，但“主内容最少可见比例”建议作为 UI 常量集中管理 | 集中常量 + 单测覆盖 |
+
+## 2. B 类：真实闭环未跑满（不许称完成）
+
+| # | 场景 | 现状 |
+|---|---|---|
+| B1 | 连续 5 Run 无重复、同一 Session 不乱跳 | 只完成 4 个真实 Run（1 spawn + 2 resume + 1 waiting_input resume） |
+| B2 | revise / create 真实变体 | 未跑（只有 analyze 与 waiting_input 续跑） |
+| B3 | 真实“运行中撤回进程树”（G） | 未实测（cancel API 对排队 Run 有效，Golden Path 覆盖 cancel 事件） |
+| B4 | 浏览器 1 秒内实时上下文（H） | 探针验证版本实时递增（v345→v372，afterVersion 长轮询在跑），未做逐毫秒测量 |
+| B5 | Obsidian UI 点选（I） | smoke/单测覆盖 readOnly + sourceUnchanged；原生目录选择器无法 headless，未走 UI 点选 |
+| B6 | 长 Prompt 端到端恢复 | 未真实跑 |
+| B7 | 从选中到发送 ≤3 个核心动作 | 未真实跑 |
+
+## 3. C 类：用户视角功能缺口（Gate F 后仍欠）
+
+| 能力 | 现状 | 还缺什么 |
+|---|---|---|
+| **对话 Session 导入** | 无（P0 新需求） | 见 `docs/product/LCOS_P0_CONVERSATION_IMPORT_PROJECT_BRIEF_20260805.md`（单独项目描述） |
+| 自然语言上下文指令 | 底层命令有，真实链路未通 | 依赖 A1 类真实接单闭环；“把第二张也加进来”这类指令要 Skill 真实执行 |
+| waiting_input | 协议/UI/一次真实问答已通 | 常态化：多场景复测、UI 人话展示、回答幂等 |
+| 小错误自动修正一次 | Skill 白名单有（8 类结构化错误） | 真实触发一次并验证“修正后不打扰用户” |
+| 手动接单后成为首选会话 + 会话失效只新建一次 | Session Affinity 逻辑有 | 真实流程未验证（失效→新建一次→绑定正确） |
+| Agent 浏览器实时上下文 1s | 数据层 afterVersion 有，面板接入轮询 | 面板端逐毫秒复测 + 断线重连场景 |
+| UI 术语降噪 / 右侧单工作台 | 只做了基础降噪 | 普通界面仍可能出开发话；“一次只有一个上下文工作台”未实现 |
+| 多选后 Agent 自动识别 Target/Context | UI 只有本地静态人话摘要 | 真实 Skill 识别未验证 |
+| `.lcosproj` 日常化 | 后端 v14 导出/导入可用 | GUI 打开/另存入口、双击打开、Windows 文件关联、自动发现、live store、状态栏保存状态 |
+| 批量导出工程 | CLI/API 有 | 项目管理页备份/迁移入口 |
+| Run Event 时间线 | SQLite/API 有 | Activity UI：人话任务过程、去重、错误定位 |
+| Runtime Recovery | recover API 有 | GUI“重新连接/继续任务”按钮与故障解释 |
+| Watcher / stale | Core 有测试 | UI 外部变化提示、重新读取、冲突处理 |
+| Checkpoint | 保存/历史按钮有 | 项目时间线、命名、恢复与对比 |
+| Preview | 缓存/注册表基础有 | 统一右侧 Viewer、外部打开 |
+| Handoff / ContextManifest | 后端 manifest 有 | “交给另一个对话”/Context Pack 导出入口 |
+| 文件夹扫描与项目索引 | Core 有 | 确认页、自动分组、节点合集与布局 |
+| 托盘 Runtime Host | 脚本存在、曾修编码 | Windows 实机验收：单实例、自启动、退出、恢复、状态菜单 |
+| Eagle/Obsidian/IMA/收藏夹连接器 | Obsidian 只读已做，其余无 | 统一资源连接器（远期；Obsidian 先按只读验收） |
+
+## 4. D 类：离 tldraw 式实时交互的差距（量化）
+
+```text
+第 1 层 读（Agent 能读懂画布）      ≈ 70%  差视口外 Cluster 摘要、近期操作、screenshotRef
+第 2 层 信号（画布变化通知）        ≈ 40%  有 afterVersion 轮询，无事件流；浏览器面板接入基础有
+第 3 层 写（Agent 能操作画布）      ≈ 40%  已有 select/focus/move_view、Context/Target/Workspace；
+                                          缺 create_relation、加进 Workspace、open_preview、移动视口
+第 4 层 闭环（观察→行动→再观察）   ≈ 10%  真实 Codex 会话闭环刚起步（A/B/E 已通）
+```
+
+最短补法（按顺序）：
+
+```text
+1. A1/A2 修通后，把真实接单闭环稳定跑满 5 Run（B1/B2）
+2. Canvas Context Snapshot 补视口外摘要 + screenshotRef（第 1 层补齐）
+3. Typed Canvas Actions 补 create_relation / 加进 Workspace / open_preview（第 3 层扩展）
+```
+
+## 5. E 类：已收口、不要重复开发
+
+- 极简 Composer（参考芯片 + 人话输入 + Agent + 结果节点 + 发送）
+- CommandDraft 持久化（切节点/刷新/重启不丢）
+- 多选、框选、组移动
+- Workspace Membership GUI（加入/移出/移至）
+- 撤回任务 + 迟到结果隔离
+- Context 命令与 Proposal（加/移参考、设 Target、聚焦、提案持久化）
+- Provider 能力门
+- ActiveContext v14 持久化 + CAS + afterVersion
+- Session Affinity 表 + 看门狗零注册 resume
+- CLI/MCP 49→58 工具 + Skill 语义决策入口 + Core 最小 Guard
+- Process Projection（只投影真实 Run，画布最多 3 个）
+- 结果四按钮（使用/补充要求/重新执行/放弃）
+- waiting_input 全链路（协议 + UI + 一次真实问答）
+- Obsidian 只读连接器
+- 质量链全绿基线（387 单测 + 57 架构 + 5 集成 + 35 pytest + 7 E2E + Golden Path）
+
+## 6. 开发优先级建议
+
+```text
+P0-1  A1：MCP 真实会话修通（这是“不得偷偷降级”的硬债）
+P0-2  A2：看门狗异步化 + 超时护栏
+P0-3  B1/B2：真实连续 5 Run + revise/create 变体跑满
+P0-4  对话 Session 导入 Phase 0（见独立项目描述）
+P1    B4 逐毫秒 / B3 真实撤回 / C 类 UI 入口（.lcosproj 日常化、Activity、Recovery）
+P2    L3 语义索引 / 事件流（SSE）/ 其余连接器 / 安装器（Gate W）
+```
+
+不要在 P0-1~P0-3 修通前继续堆新架构（SSE、向量库、更多连接器、自动布局）。
+
+## 7. 验收口径（别被糊弄）
+
+```text
+用户能自然找到入口并完整用完
+或 Agent 能通过 Skill 自动调用并得到可恢复结果
+刷新和重启后还在
+出错能恢复，错误是人话
+```
+
+Codex 必须是第一个真实通过全部 P0/P1 场景的本地 Agent；不允许用模拟 Agent、
+脚本 claim 或“CLI 命令存在”代替真实浏览器上下文与自动执行闭环。接口、按钮、
+Fixture 和类型测试不能算真实完成；未逐项复测前禁止宣称整体收口或可并入主干。
+
+## 8. 复跑入口（开发自查）
+
+```powershell
+npm run audit:manifest:verify
+npm run check:fast
+npm run smoke:gatef-closeout
+npm run test:golden:full
+npm run test:e2e        # 先 npm run dev:stop
+npm run dev:open
+node tests/e2e/closeout-diag.mjs
+node tests/e2e/single-click-probe.mjs
+```
