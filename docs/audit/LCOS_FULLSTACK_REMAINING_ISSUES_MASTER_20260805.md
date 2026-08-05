@@ -18,11 +18,39 @@ B 类：功能做了但真实闭环未跑满 / 用户视角缺口仍存在
 
 任何“接口有 / 按钮有 / 测试有 / 文档写完成”都不能算完成，见 §7 验收口径。
 
+## 0.1 第一优先：MCP 完全完善（做任何新功能之前）
+
+**用户决定：做 P0 对话导入之前，开发必须先修好 MCP。** MCP 是 Agent 与 LCOS 的正式
+通道；对话导入要靠 Skill/MCP/CLI 驱动，MCP 不完善等于地基没打。
+
+已定位的高置信根因线索（2026-08-05 实测）：
+
+```text
+1. MCP command 写死 fnm multishell 临时 node.exe（process.execPath），
+   shell 清理后路径失效 → 服务器起不来 → 真实会话静默无工具；
+2. 遗留 ai_bridge（http://127.0.0.1:8920/mcp）仍启用在 config.toml，已不可达；
+3. 现有验证停在配置层，真实会话级验收缺失。
+```
+
+完整排查与修复指引见：
+
+```text
+docs/audit/LCOS_MCP_COMPLETION_HELP_20260805.md
+```
+
+“MCP 完全完善”包含**架构解耦**：三张 MCP 面（老 ai_bridge 8920 / Light Bridge 43122/mcp /
+local-creative-os stdio）收敛为唯一一张，Bridge 只留 REST，工具按角色命名空间分组。
+设计见：
+
+```text
+docs/architecture/LCOS_MCP_BRIDGE_DECOUPLING_DESIGN_20260805.md
+```
+
 ## 1. A 类：开发必须修（验收遗留）
 
 | # | 问题 | 现状 | 要求 |
 |---|---|---|---|
-| A1 | **MCP 未进真实 Codex 会话** | `lcos:install-mcp` 注册成功（`codex mcp get` 返回配置），但真实 `codex exec` 会话内没有 `local-creative-os` MCP 工具；Agent 显式上报走 REST fallback；另有 `127.0.0.1:8920/mcp` 配置连不上 | 修通 MCP 加载并真实验证：在 codex exec 会话内看到工具、能调用一个只读工具、输出可复现证据。禁止用“REST 等价”当完成 |
+| A1 | **MCP 未进真实 Codex 会话** | 注册成功（`codex mcp get` enabled），但真实 `codex exec` 会话内没有 `local-creative-os` 工具；Agent 显式上报走 REST fallback；已定位根因线索：command 为 fnm 临时 node 路径 + 遗留 `ai_bridge` 未清理 | 见 `LCOS_MCP_COMPLETION_HELP_20260805.md`：稳定 command、清 ai_bridge、显式超时、真实会话验收六条全过 |
 | A2 | **看门狗单线程同步等待 runner** | runner 已强制退出（不再阻塞主循环），但主循环仍是单线程同步等待，架构脆弱（本轮已实际卡死一次） | 改异步 / 加超时护栏：一个 runner 卡住不得阻塞后续 Run；加回归测试覆盖“runner 不退出”场景 |
 | A3 | **`run.started` 依赖 10s 自动同步** | 极短任务可能跳过 started 事件（UI 不依赖事件，可接受，但语义不稳） | 明确事件语义或缩短窗口；至少写文档说明 |
 | A4 | **相机可见性常量分散** | 本轮已把过程/投影节点排除出相机判定，但“主内容最少可见比例”建议作为 UI 常量集中管理 | 集中常量 + 单测覆盖 |
@@ -135,15 +163,16 @@ docs/testing/fixtures/conversation-import-sample/session-p0-slice.jsonl（854KB 
 ## 6. 开发优先级建议
 
 ```text
-P0-1  A1：MCP 真实会话修通（这是“不得偷偷降级”的硬债）
+P0-1  MCP 完全完善（A1 关闭；指引见 LCOS_MCP_COMPLETION_HELP_20260805.md）——最高优先
 P0-2  A2：看门狗异步化 + 超时护栏
 P0-3  B1/B2：真实连续 5 Run + revise/create 变体跑满
-P0-4  对话 Session 导入 Phase 0（见独立项目描述）
+P0-4  对话 Session 导入 Phase 0（前置条件：P0-1 已过；见独立项目描述）
 P1    B4 逐毫秒 / B3 真实撤回 / C 类 UI 入口（.lcosproj 日常化、Activity、Recovery）
 P2    L3 语义索引 / 事件流（SSE）/ 其余连接器 / 安装器（Gate W）
 ```
 
-不要在 P0-1~P0-3 修通前继续堆新架构（SSE、向量库、更多连接器、自动布局）。
+不要在 P0-1~P0-3 修通前继续堆新架构（SSE、向量库、更多连接器、自动布局）；
+对话导入的开工闸门是 P0-1 MCP 完全完善。
 
 ## 7. 验收口径（别被糊弄）
 
