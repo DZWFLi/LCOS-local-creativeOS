@@ -2,7 +2,7 @@
 
 > 归档日期：2026-08-05
 > 分支：`codex/backend-hardening-20260802`
-> HEAD：见随包 `PACKAGE_INFO.md`（本文件由打包时更新）
+> HEAD：<打包时自动填充>
 
 ## 关键提交
 
@@ -63,5 +63,7 @@ npm run test:e2e
 docs/product/LCOS_P0_CONVERSATION_IMPORT_PROJECT_BRIEF_20260805.md
 docs/audit/LCOS_FULLSTACK_REMAINING_ISSUES_MASTER_20260805.md
 docs/audit/LCOS_GATEF_REMAINING_GAPS_FOR_DEV_20260805.md（轻量导入设计）
+docs/audit/LCOS_MCP_COMPLETION_HELP_20260805.md（MCP 完善第一优先）
+docs/architecture/LCOS_MCP_BRIDGE_DECOUPLING_DESIGN_20260805.md（MCP/Bridge 解耦 + 开源借鉴）
 docs/testing/fixtures/conversation-import-sample/（真实会话导入样本）
 ```
