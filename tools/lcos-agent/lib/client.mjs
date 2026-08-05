@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { isAbsolute, join, resolve } from "node:path";
 
 const DEFAULT_CORE_URL = "http://127.0.0.1:43121";
 const DEFAULT_BRIDGE_URL = "http://127.0.0.1:43122";
@@ -25,11 +25,19 @@ export async function coreRequest(path, init = {}) {
 
 function coreToken() {
   if (process.env.LOCAL_CORE_API_TOKEN) return process.env.LOCAL_CORE_API_TOKEN;
-  try {
-    return readFileSync(join(process.cwd(), ".codex-runtime", "local-core-token"), "utf8").trim() || undefined;
-  } catch {
-    return undefined;
+  const candidates = [
+    process.env.LCOS_CORE_TOKEN_FILE,
+    process.env.LCOS_REPO_ROOT ? join(resolve(process.env.LCOS_REPO_ROOT), ".codex-runtime", "local-core-token") : undefined,
+    join(process.cwd(), ".codex-runtime", "local-core-token"),
+  ].filter((value) => typeof value === "string" && value.length > 0);
+  for (const candidate of candidates) {
+    try {
+      const path = isAbsolute(candidate) ? candidate : resolve(candidate);
+      const token = readFileSync(path, "utf8").trim();
+      if (token) return token;
+    } catch {}
   }
+  return undefined;
 }
 
 export async function bridgeRequest(path, init = {}) {

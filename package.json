@@ -21,6 +21,7 @@
     "lcos": "node tools/lcos-agent/cli.mjs",
     "lcos:mcp": "node tools/lcos-agent/mcp-server.mjs",
     "lcos:install-skill": "node scripts/install-lcos-codex-skill.mjs",
+    "lcos:install-mcp": "node scripts/install-lcos-codex-mcp.mjs",
     "test:lcos-mcp-e2e": "node scripts/lcos-mcp-bridge-e2e.mjs",
     "check:v061-static": "node scripts/validate-v061-static.mjs",
     "check:local-core": "npm run check --workspace @local-creative-os/local-core",
@@ -44,7 +45,10 @@
     "check:gatef-capabilities": "node scripts/validate-gatef-capabilities.mjs",
     "smoke:gatef-core": "npm run build --workspace @local-creative-os/local-core && node scripts/gatef-core-smoke.mjs",
     "build:domain": "npm run build --workspace @local-creative-os/domain",
-    "build:local-core": "npm run build:domain && npm run build --workspace @local-creative-os/local-core"
+    "build:local-core": "npm run build:domain && npm run build --workspace @local-creative-os/local-core",
+    "check:gatef-closeout": "node scripts/validate-gatef-closeout.mjs",
+    "smoke:obsidian": "npm run build:local-core && node scripts/obsidian-connector-smoke.mjs",
+    "smoke:gatef-closeout": "npm run build:local-core && node scripts/gatef-core-smoke.mjs && node scripts/obsidian-connector-smoke.mjs && node scripts/validate-gatef-closeout.mjs"
   },
   "dependencies": {
     "lucide-react": "^1.24.0",

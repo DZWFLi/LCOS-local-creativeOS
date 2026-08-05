@@ -173,7 +173,6 @@ describe('Runtime HTTP closure', () => {
     const eventsAfterBody = await eventsAfter.json() as { value: { type: string }[] }
     expect(eventsAfterBody.value.map((event) => event.type)).toEqual([
       'run.queued',
-      'run.started',
       'run.cancelled',
     ])
   })

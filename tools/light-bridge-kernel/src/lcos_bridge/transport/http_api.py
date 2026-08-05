@@ -12,6 +12,7 @@ from .. import __version__
 from ..canonical.models import (
     ResultEnvelopeV0,
     ResultEnvelopeV1,
+    InputResponseV1,
     TaskEnvelopeV1,
     parse_result_envelope,
 )
@@ -39,6 +40,14 @@ class FinalizeInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     decision: str
     comment: str = ""
+
+
+class InputResponseBody(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+    request_id: str = Field(alias="requestId", min_length=1)
+    text: str | None = Field(default=None, max_length=20000)
+    selected_options: tuple[str, ...] = Field(default_factory=tuple, alias="selectedOptions")
+    responded_by: str = Field(default="user", alias="respondedBy")
 
 
 def _task_dict(task: Any) -> dict[str, Any]:
@@ -71,6 +80,7 @@ def _mcp_task_dict(task: Any) -> dict[str, Any]:
                         for item in result.changed_files
                     ],
                     "error": result.error,
+                    "input_request": None if result.input_request is None else result.input_request.model_dump(mode="json", by_alias=True),
                 }
             )
         else:
@@ -85,6 +95,10 @@ def _mcp_task_dict(task: Any) -> dict[str, Any]:
                     "error": result.error,
                 }
             )
+    if task.input_request is not None:
+        value["input_request"] = task.input_request.model_dump(mode="json", by_alias=True)
+    if task.input_response is not None:
+        value["input_response"] = task.input_response.model_dump(mode="json", by_alias=True)
     return value
 
 
@@ -155,6 +169,7 @@ def _mcp_result_for_task(args: dict[str, Any], task: Any):
                 "lcosRunId": args.get("lcos_run_id") or task.lcos_run_id,
                 "providerStatus": args.get("provider_status") or args.get("status") or "review",
                 "summary": args.get("summary") or args.get("short_summary") or "Task completed.",
+                "inputRequest": _parse_jsonish(args.get("input_request"), None),
                 "changedFiles": changed_raw,
                 "warnings": _parse_jsonish(args.get("warnings"), []),
                 "suggestedNextActions": _parse_jsonish(
@@ -282,6 +297,11 @@ def create_app(service: BridgeService) -> FastAPI:
             )
         return {"ok": True, "task": _task_dict(service.submit_result(result))}
 
+    @app.post("/v1/tasks/{task_id}/input-response")
+    def answer_task_input(task_id: str, input_value: InputResponseBody) -> dict[str, Any]:
+        response = InputResponseV1.model_validate(input_value.model_dump(mode="json", by_alias=True))
+        return {"ok": True, "task": _task_dict(service.answer_input(task_id, response))}
+
     @app.post("/v1/tasks/{task_id}/cancel")
     def cancel_task(task_id: str) -> dict[str, Any]:
         return {"ok": True, "task": _task_dict(service.cancel(task_id))}
@@ -336,6 +356,7 @@ def create_app(service: BridgeService) -> FastAPI:
                 "claim_task_by_id",
                 "heartbeat_task",
                 "direct_task",
+                "answer_input",
             ]
             return JSONResponse(
                 headers=headers,
@@ -460,6 +481,17 @@ def create_app(service: BridgeService) -> FastAPI:
                     )
                 result = _mcp_result_for_task(args, task)
                 value = {"ok": True, **_mcp_task_dict(service.submit_result(result))}
+            elif name == "answer_input":
+                response = InputResponseV1.model_validate({
+                    "requestId": args.get("request_id") or args.get("requestId"),
+                    "text": args.get("text"),
+                    "selectedOptions": _parse_jsonish(args.get("selected_options") or args.get("selectedOptions"), []),
+                    "respondedBy": args.get("responded_by") or args.get("respondedBy") or "user",
+                })
+                value = {
+                    "ok": True,
+                    **_mcp_task_dict(service.answer_input(str(args.get("task_id", "")), response)),
+                }
             elif name == "cancel_task":
                 value = {
                     "ok": True,

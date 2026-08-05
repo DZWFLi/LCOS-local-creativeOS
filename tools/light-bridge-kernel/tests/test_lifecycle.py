@@ -6,7 +6,7 @@ import sqlite3
 import pytest
 
 from lcos_bridge.canonical.ids import canonical_json, payload_fingerprint, task_id_for_run
-from lcos_bridge.canonical.models import ResultEnvelopeV0, ResultEnvelopeV1
+from lcos_bridge.canonical.models import InputResponseV1, ResultEnvelopeV0, ResultEnvelopeV1
 from lcos_bridge.core.errors import BridgeError
 from lcos_bridge.core.service import BridgeService
 from lcos_bridge.core.store import SQLiteTaskStore
@@ -237,6 +237,114 @@ def test_retrying_finalization_does_not_requeue(service):
     assert finalized.final_disposition == "retrying"
     assert service.claim_next("workbuddy", "worker-2") is None
 
+
+
+def test_waiting_input_requeues_same_task_and_resumes(service):
+    task, _ = service.create_task(make_analyze_envelope(run_id="run-waiting-input"))
+    claimed = service.claim_task_by_id(task.task_id, "workbuddy", "worker-a", 30)
+    service.start(claimed.task_id, "worker-a")
+    waiting = ResultEnvelopeV1.model_validate(
+        {
+            "contractVersion": "bridge-result-v1",
+            "taskId": task.task_id,
+            "lcosRunId": "run-waiting-input",
+            "providerStatus": "waiting_input",
+            "summary": "需要确认希望保留哪个版本。",
+            "changedFiles": [],
+            "inputRequest": {
+                "requestId": "input-1",
+                "question": "希望保留 A 版还是 B 版？",
+                "options": ["A", "B"],
+                "allowFreeText": True,
+                "contextVersion": 4,
+            },
+        }
+    )
+    paused = service.submit_result(waiting)
+    assert paused.status == "waiting_input"
+    assert paused.input_request is not None
+    assert paused.claimed_by is None
+    assert service.claim_next("workbuddy", "worker-b", 30) is None
+
+    response = InputResponseV1.model_validate(
+        {
+            "requestId": "input-1",
+            "text": "保留 A 版，并让结尾更克制。",
+            "selectedOptions": ["A"],
+            "respondedBy": "user",
+        }
+    )
+    queued = service.answer_input(task.task_id, response)
+    assert queued.status == "queued"
+    assert queued.input_response is not None
+    replayed = service.answer_input(task.task_id, response.model_copy(update={"responded_at": "2030-01-01T00:00:00Z"}))
+    assert replayed.status == "queued"
+    assert replayed.input_response is not None
+    with pytest.raises(BridgeError) as stale:
+        service.submit_result(waiting)
+    assert stale.value.code == "INPUT_ALREADY_RESOLVED"
+
+    resumed = service.claim_task_by_id(task.task_id, "workbuddy", "worker-a", 30)
+    service.start(resumed.task_id, "worker-a")
+    completed = service.submit_result(make_analyze_result(task.task_id, run_id="run-waiting-input"))
+    assert completed.status == "review"
+    assert completed.input_request is not None
+    assert completed.input_response is not None
+
+
+def test_waiting_input_rejects_unsafe_request_identity(service):
+    task, _ = service.create_task(make_analyze_envelope(run_id="run-waiting-unsafe-id"))
+    with pytest.raises(ValueError):
+        ResultEnvelopeV1.model_validate(
+            {
+                "contractVersion": "bridge-result-v1",
+                "taskId": task.task_id,
+                "lcosRunId": "run-waiting-unsafe-id",
+                "providerStatus": "waiting_input",
+                "summary": "Need one answer.",
+                "changedFiles": [],
+                "inputRequest": {
+                    "requestId": "../../outside",
+                    "question": "Which version?",
+                    "options": ["A"],
+                    "allowFreeText": True,
+                },
+            }
+        )
+
+
+def test_waiting_input_rejects_wrong_or_disallowed_answer(service):
+    task, _ = service.create_task(make_analyze_envelope(run_id="run-waiting-restricted"))
+    waiting = ResultEnvelopeV1.model_validate(
+        {
+            "contractVersion": "bridge-result-v1",
+            "taskId": task.task_id,
+            "lcosRunId": "run-waiting-restricted",
+            "providerStatus": "waiting_input",
+            "summary": "请选择一个方向。",
+            "changedFiles": [],
+            "inputRequest": {
+                "requestId": "input-2",
+                "question": "选择方向",
+                "options": ["A", "B"],
+                "allowFreeText": False,
+            },
+        }
+    )
+    service.submit_result(waiting)
+    wrong_request = InputResponseV1.model_validate(
+        {"requestId": "other", "selectedOptions": ["A"], "respondedBy": "user"}
+    )
+    with pytest.raises(BridgeError) as captured:
+        service.answer_input(task.task_id, wrong_request)
+    assert captured.value.code == "INPUT_REQUEST_MISMATCH"
+
+    invalid_option = InputResponseV1.model_validate(
+        {"requestId": "input-2", "selectedOptions": ["C"], "respondedBy": "user"}
+    )
+    with pytest.raises(BridgeError) as captured:
+        service.answer_input(task.task_id, invalid_option)
+    assert captured.value.code == "INPUT_OPTION_INVALID"
 
 def test_v1_store_migrates_and_reads_existing_v0_task(tmp_path):
     db = tmp_path / "bridge.sqlite3"

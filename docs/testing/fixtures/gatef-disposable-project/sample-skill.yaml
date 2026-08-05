@@ -1,0 +1,5 @@
+name: storyboard-skill
+description: 把 brief 转成分镜草稿的测试 Skill。
+instructions: |
+  只做分析，不写源文件。
+  输出到 .creative-os/runtime 对应 Run 的 outputRoot。

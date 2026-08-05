@@ -5,7 +5,8 @@
 .DESCRIPTION
   - 不拉起子对话；不占 Agent 回合（脚本本身零 Agent 开销）。
   - 每 N 秒向 Local Core 请求增量派单计划；Core 优先使用 projectId + provider 的正式 Session Binding。
-  - 有首选 Session 时执行 `codex exec resume <session-id>`；失效后只允许降级新建一次并原子替换绑定。
+  - 有首选 Session 时执行 `codex exec resume <session-id>`；没有绑定或绑定失效时只新建一次并原子替换。
+  - 禁止使用“最近会话”快捷方式或会话文件修改时间猜测项目会话。
   - sessions.json 仅作为旧版手动绑定兼容来源，不再是正式真相。
   - 仅支持 CLI 会话（有稳定 session id）。桌面 App 窗口无官方推送接口。
 
@@ -17,28 +18,29 @@
   CODEX_BIN                   codex 可执行文件（默认 %LOCALAPPDATA%\OpenAI\Codex\bin\codex.exe）
 #>
 $ErrorActionPreference = 'Stop'
-$repo = $env:LCOS_ORCHESTRATOR_REPO ?? (Split-Path -Parent $PSScriptRoot | Split-Path -Parent)
-$registryPath = $env:LCOS_ORCHESTRATOR_REGISTRY ?? (Join-Path $PSScriptRoot 'sessions.json')
-$interval = [int]($env:LCOS_ORCHESTRATOR_INTERVAL ?? 60)
+$repo = $env:LCOS_ORCHESTRATOR_REPO
+if (-not $repo) { $repo = (Split-Path -Parent $PSScriptRoot | Split-Path -Parent) }
+$registryPath = $env:LCOS_ORCHESTRATOR_REGISTRY
+if (-not $registryPath) { $registryPath = Join-Path $PSScriptRoot 'sessions.json' }
+$interval = if ($env:LCOS_ORCHESTRATOR_INTERVAL) { [int]$env:LCOS_ORCHESTRATOR_INTERVAL } else { 60 }
 $codex = $env:CODEX_BIN
 if (-not $codex) {
-  $found = Get-ChildItem (Join-Path $env:LOCALAPPDATA 'OpenAI\Codex\bin') -Directory -ErrorAction SilentlyContinue |
-    ForEach-Object { Join-Path $_.FullName 'codex.exe' } |
-    Where-Object { Test-Path $_ } |
-    Sort-Object -Descending |
+  $foundDirectory = Get-ChildItem (Join-Path $env:LOCALAPPDATA 'OpenAI\Codex\bin') -Directory -ErrorAction SilentlyContinue |
+    Where-Object { Test-Path (Join-Path $_.FullName 'codex.exe') } |
+    Sort-Object LastWriteTimeUtc -Descending |
     Select-Object -First 1
-  $codex = $found
+  if ($foundDirectory) { $codex = Join-Path $foundDirectory.FullName 'codex.exe' }
 }
 if (-not $codex) {
   $command = Get-Command codex -ErrorAction SilentlyContinue
-  $codex = $command?.Source
+  if ($command) { $codex = $command.Source }
 }
 if (-not $codex) { throw '找不到 codex.exe；请设置 CODEX_BIN 环境变量。' }
 $lockFile = Join-Path $env:TEMP 'lcos-orchestrator.lock'
 $stateDir = Join-Path $repo '.codex-runtime'
 $stateFile = Join-Path $stateDir 'orchestrator-state.json'
-$cooldownMs = [long]($env:LCOS_ORCHESTRATOR_COOLDOWN_MS ?? 120000)
-$recentWriteGuardMs = [long]($env:LCOS_ORCHESTRATOR_WRITE_GUARD_MS ?? 10000)
+$cooldownMs = if ($env:LCOS_ORCHESTRATOR_COOLDOWN_MS) { [long]$env:LCOS_ORCHESTRATOR_COOLDOWN_MS } else { 120000 }
+$recentWriteGuardMs = if ($env:LCOS_ORCHESTRATOR_WRITE_GUARD_MS) { [long]$env:LCOS_ORCHESTRATOR_WRITE_GUARD_MS } else { 10000 }
 $tokenFile = Join-Path $repo '.codex-runtime\local-core-token'
 $runOnce = $env:LCOS_ORCHESTRATOR_ONCE -eq '1'
 $dryRun = $env:LCOS_ORCHESTRATOR_DRY_RUN -eq '1'
@@ -81,26 +83,60 @@ function Save-CoreSessionBinding([string]$projectId, [string]$sessionId, [string
   }
 }
 
-function Get-LatestCodexSessionId([datetime]$since) {
-  try {
-    $sessionDir = Join-Path $env:USERPROFILE '.codex\sessions'
-    if (-not (Test-Path $sessionDir)) { return $null }
-    $candidate = Get-ChildItem $sessionDir -Recurse -File -Filter '*.jsonl' -ErrorAction SilentlyContinue |
-      Where-Object { $_.LastWriteTime -ge $since.AddSeconds(-5) } |
-      Sort-Object LastWriteTime -Descending |
-      Select-Object -First 1
-    if (-not $candidate) { return $null }
-    $match = [regex]::Match($candidate.Name, '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}')
-    if ($match.Success) { return $match.Value }
-    return $null
-  } catch {
-    return $null
+function Invoke-CodexCommand([string]$projectRoot, [string]$message, [string]$sessionId, [string]$taskId, [string]$runId, [string]$projectId) {
+  $runner = Join-Path $PSScriptRoot 'run-codex-task.mjs'
+  if (-not (Test-Path $runner)) { throw "Codex Runner helper 不存在：$runner" }
+  if (-not (Test-Path $stateDir)) { New-Item -ItemType Directory -Path $stateDir -Force | Out-Null }
+  $safeRunId = ($runId -replace '[^A-Za-z0-9_-]', '_')
+  $inputPath = Join-Path $stateDir "codex-launch-$safeRunId-$([guid]::NewGuid().ToString('N')).json"
+  $payload = @{
+    codexBin = $codex
+    projectRoot = $projectRoot
+    message = $message
+    sessionId = $sessionId
+    taskId = $taskId
+    runId = $runId
+    projectId = $projectId
+    bridgeUrl = 'http://127.0.0.1:43122'
+    cancellationPollMs = 750
+    gracefulCancelMs = 3000
+  } | ConvertTo-Json -Depth 5
+  Set-Content -Path $inputPath -Value $payload -Encoding UTF8
+  $lines = @(& node $runner $inputPath 2>&1)
+  $exitCode = $LASTEXITCODE
+  $session = $null
+  $cancelled = $false
+  $sessionInvalid = $false
+  $closureObserved = $false
+  $taskStatus = $null
+  $failureKind = $null
+  foreach ($line in $lines) {
+    $text = [string]$line
+    if ($text.StartsWith('LCOS_CODEX_RESULT:')) {
+      try {
+        $result = $text.Substring('LCOS_CODEX_RESULT:'.Length) | ConvertFrom-Json
+        if ($result.sessionId) { $session = [string]$result.sessionId }
+        $cancelled = [bool]$result.cancelled
+        $sessionInvalid = [bool]$result.sessionInvalid
+        $closureObserved = [bool]$result.closureObserved
+        if ($result.taskStatus) { $taskStatus = [string]$result.taskStatus }
+        if ($result.failureKind) { $failureKind = [string]$result.failureKind }
+        if ($null -ne $result.exitCode) { $exitCode = [int]$result.exitCode }
+      } catch {}
+    } else {
+      Write-Host $text
+    }
   }
-}
-
-function Invoke-CodexCommand([string[]]$arguments) {
-  & $codex @arguments | ForEach-Object { Write-Host $_ }
-  return $LASTEXITCODE
+  Remove-Item $inputPath -Force -ErrorAction SilentlyContinue
+  return [pscustomobject]@{
+    ExitCode = $exitCode
+    SessionId = $session
+    Cancelled = $cancelled
+    SessionInvalid = $sessionInvalid
+    ClosureObserved = $closureObserved
+    TaskStatus = $taskStatus
+    FailureKind = $failureKind
+  }
 }
 
 function Get-Registry {
@@ -134,25 +170,11 @@ function Get-RegisteredSessions($registry, [string]$projectId) {
   return @($raw | Where-Object { $_.sessionId -and $_.sessionId -notlike '*…*' })
 }
 
-function Send-ClaimPrompt([string]$sessionId, [string]$runId, [string]$projectId, [string]$taskId) {
-  if ($taskId) {
-    try {
-      $directBody = @{ sessionId = $sessionId } | ConvertTo-Json
-      Invoke-RestMethod -Uri "http://127.0.0.1:43122/v1/tasks/$taskId/direct" -Method POST `
-        -ContentType 'application/json' -Body $directBody -TimeoutSec 10 | Out-Null
-    } catch {
-      Write-Host "[$(Get-Date -Format HH:mm:ss)] 定向 task $taskId 失败：$($_.Exception.Message)"
-    }
-  }
-  $message = "LCOS 接单提示：项目 $projectId 有新待办 run $runId 。请按 lcos-project-context skill 认领并执行。"
-  Write-Host "[$(Get-Date -Format HH:mm:ss)] 派单 run $runId -> 会话 $sessionId"
-  & $codex exec resume $sessionId $message
-}
-
 function Send-AutoPrompt([string]$projectRoot, [string]$runId, [string]$projectId, [string]$sessionId, [string]$taskId) {
   $message = "LCOS 接单提示：项目 $projectId 有新待办 run $runId 。请按 lcos-project-context skill 读取当前 Canvas Context，认领并执行。"
   if ($dryRun) {
-    Write-Host "[$(Get-Date -Format HH:mm:ss)] DRY RUN：将派单 run $runId -> $($sessionId ?? "$projectRoot 首选会话")"
+    $destination = if ($sessionId) { $sessionId } else { "$projectRoot 首选会话" }
+    Write-Host "[$(Get-Date -Format HH:mm:ss)] DRY RUN：将派单 run $runId -> $destination"
     return [pscustomobject]@{ Success = $true; SessionId = $sessionId; CreatedNew = $false }
   }
   if ($taskId -and $sessionId) {
@@ -167,28 +189,32 @@ function Send-AutoPrompt([string]$projectRoot, [string]$runId, [string]$projectI
 
   if ($sessionId) {
     Write-Host "[$(Get-Date -Format HH:mm:ss)] 派单 run $runId -> 首选会话 $sessionId"
-    $exitCode = Invoke-CodexCommand @('exec', 'resume', $sessionId, $message)
-    if ($exitCode -eq 0) {
-      return [pscustomobject]@{ Success = $true; SessionId = $sessionId; CreatedNew = $false }
+    $execution = Invoke-CodexCommand $projectRoot $message $sessionId $taskId $runId $projectId
+    if ($execution.ExitCode -eq 0 -and $execution.ClosureObserved) {
+      $confirmedSessionId = if ($execution.SessionId) { $execution.SessionId } else { $sessionId }
+      return [pscustomobject]@{ Success = $true; SessionId = $confirmedSessionId; CreatedNew = $false }
     }
-    Write-Host "[$(Get-Date -Format HH:mm:ss)] 首选会话失效，允许降级创建一次新会话"
+    if (-not $execution.SessionInvalid) {
+      Write-Host "[$(Get-Date -Format HH:mm:ss)] Codex 本轮未形成可回收结果（$($execution.FailureKind) / $($execution.TaskStatus)），保留首选会话并等待有限重试。"
+      return [pscustomobject]@{ Success = $false; SessionId = $sessionId; CreatedNew = $false }
+    }
+    Write-Host "[$(Get-Date -Format HH:mm:ss)] 首选会话已明确失效，允许降级创建一次新会话"
     Save-CoreSessionBinding $projectId $sessionId $runId 'watchdog' 'stale' 1
   }
 
-  # 无有效正式绑定时，先尝试该目录最近会话；失败后只创建一次新会话。
-  $startedAt = Get-Date
-  Write-Host "[$(Get-Date -Format HH:mm:ss)] 自动派单 run $runId -> $projectRoot 最近会话"
-  $exitCode = Invoke-CodexCommand @('exec', '-C', $projectRoot, 'resume', '--last', $message)
-  if ($exitCode -ne 0) {
-    Write-Host "[$(Get-Date -Format HH:mm:ss)] 无可恢复会话，创建一次新会话执行 run $runId"
-    $startedAt = Get-Date
-    $exitCode = Invoke-CodexCommand @('exec', '-C', $projectRoot, '--skip-git-repo-check', "LCOS 接单：处理 run $runId（按 lcos-project-context skill 规则认领执行并提交结果）")
+  # 没有正式 Project + Provider Session Binding 时，直接创建一次新会话。
+  # 禁止使用“最近会话”快捷方式猜测会话，否则可能把任务派进用户正在使用的无关对话。
+  Write-Host "[$(Get-Date -Format HH:mm:ss)] 无正式项目会话绑定，创建一次新会话执行 run $runId"
+  $execution = Invoke-CodexCommand $projectRoot "LCOS 接单提示：项目 $projectId 有新待办 run $runId。请按 lcos-project-context skill 认领、执行并提交结果。" $null $taskId $runId $projectId
+  $createdNew = $true
+  if ($execution.ExitCode -ne 0 -or -not $execution.ClosureObserved) {
+    Write-Host "[$(Get-Date -Format HH:mm:ss)] 新会话未形成可回收结果（$($execution.FailureKind) / $($execution.TaskStatus)）。"
+    return [pscustomobject]@{ Success = $false; SessionId = $execution.SessionId; CreatedNew = $createdNew }
   }
-  if ($exitCode -ne 0) {
-    return [pscustomobject]@{ Success = $false; SessionId = $null; CreatedNew = $false }
+  if (-not $execution.SessionId) {
+    Write-Host "[$(Get-Date -Format HH:mm:ss)] Codex 执行成功，但输出未提供 Session ID；不会猜测或覆盖项目绑定。"
   }
-  $resolvedSessionId = Get-LatestCodexSessionId $startedAt
-  return [pscustomobject]@{ Success = $true; SessionId = $resolvedSessionId; CreatedNew = $true }
+  return [pscustomobject]@{ Success = $true; SessionId = $execution.SessionId; CreatedNew = $createdNew }
 }
 
 function Get-DispatchPlan([string]$projectId, [array]$sessions) {

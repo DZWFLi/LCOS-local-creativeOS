@@ -482,6 +482,16 @@ function ensureCodexSkill() {
   if (result.stdout.trim()) console.log(result.stdout.trim())
 }
 
+function ensureCodexMcp() {
+  const result = run(process.execPath, [join(process.cwd(), 'scripts/install-lcos-codex-mcp.mjs')])
+  if (!result.ok) {
+    console.error('Refusing to enable automatic Codex execution without the LCOS MCP configuration.')
+    console.error(result.stderr || result.stdout)
+    process.exit(1)
+  }
+  if (result.stdout.trim()) console.log(result.stdout.trim())
+}
+
 let stopping = false
 
 async function open() {
@@ -499,6 +509,7 @@ async function open() {
     process.exit(1)
   }
   ensureCodexSkill()
+  ensureCodexMcp()
   // 残留自愈：先把本机 LCOS 签名进程（旧栈/崩溃残留）清掉，再检查端口，
   // 避免“旧进程占着端口导致新栈拒绝启动”的死锁。
   for (const pid of lcosLauncherPids()) {

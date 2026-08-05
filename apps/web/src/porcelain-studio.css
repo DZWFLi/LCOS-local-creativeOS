@@ -3650,3 +3650,176 @@
   font-size: 11px;
   white-space: nowrap;
 }
+
+/* Gate F closeout: real waiting input and read-only Obsidian connector. */
+.app-shell.porcelain-studio-v2 .waiting-options {
+  display: grid;
+  gap: 7px;
+}
+
+.app-shell.porcelain-studio-v2 .waiting-options > h4 {
+  margin: 0 0 2px;
+}
+
+.app-shell.porcelain-studio-v2 .waiting-options > label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 7px 9px;
+  border: 1px solid var(--ps-border-soft);
+  border-radius: 10px;
+  background: var(--ps-surface-1);
+  cursor: pointer;
+}
+
+.app-shell.porcelain-studio-v2 .waiting-options input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--ps-accent);
+}
+
+.app-shell.porcelain-studio-v2 .waiting-state > textarea {
+  width: 100%;
+  min-height: 92px;
+  resize: vertical;
+  padding: 10px 11px;
+  border: 1px solid var(--ps-border);
+  border-radius: 11px;
+  color: var(--ps-text-strong);
+  background: var(--ps-surface-1);
+  font: inherit;
+  line-height: 1.55;
+}
+
+.obsidian-import-dialog {
+  width: min(760px, calc(100vw - 48px));
+  max-height: min(760px, calc(100vh - 48px));
+  display: grid;
+  grid-template-rows: auto auto auto minmax(160px, 1fr) auto;
+  gap: 12px;
+  padding: 18px;
+  overflow: hidden;
+  border: 1px solid rgba(28, 41, 54, .10);
+  border-radius: 18px;
+  background: rgba(255, 255, 253, .98);
+  box-shadow: 0 24px 80px rgba(31, 40, 50, .18);
+}
+
+.obsidian-import-dialog > header,
+.obsidian-import-dialog > header > div,
+.obsidian-import-dialog > footer,
+.obsidian-selection-bar,
+.obsidian-search {
+  display: flex;
+  align-items: center;
+}
+
+.obsidian-import-dialog > header {
+  justify-content: space-between;
+}
+
+.obsidian-import-dialog > header > div {
+  gap: 10px;
+}
+
+.obsidian-import-dialog h2,
+.obsidian-import-dialog p {
+  margin: 0;
+}
+
+.obsidian-import-dialog header p,
+.obsidian-selection-bar span,
+.obsidian-note-list small,
+.obsidian-note-list em,
+.obsidian-empty {
+  color: rgba(29, 45, 60, .55);
+  font-size: 10px;
+}
+
+.obsidian-search {
+  gap: 8px;
+  padding: 9px 11px;
+  border: 1px solid rgba(29, 45, 60, .09);
+  border-radius: 11px;
+  background: #f7f8f9;
+}
+
+.obsidian-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font: inherit;
+}
+
+.obsidian-selection-bar {
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.obsidian-selection-bar button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 6px 9px;
+  border: 1px solid rgba(29, 45, 60, .10);
+  border-radius: 9px;
+  background: #fff;
+}
+
+.obsidian-note-list {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  overflow: auto;
+  padding: 2px;
+}
+
+.obsidian-note-list > label {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 9px;
+  padding: 9px 10px;
+  border: 1px solid rgba(29, 45, 60, .07);
+  border-radius: 11px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.obsidian-note-list > label.selected {
+  border-color: rgba(103, 66, 185, .24);
+  background: rgba(103, 66, 185, .035);
+}
+
+.obsidian-note-list > label > span {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.obsidian-note-list b,
+.obsidian-note-list small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.obsidian-note-list em {
+  font-style: normal;
+}
+
+.obsidian-import-dialog > details {
+  max-height: 90px;
+  overflow: auto;
+  color: rgba(29, 45, 60, .64);
+  font-size: 10px;
+}
+
+.obsidian-import-dialog > footer {
+  justify-content: flex-end;
+  gap: 8px;
+}

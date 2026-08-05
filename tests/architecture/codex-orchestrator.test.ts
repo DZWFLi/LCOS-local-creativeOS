@@ -6,6 +6,10 @@ const source = readFileSync(
   join(__dirname, '../../tools/codex-orchestrator/watch.ps1'),
   'utf8',
 )
+const runner = readFileSync(
+  join(__dirname, '../../tools/codex-orchestrator/run-codex-task.mjs'),
+  'utf8',
+)
 const skillInstaller = readFileSync(
   join(__dirname, '../../scripts/install-lcos-codex-skill.mjs'),
   'utf8',
@@ -18,9 +22,21 @@ describe('Codex orchestrator operational guards', () => {
     expect(source).not.toContain('找不到会话注册表')
   })
 
-  it('checks nested Codex session files before dispatching', () => {
-    expect(source).toContain('Get-ChildItem $sessionDir -Recurse -File')
-    expect(source).toContain('-Filter "*$sessionId*.jsonl"')
+  it('binds only the session id emitted by the Codex process', () => {
+    expect(source).toContain('run-codex-task.mjs')
+    expect(runner).toContain('session_id')
+    expect(runner).toContain('thread_id')
+    expect(runner).toContain('LCOS_CODEX_RESULT:')
+    expect(source).not.toContain('Get-LatestCodexSessionId')
+    expect(source).not.toContain('resume --last')
+  })
+
+  it('only records dispatch success after a recoverable Bridge outcome is observed', () => {
+    expect(runner).toContain('closureObserved')
+    expect(runner).toContain('closure_not_observed')
+    expect(runner).toContain('sessionInvalid')
+    expect(source).toContain('保留首选会话并等待有限重试')
+    expect(source).toContain('首选会话已明确失效')
   })
 
   it('supports non-mutating one-shot diagnostics', () => {

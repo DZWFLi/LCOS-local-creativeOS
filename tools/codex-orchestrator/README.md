@@ -33,26 +33,17 @@ Core 给出结论：送进现有 CLI 会话 / 拉起新会话 / 先等着。
 
 ## 前提
 
-### 零注册模式（推荐，什么都不用配）
+### 项目会话绑定（正式模式）
 
-1. 你项目里的正常 Codex 对话是 **CLI 会话**，并且**在项目目录里开**（你平时就是这样用的）。
-2. 看门狗用 `codex exec -C <项目目录> resume --last "接单提示"` 自动续上“最近那个会话”，
-   不需要知道会话 ID、不需要填任何注册表。
-3. 如果那个目录从没开过会话，看门狗会自动退到 `codex exec -C <项目目录> "接单提示"` 拉起新会话。
+1. Runtime Host 从 Local Core 读取 `projectId + provider` 的正式 Session Binding。
+2. 有有效绑定时，使用 `codex exec --json -C <项目目录> resume <会话ID> "接单提示"` 精确续接。
+3. 没有绑定或绑定已经失效时，只允许新建一次会话；Codex 输出真实 Session ID 后，Core 原子保存新绑定。
+4. 禁止根据“最近会话”或会话文件修改时间猜测项目归属。
+5. `sessions.json` 只保留旧版兼容和诊断用途，不再是正式真相。
 
-### 可选：注册一次（获得“不打断思考”保护）
-
-把 项目ID → 会话ID 记进注册表后，看门狗能精确找到会话，并检查它“在不在思考”，
-思考中就等、空闲才敲门；零注册模式没有这层保护（可能打扰正在忙的最近会话）。
-
-```powershell
-Copy-Item tools\codex-orchestrator\sessions.example.json tools\codex-orchestrator\sessions.json
-# 编辑 sessions.json，填真实 projectId 和会话 ID（codex resume 不带参数可列出）
-```
-
-4. Launcher 会把仓库权威版本 `packages/skills/lcos-project-context/SKILL.md`
-   同步到 `$CODEX_HOME/skills/lcos-project-context`；也可手工执行 `npm run lcos:install-skill`。
-   安装器只更新带 LCOS 管理标记的副本，不覆盖用户自建的同名 Skill。
+Launcher 会把仓库权威 Skill 包 `packages/skills/lcos-project-context/` 同步到
+`$CODEX_HOME/skills/lcos-project-context`，并用 `codex mcp add/get --json` 安装或验证 LCOS MCP。
+安装器只更新带 LCOS 管理标记的副本，不覆盖用户自建的同名 Skill 或无关 MCP。
 
 ## 启动
 
@@ -60,8 +51,8 @@ Copy-Item tools\codex-orchestrator\sessions.example.json tools\codex-orchestrato
 pwsh -NoProfile -File tools\codex-orchestrator\watch.ps1
 ```
 
-项目默认从 Local Core 的 `/projects` 自动发现；`sessions.json` 只用于可选的精确会话绑定，
-缺失时不会阻止启动。
+项目默认从 Local Core 的 `/projects` 自动发现；正式会话绑定由 Local Core 持久化。
+`sessions.json` 缺失不会阻止启动，它也不会覆盖正式绑定。
 
 环境变量（可选）：`LCOS_ORCHESTRATOR_INTERVAL`（秒）、`LCOS_ORCHESTRATOR_PROJECTS`、
 `CODEX_BIN`。诊断时可设置 `LCOS_ORCHESTRATOR_ONCE=1` 只检查一轮，配合
@@ -71,10 +62,10 @@ pwsh -NoProfile -File tools\codex-orchestrator\watch.ps1
 
 - 桌面 App 的对话窗口没有官方推送接口，无法被脚本“塞话”；这类窗口只能靠
   skill 在每个回合主动检查（已有）。
-- 已按本机 CLI 实测（codex-cli 0.146.0-alpha.9.2）：
-  - 送话进现有会话：`codex exec resume <会话ID> "提示"`（支持带话续会话）
-  - 拉起新会话：`codex exec -C <目录> --skip-git-repo-check "提示"`
-  - 该版本没有 `--skill` 参数，skill 由会话自身/配置加载，脚本不再传。
+- 目标 Windows 环境记录的 Codex 为 `0.147.0-alpha.1.2`。
+- 精确恢复使用：`codex exec --json -C <目录> resume <会话ID> "提示"`。
+- 创建新会话使用：`codex exec --json -C <目录> --skip-git-repo-check "提示"`。
+- Skill 与 MCP 在 Runtime Host 启动前显式安装和验证，不依赖参数猜测。
 
 ## 和 GUI 不打架的规则
 

@@ -45,6 +45,8 @@ import type {
   CommandDraftV1,
   ContextChangeProposalV1,
   ProviderSessionBindingV1,
+  RunInputRequestV1,
+  AnswerRunInputRequestV1,
   MutationBatch,
   PersistedContextManifestV0,
   ProjectGraphSnapshot,
@@ -185,7 +187,8 @@ export class SqliteMetadataRepository {
     if (current === 11) { this.#migrate_012_from_v11(); current = 12 }
     if (current === 12) { this.#migrate_013_from_v12(); current = 13 }
     if (current === 13) { this.#migrate_014_from_v13(); current = 14 }
-    if (current !== 14) throw new Error(`Unsupported metadata schema version ${current}.`)
+    if (current === 14) { this.#migrate_015_from_v14(); current = 15 }
+    if (current !== 15) throw new Error(`Unsupported metadata schema version ${current}.`)
   }
 
 
@@ -805,6 +808,30 @@ export class SqliteMetadataRepository {
         PRIMARY KEY(project_id, provider)
       );
       PRAGMA user_version = 14;
+      COMMIT;
+    `)
+  }
+
+  #migrate_015_from_v14(): void {
+    this.#database.exec(`
+      BEGIN;
+      CREATE TABLE IF NOT EXISTS run_input_requests (
+        request_id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+        question TEXT NOT NULL,
+        options_json TEXT NOT NULL DEFAULT '[]',
+        allow_free_text INTEGER NOT NULL DEFAULT 1 CHECK(allow_free_text IN (0,1)),
+        context_version INTEGER,
+        status TEXT NOT NULL CHECK(status IN ('pending','answered','cancelled')),
+        answer_text TEXT,
+        selected_options_json TEXT NOT NULL DEFAULT '[]',
+        created_at TEXT NOT NULL,
+        answered_at TEXT,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_run_input_requests_run_status
+        ON run_input_requests(run_id, status, created_at);
+      PRAGMA user_version = 15;
       COMMIT;
     `)
   }
@@ -2039,6 +2066,39 @@ export class SqliteMetadataRepository {
     return run
   }
 
+  updateRunOutcome(
+    runId: RunId,
+    input: {
+      readonly status: Run['status']
+      readonly resultSummary?: string
+      readonly shortSummary?: string
+      readonly errorCode?: string
+      readonly errorMessage?: string
+      readonly completedAt?: string
+    },
+    updatedAt: string,
+  ): Run {
+    const result = this.#database.prepare(`
+      UPDATE runs SET
+        status = ?, result_summary = ?, short_summary = ?, error_code = ?, error_message = ?,
+        completed_at = ?, updated_at = ?
+      WHERE id = ?
+    `).run(
+      input.status,
+      input.resultSummary ?? null,
+      input.shortSummary ?? null,
+      input.errorCode ?? null,
+      input.errorMessage ?? null,
+      input.completedAt ?? null,
+      updatedAt,
+      runId as SQLInputValue,
+    )
+    if (result.changes !== 1) throw new Error('Run not found.')
+    const run = this.getRun(runId)
+    if (run === undefined) throw new Error('Run not found after outcome update.')
+    return run
+  }
+
   createRunEvent(
     input: Pick<RunEvent, 'id' | 'runId' | 'type' | 'payload' | 'occurredAt'>,
   ): RunEvent {
@@ -2445,7 +2505,7 @@ export class SqliteMetadataRepository {
     }
   }
 
-  get schemaVersion(): number { return 14 }
+  get schemaVersion(): number { return 15 }
 
   // ==================== Private helpers ====================
 
@@ -2871,6 +2931,92 @@ export class SqliteMetadataRepository {
     return rows.map((row) => json<ContextChangeProposalV1>(row.proposal_json as SQLInputValue))
   }
 
+  saveRunInputRequest(value: RunInputRequestV1): void {
+    const existing = this.getRunInputRequest(value.requestId)
+    if (existing !== undefined) {
+      const sameIdentity = existing.runId === value.runId
+        && existing.question === value.question
+        && JSON.stringify(existing.options) === JSON.stringify(value.options)
+        && existing.allowFreeText === value.allowFreeText
+        && existing.contextVersion === value.contextVersion
+      if (!sameIdentity) throw new Error('INPUT_REQUEST_IDEMPOTENCY_CONFLICT')
+      // A delayed provider sync must never reopen a question the user already answered or cancelled.
+      if (existing.status !== 'pending' && value.status === 'pending') return
+    }
+    this.#database.prepare(`
+      INSERT INTO run_input_requests(
+        request_id, run_id, question, options_json, allow_free_text, context_version, status,
+        answer_text, selected_options_json, created_at, answered_at, updated_at
+      ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(request_id) DO UPDATE SET
+        status = excluded.status,
+        answer_text = excluded.answer_text,
+        selected_options_json = excluded.selected_options_json,
+        answered_at = excluded.answered_at,
+        updated_at = excluded.updated_at
+    `).run(
+      value.requestId, value.runId, value.question, JSON.stringify(value.options), value.allowFreeText ? 1 : 0,
+      value.contextVersion ?? null, value.status, value.answerText ?? null, JSON.stringify(value.selectedOptions),
+      value.createdAt, value.answeredAt ?? null, value.answeredAt ?? value.createdAt,
+    )
+  }
+
+  getRunInputRequest(requestId: string): RunInputRequestV1 | undefined {
+    const row = this.#database.prepare(`SELECT * FROM run_input_requests WHERE request_id = ?`).get(requestId) as Row | undefined
+    return row === undefined ? undefined : this.#runInputRequest(row)
+  }
+
+  getPendingRunInputRequest(runId: string): RunInputRequestV1 | undefined {
+    const row = this.#database.prepare(`
+      SELECT * FROM run_input_requests WHERE run_id = ? AND status = 'pending'
+      ORDER BY created_at DESC LIMIT 1
+    `).get(runId) as Row | undefined
+    return row === undefined ? undefined : this.#runInputRequest(row)
+  }
+
+  listRunInputRequests(runId: string): readonly RunInputRequestV1[] {
+    return (this.#database.prepare(`SELECT * FROM run_input_requests WHERE run_id = ? ORDER BY created_at`).all(runId) as Row[])
+      .map((row) => this.#runInputRequest(row))
+  }
+
+  answerRunInputRequest(runId: string, input: AnswerRunInputRequestV1, answeredAt: string): RunInputRequestV1 {
+    const current = this.getRunInputRequest(input.requestId)
+    if (current === undefined || current.runId !== runId) throw new Error('INPUT_REQUEST_NOT_FOUND')
+    if (current.status === 'answered') return current
+    if (current.status !== 'pending') throw new Error('INPUT_REQUEST_NOT_PENDING')
+    const selectedOptions = [...new Set(input.selectedOptions ?? [])]
+    if (selectedOptions.some((option) => !current.options.includes(option))) throw new Error('INPUT_OPTION_INVALID')
+    const answerText = input.text?.trim()
+    if (answerText && !current.allowFreeText) throw new Error('FREE_TEXT_NOT_ALLOWED')
+    if (!answerText && selectedOptions.length === 0) throw new Error('INPUT_RESPONSE_EMPTY')
+    const answered: RunInputRequestV1 = {
+      ...current,
+      status: 'answered',
+      ...(answerText ? { answerText } : {}),
+      selectedOptions,
+      answeredAt,
+    }
+    this.saveRunInputRequest(answered)
+    return answered
+  }
+
+  #runInputRequest(row: Row): RunInputRequestV1 {
+    return {
+      schemaVersion: 1,
+      requestId: String(row.request_id),
+      runId: String(row.run_id),
+      question: String(row.question),
+      options: json<readonly string[]>(row.options_json as SQLInputValue),
+      allowFreeText: Number(row.allow_free_text) === 1,
+      ...(row.context_version === null || row.context_version === undefined ? {} : { contextVersion: Number(row.context_version) }),
+      status: String(row.status) as RunInputRequestV1['status'],
+      ...(row.answer_text ? { answerText: String(row.answer_text) } : {}),
+      selectedOptions: json<readonly string[]>(row.selected_options_json as SQLInputValue),
+      createdAt: String(row.created_at),
+      ...(row.answered_at ? { answeredAt: String(row.answered_at) } : {}),
+    }
+  }
+
   getProviderSessionBinding(projectId: string, provider: 'codex' | 'workbuddy'): ProviderSessionBindingV1 | undefined {
     const row = this.#database.prepare(`SELECT * FROM provider_session_bindings WHERE project_id = ? AND provider = ?`).get(projectId, provider) as Row | undefined
     if (row === undefined) return undefined
@@ -2955,6 +3101,7 @@ const PROJECT_TRUTH_TABLES: readonly { readonly table: string; readonly where: s
   { table: 'runtime_bindings', where: 'run_id IN (SELECT id FROM runs WHERE project_id = ?)' },
   { table: 'artifact_returns', where: 'run_id IN (SELECT id FROM runs WHERE project_id = ?)' },
   { table: 'run_events', where: 'run_id IN (SELECT id FROM runs WHERE project_id = ?)' },
+  { table: 'run_input_requests', where: 'run_id IN (SELECT id FROM runs WHERE project_id = ?)' },
   { table: 'workspace_memberships', where: 'workspace_id IN (SELECT id FROM workspaces WHERE project_id = ?)' },
 ]
 
@@ -2963,6 +3110,7 @@ const PROJECT_TRUTH_TABLES: readonly { readonly table: string; readonly where: s
  */
 const PROJECT_TRUTH_DELETE_SQL: readonly string[] = [
   'DELETE FROM workspace_memberships WHERE workspace_id IN (SELECT id FROM workspaces WHERE project_id = ?)',
+  'DELETE FROM run_input_requests WHERE run_id IN (SELECT id FROM runs WHERE project_id = ?)',
   'DELETE FROM run_events WHERE run_id IN (SELECT id FROM runs WHERE project_id = ?)',
   'DELETE FROM artifact_returns WHERE run_id IN (SELECT id FROM runs WHERE project_id = ?)',
   'DELETE FROM runtime_bindings WHERE run_id IN (SELECT id FROM runs WHERE project_id = ?)',

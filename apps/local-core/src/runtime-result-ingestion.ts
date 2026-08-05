@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { mkdir, readFile, realpath, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, extname, isAbsolute, relative, resolve } from 'node:path'
 
-import type { RuntimePersistenceContract } from '@local-creative-os/contracts'
+import type { RunInputRequestV1, RuntimePersistenceContract } from '@local-creative-os/contracts'
 import type {
   Artifact,
   ArtifactReturn,
@@ -31,6 +31,19 @@ export interface RuntimeResultRepository extends RuntimePersistenceContract, Run
     revision: ArtifactRevision,
     artifactReturn: ArtifactReturn,
   ): ArtifactReturn
+  saveRunInputRequest(value: RunInputRequestV1): void
+  updateRunOutcome(
+    runId: RunId,
+    input: {
+      readonly status: Run['status']
+      readonly resultSummary?: string
+      readonly shortSummary?: string
+      readonly errorCode?: string
+      readonly errorMessage?: string
+      readonly completedAt?: string
+    },
+    updatedAt: string,
+  ): Run
 }
 
 export type IngestedRuntimeResult =
@@ -45,6 +58,10 @@ export type IngestedRuntimeResult =
   | {
       readonly kind: 'analyze'
       readonly summary: string
+    }
+  | {
+      readonly kind: 'waiting_input'
+      readonly inputRequest: RunInputRequestV1
     }
   | {
       readonly kind: 'create'
@@ -116,6 +133,7 @@ async function archiveEvidence(path: string, envelope: BridgeResultEnvelopeV0): 
       && existingEnvelope.lcosRunId === envelope.lcosRunId
       && existingEnvelope.providerStatus === envelope.providerStatus
       && canonicalJson(existingEnvelope.changedFiles) === canonicalJson(envelope.changedFiles)
+      && canonicalJson(existingEnvelope.inputRequest) === canonicalJson(envelope.inputRequest)
     if (!sameExecutionEvidence) {
       throw error('RESULT_EVIDENCE_CONFLICT', 'ResultEnvelope evidence is immutable and conflicts with stored evidence.')
     }
@@ -130,7 +148,7 @@ function validateEnvelope(envelope: BridgeResultEnvelopeV0, run: Run, taskId: st
   ) {
     throw error('CONTRACT_UNSUPPORTED', 'ResultEnvelope identity does not match the RuntimeBinding.')
   }
-  if (!['review', 'failed', 'cancelled', 'timeout'].includes(envelope.providerStatus)) {
+  if (!['review', 'waiting_input', 'failed', 'cancelled', 'timeout'].includes(envelope.providerStatus)) {
     throw error('CONTRACT_UNSUPPORTED', 'ResultEnvelope provider status is unsupported.')
   }
 }
@@ -164,7 +182,12 @@ export class RuntimeResultIngestionService {
     const runtimeRoot = resolve(project.rootPath, '.creative-os', 'runtime', String(run.id))
     const packPath = resolve(runtimeRoot, 'runtime-input-pack.json')
     const pack = JSON.parse(await readFile(packPath, 'utf8')) as RuntimeInputPackV0
-    const evidencePath = resolve(runtimeRoot, 'result', 'result-envelope-v0.json')
+    const inputRequestEvidenceId = envelope.inputRequest?.requestId === undefined
+      ? 'unknown'
+      : createHash('sha256').update(envelope.inputRequest.requestId, 'utf8').digest('hex').slice(0, 32)
+    const evidencePath = envelope.providerStatus === 'waiting_input'
+      ? resolve(runtimeRoot, 'result', `input-request-${inputRequestEvidenceId}.json`)
+      : resolve(runtimeRoot, 'result', 'result-envelope-v0.json')
     const canonicalProjectRoot = await realpath(project.rootPath)
     const canonicalRuntimeRoot = await realpath(runtimeRoot)
     const canonicalResultRoot = await realpath(resolve(runtimeRoot, 'result'))
@@ -189,25 +212,59 @@ export class RuntimeResultIngestionService {
     if (run.status === 'cancelled') {
       throw error('LATE_RESULT_AFTER_CANCEL', 'Cancelled Run result was archived but cannot create a Draft.')
     }
+    if (envelope.providerStatus === 'waiting_input') {
+      const request = envelope.inputRequest
+      if (request === undefined) {
+        throw error('CONTRACT_UNSUPPORTED', 'waiting_input requires an inputRequest payload.')
+      }
+      const inputRequest: RunInputRequestV1 = {
+        schemaVersion: 1,
+        requestId: request.requestId,
+        runId: String(run.id),
+        question: request.question,
+        options: request.options,
+        allowFreeText: request.allowFreeText,
+        ...(request.contextVersion === undefined ? {} : { contextVersion: request.contextVersion }),
+        status: 'pending',
+        selectedOptions: [],
+        createdAt: request.createdAt ?? syncedAt,
+      }
+      this.repository.saveRunInputRequest(inputRequest)
+      this.repository.updateRunOutcome(run.id, {
+        status: 'waiting_input',
+        resultSummary: request.question,
+        shortSummary: '需要你补充一点信息',
+      }, syncedAt)
+      return { kind: 'waiting_input', inputRequest }
+    }
     if (envelope.providerStatus !== 'review') {
       const code = envelope.providerStatus === 'timeout'
         ? 'PROVIDER_TIMEOUT'
         : envelope.providerStatus === 'cancelled'
           ? 'PROVIDER_CANCELLED'
           : 'PROVIDER_FAILED'
-      if (envelope.providerStatus === 'cancelled') {
-        this.repository.updateRunStatus(run.id, 'cancelled', syncedAt)
-      } else {
-        this.repository.updateRunStatus(run.id, 'failed', syncedAt)
-      }
-      throw error(code, envelope.summary ?? envelope.shortSummary ?? envelope.resultSummary ?? 'Provider did not return a reviewable result.')
+      const message = envelope.summary ?? envelope.shortSummary ?? envelope.resultSummary ?? 'Provider did not return a reviewable result.'
+      const status = envelope.providerStatus === 'cancelled' ? 'cancelled' : 'failed'
+      this.repository.updateRunOutcome(run.id, {
+        status,
+        shortSummary: message.slice(0, 180),
+        errorCode: code,
+        errorMessage: message,
+        completedAt: syncedAt,
+      }, syncedAt)
+      throw error(code, message)
     }
     if (run.outputIntent === 'analyze') {
       if (envelope.changedFiles.length !== 0) {
         throw error('CONTRACT_UNSUPPORTED', 'Analyze runs must return zero changed files; provider returned file changes.')
       }
       const summary = envelope.summary ?? envelope.resultSummary ?? envelope.shortSummary ?? 'Analysis completed with no file changes.'
-      this.repository.updateRunStatus(run.id, 'completed', syncedAt)
+      this.repository.updateRunOutcome(run.id, {
+        status: 'completed',
+        resultSummary: summary,
+        shortSummary: envelope.shortSummary ?? summary.slice(0, 180),
+        completedAt: syncedAt,
+      }, syncedAt)
       return {
         kind: 'analyze',
         summary,

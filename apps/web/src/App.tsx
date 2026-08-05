@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { Command, Play } from 'lucide-react'
-import type { ContextChangeProposalV1, ContextManifestV0, RunProposalResult, RunReview, RuntimeProviderStatus, WorkspaceMembership } from '@local-creative-os/contracts'
+import type { ContextChangeProposalV1, ContextManifestV0, ObsidianVaultScanV1, RunProposalResult, RunReview, RuntimeProviderStatus, WorkspaceMembership } from '@local-creative-os/contracts'
 import { makePerformanceFixture } from './qa-fixtures/fixtures'
 import type { ActiveRun, Camera, CanvasNode, CanvasScope, NodeDisplayMode, NodeLayer, PersistedPrototypeState, ProjectPackage, ScopeKind, TargetContextInference, WorkRailPreferences, Workspace, WorkspaceIntent } from './model'
 import { nodeMeta, runStatusLabel } from './model'
@@ -23,6 +23,7 @@ import { NodeInfoPopover } from './features/canvas/NodeInfoPopover'
 import { LinkReferenceDialog } from './features/create/LinkReferenceDialog'
 import { UniversalImportPanel, type DirectoryEntryInput } from './features/resources/UniversalImportPanel'
 import { ResourceDetailDialog } from './features/resources/ResourceDetailDialog'
+import { ObsidianImportDialog } from './features/resources/ObsidianImportDialog'
 import { capabilitiesFor, type LinkReferenceInput, type RunOutputIntent } from './runtime/v07UiContracts'
 import { clearPrototypeState, loadProjectCatalog, loadPrototypeState, saveProjectCatalog, savePrototypeState } from './state/prototypeStorage'
 import { clearProjectNavigationState, loadProjectNavigationState, saveProjectNavigationState } from './state/projectNavigation'
@@ -77,7 +78,7 @@ function createId(prefix: string): string {
 function runtimePresentationStatus(review: RunReview): ActiveRun['status'] {
   if (review.dispatch.status === 'recovery_required' || review.dispatch.status === 'failed') return 'failed'
   if (review.presentationPhase === 'created' || review.presentationPhase === 'queued') return 'queued'
-  if (review.presentationPhase === 'cancelled') return 'failed'
+  if (review.presentationPhase === 'cancelled') return 'cancelled'
   return review.presentationPhase
 }
 
@@ -150,6 +151,9 @@ export function App() {
   const [linkDialogOpen, setLinkDialogOpen] = useState(false)
   const [importPanelOpen, setImportPanelOpen] = useState(false)
   const [resourceDetailArtifactId, setResourceDetailArtifactId] = useState<string | null>(null)
+  const [obsidianScan, setObsidianScan] = useState<ObsidianVaultScanV1 | null>(null)
+  const [obsidianBusy, setObsidianBusy] = useState(false)
+  const [obsidianError, setObsidianError] = useState<string | null>(null)
   const [activeContextProjection, setActiveContextProjection] = useState<ActiveContextProjection | null>(null)
   const [activeContextError, setActiveContextError] = useState<string | null>(null)
   const [contextSync, setContextSync] = useState<'syncing' | 'synced' | 'conflict'>('synced')
@@ -450,6 +454,42 @@ export function App() {
 
   useEffect(() => {
     if (!agentMode || !activeProjectId || bootMode !== 'runtime') return
+    const controller = new AbortController()
+    let stopped = false
+    let version = activeContextVersionRef.current
+    const watch = async () => {
+      while (!stopped && !controller.signal.aborted) {
+        const call = await bridgeRef.current.client.activeContext(
+          activeProjectId,
+          workspaceId,
+          version,
+          controller.signal,
+        )
+        if (stopped || controller.signal.aborted) return
+        if (call.result.ok) {
+          const next = call.result.value
+          if (next.version > version) {
+            version = next.version
+            activeContextVersionRef.current = next.version
+            setActiveContextProjection(next)
+            setActiveContextError(null)
+            setContextSync('synced')
+          }
+          continue
+        }
+        setActiveContextError(call.result.error.message)
+        await new Promise((resolve) => window.setTimeout(resolve, 750))
+      }
+    }
+    void watch()
+    return () => {
+      stopped = true
+      controller.abort()
+    }
+  }, [activeProjectId, agentMode, bootMode, workspaceId])
+
+  useEffect(() => {
+    if (!agentMode || !activeProjectId || bootMode !== 'runtime') return
     const timer = window.setInterval(() => {
       void bridgeRef.current.client.listContextProposals(activeProjectId, workspaceId).then((call) => {
         if (call.result.ok) setContextProposals(call.result.value as ContextChangeProposalV1[])
@@ -506,7 +546,7 @@ export function App() {
     const bridge = bridgeRef.current
     bridge.isAvailable().then((available) => {
       if (!available) {
-        setNotice('Local Core 离线，当前为 Demo 模式')
+        setNotice('本地项目服务暂时不可用，当前仅显示演示内容')
         setBootMode('offline')
         return
       }
@@ -517,13 +557,13 @@ export function App() {
           setProjects(runtimeProjects)
           setProjectOpen(false)
           setBootMode('offline')
-          setNotice(`项目不存在：${selection.requestedProjectId}。Local Core 中未找到该项目，已回到项目列表，未使用 Demo 数据`)
+          setNotice(`没有找到这个项目，已回到项目列表。项目 ID：${selection.requestedProjectId}`)
           return
         }
         if (selection.kind === 'empty-catalog') {
           setProjects([])
           setBootMode('offline')
-          setNotice('Local Core 已连接，但还没有项目；请创建新项目或打开已有目录')
+          setNotice('还没有本地项目，请创建新项目或打开已有文件夹')
           return
         }
         const runtimeProjectId = selection.projectId
@@ -544,17 +584,17 @@ export function App() {
           setWorkRail(normalizeRailPreferences(result.state.workRail))
           setDataSource('runtime')
           setBootMode('runtime')
-          setNotice('已打开 Runtime MVP Sample · 默认项目总览')
+          setNotice('项目已打开')
         } else if (result !== undefined) {
           setProjects([])
           setProjectOpen(false)
           setBootMode('offline')
-          setNotice('Runtime 项目加载失败，已回到项目列表（未回退 Demo 数据）')
+          setNotice('项目暂时无法打开，已回到项目列表。你的项目文件没有被修改')
         }
       }).catch(() => {
         setProjectOpen(false)
         setBootMode('offline')
-        setNotice('Local Core 连接异常，已回到项目列表（未使用 Demo 数据）')
+        setNotice('本地项目服务连接中断，已回到项目列表。你的内容仍保留在本地')
       })
     })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -710,16 +750,16 @@ export function App() {
           if (result.status === 'saved') {
             setSaveStatus('saved')
             setDataSource('runtime')
-            setNotice('已保存至 Local Core')
+            setNotice('已保存')
           } else {
             setSaveStatus('unsaved')
-            setNotice(`保存失败: ${result.error ?? 'Local Core 不可用'}`)
+            setNotice(`保存失败：${humanizeRuntimeMessage(result.error)}`)
             console.warn('[RuntimeBridge] Save failed:', result.error)
           }
           saveProjectCatalog(projects)
         }).catch(() => {
           setSaveStatus('unsaved')
-          setNotice('保存失败: Local Core 连接异常')
+          setNotice('保存失败：本地项目服务暂时无法连接，请稍后重试')
         })
         return
       }
@@ -823,13 +863,13 @@ export function App() {
     if (bootMode === 'runtime') {
       bridgeRef.current = new RuntimeBridge(projectId)
       void bridgeRef.current.loadProject().then((loaded) => {
-        if (loaded.source !== 'runtime' || loaded.state === null) { setNotice(`项目打开失败：${loaded.error ?? 'Runtime 数据不可用'}`); return }
+        if (loaded.source !== 'runtime' || loaded.state === null) { setNotice(`项目打开失败：${humanizeRuntimeMessage(loaded.error ?? '项目数据暂时无法读取')}`); return }
         projectStateCacheRef.current.set(projectId, loaded.state)
         setOpenProjectIds((current) => current.includes(projectId) ? current : [...current, projectId])
         applyProjectState(projectId, loaded.state)
         setDataSource('runtime')
-        setNotice(`已从 Local Core 打开 ${projects.find((project) => project.id === projectId)?.label ?? '项目'}`)
-      }).catch(() => setNotice('项目打开失败：Local Core 连接异常'))
+        setNotice(`已打开 ${projects.find((project) => project.id === projectId)?.label ?? '项目'}`)
+      }).catch(() => setNotice('项目打开失败：本地项目服务暂时无法连接'))
       return
     }
     const next = projectStateCacheRef.current.get(projectId) ?? loadPrototypeState(projectId) ?? fixtureStateForProject(projectId, defaultRailWidth())
@@ -863,7 +903,7 @@ export function App() {
     bridgeRef.current = new RuntimeBridge(entry.id)
     const loaded = await bridgeRef.current.loadProject()
     if (loaded.source !== 'runtime' || !loaded.state) {
-      setNotice(`项目已创建（${entry.name}），但 Runtime 数据加载失败`)
+      setNotice(`项目已创建（${entry.name}），但项目内容暂时无法读取`)
       return
     }
     const rootScope = loaded.state.scopes.find((scope) => scope.kind === 'root')
@@ -891,7 +931,7 @@ export function App() {
     const importedNodes = loaded.state.nodes.filter((node) => node.artifactId !== undefined).length
     setNotice(importedNodes > 0
       ? `${label} 已打开，已从目录建立 ${importedNodes} 个 Canvas 节点`
-      : `${label} 已创建并写入 Local Core，可以直接拖入本地文件`)
+      : `${label} 已创建并保存，可以直接拖入本地文件`)
   }, [camera, resetGraph, setCamera, setDataSource, setProjectOpen, setScopes, setWorkRail, setWorkspaces])
   const browseProjectDirectory = useCallback(async (title: string): Promise<string | undefined> => {
     const call = await bridgeRef.current.client.selectDirectory(title)
@@ -1080,7 +1120,7 @@ export function App() {
     if (bootMode !== 'runtime') {
       setWorkspaceStates([])
       setWorkspaceStatesLoading(false)
-      setWorkspaceStatesError('Demo 模式不伪造工作现场历史；连接 Local Core 后读取真实记录。')
+      setWorkspaceStatesError('演示模式不保存工作现场历史；打开真实项目后可查看记录。')
       return
     }
     setWorkspaceStatesLoading(true)
@@ -1263,7 +1303,7 @@ export function App() {
         id: localId,
         kind,
         title: '新文本…',
-        subtitle: '正在写入 Local Core…',
+        subtitle: '正在保存到项目…',
         x,
         y,
         ...nodeDimensions(kind, 'standard'),
@@ -1366,7 +1406,7 @@ export function App() {
 
   const generatePreview = useCallback((node: CanvasNode) => {
     if (bootMode !== 'runtime' || !node.revisionId) {
-      setNotice('只有 Runtime Revision 可以生成 Preview')
+      setNotice('只有已保存的文件版本可以生成预览')
       return
     }
     setNotice(`正在生成 ${node.title} 的 Preview…`)
@@ -1398,7 +1438,7 @@ export function App() {
 
   const refreshSource = useCallback((node: CanvasNode) => {
     if (bootMode !== 'runtime' || !node.fileRecordId) {
-      setNotice('只有 Runtime FileRecord 可以刷新')
+      setNotice('只有已导入的本地文件可以重新读取')
       return
     }
     setNotice(`正在刷新 ${node.title}…`)
@@ -1521,7 +1561,7 @@ export function App() {
         setCamera(rootScope?.camera ?? camera)
         setWorkRail(normalizeRailPreferences(loaded.state.workRail))
       }
-    }).catch(() => setNotice('链接导入失败：Local Core 连接异常'))
+    }).catch(() => setNotice('链接导入失败：本地项目服务暂时不可用'))
   }, [activeProjectId, addViewsToWorkspace, camera, resetGraph, scopeId, setCamera, setScopes, setWorkRail, setWorkspaces, workspaceId])
 
   const reloadRuntimeProject = useCallback(async (): Promise<void> => {
@@ -1596,6 +1636,48 @@ export function App() {
     }).catch(() => setNotice('压缩包导入失败：连接异常'))
   }, [activeProjectId, addViewsToWorkspace, refreshResourceStatuses, reloadRuntimeProject, scopeId, workspaceId])
 
+  const handleOpenObsidian = useCallback(() => {
+    setObsidianBusy(true)
+    setObsidianError(null)
+    void bridgeRef.current.client.selectObsidianVault().then((call) => {
+      if (!call.result.ok) {
+        setObsidianError(call.result.error.message)
+        setNotice('没有完成 Obsidian Vault 扫描，项目内容没有变化。')
+        return
+      }
+      if (call.result.value === null) return
+      setObsidianScan(call.result.value)
+    }).catch(() => {
+      setObsidianError('Obsidian Vault 扫描暂时不可用。')
+      setNotice('没有完成 Obsidian Vault 扫描，项目内容没有变化。')
+    }).finally(() => setObsidianBusy(false))
+  }, [])
+
+  const handleImportObsidian = useCallback((relativePaths: readonly string[]) => {
+    if (!obsidianScan) return
+    const point = lastCanvasPointRef.current ?? { x: 180, y: 160 }
+    setObsidianBusy(true)
+    setObsidianError(null)
+    void bridgeRef.current.client.importObsidianNotes(activeProjectId, {
+      scanId: obsidianScan.scanId,
+      relativePaths,
+      scopeId,
+      position: point,
+    }).then(async (call) => {
+      if (!call.result.ok) {
+        setObsidianError(call.result.error.message)
+        return
+      }
+      const viewIds = call.result.value.flatMap((item) => item.viewId ? [item.viewId] : [])
+      if (workspaceId && viewIds.length > 0) await addViewsToWorkspace(workspaceId, viewIds, 'import')
+      setNotice(`已从 ${obsidianScan.vaultName} 导入 ${call.result.value.length} 篇笔记；原 Vault 保持只读。`)
+      setObsidianScan(null)
+      await reloadRuntimeProject()
+      await refreshResourceStatuses()
+    }).catch(() => setObsidianError('Obsidian 笔记导入暂时中断，原 Vault 没有被修改。'))
+      .finally(() => setObsidianBusy(false))
+  }, [activeProjectId, addViewsToWorkspace, obsidianScan, refreshResourceStatuses, reloadRuntimeProject, scopeId, workspaceId])
+
   useEffect(() => {
     if (bootMode !== 'runtime' || !activeProjectId) return
     const timer = window.setInterval(() => { void refreshResourceStatuses() }, 60_000)
@@ -1603,6 +1685,7 @@ export function App() {
   }, [activeProjectId, bootMode, refreshResourceStatuses])
 
   const applyRuntimeReview = useCallback((review: RunReview, current: ActiveRun, providerError?: string) => {
+    const readableProviderError = providerError === undefined ? undefined : humanizeRuntimeMessage(providerError)
     const pendingReturn = review.returns.find((item) => item.status === 'pending_review')
     const draftRevision = pendingReturn?.draftRevisionId === undefined
       ? undefined
@@ -1623,8 +1706,8 @@ export function App() {
         revisionId: String(draftRevision.id),
         followsCurrentRevision: false,
         kind: 'generated',
-        title: changedFiles[0] ?? 'Runtime Draft',
-        subtitle: 'Runtime Draft · 等待 Accept / Reject / Retry',
+        title: changedFiles[0] ?? '待确认结果',
+        subtitle: '待确认结果 · 可以使用、放弃或再试一次',
         ...position,
         ...dimensions,
         displayMode: 'standard',
@@ -1666,14 +1749,24 @@ export function App() {
     setActiveRun({
       ...current,
       id: String(review.run.id),
-      status: providerError ? 'failed' : runtimePresentationStatus(review),
+      status: readableProviderError ? 'failed' : runtimePresentationStatus(review),
       runtime: true,
       pendingArtifactId,
       runtimeReturnId: pendingReturn === undefined ? current.runtimeReturnId : String(pendingReturn.id),
       baseRevisionId: pendingReturn === undefined ? current.baseRevisionId : String(pendingReturn.baseRevisionId),
       reviewStatus: pendingReturn === undefined ? current.reviewStatus : 'pending',
       changedFiles,
-      providerError,
+      providerError: readableProviderError,
+      ...(review.run.resultSummary === undefined ? {} : { resultSummary: review.run.resultSummary }),
+      ...(review.inputRequest === undefined ? { inputRequest: undefined } : {
+        inputRequest: {
+          requestId: review.inputRequest.requestId,
+          question: review.inputRequest.question,
+          options: [...review.inputRequest.options],
+          allowFreeText: review.inputRequest.allowFreeText,
+          ...(review.inputRequest.contextVersion === undefined ? {} : { contextVersion: review.inputRequest.contextVersion }),
+        },
+      }),
     })
   }, [nodes, scopeId, setGraph, workspaceId])
 
@@ -1687,8 +1780,11 @@ export function App() {
         || item.returns.some((artifactReturn) => artifactReturn.status === 'pending_review'),
       )
       if (review === undefined) return
-      const target = nodes.find((node) => node.artifactId === String(review.run.targetArtifactId))
-      if (target === undefined) return
+      const target = review.run.targetArtifactId === undefined
+        ? undefined
+        : nodes.find((node) => node.artifactId === String(review.run.targetArtifactId))
+      const contextAnchor = nodes.find((node) => node.artifactId !== undefined)
+      const anchor = target ?? contextAnchor
       const id = String(review.run.id)
       const processNodeId = `runtime-run-view-${id}`
       const dimensions = nodeDimensions('process', 'standard')
@@ -1697,12 +1793,12 @@ export function App() {
           id: processNodeId,
           kind: 'process',
           title: `${id} · ${review.run.instruction.slice(0, 22)}`,
-          subtitle: '从 Runtime 恢复',
-          x: target.x + 24,
-          y: target.y + target.height + 54,
+          subtitle: '已恢复任务',
+          x: anchor === undefined ? 520 : anchor.x + 24,
+          y: anchor === undefined ? 420 : anchor.y + anchor.height + 54,
           ...dimensions,
           displayMode: 'standard',
-          scopeId: target.scopeId ?? scopeId,
+          scopeId: anchor?.scopeId ?? scopeId,
           runStatus: runtimePresentationStatus(review),
           commandText: review.run.instruction,
           parentRunId: id,
@@ -1711,11 +1807,11 @@ export function App() {
           sourcePrompt: review.run.instruction,
           sourceProvider: String(review.run.provider),
           contextCount: 0,
-          targetCount: 1,
+          targetCount: target === undefined ? 0 : 1,
           outputCount: review.returns.length,
           runtimeTransient: true,
         }],
-        edges: [...graph.edges, {
+        edges: target === undefined ? graph.edges : [...graph.edges, {
           id: `runtime-target-run-edge-${id}`,
           from: target.id,
           to: processNodeId,
@@ -1726,7 +1822,7 @@ export function App() {
         id,
         status: runtimePresentationStatus(review),
         command: review.run.instruction,
-        targetIds: [target.id],
+        targetIds: target === undefined ? [] : [target.id],
         contextIds: [],
         processNodeId,
         contextSnapshotId: String(review.run.contextManifestId),
@@ -1735,7 +1831,7 @@ export function App() {
         createdAt: String(review.run.createdAt),
         runtime: true,
       }, review.dispatch.lastErrorMessage)
-      setNotice(`已恢复 Runtime Run：${id}`)
+      setNotice('已恢复 Agent 任务')
     })
   }, [activeProjectId, activeRun, applyRuntimeReview, bootMode, nodes, scopeId, setGraph])
 
@@ -1780,14 +1876,15 @@ export function App() {
         const providerError = dispatched.result.ok
           ? dispatched.result.value.providerError
           : { code: 'DISPATCH_REQUEST_FAILED', message: dispatched.result.error.message, retryable: true }
+        const providerErrorMessage = providerError === undefined ? undefined : humanizeRuntimeMessage(providerError.message)
         const id = String(review.run.id)
         const processNodeId = `runtime-run-view-${id}`
         const dimensions = nodeDimensions('process', 'standard')
         const process: CanvasNode = {
           id: processNodeId,
           kind: 'process',
-          title: `${id} · ${command.slice(0, 22)}`,
-          subtitle: providerError ? `派发待恢复 · ${providerError.code}` : `${requestedProvider === 'auto' ? 'Auto' : requestedProvider} · ${intent}`,
+          title: `Agent 任务 · ${command.slice(0, 22)}`,
+          subtitle: providerErrorMessage ? '等待重新连接本地 Agent' : '已发送给本地 Agent',
           x: target ? target.x + 24 : 460,
           y: target ? target.y + target.height + 54 : 560,
           ...dimensions,
@@ -1812,7 +1909,7 @@ export function App() {
         setGraph((graph) => ({ nodes: [...graph.nodes, process], edges: [...graph.edges, ...runEdges] }))
         const runtimeRun: ActiveRun = {
           id,
-          status: providerError ? 'failed' : runtimePresentationStatus(review),
+          status: providerErrorMessage ? 'failed' : runtimePresentationStatus(review),
           command,
           targetIds,
           contextIds,
@@ -1822,7 +1919,7 @@ export function App() {
           changedFiles: [],
           createdAt: String(review.run.createdAt),
           runtime: true,
-          providerError: providerError?.message,
+          providerError: providerErrorMessage,
           baseRevisionId: targetRevisionId,
           provider: requestedProvider,
           outputIntent: intent,
@@ -1834,9 +1931,9 @@ export function App() {
         setSelectionComposerText('')
         setGlobalComposerText('')
         clearPersistedCommandDrafts()
-        applyRuntimeReview(review, runtimeRun, providerError?.message)
+        applyRuntimeReview(review, runtimeRun, providerErrorMessage)
         setNotice(providerError
-          ? `Run 已保存为 planned，派发需要恢复：${providerError.message}`
+          ? `Agent 任务已保存，${providerErrorMessage}`
           : `真实 Run 已派发：${id}`)
       })
       return
@@ -1990,7 +2087,7 @@ export function App() {
   const syncRuntimeRun = useCallback(() => {
     if (!activeRun?.runtime || runtimeSyncBusyRef.current) return
     runtimeSyncBusyRef.current = true
-    setNotice(`正在同步 ${activeRun.id}…`)
+    setNotice('正在更新 Agent 任务状态…')
     void bridgeRef.current.client.syncRuntimeRun(activeRun.id).then((call) => {
       if (!call.result.ok) {
         setNotice(`同步失败：${call.result.error.message}`)
@@ -2010,7 +2107,7 @@ export function App() {
       setNotice('任务已撤回；之后返回的结果不会成为待确认版本')
       return
     }
-    setNotice(`正在撤回 ${activeRun.id}…`)
+    setNotice('正在撤回 Agent 任务…')
     void bridgeRef.current.client.cancelRuntimeRun(activeRun.id).then((call) => {
       if (!call.result.ok) {
         setNotice(`撤回失败：${call.result.error.message}`)
@@ -2019,6 +2116,19 @@ export function App() {
       applyRuntimeReview(call.result.value.review, activeRun, call.result.value.providerError?.message)
       setActiveRun((current) => current?.id === activeRun.id ? { ...current, status: 'cancelled' } : current)
       setNotice('任务已撤回；迟到结果只保留审计，不会进入当前版本')
+    })
+  }, [activeRun, applyRuntimeReview])
+
+  const answerActiveRunInput = useCallback((input: { readonly requestId: string; readonly text?: string; readonly selectedOptions?: readonly string[] }) => {
+    if (!activeRun?.runtime || activeRun.status !== 'waiting_input') return
+    setNotice('已收到补充，正在继续同一个任务…')
+    void bridgeRef.current.client.answerRunInput(activeRun.id, input).then((call) => {
+      if (!call.result.ok) {
+        setNotice(`暂时无法继续：${call.result.error.message}`)
+        return
+      }
+      applyRuntimeReview(call.result.value.review, activeRun, call.result.value.providerError?.message)
+      setNotice(humanizeRuntimeMessage(call.result.value.providerError?.message) || '补充信息已发送，Agent 会继续处理')
     })
   }, [activeRun, applyRuntimeReview])
 
@@ -2165,7 +2275,7 @@ export function App() {
             return
           }
           applyRuntimeReview(call.result.value.review, activeRun, call.result.value.providerError?.message)
-          setNotice(call.result.value.providerError?.message ?? 'Runtime Dispatch 已恢复')
+          setNotice(humanizeRuntimeMessage(call.result.value.providerError?.message) || 'Agent 任务已重新连接')
         })
         return
       }
@@ -2430,6 +2540,7 @@ export function App() {
         onRetry={retryRun}
         onSyncRun={syncRuntimeRun}
         onCancelRun={cancelActiveRun}
+        onAnswerInput={answerActiveRunInput}
         onContinueModify={continueModify}
         onShowRun={clearSelection}
       />
@@ -2455,7 +2566,7 @@ export function App() {
         setCamera(revealNode(camera, workbenchNode, viewport?.width ?? 1000, viewport?.height ?? 820))
         setNotice(`已定位「${workbenchNode.title}」`)
       }} onUseRevision={useHistoricalRevision} onShowResource={workbenchNode.artifactId === undefined ? undefined : () => { setWorkbench(null); setResourceDetailArtifactId(String(workbenchNode.artifactId)) }} />}
-      {activeRun && <button className={`run-pill ${activeRun.status}`} onClick={() => { clearSelection(); setWorkRail((current) => ({ ...current, collapsed: false })) }}><Play size={13} /> {activeRun.id} · {runStatusLabel[activeRun.status]}</button>}
+      {activeRun && <button className={`run-pill ${activeRun.status}`} title={activeRun.id} onClick={() => { clearSelection(); setWorkRail((current) => ({ ...current, collapsed: false })) }}><Play size={13} /> Agent 任务 · {runStatusLabel[activeRun.status]}</button>}
       <nav className="scene-title v06-breadcrumbs" aria-label="画布层级">{scopePath.map((scope, index) => {
         const current = index === scopePath.length - 1
         return <button key={scope.id} data-testid={`scope-crumb-${scope.id}`} aria-current={current ? 'page' : undefined} disabled={current} onClick={() => enterScope(scope.id)}>{index > 0 && <span>/</span>}{index === 0 ? activeProject.label : scope.label}</button>
@@ -2470,7 +2581,8 @@ export function App() {
       {confirmWorkspaceId && <ConfirmDialog title="删除这个工作空间？" description="只删除工作空间定义，不删除内容、节点、本地文件或 Camera。" onCancel={() => setConfirmWorkspaceId(null)} onConfirm={confirmDeleteWorkspace} />}
       <HandoffDialog open={handoffOpen} loading={handoffLoading} manifest={handoffManifest} error={handoffError} onClose={() => setHandoffOpen(false)} onCopy={() => { void copyHandoff() }} onDownload={downloadHandoff} />
       <LinkReferenceDialog open={linkDialogOpen} onClose={() => setLinkDialogOpen(false)} onCreate={createLinkReference} />
-      <UniversalImportPanel open={importPanelOpen} onClose={() => setImportPanelOpen(false)} onFiles={(files) => { const point = lastCanvasPointRef.current ?? { x: 180, y: 160 }; dropFiles([...files], point.x, point.y) }} onDirectory={(rootName, files, note) => { void handleImportDirectory(rootName, files, note) }} onArchive={(file, note) => { void handleImportArchive(file, note) }} onOpenLink={() => setLinkDialogOpen(true)} />
+      <UniversalImportPanel open={importPanelOpen} onClose={() => setImportPanelOpen(false)} onFiles={(files) => { const point = lastCanvasPointRef.current ?? { x: 180, y: 160 }; dropFiles([...files], point.x, point.y) }} onDirectory={(rootName, files, note) => { void handleImportDirectory(rootName, files, note) }} onArchive={(file, note) => { void handleImportArchive(file, note) }} onOpenLink={() => setLinkDialogOpen(true)} onOpenObsidian={handleOpenObsidian} />
+      <ObsidianImportDialog scan={obsidianScan} busy={obsidianBusy} error={obsidianError} onClose={() => { setObsidianScan(null); setObsidianError(null) }} onImport={handleImportObsidian} />
       {resourceDetailArtifactId !== null && <ResourceDetailDialog open projectId={activeProjectId} artifactId={resourceDetailArtifactId} client={bridgeRef.current.client} onClose={() => setResourceDetailArtifactId(null)} onChanged={() => { void refreshResourceStatuses() }} />}
       {workspaceStatesOpen && workspaceStatesWorkspaceId && (() => {
         const stateWorkspace = workspaces.find((workspace) => workspace.id === workspaceStatesWorkspaceId)
@@ -2516,25 +2628,25 @@ function AgentContextSurface({
         ? `已同步 v${projection.version}`
         : '未连接'
   const pendingProposals = proposals.filter((proposal) => proposal.status === 'pending')
-  return <aside className="agent-context-surface" data-testid="agent-context-surface" aria-label="Agent visual context">
+  return <aside className="agent-context-surface" data-testid="agent-context-surface" aria-label="Agent 看到的画布">
     <header>
       <span className={`agent-context-live ${error ? 'error' : ''}`} />
-      <div><strong>Agent Context</strong><small>{error ? 'Local Core unavailable' : 'Live from Canvas'}</small></div>
+      <div><strong>Agent 看到的画布</strong><small>{error ? '暂时无法同步' : '与当前画布同步'}</small></div>
       <code>v{projection?.version ?? 0}</code>
     </header>
     <div className={`agent-sync-badge ${syncState}`}><span>{syncLabel}</span><button type="button" className="icon-only pressable" onClick={onRefresh} title="刷新上下文">⟳</button></div>
-    {runLocked && <div className="agent-run-lock">Run {runLocked.id} 已锁定本次 Context（{runLocked.contextCount} 项）；继续修改只影响下一次 Run。</div>}
+    {runLocked && <div className="agent-run-lock" title={runLocked.id}>当前 Agent 任务已锁定 {runLocked.contextCount} 项参考内容；之后的选择只影响下一次任务。</div>}
     <dl>
-      <div><dt>Project</dt><dd>{projectLabel}</dd></div>
-      <div><dt>Workspace</dt><dd>{workspaceLabel}</dd></div>
-      <div><dt>Selection</dt><dd>{selectedNodes.length || 'None'}</dd></div>
-      <div><dt>Context</dt><dd>{projection?.contextArtifacts.length ?? 0}</dd></div>
+      <div><dt>项目</dt><dd>{projectLabel}</dd></div>
+      <div><dt>工作空间</dt><dd>{workspaceLabel}</dd></div>
+      <div><dt>当前选择</dt><dd>{selectedNodes.length || '无'}</dd></div>
+      <div><dt>参考内容</dt><dd>{projection?.contextArtifacts.length ?? 0}</dd></div>
     </dl>
     {selectedNodes.length > 0
       ? <ul>{selectedNodes.slice(0, 5).map((node) => <li key={node.id}><span className={`agent-kind kind-${node.kind}`} />{node.title}</li>)}</ul>
-      : <p>在画布中选择内容，Agent 将通过 LCOS MCP 读取同一份 Active Context。</p>}
+      : <p>在画布中选择内容，Agent 会读取同一份画布选择和参考内容。</p>}
     <section className="agent-surface-section">
-      <h4>Codex 待确认提案（{pendingProposals.length}）</h4>
+      <h4>Agent 建议（{pendingProposals.length}）</h4>
       {pendingProposals.length === 0
         ? <p className="agent-context-empty">无待确认提案</p>
         : pendingProposals.map((proposal) => (
@@ -2548,11 +2660,22 @@ function AgentContextSurface({
           ))}
     </section>
     <section className="agent-surface-section">
-      <h4>Codex 待办</h4>
-      <p className="agent-context-empty">{pendingRuns > 0 ? `${pendingRuns} 条待执行（看门狗会敲门或拉起新会话）` : '暂无待办'}</p>
+      <h4>待处理任务</h4>
+      <p className="agent-context-empty">{pendingRuns > 0 ? `${pendingRuns} 条等待本地 Agent 接手` : '暂无待办'}</p>
     </section>
-    {error && <p className="agent-context-error">{error}</p>}
+    {error && <div className="agent-context-error"><p>{humanizeRuntimeMessage(error)}</p><button type="button" className="quiet pressable" onClick={() => { void navigator.clipboard?.writeText(error) }}>复制诊断信息</button></div>}
   </aside>
+}
+
+function humanizeRuntimeMessage(message?: string | null): string {
+  if (!message) return ''
+  const value = String(message)
+  if (/authorization|token|401/i.test(value)) return '本地项目服务需要重新连接，请重启 LCOS 后再试。'
+  if (/offline|unavailable|ECONNREFUSED|fetch failed|Local Core|Bridge disconnected/i.test(value)) return '本地 Agent 服务暂时不可用，你的内容已保留，可以稍后重新连接。'
+  if (/timeout|timed out/i.test(value)) return '本地 Agent 响应较慢，本次操作没有完成，可以重新尝试。'
+  if (/stale|version|conflict|409/i.test(value)) return '内容已在其他位置发生变化，请刷新后再试。'
+  if (/cancel/i.test(value)) return '任务已撤回或正在撤回，迟到结果不会替换当前版本。'
+  return value
 }
 
 function buildScopePath(scopes: CanvasScope[], scope: CanvasScope): CanvasScope[] {

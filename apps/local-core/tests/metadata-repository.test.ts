@@ -3,14 +3,14 @@ import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import type { Checkpoint, Note, PersistedContextManifestV0, ProjectGraphSnapshot } from '@local-creative-os/contracts'
+import type { Checkpoint, Note, PersistedContextManifestV0, ProjectGraphSnapshot, RunInputRequestV1 } from '@local-creative-os/contracts'
 import type { ArtifactViewId, ContextManifestId, ProjectId, Run, RunEvent, RuntimeDispatch, WorkspaceId } from '@local-creative-os/domain'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { MetadataForeignKeyConstraintError, SqliteMetadataRepository } from '../src/metadata-repository.js'
 
 const cleanup: string[] = []
-const SCHEMA_VERSION = 14
+const SCHEMA_VERSION = 15
 
 function disposableSnapshot(): ProjectGraphSnapshot {
   const now = '2026-07-24T12:00:00.000Z'
@@ -169,6 +169,63 @@ describe('SqliteMetadataRepository', () => {
     repository.close()
     const reopened = new SqliteMetadataRepository(path)
     expect(reopened.getRunEvents(run.id)).toHaveLength(2)
+  })
+
+  it('keeps an answered input request closed when a delayed waiting_input result is replayed', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'local-core-run-input-'))
+    cleanup.push(directory)
+    const repository = new SqliteMetadataRepository(join(directory, 'metadata.sqlite'))
+    repository.save(disposableSnapshot())
+    const canonicalJson = JSON.stringify({ schemaVersion: 0, project: { id: 'disposable-portasplit' }, lockedElements: [] })
+    const manifestHash = createHash('sha256').update(canonicalJson).digest('hex')
+    repository.createContextManifest({
+      id: 'manifest-input-one' as PersistedContextManifestV0['id'],
+      projectId: 'disposable-portasplit' as ProjectId,
+      schemaVersion: 0,
+      canonicalJson,
+      manifestHash,
+      createdAt: '2026-08-05T01:00:00.000Z',
+    })
+    const run: Run = {
+      id: 'run-input-one' as Run['id'],
+      projectId: 'disposable-portasplit' as ProjectId,
+      contextManifestId: 'manifest-input-one' as ContextManifestId,
+      provider: 'codex',
+      requestedProvider: 'codex',
+      outputIntent: 'analyze',
+      returnGroupId: 'return-group-input-one',
+      status: 'waiting_input',
+      instruction: 'Analyze and ask once if needed.',
+      createdAt: '2026-08-05T01:00:00.000Z',
+      updatedAt: '2026-08-05T01:00:00.000Z',
+    }
+    repository.createRunWithDispatch(run, {
+      id: 'dispatch-input-one' as RuntimeDispatch['id'],
+      runId: run.id,
+      provider: 'codex',
+      idempotencyKey: String(run.id),
+      status: 'bound',
+      attemptCount: 1,
+      createdAt: run.createdAt,
+      updatedAt: run.updatedAt,
+    })
+    const request: RunInputRequestV1 = {
+      schemaVersion: 1,
+      requestId: 'input-one',
+      runId: String(run.id),
+      question: '保留 A 还是 B？',
+      options: ['A', 'B'],
+      allowFreeText: true,
+      status: 'pending',
+      selectedOptions: [],
+      createdAt: '2026-08-05T01:00:01.000Z',
+    }
+    repository.saveRunInputRequest(request)
+    repository.answerRunInputRequest(run.id, { requestId: request.requestId, text: 'A', selectedOptions: ['A'] }, '2026-08-05T01:00:02.000Z')
+    repository.saveRunInputRequest(request)
+    expect(repository.getRunInputRequest(request.requestId)).toMatchObject({ status: 'answered', answerText: 'A', selectedOptions: ['A'] })
+    expect(() => repository.saveRunInputRequest({ ...request, question: '不同的问题' })).toThrow('INPUT_REQUEST_IDEMPOTENCY_CONFLICT')
+    repository.close()
   })
 
   it('persists canonical workspace memberships with add/remove/move and view cascade', async () => {

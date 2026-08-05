@@ -70,6 +70,7 @@ class ProviderStatus(StrEnum):
     QUEUED = "queued"
     CLAIMED = "claimed"
     RUNNING = "running"
+    WAITING_INPUT = "waiting_input"
     REVIEW = "review"
     COMPLETED = "completed"
     FAILED = "failed"
@@ -337,6 +338,42 @@ class TaskEnvelopeV1(BaseModel):
         return payload_fingerprint(self.payload_for_fingerprint())
 
 
+class InputRequestV1(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, populate_by_name=True)
+
+    request_id: str = Field(alias="requestId", min_length=1, max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")
+    question: str = Field(min_length=1, max_length=4000)
+    options: tuple[str, ...] = Field(default_factory=tuple, max_length=20)
+    allow_free_text: bool = Field(default=True, alias="allowFreeText")
+    context_version: int | None = Field(default=None, alias="contextVersion", ge=0)
+    created_at: str = Field(default_factory=utc_now, alias="createdAt")
+
+    @field_validator("options")
+    @classmethod
+    def validate_options(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        if any(not item.strip() or len(item) > 500 for item in value):
+            raise ValueError("input request options must be non-empty strings up to 500 characters")
+        if len({item.casefold() for item in value}) != len(value):
+            raise ValueError("input request options must be unique")
+        return value
+
+
+class InputResponseV1(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, populate_by_name=True)
+
+    request_id: str = Field(alias="requestId", min_length=1, max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")
+    text: str | None = Field(default=None, max_length=20000)
+    selected_options: tuple[str, ...] = Field(default_factory=tuple, alias="selectedOptions", max_length=20)
+    responded_by: str = Field(default="user", alias="respondedBy", min_length=1, max_length=100)
+    responded_at: str = Field(default_factory=utc_now, alias="respondedAt")
+
+    @model_validator(mode="after")
+    def validate_answer(self) -> "InputResponseV1":
+        if not (self.text and self.text.strip()) and not self.selected_options:
+            raise ValueError("input response requires text or selectedOptions")
+        return self
+
+
 class ResultEnvelopeV1(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, populate_by_name=True)
 
@@ -345,10 +382,11 @@ class ResultEnvelopeV1(BaseModel):
     )
     task_id: str = Field(alias="taskId", min_length=1)
     lcos_run_id: str = Field(alias="lcosRunId", min_length=1)
-    provider_status: Literal["review", "failed", "cancelled", "timeout"] = Field(
+    provider_status: Literal["review", "waiting_input", "failed", "cancelled", "timeout"] = Field(
         alias="providerStatus"
     )
     summary: str = Field(min_length=1)
+    input_request: InputRequestV1 | None = Field(default=None, alias="inputRequest")
     changed_files: tuple[ChangedFileV1, ...] = Field(default_factory=tuple, alias="changedFiles")
     warnings: tuple[str, ...] = Field(default_factory=tuple)
     suggested_next_actions: tuple[str, ...] = Field(
@@ -361,8 +399,12 @@ class ResultEnvelopeV1(BaseModel):
         keys = [path_key(item.path) for item in self.changed_files]
         if len(keys) != len(set(keys)):
             raise ValueError("changedFiles contains duplicate paths")
-        if self.provider_status in {"failed", "cancelled", "timeout"} and self.changed_files:
-            raise ValueError("failed/cancelled/timeout results cannot contain changed files")
+        if self.provider_status in {"failed", "cancelled", "timeout", "waiting_input"} and self.changed_files:
+            raise ValueError("failed/cancelled/timeout/waiting_input results cannot contain changed files")
+        if self.provider_status == "waiting_input" and self.input_request is None:
+            raise ValueError("waiting_input result requires inputRequest")
+        if self.provider_status != "waiting_input" and self.input_request is not None:
+            raise ValueError("inputRequest is only valid for waiting_input results")
         return self
 
 
@@ -424,6 +466,7 @@ class BridgeCapabilities(BaseModel):
     multiple_outputs: bool = Field(default=True, alias="multipleOutputs")
     zero_file_results: bool = Field(default=True, alias="zeroFileResults")
     output_root_guard: bool = Field(default=True, alias="outputRootGuard")
+    waiting_input: bool = Field(default=True, alias="waitingInput")
     cancel: bool = True
     finalize: bool = True
     events_after_seq: bool = Field(default=False, alias="eventsAfterSeq")
@@ -455,6 +498,8 @@ class BridgeTask(BaseModel):
     updated_at: str = Field(alias="updatedAt")
     envelope: TaskEnvelope
     result: ResultEnvelope | None = None
+    input_request: InputRequestV1 | None = Field(default=None, alias="inputRequest")
+    input_response: InputResponseV1 | None = Field(default=None, alias="inputResponse")
 
 
 class ConversationRef(BaseModel):

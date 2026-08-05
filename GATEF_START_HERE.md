@@ -1,37 +1,48 @@
-# LCOS Gate F Development Candidate
+# LCOS Gate F Final Closeout Candidate
 
-> 日期：2026-08-04  
-> 状态：全栈开发候选包，正式合并与 Windows 安装器尚未执行。
+> 日期：2026-08-05
+> 基线：原始源码 HEAD `7cdf8c3` + 用户提供的真实 Windows Codex 证据
+> 状态：等待 Windows 实机复测；正式主线合并与 Windows 安装器后置。
 
 ## 先看
 
 ```text
-docs/audit/LCOS_GATEF_WINDOWS_VERIFICATION_20260804.md
-docs/handoffs/LCOS_FULLSTACK_GATEF_DEVELOPMENT_REPORT_20260804.md
-docs/testing/GATEF_REAL_MACHINE_TEST_CHECKLIST_20260804.md
-docs/audit/LCOS_GATE_F_CAPABILITY_LEDGER_20260804.md
+docs/handoffs/LCOS_GATEF_FINAL_CLOSEOUT_REPORT_20260805.md
+docs/testing/GATEF_REAL_MACHINE_TEST_CHECKLIST_20260805.md
+docs/audit/LCOS_GATE_F_CLOSEOUT_CAPABILITY_LEDGER_20260805.md
+docs/handoffs/LCOS_GATEF_FINAL_CLOSEOUT_IMPLEMENTATION_PLAN_20260805.md
 ```
 
-## Windows 实机起步
+## Windows 起步
 
 ```powershell
 npm ci
 npm run audit:manifest:verify
+npm run check:gatef-closeout
 npm run check:gatef-capabilities
+npm run lcos:install-skill
+npm run lcos:install-mcp
 npm run dev:open
 npm run dev:status
 ```
 
-安装 Codex Skill：
+## 本轮重点
 
-```powershell
-npm run lcos:install-skill
+```text
+真实 waiting_input
+一次自动修正
+精确 Codex Session resume
+结果闭环确认
+Codex Skill + MCP 安装
+Agent Browser afterVersion
+安全 Canvas Actions
+Obsidian 只读连接器
 ```
 
 ## 当前边界
 
 ```text
-已完成：全栈代码收口、Core 构建、Bridge、CLI/MCP、持久化、Golden Path。
-待实机：完整 npm 质量链、浏览器 E2E、真实 codex exec resume、Windows Watcher。
-后置：正式 Git 合并、Windows 安装器、自动更新。
+完成代码：全栈收口候选、Schema v15、Bridge v4、Skill/MCP/Connector。
+待实机：真实 Windows Codex、PowerShell Watchdog、Web/Vitest/Playwright 全量回归。
+后置：正式合并、Windows 安装器、screenshotRef、更多连接器与广泛 Canvas 自动布局。
 ```

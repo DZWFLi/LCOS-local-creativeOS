@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 
-import type { RunReview } from '@local-creative-os/contracts'
+import type { AnswerRunInputRequestV1, RunReview } from '@local-creative-os/contracts'
 import type { JsonValue, ProjectId, Run, RunEvent, RunId, RunResultPolicy, RuntimeDispatch } from '@local-creative-os/domain'
 import type { RuntimeProviderStatus } from '@local-creative-os/contracts'
 
@@ -155,6 +155,36 @@ export class RuntimeApplicationService {
     return this.providerAction(runId, () => this.adapter.cancel(runId))
   }
 
+  async answerInput(runId: RunId, input: AnswerRunInputRequestV1): Promise<RuntimeRunActionResult> {
+    const current = this.repository.getRunInputRequest(input.requestId)
+    if (current === undefined || current.runId !== String(runId)) throw new Error('INPUT_REQUEST_NOT_FOUND')
+    if (current.status === 'answered') return { review: this.review.getRunReview(runId) }
+    if (current.status !== 'pending') throw new Error('INPUT_REQUEST_NOT_PENDING')
+    const selectedOptions = [...new Set(input.selectedOptions ?? [])]
+    if (selectedOptions.some((option) => !current.options.includes(option))) throw new Error('INPUT_OPTION_INVALID')
+    const answerText = input.text?.trim()
+    if (answerText && !current.allowFreeText) throw new Error('FREE_TEXT_NOT_ALLOWED')
+    if (!answerText && selectedOptions.length === 0) throw new Error('INPUT_RESPONSE_EMPTY')
+
+    const result = await this.providerAction(runId, () => this.adapter.answerInput(runId, {
+      requestId: input.requestId,
+      ...(answerText ? { text: answerText } : {}),
+      selectedOptions,
+    }))
+    if (result.providerError === undefined) {
+      const answeredAt = this.now()
+      this.repository.answerRunInputRequest(runId, {
+        requestId: input.requestId,
+        ...(answerText ? { text: answerText } : {}),
+        selectedOptions,
+      }, answeredAt)
+      this.emit(runId, 'run.input_resolved', { requestId: input.requestId, projectId: String(result.review.run.projectId) })
+      this.emit(runId, 'run.queued', { resumedFromInput: true, projectId: String(result.review.run.projectId) })
+      return { review: this.review.getRunReview(runId) }
+    }
+    return result
+  }
+
   async providers(): Promise<readonly RuntimeProviderStatus[]> {
     return this.adapter.providersStatus()
   }
@@ -173,10 +203,15 @@ export class RuntimeApplicationService {
       const before = this.review.getRunReview(runId)
       await action()
       const review = this.review.getRunReview(runId)
-      if (before.dispatch.status !== 'bound'
-        && review.dispatch.status === 'bound'
-        && (review.run.status === 'queued' || review.run.status === 'running')) {
+      if (before.run.status !== 'running' && review.run.status === 'running') {
         this.emit(runId, 'run.started', { projectId: String(review.run.projectId) })
+      }
+      if (before.run.status !== 'waiting_input' && review.run.status === 'waiting_input') {
+        const inputRequest = review.inputRequest
+        this.emit(runId, 'run.waiting_input', {
+          projectId: String(review.run.projectId),
+          ...(inputRequest === undefined ? {} : { requestId: inputRequest.requestId, question: inputRequest.question }),
+        })
       }
       if (before.presentationPhase !== 'review' && review.presentationPhase === 'review') {
         this.emit(runId, 'run.review_ready', { projectId: String(review.run.projectId) })

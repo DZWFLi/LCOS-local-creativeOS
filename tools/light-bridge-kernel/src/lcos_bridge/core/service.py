@@ -5,6 +5,7 @@ from ..canonical.models import (
     BridgeCapabilities,
     BridgeTask,
     ResultEnvelope,
+    InputResponseV1,
     TaskEnvelopeV1,
 )
 from ..providers.base import ProviderRegistry
@@ -77,6 +78,9 @@ class BridgeService:
 
     def submit_result(self, result: ResultEnvelope) -> BridgeTask:
         return self.store.submit_result(result)
+
+    def answer_input(self, task_id: str, response: InputResponseV1) -> BridgeTask:
+        return self.store.answer_input(task_id, response)
 
     def cancel(self, task_id: str) -> BridgeTask:
         return self.store.cancel(task_id)

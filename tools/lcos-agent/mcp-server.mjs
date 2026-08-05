@@ -14,6 +14,22 @@ const contextProposalsPath = (projectId, workspaceId) => {
   if (workspaceId) query.set("workspaceId", workspaceId);
   return `/projects/${encodeURIComponent(projectId)}/context-proposals${query.size ? `?${query}` : ""}`;
 };
+const activeContextMutation = (active, workspaceId, patch = {}) => ({
+  ...(workspaceId ? { workspaceId } : {}),
+  scopeId: active.scopeId || "",
+  selectedViewIds: active.selectedViewIds || [],
+  pinnedContextIds: active.pinnedContextIds || [],
+  excludedContextIds: active.excludedContextIds || [],
+  ...(active.viewport ? {
+    viewport: { x: active.viewport.x, y: active.viewport.y, zoom: active.viewport.zoom },
+    visibleViewIds: active.viewport.visibleViewIds || [],
+  } : {}),
+  ...(active.targetArtifactId ? { targetArtifactId: active.targetArtifactId } : {}),
+  ...(active.targetRevisionId ? { targetRevisionId: active.targetRevisionId } : {}),
+  expectedVersion: active.version,
+  updatedBy: "codex",
+  ...patch,
+});
 const tools = [
   tool("open_lcos", "Return the loopback URL for the LCOS visual project canvas.", {
     projectId: { type: "string" },
@@ -45,6 +61,23 @@ const tools = [
     targetViewId: { type: "string" },
     clearTarget: { type: "boolean" },
   }, ["projectId", "expectedVersion"]),
+  tool("select_lcos_views", "Replace the current Project + Workspace selection with an explicit ordered list of Canvas View IDs.", {
+    projectId: { type: "string" },
+    workspaceId: { type: "string" },
+    viewIds: { type: "array", items: { type: "string" } },
+  }, ["projectId", "viewIds"]),
+  tool("focus_lcos_views", "Focus one Canvas View and make it the current selection without changing Project Truth.", {
+    projectId: { type: "string" },
+    workspaceId: { type: "string" },
+    viewId: { type: "string" },
+  }, ["projectId", "viewId"]),
+  tool("move_lcos_view", "Move one Artifact View through the canonical mutation API using Project graph compare-and-swap.", {
+    projectId: { type: "string" },
+    viewId: { type: "string" },
+    x: { type: "number" },
+    y: { type: "number" },
+    baseVersion: { type: "number" },
+  }, ["projectId", "viewId", "x", "y", "baseVersion"]),
   tool("get_lcos_run_context", "Read the frozen ContextManifest for one Run (never live ActiveContext).", {
     runId: { type: "string" },
   }, ["runId"]),
@@ -135,6 +168,23 @@ const tools = [
     projectId: { type: "string" },
     provider: { type: "string", enum: ["codex", "workbuddy"] },
   }, ["projectId", "provider"]),
+  tool("get_lcos_run_input_request", "Read the current unresolved question for one waiting LCOS Run.", {
+    runId: { type: "string" },
+  }, ["runId"]),
+  tool("answer_lcos_run_input", "Answer a waiting LCOS Run and requeue the same Run for the same preferred provider session.", {
+    runId: { type: "string" },
+    requestId: { type: "string" },
+    text: { type: "string" },
+    selectedOptions: { type: "array", items: { type: "string" } },
+  }, ["runId", "requestId"]),
+  tool("request_lcos_user_input", "Pause one claimed Run with a real waiting_input request instead of failing or retrying it.", {
+    runId: { type: "string" },
+    requestId: { type: "string" },
+    question: { type: "string" },
+    options: { type: "array", items: { type: "string" } },
+    allowFreeText: { type: "boolean" },
+    contextVersion: { type: "number" },
+  }, ["runId", "requestId", "question"]),
   tool("list_lcos_runtime_providers", "Read Provider capability and availability before sending.", {}, []),
   tool("build_lcos_context_manifest", "Freeze an immutable ContextManifest from Project Truth.", {
     projectId: { type: "string" },
@@ -205,6 +255,16 @@ const tools = [
   tool("cancel_lcos_task", "Request cancellation of a Light Bridge task.", {
     task_id: { type: "string" },
   }, ["task_id"]),
+  tool("list_lcos_connectors", "List installed LCOS resource connectors and their read/write capabilities.", {}),
+  tool("scan_lcos_obsidian_vault", "Open the native folder picker and read-only scan an Obsidian Vault. Call only after the user explicitly asks to connect or import a Vault.", {}),
+  tool("import_lcos_obsidian_notes", "Copy selected Markdown notes from a prior read-only Obsidian scan into one LCOS Project. The source Vault is never modified.", {
+    projectId: { type: "string" },
+    scanId: { type: "string" },
+    relativePaths: { type: "array", items: { type: "string" } },
+    scopeId: { type: "string" },
+    x: { type: "number" },
+    y: { type: "number" },
+  }, ["projectId", "scanId", "relativePaths", "scopeId"]),
   tool("lcos_resource_list", "List imported resources and their understanding status.", {
     projectId: { type: "string" },
   }, ["projectId"]),
@@ -316,6 +376,41 @@ async function handle({ id, method, params }) {
           }),
         });
       }
+      break;
+    case "select_lcos_views": {
+      const projectId = required(args.projectId, "projectId");
+      const active = await coreRequest(activeContextPath(projectId, args.workspaceId));
+      value = await coreRequest(activeContextPath(projectId, args.workspaceId), {
+        method: "PUT",
+        ...jsonBody(activeContextMutation(active, args.workspaceId, {
+          selectedViewIds: Array.isArray(args.viewIds) ? args.viewIds : [],
+        })),
+      });
+      break;
+    }
+    case "focus_lcos_views": {
+      const projectId = required(args.projectId, "projectId");
+      const viewId = required(args.viewId, "viewId");
+      const active = await coreRequest(activeContextPath(projectId, args.workspaceId));
+      value = await coreRequest(activeContextPath(projectId, args.workspaceId), {
+        method: "PUT",
+        ...jsonBody(activeContextMutation(active, args.workspaceId, { selectedViewIds: [viewId] })),
+      });
+      break;
+    }
+    case "move_lcos_view":
+      value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/graph`, {
+        method: "POST",
+        ...jsonBody({
+          baseVersion: Number(args.baseVersion),
+          ops: [{
+            type: "move_artifact_view",
+            viewId: required(args.viewId, "viewId"),
+            x: Number(args.x),
+            y: Number(args.y),
+          }],
+        }),
+      });
       break;
     case "get_lcos_run_context":
       {
@@ -471,6 +566,42 @@ async function handle({ id, method, params }) {
     case "clear_lcos_provider_session":
       value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/provider-sessions/${encodeURIComponent(required(args.provider, "provider"))}`, { method: "DELETE" });
       break;
+    case "get_lcos_run_input_request":
+      value = await coreRequest(`/runs/${encodeURIComponent(required(args.runId, "runId"))}/input-request`);
+      break;
+    case "answer_lcos_run_input":
+      value = await coreRequest(`/runs/${encodeURIComponent(required(args.runId, "runId"))}/input-request`, {
+        method: "POST",
+        ...jsonBody({
+          requestId: required(args.requestId, "requestId"),
+          ...(typeof args.text === "string" && args.text ? { text: args.text } : {}),
+          selectedOptions: Array.isArray(args.selectedOptions) ? args.selectedOptions : [],
+        }),
+      });
+      break;
+    case "request_lcos_user_input": {
+      const runId = required(args.runId, "runId");
+      const task = await codexTaskForRun(runId);
+      value = await bridgeRequest(`/v1/tasks/${encodeURIComponent(task.taskId)}/result`, {
+        method: "POST",
+        ...jsonBody({
+          contractVersion: "bridge-result-v1",
+          taskId: task.taskId,
+          lcosRunId: task.lcosRunId,
+          providerStatus: "waiting_input",
+          summary: required(args.question, "question"),
+          changedFiles: [],
+          inputRequest: {
+            requestId: required(args.requestId, "requestId"),
+            question: required(args.question, "question"),
+            options: Array.isArray(args.options) ? args.options : [],
+            allowFreeText: args.allowFreeText !== false,
+            ...(Number.isInteger(args.contextVersion) ? { contextVersion: args.contextVersion } : {}),
+          },
+        }),
+      });
+      break;
+    }
     case "list_lcos_runtime_providers":
       value = await coreRequest("/runtime/providers");
       break;
@@ -587,6 +718,27 @@ async function handle({ id, method, params }) {
       value = await bridgeRequest(`/v1/tasks/${encodeURIComponent(required(args.task_id, "task_id"))}/cancel`, {
         method: "POST",
         ...jsonBody({}),
+      });
+      break;
+    case "list_lcos_connectors":
+      value = await coreRequest("/connectors");
+      break;
+    case "scan_lcos_obsidian_vault":
+      value = await coreRequest("/connectors/obsidian/select-and-scan", { method: "POST", ...jsonBody({}) , timeoutMs: 120_000 });
+      break;
+    case "import_lcos_obsidian_notes":
+      value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/connectors/obsidian/import`, {
+        method: "POST",
+        ...jsonBody({
+          scanId: required(args.scanId, "scanId"),
+          relativePaths: Array.isArray(args.relativePaths) ? args.relativePaths : [],
+          scopeId: required(args.scopeId, "scopeId"),
+          position: {
+            x: Number.isFinite(args.x) ? args.x : 180,
+            y: Number.isFinite(args.y) ? args.y : 160,
+          },
+        }),
+        timeoutMs: 180_000,
       });
       break;
     case "lcos_resource_list":

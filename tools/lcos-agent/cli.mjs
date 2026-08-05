@@ -382,6 +382,37 @@ try {
     const runId = required(positional[0], "run id");
     const review = await coreRequest(`/runs/${encodeURIComponent(runId)}/review`);
     result = await coreRequest(`/projects/${encodeURIComponent(review.run.projectId)}/context-manifests/v0/${encodeURIComponent(review.run.contextManifestId)}`);
+  } else if (group === "context" && action === "select") {
+    const projectId = required(positional[0], "project id");
+    const active = await coreRequest(activeContextPath(projectId));
+    result = await coreRequest(activeContextPath(projectId), {
+      method: "PUT",
+      ...jsonBody(activeContextMutation(active, {
+        selectedViewIds: (option("views") || "").split(",").filter(Boolean),
+      })),
+    });
+  } else if (group === "context" && action === "focus") {
+    const projectId = required(positional[0], "project id");
+    const viewId = required(positional[1], "view id");
+    const active = await coreRequest(activeContextPath(projectId));
+    result = await coreRequest(activeContextPath(projectId), {
+      method: "PUT",
+      ...jsonBody(activeContextMutation(active, { selectedViewIds: [viewId] })),
+    });
+  } else if (group === "canvas" && action === "move") {
+    const projectId = required(positional[0], "project id");
+    result = await coreRequest(`/projects/${encodeURIComponent(projectId)}/graph`, {
+      method: "POST",
+      ...jsonBody({
+        baseVersion: Number(required(option("base-version"), "--base-version")),
+        ops: [{
+          type: "move_artifact_view",
+          viewId: required(positional[1], "view id"),
+          x: Number(required(option("x"), "--x")),
+          y: Number(required(option("y"), "--y")),
+        }],
+      }),
+    });
   } else if (group === "context" && action === "watch") {
     const projectId = required(positional[0], "project id");
     result = await coreRequest(activeContextPath(projectId, Number(option("after") || 0)));
@@ -409,6 +440,39 @@ try {
     result = await coreRequest(`/projects/${encodeURIComponent(projectId)}/context-proposals/${encodeURIComponent(proposalId)}/reject`, { method: "POST", ...jsonBody({}) });
   } else if (group === "context" && action === "proposals") {
     result = await coreRequest(contextProposalsPath(required(positional[0], "project id")));
+  } else if (group === "run" && action === "input") {
+    result = await coreRequest(`/runs/${encodeURIComponent(required(positional[0], "run id"))}/input-request`);
+  } else if (group === "run" && action === "answer") {
+    const runId = required(positional[0], "run id");
+    result = await coreRequest(`/runs/${encodeURIComponent(runId)}/input-request`, {
+      method: "POST",
+      ...jsonBody({
+        requestId: required(option("request"), "--request"),
+        ...(option("text") ? { text: option("text") } : {}),
+        selectedOptions: (option("select") || "").split(",").filter(Boolean),
+      }),
+    });
+  } else if (group === "run" && action === "ask") {
+    const runId = required(positional[0], "run id");
+    const task = await bridgeTaskForRun(runId);
+    result = await bridgeRequest(`/v1/tasks/${encodeURIComponent(task.taskId)}/result`, {
+      method: "POST",
+      ...jsonBody({
+        contractVersion: "bridge-result-v1",
+        taskId: task.taskId,
+        lcosRunId: task.lcosRunId ?? runId,
+        providerStatus: "waiting_input",
+        summary: required(option("question"), "--question"),
+        changedFiles: [],
+        inputRequest: {
+          requestId: required(option("request"), "--request"),
+          question: required(option("question"), "--question"),
+          options: (option("options") || "").split(",").filter(Boolean),
+          allowFreeText: !rest.includes("--no-free-text"),
+          ...(option("context-version") ? { contextVersion: Number(option("context-version")) } : {}),
+        },
+      }),
+    });
   } else if (group === "run" && action === "cancel") {
     result = await coreRequest(`/runs/${encodeURIComponent(required(positional[0], "run id"))}/cancel`, { method: "POST", ...jsonBody({}) });
   } else if (group === "run" && action === "events") {
@@ -427,6 +491,32 @@ try {
     result = await coreRequest(`/artifact-returns/${encodeURIComponent(required(positional[0], "artifact return id"))}/retry`, {
       method: "POST",
       ...jsonBody(option("instruction") ? { instruction: option("instruction") } : {}),
+    });
+  } else if (group === "connector" && action === "list") {
+    result = await coreRequest("/connectors");
+  } else if (group === "connector" && action === "obsidian-scan") {
+    result = await coreRequest("/connectors/obsidian/select-and-scan", { method: "POST", ...jsonBody({}), timeoutMs: 120_000 });
+  } else if (group === "connector" && action === "obsidian-import") {
+    const projectId = required(positional[0], "project id");
+    const scanId = required(option("scan"), "--scan");
+    const scopeId = required(option("scope"), "--scope");
+    let relativePaths = [];
+    if (option("paths-file")) {
+      const parsed = JSON.parse(await readFile(option("paths-file"), "utf8"));
+      relativePaths = Array.isArray(parsed) ? parsed : parsed.relativePaths;
+    } else if (option("paths")) {
+      relativePaths = option("paths").split(",").map((value) => value.trim()).filter(Boolean);
+    }
+    if (!Array.isArray(relativePaths) || relativePaths.length === 0) throw new Error("--paths or --paths-file must provide at least one note path");
+    result = await coreRequest(`/projects/${encodeURIComponent(projectId)}/connectors/obsidian/import`, {
+      method: "POST",
+      ...jsonBody({
+        scanId,
+        relativePaths,
+        scopeId,
+        position: { x: Number(option("x") || 180), y: Number(option("y") || 160) },
+      }),
+      timeoutMs: 180_000,
     });
   } else if (group === "resource" && action === "list") {
     result = await coreRequest(`/projects/${encodeURIComponent(required(positional[0], "project id"))}/resources`);
@@ -662,9 +752,17 @@ Project truth:
   lcos run heartbeat <run-id> [--worker local-codex]
   lcos run fail <run-id> [--summary "..."]
   lcos run context <run-id>
+  lcos run input <run-id>
+  lcos run answer <run-id> --request <id> [--text "..."] [--select A,B]
+  lcos run ask <run-id> --request <id> --question "..." [--options A,B] [--no-free-text] [--context-version N]
   lcos run accept <artifact-return-id> --base-revision <revision-id>
   lcos run reject <artifact-return-id>
   lcos run retry <artifact-return-id> [--instruction "..."]
+  lcos context select <project-id> --views view-a,view-b [--workspace id]
+  lcos context focus <project-id> <view-id> [--workspace id]
+  lcos canvas move <project-id> <view-id> --x N --y N --base-version N
+  lcos connector obsidian-scan
+  lcos connector obsidian-import <project-id> --scan <scan-id> --scope <scope-id> (--paths a.md,b.md | --paths-file paths.json) [--x N --y N]
   lcos resource list <project-id>
   lcos resource show <project-id> <resource-id>
   lcos resource read <project-id> <resource-id> [--path name] [--offset N] [--limit N] [--format text|raw|json_tree]

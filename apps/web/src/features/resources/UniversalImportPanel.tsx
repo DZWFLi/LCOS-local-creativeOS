@@ -1,4 +1,4 @@
-import { FileUp, FolderOpen, Link2, Package, X } from 'lucide-react'
+import { BookOpen, FileUp, FolderOpen, Link2, Package, X } from 'lucide-react'
 import { useRef, useState, type ChangeEvent } from 'react'
 
 const MAX_SINGLE_BYTES = 10 * 1024 * 1024
@@ -10,13 +10,14 @@ export interface DirectoryEntryInput {
   readonly file: File
 }
 
-export function UniversalImportPanel({ open, onClose, onFiles, onDirectory, onArchive, onOpenLink }: {
+export function UniversalImportPanel({ open, onClose, onFiles, onDirectory, onArchive, onOpenLink, onOpenObsidian }: {
   open: boolean
   onClose: () => void
   onFiles: (files: readonly File[]) => void
   onDirectory: (rootName: string, files: readonly DirectoryEntryInput[], note?: string) => void
   onArchive: (file: File, note?: string) => void
   onOpenLink: () => void
+  onOpenObsidian: () => void
 }) {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const directoryInputRef = useRef<HTMLInputElement | null>(null)
@@ -94,6 +95,9 @@ export function UniversalImportPanel({ open, onClose, onFiles, onDirectory, onAr
       </button>
       <button className="import-source pressable" type="button" disabled={busy} onClick={() => { onOpenLink(); onClose() }}>
         <Link2 size={20} /><b>链接</b><small>网页 / 飞书文档</small>
+      </button>
+      <button className="import-source pressable" type="button" disabled={busy} onClick={() => { onOpenObsidian(); onClose() }}>
+        <BookOpen size={20} /><b>Obsidian</b><small>只读选择 Vault 中的 Markdown</small>
       </button>
     </div>
     <label className="import-note">备注 <small>可选</small>

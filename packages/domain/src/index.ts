@@ -391,6 +391,7 @@ export type RunEventType =
   | 'run.queued'
   | 'run.started'
   | 'run.waiting_input'
+  | 'run.input_resolved'
   | 'run.review_ready'
   | 'run.completed'
   | 'run.failed'

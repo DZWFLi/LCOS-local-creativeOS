@@ -29,6 +29,7 @@ describe('Runtime Host entrypoints', () => {
     expect(source).toContain('state.trayPid = tray.pid')
     expect(source).toContain('state.bridgePid, state.orchestratorPid, state.trayPid')
     expect(source).toContain('ensureCodexSkill()')
+    expect(source).toContain('ensureCodexMcp()')
   })
 
   it('starts and owns the Codex orchestrator with the Runtime Host', () => {

@@ -37,14 +37,14 @@ export function capabilitiesFor(source: 'runtime' | 'none'): V07CapabilitySet {
   const unavailable = (reason: string): UiCapability => ({ enabled: false, reason })
   return {
     schemaVersion: 1,
-    importCopy: runtime ? { enabled: true } : unavailable('Local Core 未连接'),
+    importCopy: runtime ? { enabled: true } : unavailable('本地项目服务暂时不可用'),
     createObject: { enabled: true },
-    linkReference: runtime ? { enabled: true } : unavailable('需要 Runtime Project Truth'),
-    contextManifest: runtime ? { enabled: true } : unavailable('ContextManifest 只从 Runtime 构建'),
-    runWorkflow: runtime ? { enabled: true } : unavailable('需要 Runtime Project Truth'),
-    acceptReturn: unavailable('没有待确认的 Runtime Return'),
-    rejectReturn: unavailable('没有待确认的 Runtime Return'),
-    retryRun: unavailable('没有待确认的 Runtime Return'),
+    linkReference: runtime ? { enabled: true } : unavailable('请先打开一个本地项目'),
+    contextManifest: runtime ? { enabled: true } : unavailable('请先选择要给 Agent 参考的内容'),
+    runWorkflow: runtime ? { enabled: true } : unavailable('请先打开一个本地项目'),
+    acceptReturn: unavailable('目前没有待确认的 Agent 结果'),
+    rejectReturn: unavailable('目前没有待确认的 Agent 结果'),
+    retryRun: unavailable('目前没有待确认的 Agent 结果'),
     webPane: unavailable('MVP 使用外部标签页'),
     browserCompanion: unavailable('浏览器 Companion 尚未安装'),
   }

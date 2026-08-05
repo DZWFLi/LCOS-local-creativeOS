@@ -17,11 +17,13 @@ import type {
   PreviewRecord,
   RejectArtifactReturnResult,
   ImportResourceResultV1,
+  ObsidianVaultScanV1,
   ResourceDescriptorV0,
   Result,
   RetryRunInput,
   RetryRunResult,
   RunReview,
+  RunInputRequestV1,
   RunProposalResult,
   RuntimeProviderStatus,
   ValidatedProjectRoot,
@@ -154,6 +156,13 @@ export interface LocalCoreClient {
   validateProjectRoot(rootPath: string, signal?: AbortSignal): Promise<RuntimeCall<ValidatedProjectRoot>>
   selectDirectory(title: string, signal?: AbortSignal): Promise<RuntimeCall<{ readonly path?: string; readonly cancelled: boolean }>>
   inspectProjectRoot(rootPath: string, signal?: AbortSignal): Promise<RuntimeCall<{ readonly fileCount: number; readonly directoryCount: number; readonly totalBytes: number; readonly skipped: readonly string[]; readonly requiresConfirmation: boolean }>>
+  selectObsidianVault(signal?: AbortSignal): Promise<RuntimeCall<ObsidianVaultScanV1 | null>>
+  importObsidianNotes(projectId: string, input: {
+    readonly scanId: string
+    readonly relativePaths: readonly string[]
+    readonly scopeId: string
+    readonly position: { readonly x: number; readonly y: number }
+  }, signal?: AbortSignal): Promise<RuntimeCall<readonly ImportResourceResultV1[]>>
   importResourceUrl(projectId: string, input: {
     readonly url: string
     readonly title?: string
@@ -329,6 +338,8 @@ export interface LocalCoreClient {
   dispatchRuntimeRun(runId: string, signal?: AbortSignal): Promise<RuntimeCall<RuntimeRunActionResult>>
   recoverRuntimeRun(runId: string, signal?: AbortSignal): Promise<RuntimeCall<RuntimeRunActionResult>>
   cancelRuntimeRun(runId: string, signal?: AbortSignal): Promise<RuntimeCall<RuntimeRunActionResult>>
+  getRunInputRequest(runId: string, signal?: AbortSignal): Promise<RuntimeCall<RunInputRequestV1>>
+  answerRunInput(runId: string, input: { readonly requestId: string; readonly text?: string; readonly selectedOptions?: readonly string[] }, signal?: AbortSignal): Promise<RuntimeCall<RuntimeRunActionResult>>
   syncRuntimeRun(runId: string, signal?: AbortSignal): Promise<RuntimeCall<RuntimeRunActionResult>>
   finalizeRuntimeRun(runId: string, decision: 'completed' | 'retrying', comment?: string, signal?: AbortSignal): Promise<RuntimeCall<RuntimeRunActionResult>>
   getRunReview(runId: string, signal?: AbortSignal): Promise<RuntimeCall<RunReview>>
@@ -515,6 +526,22 @@ export function createLocalCoreClient(): LocalCoreClient {
           body: JSON.stringify(input),
         },
         decode: decodeResult<ProjectCatalogEntry>,
+      })
+    },
+    selectObsidianVault(signal) {
+      return request('/connectors/obsidian/select-and-scan', {
+        signal,
+        timeoutMs: 5 * 60_000,
+        init: { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' },
+        decode: decodeResult<ObsidianVaultScanV1 | null>,
+      })
+    },
+    importObsidianNotes(projectId, input, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/connectors/obsidian/import`, {
+        signal,
+        timeoutMs: 60_000,
+        init: { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) },
+        decode: decodeResult<readonly ImportResourceResultV1[]>,
       })
     },
     importResourceUrl(projectId, input, signal) {
@@ -1018,6 +1045,24 @@ export function createLocalCoreClient(): LocalCoreClient {
         signal,
         timeoutMs: 15_000,
         init: { method: 'POST' },
+        decode: decodeResult<RuntimeRunActionResult>,
+      })
+    },
+    getRunInputRequest(runId, signal) {
+      return request(`/runs/${encodeURIComponent(runId)}/input-request`, {
+        signal,
+        decode: decodeResult<RunInputRequestV1>,
+      })
+    },
+    answerRunInput(runId, input, signal) {
+      return request(`/runs/${encodeURIComponent(runId)}/input-request`, {
+        signal,
+        timeoutMs: 15_000,
+        init: {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(input),
+        },
         decode: decodeResult<RuntimeRunActionResult>,
       })
     },

@@ -219,6 +219,7 @@ export interface RunReview {
   readonly binding?: RuntimeBinding
   readonly returns: readonly ArtifactReturn[]
   readonly draftRevisions: readonly ArtifactRevision[]
+  readonly inputRequest?: RunInputRequestV1
   readonly presentationPhase: 'created' | 'queued' | 'running' | 'waiting_input' | 'review' | 'completed' | 'failed' | 'cancelled'
   readonly capabilities: {
     readonly schemaVersion: 1
@@ -370,6 +371,30 @@ export interface ContextChangeProposalV1 {
   readonly reason: string
   readonly createdBy: 'codex'
   readonly status: ContextChangeProposalStatus
+}
+
+
+export type RunInputRequestStatus = 'pending' | 'answered' | 'cancelled'
+
+export interface RunInputRequestV1 {
+  readonly schemaVersion: 1
+  readonly requestId: string
+  readonly runId: string
+  readonly question: string
+  readonly options: readonly string[]
+  readonly allowFreeText: boolean
+  readonly contextVersion?: number
+  readonly status: RunInputRequestStatus
+  readonly answerText?: string
+  readonly selectedOptions: readonly string[]
+  readonly createdAt: string
+  readonly answeredAt?: string
+}
+
+export interface AnswerRunInputRequestV1 {
+  readonly requestId: string
+  readonly text?: string
+  readonly selectedOptions?: readonly string[]
 }
 
 export interface CommandDraftV1 {
@@ -640,3 +665,11 @@ export type {
   ResourceSourceV0,
   ResourceUnderstandingStatus,
 } from './resources.js'
+
+export type {
+  ImportObsidianNotesV1,
+  ObsidianNoteSummaryV1,
+  ObsidianVaultScanV1,
+  ResourceConnectorAccessV1,
+  ResourceConnectorCapabilityV1,
+} from './connectors.js'

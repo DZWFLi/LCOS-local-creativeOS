@@ -17,6 +17,8 @@ from ..canonical.models import (
     ResultEnvelope,
     ResultEnvelopeV0,
     ResultEnvelopeV1,
+    InputRequestV1,
+    InputResponseV1,
     TaskEnvelopeV0,
     TaskEnvelopeV1,
     parse_result_envelope,
@@ -27,7 +29,7 @@ from ..canonical.models import (
 )
 from .errors import BridgeError
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 class SQLiteTaskStore:
@@ -70,6 +72,9 @@ class SQLiteTaskStore:
                   status TEXT NOT NULL,
                   envelope_json TEXT NOT NULL,
                   result_json TEXT,
+                  input_request_json TEXT,
+                  input_response_json TEXT,
+                  waiting_since_at TEXT,
                   external_task_id TEXT,
                   external_session_id TEXT,
                   provider_status TEXT,
@@ -100,6 +105,9 @@ class SQLiteTaskStore:
                 ("lease_expires_at", "TEXT"),
                 ("last_heartbeat_at", "TEXT"),
                 ("attempt_count", "INTEGER NOT NULL DEFAULT 0"),
+                ("input_request_json", "TEXT"),
+                ("input_response_json", "TEXT"),
+                ("waiting_since_at", "TEXT"),
             ):
                 if name not in columns:
                     connection.execute(f"ALTER TABLE bridge_tasks ADD COLUMN {name} {definition}")
@@ -421,17 +429,42 @@ class SQLiteTaskStore:
             self._validate_v0_result(task.envelope, result)
 
         now = utc_now()
+        input_request_json = None
+        waiting_since_at = None
+        if isinstance(result, ResultEnvelopeV1) and result.provider_status == "waiting_input":
+            assert result.input_request is not None
+            if (
+                task.input_request is not None
+                and task.input_response is not None
+                and task.input_request.request_id == result.input_request.request_id
+            ):
+                raise BridgeError(
+                    "INPUT_ALREADY_RESOLVED",
+                    "This input request was already answered and cannot be reopened by a delayed result.",
+                    retryable=False,
+                    http_status=409,
+                )
+            input_request_json = canonical_json(result.input_request.model_dump(mode="json", by_alias=True))
+            waiting_since_at = now
         with self._connection() as connection:
             connection.execute(
                 """
                 UPDATE bridge_tasks
-                SET status = ?, provider_status = ?, result_json = ?, updated_at = ?
+                SET status = ?, provider_status = ?, result_json = ?,
+                    input_request_json = COALESCE(?, input_request_json),
+                    input_response_json = CASE WHEN ? = 'waiting_input' THEN NULL ELSE input_response_json END,
+                    waiting_since_at = COALESCE(?, waiting_since_at),
+                    claimed_by = NULL, lease_expires_at = NULL, last_heartbeat_at = NULL,
+                    updated_at = ?
                 WHERE task_id = ?
                 """,
                 (
                     result.provider_status,
                     result.provider_status,
                     canonical_json(result.model_dump(mode="json", by_alias=True)),
+                    input_request_json,
+                    result.provider_status,
+                    waiting_since_at,
                     now,
                     task.task_id,
                 ),
@@ -461,6 +494,8 @@ class SQLiteTaskStore:
     def _validate_v1_result(
         self, envelope: TaskEnvelopeV1, result: ResultEnvelopeV1
     ) -> None:
+        if result.provider_status == "waiting_input":
+            return
         if result.provider_status != "review":
             return
 
@@ -566,6 +601,73 @@ class SQLiteTaskStore:
                     return expected
         return None
 
+
+    def answer_input(self, task_id: str, response: InputResponseV1) -> BridgeTask:
+        task = self._require(task_id)
+        if task.input_response is not None:
+            same_response = (
+                task.input_response.request_id == response.request_id
+                and task.input_response.text == response.text
+                and tuple(task.input_response.selected_options) == tuple(response.selected_options)
+                and task.input_response.responded_by == response.responded_by
+            )
+            if same_response:
+                return task
+            raise BridgeError(
+                "INPUT_RESPONSE_CONFLICT",
+                "A different response was already submitted for this input request.",
+                retryable=False,
+                http_status=409,
+            )
+        if task.status is not ProviderStatus.WAITING_INPUT or task.input_request is None:
+            raise BridgeError(
+                "TASK_NOT_WAITING_INPUT",
+                "Task is not waiting for user input.",
+                retryable=False,
+                http_status=409,
+            )
+        if response.request_id != task.input_request.request_id:
+            raise BridgeError(
+                "INPUT_REQUEST_MISMATCH",
+                "Input response does not match the active request.",
+                retryable=False,
+                http_status=409,
+            )
+        allowed = set(task.input_request.options)
+        if any(option not in allowed for option in response.selected_options):
+            raise BridgeError(
+                "INPUT_OPTION_INVALID",
+                "Input response contains an option that was not offered.",
+                retryable=False,
+                http_status=400,
+            )
+        if response.text and not task.input_request.allow_free_text:
+            raise BridgeError(
+                "FREE_TEXT_NOT_ALLOWED",
+                "This input request only accepts the offered options.",
+                retryable=False,
+                http_status=400,
+            )
+        now = utc_now()
+        with self._connection() as connection:
+            connection.execute(
+                """
+                UPDATE bridge_tasks
+                SET status = ?, provider_status = ?, result_json = NULL,
+                    input_response_json = ?, claimed_by = NULL, lease_expires_at = NULL,
+                    last_heartbeat_at = NULL, updated_at = ?
+                WHERE task_id = ?
+                """,
+                (
+                    ProviderStatus.QUEUED.value,
+                    ProviderStatus.QUEUED.value,
+                    canonical_json(response.model_dump(mode="json", by_alias=True)),
+                    now,
+                    task_id,
+                ),
+            )
+        return self._require(task_id)
+
     def cancel(self, task_id: str) -> BridgeTask:
         task = self._require(task_id)
         if task.status == ProviderStatus.COMPLETED:
@@ -646,6 +748,16 @@ class SQLiteTaskStore:
             if row["result_json"] is None
             else parse_result_envelope(json.loads(row["result_json"]))
         )
+        input_request = (
+            None
+            if "input_request_json" not in row.keys() or row["input_request_json"] is None
+            else InputRequestV1.model_validate(json.loads(row["input_request_json"]))
+        )
+        input_response = (
+            None
+            if "input_response_json" not in row.keys() or row["input_response_json"] is None
+            else InputResponseV1.model_validate(json.loads(row["input_response_json"]))
+        )
         output_intent = row["output_intent"] if "output_intent" in row.keys() else envelope.output_intent
         return BridgeTask(
             taskId=row["task_id"],
@@ -670,4 +782,6 @@ class SQLiteTaskStore:
             updatedAt=row["updated_at"],
             envelope=envelope,
             result=result,
+            inputRequest=input_request,
+            inputResponse=input_response,
         )

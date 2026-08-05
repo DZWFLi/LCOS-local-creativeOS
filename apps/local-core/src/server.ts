@@ -1,4 +1,4 @@
-import { randomUUID, timingSafeEqual } from 'node:crypto'
+import { createHash, randomUUID, timingSafeEqual } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import { isAbsolute } from 'node:path'
@@ -23,6 +23,7 @@ import type {
   CreateRunProposal,
   CommandDraftV1,
   ProviderSessionBindingV1,
+  ImportResourceResultV1,
 } from '@local-creative-os/contracts'
 import type { ArtifactReturnId, ArtifactRevisionId, ArtifactViewId, FileRecordId, ProjectId, RunId, WorkspaceId } from '@local-creative-os/domain'
 
@@ -58,6 +59,8 @@ import { ActiveContextConflictError, ActiveContextStore, type ActiveContextInput
 import { ContextProposalStore } from './context-proposal-store.js'
 import { selectNativeDirectory, type DirectoryPickerInput, type DirectoryPickerResult } from './native-directory-picker.js'
 import { indexProjectRoot, inspectProjectRoot } from './project-root-indexer.js'
+import { ObsidianConnectorSessionStore, ObsidianReadOnlyConnector } from './connectors/obsidian-connector.js'
+import { ResourceConnectorRegistry } from './connectors/connector-port.js'
 
 const LOOPBACK_HOST = '127.0.0.1'
 const MAX_BODY_BYTES = 1 * 1024 * 1024 // 1 MiB
@@ -68,6 +71,18 @@ const FORBIDDEN_BROWSER_PATH_FIELDS = new Set(['path', 'absolutePath', 'targetPa
 function isAbsolutePath(value: string): boolean {
   return isAbsolute(value)
 }
+function publicResourceImportResult(value: ImportResourceResultV1): ImportResourceResultV1 {
+  return {
+    resourceId: value.resourceId,
+    artifactId: value.artifactId,
+    revisionId: value.revisionId,
+    ...(value.viewId === undefined ? {} : { viewId: value.viewId }),
+    sourceKind: value.sourceKind,
+    understandingStatus: value.understandingStatus,
+    ...(value.descriptor === undefined ? {} : { descriptor: value.descriptor }),
+  }
+}
+
 export const LOCAL_CORE_DEV_PORT = 43121
 
 function createProjectId(name: string): string {
@@ -103,6 +118,9 @@ export interface LocalCoreServerOptions {
   readonly apiToken?: string
   readonly allowedOrigins?: readonly string[]
   readonly directoryPicker?: (input: DirectoryPickerInput) => Promise<DirectoryPickerResult>
+  readonly obsidianConnector?: ObsidianReadOnlyConnector
+  readonly obsidianSessions?: ObsidianConnectorSessionStore
+  readonly connectorRegistry?: ResourceConnectorRegistry
 }
 
 export interface LocalCoreAddress {
@@ -281,6 +299,9 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
   const runtimeApplication = options.runtimeApplicationService
   const activeContext = options.activeContextStore ?? new ActiveContextStore(metadata)
   const contextProposals = options.contextProposalStore ?? new ContextProposalStore(metadata)
+  const obsidian = options.obsidianConnector ?? new ObsidianReadOnlyConnector()
+  const obsidianSessions = options.obsidianSessions ?? new ObsidianConnectorSessionStore()
+  const connectorRegistry = options.connectorRegistry ?? new ResourceConnectorRegistry([obsidian])
   const previewWorker = options.previewWorkerService
     ?? (metadata === undefined ? undefined : new PreviewWorkerService(metadata, {
       cacheService: new PreviewCacheService(metadata, {
@@ -341,6 +362,83 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
           : '选择项目目录'
         const result = await (options.directoryPicker ?? selectNativeDirectory)({ title })
         sendJson(response, 200, { ok: true, value: result })
+        return
+      }
+
+      if (method === 'GET' && pathname === '/connectors') {
+        sendJson(response, 200, { ok: true, value: connectorRegistry.capabilities() })
+        return
+      }
+
+      if (method === 'POST' && pathname === '/connectors/obsidian/select-and-scan') {
+        const selected = await (options.directoryPicker ?? selectNativeDirectory)({ title: '选择 Obsidian Vault' })
+        if (selected.cancelled || selected.path === undefined) {
+          sendJson(response, 200, { ok: true, value: null })
+          return
+        }
+        try {
+          const scanned = await obsidian.scan(selected.path)
+          sendJson(response, 200, { ok: true, value: obsidianSessions.create(selected.path, scanned) })
+        } catch (error: unknown) {
+          sendJson(response, 400, failure('VALIDATION', error instanceof Error ? error.message : 'Obsidian Vault 扫描失败。'))
+        }
+        return
+      }
+
+      const obsidianImportMatch = /^\/projects\/([^/]+)\/connectors\/obsidian\/import$/.exec(pathname)
+      if (method === 'POST' && obsidianImportMatch !== null) {
+        if (!requireMetadata(metadata, response)) return
+        if (resources === undefined) {
+          sendJson(response, 503, failure('UNAVAILABLE', '通用资源导入服务暂不可用。'))
+          return
+        }
+        const projectId = decodeURIComponent(obsidianImportMatch[1] ?? '')
+        if (!requireProject(projectId, metadata, response)) return
+        const input = await readJsonBody(request, controller.signal)
+        if (!isRecord(input)
+          || typeof input.scanId !== 'string'
+          || !isStringArray(input.relativePaths)
+          || input.relativePaths.length < 1 || input.relativePaths.length > 200
+          || typeof input.scopeId !== 'string'
+          || !isRecord(input.position) || typeof input.position.x !== 'number' || typeof input.position.y !== 'number'
+          || Object.keys(input).some((key) => !['scanId', 'relativePaths', 'scopeId', 'position'].includes(key))) {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', '请选择 1–200 个 Obsidian Markdown 笔记。'))
+          return
+        }
+        const stored = obsidianSessions.get(input.scanId)
+        if (stored === undefined) {
+          sendJson(response, 410, failure('NOT_FOUND', 'Obsidian 扫描已过期，请重新选择 Vault。'))
+          return
+        }
+        const allowedPaths = new Set(stored.scan.notes.map((note) => note.relativePath))
+        const relativePaths = [...new Set(input.relativePaths)]
+        if (relativePaths.some((path) => !allowedPaths.has(path))) {
+          sendJson(response, 400, failure('VALIDATION', '选中的笔记不属于本次 Obsidian 扫描。'))
+          return
+        }
+        try {
+          const imported = []
+          for (let index = 0; index < relativePaths.length; index += 1) {
+            const relativePath = relativePaths[index] as string
+            const note = await obsidian.read(stored.rootPath, relativePath)
+            const identity = `obsidian-${createHash('sha256').update(projectId).update('\0').update(stored.scan.vaultName).update('\0').update(relativePath).update('\0').update(note.contentHash).digest('hex').slice(0, 24)}`
+            const outcome = await resources.importFile(projectId as ProjectId, {
+              importRequestId: identity,
+              fileName: relativePath.replace(/[\/]+/g, '--'),
+              contentType: 'text/markdown',
+              bytes: note.bytes,
+              scopeId: input.scopeId,
+              position: {
+                x: input.position.x + (index % 4) * 250,
+                y: input.position.y + Math.floor(index / 4) * 180,
+              },
+            })
+            imported.push(publicResourceImportResult(outcome))
+          }
+          sendJson(response, 201, { ok: true, value: imported })
+        } catch (error: unknown) {
+          sendJson(response, 409, failure('CONFLICT', error instanceof Error ? error.message : 'Obsidian 笔记导入失败。'))
+        }
         return
       }
 
@@ -957,6 +1055,48 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
           })
         } catch (error: unknown) {
           sendJson(response, 409, failure('CONFLICT', error instanceof Error ? error.message : 'Run cancellation conflicted.'))
+        }
+        return
+      }
+
+      const runInputRequestMatch = /^\/runs\/([^/]+)\/input-request$/.exec(pathname)
+      if (method === 'GET' && runInputRequestMatch !== null) {
+        if (!requireMetadata(metadata, response)) return
+        const runId = decodeURIComponent(runInputRequestMatch[1] ?? '') as RunId
+        const value = metadata.getPendingRunInputRequest(runId)
+        if (value === undefined) {
+          sendJson(response, 404, failure('NOT_FOUND', 'This task is not waiting for more information.'))
+          return
+        }
+        sendJson(response, 200, { ok: true, value })
+        return
+      }
+      if (method === 'POST' && runInputRequestMatch !== null) {
+        if (runtimeApplication === undefined) {
+          sendJson(response, 503, failure('UNAVAILABLE', 'Runtime execution service is not configured.'))
+          return
+        }
+        const runId = decodeURIComponent(runInputRequestMatch[1] ?? '') as RunId
+        try {
+          const input = await readJsonBody(request, controller.signal)
+          if (!isRecord(input)
+            || typeof input.requestId !== 'string'
+            || (input.text !== undefined && typeof input.text !== 'string')
+            || (input.selectedOptions !== undefined && !isStringArray(input.selectedOptions))
+            || Object.keys(input).some((key) => !['requestId', 'text', 'selectedOptions'].includes(key))) {
+            sendJson(response, 400, failure('INVALID_ARGUMENT', 'Answer requires requestId and free text or selected options.'))
+            return
+          }
+          sendJson(response, 200, {
+            ok: true,
+            value: await runtimeApplication.answerInput(runId, {
+              requestId: input.requestId,
+              ...(typeof input.text === 'string' ? { text: input.text } : {}),
+              ...(isStringArray(input.selectedOptions) ? { selectedOptions: input.selectedOptions } : {}),
+            }),
+          })
+        } catch (error: unknown) {
+          sendJson(response, 409, failure('CONFLICT', error instanceof Error ? error.message : 'Input response could not be applied.'))
         }
         return
       }
@@ -1622,9 +1762,18 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
             bytes: multipart.file.bytes,
           })
           const outcome = resources === undefined
-            ? result
+            ? undefined
             : await resources.afterImport(projectId as ProjectId, result)
-          sendJson(response, result.reused ? 200 : 201, { ok: true, value: outcome })
+          sendJson(response, result.reused ? 200 : 201, {
+            ok: true,
+            value: {
+              artifact: result.artifact,
+              revision: result.revision,
+              view: result.view,
+              reused: result.reused,
+              ...(outcome === undefined ? {} : { resource: publicResourceImportResult(outcome) }),
+            },
+          })
         } catch (error: unknown) {
           const status = error instanceof RangeError ? 413 : error instanceof ImportCopyConflictError ? 409 : 400
           sendJson(response, status, failure(error instanceof ImportCopyConflictError ? 'CONFLICT' : 'VALIDATION', error instanceof Error ? error.message : 'Import Copy failed.'))
@@ -1662,7 +1811,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
         if (uploads === undefined || !requireMetadata(metadata, response)) return
         try {
           const outcome = await uploads.complete(decodeURIComponent(uploadSessionCompleteMatch[1] ?? ''), decodeURIComponent(uploadSessionCompleteMatch[2] ?? ''))
-          sendJson(response, outcome.reused ? 200 : 201, { ok: true, value: outcome })
+          sendJson(response, outcome.reused ? 200 : 201, { ok: true, value: publicResourceImportResult(outcome) })
         } catch (error) { sendJson(response, error instanceof ResourcePackageConflictError ? 409 : error instanceof RangeError ? 413 : 400, failure('VALIDATION', error instanceof Error ? error.message : 'Upload completion failed.')) }
         return
       }
@@ -1696,7 +1845,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
             position: { x, y },
             ...(multipart.fields.note === undefined ? {} : { userNote: multipart.fields.note }),
           })
-          sendJson(response, outcome.reused ? 200 : 201, { ok: true, value: outcome })
+          sendJson(response, outcome.reused ? 200 : 201, { ok: true, value: publicResourceImportResult(outcome) })
         } catch (error: unknown) {
           const status = error instanceof RangeError ? 413 : error instanceof ResourcePackageConflictError ? 409 : 400
           sendJson(response, status, failure(error instanceof ResourcePackageConflictError ? 'CONFLICT' : 'VALIDATION', error instanceof Error ? error.message : 'Archive import failed.'))
@@ -1759,7 +1908,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
             scopeId,
             position: { x, y },
           })
-          sendJson(response, outcome.reused === undefined || !outcome.reused ? 201 : 200, { ok: true, value: outcome })
+          sendJson(response, outcome.reused === undefined || !outcome.reused ? 201 : 200, { ok: true, value: publicResourceImportResult(outcome) })
         } catch (error: unknown) {
           const status = error instanceof ImportCopyConflictError ? 409 : 400
           sendJson(response, status, failure(error instanceof ImportCopyConflictError ? 'CONFLICT' : 'VALIDATION', error instanceof Error ? error.message : 'URL import failed.'))

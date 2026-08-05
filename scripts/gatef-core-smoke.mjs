@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { createHash } from 'node:crypto'
 
 import { SqliteMetadataRepository } from '../apps/local-core/dist/metadata-repository.js'
 import { createMvpSampleSnapshot } from '../apps/local-core/dist/mvp-sample-project.js'
@@ -25,6 +26,14 @@ try {
   const firstViewId = String(firstView.id)
   const secondViewId = String(secondView.id)
 
+  const vaultPath = join(directory, 'obsidian-vault')
+  await mkdir(join(vaultPath, '.obsidian'), { recursive: true })
+  await mkdir(join(vaultPath, 'campaign'), { recursive: true })
+  await writeFile(join(vaultPath, '.obsidian', 'workspace.json'), '{}')
+  await writeFile(join(vaultPath, 'campaign', 'brief.md'), '---\ntitle: Vault Brief\ntags: [launch]\n---\n# Brief\nSee [[campaign/script]].\n')
+  await writeFile(join(vaultPath, 'campaign', 'script.md'), '# Script\n')
+  const vaultBriefHash = createHash('sha256').update(await readFile(join(vaultPath, 'campaign', 'brief.md'))).digest('hex')
+
   const token = 'gatef-core-smoke-token'
   const origin = 'http://127.0.0.1:43120'
   server = createLocalCoreServer({
@@ -32,6 +41,7 @@ try {
     metadataRepository: metadata,
     apiToken: token,
     allowedOrigins: [origin],
+    directoryPicker: async () => ({ cancelled: false, path: vaultPath }),
   })
   const address = await server.start()
   const baseUrl = `http://${address.host}:${address.port}`
@@ -147,6 +157,43 @@ try {
   assert.equal(plan.response.status, 200)
   assert.equal(plan.body.value.intent, 'analyze')
 
+  const connectorCapabilities = await request('/connectors')
+  assert.equal(connectorCapabilities.response.status, 200)
+  assert.deepEqual(connectorCapabilities.body.value.find((item) => item.connector === 'obsidian'), {
+    schemaVersion: 1,
+    connector: 'obsidian',
+    displayName: 'Obsidian Vault',
+    sourceKind: 'local_directory',
+    access: 'read_only',
+    contentTypes: ['text/markdown'],
+    supportsScan: true,
+    supportsImport: true,
+    supportsSync: false,
+  })
+
+  const obsidianScan = await request('/connectors/obsidian/select-and-scan', { method: 'POST', body: '{}' })
+  assert.equal(obsidianScan.response.status, 200)
+  assert.equal(obsidianScan.body.value.readOnly, true)
+  assert.equal(obsidianScan.body.value.noteCount, 2)
+  assert.equal(JSON.stringify(obsidianScan.body).includes(vaultPath), false)
+  assert.equal(obsidianScan.body.value.notes.some((note) => note.relativePath.startsWith('.obsidian/')), false)
+
+  const obsidianImport = await request(`/projects/${projectId}/connectors/obsidian/import`, {
+    method: 'POST',
+    body: JSON.stringify({
+      scanId: obsidianScan.body.value.scanId,
+      relativePaths: ['campaign/brief.md'],
+      scopeId: String(firstView.scopeId),
+      position: { x: 640, y: 320 },
+    }),
+  })
+  assert.equal(obsidianImport.response.status, 201)
+  assert.equal(obsidianImport.body.value.length, 1)
+  const serializedImport = JSON.stringify(obsidianImport.body)
+  assert.equal(serializedImport.includes(vaultPath), false)
+  assert.equal(serializedImport.includes('observedPath'), false)
+  assert.equal(createHash('sha256').update(await readFile(join(vaultPath, 'campaign', 'brief.md'))).digest('hex'), vaultBriefHash)
+
   const unauthorized = await fetch(`${baseUrl}/projects/${projectId}/active-context?workspaceId=${encodeURIComponent(workspaceId)}`)
   assert.equal(unauthorized.status, 401)
 
@@ -156,7 +203,7 @@ try {
   metadata = undefined
 
   metadata = new SqliteMetadataRepository(databasePath)
-  assert.equal(metadata.schemaVersion, 14)
+  assert.equal(metadata.schemaVersion, 15)
   assert.equal(metadata.getCommandDraft(projectId, workspaceId, 'selection')?.prompt, '把开场缩短到三秒')
   assert.equal(metadata.getProviderSessionBinding(projectId, 'codex')?.externalSessionId, 'session-gatef-smoke')
   assert.equal(metadata.getContextProposal(projectId, proposal.body.value.proposalId)?.status, 'pending')
@@ -172,6 +219,8 @@ try {
     contextProposalPersistence: true,
     providerSessionAffinity: true,
     agentPlanGuard: true,
+    connectorPort: true,
+    obsidianReadOnlyImport: true,
   })}\n`)
 } finally {
   if (server) await server.close()

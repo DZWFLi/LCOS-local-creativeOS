@@ -231,6 +231,40 @@ describe('RuntimeResultIngestionService', () => {
     ).rejects.toMatchObject({ detail: { code: 'RESULT_PATH_REJECTED' } })
   })
 
+  it('persists a real waiting_input request without creating a Draft', async () => {
+    const { repository, run, bridge } = await dispatchedFixture()
+    bridge.result = {
+      contractVersion: 'bridge-result-v1',
+      taskId: 'task-result-one',
+      lcosRunId: String(run.id),
+      providerStatus: 'waiting_input',
+      summary: '需要确认保留哪个方向。',
+      changedFiles: [],
+      inputRequest: {
+        requestId: 'input-result-one',
+        question: '保留 A 版还是 B 版？',
+        options: ['A', 'B'],
+        allowFreeText: true,
+        contextVersion: 3,
+      },
+    }
+
+    const ingested = await new RuntimeResultIngestionService(repository, bridge, () => now)
+      .ingest(bridge.result)
+
+    expect(ingested.kind).toBe('waiting_input')
+    expect(repository.getRun(run.id)?.status).toBe('waiting_input')
+    expect(repository.getPendingRunInputRequest(run.id)).toMatchObject({
+      requestId: 'input-result-one',
+      question: '保留 A 版还是 B 版？',
+      status: 'pending',
+      createdAt: now,
+    })
+    expect(repository.getArtifactRevisions(String(run.targetArtifactId)).some(
+      (revision) => revision.runId === run.id,
+    )).toBe(false)
+  })
+
   it('archives but quarantines a late result after Run cancellation', async () => {
     const { repository, run, bridge } = await dispatchedFixture()
     repository.updateRunStatus(run.id, 'cancelled', now)

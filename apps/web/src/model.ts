@@ -130,6 +130,14 @@ export interface ActiveRun {
   outputIntent?: 'analyze' | 'create' | 'revise'
   resultPolicy?: 'reply_only' | 'create_artifact' | 'create_collection' | 'draft_revision_per_target'
   proposalSummary?: string
+  resultSummary?: string
+  inputRequest?: {
+    requestId: string
+    question: string
+    options: string[]
+    allowFreeText: boolean
+    contextVersion?: number
+  }
 }
 
 export interface ProjectPackage {

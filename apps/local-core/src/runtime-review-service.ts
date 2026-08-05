@@ -32,12 +32,14 @@ export class RuntimeReviewService {
     })
     const pending = returns.some((artifactReturn) => artifactReturn.status === 'pending_review')
     const disabledReason = pending ? undefined : 'no_pending_artifact_return'
+    const inputRequest = this.repository.getPendingRunInputRequest(runId)
     return {
       run,
       dispatch,
       ...(binding === undefined ? {} : { binding }),
       returns,
       draftRevisions,
+      ...(inputRequest === undefined ? {} : { inputRequest }),
       presentationPhase: pending ? 'review' : run.status,
       capabilities: {
         schemaVersion: 1,

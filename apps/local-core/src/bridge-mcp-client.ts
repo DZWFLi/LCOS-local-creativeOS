@@ -80,6 +80,32 @@ function normalizeIdentity(task: JsonObject, expected?: {
   }
 }
 
+function normalizeInputRequest(value: JsonObject): NonNullable<BridgeResultEnvelopeV0['inputRequest']> {
+  const requestId = value.requestId ?? value.request_id
+  const question = value.question
+  const options = value.options
+  const allowFreeText = value.allowFreeText ?? value.allow_free_text
+  const contextVersion = value.contextVersion ?? value.context_version
+  const createdAt = value.createdAt ?? value.created_at
+  if (
+    typeof requestId !== 'string'
+    || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(requestId)
+    || typeof question !== 'string'
+    || !Array.isArray(options)
+    || typeof allowFreeText !== 'boolean'
+  ) {
+    throw providerError('CONTRACT_UNSUPPORTED', 'Bridge input request is invalid.', false)
+  }
+  return {
+    requestId,
+    question,
+    options: options.filter((item): item is string => typeof item === 'string'),
+    allowFreeText,
+    ...(typeof contextVersion === 'number' ? { contextVersion } : {}),
+    ...(typeof createdAt === 'string' ? { createdAt } : {}),
+  }
+}
+
 export class McpBridgeRuntimeClient implements BridgeRuntimePort {
   private readonly endpoint: URL
   private requestId = 0
@@ -178,7 +204,7 @@ export class McpBridgeRuntimeClient implements BridgeRuntimePort {
   async getResult(taskId: string, runId: string): Promise<BridgeResultEnvelopeV0 | undefined> {
     const task = await this.callTool('get_task_status', { task_id: taskId })
     const status = task.status
-    if (!['review', 'failed', 'cancelled', 'timeout'].includes(String(status))) return undefined
+    if (!['review', 'waiting_input', 'failed', 'cancelled', 'timeout'].includes(String(status))) return undefined
     const taskRunId = task.lcos_run_id ?? task.lcosRunId
     if (taskRunId !== undefined && taskRunId !== runId) {
       throw providerError('CONTRACT_UNSUPPORTED', 'Bridge result belongs to another Run.', false)
@@ -197,6 +223,7 @@ export class McpBridgeRuntimeClient implements BridgeRuntimePort {
       ...(typeof task.result_summary === 'string' ? { resultSummary: task.result_summary } : {}),
       ...(Array.isArray(task.warnings) ? { warnings: task.warnings.filter((item): item is string => typeof item === 'string') } : {}),
       ...(Array.isArray(task.suggested_next_actions) ? { suggestedNextActions: task.suggested_next_actions.filter((item): item is string => typeof item === 'string') } : {}),
+      ...(typeof task.input_request === 'object' && task.input_request !== null ? { inputRequest: normalizeInputRequest(task.input_request as JsonObject) } : {}),
       changedFiles: changedFiles.map((item) => {
         if (
           typeof item !== 'object'
@@ -215,6 +242,24 @@ export class McpBridgeRuntimeClient implements BridgeRuntimePort {
           ...(typeof value.mediaType === 'string' ? { mediaType: value.mediaType } : {}),
         }
       }),
+    }
+  }
+
+  async answerInput(taskId: string, response: { readonly requestId: string; readonly text?: string; readonly selectedOptions?: readonly string[] }): Promise<void> {
+    const result = await this.callTool('answer_input', {
+      task_id: taskId,
+      request_id: response.requestId,
+      ...(response.text === undefined ? {} : { text: response.text }),
+      selected_options: JSON.stringify(response.selectedOptions ?? []),
+      responded_by: 'user',
+    })
+    if (result.ok === false) {
+      const detail = result.error as JsonObject | undefined
+      throw providerError(
+        typeof detail?.code === 'string' ? detail.code : 'BRIDGE_UNAVAILABLE',
+        typeof detail?.message === 'string' ? detail.message : 'Bridge rejected the input response.',
+        Boolean(detail?.retryable),
+      )
     }
   }
 

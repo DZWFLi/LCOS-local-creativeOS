@@ -115,6 +115,7 @@ export interface BridgeRuntimePort {
   getTask?(taskId: string, runId: string): Promise<BridgeTaskIdentity | undefined>
   getResult(taskId: string, runId: string): Promise<BridgeResultEnvelopeV0 | undefined>
   finalizeReview?(taskId: string, decision: 'completed' | 'retrying', comment?: string): Promise<void>
+  answerInput?(taskId: string, response: { readonly requestId: string; readonly text?: string; readonly selectedOptions?: readonly string[] }): Promise<void>
   cancelTask?(taskId: string, runId: string): Promise<void>
   getCapabilities?(): Promise<{
     readonly bridgeVersion?: string
@@ -135,12 +136,20 @@ export interface BridgeResultEnvelopeV0 {
   readonly contractVersion: 'bridge-result-v0' | 'bridge-result-v1'
   readonly taskId: string
   readonly lcosRunId: string
-  readonly providerStatus: 'review' | 'failed' | 'cancelled' | 'timeout'
+  readonly providerStatus: 'review' | 'waiting_input' | 'failed' | 'cancelled' | 'timeout'
   readonly shortSummary?: string
   readonly resultSummary?: string
   readonly summary?: string
   readonly warnings?: readonly string[]
   readonly suggestedNextActions?: readonly string[]
+  readonly inputRequest?: {
+    readonly requestId: string
+    readonly question: string
+    readonly options: readonly string[]
+    readonly allowFreeText: boolean
+    readonly contextVersion?: number
+    readonly createdAt?: string
+  }
   readonly changedFiles: readonly {
     readonly path: string
     readonly action: 'created' | 'modified'
@@ -153,7 +162,7 @@ export interface RuntimeProviderError {
   readonly code: string
   readonly message: string
   readonly retryable: boolean
-  readonly provider: 'workbuddy'
+  readonly provider: 'workbuddy' | 'codex'
 }
 
 export class RuntimeAdapterError extends Error {
@@ -212,13 +221,13 @@ async function writeImmutable(path: string, content: string): Promise<void> {
   }
 }
 
-function dispatchError(error: unknown): RuntimeProviderError {
+function dispatchError(error: unknown, provider: 'workbuddy' | 'codex'): RuntimeProviderError {
   if (error instanceof RuntimeAdapterError) return error.detail
   return {
     code: 'BRIDGE_UNAVAILABLE',
     message: error instanceof Error ? error.message : 'Bridge request failed.',
     retryable: true,
-    provider: 'workbuddy',
+    provider,
   }
 }
 
@@ -261,7 +270,7 @@ export class RuntimeAdapterService {
       const task = await this.bridge.createTask(envelope, this.bridgeProjectId)
       return this.bind(run, task)
     } catch (error: unknown) {
-      const detail = dispatchError(error)
+      const detail = dispatchError(error, run.provider)
       this.repository.updateRuntimeDispatch({
         ...this.requireDispatch(runId),
         status: 'recovery_required',
@@ -285,7 +294,7 @@ export class RuntimeAdapterService {
       return this.bind(run, await this.bridge.createTask(envelope, this.bridgeProjectId))
     } catch (error: unknown) {
       if (error instanceof AdapterUnsupportedError) throw error
-      const detail = dispatchError(error)
+      const detail = dispatchError(error, run.provider)
       this.repository.updateRuntimeDispatch({
         ...this.requireDispatch(runId),
         status: 'recovery_required',
@@ -299,12 +308,13 @@ export class RuntimeAdapterService {
 
   async sync(runId: RunId): Promise<RuntimeBinding> {
     const binding = this.repository.getRuntimeBinding(runId)
+    const provider = binding?.provider ?? this.requireRun(runId).provider
     if (binding?.externalTaskId === undefined) {
       throw new RuntimeAdapterError({
         code: 'TASK_NOT_FOUND',
         message: 'RuntimeBinding has no external task.',
         retryable: false,
-        provider: 'workbuddy',
+        provider,
       })
     }
     const task = this.bridge.getTask === undefined
@@ -315,7 +325,7 @@ export class RuntimeAdapterService {
         code: 'TASK_NOT_FOUND',
         message: 'Bridge Task binding was not found.',
         retryable: true,
-        provider: 'workbuddy',
+        provider: binding.provider,
       })
     }
     const timestamp = this.now()
@@ -333,12 +343,13 @@ export class RuntimeAdapterService {
 
   async finalize(runId: RunId, decision: 'completed' | 'retrying', comment?: string): Promise<RuntimeBinding> {
     const binding = this.repository.getRuntimeBinding(runId)
+    const provider = binding?.provider ?? this.requireRun(runId).provider
     if (binding?.externalTaskId === undefined) {
       throw new RuntimeAdapterError({
         code: 'TASK_NOT_FOUND',
         message: 'RuntimeBinding has no external task.',
         retryable: false,
-        provider: 'workbuddy',
+        provider,
       })
     }
     if (this.bridge.finalizeReview === undefined) {
@@ -346,7 +357,7 @@ export class RuntimeAdapterService {
         code: 'CONTRACT_UNSUPPORTED',
         message: 'Bridge does not support review finalization.',
         retryable: false,
-        provider: 'workbuddy',
+        provider: binding.provider,
       })
     }
     await this.bridge.finalizeReview(binding.externalTaskId, decision, comment)
@@ -360,6 +371,36 @@ export class RuntimeAdapterService {
     })
   }
 
+  async answerInput(runId: RunId, response: { readonly requestId: string; readonly text?: string; readonly selectedOptions?: readonly string[] }): Promise<RuntimeBinding> {
+    const run = this.requireRun(runId)
+    if (run.status !== 'waiting_input') {
+      throw new RuntimeAdapterError({
+        code: 'RUN_NOT_WAITING_INPUT',
+        message: 'Run is not waiting for input.',
+        retryable: false,
+        provider: run.provider,
+      })
+    }
+    const binding = this.repository.getRuntimeBinding(runId)
+    if (binding?.externalTaskId === undefined || this.bridge.answerInput === undefined) {
+      throw new RuntimeAdapterError({
+        code: 'CONTRACT_UNSUPPORTED',
+        message: 'Bridge does not support answering input requests.',
+        retryable: false,
+        provider: run.provider,
+      })
+    }
+    await this.bridge.answerInput(binding.externalTaskId, response)
+    const timestamp = this.now()
+    this.repository.updateRunStatus(runId, 'queued', timestamp)
+    return this.repository.updateRuntimeBinding({
+      ...binding,
+      providerStatus: 'queued',
+      lastSyncedAt: timestamp,
+      updatedAt: timestamp,
+    })
+  }
+
   async cancel(runId: RunId): Promise<RuntimeBinding> {
     const run = this.requireRun(runId)
     if (isTerminalRunStatus(run.status)) {
@@ -367,7 +408,7 @@ export class RuntimeAdapterService {
         code: 'RUN_ALREADY_TERMINAL',
         message: `Run is already ${run.status}; cancellation is not allowed.`,
         retryable: false,
-        provider: 'workbuddy',
+        provider: run.provider,
       })
     }
     const binding = this.repository.getRuntimeBinding(runId)
@@ -376,7 +417,7 @@ export class RuntimeAdapterService {
         code: 'TASK_NOT_FOUND',
         message: 'RuntimeBinding has no external task to cancel.',
         retryable: false,
-        provider: 'workbuddy',
+        provider: run.provider,
       })
     }
     if (this.bridge.cancelTask !== undefined) {
@@ -544,7 +585,7 @@ export class RuntimeAdapterService {
         code: 'CONTRACT_UNSUPPORTED',
         message: 'Revise Run requires a target Artifact and Base Revision before dispatch.',
         retryable: false,
-        provider: 'workbuddy',
+        provider: run.provider,
       })
     }
     const artifact = this.repository.getArtifact(String(run.targetArtifactId))
@@ -557,7 +598,7 @@ export class RuntimeAdapterService {
         code: 'RUNTIME_STORAGE_CORRUPT',
         message: 'Revise target evidence is missing.',
         retryable: false,
-        provider: 'workbuddy',
+        provider: run.provider,
       })
     }
     return this.adapterRegistry.resolveRevise(artifact, fileRecord)
@@ -641,7 +682,8 @@ export class RuntimeAdapterService {
 
   private canonicalStatus(providerStatus: string): Run['status'] | undefined {
     if (providerStatus === 'created' || providerStatus === 'queued' || providerStatus === 'assigned') return 'queued'
-    if (providerStatus === 'running') return 'running'
+    if (providerStatus === 'running' || providerStatus === 'claimed') return 'running'
+    if (providerStatus === 'waiting_input') return 'waiting_input'
     if (providerStatus === 'failed') return 'failed'
     if (providerStatus === 'cancelled') return 'cancelled'
     return undefined

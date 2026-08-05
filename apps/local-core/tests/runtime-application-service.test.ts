@@ -4,6 +4,7 @@ import { join } from 'node:path'
 
 import { afterEach, describe, expect, it } from 'vitest'
 
+import type { RunInputRequestV1 } from '@local-creative-os/contracts'
 import type { Artifact } from '@local-creative-os/domain'
 import type {
   BridgeResultEnvelopeV0,
@@ -31,6 +32,7 @@ afterEach(() => {
 class FakeBridge implements BridgeRuntimePort {
   createError: Error | undefined
   cancelledTaskIds: string[] = []
+  answeredInputs: Array<{ taskId: string; requestId: string; text?: string; selectedOptions?: readonly string[] }> = []
   async createTask(envelope: BridgeTaskEnvelopeV0): Promise<BridgeTaskIdentity> {
     if (this.createError !== undefined) throw this.createError
     return {
@@ -43,6 +45,9 @@ class FakeBridge implements BridgeRuntimePort {
   }
   async findTaskByRunId(): Promise<BridgeTaskIdentity | undefined> { return undefined }
   async getResult(): Promise<BridgeResultEnvelopeV0 | undefined> { return undefined }
+  async answerInput(taskId: string, response: { readonly requestId: string; readonly text?: string; readonly selectedOptions?: readonly string[] }): Promise<void> {
+    this.answeredInputs.push({ taskId, ...response })
+  }
   async cancelTask(taskId: string): Promise<void> { this.cancelledTaskIds.push(taskId) }
 }
 
@@ -139,8 +144,8 @@ describe('RuntimeApplicationService', () => {
     const events = repository.getRunEvents(runId)
     const types = events.map((event) => event.type)
     expect(types).toContain('run.queued')
-    expect(types).toContain('run.started')
-    expect(events.map((event) => event.sequence)).toEqual([1, 2])
+    expect(types).not.toContain('run.started')
+    expect(events.map((event) => event.sequence)).toEqual([1])
   })
 
   it('does not duplicate lifecycle events while polling an unchanged Run', async () => {
@@ -158,7 +163,57 @@ describe('RuntimeApplicationService', () => {
     await service.sync(runId)
 
     const started = repository.getRunEvents(runId).filter((event) => event.type === 'run.started')
-    expect(started).toHaveLength(1)
+    expect(started).toHaveLength(0)
+  })
+
+  it('answers waiting_input and requeues the same Run without creating a new Run', async () => {
+    const { bridge, repository, service, snapshot } = setup()
+    const result = await service.create(snapshot.project.id, {
+      instruction: '分析当前资料。',
+      outputIntent: 'analyze',
+      requestedProvider: 'codex',
+    })
+    const runId = result.review.run.id
+    await service.dispatch(runId)
+    const request: RunInputRequestV1 = {
+      schemaVersion: 1,
+      requestId: 'input-app-one',
+      runId: String(runId),
+      question: '希望按方案 A 还是方案 B 继续？',
+      options: ['A', 'B'],
+      allowFreeText: true,
+      status: 'pending',
+      selectedOptions: [],
+      createdAt: now,
+    }
+    repository.saveRunInputRequest(request)
+    repository.updateRunStatus(runId, 'waiting_input', now)
+
+    const answered = await service.answerInput(runId, {
+      requestId: request.requestId,
+      text: '按 A 继续，并保留 B 的结尾。',
+      selectedOptions: ['A'],
+    })
+
+    expect(answered.providerError).toBeUndefined()
+    expect(repository.getRun(runId)?.status).toBe('queued')
+    expect(repository.getRunInputRequest(request.requestId)).toMatchObject({
+      status: 'answered',
+      answerText: '按 A 继续，并保留 B 的结尾。',
+      selectedOptions: ['A'],
+    })
+    expect(bridge.answeredInputs).toEqual([{
+      taskId: `task-${String(runId)}`,
+      requestId: request.requestId,
+      text: '按 A 继续，并保留 B 的结尾。',
+      selectedOptions: ['A'],
+    }])
+    expect(repository.getProjectRuns(snapshot.project.id, 10)).toHaveLength(1)
+    expect(repository.getRunEvents(runId).map((event) => event.type)).toEqual([
+      'run.queued',
+      'run.input_resolved',
+      'run.queued',
+    ])
   })
 
   it('cancels a bound Run through the Bridge and records run.cancelled', async () => {

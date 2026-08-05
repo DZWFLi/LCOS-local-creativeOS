@@ -1,4 +1,4 @@
-import { useEffect, type RefObject } from 'react'
+import { useEffect, useState, type RefObject } from 'react'
 import type { RuntimeProviderStatus } from '@local-creative-os/contracts'
 import {
   Check,
@@ -48,6 +48,7 @@ interface Props {
   onRetry: () => void
   onSyncRun: () => void
   onCancelRun: () => void
+  onAnswerInput: (input: { readonly requestId: string; readonly text?: string; readonly selectedOptions?: readonly string[] }) => void
   onContinueModify: () => void
   onShowRun: () => void
 }
@@ -77,7 +78,7 @@ export function WorkRail(props: Props) {
   if (props.collapsed) {
     return <aside className="work-rail compact" data-testid="work-rail" data-mode={mode} aria-label="AI 工作栏已折叠">
       <button className="work-rail-expand pressable" aria-label="展开 AI 工作栏" title="展开 AI 工作栏" onClick={props.onExpand}><ChevronLeft size={15} /></button>
-      {props.activeRun && <button className={`compact-run status-${props.activeRun.status} pressable`} title={`${props.activeRun.id} · ${runStatusLabel[props.activeRun.status]}`} onClick={() => { props.onShowRun(); props.onExpand() }}><Play size={14} /></button>}
+      {props.activeRun && <button className={`compact-run status-${props.activeRun.status} pressable`} title={runStatusLabel[props.activeRun.status]} onClick={() => { props.onShowRun(); props.onExpand() }}><Play size={14} /></button>}
       <button className="compact-compose pressable" title={`对${props.contextLabel}执行`} onClick={props.onRequestComposerFocus}><Sparkles size={15} /></button>
     </aside>
   }
@@ -86,7 +87,7 @@ export function WorkRail(props: Props) {
     <WorkRailHeader mode={mode} activeRun={props.activeRun} contextLabel={props.contextLabel} contextCount={props.contextCount} onSaveWorkspaceState={props.onSaveWorkspaceState} onOpenWorkspaceStates={props.onOpenWorkspaceStates} onCollapse={props.onCollapse} />
     <div className="work-rail-body" data-testid="work-rail-body">
       {mode === 'waiting-input' && props.activeRun
-        ? <WaitingState run={props.activeRun} onSync={props.onSyncRun} />
+        ? <WaitingState run={props.activeRun} onSync={props.onSyncRun} onAnswer={props.onAnswerInput} />
         : mode === 'review' && props.activeRun && primary
           ? <ReviewState node={primary} run={props.activeRun} onAccept={props.onAccept} onReject={props.onReject} onRetry={props.onRetry} onContinueModify={props.onContinueModify} />
           : mode === 'run' && props.activeRun
@@ -150,11 +151,22 @@ function RunState({ run, nodes, onRetry, onSync, onCancel }: { run: ActiveRun; n
   </div>
 }
 
-function WaitingState({ run, onSync }: { run: ActiveRun; onSync: () => void }) {
+function WaitingState({ run, onSync, onAnswer }: {
+  run: ActiveRun
+  onSync: () => void
+  onAnswer: (input: { readonly requestId: string; readonly text?: string; readonly selectedOptions?: readonly string[] }) => void
+}) {
+  const [text, setText] = useState('')
+  const [selectedOptions, setSelectedOptions] = useState<string[]>([])
+  const request = run.inputRequest
+  const canSubmit = request !== undefined && (text.trim().length > 0 || selectedOptions.length > 0)
   return <div className="rail-section waiting-state" data-testid="rail-waiting-input">
-    <div className="waiting-hero"><CircleAlert size={19} /><div><small>Agent 已暂停</small><h3>这次任务需要补充信息</h3><p>你的原内容和任务记录都已保留。可以补充要求后再试，或刷新当前处理状态。</p></div></div>
-    <section className="review-summary"><h4>当前指令</h4><ul><li>{run.command}</li><li>Agent：{run.provider ?? 'auto'}</li><li>当前版本和历史版本都没有被改动。</li></ul></section>
-    {run.runtime && <button className="rail-secondary pressable" onClick={onSync}><RefreshCw size={14} />刷新执行状态</button>}
+    <div className="waiting-hero"><CircleAlert size={19} /><div><small>Agent 已暂停</small><h3>需要你补充一点信息</h3><p>{request?.question ?? '你的原内容和任务记录都已保留。补充后会继续同一个任务。'}</p></div></div>
+    {request?.options.length ? <section className="waiting-options"><h4>可以直接选择</h4>{request.options.map((option) => <label key={option}><input type="checkbox" checked={selectedOptions.includes(option)} onChange={() => setSelectedOptions((current) => current.includes(option) ? current.filter((item) => item !== option) : [...current, option])} /><span>{option}</span></label>)}</section> : null}
+    {request?.allowFreeText !== false && <textarea data-testid="run-input-answer" value={text} onChange={(event) => setText(event.target.value)} placeholder="补充你的要求……" />}
+    {request && <button className="rail-primary pressable" data-testid="answer-runtime-input" disabled={!canSubmit} onClick={() => onAnswer({ requestId: request.requestId, ...(text.trim() ? { text: text.trim() } : {}), selectedOptions })}><Send size={14} />继续这个任务</button>}
+    <section className="review-summary"><h4>内容已保留</h4><ul><li>{run.command}</li><li>当前版本没有被改动。</li><li>任务不会因为等待而自动取消。</li></ul></section>
+    {run.runtime && <button className="rail-secondary pressable" onClick={onSync}><RefreshCw size={14} />刷新处理状态</button>}
   </div>
 }
 
@@ -174,8 +186,8 @@ function ReviewState({ node, run, onAccept, onReject, onRetry, onContinueModify 
 function CompletedState({ run, nodes, onSaveWorkspaceState }: { run: ActiveRun; nodes: CanvasNode[]; onSaveWorkspaceState: () => void }) {
   const current = run.pendingArtifactId ? nodes.find((node) => node.id === run.pendingArtifactId) : null
   return <div className="rail-section completed-state" data-testid="rail-completed">
-    <div className="completed-hero"><Check size={19} /><div><small>Agent 任务</small><h3>结果已归位</h3><p>{current?.title ?? run.changedFiles[0] ?? '本次结果'} 已写入项目过程与版本记录。</p></div></div>
-    <section className="review-summary"><h4>接下来</h4><ul><li>继续在节点下方输入下一轮修改</li><li>在 Canvas 中查看 Run、Prompt 与版本来源</li><li>需要阶段留档时保存当前工作现场</li></ul></section>
+    <div className="completed-hero"><Check size={19} /><div><small>Agent 任务</small><h3>{run.resultSummary ? '分析完成' : '结果已归位'}</h3><p>{run.resultSummary ?? `${current?.title ?? run.changedFiles[0] ?? '本次结果'} 已写入项目过程与版本记录。`}</p></div></div>
+    <section className="review-summary"><h4>接下来</h4><ul><li>继续在节点下方输入下一轮要求</li><li>在 Canvas 中查看任务与版本来源</li><li>需要阶段留档时保存当前工作现场</li></ul></section>
     <button className="rail-secondary pressable" onClick={onSaveWorkspaceState}><History size={14} />保存当前工作现场</button>
   </div>
 }
