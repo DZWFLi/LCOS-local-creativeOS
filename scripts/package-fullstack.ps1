@@ -53,6 +53,7 @@ function Add-FileEntry([string]$filePath) {
 }
 
 Get-ChildItem -LiteralPath $base -Recurse -Force -File -ErrorAction SilentlyContinue | ForEach-Object {
+  if ($_.Name -eq 'BUILD_INFO.md') { return }
   if (-not (Test-ExcludedPath $_.FullName $false)) { Add-FileEntry $_.FullName }
 }
 
