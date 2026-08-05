@@ -54,7 +54,7 @@ describe('Codex orchestrator operational guards', () => {
 
   it('installs the canonical LCOS skill globally without overwriting unmanaged skills', () => {
     expect(skillInstaller).toContain("join(codexHome, 'skills')")
-    expect(skillInstaller).toContain("'packages', 'skills', 'lcos-project-context', 'SKILL.md'")
+    expect(skillInstaller).toContain("join(sourceDirectory, 'SKILL.md')")
     expect(skillInstaller).toContain('Refusing to overwrite an unmanaged Codex skill')
     expect(skillInstaller).toContain('managed-by-lcos.json')
   })

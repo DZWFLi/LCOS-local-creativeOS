@@ -47,7 +47,7 @@ describe('v0.7.1 lightweight backend-integrated UI', () => {
   })
 
   it('keeps canonical Runtime capability gates and imports the v0.7.1 density layer', () => {
-    expect(contracts).toContain("runWorkflow: runtime ? { enabled: true } : unavailable('需要 Runtime Project Truth')")
+    expect(contracts).toContain("runWorkflow: runtime ? { enabled: true } : unavailable('请先打开一个本地项目')")
     expect(capability).toContain('props.capabilities.runWorkflow.reason')
     expect(main).toContain("import './v071.css'")
     expect(v071).toContain('top: 10px; transform: none;')

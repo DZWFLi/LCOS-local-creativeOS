@@ -127,6 +127,9 @@ async function claimStartSubmit(lcosRunId, { prepare, changedFiles, summary }) {
     body: JSON.stringify({ workerId: 'golden-agent' }),
   })
   console.log('  agent: started')
+  // 新语义：run.started 在 canonical 状态进入 running 时发出。
+  // 真实链路由 Runtime Auto-Sync（10s 轮询）观察到 running；脚本在此显式同步一次。
+  await coreRequest(`/runs/${encodeURIComponent(lcosRunId)}/sync`, { method: 'POST' })
   const files = await prepare(task)
   console.log(`  agent: prepared ${files.length} file(s)`)
   const effectiveChanged = files.length > 0 ? files : changedFiles

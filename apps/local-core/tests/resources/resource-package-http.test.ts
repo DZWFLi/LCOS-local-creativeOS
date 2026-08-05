@@ -45,10 +45,10 @@ describe('Resource package HTTP routes (U3)', () => {
 
     const imported = await fetch(`${baseUrl}/projects/${projectId}/imports`, { method: 'POST', body: form })
     expect(imported.status).toBe(201)
-    const importedBody = await imported.json() as { value: { fileRecord: { id: string }; artifact: { title: string } } }
+    const importedBody = await imported.json() as { value: { revision: { fileRecordId: string }; artifact: { title: string } } }
     expect(importedBody.value.artifact.title).toBe('中文提案.pdf')
 
-    const content = await fetch(`${baseUrl}/projects/${projectId}/file-records/${importedBody.value.fileRecord.id}/content`)
+    const content = await fetch(`${baseUrl}/projects/${projectId}/file-records/${importedBody.value.revision.fileRecordId}/content`)
     expect(content.status).toBe(200)
     expect(content.headers.get('content-type')).toBe('application/pdf')
     expect(Buffer.from(await content.arrayBuffer())).toEqual(pdf)
