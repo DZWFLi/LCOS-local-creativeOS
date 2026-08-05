@@ -59,10 +59,6 @@ Get-ChildItem -LiteralPath $base -Recurse -Force -File -ErrorAction SilentlyCont
 $buildInfoPath = Join-Path $base 'BUILD_INFO.md'
 $buildInfo = Get-Content -LiteralPath $buildInfoPath -Raw
 $buildInfo = $buildInfo.Replace('> HEAD：<打包时自动填充>', "> HEAD：$head")
-$keyLog = (& git -C $src log --oneline -8 2>$null) | ForEach-Object { "    $_" }
-if ($keyLog.Count -gt 0) {
-  $buildInfo = $buildInfo -replace '(?s)## 关键提交.*?(?=\r?\n## )', ("## 关键提交`r`n`r`n```text`r`n" + ($keyLog -join "`r`n") + "`r`n```")
-}
 $entry = $archive.CreateEntry($rootPrefix + 'BUILD_INFO.md', [System.IO.Compression.CompressionLevel]::Optimal)
 $writer = [System.IO.StreamWriter]::new($entry.Open(), [System.Text.UTF8Encoding]::new($false))
 $writer.Write($buildInfo)
@@ -73,7 +69,8 @@ $archive.Dispose()
 $fs.Dispose()
 
 $hash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLower()
-Set-Content -LiteralPath ($zip + '.sha256') -Value "$hash  $([System.IO.Path]::GetFileName($zip))" -Encoding ASCII
+$zipLeaf = [System.IO.Path]::GetFileName($zip)
+Set-Content -LiteralPath ($zip + '.sha256') -Value "$hash  $zipLeaf" -Encoding ASCII
 
 Write-Output "HEAD=$head"
 Write-Output "ENTRIES=$count"
