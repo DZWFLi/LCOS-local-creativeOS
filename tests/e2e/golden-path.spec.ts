@@ -176,7 +176,7 @@ test('requested missing project shows explicit error instead of silent demo fall
 
   await expect(page.locator('[data-testid="canvas"]')).toHaveCount(0)
   await expect(page.locator('text=继续一个项目')).toBeVisible()
-  await expect(page.locator('[data-testid="toast"]')).toContainText('项目不存在')
+  await expect(page.locator('[data-testid="toast"]')).toContainText('没有找到这个项目')
 })
 
 test('imports link and skill folder zero-form; descriptor survives reload (U5)', async ({ page }) => {
