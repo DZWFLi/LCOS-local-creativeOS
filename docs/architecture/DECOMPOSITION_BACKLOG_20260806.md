@@ -67,7 +67,15 @@ eaf754f refactor(core): extract conversations/projects/canvas/proposals/runs rou
 9397a93 refactor(core): extract connectors/executor/runtime/imports/resources/entity route modules
 03eb9c0 refactor(shell): split App JSX into AppShellView + Canvas/Dialogs/WorkRail hosts
 102d2b2 feat(phase2): fixtures out of prod + projection adapter coverage tests
+770371a refactor(cli): drop worker-mode commands duplicated by executor MCP
+f6bd4f3 chore: six-party cleanup - skills in repo, compose.ts, fixtures out of src, launcher EINVAL fallback
+3711558 fix(tests): qa-fixtures type imports after move to tests/
+72bbc2e feat(skill-install): adopt identical unmanaged skills as managed
+7c38775 fix(dev-launcher): spawn npm.cmd via shell in detached mode (EINVAL)
+acc9d00 fix(web): fallback activeProject when catalog is empty (render crash)
 ```
+
+六方分工重叠审计见 `docs/architecture/SIX_PARTY_RESPONSIBILITY_AUDIT_20260806.md`。
 
 ### Phase 3 — Gate W 前置
 
