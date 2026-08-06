@@ -127,6 +127,14 @@ lcos-executor 的任何工具；Agent 显式上报“没有 MCP，走 CLI/REST �
   b) 在真实会话内列出工具并通过一次只读调用，作为 A1 关闭证据。
 ```
 
+2026-08-06 补充（桌面会话实测）：按保姆级教程在**全新桌面对话**里查询，回复明确
+“当前会话没有暴露任何 mcp__ 前缀工具，也没有 local-creative-os / lcos-executor
+工具”。配置核对仍正常（local-creative-os=enabled、lcos-executor=disabled、
+无 ai_bridge）。因此 **A1 升级为客户端级阻塞**：Codex 0.147 alpha 在本环境无论
+exec 还是桌面会话都不加载 config.toml 的 MCP server；LCOS 侧（server、launcher、
+配置、E2E）全部就绪。当前真实执行通道 = Skill + REST（已跑通 5+ Run），MCP 工具面
+等待 Codex 客户端版本/配置机制支持后再验收。
+
 ### 7.2 L3 真实 Ollama / native sqlite-vec：未验证
 
 ```text

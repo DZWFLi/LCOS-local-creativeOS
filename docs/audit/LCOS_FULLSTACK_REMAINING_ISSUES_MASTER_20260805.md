@@ -56,7 +56,7 @@ docs/architecture/LCOS_MCP_BRIDGE_DECOUPLING_DESIGN_20260805.md
 
 | 原问题 | 状态 | 说明 |
 |---|---|---|
-| A1 MCP 真实会话加载 | ❌ 阻塞 | LCOS 双 MCP server 握手正常；卡在 Codex CLI 0.147 exec 不加载配置 MCP（`rmcp_client` 已废、`mcp_2026_07_28` 启用仍无工具、exec 无 MCP 开关）。Agent 显式 REST 兜底完成闭环 |
+| A1 MCP 真实会话加载 | ❌ 客户端级阻塞 | LCOS 双 MCP server 握手正常、配置正确；Codex 0.147 alpha **exec 与桌面会话均不加载** config 的 MCP server（`rmcp_client` 已废、`mcp_2026_07_28` 启用无效）。Agent 显式 REST 兜底完成闭环；待客户端版本/机制支持后再验收 |
 | A2 看门狗同步阻塞 | ✅ 已解决 | Node 异步看门狗：跨项目并发 2、同项目串行、超时/进程树/重试/冷却；smoke + 真实 5 Run 验证 |
 | A3 run.started 10s 语义 | 🟡 未复测 | 真实事件链正常；语义文档未更新 |
 | A4 相机常量集中 | 🟡 未做 | 本轮未触碰 |
@@ -96,7 +96,7 @@ docs/architecture/LCOS_MCP_BRIDGE_DECOUPLING_DESIGN_20260805.md
 
 | # | 问题 | 现状 | 要求 |
 |---|---|---|---|
-| A1 | **MCP 未进真实 Codex 会话** | 注册与服务器侧已就绪（稳定 launcher、双角色、握手/E2E 全过），但真实 `codex exec` 0.147 会话仍无工具；根因升级为 Codex CLI MCP 客户端加载（`rmcp_client` 已废、`mcp_2026_07_28` 启用无效、exec 无 MCP 开关） | 开发确认目标 CLI 正确加载开关/配置格式后，真实会话列工具 + 只读调用通过才关闭 |
+| A1 | **MCP 未进真实 Codex 会话** | 注册与服务器侧已就绪（稳定 launcher、双角色、握手/E2E 全过），但 Codex 0.147 alpha **exec 与桌面会话均无工具**（2026-08-06 桌面会话实测确认）；根因：客户端不加载 config 的 MCP server（`rmcp_client` 已废、`mcp_2026_07_28` 启用无效） | 开发确认目标 Codex 版本的正确加载机制（升级/新配置格式/插件路径）后，真实会话列工具 + 只读调用通过才关闭 |
 | A2 | **看门狗单线程同步等待 runner** | runner 已强制退出（不再阻塞主循环），但主循环仍是单线程同步等待，架构脆弱（本轮已实际卡死一次） | 改异步 / 加超时护栏：一个 runner 卡住不得阻塞后续 Run；加回归测试覆盖“runner 不退出”场景 |
 | A3 | **`run.started` 依赖 10s 自动同步** | 极短任务可能跳过 started 事件（UI 不依赖事件，可接受，但语义不稳） | 明确事件语义或缩短窗口；至少写文档说明 |
 | A4 | **相机可见性常量分散** | 本轮已把过程/投影节点排除出相机判定，但“主内容最少可见比例”建议作为 UI 常量集中管理 | 集中常量 + 单测覆盖 |
