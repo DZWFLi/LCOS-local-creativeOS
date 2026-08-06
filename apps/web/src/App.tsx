@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { ChevronUp, Command, Play } from 'lucide-react'
 import type { ContextChangeProposalV1, ContextManifestV0, ObsidianVaultScanV1, RunEvent, RunProposalResult, RunReview, RuntimeProviderStatus, WorkspaceMembership } from '@local-creative-os/contracts'
-import { makePerformanceFixture } from './qa-fixtures/fixtures'
 import type { ActiveRun, Camera, CanvasNode, CanvasScope, NodeDisplayMode, NodeLayer, PersistedPrototypeState, ProjectPackage, ScopeKind, TargetContextInference, WorkRailPreferences, Workspace, WorkspaceIntent } from './model'
 import { nodeMeta, runStatusLabel } from './model'
 import { ProjectCanvas } from './features/canvas/ProjectCanvas'
@@ -27,7 +26,7 @@ import { ResourceDetailDialog } from './features/resources/ResourceDetailDialog'
 import { ObsidianImportDialog } from './features/resources/ObsidianImportDialog'
 import { ConversationContextDialog } from './features/conversations/ConversationContextDialog'
 import { capabilitiesFor, type LinkReferenceInput, type RunOutputIntent } from './runtime/v07UiContracts'
-import { clearPrototypeState, loadProjectCatalog, loadPrototypeState, saveProjectCatalog, savePrototypeState } from './state/prototypeStorage'
+import { loadProjectCatalog, loadPrototypeState, saveProjectCatalog, savePrototypeState } from './state/prototypeStorage'
 import { clearProjectNavigationState, loadProjectNavigationState, saveProjectNavigationState } from './state/projectNavigation'
 import { buildWorkspaceFrames } from './state/workspaceFrames'
 import { RuntimeBridge, type DataSource, type SaveStatus } from './runtime/runtimeBridge'
@@ -62,15 +61,10 @@ function normalizeRailPreferences(value: WorkRailPreferences): WorkRailPreferenc
   return { ...value, collapsed: true, width: 312 }
 }
 
-function initialPrototype(projectId: string, performanceFixture: ReturnType<typeof makePerformanceFixture> | null): PersistedPrototypeState {
-  if (!performanceFixture) {
-    const persisted = loadPrototypeState(projectId)
-    if (persisted) return persisted
-  }
-  const fixture = fixtureStateForProject(projectId, defaultRailWidth())
-  return performanceFixture
-    ? { ...fixture, nodes: performanceFixture.nodes, edges: performanceFixture.edges }
-    : fixture
+function initialPrototype(projectId: string): PersistedPrototypeState {
+  const persisted = loadPrototypeState(projectId)
+  if (persisted) return persisted
+  return fixtureStateForProject(projectId, defaultRailWidth())
 }
 
 function createId(prefix: string): string {
@@ -91,19 +85,15 @@ function fileNameFromPath(path: string): string {
 export function App() {
   const launchSearchParams = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search)
   const agentMode = launchSearchParams?.get('agent') === '1' || launchSearchParams?.get('agent') === 'codex'
-  const qaSearchParams = typeof window === 'undefined' || !import.meta.env.DEV ? null : new URLSearchParams(window.location.search)
-  const queryState = qaSearchParams?.get('state') ?? ''
-  const perfCount = Number(qaSearchParams?.get('perf') ?? 0)
-  const performanceFixture = perfCount >= 80 ? makePerformanceFixture(Math.min(300, perfCount)) : null
   const requestedProjectId = launchSearchParams?.get('project')
   const initialProjectId = requestedProjectId || DEFAULT_PROJECT_ID
-  const initial = useMemo(() => initialPrototype(initialProjectId, performanceFixture), [performanceFixture])
+  const initial = useMemo(() => initialPrototype(initialProjectId), [initialProjectId])
   const { nodes, edges, setNodes, setEdges, setGraph, undo, redo, resetGraph } = useCanvasHistory({ nodes: initial.nodes, edges: initial.edges })
 
   const [projects, setProjects] = useState<ProjectPackage[]>(() => loadProjectCatalog(defaultProjectCatalog()))
   const [activeProjectId, setActiveProjectId] = useState(initialProjectId)
   const [openProjectIds, setOpenProjectIds] = useState<string[]>([initialProjectId])
-  const [projectOpen, setProjectOpen] = useState(queryState !== 'drive')
+  const [projectOpen, setProjectOpen] = useState(true)
   const [workspaces, setWorkspaces] = useState<Workspace[]>(initial.workspaces)
   const [scopes, setScopes] = useState<CanvasScope[]>(initial.scopes)
   const [workspaceId, setWorkspaceId] = useState<string | null>(null)
@@ -134,7 +124,7 @@ export function App() {
   const [globalComposerText, setGlobalComposerText] = useState('')
   const [globalProvider, setGlobalProvider] = useState('auto')
   const [globalCreateAsNewNode, setGlobalCreateAsNewNode] = useState(false)
-  const [selectionComposerText, setSelectionComposerText] = useState(() => queryState === 'confirm' ? '根据第二轮客户反馈调整构图，拉开产品与雕像距离，优化人物比例，保留 0–6 秒缓慢拉镜和三句字幕。' : '')
+  const [selectionComposerText, setSelectionComposerText] = useState('')
   const [selectionProvider, setSelectionProvider] = useState('auto')
   const [selectionCreateAsNewNode, setSelectionCreateAsNewNode] = useState(false)
   const [selectionBaseRevision, setSelectionBaseRevision] = useState<ArtifactRevisionProvenance | null>(null)
@@ -185,7 +175,6 @@ export function App() {
   const lastCanvasPointRef = useRef<{ x: number; y: number } | null>(null)
   const composerRef = useRef<HTMLTextAreaElement | null>(null)
   const runCounterRef = useRef(43)
-  const seededStateRef = useRef(false)
   const projectStateCacheRef = useRef<Map<string, PersistedPrototypeState>>(new Map([[initialProjectId, initial]]))
   const bridgeRef = useRef(new RuntimeBridge(initialProjectId))
   const presentationInteractionRef = useRef(false)
@@ -774,41 +763,7 @@ export function App() {
   }, [])
 
   useEffect(() => {
-    if (seededStateRef.current || !queryState) return
-    seededStateRef.current = true
-    if (queryState === 'collapsed') setWorkRail((current) => ({ ...current, collapsed: true }))
-    if (queryState === 'create') setCreateDialogOpen(true)
-    if (queryState === 'confirm') { setSelectedIds(['proposal', 'feedback', 'reference']); setSelectionComposerText('根据第二轮客户反馈调整构图，拉开产品与雕像距离。') }
-    if (queryState === 'scope') enterScope('scope-reference')
-    if (queryState === 'selection') selectNode('proposal')
-    if (queryState === 'multi') setSelectedIds(['proposal', 'feedback', 'reference'])
-    if (queryState === 'running') startRunFrom('调整第 6 页构图与产品距离', ['proposal'], ['feedback', 'reference'])
-    if (queryState === 'waiting') {
-      const processNodeId = createId('run')
-      setActiveRun({ id: 'RUN-044', status: 'waiting_input', command: '调整第 6 页构图与产品距离', targetIds: ['proposal'], contextIds: ['feedback', 'reference'], processNodeId, reviewStatus: 'idle', inputResolved: false, changedFiles: [], createdAt: new Date().toISOString() })
-    }
-    if (queryState === 'review') {
-      setActiveRun({ id: 'RUN-044', status: 'review', command: '调整第 6 页构图与产品距离', targetIds: ['proposal'], contextIds: ['feedback', 'reference'], processNodeId: 'run-042', pendingArtifactId: 'generated', reviewStatus: 'pending', inputResolved: true, changedFiles: ['Thinker_Concept_V4_AI.pptx'], createdAt: new Date().toISOString() })
-    }
-    if (queryState === 'accepted') {
-      setNodes((current) => current.map((node) => node.id === 'generated' ? { ...node, kind: 'working', draft: false, current: true, followsCurrentRevision: true, subtitle: '当前版本 · 已接受' } : node.id === 'proposal' ? { ...node, current: false, followsCurrentRevision: false, subtitle: `${node.subtitle} · 已归档` } : node))
-      setSelectedIds(['generated'])
-      setActiveRun({ id: 'RUN-044', status: 'completed', command: '调整第 6 页构图与产品距离', targetIds: ['proposal'], contextIds: ['feedback', 'reference'], processNodeId: 'run-042', pendingArtifactId: 'generated', reviewStatus: 'accepted', inputResolved: true, changedFiles: ['Thinker_Concept_V4_AI.pptx'], createdAt: new Date().toISOString() })
-    }
-    if (queryState === 'layout') setLayoutPreview(proposeScopeLayout(nodes, scopeId))
-    if (queryState === 'scope-create') { setSelectedIds(['proposal', 'feedback', 'reference']); setScopeCreateOpen(true) }
-    if (queryState === 'phase2-single') {
-      setSelectedIds(['proposal'])
-      setSelectionComposerText('根据第二轮客户反馈调整第 6 页构图和产品距离。')
-    }
-    if (queryState === 'phase2-multi') {
-      setSelectedIds(['proposal', 'feedback', 'reference'])
-      setSelectionComposerText('结合客户反馈与参考图优化提案构图。')
-    }
-  }, [queryState])
-
-  useEffect(() => {
-    if (performanceFixture || presentationInteractionRef.current) return
+    if (presentationInteractionRef.current) return
     if (bootMode === 'loading') return
     setSaveStatus('saving')
     const timer = window.setTimeout(() => {
@@ -839,7 +794,7 @@ export function App() {
       setSaveStatus('saved')
     }, 280)
     return () => window.clearTimeout(timer)
-  }, [activeProjectId, bootMode, edges, nodes, performanceFixture, presentationCommit, projects, scopes, workRail, workspaces])
+  }, [activeProjectId, bootMode, edges, nodes, presentationCommit, projects, scopes, workRail, workspaces])
 
   useEffect(() => { cameraRef.current = camera }, [camera])
   useEffect(() => { activeProjectIdRef.current = activeProjectId }, [activeProjectId])
@@ -875,13 +830,11 @@ export function App() {
   }, [bootMode, cameraValidityKey, scopeNodes, camera, setCamera])
 
   useEffect(() => {
-    if (performanceFixture) return
     const timer = window.setTimeout(() => saveProjectNavigationState(activeProjectId, camera), 3000)
     return () => window.clearTimeout(timer)
-  }, [activeProjectId, camera, performanceFixture])
+  }, [activeProjectId, camera])
 
   useEffect(() => {
-    if (performanceFixture) return
     const flush = () => saveProjectNavigationState(activeProjectIdRef.current, cameraRef.current)
     const hidden = () => { if (document.visibilityState === 'hidden') flush() }
     window.addEventListener('pagehide', flush)
@@ -890,7 +843,7 @@ export function App() {
       window.removeEventListener('pagehide', flush)
       document.removeEventListener('visibilitychange', hidden)
     }
-  }, [performanceFixture])
+  }, [])
 
   useEffect(() => {
     if (!activeRun) return
@@ -2804,7 +2757,6 @@ export function App() {
         const stateWorkspace = workspaces.find((workspace) => workspace.id === workspaceStatesWorkspaceId)
         return stateWorkspace ? <WorkspaceStatesDialog workspace={stateWorkspace} states={workspaceStates} loading={workspaceStatesLoading} saving={workspaceStateSaving} restoringId={workspaceStateRestoringId} error={workspaceStatesError} onClose={() => setWorkspaceStatesOpen(false)} onRefresh={() => loadWorkspaceStates(workspaceStatesWorkspaceId)} onSave={(name) => saveCurrentWorkspaceState(workspaceStatesWorkspaceId, name)} onRestore={restoreSavedWorkspaceState} /> : null
       })()}
-      <button className="prototype-reset" onClick={() => { clearPrototypeState(activeProjectId); clearProjectNavigationState(activeProjectId); window.location.reload() }}>重置演示数据</button>
     </section>
   </main>
 }

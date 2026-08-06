@@ -764,11 +764,6 @@ try {
       method: "POST",
       ...jsonBody({ provider: option("provider") || "workbuddy", workerId: option("worker") || "local-agent" }),
     });
-  } else if (group === "task" && action === "start") {
-    result = await coreRequest(`/executor/tasks/${encodeURIComponent(required(positional[0], "task id"))}/running`, {
-      method: "POST",
-      ...jsonBody({ workerId: option("worker") || "local-agent" }),
-    });
   } else if (group === "task" && action === "submit") {
     const taskId = required(positional[0], "task id");
     const resultPath = required(positional[1], "result envelope path");
@@ -945,7 +940,6 @@ Project truth:
 
 Agent pull:
   lcos task claim [--provider workbuddy] [--worker local-agent]
-  lcos task start <task-id> [--worker local-agent]
   lcos task submit <task-id> <result-envelope.json>
   lcos task show <task-id>
 

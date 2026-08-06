@@ -89,6 +89,8 @@ docs/architecture/LCOS_MCP_BRIDGE_DECOUPLING_DESIGN_20260805.md
 | tldraw 信号层 | ✅ 已实现 | Core SSE 端点（/active-context/events）服务端推送 + Web 流式订阅 + 轮询兜底；2026-08-06 实机验证 snapshot/update/proposals/runs 帧与持久连接；Agent 建议/待办已并入 SSE，3 秒轮询移除（仅流失败时兜底） |
 | MCP 工具按角色/域裁剪 | ✅ 已实现 | CLI-first 白名单：Agent 面 45 / 执行器面 8；执行器工具物理独立文件 executor-tools.mjs；约 20 个重复/维护工具降级 CLI 或删除（propose/成员/会话绑定/对话维护/资源枚举等）；schema 每轮 6.3K→4.3K；E2E 验证 agent 拿不到执行器工具（2026-08-06） |
 | Skill 结构化 | ✅ 已实现 | `packages/skills` 立 SPEC + 索引；拆出 lcos-executor-run；lcos-project-context 入口 11.8KB→2.8KB（~4K→~0.7K token），执行器专用 ~0.6K token；细节全部 references 懒加载；安装脚本多 skill 哈希同步（2026-08-06） |
+| 前端演示 harness | ✅ 已移除 | queryState/perf fixture/RUN-044/Thinker_Concept/重置演示数据按钮 全部删除；仅 dev 的验收 seed 不再留在 App.tsx（2026-08-06） |
+| CLI 命令面去重 | ✅ 已处理 | `task start` 删除（`run start` 覆盖）；`task claim` 保留（claim-next 语义不同）；存储 .bak 移走、WAL checkpoint（2026-08-06） |
 | tldraw 写层 | ✅ 大幅补强 | select/focus/move/viewport/relation/workspace/preview 已实现并过 MCP E2E |
 | tldraw 闭环层 | ✅ 基本闭环 | 真实 5 Run 闭环成立（此前 REST）；2026-08-06 MCP 四变体（analyze/revise/create/waiting_input）全通：create/dispatch 走 local-creative-os，claim/start/request_input/submit 走 lcos-executor，GUI Run 节点 + 待审界面实测渲染 |
 | 全新机器单命令部署 | 🟡 部分 | bootstrap npm.cmd 坑已修、本机通过；干净 VM 未跑 |

@@ -348,3 +348,14 @@ MCP 按域拆分：
 - E2E 实测：agentToolCount=45、executorToolCount=8、agentRejectedExecutor=true、
   画布动作与 claim/start/review 全通过
 ```
+
+2026-08-06 补充（残留治理：演示 harness / CLI 去重 / 存储）：
+
+```text
+- App.tsx 移除 queryState 验收 seed（RUN-044/Thinker_Concept/重置演示数据/perf fixture），
+  web typecheck + build 通过
+- CLI 删除 task start（与 run start 重复）；task claim 保留（claim-next 拉活语义不同）
+- .v5/.v17 迁移备份移至 %TEMP%\lcos-db-backups-20260806；WAL 已 checkpoint(TRUNCATE)
+- 发现小缺口：created/planned 状态 Run 的 cancel 为空操作，列入解耦台账
+- 解耦/待办汇总：docs/architecture/DECOMPOSITION_BACKLOG_20260806.md
+```
