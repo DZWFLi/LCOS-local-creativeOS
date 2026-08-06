@@ -46,7 +46,7 @@
     "agent": {
       "launcher": "tools/lcos-agent/launch-local-creative-os-mcp.cmd",
       "role": "agent",
-      "toolCount": 45,
+      "toolCount": 37,
       "note": "CLI-first 白名单"
     },
     "executor": {

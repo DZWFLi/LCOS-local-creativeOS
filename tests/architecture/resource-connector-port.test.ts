@@ -18,6 +18,6 @@ describe('Resource Connector Port', () => {
   it('exposes capability discovery through Core and MCP without leaking the Vault root', () => {
     expect(connectors).toContain("pathname === '/connectors'")
     expect(connectors).toContain('connectorRegistry.capabilities()')
-    expect(mcp).toContain('list_lcos_connectors')
+    expect(mcp).toContain('scan_lcos_obsidian_vault')
   })
 })

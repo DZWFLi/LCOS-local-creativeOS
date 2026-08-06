@@ -73,23 +73,21 @@ async function listTools(role) {
 const executorExpected = new Set([
   'get_lcos_run_context',
   'claim_lcos_run', 'start_lcos_run', 'heartbeat_lcos_run', 'fail_lcos_run', 'request_lcos_user_input',
-  'claim_lcos_task', 'start_lcos_task', 'get_lcos_task', 'get_lcos_task_by_run', 'submit_lcos_result', 'cancel_lcos_task',
+  'get_lcos_task', 'submit_lcos_result',
 ])
 
 const canvasExpected = new Set([
-  'get_lcos_active_context', 'watch_lcos_active_context', 'get_lcos_canvas_observation',
-  'select_lcos_views', 'focus_lcos_views', 'move_lcos_view', 'set_lcos_viewport',
+  'get_lcos_active_context', 'watch_lcos_active_context',
+  'select_lcos_views', 'focus_lcos_views',
   'create_lcos_relation', 'open_lcos_preview',
 ])
 
 const conversationExpected = new Set([
-  'import_lcos_conversation', 'import_lcos_manual_conversation', 'export_lcos_conversation',
+  'import_lcos_conversation',
   'list_lcos_conversations', 'get_lcos_conversation', 'search_lcos_conversations',
   'read_lcos_conversation_messages', 'list_lcos_conversation_sections',
-  'refresh_lcos_conversation_sections', 'rename_lcos_conversation_section',
   'read_lcos_conversation_section', 'annotate_lcos_conversation_section',
-  'pin_lcos_conversation_message', 'get_lcos_conversation_semantic_index',
-  'build_lcos_conversation_semantic_index',
+  'pin_lcos_conversation_message',
 ])
 
 const agent = await listTools('agent')
@@ -173,7 +171,7 @@ if (activeContext.includes('offscreenClusters') && activeContext.includes('visib
 else fail('Canvas 视口外摘要', 'ActiveContext 未投影 offscreenClusters。')
 if (activeContext.includes('recentChanges') && activeContext.includes('#deriveRecentChanges')) pass('Canvas 最近变化摘要')
 else fail('Canvas 最近变化摘要', 'ActiveContext 未投影最近选择、上下文、目标和视口变化。')
-if (source('apps/local-core/src/server.ts').includes('canvas-observation') && source('packages/contracts/src/index.ts').includes('CanvasObservationV1')) pass('Canvas Observation 合同')
+if (source('apps/local-core/src/routes/canvas.ts').includes('canvas-observation') && source('packages/contracts/src/index.ts').includes('CanvasObservationV1')) pass('Canvas Observation 合同')
 else fail('Canvas Observation 合同', '缺少结构化 Snapshot 的视觉补充。')
 
 const conversationContracts = source('packages/contracts/src/conversations.ts')

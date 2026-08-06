@@ -146,3 +146,27 @@ tools/lcos-agent/README.md        同步工具清单
 1. 无条件删 20 个死注册（零风险）。
 2. 砍 15 个活跃重复工具（45 → 30），其中 cancel_lcos_run 是否保留由开发定。
 3. 5 个待定工具保留一版观察，下次收口再评估。
+
+## 七、开发评审后执行记录（2026-08-06）
+
+开发返回 `LCOS_MCP_AGENT_TOOL_SURFACE_REVIEW_20260806.md`，结论：
+“通过瘦身方向，不通过 45→30 原表直接落地”。按评审“第一批可立即做”
+已执行：
+
+```text
+✅ 删除 20 个白名单外死注册（注册 + switch case 全清）
+✅ 删除 9 个内部/运维/大 payload 活跃工具：
+   get_lcos_project（全量图）/ move_lcos_view / list_lcos_runs /
+   sync_lcos_run / recover_lcos_run / finalize_lcos_run /
+   list_lcos_connectors / semantic index status+build
+✅ 新增紧凑 get_lcos_project_summary（摘要 + workspaces/views 清单，无全量图）
+✅ 按评审保留 cancel_lcos_run 与紧凑 get_lcos_run
+✅ Agent 面 45 → 37；capabilities.json / 政策文档 / E2E / 校验脚本同步
+✅ MCP E2E（37/8 全链）、架构测试 70/70、gatef-plus / closeout /
+   capabilities 校验全绿
+```
+
+未执行（评审第二/三批，合同级改动，待另行安排）：
+resolve/bind 合并、Conversation section 读取链合并、Preview 有界契约、
+Resource 公共 Handle 切 ArtifactId、Review 人类授权、ActiveContext
+session-scoped、watch 下沉 Host、Ingestion Profile。

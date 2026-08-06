@@ -19,7 +19,7 @@ const checks = [
     files: [
       ['packages/contracts/src/index.ts', ['CommandDraftV1']],
       ['apps/local-core/src/metadata-repository.ts', ['command_drafts', 'saveCommandDraft', 'getCommandDraft']],
-      ['apps/local-core/src/server.ts', ['command-drafts']],
+      ['apps/local-core/src/routes/projects.ts', ['command-drafts']],
       ['apps/web/src/runtime/localCoreClient.ts', ['saveCommandDraft', 'getCommandDraft']],
       ['apps/web/src/App.tsx', ['saveCommandDraft', 'deleteCommandDraft']],
     ],
@@ -31,7 +31,7 @@ const checks = [
       ['packages/contracts/src/index.ts', ['ActiveContextV2', 'workspaceId', 'selectionOrder', 'viewport']],
       ['apps/local-core/src/metadata-repository.ts', ['active_contexts', 'saveActiveContext']],
       ['apps/local-core/src/active-context-store.ts', ['expectedVersion', 'workspaceId', 'relations', 'nodes']],
-      ['apps/local-core/src/server.ts', ['afterVersion', 'ActiveContextConflictError']],
+      ['apps/local-core/src/routes/canvas.ts', ['afterVersion', 'ActiveContextConflictError']],
     ],
   },
   {
@@ -40,7 +40,7 @@ const checks = [
     files: [
       ['packages/contracts/src/index.ts', ['AgentExecutionPlanV1']],
       ['apps/local-core/src/runtime-proposal-service.ts', ['validateAgentExecutionPlan']],
-      ['apps/local-core/src/server.ts', ['validateAgentPlanMatch']],
+      ['apps/local-core/src/routes/runs.ts', ['validateAgentPlanMatch']],
       ['tools/lcos-agent/cli.mjs', ['run validate-plan']],
       ['tools/lcos-agent/mcp-server.mjs', ['validate_lcos_agent_plan']],
       ['packages/skills/lcos-project-context/SKILL.md', ['Agent Plan', 'validate_lcos_agent_plan']],
@@ -52,8 +52,8 @@ const checks = [
     files: [
       ['packages/contracts/src/index.ts', ['ProviderSessionBindingV1']],
       ['apps/local-core/src/metadata-repository.ts', ['provider_session_bindings', 'saveProviderSessionBinding']],
-      ['apps/local-core/src/server.ts', ['provider-sessions']],
-      ['tools/codex-orchestrator/watch.ps1', ['provider-sessions', 'externalSessionId']],
+      ['apps/local-core/src/routes/projects.ts', ['provider-sessions']],
+      ['tools/codex-orchestrator/watch.mjs', ['provider-sessions', 'externalSessionId']],
     ],
   },
   {
@@ -61,7 +61,7 @@ const checks = [
     description: 'Explicit reversible Agent context command uses CAS',
     files: [
       ['tools/lcos-agent/mcp-server.mjs', ['apply_lcos_context_command', 'expectedVersion']],
-      ['packages/skills/lcos-project-context/SKILL.md', ['apply_lcos_context_command']],
+      ['packages/skills/lcos-project-context/references/context-changes.md', ['apply_lcos_context_command']],
     ],
   },
   {
@@ -70,7 +70,7 @@ const checks = [
     files: [
       ['apps/web/src/runtime/localCoreClient.ts', ['cancelRuntimeRun']],
       ['apps/web/src/features/workrail/WorkRail.tsx', ['撤回任务', 'onCancelRun']],
-      ['apps/local-core/src/server.ts', ['/cancel']],
+      ['apps/local-core/src/routes/runs.ts', ['/cancel']],
       ['apps/local-core/src/runtime-result-ingestion.ts', ['LATE_RESULT_AFTER_CANCEL']],
     ],
   },

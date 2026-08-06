@@ -174,11 +174,11 @@ try {
   const listedProjects = await agent.client.call('tools/call', { name: 'list_lcos_projects', arguments: {} })
   const project = listedProjects.structuredContent?.[0] ?? listedProjects.structuredContent?.projects?.[0]
   if (!project?.id) throw new Error(`Agent MCP did not list the sample Project: ${JSON.stringify(listedProjects)}`)
-  const projectGraphCall = await agent.client.call('tools/call', { name: 'get_lcos_project', arguments: { projectId: project.id } })
-  const projectGraph = projectGraphCall.structuredContent
-  const views = projectGraph?.artifactViews ?? []
+  const projectSummaryCall = await agent.client.call('tools/call', { name: 'get_lcos_project_summary', arguments: { projectId: project.id } })
+  const projectSummary = projectSummaryCall.structuredContent
+  const views = projectSummary?.views ?? []
   if (views.length < 2) throw new Error('Sample Project does not have enough views for Canvas action E2E.')
-  const workspaceId = projectGraph.workspaces?.[0]?.id
+  const workspaceId = projectSummary?.workspaces?.[0]?.id
   const sourceViewId = String(views[0].id)
   const targetViewId = String(views[1].id)
   const selected = await agent.client.call('tools/call', { name: 'select_lcos_views', arguments: { projectId: project.id, ...(workspaceId ? { workspaceId } : {}), viewIds: [sourceViewId, targetViewId] } })

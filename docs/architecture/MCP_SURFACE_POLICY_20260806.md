@@ -14,8 +14,8 @@ CLI 能做的，MCP 不做；MCP 只保留 CLI 做不到的 Agent 会话原生�
 
 ## 当前暴露面
 
-- Agent（local-creative-os）：45 个工具（`ACTIVE_AGENT_TOOL_NAMES` 白名单），
-  按域：project 4 / canvas 6 / context 5 / run 14 / resource 5 / conversation 11。
+- Agent（local-creative-os）：37 个工具（`ACTIVE_AGENT_TOOL_NAMES` 白名单），
+  按域：project 4 / canvas 5 / context 5 / run 10 / resource 4 / conversation 9。
 - Executor（lcos-executor）：8 个工具，物理独立文件
   `tools/lcos-agent/executor-tools.mjs`（claim/start/heartbeat/fail/get-task/
   get-context/request-input/submit）。
@@ -37,11 +37,27 @@ list_lcos_pending_runs（list_lcos_runs 覆盖）
 executor 旧平行面 claim/start/cancel/task-by-run（并入 run 命名空间）
 ```
 
+## 2026-08-06 第二批（按开发评审 MCP_AGENT_TOOL_SURFACE_REVIEW 执行）
+
+```text
+get_lcos_project（全量 Graph → get_lcos_project_summary 紧凑摘要）
+move_lcos_view（纯 Canvas 排版，默认模型面不再暴露）
+run list / sync / recover / finalize（运维/内部，CLI 或 Core Reconciler）
+list_lcos_connectors（配置管理走 UI/CLI）
+conversation semantic index status / build（CLI/后台自动构建）
+```
+
+同时按评审保留：cancel_lcos_run（用户语义“停止任务”）与紧凑版
+get_lcos_run（状态/等待输入/失败原因）。Agent 面 45 → 37。
+
 ## 收益（schema token/轮）
 
 - Agent：~5.6K → ~3.8K（65 → 45）
 - Executor：~0.7K → ~0.5K（12 → 8）
 - 每轮固定上下文约省 2K token
+
+第二批（45 → 37）预计每轮再省约 0.4–0.6K token，实际收益以
+`tools/list` 序列化字节与真实输入 token 测量为准（评审 §8.3）。
 
 ## 新增工具准入
 

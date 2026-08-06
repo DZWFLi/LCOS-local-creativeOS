@@ -14,29 +14,26 @@ const EXECUTOR_TOOL_NAMES = executorToolNames;
 // CLI-first 原则：CLI 能做的（批处理/导入/导出/维护/会话绑定/资源枚举）不进 MCP；
 // 这里只保留 Agent 会话原生能力（画布上下文、Run 生命周期、提案、对话检索、资源读取/匹配）。
 const ACTIVE_AGENT_TOOL_NAMES = new Set([
-  "bind_lcos_project", "list_lcos_projects", "get_lcos_project", "open_lcos_preview",
+  "bind_lcos_project", "list_lcos_projects", "get_lcos_project_summary", "open_lcos_preview",
   "get_lcos_active_context", "watch_lcos_active_context", "select_lcos_views", "focus_lcos_views",
-  "move_lcos_view", "create_lcos_relation",
+  "create_lcos_relation",
   "propose_lcos_context_change", "accept_lcos_context_proposal", "reject_lcos_context_proposal",
   "list_lcos_context_proposals", "apply_lcos_context_command",
   "create_lcos_run", "validate_lcos_agent_plan", "dispatch_lcos_run", "cancel_lcos_run",
-  "get_lcos_run", "list_lcos_runs", "get_lcos_run_input_request", "answer_lcos_run_input",
-  "sync_lcos_run", "recover_lcos_run", "finalize_lcos_run", "accept_lcos_return",
+  "get_lcos_run", "get_lcos_run_input_request", "answer_lcos_run_input",
+  "accept_lcos_return",
   "reject_lcos_return", "retry_lcos_return",
-  "lcos_resource_read", "lcos_resource_match", "list_lcos_connectors",
-  "scan_lcos_obsidian_vault", "import_lcos_obsidian_notes",
+  "lcos_resource_read", "lcos_resource_match", "scan_lcos_obsidian_vault", "import_lcos_obsidian_notes",
   "import_lcos_conversation", "list_lcos_conversations", "get_lcos_conversation",
   "search_lcos_conversations", "read_lcos_conversation_messages", "list_lcos_conversation_sections",
   "read_lcos_conversation_section", "annotate_lcos_conversation_section",
-  "pin_lcos_conversation_message", "get_lcos_conversation_semantic_index",
-  "build_lcos_conversation_semantic_index",
-]);
+  "pin_lcos_conversation_message", ]);
 const DOMAIN_AGENT_DEFAULT = new Set(["project", "canvas", "context", "run", "provider", "resource", "conversation"]);
 const REQUESTED_PACKAGES = (process.env.LCOS_MCP_PACKAGES ?? "").split(",").map((item) => item.trim()).filter(Boolean);
 
 /** 工具所属域：project / canvas / context / run / executor / provider / resource / conversation */
 export function domainOf(toolName) {
-  if (/^(open_lcos|bind_lcos_project|list_lcos_projects|get_lcos_project|open_lcos_preview)$/.test(toolName)) return "project"
+  if (/^(open_lcos|bind_lcos_project|list_lcos_projects|get_lcos_project|get_lcos_project_summary|open_lcos_preview)$/.test(toolName)) return "project"
   if (/^(get_lcos_active_context|watch_lcos_active_context|focus_lcos_views|select_lcos_views|set_lcos_viewport|move_lcos_view|get_lcos_canvas_observation|create_lcos_relation|.*workspace_member)/.test(toolName)) return "canvas"
   if (/^(propose_lcos_context_change|apply_lcos_context_command|accept_lcos_context_proposal|reject_lcos_context_proposal|list_lcos_context_proposals|build_lcos_context_manifest)/.test(toolName)) return "context"
   if (/^(create_lcos_run|propose_lcos_run|validate_lcos_agent_plan|dispatch_lcos_run|cancel_lcos_run|get_lcos_run|list_lcos_runs|list_lcos_pending_runs|get_lcos_run_input_request|answer_lcos_run_input|sync_lcos_run|recover_lcos_run|finalize_lcos_run|accept_lcos_return|reject_lcos_return|retry_lcos_return)/.test(toolName)) return "run"
@@ -86,17 +83,12 @@ const activeContextMutation = (active, workspaceId, patch = {}) => ({
   ...patch,
 });
 const tools = [
-  tool("open_lcos", "Return the loopback URL for the LCOS visual project canvas.", {
-    projectId: { type: "string" },
-  }),
   tool("bind_lcos_project", "Bind this Codex session to an LCOS Project + optional Workspace and return the current CanvasContextSnapshot.", {
     projectId: { type: "string" },
     workspaceId: { type: "string" },
   }, ["projectId"]),
   tool("list_lcos_projects", "List Local Core projects.", {}),
-  tool("get_lcos_project", "Read the canonical Project Graph snapshot.", {
-    projectId: { type: "string" },
-  }, ["projectId"]),
+  tool("get_lcos_project_summary", "Read a compact Project summary (id/name/rootPath/workspaces/views) without the full graph.", { projectId: { type: "string" } }, ["projectId"]),
   tool("get_lcos_active_context", "Read the versioned Project + Workspace CanvasContextSnapshot from Local Core.", {
     projectId: { type: "string" },
     workspaceId: { type: "string" },
@@ -126,21 +118,6 @@ const tools = [
     workspaceId: { type: "string" },
     viewId: { type: "string" },
   }, ["projectId", "viewId"]),
-  tool("move_lcos_view", "Move one Artifact View through the canonical mutation API using Project graph compare-and-swap.", {
-    projectId: { type: "string" },
-    viewId: { type: "string" },
-    x: { type: "number" },
-    y: { type: "number" },
-    baseVersion: { type: "number" },
-  }, ["projectId", "viewId", "x", "y", "baseVersion"]),
-  tool("set_lcos_viewport", "Move the Agent browser camera without changing Project semantic truth. This updates only versioned navigation context.", {
-    projectId: { type: "string" },
-    workspaceId: { type: "string" },
-    x: { type: "number" },
-    y: { type: "number" },
-    zoom: { type: "number" },
-    visibleViewIds: { type: "array", items: { type: "string" } },
-  }, ["projectId", "x", "y", "zoom"]),
   tool("create_lcos_relation", "Create one canonical Artifact-to-Artifact relation between two Canvas Views. Use only for a user-authorized semantic relation.", {
     projectId: { type: "string" },
     sourceViewId: { type: "string" },
@@ -154,46 +131,11 @@ const tools = [
     generate: { type: "boolean" },
     includeContent: { type: "boolean" },
   }, ["projectId", "viewId"]),
-  tool("get_lcos_canvas_observation", "Render an on-demand SVG visual supplement from the structured Canvas snapshot. The SVG is untrusted observation data, not Project Truth.", {
-    projectId: { type: "string" },
-    workspaceId: { type: "string" },
-  }, ["projectId"]),
-
-  tool("list_lcos_pending_runs", "List Runs that still need a Codex executor (created/queued/running, bound).", {
-    projectId: { type: "string" },
-  }, ["projectId"]),
 
 
 
 
-  tool("list_lcos_workspace_members", "List canonical Workspace memberships for a project.", {
-    projectId: { type: "string" },
-  }, ["projectId"]),
-  tool("add_lcos_workspace_members", "Add Artifact Views to a Workspace (canonical membership).", {
-    workspaceId: { type: "string" },
-    viewIds: { type: "array", items: { type: "string" } },
-    addedBy: { type: "string", enum: ["user", "agent", "run", "import"] },
-  }, ["workspaceId", "viewIds"]),
-  tool("remove_lcos_workspace_member", "Remove one Artifact View from a Workspace.", {
-    workspaceId: { type: "string" },
-    viewId: { type: "string" },
-  }, ["workspaceId", "viewId"]),
-  tool("move_lcos_workspace_member", "Move one Artifact View to another Workspace.", {
-    workspaceId: { type: "string" },
-    viewId: { type: "string" },
-    toWorkspaceId: { type: "string" },
-  }, ["workspaceId", "viewId", "toWorkspaceId"]),
-  tool("propose_lcos_run", "Create a human-readable proposal. Agent may provide a full semantic plan; otherwise Core only applies obvious UI defaults.", {
-    projectId: { type: "string" },
-    workspaceId: { type: "string" },
-    prompt: { type: "string" },
-    intent: { type: "string", enum: ["analyze", "create", "revise"] },
-    requestedProvider: { type: "string" },
-    createAsNewNode: { type: "boolean" },
-    contextItems: { type: "array", items: { type: "object" } },
-    editTargets: { type: "array", items: { type: "object" } },
-    resultPolicy: { type: "object" },
-  }, ["projectId", "prompt"]),
+
   tool("validate_lcos_agent_plan", "Validate a structured Agent Plan without reinterpreting the user's creative intent.", {
     projectId: { type: "string" },
     plan: { type: "object" },
@@ -219,21 +161,6 @@ const tools = [
     projectId: { type: "string" },
     workspaceId: { type: "string" },
   }, ["projectId"]),
-  tool("get_lcos_provider_session", "Read the preferred provider session binding for a project.", {
-    projectId: { type: "string" },
-    provider: { type: "string", enum: ["codex", "workbuddy"] },
-  }, ["projectId", "provider"]),
-  tool("set_lcos_provider_session", "Register or refresh a project provider session binding.", {
-    projectId: { type: "string" },
-    provider: { type: "string", enum: ["codex", "workbuddy"] },
-    externalSessionId: { type: "string" },
-    origin: { type: "string", enum: ["manual", "watchdog"] },
-    lastRunId: { type: "string" },
-  }, ["projectId", "provider", "externalSessionId"]),
-  tool("clear_lcos_provider_session", "Clear a stale/closed provider session binding.", {
-    projectId: { type: "string" },
-    provider: { type: "string", enum: ["codex", "workbuddy"] },
-  }, ["projectId", "provider"]),
   tool("get_lcos_run_input_request", "Read the current unresolved question for one waiting LCOS Run.", {
     runId: { type: "string" },
   }, ["runId"]),
@@ -244,21 +171,7 @@ const tools = [
     selectedOptions: { type: "array", items: { type: "string" } },
   }, ["runId", "requestId"]),
 
-  tool("list_lcos_runtime_providers", "Read Provider capability and availability before sending.", {}, []),
-  tool("build_lcos_context_manifest", "Freeze an immutable ContextManifest from Project Truth.", {
-    projectId: { type: "string" },
-    workspaceId: { type: "string" },
-    targetArtifactId: { type: "string" },
-    requestedOutput: { type: "string" },
-  }, ["projectId"]),
-  tool("list_lcos_runs", "List canonical Runs and pending returns for a project.", {
-    projectId: { type: "string" },
-    limit: { type: "integer", minimum: 1, maximum: 100 },
-  }, ["projectId"]),
   tool("get_lcos_run", "Read one canonical Run review projection.", {
-    runId: { type: "string" },
-  }, ["runId"]),
-  tool("sync_lcos_run", "Synchronize one Run with its bound provider task.", {
     runId: { type: "string" },
   }, ["runId"]),
   tool("create_lcos_run", "Create a canonical Run with an explicit output intent (create/revise/analyze).", {
@@ -271,17 +184,9 @@ const tools = [
   tool("dispatch_lcos_run", "Dispatch a canonical Run to the bound Bridge provider.", {
     runId: { type: "string" },
   }, ["runId"]),
-  tool("recover_lcos_run", "Recover a Run whose dispatch outcome is uncertain.", {
-    runId: { type: "string" },
-  }, ["runId"]),
   tool("cancel_lcos_run", "Cancel one canonical Run and its bound Bridge task.", {
     runId: { type: "string" },
   }, ["runId"]),
-  tool("finalize_lcos_run", "Finalize a reviewed Run with completed or retrying decision.", {
-    runId: { type: "string" },
-    decision: { type: "string", enum: ["completed", "retrying"] },
-    comment: { type: "string" },
-  }, ["runId", "decision"]),
   tool("accept_lcos_return", "Accept one pending Artifact Return against its expected base revision.", {
     returnId: { type: "string" },
     expectedBaseRevisionId: { type: "string" },
@@ -299,7 +204,6 @@ const tools = [
 
 
 
-  tool("list_lcos_connectors", "List installed LCOS resource connectors and their read/write capabilities.", {}),
   tool("scan_lcos_obsidian_vault", "Open the native folder picker and read-only scan an Obsidian Vault. Call only after the user explicitly asks to connect or import a Vault.", {}),
   tool("import_lcos_obsidian_notes", "Copy selected Markdown notes from a prior read-only Obsidian scan into one LCOS Project. The source Vault is never modified.", {
     projectId: { type: "string" },
@@ -316,38 +220,14 @@ const tools = [
     workspaceId: { type: "string" },
     title: { type: "string" },
   }, ["projectId", "filePath", "scopeId"]),
-  tool("import_lcos_manual_conversation", "Import a manually supplied conversation timeline. Entries stay linear and are indexed without model calls.", {
-    projectId: { type: "string" },
-    scopeId: { type: "string" },
-    workspaceId: { type: "string" },
-    title: { type: "string" },
-    entries: { type: "array", items: { type: "object" } },
-  }, ["projectId", "scopeId", "entries"]),
-  tool("export_lcos_conversation", "Export one conversation projection to an explicit local JSON file. Raw messages are included only when requested.", {
-    projectId: { type: "string" },
-    conversationId: { type: "string" },
-    outputPath: { type: "string" },
-    includeMessages: { type: "boolean" },
-  }, ["projectId", "conversationId", "outputPath"]),
   tool("list_lcos_conversations", "List imported conversation timelines for one Project.", { projectId: { type: "string" } }, ["projectId"]),
   tool("get_lcos_conversation", "Read one conversation outline, pinned decisions and recent messages.", { projectId: { type: "string" }, conversationId: { type: "string" } }, ["projectId", "conversationId"]),
   tool("search_lcos_conversations", "Search raw conversation messages with FTS5 and optional local semantic index.", { projectId: { type: "string" }, query: { type: "string" }, semantic: { type: "boolean" }, limit: { type: "number" } }, ["projectId", "query"]),
   tool("read_lcos_conversation_messages", "Read a page of raw timeline messages.", { projectId: { type: "string" }, conversationId: { type: "string" }, offset: { type: "number" }, limit: { type: "number" }, pinnedOnly: { type: "boolean" } }, ["projectId", "conversationId"]),
   tool("list_lcos_conversation_sections", "List the zero-token rule-derived sections for one conversation.", { projectId: { type: "string" }, conversationId: { type: "string" } }, ["projectId", "conversationId"]),
-  tool("refresh_lcos_conversation_sections", "Rebuild only unlocked rule-derived sections. User-locked sections and titles are preserved.", { projectId: { type: "string" }, conversationId: { type: "string" } }, ["projectId", "conversationId"]),
-  tool("rename_lcos_conversation_section", "Rename and lock one conversation section so later rule refreshes do not overwrite it.", { projectId: { type: "string" }, conversationId: { type: "string" }, sectionId: { type: "string" }, title: { type: "string" }, lockedByUser: { type: "boolean" } }, ["projectId", "conversationId", "sectionId", "title"]),
   tool("read_lcos_conversation_section", "Read a section and its exact source messages for on-demand annotation.", { projectId: { type: "string" }, conversationId: { type: "string" }, sectionId: { type: "string" } }, ["projectId", "conversationId", "sectionId"]),
   tool("annotate_lcos_conversation_section", "Store a small source-hash-guarded section annotation.", { projectId: { type: "string" }, conversationId: { type: "string" }, sectionId: { type: "string" }, sourceHash: { type: "string" }, title: { type: "string" }, decisions: { type: "array", items: { type: "string" } }, todos: { type: "array", items: { type: "string" } }, involvedFiles: { type: "array", items: { type: "string" } } }, ["projectId", "conversationId", "sectionId", "sourceHash", "title"]),
   tool("pin_lcos_conversation_message", "Promote one raw message to a high-signal Decision node on Canvas.", { projectId: { type: "string" }, conversationId: { type: "string" }, messageId: { type: "string" }, scopeId: { type: "string" }, workspaceId: { type: "string" }, title: { type: "string" }, summary: { type: "string" }, x: { type: "number" }, y: { type: "number" } }, ["projectId", "conversationId", "messageId", "scopeId"]),
-  tool("get_lcos_conversation_semantic_index", "Read Ollama/sqlite-vec semantic index status.", { projectId: { type: "string" } }, ["projectId"]),
-  tool("build_lcos_conversation_semantic_index", "Build or refresh the optional local semantic index without blocking raw import.", { projectId: { type: "string" }, model: { type: "string" }, sessionId: { type: "string" }, force: { type: "boolean" }, batchSize: { type: "number" } }, ["projectId"]),
-  tool("lcos_resource_list", "List imported resources and their understanding status.", {
-    projectId: { type: "string" },
-  }, ["projectId"]),
-  tool("lcos_resource_describe", "Read one resource descriptor (system understanding of the resource).", {
-    projectId: { type: "string" },
-    resourceId: { type: "string" },
-  }, ["projectId", "resourceId"]),
   tool("lcos_resource_read", "Read resource content within safe bounds (never arbitrary host paths).", {
     projectId: { type: "string" },
     resourceId: { type: "string" },
@@ -386,15 +266,24 @@ if (process.env.LCOS_MCP_NO_SERVE !== "1") {
 async function invokeTool(requestedTool, args) {
   let value;
   switch (requestedTool) {
-    case "open_lcos":
-      value = { url: `http://127.0.0.1:5173/?agent=1${args.projectId ? `&project=${encodeURIComponent(args.projectId)}` : ""}` };
-      break;
     case "list_lcos_projects":
       value = await coreRequest("/projects");
       break;
-    case "get_lcos_project":
-      value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/graph`);
+    case "get_lcos_project_summary": {
+      const projectId = required(args.projectId, "projectId");
+      const graph = await coreRequest(`/projects/${encodeURIComponent(projectId)}/graph`);
+      value = {
+        project: { id: String(graph.project?.id ?? ''), name: graph.project?.name ?? '', rootPath: graph.project?.rootPath ?? '' },
+        workspaces: (graph.workspaces ?? []).map((ws) => ({ id: String(ws.id) })),
+        views: (graph.artifactViews ?? []).map((view) => ({
+          id: String(view.id),
+          title: view.title ?? '',
+          artifactId: String(view.artifactId ?? ''),
+          ...(view.revisionId === undefined ? {} : { revisionId: String(view.revisionId) }),
+        })),
+      };
       break;
+    }
     case "get_lcos_active_context":
       value = await coreRequest(activeContextPath(required(args.projectId, "projectId"), args.workspaceId));
       break;
@@ -473,34 +362,6 @@ async function invokeTool(requestedTool, args) {
       });
       break;
     }
-    case "move_lcos_view":
-      value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/graph`, {
-        method: "POST",
-        ...jsonBody({
-          baseVersion: Number(args.baseVersion),
-          ops: [{
-            type: "move_artifact_view",
-            viewId: required(args.viewId, "viewId"),
-            x: Number(args.x),
-            y: Number(args.y),
-          }],
-        }),
-      });
-      break;
-    case "set_lcos_viewport": {
-      const projectId = required(args.projectId, "projectId");
-      const active = await coreRequest(activeContextPath(projectId, args.workspaceId));
-      const zoom = Number(args.zoom);
-      if (!Number.isFinite(zoom) || zoom < 0.05 || zoom > 8) throw new Error("VIEWPORT_ZOOM_OUT_OF_RANGE");
-      value = await coreRequest(activeContextPath(projectId, args.workspaceId), {
-        method: "PUT",
-        ...jsonBody(activeContextMutation(active, args.workspaceId, {
-          viewport: { x: Number(args.x), y: Number(args.y), zoom },
-          visibleViewIds: Array.isArray(args.visibleViewIds) ? args.visibleViewIds : [],
-        })),
-      });
-      break;
-    }
     case "create_lcos_relation": {
       const projectId = required(args.projectId, "projectId");
       const sourceViewId = required(args.sourceViewId, "sourceViewId");
@@ -564,60 +425,6 @@ async function invokeTool(requestedTool, args) {
       };
       break;
     }
-    case "get_lcos_canvas_observation": {
-      const projectId = required(args.projectId, "projectId");
-      const query = new URLSearchParams();
-      if (args.workspaceId) query.set("workspaceId", args.workspaceId);
-      value = await coreRequest(`/projects/${encodeURIComponent(projectId)}/canvas-observation${query.size ? `?${query}` : ""}`);
-      break;
-    }
-    case "list_lcos_pending_runs":
-      {
-        const projectId = required(args.projectId, "projectId");
-        const reviews = await coreRequest(`/projects/${encodeURIComponent(projectId)}/runs?limit=100`);
-        value = reviews.filter((item) =>
-          ["created", "queued", "running"].includes(item.run?.status)
-          && item.dispatch?.status === "bound");
-      }
-      break;
-    case "list_lcos_workspace_members":
-      value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/workspace-memberships`);
-      break;
-    case "add_lcos_workspace_members":
-      value = await coreRequest(`/workspaces/${encodeURIComponent(required(args.workspaceId, "workspaceId"))}/members`, {
-        method: "POST",
-        ...jsonBody({
-          viewIds: args.viewIds,
-          ...(args.addedBy ? { addedBy: args.addedBy } : {}),
-        }),
-      });
-      break;
-    case "remove_lcos_workspace_member":
-      value = await coreRequest(`/workspaces/${encodeURIComponent(required(args.workspaceId, "workspaceId"))}/members/${encodeURIComponent(required(args.viewId, "viewId"))}`, {
-        method: "DELETE",
-      });
-      break;
-    case "move_lcos_workspace_member":
-      value = await coreRequest(`/workspaces/${encodeURIComponent(required(args.workspaceId, "workspaceId"))}/members/move`, {
-        method: "POST",
-        ...jsonBody({ viewId: required(args.viewId, "viewId"), toWorkspaceId: required(args.toWorkspaceId, "toWorkspaceId") }),
-      });
-      break;
-    case "propose_lcos_run":
-      value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/runs/propose`, {
-        method: "POST",
-        ...jsonBody({
-          ...(args.workspaceId ? { workspaceId: args.workspaceId } : {}),
-          prompt: required(args.prompt, "prompt"),
-          ...(args.intent ? { intent: args.intent, decisionSource: "agent" } : {}),
-          requestedProvider: args.requestedProvider || "auto",
-          ...(typeof args.createAsNewNode === "boolean" ? { createAsNewNode: args.createAsNewNode } : {}),
-          contextItems: args.contextItems || [],
-          editTargets: args.editTargets || [],
-          ...(args.resultPolicy ? { resultPolicy: args.resultPolicy } : {}),
-        }),
-      });
-      break;
     case "validate_lcos_agent_plan":
       value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/runs/validate-plan`, {
         method: "POST",
@@ -652,25 +459,6 @@ async function invokeTool(requestedTool, args) {
     case "list_lcos_context_proposals":
       value = await coreRequest(contextProposalsPath(required(args.projectId, "projectId"), args.workspaceId));
       break;
-    case "get_lcos_provider_session":
-      value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/provider-sessions/${encodeURIComponent(required(args.provider, "provider"))}`);
-      break;
-    case "set_lcos_provider_session":
-      value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/provider-sessions/${encodeURIComponent(required(args.provider, "provider"))}`, {
-        method: "PUT",
-        ...jsonBody({
-          externalSessionId: required(args.externalSessionId, "externalSessionId"),
-          origin: args.origin || "manual",
-          status: "active",
-          lastSeenAt: new Date().toISOString(),
-          ...(args.lastRunId ? { lastRunId: args.lastRunId } : {}),
-          failureCount: 0,
-        }),
-      });
-      break;
-    case "clear_lcos_provider_session":
-      value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/provider-sessions/${encodeURIComponent(required(args.provider, "provider"))}`, { method: "DELETE" });
-      break;
     case "get_lcos_run_input_request":
       value = await coreRequest(`/runs/${encodeURIComponent(required(args.runId, "runId"))}/input-request`);
       break;
@@ -684,31 +472,8 @@ async function invokeTool(requestedTool, args) {
         }),
       });
       break;
-    case "list_lcos_runtime_providers":
-      value = await coreRequest("/runtime/providers");
-      break;
-    case "build_lcos_context_manifest":
-      {
-        const projectId = required(args.projectId, "projectId");
-        const active = await coreRequest(activeContextPath(projectId, args.workspaceId));
-        value = await coreRequest(`/projects/${encodeURIComponent(projectId)}/context-manifests/v0`, {
-        method: "POST",
-        ...jsonBody({
-          ...(args.targetArtifactId ? { targetArtifactId: args.targetArtifactId } : {}),
-          contextArtifactIds: (active.contextArtifacts || active.selectedArtifacts || []).map((item) => item.artifactId),
-          ...(args.requestedOutput ? { requestedOutput: args.requestedOutput } : {}),
-        }),
-      });
-      }
-      break;
-    case "list_lcos_runs":
-      value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/runs?limit=${encodeURIComponent(args.limit || 20)}`);
-      break;
     case "get_lcos_run":
       value = await coreRequest(`/runs/${encodeURIComponent(required(args.runId, "runId"))}/review`);
-      break;
-    case "sync_lcos_run":
-      value = await coreRequest(`/runs/${encodeURIComponent(required(args.runId, "runId"))}/sync`, { method: "POST", ...jsonBody({}) });
       break;
     case "create_lcos_run":
       value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/runs`, {
@@ -729,26 +494,10 @@ async function invokeTool(requestedTool, args) {
         timeoutMs: 60_000,
       });
       break;
-    case "recover_lcos_run":
-      value = await coreRequest(`/runs/${encodeURIComponent(required(args.runId, "runId"))}/recover`, {
-        method: "POST",
-        ...jsonBody({}),
-        timeoutMs: 60_000,
-      });
-      break;
     case "cancel_lcos_run":
       value = await coreRequest(`/runs/${encodeURIComponent(required(args.runId, "runId"))}/cancel`, {
         method: "POST",
         ...jsonBody({}),
-      });
-      break;
-    case "finalize_lcos_run":
-      value = await coreRequest(`/runs/${encodeURIComponent(required(args.runId, "runId"))}/finalize`, {
-        method: "POST",
-        ...jsonBody({
-          decision: required(args.decision, "decision"),
-          ...(args.comment ? { comment: args.comment } : {}),
-        }),
       });
       break;
     case "accept_lcos_return":
@@ -768,9 +517,6 @@ async function invokeTool(requestedTool, args) {
         method: "POST",
         ...jsonBody(args.instruction ? { instruction: args.instruction } : {}),
       });
-      break;
-    case "list_lcos_connectors":
-      value = await coreRequest("/connectors");
       break;
     case "scan_lcos_obsidian_vault":
       value = await coreRequest("/connectors/obsidian/select-and-scan", { method: "POST", ...jsonBody({}) , timeoutMs: 120_000 });
@@ -799,27 +545,6 @@ async function invokeTool(requestedTool, args) {
         ...(args.title ? { title: String(args.title) } : {}),
       });
       break;
-    case "import_lcos_manual_conversation":
-      value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/conversations/import-manual`, {
-        method: "POST",
-        ...jsonBody({
-          scopeId: required(args.scopeId, "scopeId"),
-          ...(args.workspaceId ? { workspaceId: String(args.workspaceId) } : {}),
-          ...(args.title ? { title: String(args.title) } : {}),
-          entries: Array.isArray(args.entries) ? args.entries : [],
-        }),
-        timeoutMs: 600_000,
-      });
-      break;
-    case "export_lcos_conversation": {
-      const projectId = required(args.projectId, "projectId");
-      const conversationId = required(args.conversationId, "conversationId");
-      const outputPath = resolve(required(args.outputPath, "outputPath"));
-      const exported = await coreRequest(`/projects/${encodeURIComponent(projectId)}/conversations/${encodeURIComponent(conversationId)}/export?includeMessages=${args.includeMessages === false ? "false" : "true"}`, { timeoutMs: 120_000 });
-      await writeFile(outputPath, `${JSON.stringify(exported, null, 2)}\n`, { encoding: "utf8", flag: "wx" });
-      value = { outputPath, conversationId, rawTimelineIncluded: args.includeMessages !== false };
-      break;
-    }
     case "list_lcos_conversations":
       value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/conversations`);
       break;
@@ -844,15 +569,6 @@ async function invokeTool(requestedTool, args) {
     case "list_lcos_conversation_sections":
       value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/conversations/${encodeURIComponent(required(args.conversationId, "conversationId"))}/sections`);
       break;
-    case "refresh_lcos_conversation_sections":
-      value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/conversations/${encodeURIComponent(required(args.conversationId, "conversationId"))}/sections/refresh`, { method: "POST", ...jsonBody({}) });
-      break;
-    case "rename_lcos_conversation_section":
-      value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/conversations/${encodeURIComponent(required(args.conversationId, "conversationId"))}/sections/${encodeURIComponent(required(args.sectionId, "sectionId"))}`, {
-        method: "PATCH",
-        ...jsonBody({ title: required(args.title, "title"), lockedByUser: args.lockedByUser !== false }),
-      });
-      break;
     case "read_lcos_conversation_section":
       value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/conversations/${encodeURIComponent(required(args.conversationId, "conversationId"))}/sections/${encodeURIComponent(required(args.sectionId, "sectionId"))}/source`);
       break;
@@ -861,18 +577,6 @@ async function invokeTool(requestedTool, args) {
       break;
     case "pin_lcos_conversation_message":
       value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/conversations/${encodeURIComponent(required(args.conversationId, "conversationId"))}/messages/${encodeURIComponent(required(args.messageId, "messageId"))}/pin`, { method: "POST", ...jsonBody({ scopeId: required(args.scopeId, "scopeId"), ...(args.workspaceId ? { workspaceId: args.workspaceId } : {}), ...(args.title ? { title: args.title } : {}), ...(args.summary ? { summary: args.summary } : {}), ...(Number.isFinite(args.x) ? { x: args.x } : {}), ...(Number.isFinite(args.y) ? { y: args.y } : {}) }) });
-      break;
-    case "get_lcos_conversation_semantic_index":
-      value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/conversations/semantic-index`);
-      break;
-    case "build_lcos_conversation_semantic_index":
-      value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/conversations/semantic-index`, { method: "POST", ...jsonBody({ ...(args.model ? { model: args.model } : {}), ...(args.sessionId ? { sessionId: args.sessionId } : {}), ...(typeof args.force === "boolean" ? { force: args.force } : {}), ...(args.batchSize !== undefined ? { batchSize: args.batchSize } : {}) }), timeoutMs: 300_000 });
-      break;
-    case "lcos_resource_list":
-      value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/resources`);
-      break;
-    case "lcos_resource_describe":
-      value = await coreRequest(`/projects/${encodeURIComponent(required(args.projectId, "projectId"))}/resources/${encodeURIComponent(required(args.resourceId, "resourceId"))}/descriptor`);
       break;
     case "lcos_resource_read":
       {
