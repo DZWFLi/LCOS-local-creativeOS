@@ -359,3 +359,13 @@ MCP 按域拆分：
 - 发现小缺口：created/planned 状态 Run 的 cancel 为空操作，列入解耦台账
 - 解耦/待办汇总：docs/architecture/DECOMPOSITION_BACKLOG_20260806.md
 ```
+
+2026-08-06 补充（Phase 3：能力注册表 + cancel 缺口）：
+
+```text
+- 能力注册表：tools/lcos-runtime/capabilities.json（5 服务/3 端口/2 MCP 角色/
+  所有权/生命周期）+ scripts/check-capability-registry.mjs + dev-launcher 接线
+- created 状态 Run 取消：本地转移 cancelled + run.cancelled 事件；回归测试通过，
+  4 条惰性 created Run 已实际清理
+- 文档：RUNTIME_CAPABILITY_REGISTRY_20260806.md（含双同步分工说明）
+```

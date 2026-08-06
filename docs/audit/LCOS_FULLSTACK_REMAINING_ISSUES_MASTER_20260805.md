@@ -91,6 +91,8 @@ docs/architecture/LCOS_MCP_BRIDGE_DECOUPLING_DESIGN_20260805.md
 | Skill 结构化 | ✅ 已实现 | `packages/skills` 立 SPEC + 索引；拆出 lcos-executor-run；lcos-project-context 入口 11.8KB→2.8KB（~4K→~0.7K token），执行器专用 ~0.6K token；细节全部 references 懒加载；安装脚本多 skill 哈希同步（2026-08-06） |
 | 前端演示 harness | ✅ 已移除 | queryState/perf fixture/RUN-044/Thinker_Concept/重置演示数据按钮 全部删除；仅 dev 的验收 seed 不再留在 App.tsx（2026-08-06） |
 | CLI 命令面去重 | ✅ 已处理 | `task start` 删除（`run start` 覆盖）；`task claim` 保留（claim-next 语义不同）；存储 .bak 移走、WAL checkpoint（2026-08-06） |
+| Phase 3 能力注册表 | ✅ 已建 | `tools/lcos-runtime/capabilities.json` + 校验脚本 + dev-launcher 接线；安装器/托盘/文件关联只读它（2026-08-06） |
+| created 状态取消 | ✅ 已修复 | 未绑定外部任务的 Run 本地置 cancelled + run.cancelled 事件；回归测试 12/12；4 条惰性 created Run 已清理（2026-08-06） |
 | tldraw 写层 | ✅ 大幅补强 | select/focus/move/viewport/relation/workspace/preview 已实现并过 MCP E2E |
 | tldraw 闭环层 | ✅ 基本闭环 | 真实 5 Run 闭环成立（此前 REST）；2026-08-06 MCP 四变体（analyze/revise/create/waiting_input）全通：create/dispatch 走 local-creative-os，claim/start/request_input/submit 走 lcos-executor，GUI Run 节点 + 待审界面实测渲染 |
 | 全新机器单命令部署 | 🟡 部分 | bootstrap npm.cmd 坑已修、本机通过；干净 VM 未跑 |

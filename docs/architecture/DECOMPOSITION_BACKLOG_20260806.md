@@ -30,10 +30,13 @@
 
 ### Phase 3 — Gate W 前置
 
-- 能力注册表：进程/端口/锁/生命周期统一登记，安装器/托盘/文件关联只读它。
+- 能力注册表：✅ 已建 `tools/lcos-runtime/capabilities.json` + 校验脚本 +
+  dev-launcher 接线；安装器/托盘/文件关联只读它。
 - 双同步机制结论：RuntimeAutoSyncService（Core 侧收结果）+ 看门狗（派新活）为互补，
-  保留并写入架构文档，禁止再叠第三套。
-- 已知小缺口：created/planned 状态 Run 的 cancel 是空操作（需后端补转移逻辑）。
+  保留并写入 `RUNTIME_CAPABILITY_REGISTRY_20260806.md`，禁止再叠第三套。
+- created/planned 状态 Run 的 cancel：✅ 已修复（本地转移 cancelled + run.cancelled 事件 +
+  回归测试）。
+- 剩余：安装器/托盘/文件关联本体（Gate W 交付物）。
 
 ## 待办：功能
 

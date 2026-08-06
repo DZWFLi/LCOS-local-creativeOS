@@ -4,20 +4,23 @@ import { delimiter, join } from 'node:path'
 import { spawn, spawnSync } from 'node:child_process'
 import http from 'node:http'
 
-const WEB_PORT = 5173
-const CORE_PORT = 43121
-const BRIDGE_PORT = 43122
+const capabilities = readJson(join(process.cwd(), 'tools/lcos-runtime/capabilities.json')) ?? {}
+const svc = capabilities.services ?? {}
+const runtimeCfg = capabilities.runtime ?? {}
+const WEB_PORT = svc.web?.port ?? 5173
+const CORE_PORT = svc.core?.port ?? 43121
+const BRIDGE_PORT = svc.bridge?.port ?? 43122
 const WEB_URL = `http://127.0.0.1:${WEB_PORT}/`
-const CORE_HEALTH_URL = `http://127.0.0.1:${CORE_PORT}/health`
-const BRIDGE_HEALTH_URL = `http://127.0.0.1:${BRIDGE_PORT}/health`
-const RUNTIME_DIR = join(process.cwd(), '.codex-runtime')
-const STATE_FILE = join(RUNTIME_DIR, 'dev-launcher-state.json')
+const CORE_HEALTH_URL = `http://127.0.0.1:${CORE_PORT}${svc.core?.health ?? '/health'}`
+const BRIDGE_HEALTH_URL = `http://127.0.0.1:${BRIDGE_PORT}${svc.bridge?.health ?? '/health'}`
+const RUNTIME_DIR = join(process.cwd(), runtimeCfg.dir ?? '.codex-runtime')
+const STATE_FILE = join(RUNTIME_DIR, runtimeCfg.stateFile ?? 'dev-launcher-state.json')
 const LEGACY_DEV_STACK_PID_FILE = join(RUNTIME_DIR, 'dev-stack.pid')
-const PROFILE_DIR = join(RUNTIME_DIR, 'browser-profile')
-const LOG_DIR = join(RUNTIME_DIR, 'logs')
+const PROFILE_DIR = join(RUNTIME_DIR, runtimeCfg.browserProfileDir ?? 'browser-profile')
+const LOG_DIR = join(RUNTIME_DIR, runtimeCfg.logsDir ?? 'logs')
 const TARGET_FILE = join(process.cwd(), '.dev-launcher', 'target.json')
-const BRIDGE_RUNTIME_ROOT = join(RUNTIME_DIR, 'bridge')
-const CORE_TOKEN_FILE = join(RUNTIME_DIR, 'local-core-token')
+const BRIDGE_RUNTIME_ROOT = join(RUNTIME_DIR, runtimeCfg.bridgeRuntimeSubdir ?? 'bridge')
+const CORE_TOKEN_FILE = join(RUNTIME_DIR, runtimeCfg.tokenFile ?? 'local-core-token')
 const RESTART_WINDOW_MS = 5 * 60_000
 const MAX_RESTARTS_PER_WINDOW = 3
 const HEALTH_CHECK_MS = 5_000

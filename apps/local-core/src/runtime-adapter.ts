@@ -413,12 +413,21 @@ export class RuntimeAdapterService {
     }
     const binding = this.repository.getRuntimeBinding(runId)
     if (binding?.externalTaskId === undefined) {
-      throw new RuntimeAdapterError({
-        code: 'TASK_NOT_FOUND',
-        message: 'RuntimeBinding has no external task to cancel.',
-        retryable: false,
+      // created/planned 等从未绑定外部任务的 Run：本地直接置为 cancelled，
+      // providerAction 会负责补发 run.cancelled 事件。
+      const timestamp = this.now()
+      this.repository.updateRunStatus(runId, 'cancelled', timestamp)
+      return binding ?? ({
+        id: `binding-${runId}` as RuntimeBinding['id'],
+        runId,
         provider: run.provider,
-      })
+        externalTaskId: `local-cancel-${runId}`,
+        providerStatus: 'cancelled' as const,
+        finalizePending: false,
+        lastSyncedAt: timestamp,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      } as RuntimeBinding)
     }
     if (this.bridge.cancelTask !== undefined) {
       await this.bridge.cancelTask(binding.externalTaskId, String(runId))
