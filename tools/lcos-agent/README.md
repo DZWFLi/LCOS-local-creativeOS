@@ -33,9 +33,7 @@ npm run lcos -- open disposable-mvp-sample
 npm run lcos -- project current [project-id]
 npm run lcos -- project inspect <root-path>
 
-npm run lcos -- task claim --provider workbuddy --worker buddy-local
-npm run lcos -- task start <task-id> --worker buddy-local
-npm run lcos -- task submit <task-id> <result-envelope.json>
+npm run lcos -- task show <task-id>
 npm run lcos -- run events <run-id> [--after N]
 npm run lcos -- run cancel <run-id>
 npm run lcos -- artifact inspect <artifact-id>
@@ -46,6 +44,9 @@ npm run lcos -- workspace restore-state <workspace-id> <state-id>
 npm run lcos -- session summarize <project-id> --summary "..."
 npm run lcos -- process projection <project-id>
 ```
+
+Worker 生命周期（认领/心跳/提交）不通过本 CLI：Codex 会话走 lcos-executor MCP，
+WorkBuddy/手动 worker 走 `lcos-bridge task claim-next / submit-result`。
 
 `doctor` 汇总 Core / Bridge / Provider / Contract 状态；`capabilities` 输出 Bridge
 能力与两个 provider 的契约。`run create` 必须显式传 `--output create|revise|analyze`

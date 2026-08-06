@@ -346,39 +346,6 @@ try {
     result = await coreRequest(`/runs/${encodeURIComponent(required(positional[0], "run id"))}/review`);
   } else if (group === "run" && action === "sync") {
     result = await coreRequest(`/runs/${encodeURIComponent(required(positional[0], "run id"))}/sync`, { method: "POST", ...jsonBody({}) });
-  } else if (group === "run" && action === "claim") {
-    const runId = required(positional[0], "run id");
-    const task = await bridgeTaskForRun(runId);
-    result = await coreRequest(`/executor/tasks/${encodeURIComponent(task.taskId)}/claim`, {
-      method: "POST",
-      ...jsonBody({ provider: "codex", workerId: option("worker") || "local-codex" }),
-    });
-  } else if (group === "run" && action === "start") {
-    const task = await bridgeTaskForRun(required(positional[0], "run id"));
-    result = await coreRequest(`/executor/tasks/${encodeURIComponent(task.taskId)}/running`, {
-      method: "POST",
-      ...jsonBody({ workerId: option("worker") || "local-codex" }),
-    });
-  } else if (group === "run" && action === "heartbeat") {
-    const task = await bridgeTaskForRun(required(positional[0], "run id"));
-    result = await coreRequest(`/executor/tasks/${encodeURIComponent(task.taskId)}/heartbeat`, {
-      method: "POST",
-      ...jsonBody({ workerId: option("worker") || "local-codex" }),
-    });
-  } else if (group === "run" && action === "fail") {
-    const runId = required(positional[0], "run id");
-    const task = await bridgeTaskForRun(runId);
-    result = await coreRequest(`/executor/tasks/${encodeURIComponent(task.taskId)}/result`, {
-      method: "POST",
-      ...jsonBody({
-        contractVersion: "bridge-result-v1",
-        taskId: task.taskId,
-        lcosRunId: task.lcosRunId ?? runId,
-        providerStatus: "failed",
-        summary: option("summary") || "Task failed.",
-        changedFiles: [],
-      }),
-    });
   } else if (group === "run" && action === "context") {
     const runId = required(positional[0], "run id");
     const review = await coreRequest(`/runs/${encodeURIComponent(runId)}/review`);
@@ -525,27 +492,6 @@ try {
         requestId: required(option("request"), "--request"),
         ...(option("text") ? { text: option("text") } : {}),
         selectedOptions: (option("select") || "").split(",").filter(Boolean),
-      }),
-    });
-  } else if (group === "run" && action === "ask") {
-    const runId = required(positional[0], "run id");
-    const task = await bridgeTaskForRun(runId);
-    result = await coreRequest(`/executor/tasks/${encodeURIComponent(task.taskId)}/result`, {
-      method: "POST",
-      ...jsonBody({
-        contractVersion: "bridge-result-v1",
-        taskId: task.taskId,
-        lcosRunId: task.lcosRunId ?? runId,
-        providerStatus: "waiting_input",
-        summary: required(option("question"), "--question"),
-        changedFiles: [],
-        inputRequest: {
-          requestId: required(option("request"), "--request"),
-          question: required(option("question"), "--question"),
-          options: (option("options") || "").split(",").filter(Boolean),
-          allowFreeText: !rest.includes("--no-free-text"),
-          ...(option("context-version") ? { contextVersion: Number(option("context-version")) } : {}),
-        },
       }),
     });
   } else if (group === "run" && action === "cancel") {
@@ -759,23 +705,6 @@ try {
       }
       result = await coreRequest(`/projects/${encodeURIComponent(projectId)}/resource-upload-sessions/${encodeURIComponent(session.sessionId)}/complete`, { method: "POST" });
     }
-  } else if (group === "task" && action === "claim") {
-    result = await coreRequest("/executor/tasks/claim-next", {
-      method: "POST",
-      ...jsonBody({ provider: option("provider") || "workbuddy", workerId: option("worker") || "local-agent" }),
-    });
-  } else if (group === "task" && action === "submit") {
-    const taskId = required(positional[0], "task id");
-    const resultPath = required(positional[1], "result envelope path");
-    const envelope = JSON.parse(await readFile(resultPath, "utf8"));
-    if (envelope.contractVersion === "bridge-result-v1" && !envelope.summary && envelope.shortSummary) {
-      envelope.summary = envelope.shortSummary;
-      delete envelope.shortSummary;
-    }
-    result = await coreRequest(`/executor/tasks/${encodeURIComponent(taskId)}/result`, {
-      method: "POST",
-      ...jsonBody(envelope),
-    });
   } else if (group === "task" && action === "show") {
     result = await coreRequest(`/executor/tasks/${encodeURIComponent(required(positional[0], "task id"))}`);
   } else if (group === "open") {
@@ -799,18 +728,6 @@ async function probe(requestPromise) {
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) };
   }
-}
-
-async function bridgeTaskForRun(runId) {
-  const response = await coreRequest(`/executor/runs/${encodeURIComponent(runId)}/task`);
-  const task = response?.task ?? response;
-  const taskId = task?.taskId ?? task?.task_id;
-  if (!taskId) throw new Error(`TASK_NOT_FOUND: no Bridge Task for run ${runId}.`);
-  const provider = String(task?.provider ?? "unknown").toLowerCase();
-  if (provider !== "codex") {
-    throw new Error(`PROVIDER_MISMATCH: run ${runId} task provider is ${provider}, expected codex.`);
-  }
-  return { taskId, lcosRunId: task?.lcosRunId ?? task?.lcos_run_id ?? runId };
 }
 
 function required(value, label) {
@@ -899,14 +816,9 @@ Project truth:
   lcos run sync <run-id>
   lcos run cancel <run-id>
   lcos run events <run-id> [--after N]
-  lcos run claim <run-id> [--worker local-codex]
-  lcos run start <run-id> [--worker local-codex]
-  lcos run heartbeat <run-id> [--worker local-codex]
-  lcos run fail <run-id> [--summary "..."]
   lcos run context <run-id>
   lcos run input <run-id>
   lcos run answer <run-id> --request <id> [--text "..."] [--select A,B]
-  lcos run ask <run-id> --request <id> --question "..." [--options A,B] [--no-free-text] [--context-version N]
   lcos run accept <artifact-return-id> --base-revision <revision-id>
   lcos run reject <artifact-return-id>
   lcos run retry <artifact-return-id> [--instruction "..."]
@@ -939,9 +851,8 @@ Project truth:
   lcos providers
 
 Agent pull:
-  lcos task claim [--provider workbuddy] [--worker local-agent]
-  lcos task submit <task-id> <result-envelope.json>
   lcos task show <task-id>
+  （worker 接单/心跳/提交请走 lcos-executor MCP；Buddy 走 lcos-bridge task CLI）
 
 Environment:
   LCOS_CORE_URL=http://127.0.0.1:43121
