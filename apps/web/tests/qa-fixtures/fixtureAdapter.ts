@@ -1,7 +1,7 @@
 import type { ExecutionRuntimeContract, PreviewContract, Result, WorkspaceQueryContract } from '@local-creative-os/contracts'
 import type { ArtifactViewId } from '@local-creative-os/domain'
 import { fixtureWorkspaces } from './fixtures'
-import type { Camera, Workspace as UiWorkspace } from '../model'
+import type { Camera, Workspace as UiWorkspace } from '../../src/model'
 
 type WorkspaceQuery = Parameters<WorkspaceQueryContract['getWorkspaces']>[0]
 type WorkspaceResult = Awaited<ReturnType<WorkspaceQueryContract['getWorkspaces']>>
