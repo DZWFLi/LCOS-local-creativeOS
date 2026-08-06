@@ -70,11 +70,24 @@ get_lcos_project、claim_lcos_run、submit_lcos_result），请明确列出来�
 把它的原话复制给我，我继续定位（重点查 config.toml 的
 `mcp_servers.local-creative-os` 是否被这个版本识别，以及是否需要新版配置格式）。
 
+先自查一个最常见根因（2026-08-06 已在本机实锤并修复）：如果当前用的是
+DeepSeek / GPT-5.5 / Any 这类第三方 provider，检查 `C:\Users\1\.codex\models.json`
+里对应模型条目的 `supports_search_tool`：
+
+```text
+supports_search_tool=true + tool_mode=null
+→ Codex 会走动态工具发现（tool_search），第三方接口不支持就静默隐藏全部 MCP 工具。
+
+修复：把该字段改成 false（改前先备份 models.json），
+然后重启桌面 App / 新开对话，再重跑本教程。
+```
+
 ## 注意事项
 
 ```text
 1. 一个会话只能有一个主人：别同时用 CLI 和桌面开同一个会话，两边读写会打架；
 2. 测完如果还想让看门狗自动接单，别把绑定的执行会话占用着；
-3. 这个检测不影响 A1 结论：codex exec 模式已确证不加载（本机实测），
-   桌面能不能加载是补充信息。
+3. A1 已于 2026-08-06 关闭：根因是 models.json 的 supports_search_tool=true，
+   改为 false 后 codex exec 实测可见 64 个 LCOS MCP 工具并完成只读调用；
+   桌面 App 重启后应同样生效。
 ```

@@ -56,7 +56,7 @@ docs/architecture/LCOS_MCP_BRIDGE_DECOUPLING_DESIGN_20260805.md
 
 | 原问题 | 状态 | 说明 |
 |---|---|---|
-| A1 MCP 真实会话加载 | ❌ 客户端级阻塞 | LCOS 双 MCP server 握手正常、配置正确；Codex 0.147 alpha **exec 与桌面会话均不加载** config 的 MCP server（`rmcp_client` 已废、`mcp_2026_07_28` 启用无效）。Agent 显式 REST 兜底完成闭环；待客户端版本/机制支持后再验收 |
+| A1 MCP 真实会话加载 | ✅ 已解决 | 根因=本机 `models.json` DeepSeek 条目 `supports_search_tool=true` 触发动态工具发现，第三方 provider 不支持 tool_search 导致 MCP 静默隐藏；改为 `false` 后真实 `codex exec` 可见 64 个 LCOS 工具，且只读调用 `list_lcos_projects` 真实返回 Core 数据（2026-08-06 实机证据，详见验收报告 7.1）。桌面 App 需重启生效；`lcos-executor` enabled=false 为角色分流设计 |
 | A2 看门狗同步阻塞 | ✅ 已解决 | Node 异步看门狗：跨项目并发 2、同项目串行、超时/进程树/重试/冷却；smoke + 真实 5 Run 验证 |
 | A3 run.started 10s 语义 | 🟡 未复测 | 真实事件链正常；语义文档未更新 |
 | A4 相机常量集中 | 🟡 未做 | 本轮未触碰 |
@@ -68,7 +68,7 @@ docs/architecture/LCOS_MCP_BRIDGE_DECOUPLING_DESIGN_20260805.md
 | B6 长 Prompt 端到端恢复 | ✅ 已测 | 2790 字 analyze 完成；强杀 Core 重启后 Run/会话绑定不丢 |
 | B7 选中到发送 ≤3 动作 | ✅ 已测 | 3 步实测；顺带修复 Composer 发 Run 400（requestedProvider=auto 未被 Core 接受） |
 | 对话 Session 导入 | ✅ 已实现 | L0-L3 + GUI 入口 + 案例样本，smoke 全过；Agent 驱动仍依赖 MCP 关闭 A1 |
-| 自然语言上下文指令 | 🟡 部分 | Skill/CLI/REST 全链真实可用；MCP 工具面未通 |
+| 自然语言上下文指令 | 🟡 部分 | Skill/CLI/REST 全链真实可用；MCP 工具面已通（64 工具可见），真实指令闭环待复测 |
 | waiting_input | ✅ 已解决 | 提问→回答→同会话续跑→completed，真实复测通过 |
 | 小错误自动修正一次 | 🟡 部分 | 架构/Skill 合同过；真实触发未复测 |
 | 会话首选/失效只新建一次 | ✅ 基本解决 | 5 Run 同会话；`sessionInvalid` 标记疑似误报，待开发确认 |
@@ -88,7 +88,7 @@ docs/architecture/LCOS_MCP_BRIDGE_DECOUPLING_DESIGN_20260805.md
 | tldraw 读层 | ✅ 大幅补强 | Snapshot + 视口外 Cluster + recentChanges + SVG Observation + screenshotRef |
 | tldraw 信号层 | 🟡 部分 | afterVersion + Agent 面板同步已验；无 SSE |
 | tldraw 写层 | ✅ 大幅补强 | select/focus/move/viewport/relation/workspace/preview 已实现并过 MCP E2E |
-| tldraw 闭环层 | 🟡 部分 | 真实 5 Run 闭环成立；工具面仍走 REST 兜底（MCP 未通） |
+| tldraw 闭环层 | 🟡 部分 | 真实 5 Run 闭环成立；MCP 工具面已通，真实 MCP 驱动 Run 待复测 |
 | 全新机器单命令部署 | 🟡 部分 | bootstrap npm.cmd 坑已修、本机通过；干净 VM 未跑 |
 | L3 真实 Ollama / native sqlite-vec | ❌ 网络受阻 | 安装包 1.49GB、本机网络 100–200KB/s；下载脚本就绪；C 盘仅 3GB，模型建议放 E 盘；BLOB fallback 工作 |
 
@@ -96,7 +96,7 @@ docs/architecture/LCOS_MCP_BRIDGE_DECOUPLING_DESIGN_20260805.md
 
 | # | 问题 | 现状 | 要求 |
 |---|---|---|---|
-| A1 | **MCP 未进真实 Codex 会话** | 注册与服务器侧已就绪（稳定 launcher、双角色、握手/E2E 全过），但 Codex 0.147 alpha **exec 与桌面会话均无工具**（2026-08-06 桌面会话实测确认）；根因：客户端不加载 config 的 MCP server（`rmcp_client` 已废、`mcp_2026_07_28` 启用无效） | 开发确认目标 Codex 版本的正确加载机制（升级/新配置格式/插件路径）后，真实会话列工具 + 只读调用通过才关闭 |
+| A1 | **MCP 未进真实 Codex 会话** | ✅ 已关闭：根因=`models.json` DeepSeek 条目 `supports_search_tool=true` + `tool_mode=null` 触发动态工具发现，第三方 provider 不支持 tool_search 导致 MCP 静默隐藏（GitHub #31750/#36382 同款）；修复=备份后将该字段改为 `false`。实机验证：真实 `codex exec` 会话可见 64 个 `mcp__local_creative_os__*` 工具，只读调用 `list_lcos_projects` 真实返回 Core 数据（2026-08-06）。桌面 App 重启/新会话后生效；回滚=恢复 `models.json.bak-20260806-mcpfix` | 已完成；剩余：桌面 App 重启后复测一次（`supports_search_tool=false` 校验已并入 `scripts/install-lcos-codex-mcp.mjs`） |
 | A2 | **看门狗单线程同步等待 runner** | runner 已强制退出（不再阻塞主循环），但主循环仍是单线程同步等待，架构脆弱（本轮已实际卡死一次） | 改异步 / 加超时护栏：一个 runner 卡住不得阻塞后续 Run；加回归测试覆盖“runner 不退出”场景 |
 | A3 | **`run.started` 依赖 10s 自动同步** | 极短任务可能跳过 started 事件（UI 不依赖事件，可接受，但语义不稳） | 明确事件语义或缩短窗口；至少写文档说明 |
 | A4 | **相机可见性常量分散** | 本轮已把过程/投影节点排除出相机判定，但“主内容最少可见比例”建议作为 UI 常量集中管理 | 集中常量 + 单测覆盖 |
@@ -183,7 +183,7 @@ docs/testing/fixtures/conversation-import-sample/session-p0-slice.jsonl（854KB 
 最短补法（按顺序）：
 
 ```text
-1. A1/A2 修通后，把真实接单闭环稳定跑满 5 Run（B1/B2）
+1. A2 修通后（A1 已于 2026-08-06 关闭），把真实 MCP 接单闭环稳定跑满 5 Run（B1/B2）
 2. Canvas Context Snapshot 补视口外摘要 + screenshotRef（第 1 层补齐）
 3. Typed Canvas Actions 补 create_relation / 加进 Workspace / open_preview（第 3 层扩展）
 ```
@@ -209,7 +209,7 @@ docs/testing/fixtures/conversation-import-sample/session-p0-slice.jsonl（854KB 
 ## 6. 开发优先级建议
 
 ```text
-P0-1  MCP 完全完善（A1 关闭；修通 + 解耦 + 全新机器单命令部署；指引见
+P0-1  MCP 完全完善（A1 已关闭；解耦 + 全新机器单命令部署；指引见
        LCOS_MCP_COMPLETION_HELP_20260805.md 与 LCOS_MCP_BRIDGE_DECOUPLING_DESIGN）——最高优先
 P0-2  A2：看门狗异步化 + 超时护栏
 P0-3  B1/B2：真实连续 5 Run + revise/create 变体跑满

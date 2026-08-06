@@ -166,7 +166,11 @@ Core + Bridge + MCP + Skill + CLI + Web 全通；老 bridge 不用装、不用�
    （Gate W 可打包内置运行时）；
 2. 绝对禁止把“安装时所在 shell 的临时 node 路径”（fnm multishell shim）写进
    MCP 配置——这是本轮实测定位的 A1 根因之一，也是全新机器部署的硬伤；
-3. 包内自带 package-lock.json，全新机器 npm ci 可复现依赖。
+3. 若用户使用第三方 provider（DeepSeek / GPT-5.5 / Any 等），bootstrap 必须校验
+   `~/.codex/models.json` 中对应模型条目的 `supports_search_tool=false`，否则
+   MCP 工具会被动态工具发现（tool_search）静默隐藏——这是 2026-08-06 实机定位的
+   最终根因（GitHub #31750/#36382 同款），改字段后真实会话 64 个 LCOS 工具全部可见；
+4. 包内自带 package-lock.json，全新机器 npm ci 可复现依赖。
 ```
 
 ### 8.2 单命令引导（bootstrap）

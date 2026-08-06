@@ -56,6 +56,43 @@ function backupConfig() {
   console.log(`已备份 Codex 配置：${backup}`)
   return backup
 }
+function ensureProviderToolExposure() {
+  // 第三方 provider（DeepSeek / GPT-5.5 / Any 等）若模型条目为
+  // supports_search_tool=true + tool_mode=null，Codex 会走动态工具发现
+  // （tool_search），接口不支持时所有 MCP 工具被静默隐藏（openai/codex#31750、
+  // #36382 同款）。这里自动修正并备份，保证全新机器部署后 MCP 立即可见。
+  const modelsPath = join(codexHome, 'models.json')
+  if (!existsSync(modelsPath)) {
+    console.log('未找到 models.json，跳过 provider 工具暴露校验。')
+    return
+  }
+  let catalog
+  try {
+    catalog = JSON.parse(readFileSync(modelsPath, 'utf8'))
+  } catch (error) {
+    console.warn(`models.json 解析失败，跳过校验：${error.message}`)
+    return
+  }
+  const entries = Array.isArray(catalog?.models) ? catalog.models : []
+  const affected = entries.filter(
+    (entry) => entry
+      && entry.supports_search_tool === true
+      && (entry.tool_mode === null || entry.tool_mode === undefined),
+  )
+  if (affected.length === 0) {
+    console.log('models.json 校验通过：无 supports_search_tool=true + tool_mode=null 的模型条目。')
+    return
+  }
+  const backup = `${modelsPath}.lcos-backup-${new Date().toISOString().replace(/[:.]/g, '-')}`
+  copyFileSync(modelsPath, backup)
+  for (const entry of affected) entry.supports_search_tool = false
+  writeFileSync(modelsPath, `${JSON.stringify(catalog, null, 2)}\n`, 'utf8')
+  console.log(`已修正 models.json 的 MCP 工具暴露（${affected.length} 个条目）`)
+  console.log(`变更条目：${affected.map((entry) => entry.slug ?? entry.display_name ?? 'unknown').join('、')}`)
+  console.log(`备份：${backup}`)
+  console.log('原因：supports_search_tool=true + tool_mode=null 会触发动态工具发现；')
+  console.log('第三方 provider 不支持 tool_search 时 MCP 工具会被静默隐藏。桌面 App 需重启后生效。')
+}
 function getServer(codex, name) {
   const result = run(codex, ['mcp', 'get', name, '--json'], { allowFailure: true })
   if ((result.status ?? 1) !== 0) return undefined
@@ -111,6 +148,7 @@ const codex = findCodex()
 const help = run(codex, ['mcp', 'add', '--help'], { allowFailure: true })
 if ((help.status ?? 1) !== 0) fail('当前 Codex CLI 不支持 `codex mcp add`。', `${help.stdout ?? ''}\n${help.stderr ?? ''}`.trim())
 backupConfig()
+ensureProviderToolExposure()
 
 // Only remove the exact retired name. The backup above makes the cleanup reversible.
 removeManaged(codex, 'ai_bridge', { exactLegacy: true })

@@ -104,7 +104,7 @@ closeout-diag：10 节点、Agent 面板 v819 与画布同步、无错误
 
 ## 7. 未通过 / 未验证（诚实清单）
 
-### 7.1 MCP 真实会话加载：阻塞（A1 根因已定位）
+### 7.1 MCP 真实会话加载：已修复（A1 关闭，2026-08-06 实机证据）
 
 ```text
 现象：真实 codex exec 会话（含 Runner 派单的会话）看不到 local-creative-os /
@@ -141,6 +141,35 @@ exec 还是桌面会话都不加载 config.toml 的 MCP server；LCOS 侧（serv
 `gpt-5.1-codex / gpt-5.2-codex / gpt-5.1-codex-mini`（均 “not supported”），CLI 侧
 无法直接完成对照。**待桌面端验证**：新对话切换到账号可用的 OpenAI 模型后重跑 MCP
 清单；若工具出现 → provider 为根因；若不出现 → 客户端构建/feature 为根因。
+
+2026-08-06 补充（根因已修，A1 关闭）：
+
+```text
+根因：本机 C:\Users\1\.codex\models.json 中 DeepSeek 模型条目
+      supports_search_tool=true + tool_mode=null。Codex 对这类模型走动态工具
+      发现（tool_search），而 DeepSeek 第三方接口不支持 tool_search，导致所有
+      MCP / 插件工具被静默隐藏。这与 GitHub openai/codex#31750、#36382 及多个
+      同款社区案例（DeepSeek / GPT-5.5 / Any 接入）完全吻合。
+
+修复：备份 models.json → models.json.bak-20260806-mcpfix，将 deepseek-v4-flash
+      与 deepseek-v4-pro 的 supports_search_tool 改为 false（tool_mode 保持
+      null，未改动其它字段）。
+
+实机验证（Codex CLI 0.147.0-alpha.1.2，DeepSeek provider）：
+1. 修复前：codex exec 真实会话看不到任何 MCP 工具；
+2. 修复后：同一会话可见 mcp__local_creative_os__* 共 64 个工具 +
+   mcp__node_repl__* + mcp__codex_apps__*（插件工具一并恢复）；
+3. 修复后只读调用：mcp__local_creative_os__list_lcos_projects 真实返回
+   Core 项目列表（含 disposable-mvp-sample），输出保存在
+   %TEMP%\lcos-mcp-readonly-call-20260806.txt。
+
+剩余注意事项：
+- 桌面 App 需重启（或至少新开对话）才会重新读取 models.json；
+- lcos-executor server 在 config.toml 中仍为 enabled=false，这是角色分流设计
+  的一部分，不代表功能缺失；Agent 侧完整 Run 工具（create/dispatch/cancel 等）
+  已通过 local-creative-os server 暴露；
+- 若换回官方 OpenAI provider，可按原值恢复 supports_search_tool=true。
+```
 
 ### 7.2 L3 真实 Ollama / native sqlite-vec：未验证
 
