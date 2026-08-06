@@ -30,6 +30,17 @@ export interface RouteHttpHelpers {
   readonly sendBinary: (response: ServerResponse, statusCode: number, bytes: Buffer, fileName: string, contentType?: string) => void
 }
 
+export function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+export function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string')
+}
+
+/** 浏览器只允许提交不透明 ID；路径类字段一律拒绝（与 server.ts 原语义一致）。 */
+export const FORBIDDEN_BROWSER_PATH_FIELDS = new Set(['path', 'absolutePath', 'targetPath', 'observedPath', 'rootPath'])
+
 /** 请求上下文必须有 metadata，否则按 server.ts 原语义返回 503 并返回 undefined。 */
 export function routeRequireMetadata(ctx: {
   readonly metadata: SqliteMetadataRepository | undefined
