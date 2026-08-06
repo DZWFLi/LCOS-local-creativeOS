@@ -60,7 +60,7 @@ docs/architecture/LCOS_MCP_BRIDGE_DECOUPLING_DESIGN_20260805.md
 | A2 看门狗同步阻塞 | ✅ 已解决 | Node 异步看门狗：跨项目并发 2、同项目串行、超时/进程树/重试/冷却；smoke + 真实 5 Run 验证 |
 | A3 run.started 10s 语义 | 🟡 未复测 | 真实事件链正常；语义文档未更新 |
 | A4 相机常量集中 | 🟡 未做 | 本轮未触碰 |
-| B1 连续 5 Run | ✅ 已解决 | 同一项目 5 个真实 Run，会话 `019fd215` 全程未跳 |
+| B1 连续 5 Run | ✅ 已解决 | 同一项目 5 个真实 Run（此前会话 `019fd215`）；2026-08-06 新增 MCP 四变体（analyze/revise/create/waiting_input）同会话 `019fd4d1` 全程未跳，sessionInvalid=false |
 | B2 revise/create 变体 | ✅ 已解决 | 真实 create 两文件 + 真实 revise Draft，均接受收口 |
 | B3 running 撤回进程树 | 🟡 部分 | 排队中取消通过；运行中取消未实测 |
 | B4 浏览器 1s 同步 | 🟡 部分 | Agent 面板版本同步可见（v812/v819）；无逐毫秒测量 |
@@ -71,7 +71,7 @@ docs/architecture/LCOS_MCP_BRIDGE_DECOUPLING_DESIGN_20260805.md
 | 自然语言上下文指令 | 🟡 部分 | Skill/CLI/REST 全链真实可用；MCP 工具面已通（64 工具可见），propose→pending→reject 已实测（2026-08-06）；完整“指令→apply→Run 冻结”闭环待复测 |
 | waiting_input | ✅ 已解决 | 提问→回答→同会话续跑→completed，真实复测通过 |
 | 小错误自动修正一次 | 🟡 部分 | 架构/Skill 合同过；真实触发未复测 |
-| 会话首选/失效只新建一次 | ✅ 基本解决 | 5 Run 同会话；`sessionInvalid` 标记疑似误报，待开发确认 |
+| 会话首选/失效只新建一次 | ✅ 基本解决 | 5 Run 同会话；2026-08-06 MCP 四变体同会话稳定；`sessionInvalid` 真实触发→新建一次的路径仍未复测 |
 | UI 术语降噪/右侧单工作台 | 🟡 部分 | 术语继续降噪；右侧单工作台未完成 |
 | 多选 Target/Context 识别 | 🟡 未复测 | 真实 Skill 识别未验证 |
 | `.lcosproj` 日常化 | 🟡 部分 | GUI 入口（打开/导出/备份/会话绑定）+ 浏览器 smoke 已过；Windows 文件关联仍 Gate W |
@@ -86,9 +86,9 @@ docs/architecture/LCOS_MCP_BRIDGE_DECOUPLING_DESIGN_20260805.md
 | 托盘 Runtime Host 生命周期 | 🟡 部分 | 托盘在跑；全生命周期未测 |
 | Eagle/Obsidian/IMA/收藏夹 | 🟡 部分 | Obsidian 只读完成；其余无 |
 | tldraw 读层 | ✅ 大幅补强 | Snapshot + 视口外 Cluster + recentChanges + SVG Observation + screenshotRef |
-| tldraw 信号层 | 🟡 部分 | afterVersion + Agent 面板同步已验；无 SSE |
+| tldraw 信号层 | ✅ 已实现 | Core SSE 端点（/active-context/events）服务端推送 + Web EventSource 流式订阅 + 轮询兜底；2026-08-06 实机验证 snapshot/update 帧与持久连接（单测 + 真实浏览器） |
 | tldraw 写层 | ✅ 大幅补强 | select/focus/move/viewport/relation/workspace/preview 已实现并过 MCP E2E |
-| tldraw 闭环层 | 🟡 部分 | 真实 5 Run 闭环成立（此前 REST）；2026-08-06 起 MCP 工具面全通，并完成 1 个 MCP 驱动 analyze Run（create/dispatch 走 local-creative-os，claim/start/submit 走 lcos-executor） |
+| tldraw 闭环层 | ✅ 基本闭环 | 真实 5 Run 闭环成立（此前 REST）；2026-08-06 MCP 四变体（analyze/revise/create/waiting_input）全通：create/dispatch 走 local-creative-os，claim/start/request_input/submit 走 lcos-executor，GUI Run 节点 + 待审界面实测渲染 |
 | 全新机器单命令部署 | 🟡 部分 | bootstrap npm.cmd 坑已修、本机通过；干净 VM 未跑 |
 | L3 真实 Ollama / native sqlite-vec | ❌ 网络受阻 | 安装包 1.49GB、本机网络 100–200KB/s；下载脚本就绪；C 盘仅 3GB，模型建议放 E 盘；BLOB fallback 工作 |
 

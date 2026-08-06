@@ -755,4 +755,72 @@ describe('Runtime HTTP closure', () => {
     const expiredPlanBody = await expiredPlan.json() as { value: { runId: string; decision: string }[] }
     expect(expiredPlanBody.value[0]).toMatchObject({ runId, decision: 'spawn_new' })
   })
+
+  it('streams active-context updates over SSE after a version bump', async () => {
+    const dbRoot = mkdtempSync(join(tmpdir(), 'lcos-runtime-http-db-'))
+    const projectRoot = mkdtempSync(join(tmpdir(), 'lcos-runtime-http-project-'))
+    roots.push(dbRoot, projectRoot)
+    const repository = new SqliteMetadataRepository(join(dbRoot, 'metadata.sqlite'))
+    repositories.push(repository)
+    const snapshot = createMvpSampleSnapshot(projectRoot, '2026-07-29T19:30:00.000Z')
+    repository.save(snapshot)
+    const bridge = new FakeBridge()
+    const review = new RuntimeReviewService(repository, undefined, () => 'http-sse')
+    const application = new RuntimeApplicationService(
+      repository,
+      new ContextManifestService(repository),
+      new RuntimeAdapterService(repository, bridge, 'mvp-fast-build'),
+      new RuntimeResultIngestionService(repository, bridge),
+      review,
+      undefined,
+      () => 'http-sse',
+    )
+    const server = createLocalCoreServer({
+      port: 0,
+      metadataRepository: repository,
+      runtimeReviewService: review,
+      runtimeApplicationService: application,
+    })
+    servers.push(server)
+    const address = await server.start()
+    const baseUrl = `http://${address.host}:${address.port}`
+    const controller = new AbortController()
+    const framesPromise = (async () => {
+      const response = await fetch(`${baseUrl}/projects/${snapshot.project.id}/active-context/events`, {
+        signal: controller.signal,
+      })
+      expect(response.status).toBe(200)
+      expect(response.headers.get('content-type')).toContain('text/event-stream')
+      const reader = response.body!.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) return buffer
+        buffer += decoder.decode(value, { stream: true })
+        if (buffer.includes('event: update')) return buffer
+      }
+    })()
+
+    await new Promise((resolve) => setTimeout(resolve, 150))
+    const updateResponse = await fetch(`${baseUrl}/projects/${snapshot.project.id}/active-context`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        scopeId: snapshot.scopes[0].id,
+        selectedViewIds: [],
+        pinnedContextIds: [],
+        excludedContextIds: [],
+      }),
+    })
+    expect(updateResponse.status).toBe(200)
+
+    const frames = await Promise.race([
+      framesPromise,
+      new Promise<string>((_, reject) => setTimeout(() => reject(new Error('SSE update frame timed out')), 3_000)),
+    ])
+    controller.abort()
+    expect(frames).toContain('event: snapshot')
+    expect(frames).toContain('event: update')
+  })
 })

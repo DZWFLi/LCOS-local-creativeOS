@@ -488,7 +488,16 @@ export function App() {
     const controller = new AbortController()
     let stopped = false
     let version = activeContextVersionRef.current
-    const watch = async () => {
+    let fallbackTimer: number | undefined
+    const apply = (next: ActiveContextProjection) => {
+      if (next.version <= version) return
+      version = next.version
+      activeContextVersionRef.current = next.version
+      setActiveContextProjection(next)
+      setActiveContextError(null)
+      setContextSync('synced')
+    }
+    const poll = async () => {
       while (!stopped && !controller.signal.aborted) {
         const call = await bridgeRef.current.client.activeContext(
           activeProjectId,
@@ -498,24 +507,35 @@ export function App() {
         )
         if (stopped || controller.signal.aborted) return
         if (call.result.ok) {
-          const next = call.result.value
-          if (next.version > version) {
-            version = next.version
-            activeContextVersionRef.current = next.version
-            setActiveContextProjection(next)
-            setActiveContextError(null)
-            setContextSync('synced')
-          }
+          apply(call.result.value)
           continue
         }
         setActiveContextError(call.result.error.message)
         await new Promise((resolve) => window.setTimeout(resolve, 750))
       }
     }
-    void watch()
+    const startPolling = () => {
+      if (stopped || fallbackTimer !== undefined) return
+      fallbackTimer = window.setTimeout(() => {
+        fallbackTimer = undefined
+        void poll()
+      }, 750)
+    }
+    void bridgeRef.current.client.streamActiveContext(
+      activeProjectId,
+      workspaceId,
+      version,
+      apply,
+      controller.signal,
+    ).then(() => {
+      if (!stopped) startPolling()
+    }).catch(() => {
+      if (!stopped) startPolling()
+    })
     return () => {
       stopped = true
       controller.abort()
+      if (fallbackTimer !== undefined) window.clearTimeout(fallbackTimer)
     }
   }, [activeProjectId, agentMode, bootMode, workspaceId])
 

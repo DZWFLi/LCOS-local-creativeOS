@@ -320,6 +320,18 @@ export interface LocalCoreClient {
     readonly expectedVersion?: number
   }, signal?: AbortSignal): Promise<RuntimeCall<ActiveContextProjection>>
   activeContext(projectId: string, workspaceId?: string | null, afterVersion?: number, signal?: AbortSignal): Promise<RuntimeCall<ActiveContextProjection>>
+  /**
+   * Subscribe to active-context updates over SSE. Resolves once the stream is
+   * open; onEvent fires for `snapshot` and every subsequent `update` frame.
+   * Rejects if the endpoint is unavailable, so callers can fall back to polling.
+   */
+  streamActiveContext(
+    projectId: string,
+    workspaceId: string | null,
+    afterVersion: number | undefined,
+    onEvent: (value: ActiveContextProjection) => void,
+    signal?: AbortSignal,
+  ): Promise<void>
   getCommandDraft(projectId: string, workspaceId: string | null, composerAnchor: string, signal?: AbortSignal): Promise<RuntimeCall<CommandDraftV1 | null>>
   saveCommandDraft(projectId: string, workspaceId: string | null, composerAnchor: string, input: Omit<CommandDraftV1, 'schemaVersion' | 'projectId' | 'workspaceId' | 'composerAnchor' | 'updatedAt'>, signal?: AbortSignal): Promise<RuntimeCall<CommandDraftV1>>
   deleteCommandDraft(projectId: string, workspaceId: string | null, composerAnchor: string, signal?: AbortSignal): Promise<RuntimeCall<{ readonly deleted: boolean }>>
@@ -955,6 +967,49 @@ export function createLocalCoreClient(): LocalCoreClient {
         signal,
         decode: decodeResult<ActiveContextProjection>,
       })
+    },
+    async streamActiveContext(projectId, workspaceId, afterVersion, onEvent, signal) {
+      const params = new URLSearchParams()
+      if (workspaceId) params.set('workspaceId', workspaceId)
+      if (afterVersion !== undefined) params.set('afterVersion', String(afterVersion))
+      const query = params.toString() ? `?${params.toString()}` : ''
+      const response = await fetch(
+        `${LOCAL_CORE_API_PREFIX}/projects/${encodeURIComponent(projectId)}/active-context/events${query}`,
+        { signal },
+      )
+      if (!response.ok || response.body === null) {
+        throw new Error(`Local Core SSE unavailable (HTTP ${response.status}).`)
+      }
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let eventName = 'message'
+      const dispatch = (data: string): void => {
+        if (!data) return
+        try {
+          const parsed: unknown = JSON.parse(data)
+          const value = (parsed as { value?: ActiveContextProjection } | null)?.value
+          if (value !== undefined && typeof value === 'object') onEvent(value)
+        } catch {
+          // Malformed frames are skipped; the next heartbeat/update keeps the stream alive.
+        }
+      }
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        let boundary: number
+        while ((boundary = buffer.indexOf('\n\n')) >= 0) {
+          const frame = buffer.slice(0, boundary)
+          buffer = buffer.slice(boundary + 2)
+          let data = ''
+          for (const line of frame.split('\n')) {
+            if (line.startsWith('event:')) eventName = line.slice(6).trim()
+            else if (line.startsWith('data:')) data += (data === '' ? '' : '\n') + line.slice(5).trimStart()
+          }
+          if (eventName === 'snapshot' || eventName === 'update') dispatch(data)
+        }
+      }
     },
     getCommandDraft(projectId, workspaceId, composerAnchor, signal) {
       const query = workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : ''

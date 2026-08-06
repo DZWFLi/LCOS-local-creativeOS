@@ -51,10 +51,46 @@ function contextKey(projectId: string, workspaceId: string | null | undefined): 
   return `${projectId}::${workspaceId ?? '__project_overview__'}`
 }
 
+export type ActiveContextListener = (
+  projectId: string,
+  workspaceId: string | null,
+  value: ActiveContextProjection,
+) => void
+
 export class ActiveContextStore {
   readonly #values = new Map<string, ActiveContextProjection>()
+  readonly #listeners = new Map<string, Set<ActiveContextListener>>()
 
   constructor(private readonly metadata?: SqliteMetadataRepository) {}
+
+  /** Subscribe to version-advancing updates for one project+workspace context. */
+  subscribe(projectId: string, workspaceId: string | null, listener: ActiveContextListener): () => void {
+    const key = contextKey(projectId, workspaceId)
+    let set = this.#listeners.get(key)
+    if (set === undefined) {
+      set = new Set()
+      this.#listeners.set(key, set)
+    }
+    set.add(listener)
+    return () => {
+      const current = this.#listeners.get(key)
+      if (current === undefined) return
+      current.delete(listener)
+      if (current.size === 0) this.#listeners.delete(key)
+    }
+  }
+
+  #emit(projectId: string, workspaceId: string | null, value: ActiveContextProjection): void {
+    const set = this.#listeners.get(contextKey(projectId, workspaceId))
+    if (set === undefined) return
+    for (const listener of set) {
+      try {
+        listener(projectId, workspaceId, value)
+      } catch {
+        // A broken subscriber must never break the context store.
+      }
+    }
+  }
 
   get(projectId: string, graph: ProjectGraphSnapshot, workspaceId: string | null = null): ActiveContextProjection {
     const key = contextKey(projectId, workspaceId)
@@ -89,6 +125,7 @@ export class ActiveContextStore {
     }
     this.metadata?.saveActiveContext(next)
     this.#values.set(contextKey(projectId, workspaceId), next)
+    this.#emit(projectId, workspaceId, next)
     return next
   }
 

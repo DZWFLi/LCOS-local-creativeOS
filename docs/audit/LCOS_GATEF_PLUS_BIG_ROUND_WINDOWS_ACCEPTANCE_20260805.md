@@ -196,6 +196,33 @@ sessionInvalid=false（本轮会话未损坏）。
   executor MCP 路径与本次 analyze 相同，建议作为下一轮回归）。
 ```
 
+2026-08-06 补充（MCP 变体回归 + GUI + SSE，全部实机）：
+
+```text
+MCP 四变体（local-creative-os 创建/派发，lcos-executor 认领/启动/提交）：
+1. analyze：run-bc200f1f → completed + resultSummary 落库
+2. revise：run-ed61595a → Script draft revision 生成，pending_review
+3. create：run-4812d1b0 → 新建“交接检查清单”Artifact，pending_review
+4. waiting_input：run-71c14565 → request_lcos_user_input（正式/轻松）
+   → answer_lcos_run_input（轻松）→ 同会话续跑 → submit → draft 待审
+四变体全程同会话 019fd4d1，sessionInvalid=false。
+
+GUI 实机（应用内浏览器，agent=codex&project=disposable-mvp-sample）：
+- 项目画布渲染 Brief/Script/Reference/Feedback + 导入文档
+- Run 过程节点与三条指令出现在画布；“确认这次修改/补充修改要求”待审界面可见
+- 控制台 0 error / 0 warning
+
+SSE 实时推送（本轮新实现，替代 1s 长轮询）：
+- Core：GET /projects/:id/active-context/events（text/event-stream，
+  snapshot 首帧 + update 推送 + 15s 心跳；request close 自动清理）
+- Web：localCoreClient.streamActiveContext（fetch 流式解析），App agent 模式
+  优先订阅，失败自动回退原轮询
+- 验证：单测（订阅→PUT→收到 snapshot+update，11/11 过）；实机探针收到
+  snapshot(v1477)→update(v1478)；浏览器与 Core 保持 1 条持久连接（4s 稳定）
+- 发现并修复：手动起 Web 缺 LOCAL_CORE_API_TOKEN 时 vite 代理 401、项目列表
+  为空；dev:open 已内置，手动启动需带 token
+```
+
 ### 7.2 L3 真实 Ollama / native sqlite-vec：未验证
 
 ```text

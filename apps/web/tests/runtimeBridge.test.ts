@@ -157,6 +157,7 @@ function mockClient(overrides: Partial<LocalCoreClient> = {}): LocalCoreClient {
     createCheckpoint: unavailable,
     updateActiveContext: unavailable,
     activeContext: unavailable,
+    streamActiveContext: unavailable,
     getCommandDraft: unavailable,
     saveCommandDraft: unavailable,
     deleteCommandDraft: unavailable,

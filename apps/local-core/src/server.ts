@@ -1036,6 +1036,62 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
         return
       }
 
+      const activeContextEventsMatch = /^\/projects\/([^/]+)\/active-context\/events$/.exec(pathname)
+      if (method === 'GET' && activeContextEventsMatch !== null) {
+        if (!requireMetadata(metadata, response)) return
+        const projectId = decodeURIComponent(activeContextEventsMatch[1] ?? '')
+        if (!requireProject(projectId, metadata, response)) return
+        const graph = metadata.get(projectId)
+        if (graph === undefined) {
+          sendJson(response, 404, failure('NOT_FOUND', 'Project graph not found.'))
+          return
+        }
+        const workspaceRaw = url.searchParams.get('workspaceId')
+        const workspaceId = workspaceRaw === null || workspaceRaw === '' ? null : workspaceRaw
+        const afterRaw = url.searchParams.get('afterVersion')
+        const afterVersion = afterRaw === null ? undefined : Number(afterRaw)
+        if (afterRaw !== null && (!Number.isInteger(afterVersion) || (afterVersion ?? -1) < 0)) {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'afterVersion must be a non-negative integer.'))
+          return
+        }
+
+        response.writeHead(200, {
+          'content-type': 'text/event-stream; charset=utf-8',
+          'cache-control': 'no-cache, no-transform',
+          connection: 'keep-alive',
+          'x-accel-buffering': 'no',
+        })
+        response.flushHeaders()
+
+        let closed = false
+        const heartbeat = setInterval(() => {
+          if (!closed && !response.writableEnded) response.write(': ping\n\n')
+        }, 15_000)
+        const close = () => {
+          if (closed) return
+          closed = true
+          clearInterval(heartbeat)
+          if (!response.writableEnded) response.end()
+        }
+        request.on('close', close)
+        request.on('error', close)
+        response.on('close', close)
+
+        const sendEvent = (event: string, value: unknown): void => {
+          if (closed || response.writableEnded) return
+          response.write(`event: ${event}\ndata: ${JSON.stringify({ ok: true, value })}\n\n`)
+        }
+        const unsubscribe = activeContext.subscribe(projectId, workspaceId, (_projectId, _workspaceId, value) => {
+          if (afterVersion !== undefined && value.version <= afterVersion) return
+          sendEvent('update', value)
+        })
+        response.on('close', unsubscribe)
+        request.on('close', unsubscribe)
+
+        sendEvent('snapshot', activeContext.get(projectId, graph, workspaceId))
+        return
+      }
+
       const activeContextMatch = /^\/projects\/([^/]+)\/active-context$/.exec(pathname)
       if ((method === 'GET' || method === 'PUT') && activeContextMatch !== null) {
         if (!requireMetadata(metadata, response)) return
