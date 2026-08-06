@@ -69,3 +69,5 @@ get_lcos_task / get_lcos_run_context / request_lcos_user_input / submit_lcos_res
 3. 不修改任何画布/上下文/提案状态。
 4. 工具不可用时允许 REST/CLI 兜底，但必须在 Diagnostics 里如实标注，不得冒充 MCP 成功。
 5. 会话轮换：本 Skill 设计为轻量执行面；不要让项目历史上下文混入执行回合。
+6. 会话绑定只认 Core 返回的 provider session；Never guess the newest JSONL file
+   or use an unrelated --last session as the binding。

@@ -20,11 +20,24 @@
 - `apps/web/src/App.tsx`（约 2900 行）拆为：
   AppShell / CanvasHost / WorkRailHost / AgentCardHost / DialogsHost；
   每个 Host 只通过 contracts + runtime 客户端访问 Core。
+  - ✅ 第一片：AgentContextSurface 迁至 `features/shell/AgentContextSurface.tsx`；
+    `createId / runtimePresentationStatus / fileNameFromPath / buildScopePath /
+    isTextPreviewFile / inferFileType` 迁至 `features/shell/appShell.ts`；
+    `humanizeRuntimeMessage` 迁至 `runtime/messages.ts`。App.tsx 2750 行。
+  - ⏳ 剩余：JSX 尾部迁为 AppShellView（CanvasHost / WorkRailHost / DialogsHost
+    组合），App.tsx 只留编排。
 - `apps/local-core/src/server.ts`（约 3000 行）路由拆分 `routes/*` + 服务装配 `compose.ts`。
+  - ✅ 第一片：`/artifact-returns/:id/(accept|reject|retry)` 迁至
+    `routes/runtime-reviews.ts`（注入式 context，server.ts 约 40 行 → 15 行）。
+  - ⏳ 剩余：context-proposals / runs / conversations / resources / workspaces
+    / active-context 等路由组继续外迁。
 
 ### Phase 2 — 契约与适配
 
 - web `model.ts` 视图模型 → contracts 显式适配层全覆盖（projectionAdapters 补全）+ 架构测试。
+  - ⏳ projectionAdapters 覆盖审计（web model 与 contracts 一致性）进行中；
+  - ✅ 架构测试首块：`tests/architecture/web-shell-boundaries.test.ts`
+    （features 不得 import App、runtime client 不得 import features）。
 - CSS 主题收敛（用户暂缓；v07/v071/porcelain 三套并存）。
 - `qa-fixtures/` 归档：fixtures 只留给测试，不进生产包。
 

@@ -65,6 +65,7 @@ import {
   type CreateRuntimeRunInput,
 } from './runtime-application-service.js'
 import { ActiveContextConflictError, ActiveContextStore, type ActiveContextInput } from './active-context-store.js'
+import { handleRuntimeReviewRoute } from './routes/runtime-reviews.js'
 import { ContextProposalStore } from './context-proposal-store.js'
 import { selectNativeDirectory, type DirectoryPickerInput, type DirectoryPickerResult } from './native-directory-picker.js'
 import { indexProjectRoot, inspectProjectRoot } from './project-root-indexer.js'
@@ -2075,41 +2076,22 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
         return
       }
 
-      const acceptReturnMatch = /^\/artifact-returns\/([^/]+)\/accept$/.exec(pathname)
-      const rejectReturnMatch = /^\/artifact-returns\/([^/]+)\/reject$/.exec(pathname)
-      const retryReturnMatch = /^\/artifact-returns\/([^/]+)\/retry$/.exec(pathname)
-      if (method === 'POST' && (acceptReturnMatch !== null || rejectReturnMatch !== null || retryReturnMatch !== null)) {
-        if (runtimeReview === undefined) {
-          sendJson(response, 503, failure('UNAVAILABLE', 'Runtime Review service is not configured.'))
-          return
-        }
-        const returnId = decodeURIComponent(
-          acceptReturnMatch?.[1] ?? rejectReturnMatch?.[1] ?? retryReturnMatch?.[1] ?? '',
-        ) as ArtifactReturnId
-        try {
-          if (acceptReturnMatch !== null) {
-            const input = await readJsonBody(request, controller.signal)
-            if (!isRecord(input) || typeof input.expectedBaseRevisionId !== 'string'
-              || Object.keys(input).some((key) => key !== 'expectedBaseRevisionId')) {
-              sendJson(response, 400, failure('INVALID_ARGUMENT', 'Accept requires only expectedBaseRevisionId.'))
-              return
-            }
-            sendJson(response, 200, { ok: true, value: runtimeReview.accept(returnId, input as unknown as AcceptArtifactReturnInput) })
-          } else if (rejectReturnMatch !== null) {
-            sendJson(response, 200, { ok: true, value: runtimeReview.reject(returnId) })
-          } else {
-            const raw = await readRawBody(request, controller.signal, MAX_BODY_BYTES)
-            const input = raw.length === 0 ? {} : JSON.parse(raw.toString('utf8')) as unknown
-            if (!isRecord(input) || (input.instruction !== undefined && typeof input.instruction !== 'string')
-              || Object.keys(input).some((key) => key !== 'instruction')) {
-              sendJson(response, 400, failure('INVALID_ARGUMENT', 'Retry accepts only optional instruction.'))
-              return
-            }
-            sendJson(response, 201, { ok: true, value: runtimeReview.retry(returnId, input) })
-          }
-        } catch (error: unknown) {
-          sendJson(response, 409, failure('CONFLICT', error instanceof Error ? error.message : 'Runtime review decision conflicted.'))
-        }
+      if (runtimeReview !== undefined) {
+        if (await handleRuntimeReviewRoute({
+          pathname,
+          request,
+          response,
+          controller,
+          runtimeReview,
+          maxBodyBytes: MAX_BODY_BYTES,
+          sendJson,
+          failure,
+          readJsonBody,
+          readRawBody,
+          isRecord,
+        })) return
+      } else if (method === 'POST' && /^\/artifact-returns\/([^/]+)\/(accept|reject|retry)$/.test(pathname)) {
+        sendJson(response, 503, failure('UNAVAILABLE', 'Runtime Review service is not configured.'))
         return
       }
 

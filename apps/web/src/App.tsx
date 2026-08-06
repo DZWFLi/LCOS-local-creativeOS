@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
-import { ChevronUp, Command, Play } from 'lucide-react'
+import { Command, Play } from 'lucide-react'
 import type { ContextChangeProposalV1, ContextManifestV0, ObsidianVaultScanV1, RunEvent, RunProposalResult, RunReview, RuntimeProviderStatus, WorkspaceMembership } from '@local-creative-os/contracts'
 import type { ActiveRun, Camera, CanvasNode, CanvasScope, NodeDisplayMode, NodeLayer, PersistedPrototypeState, ProjectPackage, ScopeKind, TargetContextInference, WorkRailPreferences, Workspace, WorkspaceIntent } from './model'
 import { nodeMeta, runStatusLabel } from './model'
@@ -44,6 +44,9 @@ import { inferTargetContext, moveBetweenTargetAndContext, setPrimaryTarget } fro
 import { defaultProjectCatalog, fixtureStateForProject } from './qa-fixtures/projectFixtures'
 import { createChildScopeFromSelection, removeScopeTree } from './state/canvasScopes'
 import type { ActiveContextProjection } from './runtime/localCoreClient'
+import { humanizeRuntimeMessage } from './runtime/messages'
+import { AgentContextSurface } from './features/shell/AgentContextSurface'
+import { buildScopePath, createId, fileNameFromPath, inferFileType, isTextPreviewFile, runtimePresentationStatus } from './features/shell/appShell'
 import { parseArtifactRevisions, parseProcessProjection, parseWorkspaceStates, type ArtifactRevisionProvenance, type WorkspaceStateSummary } from './runtime/projectionAdapters'
 import { WorkspaceStatesDialog } from './features/workspace/WorkspaceStatesDialog'
 
@@ -65,21 +68,6 @@ function initialPrototype(projectId: string): PersistedPrototypeState {
   const persisted = loadPrototypeState(projectId)
   if (persisted) return persisted
   return fixtureStateForProject(projectId, defaultRailWidth())
-}
-
-function createId(prefix: string): string {
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
-}
-
-function runtimePresentationStatus(review: RunReview): ActiveRun['status'] {
-  if (review.dispatch.status === 'recovery_required' || review.dispatch.status === 'failed') return 'failed'
-  if (review.presentationPhase === 'created' || review.presentationPhase === 'queued') return 'queued'
-  if (review.presentationPhase === 'cancelled') return 'cancelled'
-  return review.presentationPhase
-}
-
-function fileNameFromPath(path: string): string {
-  return path.split(/[\\/]/).filter(Boolean).at(-1) ?? path
 }
 
 export function App() {
@@ -2759,151 +2747,4 @@ export function App() {
       })()}
     </section>
   </main>
-}
-
-function AgentContextSurface({
-  projectLabel,
-  workspaceLabel,
-  projection,
-  selectedNodes,
-  error,
-  syncState,
-  proposals,
-  pendingRuns,
-  pendingReviews,
-  detailsOpen,
-  runLocked,
-  onAcceptProposal,
-  onRejectProposal,
-  onRefresh,
-  onToggleDetails,
-  onOpenReview,
-}: {
-  readonly projectLabel: string
-  readonly workspaceLabel: string
-  readonly projection: ActiveContextProjection | null
-  readonly selectedNodes: readonly CanvasNode[]
-  readonly error: string | null
-  readonly syncState: 'syncing' | 'synced' | 'conflict'
-  readonly proposals: readonly ContextChangeProposalV1[]
-  readonly pendingRuns: number
-  readonly pendingReviews: readonly RunReview[]
-  readonly detailsOpen: boolean
-  readonly runLocked: { readonly id: string; readonly contextCount: number } | null
-  readonly onAcceptProposal: (proposalId: string) => void
-  readonly onRejectProposal: (proposalId: string) => void
-  readonly onRefresh: () => void
-  readonly onToggleDetails: () => void
-  readonly onOpenReview: (review: RunReview) => void
-}) {
-  const syncLabel = syncState === 'conflict'
-    ? '冲突：画布已被其它端修改'
-    : syncState === 'syncing'
-      ? '同步中…'
-      : projection
-        ? `已同步 v${projection.version}`
-        : '未连接'
-  const pendingProposals = proposals.filter((proposal) => proposal.status === 'pending')
-  return <aside className="agent-context-surface" data-testid="agent-context-surface" aria-label="Agent 看到的画布">
-    <header>
-      <span className={`agent-context-live ${error ? 'error' : ''}`} />
-      <div><strong>Agent 看到的画布</strong><small>{error ? '暂时无法同步' : '与当前画布同步'}</small></div>
-      <code>v{projection?.version ?? 0}</code>
-      <button type="button" className="icon-only pressable" onClick={onToggleDetails} title={detailsOpen ? '收起详情' : '展开详情'} aria-label="展开或收起详情"><ChevronUp size={13} style={{ transform: detailsOpen ? 'rotate(0deg)' : 'rotate(180deg)' }} /></button>
-    </header>
-    <div className={`agent-sync-badge ${syncState}`}><span>{syncLabel}</span><button type="button" className="icon-only pressable" onClick={onRefresh} title="刷新上下文">⟳</button></div>
-    {runLocked && <div className="agent-run-lock" title={runLocked.id}>当前 Agent 任务已锁定 {runLocked.contextCount} 项参考内容；之后的选择只影响下一次任务。</div>}
-    <dl className="agent-context-stats">
-      <div><dt>选择</dt><dd>{selectedNodes.length || '无'}</dd></div>
-      <div><dt>参考</dt><dd>{projection?.contextArtifacts.length ?? 0}</dd></div>
-      <div><dt>任务</dt><dd>{pendingReviews.length + pendingRuns}</dd></div>
-    </dl>
-    <section className="agent-surface-section">
-      <h4>待处理任务</h4>
-      {pendingReviews.length === 0 && pendingRuns === 0
-        ? <p className="agent-context-empty">暂无待办</p>
-        : <>
-          {pendingRuns > 0 && <p className="agent-context-empty">{pendingRuns} 条等待本地 Agent 接手</p>}
-          {pendingReviews.map((review) => (
-            <div key={String(review.run.id)} className="agent-review-chip" data-testid={`agent-review-${review.run.id}`}>
-              <div><strong>{review.run.instruction.slice(0, 46)}</strong><small>结果待确认</small></div>
-              <button type="button" className="pressable" onClick={() => onOpenReview(review)}>查看结果</button>
-            </div>
-          ))}
-        </>}
-    </section>
-    {pendingProposals.length > 0 && <section className="agent-surface-section">
-      <h4>Agent 建议（{pendingProposals.length}）</h4>
-      {pendingProposals.map((proposal) => (
-        <div key={proposal.proposalId} className="agent-proposal-chip" data-testid={`agent-proposal-${proposal.proposalId}`}>
-          <div><strong>{proposal.reason}</strong><small>加入 {proposal.addViewIds.length} · 移除 {proposal.removeViewIds.length}{proposal.targetViewId ? ' · 改目标' : ''}</small></div>
-          <div className="agent-proposal-actions">
-            <button type="button" className="pressable" onClick={() => onAcceptProposal(proposal.proposalId)}>接受</button>
-            <button type="button" className="quiet pressable" onClick={() => onRejectProposal(proposal.proposalId)}>拒绝</button>
-          </div>
-        </div>
-      ))}
-    </section>}
-    {detailsOpen && <>
-      <dl>
-        <div><dt>项目</dt><dd>{projectLabel}</dd></div>
-        <div><dt>工作空间</dt><dd>{workspaceLabel}</dd></div>
-        <div><dt>当前选择</dt><dd>{selectedNodes.length || '无'}</dd></div>
-        <div><dt>参考内容</dt><dd>{projection?.contextArtifacts.length ?? 0}</dd></div>
-      </dl>
-      {selectedNodes.length > 0
-        ? <ul>{selectedNodes.slice(0, 5).map((node) => <li key={node.id}><span className={`agent-kind kind-${node.kind}`} />{node.title}</li>)}</ul>
-        : <p>在画布中选择内容，Agent 会读取同一份画布选择和参考内容。</p>}
-      {(projection?.offscreenClusters?.length ?? 0) > 0 && <section className="agent-surface-section">
-        <h4>视口外内容</h4>
-        <div className="agent-offscreen-clusters">{projection!.offscreenClusters!.slice(0, 6).map((cluster) => <span key={cluster.key} title={`${cluster.viewIds.length} 个可定位视图`}>{cluster.kind} · {cluster.count}</span>)}</div>
-      </section>}
-      {(projection?.recentChanges?.length ?? 0) > 0 && <section className="agent-surface-section">
-        <h4>最近变化</h4>
-        <ul className="agent-context-changes">{projection!.recentChanges!.slice(-4).reverse().map((change) => <li key={`${change.version}-${change.kind}-${change.occurredAt}`}><span>{change.summary}</span><small>v{change.version}</small></li>)}</ul>
-      </section>}
-    </>}
-    {error && <div className="agent-context-error"><p>{humanizeRuntimeMessage(error)}</p><button type="button" className="quiet pressable" onClick={() => { void navigator.clipboard?.writeText(error) }}>复制诊断信息</button></div>}
-  </aside>
-}
-
-function humanizeRuntimeMessage(message?: string | null): string {
-  if (!message) return ''
-  const value = String(message)
-  if (/authorization|token|401/i.test(value)) return '本地项目服务需要重新连接，请重启 LCOS 后再试。'
-  if (/offline|unavailable|ECONNREFUSED|fetch failed|Local Core|Bridge disconnected/i.test(value)) return '本地 Agent 服务暂时不可用，你的内容已保留，可以稍后重新连接。'
-  if (/timeout|timed out/i.test(value)) return '本地 Agent 响应较慢，本次操作没有完成，可以重新尝试。'
-  if (/stale|version|conflict|409/i.test(value)) return '内容已在其他位置发生变化，请刷新后再试。'
-  if (/cancel/i.test(value)) return '任务已撤回或正在撤回，迟到结果不会替换当前版本。'
-  return value
-}
-
-function buildScopePath(scopes: CanvasScope[], scope: CanvasScope): CanvasScope[] {
-  const result: CanvasScope[] = [scope]
-  let current = scope
-  while (current.parentScopeId) {
-    const parent = scopes.find((item) => item.id === current.parentScopeId)
-    if (!parent) break
-    result.unshift(parent)
-    current = parent
-  }
-  return result
-}
-
-function isTextPreviewFile(file: File): boolean {
-  return file.type.startsWith('text/')
-    || /\.(md|markdown|txt|log|json|csv|tsv|yaml|yml)$/i.test(file.name)
-}
-
-function inferFileType(fileName: string): string {
-  if (/\.(md|markdown)$/i.test(fileName)) return 'text/markdown'
-  if (/\.txt$/i.test(fileName)) return 'text/plain'
-  if (/\.json$/i.test(fileName)) return 'application/json'
-  if (/\.csv$/i.test(fileName)) return 'text/csv'
-  if (/\.docx$/i.test(fileName)) return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-  if (/\.pdf$/i.test(fileName)) return 'application/pdf'
-  if (/\.svg$/i.test(fileName)) return 'image/svg+xml'
-  if (/\.avif$/i.test(fileName)) return 'image/avif'
-  if (/\.bmp$/i.test(fileName)) return 'image/bmp'
-  return 'unknown'
 }
