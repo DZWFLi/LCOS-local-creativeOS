@@ -177,7 +177,7 @@ export function App() {
   const restoredDraftContextIdsRef = useRef<string[]>([])
   const runEventSequenceRef = useRef<number | undefined>(undefined)
 
-  const activeProject = projects.find((project) => project.id === activeProjectId) ?? projects[0]
+  const activeProject = projects.find((project) => project.id === activeProjectId) ?? projects[0] ?? { id: activeProjectId, label: activeProjectId, localPath: '', updatedAt: '', pendingCount: 0 }
   const activeWorkspace = workspaceId ? workspaces.find((workspace) => workspace.id === workspaceId) ?? null : null
   const activeScope = scopes.find((scope) => scope.id === scopeId) ?? scopes[0]
   const overviewWorkspace = useMemo<Workspace>(() => ({
