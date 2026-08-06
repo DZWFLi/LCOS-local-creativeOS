@@ -68,7 +68,7 @@ docs/architecture/LCOS_MCP_BRIDGE_DECOUPLING_DESIGN_20260805.md
 | B6 长 Prompt 端到端恢复 | ✅ 已测 | 2790 字 analyze 完成；强杀 Core 重启后 Run/会话绑定不丢 |
 | B7 选中到发送 ≤3 动作 | ✅ 已测 | 3 步实测；顺带修复 Composer 发 Run 400（requestedProvider=auto 未被 Core 接受） |
 | 对话 Session 导入 | ✅ 已实现 | L0-L3 + GUI 入口 + 案例样本，smoke 全过；Agent 驱动仍依赖 MCP 关闭 A1 |
-| 自然语言上下文指令 | 🟡 部分 | Skill/CLI/REST 全链真实可用；MCP 工具面已通（64 工具可见），真实指令闭环待复测 |
+| 自然语言上下文指令 | 🟡 部分 | Skill/CLI/REST 全链真实可用；MCP 工具面已通（64 工具可见），propose→pending→reject 已实测（2026-08-06）；完整“指令→apply→Run 冻结”闭环待复测 |
 | waiting_input | ✅ 已解决 | 提问→回答→同会话续跑→completed，真实复测通过 |
 | 小错误自动修正一次 | 🟡 部分 | 架构/Skill 合同过；真实触发未复测 |
 | 会话首选/失效只新建一次 | ✅ 基本解决 | 5 Run 同会话；`sessionInvalid` 标记疑似误报，待开发确认 |
@@ -88,7 +88,7 @@ docs/architecture/LCOS_MCP_BRIDGE_DECOUPLING_DESIGN_20260805.md
 | tldraw 读层 | ✅ 大幅补强 | Snapshot + 视口外 Cluster + recentChanges + SVG Observation + screenshotRef |
 | tldraw 信号层 | 🟡 部分 | afterVersion + Agent 面板同步已验；无 SSE |
 | tldraw 写层 | ✅ 大幅补强 | select/focus/move/viewport/relation/workspace/preview 已实现并过 MCP E2E |
-| tldraw 闭环层 | 🟡 部分 | 真实 5 Run 闭环成立；MCP 工具面已通，真实 MCP 驱动 Run 待复测 |
+| tldraw 闭环层 | 🟡 部分 | 真实 5 Run 闭环成立（此前 REST）；2026-08-06 起 MCP 工具面全通，并完成 1 个 MCP 驱动 analyze Run（create/dispatch 走 local-creative-os，claim/start/submit 走 lcos-executor） |
 | 全新机器单命令部署 | 🟡 部分 | bootstrap npm.cmd 坑已修、本机通过；干净 VM 未跑 |
 | L3 真实 Ollama / native sqlite-vec | ❌ 网络受阻 | 安装包 1.49GB、本机网络 100–200KB/s；下载脚本就绪；C 盘仅 3GB，模型建议放 E 盘；BLOB fallback 工作 |
 

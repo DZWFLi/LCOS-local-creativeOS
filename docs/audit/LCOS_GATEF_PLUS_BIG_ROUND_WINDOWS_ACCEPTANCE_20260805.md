@@ -171,6 +171,31 @@ exec 还是桌面会话都不加载 config.toml 的 MCP server；LCOS 侧（serv
 - 若换回官方 OpenAI provider，可按原值恢复 supports_search_tool=true。
 ```
 
+2026-08-06 补充（MCP 全栈实机闭环）：
+
+```text
+场景：修复 supports_search_tool 后，在真实桌面会话内直接通过 local-creative-os
+MCP 走完整链路；看门狗拉起真实 codex runner，通过 lcos-executor MCP 执行。
+
+普通会话（local-creative-os MCP，全部真实返回）：
+1. list_lcos_projects / get_lcos_project / get_lcos_active_context（version 1477）
+2. bind_lcos_project(disposable-mvp-sample)
+3. validate_lcos_agent_plan(analyze + reply_only) 通过
+4. create_lcos_run → run-bc200f1f；dispatch_lcos_run → queued + bound
+5. propose_lcos_context_change → proposal pending → list 可见 → reject 清理
+
+执行会话（lcos-executor MCP，watchdog 拉起 thread 019fd4d1）：
+claim_lcos_run → start_lcos_run → submit_lcos_result 三个工具全部走 MCP 完成；
+任务 providerStatus=review，Core run 状态 completed，resultSummary 落库，
+sessionInvalid=false（本轮会话未损坏）。
+
+未覆盖（诚实清单）：
+- GUI 刷新后 Run 节点呈现：Web 已手动拉起（127.0.0.1:5173，PID 37492），
+  待浏览器刷新后确认 run-bc200f1f 的过程节点出现在画布；
+- MCP 驱动的 revise/create 变体与 waiting_input 未在本轮重跑（此前 REST 版已通，
+  executor MCP 路径与本次 analyze 相同，建议作为下一轮回归）。
+```
+
 ### 7.2 L3 真实 Ollama / native sqlite-vec：未验证
 
 ```text
