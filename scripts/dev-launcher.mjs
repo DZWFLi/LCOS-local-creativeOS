@@ -261,6 +261,8 @@ function spawnLogged(script, logName, environment = {}) {
     cwd: process.cwd(),
     stdio,
     windowsHide: true,
+    // detached 父进程直接 spawn npm.cmd 会抛 EINVAL；.cmd 必须经 shell 启动。
+    shell: process.platform === 'win32' && String(npmCommand).toLowerCase().endsWith('.cmd'),
     env: { ...process.env, ...environment },
   })
   let child
