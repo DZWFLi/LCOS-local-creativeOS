@@ -118,7 +118,19 @@ for (const pattern of patterns) {
 }
 const terminalTaskStatuses = new Set(['waiting_input', 'review', 'completed', 'failed', 'cancelled', 'timeout'])
 const closureObserved = !taskId || terminalTaskStatuses.has(latestTaskStatus)
-const sessionInvalid = Boolean(sessionId) && /(?:session|thread).{0,80}(?:not found|does not exist|unknown|invalid|closed)|failed to (?:resume|load).{0,40}(?:session|thread)/i.test(combined)
+// 会话失效检测：除了英文报错文本，还要覆盖本地化系统错误（如中文 Windows 的
+// “系统找不到指定的文件”/ os error 2）。另外，resume 指定了会话但任务从未被
+// 认领（taskStatus 仍为 queued/created）且进程非零退出，基本可断定会话无法恢复，
+// 应标记 stale 让下一次派单拉新会话，而不是无限重试同一个坏会话。
+const sessionNeverResumed = Boolean(sessionId)
+  && !cancelled
+  && !closureObserved
+  && Number(result.code) !== 0
+  && (latestTaskStatus === null || latestTaskStatus === 'queued' || latestTaskStatus === 'created')
+const sessionInvalid = Boolean(sessionId) && (
+  /(?:session|thread).{0,80}(?:not found|does not exist|unknown|invalid|closed)|failed to (?:resume|load).{0,40}(?:session|thread)|os error 2|系统找不到/i.test(combined)
+  || sessionNeverResumed
+)
 const effectiveExitCode = cancelled
   ? 130
   : Number(result.code) !== 0

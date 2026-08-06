@@ -148,8 +148,9 @@ async function updateRunState(runId, patch) {
   await writeJsonAtomic(stateFile, state)
 }
 async function directTask(taskId, sessionId) {
-  if (!taskId || !sessionId) return
-  try { await bridge(`/v1/tasks/${encodeURIComponent(taskId)}/direct`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sessionId }) }) }
+  if (!taskId) return
+  // sessionId 为空表示 spawn_new：清空旧会话的定向，否则新会话无法认领该任务。
+  try { await bridge(`/v1/tasks/${encodeURIComponent(taskId)}/direct`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sessionId: sessionId ?? null }) }) }
   catch (error) { log('任务定向失败，继续由执行器认领', error.message) }
 }
 function killProcessTree(child) {

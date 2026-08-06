@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
-import { Command, Play } from 'lucide-react'
+import { ChevronUp, Command, Play } from 'lucide-react'
 import type { ContextChangeProposalV1, ContextManifestV0, ObsidianVaultScanV1, RunEvent, RunProposalResult, RunReview, RuntimeProviderStatus, WorkspaceMembership } from '@local-creative-os/contracts'
 import { makePerformanceFixture } from './qa-fixtures/fixtures'
 import type { ActiveRun, Camera, CanvasNode, CanvasScope, NodeDisplayMode, NodeLayer, PersistedPrototypeState, ProjectPackage, ScopeKind, TargetContextInference, WorkRailPreferences, Workspace, WorkspaceIntent } from './model'
@@ -117,6 +117,12 @@ export function App() {
   const [excludedContextIds, setExcludedContextIds] = useState<string[]>([])
   const [manualInference, setManualInference] = useState<TargetContextInference | null>(null)
   const [activeRun, setActiveRun] = useState<ActiveRun | null>(null)
+  const [runReviews, setRunReviews] = useState<readonly RunReview[]>([])
+  const [agentSurfaceDetailsOpen, setAgentSurfaceDetailsOpen] = useState(false)
+  const pendingReviews = useMemo(() => runReviews.filter((review) =>
+    review.presentationPhase === 'review'
+    || review.returns.some((item) => item.status === 'pending_review'),
+  ), [runReviews])
   const [spaceHeld, setSpaceHeld] = useState(false)
   const [notice, setNotice] = useState('已恢复上次工作现场')
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved')
@@ -547,7 +553,9 @@ export function App() {
       })
       void bridgeRef.current.client.projectRunReviews(activeProjectId, 100).then((call) => {
         if (!call.result.ok) return
-        const pending = (call.result.value as readonly {
+        const reviews = call.result.value as RunReview[]
+        setRunReviews(reviews)
+        const pending = (reviews as readonly {
           run: { provider?: string; status: string }
           dispatch: { status: string }
           binding?: { providerStatus?: string }
@@ -1851,6 +1859,61 @@ export function App() {
     })
   }, [nodes, scopeId, setGraph, workspaceId])
 
+  const openRunReview = useCallback((review: RunReview) => {
+    const target = review.run.targetArtifactId === undefined
+      ? undefined
+      : nodes.find((node) => node.artifactId === String(review.run.targetArtifactId))
+    const contextAnchor = nodes.find((node) => node.artifactId !== undefined)
+    const anchor = target ?? contextAnchor
+    const id = String(review.run.id)
+    const processNodeId = `runtime-run-view-${id}`
+    const dimensions = nodeDimensions('process', 'standard')
+    setGraph((graph) => graph.nodes.some((node) => node.id === processNodeId) ? graph : {
+      nodes: [...graph.nodes, {
+        id: processNodeId,
+        kind: 'process',
+        title: `${id} · ${review.run.instruction.slice(0, 22)}`,
+        subtitle: activeRun === null ? '已恢复任务' : '待确认结果',
+        x: anchor === undefined ? 520 : anchor.x + 24,
+        y: anchor === undefined ? 420 : anchor.y + anchor.height + 54,
+        ...dimensions,
+        displayMode: 'standard',
+        scopeId: anchor?.scopeId ?? scopeId,
+        runStatus: runtimePresentationStatus(review),
+        commandText: review.run.instruction,
+        parentRunId: id,
+        createdAt: String(review.run.createdAt),
+        sourceRunId: id,
+        sourcePrompt: review.run.instruction,
+        sourceProvider: String(review.run.provider),
+        contextCount: 0,
+        targetCount: target === undefined ? 0 : 1,
+        outputCount: review.returns.length,
+        runtimeTransient: true,
+      }],
+      edges: target === undefined ? graph.edges : [...graph.edges, {
+        id: `runtime-target-run-edge-${id}`,
+        from: target.id,
+        to: processNodeId,
+        kind: 'modify',
+      }],
+    })
+    applyRuntimeReview(review, {
+      id,
+      status: runtimePresentationStatus(review),
+      command: review.run.instruction,
+      targetIds: target === undefined ? [] : [target.id],
+      contextIds: [],
+      processNodeId,
+      contextSnapshotId: String(review.run.contextManifestId),
+      reviewStatus: 'idle',
+      changedFiles: [],
+      createdAt: String(review.run.createdAt),
+      runtime: true,
+    }, review.dispatch.lastErrorMessage)
+    setNotice(activeRun === null ? '已恢复 Agent 任务' : '已打开任务结果')
+  }, [activeRun, applyRuntimeReview, nodes, scopeId, setGraph])
+
   useEffect(() => {
     if (bootMode !== 'runtime' || activeRun !== null || restoredRunProjectRef.current === activeProjectId) return
     restoredRunProjectRef.current = activeProjectId
@@ -1861,60 +1924,9 @@ export function App() {
         || item.returns.some((artifactReturn) => artifactReturn.status === 'pending_review'),
       )
       if (review === undefined) return
-      const target = review.run.targetArtifactId === undefined
-        ? undefined
-        : nodes.find((node) => node.artifactId === String(review.run.targetArtifactId))
-      const contextAnchor = nodes.find((node) => node.artifactId !== undefined)
-      const anchor = target ?? contextAnchor
-      const id = String(review.run.id)
-      const processNodeId = `runtime-run-view-${id}`
-      const dimensions = nodeDimensions('process', 'standard')
-      setGraph((graph) => graph.nodes.some((node) => node.id === processNodeId) ? graph : {
-        nodes: [...graph.nodes, {
-          id: processNodeId,
-          kind: 'process',
-          title: `${id} · ${review.run.instruction.slice(0, 22)}`,
-          subtitle: '已恢复任务',
-          x: anchor === undefined ? 520 : anchor.x + 24,
-          y: anchor === undefined ? 420 : anchor.y + anchor.height + 54,
-          ...dimensions,
-          displayMode: 'standard',
-          scopeId: anchor?.scopeId ?? scopeId,
-          runStatus: runtimePresentationStatus(review),
-          commandText: review.run.instruction,
-          parentRunId: id,
-          createdAt: String(review.run.createdAt),
-          sourceRunId: id,
-          sourcePrompt: review.run.instruction,
-          sourceProvider: String(review.run.provider),
-          contextCount: 0,
-          targetCount: target === undefined ? 0 : 1,
-          outputCount: review.returns.length,
-          runtimeTransient: true,
-        }],
-        edges: target === undefined ? graph.edges : [...graph.edges, {
-          id: `runtime-target-run-edge-${id}`,
-          from: target.id,
-          to: processNodeId,
-          kind: 'modify',
-        }],
-      })
-      applyRuntimeReview(review, {
-        id,
-        status: runtimePresentationStatus(review),
-        command: review.run.instruction,
-        targetIds: target === undefined ? [] : [target.id],
-        contextIds: [],
-        processNodeId,
-        contextSnapshotId: String(review.run.contextManifestId),
-        reviewStatus: 'idle',
-        changedFiles: [],
-        createdAt: String(review.run.createdAt),
-        runtime: true,
-      }, review.dispatch.lastErrorMessage)
-      setNotice('已恢复 Agent 任务')
+      openRunReview(review)
     })
-  }, [activeProjectId, activeRun, applyRuntimeReview, bootMode, nodes, scopeId, setGraph])
+  }, [activeProjectId, activeRun, bootMode, openRunReview])
 
   const clearPersistedCommandDrafts = useCallback(() => {
     restoredDraftContextIdsRef.current = []
@@ -2436,7 +2448,8 @@ export function App() {
       }
       setNotice('正在创建 Retry Run…')
       void bridgeRef.current.client.retryArtifactReturn(activeRun.runtimeReturnId, {
-        instruction: selectionComposerText.trim() || globalComposerText.trim() || activeRun.command,
+        // 重新执行 = 用原指令重跑；输入框里的新文本属于“补充修改要求”。
+        instruction: activeRun.command,
       }).then(async (retryCall) => {
         if (!retryCall.result.ok) {
           setNotice(`Retry 失败：${retryCall.result.error.message}`)
@@ -2738,10 +2751,14 @@ export function App() {
         syncState={contextSync}
         proposals={contextProposals}
         pendingRuns={pendingCodexCount}
+        pendingReviews={pendingReviews}
+        detailsOpen={agentSurfaceDetailsOpen}
         runLocked={activeRun ? { id: activeRun.id, contextCount: activeRun.contextIds.length } : null}
         onAcceptProposal={(proposalId) => resolveContextProposal(proposalId, 'accept')}
         onRejectProposal={(proposalId) => resolveContextProposal(proposalId, 'reject')}
         onRefresh={refreshActiveContext}
+        onToggleDetails={() => setAgentSurfaceDetailsOpen((current) => !current)}
+        onOpenReview={openRunReview}
       />}
       {nodeInfoNode && <NodeInfoPopover node={nodeInfoNode} camera={camera} relationCount={nodeInfoRelationCount} onClose={() => setNodeInfoId(null)} onRelations={() => { selectNode(nodeInfoNode.id); setNodeInfoId(null); setNotice(`${nodeInfoRelationCount} 个关联已在画布中高亮`) }} onPreview={(node) => { setNodeInfoId(null); setWorkbench({ nodeId: node.id, focus: 'preview' }) }} onShowResource={(node) => { setNodeInfoId(null); setResourceDetailArtifactId(String(node.artifactId)) }} onRevisions={(node) => { setNodeInfoId(null); setWorkbench({ nodeId: node.id, focus: 'revisions' }) }} />}
       <ProjectToolsDialog open={projectToolsOpen} project={activeProject} projects={projects} client={bridgeRef.current.client} onClose={() => setProjectToolsOpen(false)} onProjectOpened={refreshProjectCatalog} onSelectArtifact={selectArtifactFromTools} onNotice={setNotice} />
@@ -2789,10 +2806,14 @@ function AgentContextSurface({
   syncState,
   proposals,
   pendingRuns,
+  pendingReviews,
+  detailsOpen,
   runLocked,
   onAcceptProposal,
   onRejectProposal,
   onRefresh,
+  onToggleDetails,
+  onOpenReview,
 }: {
   readonly projectLabel: string
   readonly workspaceLabel: string
@@ -2802,10 +2823,14 @@ function AgentContextSurface({
   readonly syncState: 'syncing' | 'synced' | 'conflict'
   readonly proposals: readonly ContextChangeProposalV1[]
   readonly pendingRuns: number
+  readonly pendingReviews: readonly RunReview[]
+  readonly detailsOpen: boolean
   readonly runLocked: { readonly id: string; readonly contextCount: number } | null
   readonly onAcceptProposal: (proposalId: string) => void
   readonly onRejectProposal: (proposalId: string) => void
   readonly onRefresh: () => void
+  readonly onToggleDetails: () => void
+  readonly onOpenReview: (review: RunReview) => void
 }) {
   const syncLabel = syncState === 'conflict'
     ? '冲突：画布已被其它端修改'
@@ -2820,44 +2845,60 @@ function AgentContextSurface({
       <span className={`agent-context-live ${error ? 'error' : ''}`} />
       <div><strong>Agent 看到的画布</strong><small>{error ? '暂时无法同步' : '与当前画布同步'}</small></div>
       <code>v{projection?.version ?? 0}</code>
+      <button type="button" className="icon-only pressable" onClick={onToggleDetails} title={detailsOpen ? '收起详情' : '展开详情'} aria-label="展开或收起详情"><ChevronUp size={13} style={{ transform: detailsOpen ? 'rotate(0deg)' : 'rotate(180deg)' }} /></button>
     </header>
     <div className={`agent-sync-badge ${syncState}`}><span>{syncLabel}</span><button type="button" className="icon-only pressable" onClick={onRefresh} title="刷新上下文">⟳</button></div>
     {runLocked && <div className="agent-run-lock" title={runLocked.id}>当前 Agent 任务已锁定 {runLocked.contextCount} 项参考内容；之后的选择只影响下一次任务。</div>}
-    <dl>
-      <div><dt>项目</dt><dd>{projectLabel}</dd></div>
-      <div><dt>工作空间</dt><dd>{workspaceLabel}</dd></div>
-      <div><dt>当前选择</dt><dd>{selectedNodes.length || '无'}</dd></div>
-      <div><dt>参考内容</dt><dd>{projection?.contextArtifacts.length ?? 0}</dd></div>
+    <dl className="agent-context-stats">
+      <div><dt>选择</dt><dd>{selectedNodes.length || '无'}</dd></div>
+      <div><dt>参考</dt><dd>{projection?.contextArtifacts.length ?? 0}</dd></div>
+      <div><dt>任务</dt><dd>{pendingReviews.length + pendingRuns}</dd></div>
     </dl>
-    {selectedNodes.length > 0
-      ? <ul>{selectedNodes.slice(0, 5).map((node) => <li key={node.id}><span className={`agent-kind kind-${node.kind}`} />{node.title}</li>)}</ul>
-      : <p>在画布中选择内容，Agent 会读取同一份画布选择和参考内容。</p>}
-    {(projection?.offscreenClusters?.length ?? 0) > 0 && <section className="agent-surface-section">
-      <h4>视口外内容</h4>
-      <div className="agent-offscreen-clusters">{projection!.offscreenClusters!.slice(0, 6).map((cluster) => <span key={cluster.key} title={`${cluster.viewIds.length} 个可定位视图`}>{cluster.kind} · {cluster.count}</span>)}</div>
-    </section>}
-    {(projection?.recentChanges?.length ?? 0) > 0 && <section className="agent-surface-section">
-      <h4>最近变化</h4>
-      <ul className="agent-context-changes">{projection!.recentChanges!.slice(-4).reverse().map((change) => <li key={`${change.version}-${change.kind}-${change.occurredAt}`}><span>{change.summary}</span><small>v{change.version}</small></li>)}</ul>
-    </section>}
-    <section className="agent-surface-section">
-      <h4>Agent 建议（{pendingProposals.length}）</h4>
-      {pendingProposals.length === 0
-        ? <p className="agent-context-empty">无待确认提案</p>
-        : pendingProposals.map((proposal) => (
-            <div key={proposal.proposalId} className="agent-proposal-chip" data-testid={`agent-proposal-${proposal.proposalId}`}>
-              <div><strong>{proposal.reason}</strong><small>加入 {proposal.addViewIds.length} · 移除 {proposal.removeViewIds.length}{proposal.targetViewId ? ' · 改目标' : ''}</small></div>
-              <div className="agent-proposal-actions">
-                <button type="button" className="pressable" onClick={() => onAcceptProposal(proposal.proposalId)}>接受</button>
-                <button type="button" className="quiet pressable" onClick={() => onRejectProposal(proposal.proposalId)}>拒绝</button>
-              </div>
-            </div>
-          ))}
-    </section>
     <section className="agent-surface-section">
       <h4>待处理任务</h4>
-      <p className="agent-context-empty">{pendingRuns > 0 ? `${pendingRuns} 条等待本地 Agent 接手` : '暂无待办'}</p>
+      {pendingReviews.length === 0 && pendingRuns === 0
+        ? <p className="agent-context-empty">暂无待办</p>
+        : <>
+          {pendingRuns > 0 && <p className="agent-context-empty">{pendingRuns} 条等待本地 Agent 接手</p>}
+          {pendingReviews.map((review) => (
+            <div key={String(review.run.id)} className="agent-review-chip" data-testid={`agent-review-${review.run.id}`}>
+              <div><strong>{review.run.instruction.slice(0, 46)}</strong><small>结果待确认</small></div>
+              <button type="button" className="pressable" onClick={() => onOpenReview(review)}>查看结果</button>
+            </div>
+          ))}
+        </>}
     </section>
+    {pendingProposals.length > 0 && <section className="agent-surface-section">
+      <h4>Agent 建议（{pendingProposals.length}）</h4>
+      {pendingProposals.map((proposal) => (
+        <div key={proposal.proposalId} className="agent-proposal-chip" data-testid={`agent-proposal-${proposal.proposalId}`}>
+          <div><strong>{proposal.reason}</strong><small>加入 {proposal.addViewIds.length} · 移除 {proposal.removeViewIds.length}{proposal.targetViewId ? ' · 改目标' : ''}</small></div>
+          <div className="agent-proposal-actions">
+            <button type="button" className="pressable" onClick={() => onAcceptProposal(proposal.proposalId)}>接受</button>
+            <button type="button" className="quiet pressable" onClick={() => onRejectProposal(proposal.proposalId)}>拒绝</button>
+          </div>
+        </div>
+      ))}
+    </section>}
+    {detailsOpen && <>
+      <dl>
+        <div><dt>项目</dt><dd>{projectLabel}</dd></div>
+        <div><dt>工作空间</dt><dd>{workspaceLabel}</dd></div>
+        <div><dt>当前选择</dt><dd>{selectedNodes.length || '无'}</dd></div>
+        <div><dt>参考内容</dt><dd>{projection?.contextArtifacts.length ?? 0}</dd></div>
+      </dl>
+      {selectedNodes.length > 0
+        ? <ul>{selectedNodes.slice(0, 5).map((node) => <li key={node.id}><span className={`agent-kind kind-${node.kind}`} />{node.title}</li>)}</ul>
+        : <p>在画布中选择内容，Agent 会读取同一份画布选择和参考内容。</p>}
+      {(projection?.offscreenClusters?.length ?? 0) > 0 && <section className="agent-surface-section">
+        <h4>视口外内容</h4>
+        <div className="agent-offscreen-clusters">{projection!.offscreenClusters!.slice(0, 6).map((cluster) => <span key={cluster.key} title={`${cluster.viewIds.length} 个可定位视图`}>{cluster.kind} · {cluster.count}</span>)}</div>
+      </section>}
+      {(projection?.recentChanges?.length ?? 0) > 0 && <section className="agent-surface-section">
+        <h4>最近变化</h4>
+        <ul className="agent-context-changes">{projection!.recentChanges!.slice(-4).reverse().map((change) => <li key={`${change.version}-${change.kind}-${change.occurredAt}`}><span>{change.summary}</span><small>v{change.version}</small></li>)}</ul>
+      </section>}
+    </>}
     {error && <div className="agent-context-error"><p>{humanizeRuntimeMessage(error)}</p><button type="button" className="quiet pressable" onClick={() => { void navigator.clipboard?.writeText(error) }}>复制诊断信息</button></div>}
   </aside>
 }

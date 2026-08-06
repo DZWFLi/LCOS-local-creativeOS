@@ -29,7 +29,7 @@ class StartInput(BaseModel):
 
 class DirectInput(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
-    session_id: str = Field(alias="sessionId")
+    session_id: str | None = Field(default=None, alias="sessionId")
 
 
 class FinalizeInput(BaseModel):

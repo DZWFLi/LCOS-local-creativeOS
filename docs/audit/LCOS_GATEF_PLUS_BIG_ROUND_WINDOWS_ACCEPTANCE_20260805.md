@@ -278,3 +278,33 @@ B7 选中→发送：通过（3 步；修复了 Composer 发 Run 400——GUI �
 GUI↔Core 合同全量审计：见 docs/audit/LCOS_GUI_CORE_CONTRACT_MISMATCH_AUDIT_20260805.md
   （除 auto 外未发现其它错位）
 ```
+
+## 11. 第二轮实测（2026-08-06：GUI 验收 + 恢复链路 + Agent 卡片瘦身）
+
+```text
+GUI 验收三件套（应用内浏览器，全部真实点击）：
+1. 使用这个版本（accept）：run-4812 adopted；retry 结果 run-8358 adopted
+2. 放弃这个结果（reject）：run-ed61595a rejected（Rail 显示正确目标）
+3. 重新执行（retry）：run-8358 retryOf=run-25a9，指令正确，随后 accepted
+4. 发现并修复：retry 之前把输入框残留文本当新指令（改用原指令重跑）；
+   多待审并存时无导航入口（Agent 卡片新增待审列表 + 查看结果）
+
+运行中取消：run-9698 running 时 cancel → queued/started/cancelled 事件链完整、
+进程树被杀、无草稿残留。
+
+会话失效→新建一次（真实触发）：移走会话文件 → resume 失败（中文系统错误）
+→ 补强 sessionInvalid 检测 → binding stale → spawn 新会话 019fd511 → Run 完成
+（“6 个内容节点”，答案正确）。同时修复 Bridge 任务定向残留：spawn_new 时清空
+dispatch_target，否则新会话 claim 被拒。
+
+Agent 画布卡片瘦身：默认只显示 头部 + 同步 + 选择/参考/任务统计 + 待处理任务
+（含可点开待审）+ Agent 建议；项目/工作空间/最近变化/视口外等内容默认收起，
+卡片宽度 258→236px。
+
+多选 Target/Context：3 节点多选 → selectionOrder/contextArtifacts 一致（v1569）。
+
+功能验收（本轮核对）：Activity 任务过程 ✅；Recovery 重新连接 ✅；Watcher stale/
+外部修改采纳 ✅；Checkpoint 保存/恢复 ✅；Checkpoint 状态对比 ❌ 未做；
+Preview 外部打开 ❌ 未做；Handoff 文件级 zip ❌ 未做（仅 Markdown 下载）；
+文件夹扫描确认页 🟡 待验收。
+```

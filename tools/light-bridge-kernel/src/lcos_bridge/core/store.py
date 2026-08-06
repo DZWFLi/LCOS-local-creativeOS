@@ -212,8 +212,8 @@ class SQLiteTaskStore:
             ).fetchone()
         return None if row is None else self._row_to_task(row)
 
-    def direct_task(self, task_id: str, session_id: str) -> BridgeTask:
-        """把任务定向给某个会话：排队认领不能抢走；该会话可定向认领。"""
+    def direct_task(self, task_id: str, session_id: str | None) -> BridgeTask:
+        """把任务定向给某个会话（排队认领不能抢走），或传 None 清空定向。"""
         with self._connection() as connection:
             connection.execute("BEGIN IMMEDIATE")
             try:
@@ -224,6 +224,13 @@ class SQLiteTaskStore:
                     connection.execute("COMMIT")
                     raise BridgeError("TASK_NOT_FOUND", "Task was not found.", retryable=False, http_status=404)
                 task = self._row_to_task(row)
+                if session_id is None:
+                    connection.execute(
+                        "DELETE FROM bridge_meta WHERE key = ?",
+                        (f"dispatch_target:{task_id}",),
+                    )
+                    connection.execute("COMMIT")
+                    return self._require(task_id)
                 if task.claimed_by is not None and task.claimed_by != session_id:
                     raise BridgeError(
                         "LEASE_CONFLICT",

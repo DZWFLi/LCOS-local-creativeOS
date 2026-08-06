@@ -59,10 +59,10 @@ docs/architecture/LCOS_MCP_BRIDGE_DECOUPLING_DESIGN_20260805.md
 | A1 MCP 真实会话加载 | ✅ 已解决 | 根因=本机 `models.json` DeepSeek 条目 `supports_search_tool=true` 触发动态工具发现，第三方 provider 不支持 tool_search 导致 MCP 静默隐藏；改为 `false` 后真实 `codex exec` 可见 64 个 LCOS 工具，且只读调用 `list_lcos_projects` 真实返回 Core 数据（2026-08-06 实机证据，详见验收报告 7.1）。桌面 App 需重启生效；`lcos-executor` enabled=false 为角色分流设计 |
 | A2 看门狗同步阻塞 | ✅ 已解决 | Node 异步看门狗：跨项目并发 2、同项目串行、超时/进程树/重试/冷却；smoke + 真实 5 Run 验证 |
 | A3 run.started 10s 语义 | 🟡 未复测 | 真实事件链正常；语义文档未更新 |
-| A4 相机常量集中 | 🟡 未做 | 本轮未触碰 |
+| A4 相机常量集中 | ✅ 已集中 | MIN_RESTORED_CAMERA_CONTENT_RATIO / MIN/MAX_CANVAS_ZOOM / CANVAS_ZOOM_STEP 均在 `canvasGeometry.ts`（2026-08-06 核对） |
 | B1 连续 5 Run | ✅ 已解决 | 同一项目 5 个真实 Run（此前会话 `019fd215`）；2026-08-06 新增 MCP 四变体（analyze/revise/create/waiting_input）同会话 `019fd4d1` 全程未跳，sessionInvalid=false |
 | B2 revise/create 变体 | ✅ 已解决 | 真实 create 两文件 + 真实 revise Draft，均接受收口 |
-| B3 running 撤回进程树 | 🟡 部分 | 排队中取消通过；运行中取消未实测 |
+| B3 running 撤回进程树 | ✅ 已实测 | 运行中取消：queued→started→cancelled 事件链完整，执行进程树被杀，无草稿残留（2026-08-06） |
 | B4 浏览器 1s 同步 | 🟡 部分 | Agent 面板版本同步可见（v812/v819）；无逐毫秒测量 |
 | B5 Obsidian UI 点选 | 🟡 部分 | smoke 覆盖；原生目录选择仍无法 headless |
 | B6 长 Prompt 端到端恢复 | ✅ 已测 | 2790 字 analyze 完成；强杀 Core 重启后 Run/会话绑定不丢 |
@@ -71,17 +71,17 @@ docs/architecture/LCOS_MCP_BRIDGE_DECOUPLING_DESIGN_20260805.md
 | 自然语言上下文指令 | 🟡 部分 | Skill/CLI/REST 全链真实可用；MCP 工具面已通（64 工具可见），propose→pending→reject 已实测（2026-08-06）；完整“指令→apply→Run 冻结”闭环待复测 |
 | waiting_input | ✅ 已解决 | 提问→回答→同会话续跑→completed，真实复测通过 |
 | 小错误自动修正一次 | 🟡 部分 | 架构/Skill 合同过；真实触发未复测 |
-| 会话首选/失效只新建一次 | ✅ 基本解决 | 5 Run 同会话；2026-08-06 MCP 四变体同会话稳定；`sessionInvalid` 真实触发→新建一次的路径仍未复测 |
+| 会话首选/失效只新建一次 | ✅ 已实测 | 真实触发：移除会话文件→resume 失败→session_invalid→binding stale→spawn 新会话 019fd511 完成 Run（2026-08-06）；顺带修复两个缺陷（本地化错误检测、任务定向残留） |
 | UI 术语降噪/右侧单工作台 | 🟡 部分 | 术语继续降噪；右侧单工作台未完成 |
-| 多选 Target/Context 识别 | 🟡 未复测 | 真实 Skill 识别未验证 |
+| 多选 Target/Context 识别 | ✅ 基本验证 | 3 节点多选→selectionOrder/contextArtifacts 同步（v1569）；revise/analyze 多轮真实 Run 的 Target/Context 分离正确（2026-08-06） |
 | `.lcosproj` 日常化 | 🟡 部分 | GUI 入口（打开/导出/备份/会话绑定）+ 浏览器 smoke 已过；Windows 文件关联仍 Gate W |
 | 批量导出工程 | ✅ 已解决 | export-all + 项目工具入口 |
 | Run Event Activity UI | 🟡 入口已加 | Activity/Recovery/stale 入口已补，未手工验收 |
 | Runtime Recovery GUI | 🟡 入口已加 | 未手工验收 |
 | Watcher / stale UI | 🟡 入口已加 | 未手工验收 |
-| Checkpoint 项目时间线 | 🟡 部分 | WorkspaceStates 已有；时间线/对比未做 |
-| Preview 统一 Viewer/外部打开 | 🟡 部分 | PreviewSurface 有；外部打开缺 |
-| Handoff Context Pack | 🟡 部分 | Markdown 导出有；文件级 zip 包缺 |
+| Checkpoint 项目时间线 | 🟡 部分 | 保存/恢复工作现场可用；保存状态之间的“对比”未做 |
+| Preview 统一 Viewer/外部打开 | 🟡 部分 | PreviewSurface 有；外部打开仍缺（未找到外部打开路径） |
+| Handoff Context Pack | 🟡 部分 | Markdown 导出有；文件级 zip 包仍缺 |
 | 文件夹扫描确认页/自动分组 | 🟡 部分 | 创建流程有；确认页/分组预览未手工验收 |
 | 托盘 Runtime Host 生命周期 | 🟡 部分 | 托盘在跑；全生命周期未测 |
 | Eagle/Obsidian/IMA/收藏夹 | 🟡 部分 | Obsidian 只读完成；其余无 |

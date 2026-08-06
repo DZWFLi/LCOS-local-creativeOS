@@ -30,7 +30,7 @@ function oneLineSummary(proposal: CreateRunProposal): string {
       return `将参考 ${contextCount} 项，由 ${provider} 新建${proposal.resultPolicy.type === 'create_collection' ? '一个内容集合' : '新内容'}。`
     case 'revise': {
       const target = proposal.editTargets[0]
-      const targetLabel = target === undefined ? '（未指定目标）' : `「${target.artifactId} · ${target.baseRevisionId.slice(0, 8)}」`
+      const targetLabel = target === undefined ? '（未指定目标）' : `「${target.artifactId ?? '?'} · ${target.baseRevisionId?.slice(0, 8) ?? '?'}」`
       const targets = proposal.editTargets.length > 1 ? `等 ${proposal.editTargets.length} 个对象` : ''
       return `将参考 ${contextCount} 项，由 ${provider} 修改${targetLabel}${targets}，生成新 Draft Revision。`
     }
@@ -49,6 +49,13 @@ export type ProposeRunInput =
 export function proposeRun(input: ProposeRunInput): RunProposalResult {
   const prompt = input.prompt.trim()
   if (prompt.length === 0) throw new Error('Run prompt is required.')
+  if (!Array.isArray(input.editTargets) || input.editTargets.some((target) =>
+    typeof target !== 'object' || target === null
+    || typeof (target as { artifactId?: unknown }).artifactId !== 'string'
+    || typeof (target as { baseRevisionId?: unknown }).baseRevisionId !== 'string',
+  )) {
+    throw new Error('editTargets 每个条目必须是 { artifactId: string, baseRevisionId: string }。')
+  }
   const intent = input.intent ?? inferIntent({ ...(input.createAsNewNode === undefined ? {} : { createAsNewNode: input.createAsNewNode }), editTargetCount: input.editTargets.length })
 
   // Domain Guard（6.3）：analyze 禁止写目标文件；create 只能新建。

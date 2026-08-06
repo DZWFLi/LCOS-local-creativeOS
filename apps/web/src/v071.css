@@ -68,14 +68,20 @@
 .app-shell.v071 .shortcut-hint { right: 64px !important; }
 .app-shell.v071 .prototype-reset { right: 14px !important; }
 
-.agent-context-surface { position: absolute; z-index: 44; top: 12px; right: calc(var(--work-rail-width) + 12px); width: 258px; padding: 10px; border: 1px solid rgba(27,42,56,.10); border-radius: 14px; color: var(--v071-ink); background: rgba(252,252,250,.96); box-shadow: 0 12px 34px rgba(25,40,55,.10); backdrop-filter: blur(14px); pointer-events: auto; }
+.agent-context-surface { position: absolute; z-index: 44; top: 12px; right: calc(var(--work-rail-width) + 12px); width: 236px; padding: 8px; border: 1px solid rgba(27,42,56,.10); border-radius: 14px; color: var(--v071-ink); background: rgba(252,252,250,.96); box-shadow: 0 12px 34px rgba(25,40,55,.10); backdrop-filter: blur(14px); pointer-events: auto; }
 .agent-context-surface header { display: flex; align-items: center; gap: 8px; }
 .agent-context-surface header > div { min-width: 0; display: grid; flex: 1; }
+.agent-context-surface header button { display: grid; place-items: center; width: 22px; height: 22px; border: 0; border-radius: 7px; color: var(--v071-muted); background: transparent; cursor: pointer; }
+.agent-context-surface header button:hover { color: var(--v071-ink); background: rgba(27,42,56,.055); }
 .agent-context-surface strong { font-size: 11px; }
 .agent-context-surface small { color: var(--v071-muted); font-size: 9px; }
 .agent-context-surface code { padding: 3px 5px; border-radius: 6px; color: #6341c4; background: rgba(112,71,216,.08); font-size: 9px; }
 .agent-context-live { width: 8px; height: 8px; border-radius: 50%; background: #27a77f; box-shadow: 0 0 0 4px rgba(39,167,127,.10); }
 .agent-context-live.error { background: #d35d50; box-shadow: 0 0 0 4px rgba(211,93,80,.10); }
+.agent-context-surface .agent-context-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 8px 0 0; }
+.agent-context-surface .agent-context-stats > div { display: grid; gap: 1px; padding: 5px 7px; border-radius: 8px; background: rgba(27,42,56,.035); }
+.agent-context-surface .agent-context-stats dt { color: var(--v071-muted); font-size: 8.5px; }
+.agent-context-surface .agent-context-stats dd { margin: 0; font-size: 11px; font-weight: 600; }
 .agent-context-surface dl { display: grid; gap: 4px; margin: 10px 0 0; }
 .agent-context-surface dl > div { display: grid; grid-template-columns: 68px minmax(0,1fr); gap: 7px; }
 .agent-context-surface dt { color: var(--v071-muted); font-size: 9px; }
@@ -84,6 +90,11 @@
 .agent-context-surface li { display: flex; align-items: center; gap: 6px; overflow: hidden; font-size: 9.5px; text-overflow: ellipsis; white-space: nowrap; }
 .agent-context-surface p { margin: 9px 0 0; color: var(--v071-muted); font-size: 9px; line-height: 1.45; }
 .agent-context-surface .agent-context-error { color: #b54d43; }
+.agent-context-surface .agent-review-chip { display: grid; gap: 6px; margin: 8px 0 0; padding: 7px 8px; border-radius: 9px; background: rgba(27,42,56,.035); }
+.agent-context-surface .agent-review-chip strong { display: block; overflow: hidden; font-size: 10px; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
+.agent-context-surface .agent-review-chip small { display: block; margin-top: 2px; }
+.agent-context-surface .agent-review-chip button { justify-self: start; margin-top: 4px; padding: 3px 10px; border: 0; border-radius: 999px; color: #fff; background: #7047d8; font-size: 10px; cursor: pointer; }
+.agent-context-surface .agent-review-chip button:hover { background: #5f38c0; }
 .agent-kind { width: 6px; height: 6px; flex: 0 0 6px; border-radius: 50%; background: #6d85a0; }
 .agent-kind.kind-context { background: #38a38c; }.agent-kind.kind-generated { background: #8359dc; }.agent-kind.kind-process { background: #d48645; }
 

@@ -67,7 +67,7 @@ class BridgeService:
         self.providers.get(provider)
         return self.store.claim_task_by_id(task_id, provider, worker_id, lease_seconds)
 
-    def direct_task(self, task_id: str, session_id: str) -> BridgeTask:
+    def direct_task(self, task_id: str, session_id: str | None) -> BridgeTask:
         return self.store.direct_task(task_id, session_id)
 
     def heartbeat(self, task_id: str, worker_id: str, lease_seconds: int = 120) -> BridgeTask:
