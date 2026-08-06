@@ -47,6 +47,7 @@ import type { ActiveContextProjection } from './runtime/localCoreClient'
 import { humanizeRuntimeMessage } from './runtime/messages'
 import { AgentContextSurface } from './features/shell/AgentContextSurface'
 import { buildScopePath, createId, fileNameFromPath, inferFileType, isTextPreviewFile, runtimePresentationStatus } from './features/shell/appShell'
+import { AppShellView } from './features/shell/AppShellView'
 import { parseArtifactRevisions, parseProcessProjection, parseWorkspaceStates, type ArtifactRevisionProvenance, type WorkspaceStateSummary } from './runtime/projectionAdapters'
 import { WorkspaceStatesDialog } from './features/workspace/WorkspaceStatesDialog'
 
@@ -2580,45 +2581,96 @@ export function App() {
     setNotice(`已定位「${node.title}」`)
   }, [nodes, safeInsets, scopeId, selectNode])
 
-  if (!projectOpen) return <>
-    {notice && <div data-testid="toast" className="notice" role="status" aria-live="polite">{notice}</div>}
-    <ProjectDrive projects={projects} openProjectIds={openProjectIds} onOpen={openProject} onCreate={() => setProjectCreateOpen(true)} />
-    <ProjectCreateDialog open={projectCreateOpen} onCancel={() => setProjectCreateOpen(false)} onBrowseDirectory={browseProjectDirectory} onInspectDirectory={inspectProjectDirectory} onCreate={createProject} />
-  </>
-
   const editorWorkspace = workspaceEditor?.id ? workspaces.find((workspace) => workspace.id === workspaceEditor.id) : undefined
   const nodeToRename = renameNodeId ? nodes.find((node) => node.id === renameNodeId) : undefined
   const scopePath = buildScopePath(scopes, activeScope)
-
-  return <main className="app-shell v05 v051 v052 v053 v056 v0561 v06 v06-phase2 v06-phase3 v061 v07 v071 porcelain-studio-v2" data-testid="creative-os-app">
-    <V07TopBar projects={projects} openProjectIds={openProjectIds} activeProjectId={activeProjectId} scopePath={scopePath} saveStatus={saveStatus} runStatus={activeRun?.status ?? null} workRailCollapsed={workRail.collapsed} onOpenDrive={() => setProjectOpen(false)} onOpenProject={openProject} onCloseProject={closeProjectTab} onOpenScope={enterScope} onToggleWorkRail={() => setWorkRail((current) => ({ ...current, collapsed: !current.collapsed }))} />
-    <section className={`scene intent-${effectiveWorkspace.intent ?? 'blank'}`} style={sceneStyle} data-project-id={activeProjectId} data-scope-id={scopeId} data-workspace-id={workspaceId ?? 'project-overview'} data-workspace-intent={effectiveWorkspace.intent ?? 'blank'}>
-      {capabilityOpen && <CapabilityPopover capabilities={capabilities} nodes={scopeNodes} onClose={() => setCapabilityOpen(false)} onImport={(files) => { const point = lastCanvasPointRef.current ?? { x: 180, y: 160 }; dropFiles(files, point.x, point.y); setCapabilityOpen(false) }} onCreateObject={() => { setCapabilityOpen(false); setCreateDialogOpen(true) }} onAddLink={() => { setCapabilityOpen(false); setLinkDialogOpen(true) }} onUniversalImport={() => { setCapabilityOpen(false); setImportPanelOpen(true) }} onHandoff={() => { setCapabilityOpen(false); void openHandoff() }} onProjectTools={() => { setCapabilityOpen(false); setProjectToolsOpen(true) }} onOpenComposer={() => { setCapabilityOpen(false); requestComposerFocus() }} onSelectNode={(id) => { selectNode(id); setCapabilityOpen(false) }} />}
-      <WorkspaceDock workspaces={scopeWorkspaces} activeId={workspaceId} collapsed={dockCollapsed} onCollapsedChange={setDockCollapsed} capabilitiesOpen={capabilityOpen} onOpenCapabilities={() => setCapabilityOpen((value) => !value)} onOverview={activateOverview} onChange={changeWorkspace} onLocate={locateWorkspace} onAddWorkspace={() => setWorkspaceEditor({ mode: 'create' })} onEditWorkspace={(id) => setWorkspaceEditor({ mode: 'edit', id })} onDuplicateWorkspace={duplicateWorkspace} onDeleteWorkspace={deleteWorkspace} onMoveWorkspace={moveWorkspace} onSaveWorkspaceState={saveCurrentWorkspaceState} onOpenWorkspaceStates={openWorkspaceStates} runStatus={activeRun?.status ?? null} />
-      <ProjectCanvas
-        nodes={visibleNodes}
-        setNodes={setNodes}
-        edges={visibleEdges}
-        setEdges={setEdges}
-        camera={camera}
-        setCamera={setCamera}
-        selectedId={selectedId}
-        selectedIds={selectedIds}
-        selectedEdgeId={selectedEdgeId}
-        setSelectedEdgeId={setSelectedEdgeId}
-        pendingId={activeRun?.pendingArtifactId ?? null}
-        runId={activeRun?.id ?? 'RUN-043'}
-        runStatus={activeRun?.status ?? null}
-        spaceHeld={spaceHeld}
-        locked={createDialogOpen || scopeCreateOpen}
-        layoutPreview={layoutPreview}
-        workspaceFrames={activeWorkspaceFrames}
-        workspaceMemberNodes={scopeNodes}
-        activeWorkspaceId={workspaceId}
-        onWorkspaceActivate={changeWorkspace}
-        onPresentationInteractionChange={handlePresentationInteractionChange}
-        onPresentationCommit={handlePresentationCommit}
-        selectionComposer={selectedIds.length ? {
+  return <AppShellView
+    notice={notice}
+    drive={{
+      open: !projectOpen,
+      projects,
+      openProjectIds,
+      onOpen: openProject,
+      onCreate: () => setProjectCreateOpen(true),
+    }}
+    topBar={{
+      projects,
+      openProjectIds,
+      activeProjectId,
+      scopePath,
+      saveStatus,
+      runStatus: activeRun?.status ?? null,
+      workRailCollapsed: workRail.collapsed,
+      onOpenDrive: () => setProjectOpen(false),
+      onOpenProject: openProject,
+      onCloseProject: closeProjectTab,
+      onOpenScope: enterScope,
+      onToggleWorkRail: () => setWorkRail((current) => ({ ...current, collapsed: !current.collapsed })),
+    }}
+    scene={{
+      sceneStyle,
+      sceneData: {
+        projectId: activeProjectId,
+        scopeId,
+        workspaceId,
+        workspaceIntent: effectiveWorkspace.intent ?? 'blank',
+      },
+      capability: capabilityOpen ? {
+        capabilities,
+        nodes: scopeNodes,
+        onClose: () => setCapabilityOpen(false),
+        onImport: (files) => { const point = lastCanvasPointRef.current ?? { x: 180, y: 160 }; dropFiles(files, point.x, point.y); setCapabilityOpen(false) },
+        onCreateObject: () => { setCapabilityOpen(false); setCreateDialogOpen(true) },
+        onAddLink: () => { setCapabilityOpen(false); setLinkDialogOpen(true) },
+        onUniversalImport: () => { setCapabilityOpen(false); setImportPanelOpen(true) },
+        onHandoff: () => { setCapabilityOpen(false); void openHandoff() },
+        onProjectTools: () => { setCapabilityOpen(false); setProjectToolsOpen(true) },
+        onOpenComposer: () => { setCapabilityOpen(false); requestComposerFocus() },
+        onSelectNode: (id) => { selectNode(id); setCapabilityOpen(false) },
+      } : null,
+      dock: {
+        workspaces: scopeWorkspaces,
+        activeId: workspaceId,
+        collapsed: dockCollapsed,
+        onCollapsedChange: setDockCollapsed,
+        capabilitiesOpen: capabilityOpen,
+        onOpenCapabilities: () => setCapabilityOpen((value) => !value),
+        onOverview: activateOverview,
+        onChange: changeWorkspace,
+        onLocate: locateWorkspace,
+        onAddWorkspace: () => setWorkspaceEditor({ mode: 'create' }),
+        onEditWorkspace: (id) => setWorkspaceEditor({ mode: 'edit', id }),
+        onDuplicateWorkspace: duplicateWorkspace,
+        onDeleteWorkspace: deleteWorkspace,
+        onMoveWorkspace: moveWorkspace,
+        onSaveWorkspaceState: saveCurrentWorkspaceState,
+        onOpenWorkspaceStates: openWorkspaceStates,
+        runStatus: activeRun?.status ?? null,
+      },
+      canvas: {
+        nodes: visibleNodes,
+        setNodes,
+        edges: visibleEdges,
+        setEdges,
+        camera,
+        setCamera,
+        selectedId,
+        selectedIds,
+        selectedEdgeId,
+        setSelectedEdgeId,
+        pendingId: activeRun?.pendingArtifactId ?? null,
+        runId: activeRun?.id ?? 'RUN-043',
+        runStatus: activeRun?.status ?? null,
+        spaceHeld,
+        locked: createDialogOpen || scopeCreateOpen,
+        layoutPreview,
+        workspaceFrames: activeWorkspaceFrames,
+        workspaceMemberNodes: scopeNodes,
+        activeWorkspaceId: workspaceId,
+        onWorkspaceActivate: changeWorkspace,
+        onPresentationInteractionChange: handlePresentationInteractionChange,
+        onPresentationCommit: handlePresentationCommit,
+        selectionComposer: selectedIds.length ? {
           contextIds: selectionContextIds,
           prompt: selectionComposerText,
           provider: selectionProvider,
@@ -2639,112 +2691,242 @@ export function App() {
           onRemoveFromWorkspace: removeSelectionFromActiveWorkspace,
           onMoveToWorkspace: moveSelectionToWorkspace,
           onClose: clearSelection,
-        } : undefined}
-        onSelect={selectNode}
-        onClearSelection={clearSelection}
-        onMarqueeSelect={selectMarquee}
-        onSelectEdge={selectEdge}
-        onDoubleClick={handleDoubleClick}
-        onDetails={showNodeDetails}
-        onRequestAi={requestComposerFocus}
-        onCreateNodeFromAnchor={createNodeFromAnchor}
-        onFilesDropped={dropFiles}
-        onArrangeSelection={arrangeSelection}
-        onCopySelection={copySelectedViews}
-        onDuplicateSelection={duplicateSelectedViews}
-        onCreateScopeFromSelection={() => selectedIds.length ? setScopeCreateOpen(true) : setNotice('先选择要整理进子画布的对象')}
-        onDeleteSelection={deleteSelectedViews}
-        onPointerWorldChange={rememberCanvasPoint}
-        onSpaceCreate={(point) => { lastCanvasPointRef.current = point; setCreateDialogOpen(true) }}
-      />
-      <div className="canvas-hud" data-testid="canvas-hud"><CanvasMiniMap nodes={scopeNodes} workspaceFrames={activeWorkspaceFrames} camera={camera} setCamera={setCamera} collapsed={miniMapCollapsed} onCollapsedChange={setMiniMapCollapsed} safeInsets={safeInsets} /></div>
-      <WorkRail
-        workspace={effectiveWorkspace}
-        nodes={nodes}
-        activeRun={activeRun}
-        pendingNode={pendingNode}
-        collapsed={workRail.collapsed}
-        width={effectiveRailWidth}
-        contextLabel={activeWorkspace ? `工作空间「${activeWorkspace.label}」` : '当前画布'}
-        contextCount={globalContextIds.length}
-        composerText={globalComposerText}
-        composerRef={composerRef}
-        composerFocusRequest={composerFocusRequest}
-        provider={globalProvider}
-        createAsNewNode={globalCreateAsNewNode}
-        providers={runtimeProviders}
-        onRequestComposerFocus={requestComposerFocus}
-        onCollapse={() => setWorkRail((current) => ({ ...current, collapsed: true }))}
-        onExpand={() => setWorkRail((current) => ({ ...current, collapsed: false }))}
-        onComposerChange={setGlobalComposerText}
-        onProviderChange={setGlobalProvider}
-        onCreateAsNewNodeChange={setGlobalCreateAsNewNode}
-        onSend={requestGlobalRun}
-        onSaveWorkspaceState={() => saveCurrentWorkspaceState()}
-        onOpenWorkspaceStates={() => openWorkspaceStates()}
-        onAccept={acceptRun}
-        onReject={rejectRun}
-        onRetry={retryRun}
-        onSyncRun={syncRuntimeRun}
-        onCancelRun={cancelActiveRun}
-        runEvents={runEvents}
-        runEventsError={runEventsError}
-        runtimeRecovering={runtimeRecovering}
-        onRecoverRun={recoverActiveRun}
-        onAnswerInput={answerActiveRunInput}
-        onContinueModify={continueModify}
-        onShowRun={clearSelection}
-      />
-      {agentMode && <AgentContextSurface
-        projectLabel={activeProject.label}
-        workspaceLabel={effectiveWorkspace.label}
-        projection={activeContextProjection}
-        selectedNodes={selectedNodes}
-        error={activeContextError}
-        syncState={contextSync}
-        proposals={contextProposals}
-        pendingRuns={pendingCodexCount}
-        pendingReviews={pendingReviews}
-        detailsOpen={agentSurfaceDetailsOpen}
-        runLocked={activeRun ? { id: activeRun.id, contextCount: activeRun.contextIds.length } : null}
-        onAcceptProposal={(proposalId) => resolveContextProposal(proposalId, 'accept')}
-        onRejectProposal={(proposalId) => resolveContextProposal(proposalId, 'reject')}
-        onRefresh={refreshActiveContext}
-        onToggleDetails={() => setAgentSurfaceDetailsOpen((current) => !current)}
-        onOpenReview={openRunReview}
-      />}
-      {nodeInfoNode && <NodeInfoPopover node={nodeInfoNode} camera={camera} relationCount={nodeInfoRelationCount} onClose={() => setNodeInfoId(null)} onRelations={() => { selectNode(nodeInfoNode.id); setNodeInfoId(null); setNotice(`${nodeInfoRelationCount} 个关联已在画布中高亮`) }} onPreview={(node) => { setNodeInfoId(null); setWorkbench({ nodeId: node.id, focus: 'preview' }) }} onShowResource={(node) => { setNodeInfoId(null); setResourceDetailArtifactId(String(node.artifactId)) }} onRevisions={(node) => { setNodeInfoId(null); setWorkbench({ nodeId: node.id, focus: 'revisions' }) }} />}
-      <ProjectToolsDialog open={projectToolsOpen} project={activeProject} projects={projects} client={bridgeRef.current.client} onClose={() => setProjectToolsOpen(false)} onProjectOpened={refreshProjectCatalog} onSelectArtifact={selectArtifactFromTools} onNotice={setNotice} />
-      {workbenchNode && <ArtifactWorkbench node={workbenchNode} projectId={activeProjectId} client={bridgeRef.current.client} relationCount={workbenchRelationCount} focus={workbench?.focus ?? 'preview'} onFocusChange={(focus) => setWorkbench((current) => current ? { ...current, focus } : current)} onClose={() => setWorkbench(null)} onLocate={() => {
-        selectNode(workbenchNode.id)
-        setNodeInfoId(null)
-        const viewport = document.querySelector<HTMLElement>('[data-testid="canvas"]')?.getBoundingClientRect()
-        setCamera(revealNode(camera, workbenchNode, viewport?.width ?? 1000, viewport?.height ?? 820))
-        setNotice(`已定位「${workbenchNode.title}」`)
-      }} onUseRevision={useHistoricalRevision} onShowResource={workbenchNode.artifactId === undefined ? undefined : () => { setWorkbench(null); setResourceDetailArtifactId(String(workbenchNode.artifactId)) }} onRefreshFile={workbenchNode.fileRecordId === undefined ? undefined : () => refreshSource(workbenchNode)} onAdoptExternalChange={workbenchNode.fileRecordId === undefined || workbenchNode.fileAvailability !== 'stale' ? undefined : () => adoptExternalChange(workbenchNode)} />}
-      {activeRun && <button className={`run-pill ${activeRun.status}`} title={activeRun.id} onClick={() => { clearSelection(); setWorkRail((current) => ({ ...current, collapsed: false })) }}><Play size={13} /> Agent 任务 · {runStatusLabel[activeRun.status]}</button>}
-      <nav className="scene-title v06-breadcrumbs" aria-label="画布层级">{scopePath.map((scope, index) => {
-        const current = index === scopePath.length - 1
-        return <button key={scope.id} data-testid={`scope-crumb-${scope.id}`} aria-current={current ? 'page' : undefined} disabled={current} onClick={() => enterScope(scope.id)}>{index > 0 && <span>/</span>}{index === 0 ? activeProject.label : scope.label}</button>
-      })}{activeScope.parentScopeId && <button className="scope-back" data-testid="scope-back" onClick={leaveScope}>返回上级</button>}</nav>
-      {!selectedIds.length && !activeRun && <div className="shortcut-hint"><Command size={12} /> 单击内容 · C 输入指令 · Ctrl/Cmd+Enter 执行</div>}
-      {layoutPreview && <div className="layout-preview-banner"><span>预览自动布局 · 只移动当前子画布中的视图</span><button onClick={applyLayout}>应用</button><button onClick={() => setLayoutPreview(null)}>取消</button></div>}
-      {notice && <div data-testid="toast" className="notice" role="status" aria-live="polite">{notice}</div>}
-      <ScopeCreateDialog open={scopeCreateOpen} selectedCount={selectedIds.length} leftInset={safeInsets.left} rightInset={24} onCancel={() => setScopeCreateOpen(false)} onCreate={createScopeFromSelection} />
-      <CreateContentDialog open={createDialogOpen} leftInset={safeInsets.left} rightInset={24} onCancel={() => setCreateDialogOpen(false)} onCreate={createContentFromDialog} />
-      {workspaceEditor && <WorkspaceDialog mode={workspaceEditor.mode} workspace={editorWorkspace} currentCamera={camera} onCancel={() => setWorkspaceEditor(null)} onSave={saveWorkspaceEditor} />}
-      {nodeToRename && <InlineNodeRename node={nodeToRename} camera={camera} onCancel={() => setRenameNodeId(null)} onSave={(value) => renameNodeTitle(nodeToRename.id, value)} />}
-      {confirmWorkspaceId && <ConfirmDialog title="删除这个工作空间？" description="只删除工作空间定义，不删除内容、节点、本地文件或 Camera。" onCancel={() => setConfirmWorkspaceId(null)} onConfirm={confirmDeleteWorkspace} />}
-      <HandoffDialog open={handoffOpen} loading={handoffLoading} manifest={handoffManifest} error={handoffError} onClose={() => setHandoffOpen(false)} onCopy={() => { void copyHandoff() }} onDownload={downloadHandoff} />
-      <LinkReferenceDialog open={linkDialogOpen} onClose={() => setLinkDialogOpen(false)} onCreate={createLinkReference} />
-      <UniversalImportPanel open={importPanelOpen} onClose={() => setImportPanelOpen(false)} onFiles={(files) => { const point = lastCanvasPointRef.current ?? { x: 180, y: 160 }; dropFiles([...files], point.x, point.y) }} onDirectory={(rootName, files, note) => { void handleImportDirectory(rootName, files, note) }} onArchive={(file, note) => { void handleImportArchive(file, note) }} onOpenLink={() => setLinkDialogOpen(true)} onOpenObsidian={handleOpenObsidian} onOpenConversations={() => setConversationDialogOpen(true)} />
-      <ConversationContextDialog open={conversationDialogOpen} projectId={activeProjectId} scopeId={scopeId} {...(workspaceId === null ? {} : { workspaceId })} client={bridgeRef.current.client} onClose={() => setConversationDialogOpen(false)} onImported={() => { setNotice('对话上下文已更新'); void openProject(activeProjectId) }} onFocusArtifact={selectArtifactFromTools} onRequestSectionAnnotation={requestConversationSectionAnnotation} />
-      <ObsidianImportDialog scan={obsidianScan} busy={obsidianBusy} error={obsidianError} onClose={() => { setObsidianScan(null); setObsidianError(null) }} onImport={handleImportObsidian} />
-      {resourceDetailArtifactId !== null && <ResourceDetailDialog open projectId={activeProjectId} artifactId={resourceDetailArtifactId} client={bridgeRef.current.client} onClose={() => setResourceDetailArtifactId(null)} onChanged={() => { void refreshResourceStatuses() }} />}
-      {workspaceStatesOpen && workspaceStatesWorkspaceId && (() => {
+        } : undefined,
+        onSelect: selectNode,
+        onClearSelection: clearSelection,
+        onMarqueeSelect: selectMarquee,
+        onSelectEdge: selectEdge,
+        onDoubleClick: handleDoubleClick,
+        onDetails: showNodeDetails,
+        onRequestAi: requestComposerFocus,
+        onCreateNodeFromAnchor: createNodeFromAnchor,
+        onFilesDropped: dropFiles,
+        onArrangeSelection: arrangeSelection,
+        onCopySelection: copySelectedViews,
+        onDuplicateSelection: duplicateSelectedViews,
+        onCreateScopeFromSelection: () => selectedIds.length ? setScopeCreateOpen(true) : setNotice('先选择要整理进子画布的对象'),
+        onDeleteSelection: deleteSelectedViews,
+        onPointerWorldChange: rememberCanvasPoint,
+        onSpaceCreate: (point) => { lastCanvasPointRef.current = point; setCreateDialogOpen(true) },
+      },
+      miniMap: {
+        nodes: scopeNodes,
+        workspaceFrames: activeWorkspaceFrames,
+        camera,
+        setCamera,
+        collapsed: miniMapCollapsed,
+        onCollapsedChange: setMiniMapCollapsed,
+        safeInsets,
+      },
+      breadcrumbs: {
+        projectLabel: activeProject.label,
+        items: scopePath.map((scope, index) => ({ id: scope.id, label: index === 0 ? activeProject.label : scope.label, current: index === scopePath.length - 1 })),
+        onEnter: enterScope,
+        onBack: activeScope.parentScopeId ? leaveScope : null,
+      },
+      shortcutHintVisible: !selectedIds.length && !activeRun,
+      runPill: activeRun ? {
+        status: activeRun.status,
+        label: runStatusLabel[activeRun.status],
+        onClick: () => { clearSelection(); setWorkRail((current) => ({ ...current, collapsed: false })) },
+      } : null,
+      layoutPreview: layoutPreview ? {
+        onApply: applyLayout,
+        onCancel: () => setLayoutPreview(null),
+      } : null,
+      notice,
+      nodeInfo: nodeInfoNode ? {
+        node: nodeInfoNode,
+        camera,
+        relationCount: nodeInfoRelationCount,
+        onClose: () => setNodeInfoId(null),
+        onRelations: () => { selectNode(nodeInfoNode.id); setNodeInfoId(null); setNotice(`${nodeInfoRelationCount} 个关联已在画布中高亮`) },
+        onPreview: (node) => { setNodeInfoId(null); setWorkbench({ nodeId: node.id, focus: 'preview' }) },
+        onShowResource: (node) => { setNodeInfoId(null); setResourceDetailArtifactId(String(node.artifactId)) },
+        onRevisions: (node) => { setNodeInfoId(null); setWorkbench({ nodeId: node.id, focus: 'revisions' }) },
+      } : null,
+      agentSurface: agentMode ? {
+        projectLabel: activeProject.label,
+        workspaceLabel: effectiveWorkspace.label,
+        projection: activeContextProjection,
+        selectedNodes,
+        error: activeContextError,
+        syncState: contextSync,
+        proposals: contextProposals,
+        pendingRuns: pendingCodexCount,
+        pendingReviews,
+        detailsOpen: agentSurfaceDetailsOpen,
+        runLocked: activeRun ? { id: activeRun.id, contextCount: activeRun.contextIds.length } : null,
+        onAcceptProposal: (proposalId) => resolveContextProposal(proposalId, 'accept'),
+        onRejectProposal: (proposalId) => resolveContextProposal(proposalId, 'reject'),
+        onRefresh: refreshActiveContext,
+        onToggleDetails: () => setAgentSurfaceDetailsOpen((current) => !current),
+        onOpenReview: openRunReview,
+      } : null,
+    }}
+    rail={{
+      workspace: effectiveWorkspace,
+      nodes,
+      activeRun,
+      pendingNode,
+      collapsed: workRail.collapsed,
+      width: effectiveRailWidth,
+      contextLabel: activeWorkspace ? `工作空间「${activeWorkspace.label}」` : '当前画布',
+      contextCount: globalContextIds.length,
+      composerText: globalComposerText,
+      composerRef,
+      composerFocusRequest,
+      provider: globalProvider,
+      createAsNewNode: globalCreateAsNewNode,
+      providers: runtimeProviders,
+      onRequestComposerFocus: requestComposerFocus,
+      onCollapse: () => setWorkRail((current) => ({ ...current, collapsed: true })),
+      onExpand: () => setWorkRail((current) => ({ ...current, collapsed: false })),
+      onComposerChange: setGlobalComposerText,
+      onProviderChange: setGlobalProvider,
+      onCreateAsNewNodeChange: setGlobalCreateAsNewNode,
+      onSend: requestGlobalRun,
+      onSaveWorkspaceState: () => saveCurrentWorkspaceState(),
+      onOpenWorkspaceStates: () => openWorkspaceStates(),
+      onAccept: acceptRun,
+      onReject: rejectRun,
+      onRetry: retryRun,
+      onSyncRun: syncRuntimeRun,
+      onCancelRun: cancelActiveRun,
+      runEvents,
+      runEventsError,
+      runtimeRecovering,
+      onRecoverRun: recoverActiveRun,
+      onAnswerInput: answerActiveRunInput,
+      onContinueModify: continueModify,
+      onShowRun: clearSelection,
+    }}
+    dialogs={{
+      projectCreate: {
+        open: projectCreateOpen,
+        onCancel: () => setProjectCreateOpen(false),
+        onBrowseDirectory: browseProjectDirectory,
+        onInspectDirectory: inspectProjectDirectory,
+        onCreate: createProject,
+      },
+      projectTools: projectToolsOpen ? {
+        open: projectToolsOpen,
+        project: activeProject,
+        projects,
+        client: bridgeRef.current.client,
+        onClose: () => setProjectToolsOpen(false),
+        onProjectOpened: refreshProjectCatalog,
+        onSelectArtifact: selectArtifactFromTools,
+        onNotice: setNotice,
+      } : null,
+      workbench: workbenchNode ? {
+        node: workbenchNode,
+        projectId: activeProjectId,
+        client: bridgeRef.current.client,
+        relationCount: workbenchRelationCount,
+        focus: workbench?.focus ?? 'preview',
+        onFocusChange: (focus) => setWorkbench((current) => current ? { ...current, focus } : current),
+        onClose: () => setWorkbench(null),
+        onLocate: () => {
+          selectNode(workbenchNode.id)
+          setNodeInfoId(null)
+          const viewport = document.querySelector<HTMLElement>('[data-testid="canvas"]')?.getBoundingClientRect()
+          setCamera(revealNode(camera, workbenchNode, viewport?.width ?? 1000, viewport?.height ?? 820))
+          setNotice(`已定位「${workbenchNode.title}」`)
+        },
+        onUseRevision: useHistoricalRevision,
+        onShowResource: workbenchNode.artifactId === undefined ? undefined : () => { setWorkbench(null); setResourceDetailArtifactId(String(workbenchNode.artifactId)) },
+        onRefreshFile: workbenchNode.fileRecordId === undefined ? undefined : () => refreshSource(workbenchNode),
+        onAdoptExternalChange: workbenchNode.fileRecordId === undefined || workbenchNode.fileAvailability !== 'stale' ? undefined : () => adoptExternalChange(workbenchNode),
+      } : null,
+      scopeCreate: scopeCreateOpen ? {
+        open: scopeCreateOpen,
+        selectedCount: selectedIds.length,
+        leftInset: safeInsets.left,
+        rightInset: 24,
+        onCancel: () => setScopeCreateOpen(false),
+        onCreate: createScopeFromSelection,
+      } : null,
+      createContent: createDialogOpen ? {
+        open: createDialogOpen,
+        leftInset: safeInsets.left,
+        rightInset: 24,
+        onCancel: () => setCreateDialogOpen(false),
+        onCreate: createContentFromDialog,
+      } : null,
+      workspaceEditor: workspaceEditor ? {
+        mode: workspaceEditor.mode,
+        workspace: editorWorkspace,
+        currentCamera: camera,
+        onCancel: () => setWorkspaceEditor(null),
+        onSave: saveWorkspaceEditor,
+      } : null,
+      nodeRename: nodeToRename ? {
+        node: nodeToRename,
+        camera,
+        onCancel: () => setRenameNodeId(null),
+        onSave: (value) => renameNodeTitle(nodeToRename.id, value),
+      } : null,
+      confirmWorkspaceDelete: confirmWorkspaceId ? {
+        title: '删除这个工作空间？',
+        description: '只删除工作空间定义，不删除内容、节点、本地文件或 Camera。',
+        onCancel: () => setConfirmWorkspaceId(null),
+        onConfirm: confirmDeleteWorkspace,
+      } : null,
+      handoff: handoffOpen ? {
+        open: handoffOpen,
+        loading: handoffLoading,
+        manifest: handoffManifest,
+        error: handoffError,
+        onClose: () => setHandoffOpen(false),
+        onCopy: () => { void copyHandoff() },
+        onDownload: downloadHandoff,
+      } : null,
+      linkReference: linkDialogOpen ? {
+        open: linkDialogOpen,
+        onClose: () => setLinkDialogOpen(false),
+        onCreate: createLinkReference,
+      } : null,
+      universalImport: importPanelOpen ? {
+        open: importPanelOpen,
+        onClose: () => setImportPanelOpen(false),
+        onFiles: (files) => { const point = lastCanvasPointRef.current ?? { x: 180, y: 160 }; dropFiles([...files], point.x, point.y) },
+        onDirectory: (rootName, files, note) => { void handleImportDirectory(rootName, files, note) },
+        onArchive: (file, note) => { void handleImportArchive(file, note) },
+        onOpenLink: () => setLinkDialogOpen(true),
+        onOpenObsidian: handleOpenObsidian,
+        onOpenConversations: () => setConversationDialogOpen(true),
+      } : null,
+      conversationContext: conversationDialogOpen ? {
+        open: conversationDialogOpen,
+        projectId: activeProjectId,
+        scopeId,
+        ...(workspaceId === null ? {} : { workspaceId }),
+        client: bridgeRef.current.client,
+        onClose: () => setConversationDialogOpen(false),
+        onImported: () => { setNotice('对话上下文已更新'); void openProject(activeProjectId) },
+        onFocusArtifact: selectArtifactFromTools,
+        onRequestSectionAnnotation: requestConversationSectionAnnotation,
+      } : null,
+      obsidianImport: obsidianScan ? {
+        scan: obsidianScan,
+        busy: obsidianBusy,
+        error: obsidianError,
+        onClose: () => { setObsidianScan(null); setObsidianError(null) },
+        onImport: handleImportObsidian,
+      } : null,
+      resourceDetail: resourceDetailArtifactId !== null ? {
+        open: true,
+        projectId: activeProjectId,
+        artifactId: resourceDetailArtifactId,
+        client: bridgeRef.current.client,
+        onClose: () => setResourceDetailArtifactId(null),
+        onChanged: () => { void refreshResourceStatuses() },
+      } : null,
+      extraDialogs: workspaceStatesOpen && workspaceStatesWorkspaceId ? (() => {
         const stateWorkspace = workspaces.find((workspace) => workspace.id === workspaceStatesWorkspaceId)
         return stateWorkspace ? <WorkspaceStatesDialog workspace={stateWorkspace} states={workspaceStates} loading={workspaceStatesLoading} saving={workspaceStateSaving} restoringId={workspaceStateRestoringId} error={workspaceStatesError} onClose={() => setWorkspaceStatesOpen(false)} onRefresh={() => loadWorkspaceStates(workspaceStatesWorkspaceId)} onSave={(name) => saveCurrentWorkspaceState(workspaceStatesWorkspaceId, name)} onRestore={restoreSavedWorkspaceState} /> : null
-      })()}
-    </section>
-  </main>
+      })() : null,
+    }}
+  />
 }

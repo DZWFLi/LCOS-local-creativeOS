@@ -1,0 +1,39 @@
+import type { ComponentProps } from 'react'
+import { ProjectDrive } from '../project/ProjectDrive'
+import { V07TopBar } from './V07TopBar'
+import { DialogsHost, type DialogsHostProps } from './DialogsHost'
+import { CanvasSceneHost, type CanvasSceneHostProps } from './CanvasSceneHost'
+import { WorkRailHost } from './WorkRailHost'
+import type { WorkRail } from '../workrail/WorkRail'
+
+export interface AppShellViewProps {
+  readonly notice: string | null
+  readonly drive: {
+    readonly open: boolean
+    readonly projects: ComponentProps<typeof ProjectDrive>['projects']
+    readonly openProjectIds: ComponentProps<typeof ProjectDrive>['openProjectIds']
+    readonly onOpen: ComponentProps<typeof ProjectDrive>['onOpen']
+    readonly onCreate: () => void
+  }
+  readonly topBar: ComponentProps<typeof V07TopBar>
+  readonly scene: CanvasSceneHostProps
+  readonly rail: ComponentProps<typeof WorkRail>
+  readonly dialogs: DialogsHostProps
+}
+
+/** App Shell 纯展示层：把 Drive / TopBar / Scene / WorkRail / Dialogs 组装成最终布局。 */
+export function AppShellView(props: AppShellViewProps) {
+  if (props.drive.open) {
+    return <>
+      {props.notice && <div data-testid="toast" className="notice" role="status" aria-live="polite">{props.notice}</div>}
+      <ProjectDrive projects={props.drive.projects} openProjectIds={props.drive.openProjectIds} onOpen={props.drive.onOpen} onCreate={props.drive.onCreate} />
+      <DialogsHost {...props.dialogs} />
+    </>
+  }
+  return <main className="app-shell v05 v051 v052 v053 v056 v0561 v06 v06-phase2 v06-phase3 v061 v07 v071 porcelain-studio-v2" data-testid="creative-os-app">
+    <V07TopBar {...props.topBar} />
+    <CanvasSceneHost {...props.scene} />
+    <WorkRailHost rail={props.rail} />
+    <DialogsHost {...props.dialogs} />
+  </main>
+}
