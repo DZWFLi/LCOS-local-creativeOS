@@ -20,26 +20,54 @@
 - `apps/web/src/App.tsx`（约 2900 行）拆为：
   AppShell / CanvasHost / WorkRailHost / AgentCardHost / DialogsHost；
   每个 Host 只通过 contracts + runtime 客户端访问 Core。
-  - ✅ 第一片：AgentContextSurface 迁至 `features/shell/AgentContextSurface.tsx`；
-    `createId / runtimePresentationStatus / fileNameFromPath / buildScopePath /
-    isTextPreviewFile / inferFileType` 迁至 `features/shell/appShell.ts`；
-    `humanizeRuntimeMessage` 迁至 `runtime/messages.ts`。App.tsx 2750 行。
-  - ⏳ 剩余：JSX 尾部迁为 AppShellView（CanvasHost / WorkRailHost / DialogsHost
-    组合），App.tsx 只留编排。
+  - ✅ 完成：`features/shell/AppShellView.tsx` 组装 Drive / TopBar / Scene /
+    WorkRail / Dialogs；`CanvasSceneHost.tsx`（Dock + Canvas + Mini-map +
+    面包屑 + 状态浮层）、`WorkRailHost.tsx`、`DialogsHost.tsx`（14 类弹窗 +
+    复杂弹窗逃生口）；`AgentContextSurface.tsx` + `appShell.ts` +
+    `runtime/messages.ts` 上一轮已迁出。App.tsx 只保留编排与 props 组装
+    （约 2930 行，JSX 展示层已全部外迁）。
 - `apps/local-core/src/server.ts`（约 3000 行）路由拆分 `routes/*` + 服务装配 `compose.ts`。
-  - ✅ 第一片：`/artifact-returns/:id/(accept|reject|retry)` 迁至
-    `routes/runtime-reviews.ts`（注入式 context，server.ts 约 40 行 → 15 行）。
-  - ⏳ 剩余：context-proposals / runs / conversations / resources / workspaces
-    / active-context 等路由组继续外迁。
+  - ✅ 完成：`routes/` 下 13 个模块（route-context 共享守卫/helpers、
+    runtime-reviews、conversations、projects、canvas、context-proposals、runs、
+    lcosproj、artifacts、workspace-states、connectors、executor、runtime、
+    imports、resources、entity、multipart）；server.ts 从 3014 行降至 670 行，
+    分发器只剩健康检查 + 模块调用 + entity/fallback。
 
 ### Phase 2 — 契约与适配
 
 - web `model.ts` 视图模型 → contracts 显式适配层全覆盖（projectionAdapters 补全）+ 架构测试。
-  - ⏳ projectionAdapters 覆盖审计（web model 与 contracts 一致性）进行中；
-  - ✅ 架构测试首块：`tests/architecture/web-shell-boundaries.test.ts`
-    （features 不得 import App、runtime client 不得 import features）。
+  - ✅ projectionAdapters 覆盖测试（artifact revisions / workspace states /
+    process projection / session summaries / revision compare）：
+    `apps/web/tests/projectionAdapters.test.ts`；
+  - ✅ 适配层边界测试：`tests/architecture/projection-adapters-boundary.test.ts`
+    （只依赖 contracts + model，不碰 React/features）；
+  - ✅ 既有 shell 边界测试保留：`tests/architecture/web-shell-boundaries.test.ts`。
 - CSS 主题收敛（用户暂缓；v07/v071/porcelain 三套并存）。
-- `qa-fixtures/` 归档：fixtures 只留给测试，不进生产包。
+- ✅ `qa-fixtures/` 已退出生产路径：`createBlankProjectState` 迁至
+  `state/projectState.ts`；App.tsx 不再 import qa-fixtures，目录只被
+  `apps/web/tests/*` 引用；边界测试 `tests/architecture/qa-fixtures-boundary.test.ts`
+  阻止生产代码回引。
+
+### 本轮验证
+
+```text
+check:fast（lint → typecheck → web 134 / core 252 / domain / contracts 测试
+  → 架构 69 → web build）✅
+smoke:gatef-core（新代码进程内全链路 + schema/capabilities）✅
+真实 HTTP 抽查（connectors/executor/projects/graph/active-context/
+  context-proposals/workspaces/artifacts/runs/providers/states/revisions）全部 200 ✅
+```
+
+### 提交
+
+```text
+3069c3c refactor(shell): extract AgentContextSurface + runtime-review route + boundaries test
+eaf754f refactor(core): extract conversations/projects/canvas/proposals/runs route modules
+8f6033a refactor(core): extract lcosproj/artifacts/workspace-states route modules + shared multipart
+9397a93 refactor(core): extract connectors/executor/runtime/imports/resources/entity route modules
+03eb9c0 refactor(shell): split App JSX into AppShellView + Canvas/Dialogs/WorkRail hosts
+102d2b2 feat(phase2): fixtures out of prod + projection adapter coverage tests
+```
 
 ### Phase 3 — Gate W 前置
 
