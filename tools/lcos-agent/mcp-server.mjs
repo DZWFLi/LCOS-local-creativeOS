@@ -14,6 +14,33 @@ const EXECUTOR_TOOL_NAMES = new Set([
   "claim_lcos_run", "start_lcos_run", "heartbeat_lcos_run", "fail_lcos_run", "request_lcos_user_input",
   "claim_lcos_task", "start_lcos_task", "get_lcos_task", "get_lcos_task_by_run", "submit_lcos_result", "cancel_lcos_task",
 ]);
+const DOMAIN_AGENT_DEFAULT = new Set(["project", "canvas", "context", "run", "provider", "resource", "conversation"]);
+const REQUESTED_PACKAGES = (process.env.LCOS_MCP_PACKAGES ?? "").split(",").map((item) => item.trim()).filter(Boolean);
+
+/** 工具所属域：project / canvas / context / run / executor / provider / resource / conversation */
+export function domainOf(toolName) {
+  if (/^(open_lcos|bind_lcos_project|list_lcos_projects|get_lcos_project|open_lcos_preview)$/.test(toolName)) return "project"
+  if (/^(get_lcos_active_context|watch_lcos_active_context|focus_lcos_views|select_lcos_views|set_lcos_viewport|move_lcos_view|get_lcos_canvas_observation|create_lcos_relation|.*workspace_member)/.test(toolName)) return "canvas"
+  if (/^(propose_lcos_context_change|apply_lcos_context_command|accept_lcos_context_proposal|reject_lcos_context_proposal|list_lcos_context_proposals|build_lcos_context_manifest)/.test(toolName)) return "context"
+  if (/^(create_lcos_run|propose_lcos_run|validate_lcos_agent_plan|dispatch_lcos_run|cancel_lcos_run|get_lcos_run|list_lcos_runs|list_lcos_pending_runs|get_lcos_run_input_request|answer_lcos_run_input|sync_lcos_run|recover_lcos_run|finalize_lcos_run|accept_lcos_return|reject_lcos_return|retry_lcos_return)/.test(toolName)) return "run"
+  if (/^(claim_lcos_run|start_lcos_run|heartbeat_lcos_run|fail_lcos_run|submit_lcos_result|request_lcos_user_input|claim_lcos_task|start_lcos_task|get_lcos_task|get_lcos_task_by_run|cancel_lcos_task)/.test(toolName)) return "executor"
+  if (/^(get_lcos_provider_session|set_lcos_provider_session|clear_lcos_provider_session|list_lcos_runtime_providers)/.test(toolName)) return "provider"
+  if (/^(lcos_resource_|list_lcos_connectors|scan_lcos_obsidian_vault|import_lcos_obsidian_notes)/.test(toolName)) return "resource"
+  if (/^(import_lcos_conversation|import_lcos_manual_conversation|export_lcos_conversation|list_lcos_conversations|get_lcos_conversation|search_lcos_conversations|read_lcos_conversation_messages|list_lcos_conversation_sections|refresh_lcos_conversation_sections|rename_lcos_conversation_section|read_lcos_conversation_section|annotate_lcos_conversation_section|pin_lcos_conversation_message|get_lcos_conversation_semantic_index|build_lcos_conversation_semantic_index)/.test(toolName)) return "conversation"
+  return "other"
+}
+
+/** 按角色 + 可选包裁剪后的工具名清单（验证用）。 */
+export function listToolsForRole(role = "agent", packages = []) {
+  const wanted = new Set(packages)
+  return tools
+    .filter((item) => {
+      if (role === "executor") return EXECUTOR_TOOL_NAMES.has(item.name)
+      if (EXECUTOR_TOOL_NAMES.has(item.name)) return false
+      return wanted.size === 0 || wanted.has(domainOf(item.name))
+    })
+    .map((item) => item.name)
+}
 const activeContextPath = (projectId, workspaceId, afterVersion) => {
   const query = new URLSearchParams();
   if (workspaceId) query.set("workspaceId", workspaceId);
@@ -356,17 +383,24 @@ const tools = [
   }, ["projectId", "instruction"]),
 ];
 
-const visibleTools = tools.filter((item) => ROLE === "executor" ? EXECUTOR_TOOL_NAMES.has(item.name) : !EXECUTOR_TOOL_NAMES.has(item.name));
+const visibleTools = tools.filter((item) => {
+  if (ROLE === "executor") return EXECUTOR_TOOL_NAMES.has(item.name)
+  if (EXECUTOR_TOOL_NAMES.has(item.name)) return false
+  return REQUESTED_PACKAGES.length === 0 || REQUESTED_PACKAGES.includes(domainOf(item.name))
+})
+const loadedDomains = [...new Set(visibleTools.map((item) => domainOf(item.name)))].sort()
 
-serveStdioMcp({
-  serverInfo: SERVER,
-  instructions: ROLE === "executor"
-    ? "This server is only for provider execution: claim, start, heartbeat, request input, submit, fail or cancel. Project and Canvas operations belong to local-creative-os."
-    : "Read the Project + Workspace CanvasContextSnapshot before acting. Generate a structured Agent Plan, let Core validate safety/lifecycle, and never mutate a running Run's frozen ContextManifest.",
-  protocolVersions: SUPPORTED_PROTOCOL_VERSIONS,
-  tools: visibleTools,
-  callTool: invokeTool,
-});
+if (process.env.LCOS_MCP_NO_SERVE !== "1") {
+  serveStdioMcp({
+    serverInfo: SERVER,
+    instructions: ROLE === "executor"
+      ? "This server is only for provider execution: claim, start, heartbeat, request input, submit, fail or cancel. Project and Canvas operations belong to local-creative-os."
+      : `Read the Project + Workspace CanvasContextSnapshot before acting. Generate a structured Agent Plan, let Core validate safety/lifecycle, and never mutate a running Run's frozen ContextManifest. Loaded packages: ${loadedDomains.join(", ")}.`,
+    protocolVersions: SUPPORTED_PROTOCOL_VERSIONS,
+    tools: visibleTools,
+    callTool: invokeTool,
+  })
+}
 
 async function invokeTool(requestedTool, args) {
   let value;
@@ -1071,4 +1105,3 @@ async function codexTaskForRun(runId) {
   }
   return { taskId, lcosRunId: task?.lcosRunId ?? task?.lcos_run_id ?? runId };
 }
-

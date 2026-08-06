@@ -87,6 +87,8 @@ docs/architecture/LCOS_MCP_BRIDGE_DECOUPLING_DESIGN_20260805.md
 | Eagle/Obsidian/IMA/收藏夹 | 🟡 部分 | Obsidian 只读完成；其余无 |
 | tldraw 读层 | ✅ 大幅补强 | Snapshot + 视口外 Cluster + recentChanges + SVG Observation + screenshotRef |
 | tldraw 信号层 | ✅ 已实现 | Core SSE 端点（/active-context/events）服务端推送 + Web 流式订阅 + 轮询兜底；2026-08-06 实机验证 snapshot/update/proposals/runs 帧与持久连接；Agent 建议/待办已并入 SSE，3 秒轮询移除（仅流失败时兜底） |
+| MCP 工具按角色/域裁剪 | ✅ 已实现 | 单一注册表 76 工具 → Agent 面 65 / 执行器面 12（物理过滤）；新增域（project/canvas/context/run/provider/resource/conversation/executor）+ `LCOS_MCP_PACKAGES` 可选裁剪；E2E 验证 agent 拿不到执行器工具（2026-08-06） |
+| Skill 结构化 | ✅ 已实现 | `packages/skills` 立 SPEC + 索引；拆出 lcos-executor-run；lcos-project-context 入口 11.8KB→2.8KB（~4K→~0.7K token），执行器专用 ~0.6K token；细节全部 references 懒加载；安装脚本多 skill 哈希同步（2026-08-06） |
 | tldraw 写层 | ✅ 大幅补强 | select/focus/move/viewport/relation/workspace/preview 已实现并过 MCP E2E |
 | tldraw 闭环层 | ✅ 基本闭环 | 真实 5 Run 闭环成立（此前 REST）；2026-08-06 MCP 四变体（analyze/revise/create/waiting_input）全通：create/dispatch 走 local-creative-os，claim/start/request_input/submit 走 lcos-executor，GUI Run 节点 + 待审界面实测渲染 |
 | 全新机器单命令部署 | 🟡 部分 | bootstrap npm.cmd 坑已修、本机通过；干净 VM 未跑 |

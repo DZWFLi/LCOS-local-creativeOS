@@ -313,3 +313,24 @@ proposals（提案增改）、runs（Run 事件变化）；Web 端由 SSE 驱动
 Preview 外部打开 ❌ 未做；Handoff 文件级 zip ❌ 未做（仅 Markdown 下载）；
 文件夹扫描确认页 🟡 待验收。
 ```
+
+## 12. 第三轮（2026-08-06：Skill 结构化 + MCP 按域拆分）
+
+```text
+Skill 结构化：
+- packages/skills 新增 SKILL_SPEC.md（frontmatter role/estimatedTokens/readOrder、
+  入口≤2K、章节目录、references 懒加载）与 index.md（5 个 skill 角色/体积/触发）
+- lcos-project-context 从 11.8KB 全文拆为 2.8KB 入口 + 10 个 references 章节
+  （~4K → ~0.7K token/轮）
+- 新增 lcos-executor-run（执行器专用，2.6KB / ~0.6K token），看门狗接单提示改指
+  该 skill；执行器不再读管理面全文
+- 安装脚本泛化为多 skill 哈希同步（lcos-project-context + lcos-executor-run）
+
+MCP 按域拆分：
+- 76 工具按域归类：project/canvas/context/run/provider/resource/conversation/executor
+- Agent 面 65 工具（~5.6K token schema）；执行器面 12 工具（~0.7K）
+- LCOS_MCP_PACKAGES 可选裁剪：日常画布+任务包 37 工具（~3.5K token），
+  对话/资源包按需追加
+- E2E 实测：agentToolCount=65、executorToolCount=12、agentRejectedExecutor=true、
+  画布动作与 claim/start/review 全通过
+```

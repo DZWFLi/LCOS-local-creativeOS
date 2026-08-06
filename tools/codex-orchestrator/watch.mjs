@@ -170,8 +170,8 @@ async function launch(item, project) {
   await mkdir(stateDir, { recursive: true })
   const inputPath = join(stateDir, `codex-launch-${String(item.runId).replace(/[^A-Za-z0-9_-]/g, '_')}-${Date.now()}.json`)
   const message = sessionId
-    ? `LCOS 接单提示：项目 ${project.id} 有新待办 run ${item.runId}。请按 lcos-project-context skill 读取冻结上下文，认领、执行并提交。`
-    : `LCOS 接单提示：项目 ${project.id} 有新待办 run ${item.runId}。请按 lcos-project-context skill 认领、执行并提交结果。`
+    ? `LCOS 接单提示：项目 ${project.id} 有新待办 run ${item.runId}。请按 lcos-executor-run skill 读取冻结上下文，认领、执行并提交。`
+    : `LCOS 接单提示：项目 ${project.id} 有新待办 run ${item.runId}。请按 lcos-executor-run skill 认领、执行并提交结果。`
   await writeFile(inputPath, JSON.stringify({
     codexBin, projectRoot: item.projectRoot || project.rootPath, message, sessionId, taskId: item.taskId || '', runId: item.runId,
     projectId: project.id, bridgeUrl, cancellationPollMs: 750, gracefulCancelMs: 3_000,
