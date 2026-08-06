@@ -25,4 +25,12 @@ describe('qa-fixtures boundary (Phase 2)', () => {
     expect(factory).toContain('createBlankProjectState')
     expect(factory).not.toMatch(/fixture/i)
   })
+
+  it('keeps the fixture directory physically outside production src', () => {
+    const fixturesDir = join(__dirname, '../../apps/web/tests/qa-fixtures')
+    const entries = readdirSync(fixturesDir)
+    expect(entries).toContain('fixtures.ts')
+    expect(entries).toContain('projectFixtures.ts')
+    expect(entries).toContain('fixtureAdapter.ts')
+  })
 })

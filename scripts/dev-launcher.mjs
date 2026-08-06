@@ -257,12 +257,22 @@ function spawnLogged(script, logName, environment = {}) {
   const args = npmCli ? [npmCli, 'run', script] : ['run', script]
   const outFd = openSync(join(LOG_DIR, `${logName}.out.log`), 'a')
   const errFd = openSync(join(LOG_DIR, `${logName}.err.log`), 'a')
-  const child = spawn(npmCommand, args, {
+  const spawnWith = (stdio) => spawn(npmCommand, args, {
     cwd: process.cwd(),
-    stdio: ['ignore', outFd, errFd],
+    stdio,
     windowsHide: true,
     env: { ...process.env, ...environment },
   })
+  let child
+  try {
+    child = spawnWith(['ignore', outFd, errFd])
+  } catch (error) {
+    // detached 父进程在 Windows 上继承 fd stdio 会抛 EINVAL；降级为忽略日志流。
+    try { closeSync(outFd) } catch {}
+    try { closeSync(errFd) } catch {}
+    if (error?.code === 'EINVAL') child = spawnWith(['ignore', 'ignore', 'ignore'])
+    else throw error
+  }
   child.once('exit', () => {
     try { closeSync(outFd) } catch {}
     try { closeSync(errFd) } catch {}
@@ -283,13 +293,13 @@ function spawnBridge(environment = {}) {
   const sourceRoot = join(process.cwd(), 'tools/light-bridge-kernel/src')
   const outFd = openSync(join(LOG_DIR, 'bridge.out.log'), 'a')
   const errFd = openSync(join(LOG_DIR, 'bridge.err.log'), 'a')
-  const child = spawn(python, [
+  const spawnWith = (stdio) => spawn(python, [
     '-m', 'lcos_bridge', 'serve',
     '--host', '127.0.0.1',
     '--port', String(BRIDGE_PORT),
   ], {
     cwd: process.cwd(),
-    stdio: ['ignore', outFd, errFd],
+    stdio,
     windowsHide: true,
     env: {
       ...process.env,
@@ -298,6 +308,15 @@ function spawnBridge(environment = {}) {
       LCOS_BRIDGE_RUNTIME_ROOT: BRIDGE_RUNTIME_ROOT,
     },
   })
+  let child
+  try {
+    child = spawnWith(['ignore', outFd, errFd])
+  } catch (error) {
+    try { closeSync(outFd) } catch {}
+    try { closeSync(errFd) } catch {}
+    if (error?.code === 'EINVAL') child = spawnWith(['ignore', 'ignore', 'ignore'])
+    else throw error
+  }
   child.once('exit', () => {
     try { closeSync(outFd) } catch {}
     try { closeSync(errFd) } catch {}
@@ -309,16 +328,25 @@ function spawnTray() {
   if (process.platform !== 'win32') return null
   const outFd = openSync(join(LOG_DIR, 'tray-host.out.log'), 'a')
   const errFd = openSync(join(LOG_DIR, 'tray-host.err.log'), 'a')
-  const child = spawn('powershell.exe', [
+  const spawnWith = (stdio) => spawn('powershell.exe', [
     '-NoProfile',
     '-WindowStyle', 'Hidden',
     '-File', join(process.cwd(), 'scripts/runtime-host-tray.ps1'),
   ], {
     cwd: process.cwd(),
-    stdio: ['ignore', outFd, errFd],
+    stdio,
     windowsHide: true,
     env: { ...process.env, LCOS_REPO_ROOT: process.cwd() },
   })
+  let child
+  try {
+    child = spawnWith(['ignore', outFd, errFd])
+  } catch (error) {
+    try { closeSync(outFd) } catch {}
+    try { closeSync(errFd) } catch {}
+    if (error?.code === 'EINVAL') child = spawnWith(['ignore', 'ignore', 'ignore'])
+    else throw error
+  }
   child.once('exit', () => {
     try { closeSync(outFd) } catch {}
     try { closeSync(errFd) } catch {}

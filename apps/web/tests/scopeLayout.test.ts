@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fixtureNodes } from '../src/qa-fixtures/fixtures'
+import { fixtureNodes } from './qa-fixtures/fixtures'
 import { applyScopeLayout, proposeScopeLayout } from '../src/features/canvas/scopeLayout'
 
 describe('v0.6 Canvas Scope layout', () => {

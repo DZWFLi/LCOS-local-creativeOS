@@ -65,6 +65,7 @@ import {
   type CreateRuntimeRunInput,
 } from './runtime-application-service.js'
 import { ActiveContextConflictError, ActiveContextStore, type ActiveContextInput } from './active-context-store.js'
+import { composeLocalCoreServices } from './compose.js'
 import { handleRuntimeReviewRoute } from './routes/runtime-reviews.js'
 import { handleCanvasRoute } from './routes/canvas.js'
 import { handleConnectorsRoute } from './routes/connectors.js'
@@ -290,22 +291,13 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
     throw new Error('Local Core requestTimeoutMs must be a positive finite number.')
   }
 
-  const catalog = options.catalog ?? new ExplicitProjectCatalog([])
-  const metadata = options.metadataRepository
-  const fileRegistry = options.fileRegistryService
-  const fileObservation = options.fileObservationService ?? (metadata === undefined ? undefined : new FileObservationService(metadata))
-  const importCopy = options.importCopyService ?? (metadata === undefined ? undefined : new ImportCopyService(metadata))
-  const resources = options.resourceImportService ?? (metadata === undefined || importCopy === undefined ? undefined : new UniversalResourceImportService(metadata, importCopy))
-  const packages = options.resourcePackageService ?? (metadata === undefined ? undefined : new ResourcePackageService(metadata))
-  const uploads = metadata === undefined || packages === undefined ? undefined : new ResourceUploadSessionService(metadata, packages)
-  const resourceReader = options.resourceReader ?? (metadata === undefined ? undefined : new ResourceReader(metadata))
-  const matcher = options.resourceMatcher ?? new ResourceMatcher()
-  const contextManifest = options.contextManifestService ?? (metadata === undefined ? undefined : new ContextManifestService(metadata))
-  const runtimeReview = options.runtimeReviewService ?? (metadata === undefined ? undefined : new RuntimeReviewService(metadata))
-  const runtimeApplication = options.runtimeApplicationService
-  const activeContext = options.activeContextStore ?? new ActiveContextStore(metadata)
-  const contextProposals = options.contextProposalStore ?? new ContextProposalStore(metadata)
-  const runEventListeners = new Map<string, Set<() => void>>()
+  const services = composeLocalCoreServices(options)
+  const {
+    catalog, metadata, fileRegistry, fileObservation, importCopy, resources, packages, uploads,
+    resourceReader, matcher, contextManifest, runtimeReview, runtimeApplication, activeContext,
+    contextProposals, runEventListeners, obsidian, obsidianSessions, connectorRegistry,
+    ownsConversationService, conversations, previewWorker,
+  } = services
   metadata?.setRunEventSink?.((event) => {
     const payloadProjectId = (event.payload as { projectId?: string } | null)?.projectId
     const runProjectId = payloadProjectId ?? metadata.getRun(event.runId)?.projectId
@@ -316,17 +308,6 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
       try { listener() } catch { /* 推送失败不影响 Run 生命周期 */ }
     }
   })
-  const obsidian = options.obsidianConnector ?? new ObsidianReadOnlyConnector()
-  const obsidianSessions = options.obsidianSessions ?? new ObsidianConnectorSessionStore()
-  const connectorRegistry = options.connectorRegistry ?? new ResourceConnectorRegistry([obsidian])
-  const ownsConversationService = options.conversationImportService === undefined && metadata !== undefined
-  const conversations = options.conversationImportService ?? (metadata === undefined ? undefined : new ConversationImportService(metadata))
-  const previewWorker = options.previewWorkerService
-    ?? (metadata === undefined ? undefined : new PreviewWorkerService(metadata, {
-      cacheService: new PreviewCacheService(metadata, {
-        cacheRoot: options.previewCacheRoot ?? `${metadata.databasePath}.preview-cache`,
-      }),
-    }))
   let server: Server | undefined
   let currentAddress: LocalCoreAddress | undefined
   let lifecycleSignal: AbortSignal | undefined

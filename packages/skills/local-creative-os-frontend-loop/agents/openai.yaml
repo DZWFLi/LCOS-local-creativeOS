@@ -1,0 +1,7 @@
+interface:
+  display_name: "Local Creative OS Frontend Loop"
+  short_description: "按 Make 基准打磨 OS 前端手感、功能与视觉"
+  brand_color: "#7342E2"
+  default_prompt: "使用 $local-creative-os-frontend-loop 继续打磨当前前端，先修真实操作手感，再做结构完整与 Make 材质对齐。"
+policy:
+  allow_implicit_invocation: true

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Local Creative OS Backend Flow"
+  short_description: "按分工、三区风险与低成本验证推进 Local Creative OS 后端"
+  default_prompt: "Use $local-creative-os-backend-flow to推进当前 Local Creative OS 后端阶段。"

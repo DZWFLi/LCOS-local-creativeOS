@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createBlankProjectState, fixtureStateForProject } from '../src/qa-fixtures/projectFixtures'
+import { createBlankProjectState, fixtureStateForProject } from './qa-fixtures/projectFixtures'
 
 describe('v0.6 phase 3 Project Drive sessions', () => {
   it('keeps different project packages on different graphs', () => {

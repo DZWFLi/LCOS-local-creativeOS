@@ -1,0 +1,3 @@
+display_name: "WorkBuddy Orchestrator"
+short_description: "Create and verify real AI Bridge tasks for WorkBuddy."
+default_prompt: "Use this skill when the user wants Codex to preprocess a request, create a real AI Bridge task for WorkBuddy, verify execution through task evidence, and then review the returned result."
