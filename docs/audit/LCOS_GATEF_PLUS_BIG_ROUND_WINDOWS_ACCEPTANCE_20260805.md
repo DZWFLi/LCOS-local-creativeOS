@@ -135,6 +135,13 @@ exec 还是桌面会话都不加载 config.toml 的 MCP server；LCOS 侧（serv
 配置、E2E）全部就绪。当前真实执行通道 = Skill + REST（已跑通 5+ Run），MCP 工具面
 等待 Codex 客户端版本/配置机制支持后再验收。
 
+2026-08-06 补充（provider 假设）：本机 config.toml 全局 `model_provider="deepseek"`
+且 models.json 只含 DeepSeek 模型——所有会话均走第三方 provider，MCP 工具面不出现
+与此高度吻合。尝试 `codex exec -c model_provider=openai` 做对照：ChatGPT 账号拒绝
+`gpt-5.1-codex / gpt-5.2-codex / gpt-5.1-codex-mini`（均 “not supported”），CLI 侧
+无法直接完成对照。**待桌面端验证**：新对话切换到账号可用的 OpenAI 模型后重跑 MCP
+清单；若工具出现 → provider 为根因；若不出现 → 客户端构建/feature 为根因。
+
 ### 7.2 L3 真实 Ollama / native sqlite-vec：未验证
 
 ```text
