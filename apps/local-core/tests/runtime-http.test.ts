@@ -803,6 +803,19 @@ describe('Runtime HTTP closure', () => {
     })()
 
     await new Promise((resolve) => setTimeout(resolve, 150))
+    const versionBody = await fetch(`${baseUrl}/projects/${snapshot.project.id}/active-context`) as { json(): Promise<{ value: { version: number } }> }
+    const currentVersion = (await versionBody.json()).value.version
+    const proposalResponse = await fetch(`${baseUrl}/projects/${snapshot.project.id}/context-proposals`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        baseContextVersion: currentVersion,
+        addViewIds: [snapshot.artifactViews[0].id],
+        removeViewIds: [],
+        reason: 'sse-test',
+      }),
+    })
+    expect(proposalResponse.status).toBe(201)
     const updateResponse = await fetch(`${baseUrl}/projects/${snapshot.project.id}/active-context`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
@@ -822,5 +835,8 @@ describe('Runtime HTTP closure', () => {
     controller.abort()
     expect(frames).toContain('event: snapshot')
     expect(frames).toContain('event: update')
+    expect(frames).toContain('event: proposals')
+    expect(frames).toContain('event: runs')
+    expect(frames).toContain('"proposalId"')
   })
 })

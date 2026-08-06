@@ -495,6 +495,7 @@ export function App() {
     let stopped = false
     let version = activeContextVersionRef.current
     let fallbackTimer: number | undefined
+    let cardTimer: number | undefined
     const apply = (next: ActiveContextProjection) => {
       if (next.version <= version) return
       version = next.version
@@ -502,6 +503,36 @@ export function App() {
       setActiveContextProjection(next)
       setActiveContextError(null)
       setContextSync('synced')
+    }
+    const applyProposals = (value: readonly ContextChangeProposalV1[]) => {
+      setContextProposals([...value])
+    }
+    const applyRuns = (value: readonly RunReview[]) => {
+      setRunReviews(value)
+      const pending = (value as readonly {
+        run: { provider?: string; status: string }
+        dispatch: { status: string }
+        binding?: { providerStatus?: string }
+      }[]).filter((review) =>
+        review.run.provider === 'codex'
+        && ['created', 'queued', 'running'].includes(review.run.status)
+        && review.dispatch.status === 'bound'
+        && !['claimed', 'running', 'review', 'completed', 'failed', 'cancelled', 'timeout'].includes(String(review.binding?.providerStatus ?? '')))
+      setPendingCodexCount(pending.length)
+    }
+    const pollCard = async () => {
+      if (stopped) return
+      const [proposals, reviews] = await Promise.all([
+        bridgeRef.current.client.listContextProposals(activeProjectId, workspaceId).catch(() => null),
+        bridgeRef.current.client.projectRunReviews(activeProjectId, 100).catch(() => null),
+      ])
+      if (stopped) return
+      if (proposals?.result.ok) applyProposals(proposals.result.value)
+      if (reviews?.result.ok) applyRuns(reviews.result.value)
+    }
+    const startCardPolling = () => {
+      if (stopped || cardTimer !== undefined) return
+      cardTimer = window.setInterval(() => { void pollCard() }, 3_000)
     }
     const poll = async () => {
       while (!stopped && !controller.signal.aborted) {
@@ -526,12 +557,17 @@ export function App() {
         fallbackTimer = undefined
         void poll()
       }, 750)
+      startCardPolling()
     }
     void bridgeRef.current.client.streamActiveContext(
       activeProjectId,
       workspaceId,
       version,
-      apply,
+      {
+        onContext: apply,
+        onProposals: applyProposals,
+        onRuns: applyRuns,
+      },
       controller.signal,
     ).then(() => {
       if (!stopped) startPolling()
@@ -542,32 +578,8 @@ export function App() {
       stopped = true
       controller.abort()
       if (fallbackTimer !== undefined) window.clearTimeout(fallbackTimer)
+      if (cardTimer !== undefined) window.clearInterval(cardTimer)
     }
-  }, [activeProjectId, agentMode, bootMode, workspaceId])
-
-  useEffect(() => {
-    if (!agentMode || !activeProjectId || bootMode !== 'runtime') return
-    const timer = window.setInterval(() => {
-      void bridgeRef.current.client.listContextProposals(activeProjectId, workspaceId).then((call) => {
-        if (call.result.ok) setContextProposals(call.result.value as ContextChangeProposalV1[])
-      })
-      void bridgeRef.current.client.projectRunReviews(activeProjectId, 100).then((call) => {
-        if (!call.result.ok) return
-        const reviews = call.result.value as RunReview[]
-        setRunReviews(reviews)
-        const pending = (reviews as readonly {
-          run: { provider?: string; status: string }
-          dispatch: { status: string }
-          binding?: { providerStatus?: string }
-        }[]).filter((review) =>
-          review.run.provider === 'codex'
-          && ['created', 'queued', 'running'].includes(review.run.status)
-          && review.dispatch.status === 'bound'
-          && !['claimed', 'running', 'review', 'completed', 'failed', 'cancelled', 'timeout'].includes(String(review.binding?.providerStatus ?? '')))
-        setPendingCodexCount(pending.length)
-      })
-    }, 3_000)
-    return () => window.clearInterval(timer)
   }, [activeProjectId, agentMode, bootMode, workspaceId])
 
   const refreshActiveContext = useCallback(() => {

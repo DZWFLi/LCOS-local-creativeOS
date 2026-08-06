@@ -2345,7 +2345,9 @@ export class SqliteMetadataRepository {
       const created = this.#database.prepare(
         'SELECT * FROM run_events WHERE id = ?',
       ).get(input.id as SQLInputValue) as Row
-      return this.#mapRunEvent(created)
+      const event = this.#mapRunEvent(created)
+      this.#runEventSink?.(event)
+      return event
     } catch (error: unknown) {
       this.#database.exec('ROLLBACK;')
       const replay = this.#database.prepare(
@@ -2354,6 +2356,13 @@ export class SqliteMetadataRepository {
       if (replay !== undefined) return this.#mapRunEvent(replay)
       throw error
     }
+  }
+
+  #runEventSink?: (event: RunEvent) => void
+
+  /** 注册 Run 事件落库通知（SSE 推送等实时面使用；同一时刻只保留一个订阅者）。 */
+  setRunEventSink(sink: (event: RunEvent) => void): void {
+    this.#runEventSink = sink
   }
 
   getRunEvents(runId: RunId, afterSequence?: number): readonly RunEvent[] {

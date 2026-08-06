@@ -20,8 +20,33 @@ export interface CreateContextProposalInput {
  */
 export class ContextProposalStore {
   readonly #proposals = new Map<string, ContextChangeProposalV1[]>()
+  readonly #listeners = new Map<string, Set<(projectId: string) => void>>()
 
   constructor(private readonly metadata?: SqliteMetadataRepository) {}
+
+  /** 订阅某项目的提案变化（create/accept/reject 后触发）。 */
+  subscribe(projectId: string, listener: (projectId: string) => void): () => void {
+    let set = this.#listeners.get(projectId)
+    if (set === undefined) {
+      set = new Set()
+      this.#listeners.set(projectId, set)
+    }
+    set.add(listener)
+    return () => {
+      const current = this.#listeners.get(projectId)
+      if (current === undefined) return
+      current.delete(listener)
+      if (current.size === 0) this.#listeners.delete(projectId)
+    }
+  }
+
+  #emit(projectId: string): void {
+    const set = this.#listeners.get(projectId)
+    if (set === undefined) return
+    for (const listener of set) {
+      try { listener(projectId) } catch { /* 订阅者异常不能破坏提案存储 */ }
+    }
+  }
 
   create(projectId: string, input: CreateContextProposalInput, current: ActiveContextProjection): ContextChangeProposalV1 {
     if (input.baseContextVersion !== current.version) {
@@ -42,6 +67,7 @@ export class ContextProposalStore {
     this.metadata?.saveContextProposal(proposal)
     const existing = this.#proposals.get(projectId) ?? []
     this.#proposals.set(projectId, [...existing, proposal])
+    this.#emit(projectId)
     return proposal
   }
 
@@ -76,6 +102,7 @@ export class ContextProposalStore {
     this.metadata?.saveContextProposal(resolved)
     const proposals = (this.#proposals.get(projectId) ?? []).filter((item) => item.proposalId !== proposal.proposalId)
     this.#proposals.set(projectId, [...proposals, resolved])
+    this.#emit(projectId)
     return resolved
   }
 

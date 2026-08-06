@@ -303,6 +303,11 @@ Agent 画布卡片瘦身：默认只显示 头部 + 同步 + 选择/参考/任�
 
 多选 Target/Context：3 节点多选 → selectionOrder/contextArtifacts 一致（v1569）。
 
+SSE 合并推送（3s 轮询移除）：/active-context/events 现同时推 snapshot/update、
+proposals（提案增改）、runs（Run 事件变化）；Web 端由 SSE 驱动，仅流失败时
+3s 轮询兜底。实测：MCP 提提案 → 卡片 2s 内出现“Agent 建议（1）”；拒绝后立即
+清除；REST 取消遗留 Run → 卡片“待处理任务”2s 内从 1 变 0，全程无刷新。
+
 功能验收（本轮核对）：Activity 任务过程 ✅；Recovery 重新连接 ✅；Watcher stale/
 外部修改采纳 ✅；Checkpoint 保存/恢复 ✅；Checkpoint 状态对比 ❌ 未做；
 Preview 外部打开 ❌ 未做；Handoff 文件级 zip ❌ 未做（仅 Markdown 下载）；

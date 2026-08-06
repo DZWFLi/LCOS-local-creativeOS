@@ -86,7 +86,7 @@ docs/architecture/LCOS_MCP_BRIDGE_DECOUPLING_DESIGN_20260805.md
 | 托盘 Runtime Host 生命周期 | 🟡 部分 | 托盘在跑；全生命周期未测 |
 | Eagle/Obsidian/IMA/收藏夹 | 🟡 部分 | Obsidian 只读完成；其余无 |
 | tldraw 读层 | ✅ 大幅补强 | Snapshot + 视口外 Cluster + recentChanges + SVG Observation + screenshotRef |
-| tldraw 信号层 | ✅ 已实现 | Core SSE 端点（/active-context/events）服务端推送 + Web EventSource 流式订阅 + 轮询兜底；2026-08-06 实机验证 snapshot/update 帧与持久连接（单测 + 真实浏览器） |
+| tldraw 信号层 | ✅ 已实现 | Core SSE 端点（/active-context/events）服务端推送 + Web 流式订阅 + 轮询兜底；2026-08-06 实机验证 snapshot/update/proposals/runs 帧与持久连接；Agent 建议/待办已并入 SSE，3 秒轮询移除（仅流失败时兜底） |
 | tldraw 写层 | ✅ 大幅补强 | select/focus/move/viewport/relation/workspace/preview 已实现并过 MCP E2E |
 | tldraw 闭环层 | ✅ 基本闭环 | 真实 5 Run 闭环成立（此前 REST）；2026-08-06 MCP 四变体（analyze/revise/create/waiting_input）全通：create/dispatch 走 local-creative-os，claim/start/request_input/submit 走 lcos-executor，GUI Run 节点 + 待审界面实测渲染 |
 | 全新机器单命令部署 | 🟡 部分 | bootstrap npm.cmd 坑已修、本机通过；干净 VM 未跑 |

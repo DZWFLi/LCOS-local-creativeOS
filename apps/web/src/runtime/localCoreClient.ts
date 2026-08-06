@@ -322,14 +322,18 @@ export interface LocalCoreClient {
   activeContext(projectId: string, workspaceId?: string | null, afterVersion?: number, signal?: AbortSignal): Promise<RuntimeCall<ActiveContextProjection>>
   /**
    * Subscribe to active-context updates over SSE. Resolves once the stream is
-   * open; onEvent fires for `snapshot` and every subsequent `update` frame.
+   * open; handlers fire for `snapshot`/`update`, `proposals` and `runs` frames.
    * Rejects if the endpoint is unavailable, so callers can fall back to polling.
    */
   streamActiveContext(
     projectId: string,
     workspaceId: string | null,
     afterVersion: number | undefined,
-    onEvent: (value: ActiveContextProjection) => void,
+    handlers: {
+      readonly onContext?: (value: ActiveContextProjection) => void
+      readonly onProposals?: (value: readonly ContextChangeProposalV1[]) => void
+      readonly onRuns?: (value: readonly RunReview[]) => void
+    },
     signal?: AbortSignal,
   ): Promise<void>
   getCommandDraft(projectId: string, workspaceId: string | null, composerAnchor: string, signal?: AbortSignal): Promise<RuntimeCall<CommandDraftV1 | null>>
@@ -968,7 +972,7 @@ export function createLocalCoreClient(): LocalCoreClient {
         decode: decodeResult<ActiveContextProjection>,
       })
     },
-    async streamActiveContext(projectId, workspaceId, afterVersion, onEvent, signal) {
+    async streamActiveContext(projectId, workspaceId, afterVersion, handlers, signal) {
       const params = new URLSearchParams()
       if (workspaceId) params.set('workspaceId', workspaceId)
       if (afterVersion !== undefined) params.set('afterVersion', String(afterVersion))
@@ -984,12 +988,15 @@ export function createLocalCoreClient(): LocalCoreClient {
       const decoder = new TextDecoder()
       let buffer = ''
       let eventName = 'message'
-      const dispatch = (data: string): void => {
+      const dispatch = (event: string, data: string): void => {
         if (!data) return
         try {
           const parsed: unknown = JSON.parse(data)
-          const value = (parsed as { value?: ActiveContextProjection } | null)?.value
-          if (value !== undefined && typeof value === 'object') onEvent(value)
+          const value = (parsed as { value?: unknown } | null)?.value
+          if (value === undefined || typeof value !== 'object') return
+          if (event === 'snapshot' || event === 'update') handlers.onContext?.(value as ActiveContextProjection)
+          else if (event === 'proposals') handlers.onProposals?.(value as readonly ContextChangeProposalV1[])
+          else if (event === 'runs') handlers.onRuns?.(value as readonly RunReview[])
         } catch {
           // Malformed frames are skipped; the next heartbeat/update keeps the stream alive.
         }
@@ -1007,7 +1014,7 @@ export function createLocalCoreClient(): LocalCoreClient {
             if (line.startsWith('event:')) eventName = line.slice(6).trim()
             else if (line.startsWith('data:')) data += (data === '' ? '' : '\n') + line.slice(5).trimStart()
           }
-          if (eventName === 'snapshot' || eventName === 'update') dispatch(data)
+          if (['snapshot', 'update', 'proposals', 'runs'].includes(eventName)) dispatch(eventName, data)
         }
       }
     },

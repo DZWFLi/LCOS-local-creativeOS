@@ -32,6 +32,7 @@ import type {
   PinConversationMessageInputV1,
   BuildConversationSemanticIndexInputV1,
   CanvasObservationV1,
+  RunEvent,
 } from '@local-creative-os/contracts'
 import type { ArtifactReturnId, ArtifactRevisionId, ArtifactViewId, FileRecordId, ProjectId, RunId, WorkspaceId } from '@local-creative-os/domain'
 
@@ -342,6 +343,17 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
   const runtimeApplication = options.runtimeApplicationService
   const activeContext = options.activeContextStore ?? new ActiveContextStore(metadata)
   const contextProposals = options.contextProposalStore ?? new ContextProposalStore(metadata)
+  const runEventListeners = new Map<string, Set<() => void>>()
+  metadata?.setRunEventSink?.((event) => {
+    const payloadProjectId = (event.payload as { projectId?: string } | null)?.projectId
+    const runProjectId = payloadProjectId ?? metadata.getRun(event.runId)?.projectId
+    const projectId = String(runProjectId ?? '')
+    const listeners = runEventListeners.get(projectId)
+    if (listeners === undefined) return
+    for (const listener of listeners) {
+      try { listener() } catch { /* 推送失败不影响 Run 生命周期 */ }
+    }
+  })
   const obsidian = options.obsidianConnector ?? new ObsidianReadOnlyConnector()
   const obsidianSessions = options.obsidianSessions ?? new ObsidianConnectorSessionStore()
   const connectorRegistry = options.connectorRegistry ?? new ResourceConnectorRegistry([obsidian])
@@ -1081,14 +1093,40 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
           if (closed || response.writableEnded) return
           response.write(`event: ${event}\ndata: ${JSON.stringify({ ok: true, value })}\n\n`)
         }
-        const unsubscribe = activeContext.subscribe(projectId, workspaceId, (_projectId, _workspaceId, value) => {
+        const unsubscribes: Array<() => void> = []
+        unsubscribes.push(activeContext.subscribe(projectId, workspaceId, (_projectId, _workspaceId, value) => {
           if (afterVersion !== undefined && value.version <= afterVersion) return
           sendEvent('update', value)
-        })
-        response.on('close', unsubscribe)
-        request.on('close', unsubscribe)
+        }))
+        unsubscribes.push(contextProposals.subscribe(projectId, () => {
+          sendEvent('proposals', contextProposals.list(projectId, workspaceId))
+        }))
+        const runListener = (): void => {
+          if (runtimeApplication === undefined) return
+          sendEvent('runs', runtimeApplication.getProjectReviews(projectId as ProjectId, 100))
+        }
+        let runProjectListeners = runEventListeners.get(projectId)
+        if (runProjectListeners === undefined) {
+          runProjectListeners = new Set<() => void>()
+          runEventListeners.set(projectId, runProjectListeners)
+        }
+        runProjectListeners.add(runListener)
+        const cleanup = () => {
+          for (const unsubscribe of unsubscribes) unsubscribe()
+          const current = runEventListeners.get(projectId)
+          if (current !== undefined) {
+            current.delete(runListener)
+            if (current.size === 0) runEventListeners.delete(projectId)
+          }
+        }
+        response.on('close', cleanup)
+        request.on('close', cleanup)
 
         sendEvent('snapshot', activeContext.get(projectId, graph, workspaceId))
+        sendEvent('proposals', contextProposals.list(projectId, workspaceId))
+        if (runtimeApplication !== undefined) {
+          sendEvent('runs', runtimeApplication.getProjectReviews(projectId as ProjectId, 100))
+        }
         return
       }
 
