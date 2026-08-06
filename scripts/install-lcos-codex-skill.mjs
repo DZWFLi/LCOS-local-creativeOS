@@ -70,6 +70,18 @@ function installSkill(name) {
     } catch {}
   }
   if (existsSync(destination) && !existsSync(markerFile)) {
+    if (destinationMatches(files)) {
+      // 目标内容与仓库完全一致：收养为托管 skill，避免后续漂移。
+      writeFileSync(markerFile, `${JSON.stringify({
+        schemaVersion: 2,
+        name,
+        source: sourceLabel,
+        sourceHash,
+        installedAt: new Date().toISOString(),
+      }, null, 2)}\n`)
+      console.log(`LCOS Codex skill adopted: ${destination}`)
+      return
+    }
     fail(`Refusing to overwrite an unmanaged Codex skill: ${destination}`)
   }
 
