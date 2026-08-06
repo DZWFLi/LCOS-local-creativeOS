@@ -23,10 +23,11 @@ describe('Slice E: Artifact Workbench + Viewer Registry', () => {
 
   it('opens the Workbench on double-click of file/artifact nodes', () => {
     const appSrc = readFileSync(join(webRoot, 'App.tsx'), 'utf8')
+    const dialogs = readFileSync(join(webRoot, 'features', 'shell', 'DialogsHost.tsx'), 'utf8')
     expect(appSrc).toContain('setWorkbench({ nodeId: id, focus: \'preview\' })')
     expect(appSrc).toContain('if (node.opensScopeId)')
     expect(appSrc).not.toContain('DocumentPreviewDialog')
-    expect(appSrc).toContain('<ArtifactWorkbench')
+    expect(dialogs).toContain('<ArtifactWorkbench')
   })
 
   it('keeps the Workbench a single instance with local nav and Esc close', () => {

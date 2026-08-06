@@ -41,7 +41,7 @@ import { canPreviewArtifact } from './features/viewer/artifactViewerRegistry'
 import { copyCanvasSelection, pasteCanvasNodes, pasteRelationTemplate, type CanvasClipboardPayload } from './state/canvasClipboard'
 import { useCanvasHistory } from './state/useCanvasHistory'
 import { inferTargetContext, moveBetweenTargetAndContext, setPrimaryTarget } from './state/workContext'
-import { defaultProjectCatalog, fixtureStateForProject } from './qa-fixtures/projectFixtures'
+import { createBlankProjectState } from './state/projectState'
 import { createChildScopeFromSelection, removeScopeTree } from './state/canvasScopes'
 import type { ActiveContextProjection } from './runtime/localCoreClient'
 import { humanizeRuntimeMessage } from './runtime/messages'
@@ -68,7 +68,7 @@ function normalizeRailPreferences(value: WorkRailPreferences): WorkRailPreferenc
 function initialPrototype(projectId: string): PersistedPrototypeState {
   const persisted = loadPrototypeState(projectId)
   if (persisted) return persisted
-  return fixtureStateForProject(projectId, defaultRailWidth())
+  return createBlankProjectState({ id: projectId, label: projectId, localPath: '', updatedAt: '', pendingCount: 0 }, defaultRailWidth())
 }
 
 export function App() {
@@ -79,7 +79,7 @@ export function App() {
   const initial = useMemo(() => initialPrototype(initialProjectId), [initialProjectId])
   const { nodes, edges, setNodes, setEdges, setGraph, undo, redo, resetGraph } = useCanvasHistory({ nodes: initial.nodes, edges: initial.edges })
 
-  const [projects, setProjects] = useState<ProjectPackage[]>(() => loadProjectCatalog(defaultProjectCatalog()))
+  const [projects, setProjects] = useState<ProjectPackage[]>(() => loadProjectCatalog([]))
   const [activeProjectId, setActiveProjectId] = useState(initialProjectId)
   const [openProjectIds, setOpenProjectIds] = useState<string[]>([initialProjectId])
   const [projectOpen, setProjectOpen] = useState(true)
@@ -915,7 +915,10 @@ export function App() {
       }).catch(() => setNotice('项目打开失败：本地项目服务暂时无法连接'))
       return
     }
-    const next = projectStateCacheRef.current.get(projectId) ?? loadPrototypeState(projectId) ?? fixtureStateForProject(projectId, defaultRailWidth())
+    const next = projectStateCacheRef.current.get(projectId) ?? loadPrototypeState(projectId) ?? createBlankProjectState(
+      projects.find((project) => project.id === projectId) ?? { id: projectId, label: projectId, localPath: '', updatedAt: '', pendingCount: 0 },
+      defaultRailWidth(),
+    )
     projectStateCacheRef.current.set(projectId, next)
     setOpenProjectIds((current) => current.includes(projectId) ? current : [...current, projectId])
     applyProjectState(projectId, next)
@@ -929,10 +932,13 @@ export function App() {
     if (projectId !== activeProjectId) return
     const nextId = remaining.at(-1)
     if (nextId) {
-      const next = projectStateCacheRef.current.get(nextId) ?? loadPrototypeState(nextId) ?? fixtureStateForProject(nextId, defaultRailWidth())
+      const next = projectStateCacheRef.current.get(nextId) ?? loadPrototypeState(nextId) ?? createBlankProjectState(
+        projects.find((project) => project.id === nextId) ?? { id: nextId, label: nextId, localPath: '', updatedAt: '', pendingCount: 0 },
+        defaultRailWidth(),
+      )
       applyProjectState(nextId, next)
     } else setProjectOpen(false)
-  }, [activeProjectId, applyProjectState, camera, captureProjectState, openProjectIds])
+  }, [activeProjectId, applyProjectState, camera, captureProjectState, openProjectIds, projects])
 
   const createProject = useCallback(async (input: { label: string; intent: 'create'; parentPath: string; directoryName: string } | { label: string; intent: 'open'; rootPath: string; importExisting?: boolean }) => {
     setProjectCreateOpen(false)

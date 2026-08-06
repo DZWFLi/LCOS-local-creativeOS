@@ -16,14 +16,14 @@ describe('UI-05: ActiveContext write-back from Web to Core (Slice D fix)', () =>
   // Core PUT /active-context + Web App.tsx selection sync must both exist.
   // The browser probe tests/e2e/active-context-probe.mjs verifies the real chain.
 
-  it('server.ts declares PUT /active-context handler', () => {
+  it('core declares PUT /active-context handler (routes/canvas.ts)', () => {
     // This is a structural test: if someone accidentally removes the PUT, this catches it.
     // We grep for the known server pattern without starting the server.
     const fs = require('node:fs')
-    const serverSrc = fs.readFileSync(
-      join(__dirname, '../../apps/local-core/src/server.ts'), 'utf-8'
+    const canvasSrc = fs.readFileSync(
+      join(__dirname, '../../apps/local-core/src/routes/canvas.ts'), 'utf-8'
     )
-    expect(serverSrc).toContain("method === 'GET' || method === 'PUT'")
+    expect(canvasSrc).toContain("method === 'GET' || method === 'PUT'")
   })
 
   it('active-context-store exports an update method', async () => {
@@ -120,13 +120,13 @@ describe('GAP-UI-07: Checkpoint button is a toast, not a Core API call', () => {
   // App.tsx line 1649: setNotice('检查点已创建') — only shows a toast.
   // Core server has POST /checkpoints route (line ~560), but Web never calls it.
 
-  it('server.ts declares POST /checkpoints handler', () => {
+  it('core declares POST /checkpoints handler (routes/entity.ts)', () => {
     const fs = require('node:fs')
-    const serverSrc = fs.readFileSync(
-      join(__dirname, '../../apps/local-core/src/server.ts'), 'utf-8'
+    const entitySrc = fs.readFileSync(
+      join(__dirname, '../../apps/local-core/src/routes/entity.ts'), 'utf-8'
     )
-    expect(serverSrc).toContain('/checkpoints')
-    expect(serverSrc).toContain('createCheckpoint')
+    expect(entitySrc).toContain('/checkpoints')
+    expect(entitySrc).toContain('createCheckpoint')
   })
 
   it('App.tsx Workspace State UI calls the Core API (Slice F fix / UI v5)', () => {

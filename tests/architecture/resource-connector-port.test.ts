@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 
 const port = readFileSync(join(__dirname, '../../apps/local-core/src/connectors/connector-port.ts'), 'utf8')
 const obsidian = readFileSync(join(__dirname, '../../apps/local-core/src/connectors/obsidian-connector.ts'), 'utf8')
-const server = readFileSync(join(__dirname, '../../apps/local-core/src/server.ts'), 'utf8')
+const connectors = readFileSync(join(__dirname, '../../apps/local-core/src/routes/connectors.ts'), 'utf8')
 const mcp = readFileSync(join(__dirname, '../../tools/lcos-agent/mcp-server.mjs'), 'utf8')
 
 describe('Resource Connector Port', () => {
@@ -16,8 +16,8 @@ describe('Resource Connector Port', () => {
   })
 
   it('exposes capability discovery through Core and MCP without leaking the Vault root', () => {
-    expect(server).toContain("pathname === '/connectors'")
-    expect(server).toContain('connectorRegistry.capabilities()')
+    expect(connectors).toContain("pathname === '/connectors'")
+    expect(connectors).toContain('connectorRegistry.capabilities()')
     expect(mcp).toContain('list_lcos_connectors')
   })
 })

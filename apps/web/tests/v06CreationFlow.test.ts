@@ -29,7 +29,7 @@ describe('v0.6 simplified content creation contract', () => {
   it('centers the dialog outside the transformed canvas and locks canvas interaction', () => {
     expect(dialog).toContain('createPortal')
     expect(dialog).toContain('canvas-create-layer')
-    expect(app).toContain('locked={createDialogOpen || scopeCreateOpen}')
+    expect(app).toContain('locked: createDialogOpen || scopeCreateOpen')
     expect(canvas).toContain("${locked ? 'is-locked' : ''}")
     expect(css).toContain('.canvas.is-locked')
     expect(css).toContain('pointer-events: none')
@@ -40,6 +40,6 @@ describe('v0.6 simplified content creation contract', () => {
   it('uses Space plus blank-canvas click to create at the pointer instead of panning', () => {
     expect(canvas).toContain('blankCanvas && spaceHeld')
     expect(canvas).toContain('onSpaceCreate(point)')
-    expect(app).toContain('onSpaceCreate={(point) =>')
+    expect(app).toContain('onSpaceCreate: (point) =>')
   })
 })

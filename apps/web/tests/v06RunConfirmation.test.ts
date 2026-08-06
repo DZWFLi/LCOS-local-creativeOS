@@ -10,7 +10,7 @@ describe('Gate F plain-language composer contract', () => {
 
   it('launches runs directly from selected context without a technical confirmation page', () => {
     expect(app).not.toContain('<RunConfirmDialog')
-    expect(app).toContain('selectionComposer={selectedIds.length ?')
+    expect(app).toContain('selectionComposer: selectedIds.length ?')
     expect(app).toContain('onSend: requestSelectionRun')
     expect(composer).toContain('data-testid="selection-composer"')
     expect(composer).toContain('Ctrl/Cmd+Enter')
@@ -46,13 +46,13 @@ describe('Gate F plain-language composer contract', () => {
   it('keeps the right rail as workspace/canvas global context', () => {
     expect(rail).toContain('对整个{contextLabel}直接工作')
     expect(rail).toContain('global-context-composer')
-    expect(app).toContain('contextCount={globalContextIds.length}')
-    expect(app).toContain('onSend={requestGlobalRun}')
+    expect(app).toContain('contextCount: globalContextIds.length')
+    expect(app).toContain('onSend: requestGlobalRun')
   })
 
   it('memoizes the heavy Canvas while the inline command changes', () => {
     expect(canvas).toContain('memo(function ProjectCanvas')
     expect(app).toContain('const sceneStyle = useMemo')
-    expect(app).toContain('onPointerWorldChange={rememberCanvasPoint}')
+    expect(app).toContain('onPointerWorldChange: rememberCanvasPoint')
   })
 })

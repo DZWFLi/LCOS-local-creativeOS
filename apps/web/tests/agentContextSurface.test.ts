@@ -8,8 +8,9 @@ const webRoot = join(import.meta.dirname, '..', 'src')
 describe('C3 Agent visual context surface', () => {
   it('opens agent mode for ?agent=codex and renders the surface', () => {
     const app = readFileSync(join(webRoot, 'App.tsx'), 'utf8')
+    const surface = readFileSync(join(webRoot, 'features', 'shell', 'AgentContextSurface.tsx'), 'utf8')
     expect(app).toContain("get('agent') === 'codex'")
-    expect(app).toContain('agent-context-surface')
+    expect(surface).toContain('agent-context-surface')
   })
 
   it('surface carries sync state, proposals, pending runs and run lock', () => {

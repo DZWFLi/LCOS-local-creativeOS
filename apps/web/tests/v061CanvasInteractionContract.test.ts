@@ -7,6 +7,7 @@ const here = path.dirname(fileURLToPath(import.meta.url))
 const src = (relative: string) => fs.readFileSync(path.join(here, '..', 'src', relative), 'utf8')
 
 const app = src('App.tsx')
+const scene = src('features/shell/CanvasSceneHost.tsx')
 const canvas = src('features/canvas/ProjectCanvas.tsx')
 const minimap = src('features/canvas/CanvasMiniMap.tsx')
 const navigation = src('state/projectNavigation.ts')
@@ -23,7 +24,7 @@ describe('v0.6.1 canvas interaction architecture', () => {
   it('keeps zoom transform on CanvasWorld and screen HUD outside it', () => {
     expect(canvas).toContain('data-testid="canvas-world"')
     expect(canvas).toContain('scale(${camera.zoom})')
-    expect(app).toContain('className="canvas-hud"')
+    expect(scene).toContain('className="canvas-hud"')
   })
 
   it('keeps anchor create menu outside the transformed CanvasWorld', () => {
@@ -39,7 +40,8 @@ describe('v0.6.1 canvas interaction architecture', () => {
   it('supports resize, workspace frame drag and active-scope minimap nodes', () => {
     expect(canvas).toContain('className="resize-handle"')
     expect(canvas).toContain('workspace-frame-header')
-    expect(app).toContain('<CanvasMiniMap nodes={scopeNodes}')
+    expect(app).toContain('miniMap: {')
+    expect(scene).toContain('<CanvasMiniMap {...props.miniMap} />')
     expect(app).toContain('activeWorkspaceFrames')
     expect(minimap).toContain('data-camera-rect="true"')
     expect(minimap).toContain('data-minimap-node-id')
@@ -47,8 +49,9 @@ describe('v0.6.1 canvas interaction architecture', () => {
   })
 
   it('keeps camera navigation out of project mutation paths', () => {
+    const workspaceState = src('state/workspaceState.ts')
+    expect(workspaceState).not.toContain('activeWorkspaceId: workspaceId')
     expect(app).not.toContain('const persistedWorkspaces = workspaces.map((workspace) => workspace.id === workspaceId ? { ...workspace, camera')
-    expect(app).not.toContain('activeWorkspaceId: workspaceId')
     expect(app).toContain('activeWorkspaceId: null')
   })
 
