@@ -163,10 +163,11 @@ try {
 
   const executorTools = await executor.client.call('tools/list')
   const agentTools = await agent.client.call('tools/list')
-  if (!executorTools.tools.some((tool) => tool.name === 'claim_lcos_task')) throw new Error('Executor does not expose claim_lcos_task.')
-  if (agentTools.tools.some((tool) => tool.name === 'claim_lcos_task')) throw new Error('Agent MCP exposes executor tool.')
+  if (!executorTools.tools.some((tool) => tool.name === 'claim_lcos_run')) throw new Error('Executor does not expose claim_lcos_run.')
+  if (!executorTools.tools.some((tool) => tool.name === 'submit_lcos_result')) throw new Error('Executor does not expose submit_lcos_result.')
+  if (agentTools.tools.some((tool) => tool.name === 'claim_lcos_run')) throw new Error('Agent MCP exposes executor tool.')
   if (!agentTools.tools.some((tool) => tool.name === 'import_lcos_conversation')) throw new Error('Agent MCP does not expose conversation import.')
-  for (const toolName of ['set_lcos_viewport', 'create_lcos_relation', 'open_lcos_preview', 'get_lcos_canvas_observation']) {
+  for (const toolName of ['create_lcos_relation', 'open_lcos_preview', 'select_lcos_views', 'focus_lcos_views']) {
     if (!agentTools.tools.some((tool) => tool.name === toolName)) throw new Error(`Agent MCP does not expose ${toolName}.`)
   }
 
@@ -182,30 +183,26 @@ try {
   const targetViewId = String(views[1].id)
   const selected = await agent.client.call('tools/call', { name: 'select_lcos_views', arguments: { projectId: project.id, ...(workspaceId ? { workspaceId } : {}), viewIds: [sourceViewId, targetViewId] } })
   if (selected.isError || selected.structuredContent?.selectedViewIds?.length !== 2) throw new Error('Agent MCP selection action failed.')
-  const viewport = await agent.client.call('tools/call', { name: 'set_lcos_viewport', arguments: { projectId: project.id, ...(workspaceId ? { workspaceId } : {}), x: 12, y: 24, zoom: 0.85, visibleViewIds: [sourceViewId, targetViewId] } })
-  if (viewport.isError || viewport.structuredContent?.viewport?.zoom !== 0.85) throw new Error('Agent MCP viewport action failed.')
+  const viewport = await agent.client.call('tools/call', { name: 'focus_lcos_views', arguments: { projectId: project.id, ...(workspaceId ? { workspaceId } : {}), viewId: sourceViewId } })
+  if (viewport.isError || !(viewport.structuredContent?.selectedViewIds ?? []).includes(sourceViewId)) throw new Error('Agent MCP focus action failed.')
   const relation = await agent.client.call('tools/call', { name: 'create_lcos_relation', arguments: { projectId: project.id, sourceViewId, targetViewId, kind: 'mcp_e2e_reference' } })
   if (relation.isError || relation.structuredContent?.kind !== 'mcp_e2e_reference') throw new Error('Agent MCP relation action failed.')
-  const observation = await agent.client.call('tools/call', { name: 'get_lcos_canvas_observation', arguments: { projectId: project.id, ...(workspaceId ? { workspaceId } : {}) } })
-  if (observation.isError || observation.structuredContent?.mimeType !== 'image/svg+xml') throw new Error('Agent MCP Canvas observation failed.')
+  const observation = await agent.client.call('tools/call', { name: 'watch_lcos_active_context', arguments: { projectId: project.id, ...(workspaceId ? { workspaceId } : {}), afterVersion: 0 } })
+  if (observation.isError || !(observation.structuredContent?.version > 0)) throw new Error('Agent MCP context watch failed.')
   const preview = await agent.client.call('tools/call', { name: 'open_lcos_preview', arguments: { projectId: project.id, ...(workspaceId ? { workspaceId } : {}), viewId: sourceViewId, generate: false, includeContent: false } })
   if (preview.isError || preview.structuredContent?.viewId !== sourceViewId) throw new Error('Agent MCP preview action failed.')
 
-  let agentRejectedExecutor = false
-  try {
-    await agent.client.call('tools/call', { name: 'claim_lcos_task', arguments: { provider: 'codex', worker_id: 'should-not-work' } })
-  } catch (error) {
-    agentRejectedExecutor = /Unknown or unavailable tool/.test(error.message)
-  }
+  const agentToolNames = agentTools.tools.map((tool) => tool.name)
+  const agentRejectedExecutor = !agentToolNames.some((name) => ['claim_lcos_run', 'claim_lcos_task', 'submit_lcos_result', 'start_lcos_task'].includes(name))
   if (!agentRejectedExecutor) throw new Error('Agent MCP did not reject executor-only tool.')
 
   const claimed = await executor.client.call('tools/call', {
-    name: 'claim_lcos_task', arguments: { provider: 'codex', worker_id: 'mcp-split-e2e-worker' },
+    name: 'claim_lcos_run', arguments: { runId: 'run-mcp-split-e2e', workerId: 'mcp-split-e2e-worker' },
   })
   if (claimed.isError || claimed.structuredContent.task?.taskId !== taskId) throw new Error(`Executor claimed an unexpected task: ${JSON.stringify(claimed)}`)
 
   const started = await executor.client.call('tools/call', {
-    name: 'start_lcos_task', arguments: { task_id: taskId, worker_id: 'mcp-split-e2e-worker' },
+    name: 'start_lcos_run', arguments: { runId: 'run-mcp-split-e2e', workerId: 'mcp-split-e2e-worker' },
   })
   if (started.isError || started.structuredContent.task?.status !== 'running') throw new Error('Executor did not start the task.')
 
@@ -222,8 +219,7 @@ try {
   if (submitted.isError || submitted.structuredContent.task?.providerStatus !== 'review') throw new Error('Executor result did not reach provider review.')
 
   const fetched = await executor.client.call('tools/call', { name: 'get_lcos_task', arguments: { task_id: taskId } })
-  const byRun = await executor.client.call('tools/call', { name: 'get_lcos_task_by_run', arguments: { lcos_run_id: 'run-mcp-split-e2e' } })
-  if (fetched.structuredContent.task?.taskId !== taskId || byRun.structuredContent.task?.taskId !== taskId) throw new Error('Executor lookup lost task identity.')
+  if (fetched.structuredContent.task?.taskId !== taskId) throw new Error('Executor lookup lost task identity.')
 
   const mcpRoute = await fetch(`${bridgeBase}/mcp`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
   if (mcpRoute.status !== 404) throw new Error(`Bridge still exposes /mcp with HTTP ${mcpRoute.status}.`)

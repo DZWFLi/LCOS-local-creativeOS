@@ -4,15 +4,32 @@ import { createHash, randomUUID } from "node:crypto";
 import { basename, resolve } from "node:path";
 import { coreRequest, jsonBody } from "./lib/client.mjs";
 import { serveStdioMcp } from "./lib/mcp-stdio-runtime.mjs";
+import { executorToolDefinitions, executorToolNames, invokeExecutorTool } from "./executor-tools.mjs";
 
 const ROLE = process.env.LCOS_MCP_ROLE === "executor" ? "executor" : "agent";
 const SERVER = { name: ROLE === "executor" ? "lcos-executor" : "local-creative-os", version: "0.5.0" };
 const SUPPORTED_PROTOCOL_VERSIONS = ["2025-11-25", "2025-06-18", "2024-11-05"];
 const CONVERSATION_CHUNK_BYTES = 4 * 1024 * 1024;
-const EXECUTOR_TOOL_NAMES = new Set([
-  "get_lcos_run_context",
-  "claim_lcos_run", "start_lcos_run", "heartbeat_lcos_run", "fail_lcos_run", "request_lcos_user_input",
-  "claim_lcos_task", "start_lcos_task", "get_lcos_task", "get_lcos_task_by_run", "submit_lcos_result", "cancel_lcos_task",
+const EXECUTOR_TOOL_NAMES = executorToolNames;
+// CLI-first 原则：CLI 能做的（批处理/导入/导出/维护/会话绑定/资源枚举）不进 MCP；
+// 这里只保留 Agent 会话原生能力（画布上下文、Run 生命周期、提案、对话检索、资源读取/匹配）。
+const ACTIVE_AGENT_TOOL_NAMES = new Set([
+  "bind_lcos_project", "list_lcos_projects", "get_lcos_project", "open_lcos_preview",
+  "get_lcos_active_context", "watch_lcos_active_context", "select_lcos_views", "focus_lcos_views",
+  "move_lcos_view", "create_lcos_relation",
+  "propose_lcos_context_change", "accept_lcos_context_proposal", "reject_lcos_context_proposal",
+  "list_lcos_context_proposals", "apply_lcos_context_command",
+  "create_lcos_run", "validate_lcos_agent_plan", "dispatch_lcos_run", "cancel_lcos_run",
+  "get_lcos_run", "list_lcos_runs", "get_lcos_run_input_request", "answer_lcos_run_input",
+  "sync_lcos_run", "recover_lcos_run", "finalize_lcos_run", "accept_lcos_return",
+  "reject_lcos_return", "retry_lcos_return",
+  "lcos_resource_read", "lcos_resource_match", "list_lcos_connectors",
+  "scan_lcos_obsidian_vault", "import_lcos_obsidian_notes",
+  "import_lcos_conversation", "list_lcos_conversations", "get_lcos_conversation",
+  "search_lcos_conversations", "read_lcos_conversation_messages", "list_lcos_conversation_sections",
+  "read_lcos_conversation_section", "annotate_lcos_conversation_section",
+  "pin_lcos_conversation_message", "get_lcos_conversation_semantic_index",
+  "build_lcos_conversation_semantic_index",
 ]);
 const DOMAIN_AGENT_DEFAULT = new Set(["project", "canvas", "context", "run", "provider", "resource", "conversation"]);
 const REQUESTED_PACKAGES = (process.env.LCOS_MCP_PACKAGES ?? "").split(",").map((item) => item.trim()).filter(Boolean);
@@ -23,7 +40,7 @@ export function domainOf(toolName) {
   if (/^(get_lcos_active_context|watch_lcos_active_context|focus_lcos_views|select_lcos_views|set_lcos_viewport|move_lcos_view|get_lcos_canvas_observation|create_lcos_relation|.*workspace_member)/.test(toolName)) return "canvas"
   if (/^(propose_lcos_context_change|apply_lcos_context_command|accept_lcos_context_proposal|reject_lcos_context_proposal|list_lcos_context_proposals|build_lcos_context_manifest)/.test(toolName)) return "context"
   if (/^(create_lcos_run|propose_lcos_run|validate_lcos_agent_plan|dispatch_lcos_run|cancel_lcos_run|get_lcos_run|list_lcos_runs|list_lcos_pending_runs|get_lcos_run_input_request|answer_lcos_run_input|sync_lcos_run|recover_lcos_run|finalize_lcos_run|accept_lcos_return|reject_lcos_return|retry_lcos_return)/.test(toolName)) return "run"
-  if (/^(claim_lcos_run|start_lcos_run|heartbeat_lcos_run|fail_lcos_run|submit_lcos_result|request_lcos_user_input|claim_lcos_task|start_lcos_task|get_lcos_task|get_lcos_task_by_run|cancel_lcos_task)/.test(toolName)) return "executor"
+  if (EXECUTOR_TOOL_NAMES.has(toolName)) return "executor"
   if (/^(get_lcos_provider_session|set_lcos_provider_session|clear_lcos_provider_session|list_lcos_runtime_providers)/.test(toolName)) return "provider"
   if (/^(lcos_resource_|list_lcos_connectors|scan_lcos_obsidian_vault|import_lcos_obsidian_notes)/.test(toolName)) return "resource"
   if (/^(import_lcos_conversation|import_lcos_manual_conversation|export_lcos_conversation|list_lcos_conversations|get_lcos_conversation|search_lcos_conversations|read_lcos_conversation_messages|list_lcos_conversation_sections|refresh_lcos_conversation_sections|rename_lcos_conversation_section|read_lcos_conversation_section|annotate_lcos_conversation_section|pin_lcos_conversation_message|get_lcos_conversation_semantic_index|build_lcos_conversation_semantic_index)/.test(toolName)) return "conversation"
@@ -32,11 +49,11 @@ export function domainOf(toolName) {
 
 /** 按角色 + 可选包裁剪后的工具名清单（验证用）。 */
 export function listToolsForRole(role = "agent", packages = []) {
+  if (role === "executor") return [...executorToolNames]
   const wanted = new Set(packages)
   return tools
     .filter((item) => {
-      if (role === "executor") return EXECUTOR_TOOL_NAMES.has(item.name)
-      if (EXECUTOR_TOOL_NAMES.has(item.name)) return false
+      if (!ACTIVE_AGENT_TOOL_NAMES.has(item.name)) return false
       return wanted.size === 0 || wanted.has(domainOf(item.name))
     })
     .map((item) => item.name)
@@ -141,28 +158,14 @@ const tools = [
     projectId: { type: "string" },
     workspaceId: { type: "string" },
   }, ["projectId"]),
-  tool("get_lcos_run_context", "Read the frozen ContextManifest for one Run (never live ActiveContext).", {
-    runId: { type: "string" },
-  }, ["runId"]),
+
   tool("list_lcos_pending_runs", "List Runs that still need a Codex executor (created/queued/running, bound).", {
     projectId: { type: "string" },
   }, ["projectId"]),
-  tool("claim_lcos_run", "Atomically claim the Bridge Task of one Codex Run (provider-isolated).", {
-    runId: { type: "string" },
-    workerId: { type: "string" },
-  }, ["runId", "workerId"]),
-  tool("start_lcos_run", "Mark the claimed Codex Run Task as running.", {
-    runId: { type: "string" },
-    workerId: { type: "string" },
-  }, ["runId", "workerId"]),
-  tool("heartbeat_lcos_run", "Renew the lease of the running Codex Run Task.", {
-    runId: { type: "string" },
-    workerId: { type: "string" },
-  }, ["runId", "workerId"]),
-  tool("fail_lcos_run", "Submit a structured failed result for a Codex Run Task.", {
-    runId: { type: "string" },
-    summary: { type: "string" },
-  }, ["runId", "summary"]),
+
+
+
+
   tool("list_lcos_workspace_members", "List canonical Workspace memberships for a project.", {
     projectId: { type: "string" },
   }, ["projectId"]),
@@ -240,14 +243,7 @@ const tools = [
     text: { type: "string" },
     selectedOptions: { type: "array", items: { type: "string" } },
   }, ["runId", "requestId"]),
-  tool("request_lcos_user_input", "Pause one claimed Run with a real waiting_input request instead of failing or retrying it.", {
-    runId: { type: "string" },
-    requestId: { type: "string" },
-    question: { type: "string" },
-    options: { type: "array", items: { type: "string" } },
-    allowFreeText: { type: "boolean" },
-    contextVersion: { type: "number" },
-  }, ["runId", "requestId", "question"]),
+
   tool("list_lcos_runtime_providers", "Read Provider capability and availability before sending.", {}, []),
   tool("build_lcos_context_manifest", "Freeze an immutable ContextManifest from Project Truth.", {
     projectId: { type: "string" },
@@ -297,27 +293,12 @@ const tools = [
     returnId: { type: "string" },
     instruction: { type: "string" },
   }, ["returnId"]),
-  tool("claim_lcos_task", "Pull one Light Bridge task pending assignment for a provider.", {
-    provider: { type: "string" },
-    worker_id: { type: "string" },
-  }, ["provider", "worker_id"]),
-  tool("start_lcos_task", "Mark a Light Bridge task running.", {
-    task_id: { type: "string" },
-    worker_id: { type: "string" },
-  }, ["task_id"]),
-  tool("get_lcos_task", "Read one Light Bridge task and its result state.", {
-    task_id: { type: "string" },
-  }, ["task_id"]),
-  tool("get_lcos_task_by_run", "Find a Light Bridge task by LCOS run ID.", {
-    lcos_run_id: { type: "string" },
-  }, ["lcos_run_id"]),
-  tool("submit_lcos_result", "Post a provider execution result back into Light Bridge.", {
-    task_id: { type: "string" },
-    result: { type: "object" },
-  }, ["task_id", "result"]),
-  tool("cancel_lcos_task", "Request cancellation of a Light Bridge task.", {
-    task_id: { type: "string" },
-  }, ["task_id"]),
+
+
+
+
+
+
   tool("list_lcos_connectors", "List installed LCOS resource connectors and their read/write capabilities.", {}),
   tool("scan_lcos_obsidian_vault", "Open the native folder picker and read-only scan an Obsidian Vault. Call only after the user explicitly asks to connect or import a Vault.", {}),
   tool("import_lcos_obsidian_notes", "Copy selected Markdown notes from a prior read-only Obsidian scan into one LCOS Project. The source Vault is never modified.", {
@@ -384,11 +365,11 @@ const tools = [
 ];
 
 const visibleTools = tools.filter((item) => {
-  if (ROLE === "executor") return EXECUTOR_TOOL_NAMES.has(item.name)
-  if (EXECUTOR_TOOL_NAMES.has(item.name)) return false
+  if (!ACTIVE_AGENT_TOOL_NAMES.has(item.name)) return false
   return REQUESTED_PACKAGES.length === 0 || REQUESTED_PACKAGES.includes(domainOf(item.name))
 })
-const loadedDomains = [...new Set(visibleTools.map((item) => domainOf(item.name)))].sort()
+const exposedTools = ROLE === "executor" ? executorToolDefinitions : visibleTools
+const loadedDomains = [...new Set(exposedTools.map((item) => domainOf(item.name)))].sort()
 
 if (process.env.LCOS_MCP_NO_SERVE !== "1") {
   serveStdioMcp({
@@ -397,8 +378,8 @@ if (process.env.LCOS_MCP_NO_SERVE !== "1") {
       ? "This server is only for provider execution: claim, start, heartbeat, request input, submit, fail or cancel. Project and Canvas operations belong to local-creative-os."
       : `Read the Project + Workspace CanvasContextSnapshot before acting. Generate a structured Agent Plan, let Core validate safety/lifecycle, and never mutate a running Run's frozen ContextManifest. Loaded packages: ${loadedDomains.join(", ")}.`,
     protocolVersions: SUPPORTED_PROTOCOL_VERSIONS,
-    tools: visibleTools,
-    callTool: invokeTool,
+    tools: exposedTools,
+    callTool: ROLE === "executor" ? invokeExecutorTool : invokeTool,
   })
 }
 
@@ -590,15 +571,6 @@ async function invokeTool(requestedTool, args) {
       value = await coreRequest(`/projects/${encodeURIComponent(projectId)}/canvas-observation${query.size ? `?${query}` : ""}`);
       break;
     }
-    case "get_lcos_run_context":
-      {
-        const runId = required(args.runId, "runId");
-        const review = await coreRequest(`/runs/${encodeURIComponent(runId)}/review`);
-        value = await coreRequest(
-          `/projects/${encodeURIComponent(review.run.projectId)}/context-manifests/v0/${encodeURIComponent(review.run.contextManifestId)}`
-        );
-      }
-      break;
     case "list_lcos_pending_runs":
       {
         const projectId = required(args.projectId, "projectId");
@@ -606,51 +578,6 @@ async function invokeTool(requestedTool, args) {
         value = reviews.filter((item) =>
           ["created", "queued", "running"].includes(item.run?.status)
           && item.dispatch?.status === "bound");
-      }
-      break;
-    case "claim_lcos_run":
-      {
-        const runId = required(args.runId, "runId");
-        const task = await codexTaskForRun(runId);
-        value = await coreRequest(`/executor/tasks/${encodeURIComponent(task.taskId)}/claim`, {
-          method: "POST",
-          ...jsonBody({ provider: "codex", workerId: required(args.workerId, "workerId") }),
-        });
-      }
-      break;
-    case "start_lcos_run":
-      {
-        const task = await codexTaskForRun(required(args.runId, "runId"));
-        value = await coreRequest(`/executor/tasks/${encodeURIComponent(task.taskId)}/running`, {
-          method: "POST",
-          ...jsonBody({ workerId: required(args.workerId, "workerId") }),
-        });
-      }
-      break;
-    case "heartbeat_lcos_run":
-      {
-        const task = await codexTaskForRun(required(args.runId, "runId"));
-        value = await coreRequest(`/executor/tasks/${encodeURIComponent(task.taskId)}/heartbeat`, {
-          method: "POST",
-          ...jsonBody({ workerId: required(args.workerId, "workerId") }),
-        });
-      }
-      break;
-    case "fail_lcos_run":
-      {
-        const runId = required(args.runId, "runId");
-        const task = await codexTaskForRun(runId);
-        value = await coreRequest(`/executor/tasks/${encodeURIComponent(task.taskId)}/result`, {
-          method: "POST",
-          ...jsonBody({
-            contractVersion: "bridge-result-v1",
-            taskId: task.taskId,
-            lcosRunId: task.lcosRunId ?? runId,
-            providerStatus: "failed",
-            summary: args.summary ?? "Task failed.",
-            changedFiles: [],
-          }),
-        });
       }
       break;
     case "list_lcos_workspace_members":
@@ -757,29 +684,6 @@ async function invokeTool(requestedTool, args) {
         }),
       });
       break;
-    case "request_lcos_user_input": {
-      const runId = required(args.runId, "runId");
-      const task = await codexTaskForRun(runId);
-      value = await coreRequest(`/executor/tasks/${encodeURIComponent(task.taskId)}/result`, {
-        method: "POST",
-        ...jsonBody({
-          contractVersion: "bridge-result-v1",
-          taskId: task.taskId,
-          lcosRunId: task.lcosRunId,
-          providerStatus: "waiting_input",
-          summary: required(args.question, "question"),
-          changedFiles: [],
-          inputRequest: {
-            requestId: required(args.requestId, "requestId"),
-            question: required(args.question, "question"),
-            options: Array.isArray(args.options) ? args.options : [],
-            allowFreeText: args.allowFreeText !== false,
-            ...(Number.isInteger(args.contextVersion) ? { contextVersion: args.contextVersion } : {}),
-          },
-        }),
-      });
-      break;
-    }
     case "list_lcos_runtime_providers":
       value = await coreRequest("/runtime/providers");
       break;
@@ -863,39 +767,6 @@ async function invokeTool(requestedTool, args) {
       value = await coreRequest(`/artifact-returns/${encodeURIComponent(required(args.returnId, "returnId"))}/retry`, {
         method: "POST",
         ...jsonBody(args.instruction ? { instruction: args.instruction } : {}),
-      });
-      break;
-    case "claim_lcos_task":
-      value = await coreRequest("/executor/tasks/claim-next", {
-        method: "POST",
-        ...jsonBody({
-          provider: required(args.provider, "provider"),
-          workerId: required(args.worker_id, "worker_id"),
-        }),
-      });
-      break;
-    case "start_lcos_task":
-      value = await coreRequest(`/executor/tasks/${encodeURIComponent(required(args.task_id, "task_id"))}/running`, {
-        method: "POST",
-        ...jsonBody({ workerId: args.worker_id || null }),
-      });
-      break;
-    case "get_lcos_task":
-      value = await coreRequest(`/executor/tasks/${encodeURIComponent(required(args.task_id, "task_id"))}`);
-      break;
-    case "get_lcos_task_by_run":
-      value = await coreRequest(`/executor/runs/${encodeURIComponent(required(args.lcos_run_id, "lcos_run_id"))}/task`);
-      break;
-    case "submit_lcos_result":
-      value = await coreRequest(`/executor/tasks/${encodeURIComponent(required(args.task_id, "task_id"))}/result`, {
-        method: "POST",
-        ...jsonBody(args.result),
-      });
-      break;
-    case "cancel_lcos_task":
-      value = await coreRequest(`/executor/tasks/${encodeURIComponent(required(args.task_id, "task_id"))}/cancel`, {
-        method: "POST",
-        ...jsonBody({}),
       });
       break;
     case "list_lcos_connectors":
@@ -1084,7 +955,6 @@ async function importConversationFile({ projectId, filePath, scopeId, workspaceI
   }
 }
 
-
 function tool(name, description, properties, required = []) {
   return { name, description, inputSchema: { type: "object", properties, additionalProperties: false, ...(required.length ? { required } : {}) } };
 }
@@ -1092,16 +962,4 @@ function tool(name, description, properties, required = []) {
 function required(value, name) {
   if (typeof value !== "string" || !value) throw new Error(`${name} is required`);
   return value;
-}
-
-async function codexTaskForRun(runId) {
-  const response = await coreRequest(`/executor/runs/${encodeURIComponent(runId)}/task`);
-  const task = response?.task ?? response;
-  const taskId = task?.taskId ?? task?.task_id;
-  if (!taskId) throw new Error(`TASK_NOT_FOUND: no Bridge Task for run ${runId}.`);
-  const provider = String(task?.provider ?? task?.provider ?? "unknown").toLowerCase();
-  if (provider !== "codex") {
-    throw new Error(`PROVIDER_MISMATCH: run ${runId} task provider is ${provider}, expected codex.`);
-  }
-  return { taskId, lcosRunId: task?.lcosRunId ?? task?.lcos_run_id ?? runId };
 }

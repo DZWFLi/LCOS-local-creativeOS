@@ -14,8 +14,9 @@ ordered selection / Target / Pinned & Excluded Context / viewport 与可见 View
 节点身份、位置与受控摘要 / 一跳关系 / version / updatedAt / updatedBy
 ```
 
-不要抓取 React 状态或 DOM。`get_lcos_canvas_observation` 提供的 SVG
-`screenshotRef` 只作视觉证据，结构化 CanvasContextSnapshot 才是唯一上下文真相。
+不要抓取 React 状态或 DOM。画布快照的 `screenshotRef` 只作视觉证据，
+结构化 CanvasContextSnapshot 才是唯一上下文真相（SVG 观察已并入快照，
+MCP 精简后不再单独暴露 observation 工具）。
 
 ## Obsidian（仅用户明确要求时）
 

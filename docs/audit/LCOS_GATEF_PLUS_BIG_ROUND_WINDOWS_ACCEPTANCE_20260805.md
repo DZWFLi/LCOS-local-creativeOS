@@ -334,3 +334,17 @@ MCP 按域拆分：
 - E2E 实测：agentToolCount=65、executorToolCount=12、agentRejectedExecutor=true、
   画布动作与 claim/start/review 全通过
 ```
+
+2026-08-06 补充（CLI-first 精简 + 执行器物理拆分）：
+
+```text
+原则：CLI 能做的，MCP 不做；MCP 只留 Agent 会话原生能力。
+- Agent 白名单 45 工具（~3.8K token），执行器 8 工具（~0.5K）
+- 执行器工具物理拆到 tools/lcos-agent/executor-tools.mjs，agent 文件不再含执行器 handler
+- 降级/删除约 20 个：propose_lcos_run、workspace 成员×4、provider 会话×3、
+  set_lcos_viewport、get_lcos_canvas_observation、conversation 维护×4、
+  resource 枚举×2、providers、pending_runs、executor 旧平行面×4
+- 政策文档：docs/architecture/MCP_SURFACE_POLICY_20260806.md
+- E2E 实测：agentToolCount=45、executorToolCount=8、agentRejectedExecutor=true、
+  画布动作与 claim/start/review 全通过
+```

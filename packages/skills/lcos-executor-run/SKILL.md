@@ -29,11 +29,11 @@ readOrder: []
 
 ```text
 claim_lcos_run / start_lcos_run / heartbeat_lcos_run / fail_lcos_run
-get_lcos_task / get_lcos_task_by_run / claim_lcos_task / start_lcos_task
-cancel_lcos_task / submit_lcos_result / request_lcos_user_input
+get_lcos_task / get_lcos_run_context / request_lcos_user_input / submit_lcos_result
 ```
 
 禁止使用 local-creative-os 的管理面工具（画布、提案、导入等）。
+取消任务由 Core/Agent 侧的 `cancel_lcos_run` 处理；执行器收到取消信号即停止。
 
 ## waiting_input
 
