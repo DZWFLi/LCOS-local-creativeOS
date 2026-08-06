@@ -27,6 +27,7 @@ export interface RouteHttpHelpers {
   readonly isStringArray: (value: unknown) => value is string[]
   readonly withAbort: <Value>(operation: Promise<Value>, signal: AbortSignal) => Promise<Value>
   readonly statusForError: (code: string) => number
+  readonly sendBinary: (response: ServerResponse, statusCode: number, bytes: Buffer, fileName: string, contentType?: string) => void
 }
 
 /** 请求上下文必须有 metadata，否则按 server.ts 原语义返回 503 并返回 undefined。 */

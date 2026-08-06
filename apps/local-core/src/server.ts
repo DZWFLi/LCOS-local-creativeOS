@@ -69,8 +69,11 @@ import { handleRuntimeReviewRoute } from './routes/runtime-reviews.js'
 import { handleCanvasRoute } from './routes/canvas.js'
 import { handleContextProposalsRoute } from './routes/context-proposals.js'
 import { handleConversationsRoute } from './routes/conversations.js'
+import { handleLcosprojRoute } from './routes/lcosproj.js'
 import { handleProjectsRoute } from './routes/projects.js'
 import { handleRunsRoute } from './routes/runs.js'
+import { handleArtifactsRoute } from './routes/artifacts.js'
+import { handleWorkspaceStatesRoute } from './routes/workspace-states.js'
 import { ContextProposalStore } from './context-proposal-store.js'
 import { selectNativeDirectory, type DirectoryPickerInput, type DirectoryPickerResult } from './native-directory-picker.js'
 import { indexProjectRoot, inspectProjectRoot } from './project-root-indexer.js'
@@ -393,7 +396,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
       const url = new URL(request.url ?? '/', `http://${LOOPBACK_HOST}`)
       const method = request.method ?? 'GET'
       const pathname = url.pathname
-      const routeHelpers = { sendJson, failure, readJsonBody, readRawBody, isRecord, isStringArray, withAbort, statusForError }
+      const routeHelpers = { sendJson, failure, readJsonBody, readRawBody, isRecord, isStringArray, withAbort, statusForError, sendBinary }
 
       const hostHeader = request.headers.host ?? ''
       const requestHost = hostHeader.replace(/^\[|\](:\d+)?$/g, '').split(':')[0]?.toLowerCase()
@@ -603,377 +606,39 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
         contextManifest,
         helpers: routeHelpers,
       })) return
-      const exportLcosprojDownloadMatch = /^\/projects\/([^/]+)\/export-lcosproj-file$/.exec(pathname)
-      if (method === 'GET' && exportLcosprojDownloadMatch !== null) {
-        if (!requireMetadata(metadata, response)) return
-        const projectId = decodeURIComponent(exportLcosprojDownloadMatch[1] ?? '') as ProjectId
-        const project = requireProject(String(projectId), metadata, response)
-        if (project === undefined) return
-        const tempRoot = await mkdtemp(join(tmpdir(), 'lcosproj-export-'))
-        const safeName = `${project.name.replace(/[\\/:*?"<>|]/g, '_').trim() || 'project'}.lcosproj`
-        const targetPath = join(tempRoot, safeName)
-        try {
-          await new LcosprojService(metadata).exportProject(projectId, targetPath)
-          sendBinary(response, 200, await readFile(targetPath), safeName, 'application/vnd.local-creative-os.project')
-        } catch (error: unknown) {
-          sendJson(response, 409, failure('CONFLICT', error instanceof Error ? error.message : 'Export failed.'))
-        } finally {
-          await rm(tempRoot, { recursive: true, force: true }).catch(() => undefined)
-        }
-        return
-      }
+      if (await handleLcosprojRoute({
+        method,
+        pathname,
+        url,
+        request,
+        response,
+        controller,
+        metadata,
+        maxLcosprojBodyBytes: MAX_LCOSPROJ_BODY_BYTES,
+        helpers: routeHelpers,
+      })) return
+      if (await handleArtifactsRoute({
+        method,
+        pathname,
+        url,
+        request,
+        response,
+        controller,
+        metadata,
 
-      if (method === 'POST' && pathname === '/lcosproj/open-upload') {
-        if (!requireMetadata(metadata, response)) return
-        const tempRoot = await mkdtemp(join(tmpdir(), 'lcosproj-open-'))
-        try {
-          const raw = await readRawBody(request, controller.signal, MAX_LCOSPROJ_BODY_BYTES)
-          const multipart = parseMultipartImport(request.headers['content-type'], raw)
-          if (!/\.lcosproj$/i.test(multipart.file.fileName)) {
-            sendJson(response, 400, failure('INVALID_ARGUMENT', '请选择 .lcosproj 工程文件。'))
-            return
-          }
-          const safeName = basename(multipart.file.fileName).replace(/[^a-zA-Z0-9._-]/g, '_') || 'project.lcosproj'
-          const filePath = join(tempRoot, safeName)
-          await writeFile(filePath, multipart.file.bytes, { flag: 'wx' })
-          sendJson(response, 200, { ok: true, value: await new LcosprojService(metadata).open(filePath) })
-        } catch (error: unknown) {
-          sendJson(response, error instanceof RangeError ? 413 : 409, failure(error instanceof RangeError ? 'INVALID_ARGUMENT' : 'CONFLICT', error instanceof Error ? error.message : 'Open failed.'))
-        } finally {
-          await rm(tempRoot, { recursive: true, force: true }).catch(() => undefined)
-        }
-        return
-      }
+        helpers: routeHelpers,
+      })) return
+      if (await handleWorkspaceStatesRoute({
+        method,
+        pathname,
+        url,
+        request,
+        response,
+        controller,
+        metadata,
 
-      const exportLcosprojMatch = /^\/projects\/([^/]+)\/export-lcosproj$/.exec(pathname)
-      if (method === 'POST' && exportLcosprojMatch !== null) {
-        if (!requireMetadata(metadata, response)) return
-        const projectId = decodeURIComponent(exportLcosprojMatch[1] ?? '') as ProjectId
-        const input = await readJsonBody(request, controller.signal)
-        if (!isRecord(input) || typeof input.targetPath !== 'string' || !isAbsolutePath(input.targetPath)
-          || Object.keys(input).some((key) => key !== 'targetPath')) {
-          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Export requires an absolute targetPath.'))
-          return
-        }
-        try {
-          sendJson(response, 201, {
-            ok: true,
-            value: await new LcosprojService(metadata).exportProject(projectId, input.targetPath),
-          })
-        } catch (error: unknown) {
-          sendJson(response, 409, failure('CONFLICT', error instanceof Error ? error.message : 'Export failed.'))
-        }
-        return
-      }
-
-      const lcosprojOpenMatch = /^\/lcosproj\/open$/.exec(pathname)
-      if (method === 'POST' && lcosprojOpenMatch !== null) {
-        if (!requireMetadata(metadata, response)) return
-        const input = await readJsonBody(request, controller.signal)
-        if (!isRecord(input) || typeof input.filePath !== 'string' || !isAbsolutePath(input.filePath)
-          || (input.rootPath !== undefined && (typeof input.rootPath !== 'string' || !isAbsolutePath(input.rootPath)))
-          || Object.keys(input).some((key) => !['filePath', 'rootPath'].includes(key))) {
-          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Open requires an absolute filePath and optional absolute rootPath.'))
-          return
-        }
-        try {
-          sendJson(response, 200, {
-            ok: true,
-            value: await new LcosprojService(metadata).open(
-              input.filePath,
-              typeof input.rootPath === 'string' ? input.rootPath : undefined,
-            ),
-          })
-        } catch (error: unknown) {
-          sendJson(response, 409, failure('CONFLICT', error instanceof Error ? error.message : 'Open failed.'))
-        }
-        return
-      }
-
-      const lcosprojInspectMatch = /^\/lcosproj\/inspect$/.exec(pathname)
-      if (method === 'GET' && lcosprojInspectMatch !== null) {
-        if (!requireMetadata(metadata, response)) return
-        const filePath = url.searchParams.get('file')
-        if (filePath === null || !isAbsolutePath(filePath)) {
-          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Inspect requires an absolute file query param.'))
-          return
-        }
-        try {
-          sendJson(response, 200, { ok: true, value: new LcosprojService(metadata).inspect(filePath) })
-        } catch (error: unknown) {
-          sendJson(response, 409, failure('CONFLICT', error instanceof Error ? error.message : 'Inspect failed.'))
-        }
-        return
-      }
-
-      const lcosprojExportAllMatch = /^\/lcosproj\/export-all$/.exec(pathname)
-      if (method === 'POST' && lcosprojExportAllMatch !== null) {
-        if (!requireMetadata(metadata, response)) return
-        const input = await readJsonBody(request, controller.signal)
-        if (!isRecord(input) || typeof input.targetDir !== 'string' || !isAbsolutePath(input.targetDir)
-          || (input.projectIds !== undefined && !isStringArray(input.projectIds))
-          || Object.keys(input).some((key) => !['targetDir', 'projectIds'].includes(key))) {
-          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Export-all requires an absolute targetDir.'))
-          return
-        }
-        try {
-          sendJson(response, 201, {
-            ok: true,
-            value: await new LcosprojService(metadata).exportAll(
-              input.targetDir,
-              input.projectIds === undefined ? undefined : input.projectIds as string[],
-            ),
-          })
-        } catch (error: unknown) {
-          sendJson(response, 409, failure('CONFLICT', error instanceof Error ? error.message : 'Export-all failed.'))
-        }
-        return
-      }
-
-      const artifactSearchMatch = /^\/projects\/([^/]+)\/artifacts\/search$/.exec(pathname)
-      if (method === 'GET' && artifactSearchMatch !== null) {
-        if (!requireMetadata(metadata, response)) return
-        const projectId = decodeURIComponent(artifactSearchMatch[1] ?? '') as ProjectId
-        const query = (url.searchParams.get('q') ?? '').trim().toLocaleLowerCase('en-US')
-        const matches = metadata.getArtifacts(String(projectId))
-          .filter((artifact) => query.length === 0 || artifact.title.toLocaleLowerCase('en-US').includes(query))
-          .slice(0, 50)
-        sendJson(response, 200, { ok: true, value: matches })
-        return
-      }
-
-      const artifactDetailMatch = /^\/artifacts\/([^/]+)$/.exec(pathname)
-      if (method === 'GET' && artifactDetailMatch !== null) {
-        if (!requireMetadata(metadata, response)) return
-        const artifactId = decodeURIComponent(artifactDetailMatch[1] ?? '')
-        const artifact = metadata.getArtifact(artifactId)
-        if (artifact === undefined) {
-          sendJson(response, 404, failure('NOT_FOUND', 'Artifact not found.'))
-          return
-        }
-        const revisions = metadata.getArtifactRevisions(artifactId)
-        const runById = new Map(
-          metadata.getProjectRuns(artifact.projectId, 100).map((run) => [String(run.id), run]),
-        )
-        sendJson(response, 200, {
-          ok: true,
-          value: {
-            artifact,
-            currentRevisionId: artifact.currentRevisionId,
-            revisions: revisions.map((revision) => ({
-              id: String(revision.id),
-              status: revision.status,
-              source: revision.source,
-              createdAt: revision.createdAt,
-              ...(revision.runId === undefined ? {} : {
-                run: {
-                  id: String(revision.runId),
-                  instruction: runById.get(String(revision.runId))?.instruction ?? null,
-                  provider: runById.get(String(revision.runId))?.provider ?? null,
-                },
-              }),
-            })),
-          },
-        })
-        return
-      }
-
-      const revisionListMatch = /^\/artifacts\/([^/]+)\/revisions$/.exec(pathname)
-      if (method === 'GET' && revisionListMatch !== null) {
-        if (!requireMetadata(metadata, response)) return
-        const artifactId = decodeURIComponent(revisionListMatch[1] ?? '')
-        sendJson(response, 200, { ok: true, value: metadata.getArtifactRevisions(artifactId) })
-        return
-      }
-
-      const revisionCompareMatch = /^\/projects\/([^/]+)\/revisions\/compare$/.exec(pathname)
-      if (method === 'GET' && revisionCompareMatch !== null) {
-        if (!requireMetadata(metadata, response)) return
-        const base = url.searchParams.get('base')
-        const head = url.searchParams.get('head')
-        if (base === null || head === null) {
-          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Compare requires base and head revision ids.'))
-          return
-        }
-        try {
-          sendJson(response, 200, {
-            ok: true,
-            value: await new RuntimeRevisionCompareService(metadata).compare(base, head),
-          })
-        } catch (error: unknown) {
-          sendJson(response, 409, failure('CONFLICT', error instanceof Error ? error.message : 'Compare failed.'))
-        }
-        return
-      }
-
-      const processProjectionMatch = /^\/projects\/([^/]+)\/process-projection$/.exec(pathname)
-      if (method === 'GET' && processProjectionMatch !== null) {
-        if (!requireMetadata(metadata, response)) return
-        const projectId = decodeURIComponent(processProjectionMatch[1] ?? '') as ProjectId
-        sendJson(response, 200, {
-          ok: true,
-          value: new ProcessProjectionService(metadata).project(projectId),
-        })
-        return
-      }
-
-      const workspaceStatesMatch = /^\/workspaces\/([^/]+)\/states$/.exec(pathname)
-      if (workspaceStatesMatch !== null && (method === 'GET' || method === 'POST')) {
-        if (!requireMetadata(metadata, response)) return
-        const workspaceId = decodeURIComponent(workspaceStatesMatch[1] ?? '') as WorkspaceId
-        const service = new WorkspaceStateService(metadata)
-        if (method === 'GET') {
-          sendJson(response, 200, { ok: true, value: service.list(workspaceId) })
-          return
-        }
-        const input = await readJsonBody(request, controller.signal)
-        if (!isRecord(input) || typeof input.name !== 'string'
-          || Object.keys(input).some((key) => !['name'].includes(key))) {
-          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Workspace state save requires name.'))
-          return
-        }
-        try {
-          sendJson(response, 201, { ok: true, value: service.save(workspaceId, input.name, new Date().toISOString()) })
-        } catch (error: unknown) {
-          sendJson(response, 409, failure('CONFLICT', error instanceof Error ? error.message : 'Workspace state save failed.'))
-        }
-        return
-      }
-
-      const workspaceStateRestoreMatch = /^\/workspaces\/([^/]+)\/states\/([^/]+)\/restore$/.exec(pathname)
-      if (method === 'POST' && workspaceStateRestoreMatch !== null) {
-        if (!requireMetadata(metadata, response)) return
-        const stateId = decodeURIComponent(workspaceStateRestoreMatch[2] ?? '')
-        try {
-          sendJson(response, 200, {
-            ok: true,
-            value: new WorkspaceStateService(metadata).restore(stateId),
-          })
-        } catch (error: unknown) {
-          sendJson(response, 409, failure('CONFLICT', error instanceof Error ? error.message : 'Workspace state restore failed.'))
-        }
-        return
-      }
-
-      const sessionSummariesMatch = /^\/projects\/([^/]+)\/session-summaries$/.exec(pathname)
-      if (sessionSummariesMatch !== null && (method === 'GET' || method === 'POST')) {
-        if (!requireMetadata(metadata, response)) return
-        const projectId = decodeURIComponent(sessionSummariesMatch[1] ?? '') as ProjectId
-        if (method === 'GET') {
-          sendJson(response, 200, { ok: true, value: metadata.listSessionSummaries(projectId) })
-          return
-        }
-        const input = await readJsonBody(request, controller.signal)
-        if (!isRecord(input) || typeof input.title !== 'string' || typeof input.summary !== 'string'
-          || (input.runIds !== undefined && !isStringArray(input.runIds))
-          || (input.handoffRef !== undefined && typeof input.handoffRef !== 'string')
-          || Object.keys(input).some((key) => !['title', 'summary', 'runIds', 'handoffRef'].includes(key))) {
-          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Session summary requires title and summary.'))
-          return
-        }
-        const now = new Date().toISOString()
-        sendJson(response, 201, {
-          ok: true,
-          value: metadata.createSessionSummary({
-            id: `session-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
-            projectId,
-            title: input.title,
-            summary: input.summary,
-            runIds: (input.runIds ?? []) as RunId[],
-            ...(input.handoffRef === undefined ? {} : { handoffRef: input.handoffRef }),
-            createdAt: now,
-            updatedAt: now,
-          }),
-        })
-        return
-      }
-
-      const projectMembershipsMatch = /^\/projects\/([^/]+)\/workspace-memberships$/.exec(pathname)
-      if (method === 'GET' && projectMembershipsMatch !== null) {
-        if (!requireMetadata(metadata, response)) return
-        const projectId = decodeURIComponent(projectMembershipsMatch[1] ?? '') as ProjectId
-        if (!requireProject(projectId, metadata, response)) return
-        sendJson(response, 200, { ok: true, value: metadata.listProjectWorkspaceMemberships(projectId) })
-        return
-      }
-
-      const membersMatch = /^\/workspaces\/([^/]+)\/members$/.exec(pathname)
-      if (membersMatch !== null && (method === 'POST' || method === 'GET')) {
-        if (!requireMetadata(metadata, response)) return
-        const workspaceId = decodeURIComponent(membersMatch[1] ?? '') as WorkspaceId
-        if (metadata.getWorkspace(workspaceId) === undefined) {
-          sendJson(response, 404, failure('NOT_FOUND', 'Workspace not found.'))
-          return
-        }
-        if (method === 'GET') {
-          sendJson(response, 200, { ok: true, value: metadata.listWorkspaceMembers(workspaceId) })
-          return
-        }
-        const input = await readJsonBody(request, controller.signal)
-        if (!isRecord(input) || !isStringArray(input.viewIds)
-          || (input.addedBy !== undefined && typeof input.addedBy !== 'string')
-          || Object.keys(input).some((key) => !['viewIds', 'addedBy'].includes(key))) {
-          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Membership add requires viewIds array.'))
-          return
-        }
-        const addedBy = ['user', 'agent', 'run', 'import'].includes(String(input.addedBy ?? 'user'))
-          ? String(input.addedBy ?? 'user') as 'user' | 'agent' | 'run' | 'import'
-          : 'user'
-        sendJson(response, 200, {
-          ok: true,
-          value: metadata.addWorkspaceMembers(
-            workspaceId,
-            input.viewIds as ArtifactViewId[],
-            addedBy,
-            new Date().toISOString(),
-          ),
-        })
-        return
-      }
-
-      const memberOneMatch = /^\/workspaces\/([^/]+)\/members\/([^/]+)$/.exec(pathname)
-      if (method === 'DELETE' && memberOneMatch !== null) {
-        if (!requireMetadata(metadata, response)) return
-        const workspaceId = decodeURIComponent(memberOneMatch[1] ?? '') as WorkspaceId
-        const viewId = decodeURIComponent(memberOneMatch[2] ?? '') as ArtifactViewId
-        if (metadata.getWorkspace(workspaceId) === undefined) {
-          sendJson(response, 404, failure('NOT_FOUND', 'Workspace not found.'))
-          return
-        }
-        sendJson(response, 200, {
-          ok: true,
-          value: metadata.removeWorkspaceMembers(workspaceId, [viewId]),
-        })
-        return
-      }
-
-      const membersMoveMatch = /^\/workspaces\/([^/]+)\/members\/move$/.exec(pathname)
-      if (method === 'POST' && membersMoveMatch !== null) {
-        if (!requireMetadata(metadata, response)) return
-        const fromWorkspaceId = decodeURIComponent(membersMoveMatch[1] ?? '') as WorkspaceId
-        const input = await readJsonBody(request, controller.signal)
-        if (!isRecord(input) || typeof input.toWorkspaceId !== 'string' || typeof input.viewId !== 'string'
-          || Object.keys(input).some((key) => !['toWorkspaceId', 'viewId'].includes(key))) {
-          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Membership move requires toWorkspaceId and viewId.'))
-          return
-        }
-        try {
-          sendJson(response, 200, {
-            ok: true,
-            value: metadata.moveWorkspaceMembers(
-              fromWorkspaceId,
-              input.toWorkspaceId as WorkspaceId,
-              [input.viewId as ArtifactViewId],
-              'user',
-              new Date().toISOString(),
-            ),
-          })
-        } catch (error: unknown) {
-          sendJson(response, 409, failure('CONFLICT', error instanceof Error ? error.message : 'Membership move conflicted.'))
-        }
-        return
-      }
-
+        helpers: routeHelpers,
+      })) return
       const runtimeProvidersMatch = /^\/runtime\/providers$/.exec(pathname)
       if (method === 'GET' && runtimeProvidersMatch !== null) {
         if (runtimeApplication === undefined) {
