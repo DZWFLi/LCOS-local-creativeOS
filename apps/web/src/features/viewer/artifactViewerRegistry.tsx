@@ -42,7 +42,7 @@ export function resolveArtifactViewerKind(node: CanvasNode): ArtifactViewerKind 
   const fileType = (node.fileType ?? '').toLocaleLowerCase('en-US')
   const title = node.title.toLocaleLowerCase('en-US')
   if (title.endsWith('.link.md') || title.startsWith('link:') || node.previewText?.startsWith('url:')) return 'link'
-  if (['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg'].includes(fileType)
+  if (['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'image'].includes(fileType)
     || /\.(png|jpe?g|webp|gif|svg)$/.test(title)) return 'image'
   if (fileType === 'pdf' || title.endsWith('.pdf')) return 'pdf'
   if (['ppt', 'pptx', 'presentation'].includes(fileType) || /\.pptx?$/.test(title)) return 'presentation'

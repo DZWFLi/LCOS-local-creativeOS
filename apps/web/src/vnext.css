@@ -35,6 +35,7 @@
 }
 
 .app-shell.porcelain-studio-v2 > .scene {
+  top: 0 !important;
   height: calc(100vh - 44px) !important;
   background:
     radial-gradient(circle at 62% 14%, rgba(139,92,246,.032), transparent 28%),

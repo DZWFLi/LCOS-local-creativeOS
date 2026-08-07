@@ -2950,6 +2950,7 @@ export function App() {
         scopes,
         rootScopeId: rootScope.id,
         currentScopeId: scopeId,
+        excludedScopeIds: [workbenchScopeId],
         onCancel: cancelTransfer,
         onSend: handleTransfer,
       },

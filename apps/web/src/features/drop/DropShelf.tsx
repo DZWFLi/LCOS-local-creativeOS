@@ -17,11 +17,12 @@ interface Props {
   scopes: CanvasScope[]
   rootScopeId: string
   currentScopeId: string
+  excludedScopeIds?: readonly string[]
   onCancel: () => void
   onSend: (destination: DropDestination, follow: boolean) => void
 }
 
-export function DropShelf({ open, anchor, count, workspaces, scopes, rootScopeId, currentScopeId, onCancel, onSend }: Props) {
+export function DropShelf({ open, anchor, count, workspaces, scopes, rootScopeId, currentScopeId, excludedScopeIds = [], onCancel, onSend }: Props) {
   const shelfRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (!open) return
@@ -43,7 +44,7 @@ export function DropShelf({ open, anchor, count, workspaces, scopes, rootScopeId
   const destinations: DropDestination[] = [
     { kind: 'workbench', id: 'current-workbench', label: '当前现场' },
     ...workspaces.map((workspace) => ({ kind: 'workspace' as const, id: workspace.id, label: workspace.label })),
-    ...scopes.filter((scope) => scope.id !== currentScopeId && scope.kind !== 'root').slice(0, 4).map((scope) => ({ kind: 'scope' as const, id: scope.id, label: scope.label })),
+    ...scopes.filter((scope) => scope.id !== currentScopeId && scope.kind !== 'root' && !excludedScopeIds.includes(scope.id)).slice(0, 4).map((scope) => ({ kind: 'scope' as const, id: scope.id, label: scope.label })),
     ...(currentScopeId !== rootScopeId ? [{ kind: 'root' as const, id: rootScopeId, label: '主画布' }] : []),
   ]
   const iconFor = (destination: DropDestination) => destination.kind === 'workspace' ? <LayoutPanelLeft size={15} /> : destination.kind === 'scope' ? <Layers3 size={15} /> : <Boxes size={15} />
