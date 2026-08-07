@@ -23,6 +23,7 @@ export interface DialogsHostProps {
   readonly workspaceEditor: ComponentProps<typeof WorkspaceDialog> | null
   readonly nodeRename: ComponentProps<typeof InlineNodeRename> | null
   readonly confirmWorkspaceDelete: ComponentProps<typeof ConfirmDialog> | null
+  readonly confirmProjectDelete: ComponentProps<typeof ConfirmDialog> | null
   readonly handoff: ComponentProps<typeof HandoffDialog> | null
   readonly linkReference: ComponentProps<typeof LinkReferenceDialog> | null
   readonly universalImport: ComponentProps<typeof UniversalImportPanel> | null
@@ -44,6 +45,7 @@ export function DialogsHost(props: DialogsHostProps) {
     props.workspaceEditor && <WorkspaceDialog key="workspace-editor" {...props.workspaceEditor} />,
     props.nodeRename && <InlineNodeRename key="node-rename" {...props.nodeRename} />,
     props.confirmWorkspaceDelete && <ConfirmDialog key="confirm-workspace-delete" {...props.confirmWorkspaceDelete} />,
+    props.confirmProjectDelete && <ConfirmDialog key="confirm-project-delete" {...props.confirmProjectDelete} />,
     props.handoff && <HandoffDialog key="handoff" {...props.handoff} />,
     props.linkReference && <LinkReferenceDialog key="link-reference" {...props.linkReference} />,
     props.universalImport && <UniversalImportPanel key="universal-import" {...props.universalImport} />,

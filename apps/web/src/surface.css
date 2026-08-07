@@ -2349,7 +2349,10 @@ body,
 }
 .project-drive-header { height: 54px; display: flex; align-items: center; padding: 0 24px; border-bottom: 1px solid rgba(29,45,60,.08); background: rgba(255,255,255,.86); }
 .project-drive-brand { display: flex; align-items: center; gap: 9px; font-size: 12px; font-weight: 780; letter-spacing: .08em; }
-.drive-create { margin-left: auto; display: flex; align-items: center; gap: 7px; padding: 9px 12px; border-radius: 12px; color: #fff; background: linear-gradient(135deg,#7a4ce2,#5968d8); font-size: 11px; font-weight: 760; }
+.drive-header-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.drive-create { display: flex; align-items: center; gap: 7px; padding: 9px 12px; border: 0; border-radius: 12px; color: #fff; background: linear-gradient(135deg,#7a4ce2,#5968d8); font-size: 11px; font-weight: 760; cursor: pointer; }
+.drive-import { display: flex; align-items: center; gap: 7px; padding: 9px 12px; border: 1px solid rgba(29,45,60,.12); border-radius: 12px; color: rgba(24,36,49,.72); background: rgba(255,255,255,.8); font-size: 11px; font-weight: 660; cursor: pointer; }
+.drive-import:hover { border-color: rgba(112,85,199,.25); color: #7055c7; }
 .project-drive-hero { max-width: 920px; margin: 0 auto; padding: 70px 24px 34px; }
 .project-drive-hero > span { color: #7047d8; font-size: 11px; font-weight: 780; letter-spacing: .12em; }
 .project-drive-hero h1 { margin: 12px 0 10px; font-size: 38px; letter-spacing: -.04em; }
@@ -2365,6 +2368,13 @@ body,
 .project-folder-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 14px; }
 .project-folder { min-height: 170px; display: grid; align-content: start; gap: 8px; padding: 18px; border: 1px solid rgba(29,45,60,.08); border-radius: 22px; text-align: left; background: linear-gradient(145deg,#fff,#f5f6f4); box-shadow: 0 16px 34px rgba(35,52,69,.065), inset 0 1px 0 #fff; }
 .project-folder:hover { transform: translateY(-2px); box-shadow: 0 20px 40px rgba(35,52,69,.09), inset 0 1px 0 #fff; }
+.project-folder { position: relative; }
+.project-folder-main { display: grid; gap: 8px; align-content: start; padding: 0; border: 0; background: transparent; text-align: left; color: inherit; cursor: pointer; }
+.project-folder-delete { position: absolute; top: 10px; right: 10px; width: 26px; height: 26px; display: grid; place-items: center; border: 0; border-radius: 8px; color: rgba(24,36,49,.35); background: transparent; cursor: pointer; }
+.project-folder-delete:hover { background: rgba(190,60,50,.09); color: #a23b33; }
+.drive-sort { display: inline-flex; align-items: center; gap: 4px; margin-right: 10px; color: var(--v06-muted); font-size: 10px; }
+.drive-sort select { padding: 3px 6px; border: 1px solid rgba(29,45,60,.1); border-radius: 8px; background: #fff; color: inherit; font-size: 10px; }
+.drive-recent-opened { padding-top: 8px; }
 .project-folder-icon { width: 46px; height: 42px; display: grid; place-items: center; border-radius: 14px; color: #7047d8; background: linear-gradient(145deg,#fff,#eee9ff); }
 .project-folder strong { font-size: 14px; }
 .project-folder small { overflow: hidden; color: var(--v06-muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }

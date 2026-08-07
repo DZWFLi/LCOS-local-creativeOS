@@ -1483,7 +1483,16 @@ export class SqliteMetadataRepository {
   }
 
   deleteProject(projectId: string): void {
-    this.#database.prepare('DELETE FROM projects WHERE id = ?').run(projectId as SQLInputValue)
+    this.#database.exec('BEGIN IMMEDIATE;')
+    try {
+      for (const sql of PROJECT_TRUTH_DELETE_SQL) {
+        this.#database.prepare(sql).run(projectId as SQLInputValue)
+      }
+      this.#database.exec('COMMIT;')
+    } catch (error: unknown) {
+      try { this.#database.exec('ROLLBACK;') } catch { /* already rolled back */ }
+      throw error
+    }
   }
 
   /**

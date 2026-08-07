@@ -160,6 +160,23 @@ export async function handleProjectsRoute(ctx: ProjectsRouteContext): Promise<bo
     return true
   }
 
+  const projectDeleteMatch = /^\/projects\/([^/]+)$/.exec(pathname)
+  if (method === 'DELETE' && projectDeleteMatch !== null) {
+    const metadata = routeRequireMetadata(ctx)
+    if (metadata === undefined) return true
+    const projectId = decodeURIComponent(projectDeleteMatch[1] ?? '')
+    if (metadata.getProject(projectId) === undefined) {
+      sendJson(response, 404, failure('NOT_FOUND', 'Project not found.'))
+      return true
+    }
+    metadata.deleteProject(projectId)
+    sendJson(response, 200, {
+      ok: true,
+      value: { deleted: true, projectId, note: '项目已从 LCOS 移除；源文件与 .lcosproj 工程文件保留在磁盘。' },
+    })
+    return true
+  }
+
   const graphMatch = /^\/projects\/([^/]+)\/graph$/.exec(pathname)
   if (method === 'GET' && graphMatch !== null) {
     const metadata = routeRequireMetadata(ctx); if (metadata === undefined) return true

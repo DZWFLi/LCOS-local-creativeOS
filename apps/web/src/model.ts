@@ -148,6 +148,7 @@ export interface ProjectPackage {
   label: string
   localPath: string
   updatedAt: string
+  lastOpenedAt?: string
   pendingCount: number
   rootScopeId?: string
 }

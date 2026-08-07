@@ -602,6 +602,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
       if (error instanceof DOMException && error.name === 'AbortError' && !response.headersSent && !response.destroyed) {
         sendJson(response, timedOut ? 408 : 499, failure('ABORTED', timedOut ? 'Request timed out.' : 'Request was aborted.'))
       } else if (!response.headersSent && !response.destroyed) {
+        console.error('[LocalCore] Request failed:', error)
         sendJson(response, 500, failure('INTERNAL', 'Unexpected Local Core error.'))
       } else response.destroy()
     } finally {

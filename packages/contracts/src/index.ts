@@ -616,6 +616,7 @@ export interface ProjectCatalogEntry {
   readonly name: string
   readonly rootPath: string
   readonly graphVersion: GraphVersion
+  readonly lastOpenedAt?: string
 }
 
 export interface AbortSignal {

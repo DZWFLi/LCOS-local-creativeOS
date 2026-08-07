@@ -144,6 +144,7 @@ export function App() {
   const [runProposal, setRunProposal] = useState<RunProposalResult | null>(null)
   const [, setWorkspaceMemberships] = useState<readonly WorkspaceMembership[]>([])
   const [confirmWorkspaceId, setConfirmWorkspaceId] = useState<string | null>(null)
+  const [confirmProjectDelete, setConfirmProjectDelete] = useState<ProjectPackage | null>(null)
   const [workspaceEditor, setWorkspaceEditor] = useState<{ mode: 'create' | 'edit'; id?: string } | null>(null)
   const [renameNodeId, setRenameNodeId] = useState<string | null>(null)
   const [layoutPreview, setLayoutPreview] = useState<LayoutPreviewItem[] | null>(null)
@@ -2747,6 +2748,7 @@ export function App() {
   const duplicateSelectedViews = useCallback(() => { duplicateSelection() }, [duplicateSelection])
   const deleteSelectedViews = useCallback(() => { deleteNodes(selectedIds) }, [deleteNodes, selectedIds])
   const rememberCanvasPoint = useCallback((point: { x: number; y: number }) => { lastCanvasPointRef.current = point }, [])
+  const requestDeleteProject = useCallback((project: ProjectPackage) => setConfirmProjectDelete(project), [])
   const handleFrameBoundsChange = useCallback((workspaceId: string, frameBounds: { x: number; y: number; width: number; height: number }) => {
     setWorkspaces((current) => current.map((workspace) => workspace.id === workspaceId
       ? { ...workspace, frameBounds, version: (workspace.version ?? 0) + 1 }
@@ -2774,7 +2776,7 @@ export function App() {
       if (modifier && event.shiftKey && key === 'l') { event.preventDefault(); arrangeSelection(); return }
       if (modifier && key === 'o' && selectedNodes.length === 1) { event.preventDefault(); openNative(selectedNodes[0]); return }
       if (event.code === 'Space') { event.preventDefault(); setSpaceHeld(true); return }
-      if (event.key === 'Escape') { if (stagedTransfer) setStagedTransfer(null); else if (immersiveNodeId) setImmersiveNodeId(null); else if (workbench) setWorkbench(null); else if (capabilityOpen) setCapabilityOpen(false); else if (nodeInfoId) setNodeInfoId(null); else if (layoutPreview) setLayoutPreview(null); else clearSelection(); return }
+      if (event.key === 'Escape') { if (confirmProjectDelete) setConfirmProjectDelete(null); else if (confirmWorkspaceId) setConfirmWorkspaceId(null); else if (stagedTransfer) setStagedTransfer(null); else if (immersiveNodeId) setImmersiveNodeId(null); else if (workbench) setWorkbench(null); else if (capabilityOpen) setCapabilityOpen(false); else if (nodeInfoId) setNodeInfoId(null); else if (layoutPreview) setLayoutPreview(null); else clearSelection(); return }
       if (key === 'c') { event.preventDefault(); requestComposerFocus(); return }
       if (event.key === 'Delete' || event.key === 'Backspace') {
         if (selectedIds.length) { deleteNodes(selectedIds); return }
@@ -2784,7 +2786,7 @@ export function App() {
     const release = (event: KeyboardEvent) => { if (event.code === 'Space') setSpaceHeld(false) }
     window.addEventListener('keydown', handler); window.addEventListener('keyup', release)
     return () => { window.removeEventListener('keydown', handler); window.removeEventListener('keyup', release) }
-  }, [arrangeSelection, clearSelection, copySelection, createDialogOpen, deleteNodes, duplicateSelection, capabilityOpen, immersiveNodeId, nodeInfoId, workbench, layoutPreview, openNative, pasteClipboard, projectCreateOpen, redo, requestComposerFocus, requestGlobalRun, requestSelectionRun, scopeCreateOpen, selectedEdgeId, selectedId, selectedIds, selectedNodes, setEdges, stagedTransfer, undo])
+  }, [arrangeSelection, clearSelection, confirmProjectDelete, confirmWorkspaceId, copySelection, createDialogOpen, deleteNodes, duplicateSelection, capabilityOpen, immersiveNodeId, nodeInfoId, workbench, layoutPreview, openNative, pasteClipboard, projectCreateOpen, redo, requestComposerFocus, requestGlobalRun, requestSelectionRun, scopeCreateOpen, selectedEdgeId, selectedId, selectedIds, selectedNodes, setEdges, stagedTransfer, undo])
 
 
   const refreshProjectCatalog = useCallback(() => {
@@ -2798,6 +2800,36 @@ export function App() {
       setProjectOpen(false)
     })
   }, [])
+
+  const confirmDeleteProject = useCallback(() => {
+    const target = confirmProjectDelete
+    if (target === null) return
+    setConfirmProjectDelete(null)
+    void bridgeRef.current.client.deleteProject(target.id).then((call) => {
+      if (!call.result.ok) {
+        setNotice(`删除失败：${call.result.error.message}`)
+        return
+      }
+      if (activeProjectId === target.id) {
+        setOpenProjectIds((current) => current.filter((id) => id !== target.id))
+        setProjectOpen(false)
+      }
+      refreshProjectCatalog()
+      setNotice(`「${target.label}」已从 LCOS 移除；源文件与工程文件保留在磁盘。`)
+    })
+  }, [activeProjectId, confirmProjectDelete, refreshProjectCatalog])
+
+  const importLcosprojFile = useCallback((file: File) => {
+    setNotice('正在打开工程文件…')
+    void bridgeRef.current.client.openLcosprojUpload(file).then((call) => {
+      if (!call.result.ok) {
+        setNotice(`工程文件打开失败：${call.result.error.message}`)
+        return
+      }
+      setNotice('工程文件已恢复为项目')
+      refreshProjectCatalog()
+    })
+  }, [refreshProjectCatalog])
 
   const selectArtifactFromTools = useCallback((artifactId: string) => {
     const node = nodes.find((item) => String(item.artifactId) === artifactId)
@@ -2823,6 +2855,8 @@ export function App() {
       openProjectIds,
       onOpen: openProject,
       onCreate: () => setProjectCreateOpen(true),
+      onDelete: requestDeleteProject,
+      onImportLcosproj: importLcosprojFile,
     }}
     strip={{
       projectLabel: activeProject.label,
@@ -3144,6 +3178,12 @@ export function App() {
         description: '只删除工作空间定义，不删除内容、节点、本地文件或 Camera。',
         onCancel: () => setConfirmWorkspaceId(null),
         onConfirm: confirmDeleteWorkspace,
+      } : null,
+      confirmProjectDelete: confirmProjectDelete ? {
+        title: `从 LCOS 移除「${confirmProjectDelete.label}」？`,
+        description: '项目会从项目列表移除；磁盘上的源文件和 .lcosproj 工程文件都会保留，之后仍可重新打开。',
+        onCancel: () => setConfirmProjectDelete(null),
+        onConfirm: confirmDeleteProject,
       } : null,
       handoff: handoffOpen ? {
         open: handoffOpen,

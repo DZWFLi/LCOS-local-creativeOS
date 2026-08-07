@@ -92,6 +92,7 @@ export class RuntimeBridge {
         label: entry.name,
         localPath: entry.rootPath,
         updatedAt: '',
+        ...(entry.lastOpenedAt === undefined ? {} : { lastOpenedAt: String(entry.lastOpenedAt) }),
         pendingCount: 0,
       }))
       return { source: 'runtime', projects }

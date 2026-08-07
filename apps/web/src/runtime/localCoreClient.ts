@@ -249,6 +249,7 @@ export interface LocalCoreClient {
   ), signal?: AbortSignal): Promise<RuntimeCall<ProjectCatalogEntry>>
   metadataStatus(signal?: AbortSignal): Promise<RuntimeCall<MetadataStoreStatus>>
   projectGraph(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<ProjectGraphSnapshot>>
+  deleteProject(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<{ deleted: boolean; projectId: string; note?: string }>>
   mergeWorkbench(projectId: string, workbenchScopeId: string, signal?: AbortSignal): Promise<RuntimeCall<{ mergedViews: number; restoredRefs: number; removedViews: number }>>
   createTextArtifact(projectId: string, input: {
     readonly title?: string
@@ -773,6 +774,13 @@ export function createLocalCoreClient(): LocalCoreClient {
       return request(`/projects/${encodeURIComponent(projectId)}/graph`, {
         signal,
         decode: decodeResult<ProjectGraphSnapshot>,
+      })
+    },
+    deleteProject(projectId, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}`, {
+        signal,
+        init: { method: 'DELETE' },
+        decode: decodeResult<{ deleted: boolean; projectId: string; note?: string }>,
       })
     },
     mergeWorkbench(projectId, workbenchScopeId, signal) {

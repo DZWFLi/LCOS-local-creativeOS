@@ -94,6 +94,30 @@ afterEach(async () => {
 })
 
 describe('SqliteMetadataRepository', () => {
+  it('deletes a project and all dependent rows despite RESTRICT fks (project home delete)', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'local-core-project-delete-'))
+    cleanup.push(directory)
+    const repository = new SqliteMetadataRepository(join(directory, 'metadata.sqlite'))
+    repository.save(disposableSnapshot())
+    const projectId = 'disposable-portasplit' as ProjectId
+    repository.createCheckpoint({
+      id: 'checkpoint-del-1' as Checkpoint['id'],
+      projectId,
+      scopeId: 'scope-root' as never,
+      label: 'state',
+      snapshotJson: { name: 's' } as never,
+      createdAt: '2026-08-07T12:00:00.000Z',
+    })
+
+    repository.deleteProject(projectId)
+
+    expect(repository.getProject(projectId)).toBeUndefined()
+    expect(repository.get(projectId)).toBeUndefined()
+    expect(repository.getArtifacts(projectId)).toHaveLength(0)
+    expect(repository.getCheckpoint('checkpoint-del-1')).toBeUndefined()
+    expect(repository.getNotes(projectId)).toHaveLength(0)
+  })
+
   it('persists provider-neutral handoff records with resume modes (B6)', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'local-core-handoffs-'))
     cleanup.push(directory)
