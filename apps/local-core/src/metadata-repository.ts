@@ -1486,7 +1486,12 @@ export class SqliteMetadataRepository {
     this.#database.exec('BEGIN IMMEDIATE;')
     try {
       for (const sql of PROJECT_TRUTH_DELETE_SQL) {
-        this.#database.prepare(sql).run(projectId as SQLInputValue)
+        try {
+          this.#database.prepare(sql).run(projectId as SQLInputValue)
+        } catch (error: unknown) {
+          console.error(`[LocalCore] deleteProject failed at: ${sql.slice(0, 110)}`, error)
+          throw error
+        }
       }
       this.#database.exec('COMMIT;')
     } catch (error: unknown) {
@@ -3510,7 +3515,6 @@ const PROJECT_TRUTH_DELETE_SQL: readonly string[] = [
   'DELETE FROM runtime_dispatches WHERE run_id IN (SELECT id FROM runs WHERE project_id = ?)',
   'DELETE FROM preview_records WHERE project_id = ?',
   'DELETE FROM session_summaries WHERE project_id = ?',
-  'DELETE FROM context_manifests WHERE project_id = ?',
   'DELETE FROM checkpoints WHERE project_id = ?',
   'DELETE FROM handoffs WHERE project_id = ?',
   'DELETE FROM notes WHERE project_id = ?',
@@ -3518,6 +3522,7 @@ const PROJECT_TRUTH_DELETE_SQL: readonly string[] = [
   'DELETE FROM artifact_views WHERE artifact_id IN (SELECT id FROM artifacts WHERE project_id = ?)',
   'DELETE FROM artifact_revisions WHERE artifact_id IN (SELECT id FROM artifacts WHERE project_id = ?)',
   'DELETE FROM runs WHERE project_id = ?',
+  'DELETE FROM context_manifests WHERE project_id = ?',
   'DELETE FROM file_records WHERE project_id = ?',
   'DELETE FROM artifacts WHERE project_id = ?',
   'DELETE FROM workspaces WHERE project_id = ?',
