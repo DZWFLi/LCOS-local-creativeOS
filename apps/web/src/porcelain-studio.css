@@ -1720,6 +1720,9 @@
 /* -------------------------------------------------------------------------- */
 
 .project-drive {
+  height: 100dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   font-family: var(--ps-font-ui, Inter, system-ui, sans-serif);
   color: #182431;
   background:

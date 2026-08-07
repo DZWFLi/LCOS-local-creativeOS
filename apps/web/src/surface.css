@@ -2339,7 +2339,9 @@ body,
 /* -------------------------------------------------------------------------- */
 
 .project-drive {
-  min-height: 100dvh;
+  height: 100dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   color: var(--v06-text);
   background:
     radial-gradient(circle at 18% 0%, rgba(120,84,224,.06), transparent 28%),
