@@ -70,14 +70,14 @@
 | GAP | 判定 |
 | --- | --- |
 | B1 Workspace Frame Bounds | **已完成**（schema v19 + update_workspace_frame CAS + 前端拖拽/缩放/刷新恢复，浏览器 7/7 验证） |
-| B2 Aggregate Relation Endpoint | EXTEND（端点仅 artifact/note/scope） |
-| B3 Projection Layout Store | FRONTEND_ONLY |
-| B4 Workbench Branch/Merge | EXTEND（前端已用 collection + view ref；Core merge 服务 P1） |
-| B5 ContextSnapshot History | EXTEND（ContextManifest/Checkpoint 已有） |
-| B6 Session/Handoff 终局合同 | EXTEND（SessionSummary 已有） |
-| B7 ActiveContext 多 Agent 隔离 | EXISTS（CAS + updatedBy；可加 sessionId 归因） |
+| B2 Aggregate Relation Endpoint | **已完成**（view/workspace 端点 + 测试） |
+| B3 Projection Layout Store | FRONTEND_ONLY（前端视图状态） |
+| B4 Workbench Branch/Merge | **已完成**（WorkbenchService Core 收口 + 前端 runtime 分支） |
+| B5 ContextSnapshot History | **已完成**（create/compare/branch + 路由） |
+| B6 Session/Handoff 终局合同 | **已完成**（HandoffRecord + 三态 + 路由，schema v20） |
+| B7 ActiveContext 多 Agent 隔离 | **已完成**（sessionId 归因） |
 | B8 Run Proposal/Composer 对齐 | EXISTS（runtime-proposal-service） |
-| B9 UI Agent Command Surface | EXTEND（无 temporary-workbench kind） |
+| B9 UI Agent Command Surface | **已完成**（temporary-workbench kind） |
 
 ## 6. Schema / API / MCP 变化
 
@@ -134,7 +134,8 @@ vnext-surface-check：7/7 PASS
 
 ## 10. 剩余风险与下一步
 
-- **B1 frameBounds 持久化**：已完成（本批次）
+- **B1 frameBounds 持久化**：已完成
+- **B2/B4/B5/B6/B7/B9 后端缺口**：已完成（2026-08-07 第二批），剩余仅 B3（FRONTEND_ONLY）与 B8（本就 EXISTS）
 - **Workbench Merge 通知文案**：当目标已存在引用时提示"0 个新稳定结果"略误导（功能正确，建议改为"已复位 N 个引用"）
 - **多项目 tabs**：顶部收敛为单项目条，多项目切换走 Drive（设计方向，记录在案）
 - **MCP 端到端**：本轮未重跑 `test:lcos-mcp-e2e`（需 bridge-test-venv 环境变量）；MCP 面未动

@@ -9,14 +9,14 @@
 | GAP | 判定 | 一句话 |
 | --- | --- | --- |
 | B1 Workspace Frame Bounds | **DONE（2026-08-07）** | frameBounds/preferredSurface/version 已持久化 + CAS + 前端拖拽/缩放/刷新恢复 |
-| B2 Aggregate Relation Endpoint | EXTEND | Relation 实体端点仅 artifact/note/scope，缺 workspace/view |
+| B2 Aggregate Relation Endpoint | **DONE（2026-08-07）** | RelationEntityType 扩展 view/workspace 端点 + 持久化测试 |
 | B3 Projection Layout Store | FRONTEND_ONLY | 各投影独立布局属视图状态，不进后端 Canonical Truth |
-| B4 Workbench Branch/Merge | EXTEND | 前端已用 collection scope + view ref 实现分支；正式 Merge 缺 Core 收口服务 |
-| B5 ContextSnapshot History | EXTEND | ContextManifest/Checkpoint 已有；可回看/对比/分支 API 缺 |
-| B6 Session/Handoff 终局合同 | EXTEND | SessionSummary 已有；持久 Handoff/Decision/OpenQuestion 记录待确认 |
-| B7 ActiveContext 多 Agent 隔离 | EXISTS（+小扩展） | expectedVersion CAS + updatedBy 已有；可加 sessionId 归因 |
+| B4 Workbench Branch/Merge | **DONE（2026-08-07）** | WorkbenchService.merge Core 收口 + POST /projects/:id/workbench/merge + 前端 runtime 分支 |
+| B5 ContextSnapshot History | **DONE（2026-08-07）** | ContextSnapshotService create/compare/branch + 路由 |
+| B6 Session/Handoff 终局合同 | **DONE（2026-08-07）** | HandoffRecord + 三态 resumeMode + 路由（schema v20） |
+| B7 ActiveContext 多 Agent 隔离 | **DONE（2026-08-07）** | sessionId 归因加入 ActiveContextInput/投影/路由 |
 | B8 Run Proposal/Composer 对齐 | EXISTS | runtime-proposal-service.proposeRun 是唯一推断入口 |
-| B9 UI Agent Core Command Surface | EXTEND | ScopeKind 无 temporary-workbench；UI 语义动作需继续走 MCP 薄调用 |
+| B9 UI Agent Core Command Surface | **DONE（2026-08-07）** | ScopeKind + temporary-workbench，workbench 创建走新 kind |
 
 ---
 
