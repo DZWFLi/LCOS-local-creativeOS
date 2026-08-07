@@ -249,10 +249,10 @@ export class SqliteMetadataRepository {
         viewport TEXT NOT NULL, focused_node_ids TEXT NOT NULL DEFAULT '[]',
         visible_layers TEXT NOT NULL DEFAULT '["core","process"]',
         context_policy TEXT NOT NULL DEFAULT 'selection-only',
+        updated_at TEXT NOT NULL,
         frame_bounds TEXT,
         preferred_surface TEXT,
-        version INTEGER NOT NULL DEFAULT 0,
-        updated_at TEXT NOT NULL
+        version INTEGER NOT NULL DEFAULT 0
       );
       CREATE TABLE artifacts (
         id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -414,10 +414,10 @@ export class SqliteMetadataRepository {
         viewport TEXT NOT NULL, focused_node_ids TEXT NOT NULL DEFAULT '[]',
         visible_layers TEXT NOT NULL DEFAULT '["core","process"]',
         context_policy TEXT NOT NULL DEFAULT 'selection-only',
+        updated_at TEXT NOT NULL,
         frame_bounds TEXT,
         preferred_surface TEXT,
-        version INTEGER NOT NULL DEFAULT 0,
-        updated_at TEXT NOT NULL
+        version INTEGER NOT NULL DEFAULT 0
       );
       CREATE TABLE artifacts (
         id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -538,10 +538,10 @@ export class SqliteMetadataRepository {
         viewport TEXT NOT NULL, focused_node_ids TEXT NOT NULL DEFAULT '[]',
         visible_layers TEXT NOT NULL DEFAULT '["core","process"]',
         context_policy TEXT NOT NULL DEFAULT 'selection-only',
+        updated_at TEXT NOT NULL,
         frame_bounds TEXT,
         preferred_surface TEXT,
-        version INTEGER NOT NULL DEFAULT 0,
-        updated_at TEXT NOT NULL
+        version INTEGER NOT NULL DEFAULT 0
       );
       CREATE TABLE context_manifests (
         id TEXT PRIMARY KEY,
@@ -2879,7 +2879,8 @@ export class SqliteMetadataRepository {
       referencedTable: 'projects',
       referencedId: String(value.projectId),
     }, `
-      INSERT INTO workspaces VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO workspaces (id, project_id, scope_id, name, intent, viewport, focused_node_ids, visible_layers, context_policy, frame_bounds, preferred_surface, version, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET name=excluded.name, intent=excluded.intent, scope_id=excluded.scope_id, viewport=excluded.viewport, focused_node_ids=excluded.focused_node_ids, visible_layers=excluded.visible_layers, context_policy=excluded.context_policy, frame_bounds=excluded.frame_bounds, preferred_surface=excluded.preferred_surface, version=excluded.version, updated_at=excluded.updated_at
     `, [
       value.id as SQLInputValue, value.projectId as SQLInputValue, value.scopeId as SQLInputValue,
