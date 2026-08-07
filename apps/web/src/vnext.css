@@ -315,12 +315,19 @@
 /* Selection and composer                                                      */
 /* -------------------------------------------------------------------------- */
 .app-shell.porcelain-studio-v2 .selection-toolbar { gap:3px; padding:4px; border-radius:13px; background:rgba(253,253,255,.92); border:1px solid var(--vnext-hair); box-shadow:0 9px 24px rgba(46,42,66,.075); }
-.app-shell.porcelain-studio-v2 .selection-toolbar > span { max-width:0; overflow:hidden; opacity:0; margin:0; padding:0; transition:max-width 120ms ease,opacity 120ms ease; }
-.app-shell.porcelain-studio-v2 .selection-toolbar:hover > span { max-width:100px; opacity:1; margin:0 4px; }
-.app-shell.porcelain-studio-v2 .selection-toolbar button { min-width:29px; height:29px; padding:0 7px; gap:4px; border-radius:9px; font-size:0; }
+.app-shell.porcelain-studio-v2 .selection-toolbar > span { display:none; }
+.app-shell.porcelain-studio-v2 .selection-toolbar button { position:static; min-width:auto; height:26px; padding:0 8px; gap:4px; border-radius:9px; font-size:9px; white-space:nowrap; }
 .app-shell.porcelain-studio-v2 .selection-toolbar button svg { width:13px; height:13px; }
-.app-shell.porcelain-studio-v2 .selection-toolbar:hover button { font-size:9px; }
 .app-shell.porcelain-studio-v2 .selection-composer { border-radius:17px; background:rgba(253,253,255,.95); border-color:var(--vnext-hair); box-shadow:0 18px 45px rgba(44,41,63,.11),inset 0 1px 0 #fff; }
+.app-shell.porcelain-studio-v2 .selection-composer { pointer-events:none; }
+.app-shell.porcelain-studio-v2 .selection-composer > * { pointer-events:auto; }
+.app-shell.porcelain-studio-v2 .selection-composer .proposal-summary,
+.app-shell.porcelain-studio-v2 .selection-composer .proposal-ambiguity { pointer-events:none; }
+.app-shell.porcelain-studio-v2 .selection-composer-header { display:none; }
+.app-shell.porcelain-studio-v2 .selection-composer textarea { height:36px; min-height:36px; max-height:36px; padding:8px 10px; }
+.app-shell.porcelain-studio-v2 .selection-composer .proposal-summary,
+.app-shell.porcelain-studio-v2 .selection-composer .proposal-ambiguity { display:none; }
+.app-shell.porcelain-studio-v2 .selection-composer-options { padding:0 10px 6px; }
 .app-shell.porcelain-studio-v2 .selection-composer-header > div:first-child strong { display:none; }
 .app-shell.porcelain-studio-v2 .selection-composer-header-actions .workspace-membership-action,
 .app-shell.porcelain-studio-v2 .selection-composer-header-actions .workspace-move-action { display:none; }

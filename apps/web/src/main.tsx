@@ -6,6 +6,7 @@ import './surface.css'
 import './v07.css'
 import './v071.css'
 import './porcelain-studio.css'
+import './vnext.css'
 
 const diagnosticsRoute = import.meta.env.DEV && window.location.pathname === '/__diagnostics'
 

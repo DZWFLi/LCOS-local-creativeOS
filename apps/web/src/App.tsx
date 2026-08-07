@@ -58,7 +58,6 @@ import { SurfaceComposerBar } from './features/surfaces/SurfaceComposerBar'
 import { DropShelf, type DropAnchor, type DropDestination } from './features/drop/DropShelf'
 import { ImmersiveViewer } from './features/viewer/ImmersiveViewer'
 import { resolveArtifactViewerKind } from './features/viewer/artifactViewerRegistry'
-import './vnext.css'
 
 const MVP_SAMPLE_PROJECT_ID = 'disposable-mvp-sample'
 const DEFAULT_PROJECT_ID = MVP_SAMPLE_PROJECT_ID
