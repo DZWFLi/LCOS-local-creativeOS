@@ -69,7 +69,7 @@
 
 | GAP | 判定 |
 | --- | --- |
-| B1 Workspace Frame Bounds | EXTEND（viewport 已持久化；frameBounds/preferredSurface 待 N1） |
+| B1 Workspace Frame Bounds | **已完成**（schema v19 + update_workspace_frame CAS + 前端拖拽/缩放/刷新恢复，浏览器 7/7 验证） |
 | B2 Aggregate Relation Endpoint | EXTEND（端点仅 artifact/note/scope） |
 | B3 Projection Layout Store | FRONTEND_ONLY |
 | B4 Workbench Branch/Merge | EXTEND（前端已用 collection + view ref；Core merge 服务 P1） |
@@ -134,7 +134,7 @@ vnext-surface-check：7/7 PASS
 
 ## 10. 剩余风险与下一步
 
-- **B1 frameBounds 持久化**（N1，前端阻塞项）：Frame 拖拽/缩放目前由 `workspaceFrames` 推导，刷新不恢复独立 frame——合并说明 P0
+- **B1 frameBounds 持久化**：已完成（本批次）
 - **Workbench Merge 通知文案**：当目标已存在引用时提示"0 个新稳定结果"略误导（功能正确，建议改为"已复位 N 个引用"）
 - **多项目 tabs**：顶部收敛为单项目条，多项目切换走 Drive（设计方向，记录在案）
 - **MCP 端到端**：本轮未重跑 `test:lcos-mcp-e2e`（需 bridge-test-venv 环境变量）；MCP 面未动

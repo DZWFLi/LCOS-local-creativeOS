@@ -10,7 +10,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { MetadataForeignKeyConstraintError, SqliteMetadataRepository } from '../src/metadata-repository.js'
 
 const cleanup: string[] = []
-const SCHEMA_VERSION = 18
+const SCHEMA_VERSION = 19
 
 function disposableSnapshot(): ProjectGraphSnapshot {
   const now = '2026-07-24T12:00:00.000Z'
@@ -94,6 +94,55 @@ afterEach(async () => {
 })
 
 describe('SqliteMetadataRepository', () => {
+  it('persists workspace frame bounds with CAS version and no semantic graph bump (B1)', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'local-core-workspace-frame-'))
+    cleanup.push(directory)
+    const path = join(directory, 'metadata.sqlite')
+    const repository = new SqliteMetadataRepository(path)
+    repository.save(disposableSnapshot())
+    const projectId = 'disposable-portasplit' as ProjectId
+    const workspaceId = 'workspace-main' as WorkspaceId
+    const baseVersion = repository.get(projectId)?.graphVersion ?? 1
+
+    repository.applyMutations({
+      baseVersion,
+      ops: [{
+        type: 'update_workspace_frame',
+        workspaceId,
+        frameBounds: { x: 120, y: 80, width: 640, height: 420 },
+        preferredSurface: 'context-flow',
+        expectedVersion: 0,
+      }],
+    }, projectId)
+
+    let graph = repository.get(projectId)
+    let workspace = graph?.workspaces.find((item) => item.id === workspaceId)
+    expect(workspace?.frameBounds).toEqual({ x: 120, y: 80, width: 640, height: 420 })
+    expect(workspace?.preferredSurface).toBe('context-flow')
+    expect(workspace?.version).toBe(1)
+    expect(graph?.graphVersion).toBe(baseVersion)
+
+    expect(() => repository.applyMutations({
+      baseVersion,
+      ops: [{ type: 'update_workspace_frame', workspaceId, frameBounds: { x: 1, y: 2, width: 3, height: 4 }, expectedVersion: 7 }],
+    }, projectId)).toThrow(/version conflict/)
+
+    repository.applyMutations({
+      baseVersion,
+      ops: [{ type: 'update_workspace_frame', workspaceId, frameBounds: { x: 200, y: 100, width: 500, height: 300 }, expectedVersion: 1 }],
+    }, projectId)
+
+    graph = repository.get(projectId)
+    workspace = graph?.workspaces.find((item) => item.id === workspaceId)
+    expect(workspace?.frameBounds).toEqual({ x: 200, y: 100, width: 500, height: 300 })
+    expect(workspace?.version).toBe(2)
+
+    const reopened = new SqliteMetadataRepository(path)
+    const restored = reopened.get(projectId)?.workspaces.find((item) => item.id === workspaceId)
+    expect(restored?.frameBounds).toEqual({ x: 200, y: 100, width: 500, height: 300 })
+    expect(restored?.version).toBe(2)
+  })
+
   it('persists durable run events with per-run sequence and idempotent replay', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'local-core-run-events-'))
     cleanup.push(directory)

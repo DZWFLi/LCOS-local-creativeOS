@@ -1181,7 +1181,8 @@ export function App() {
     setGraph({ nodes: nextNodes, edges: [...retainedEdges, ...mergedEdges] })
     enterScopeKeepingSelection(rootScope.id, [...benchToRoot.values()])
     setActiveSurface('arrange')
-    setNotice(`已并回 ${additions.length} 个新稳定结果；原项目引用已复位，临时现场已清空`)
+    const restoredRefs = benchToRoot.size - additions.length
+    setNotice(`已并回 ${additions.length} 个新稳定结果${restoredRefs > 0 ? `，复位 ${restoredRefs} 个原项目引用` : ''}；临时现场已清空`)
   }, [edges, enterScopeKeepingSelection, nodes, rootScope.id, setGraph, workbenchScope])
 
   const stageTransfer = useCallback((ids: string[], anchor: DropAnchor) => {
@@ -2726,6 +2727,11 @@ export function App() {
   const duplicateSelectedViews = useCallback(() => { duplicateSelection() }, [duplicateSelection])
   const deleteSelectedViews = useCallback(() => { deleteNodes(selectedIds) }, [deleteNodes, selectedIds])
   const rememberCanvasPoint = useCallback((point: { x: number; y: number }) => { lastCanvasPointRef.current = point }, [])
+  const handleFrameBoundsChange = useCallback((workspaceId: string, frameBounds: { x: number; y: number; width: number; height: number }) => {
+    setWorkspaces((current) => current.map((workspace) => workspace.id === workspaceId
+      ? { ...workspace, frameBounds, version: (workspace.version ?? 0) + 1 }
+      : workspace))
+  }, [])
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
@@ -2869,6 +2875,7 @@ export function App() {
         onWorkspaceActivate: changeWorkspace,
         onPresentationInteractionChange: handlePresentationInteractionChange,
         onPresentationCommit: handlePresentationCommit,
+        onFrameBoundsChange: handleFrameBoundsChange,
         selectionComposer: selectedIds.length ? {
           contextIds: selectionContextIds,
           prompt: selectionComposerText,

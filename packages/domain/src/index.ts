@@ -77,6 +77,14 @@ export interface WorkspaceViewport {
   readonly zoom: number
 }
 
+/** 独立于成员节点推导的空间框（B1：Frame 拖拽/缩放后持久化恢复）。 */
+export interface WorkspaceFrameBounds {
+  readonly x: number
+  readonly y: number
+  readonly width: number
+  readonly height: number
+}
+
 export type WorkspaceContextPolicy = 'workspace-related' | 'selection-only'
 
 export interface Workspace {
@@ -89,6 +97,9 @@ export interface Workspace {
   readonly focusedViewIds: readonly ArtifactViewId[]
   readonly visibleLayers: readonly string[]
   readonly contextPolicy: WorkspaceContextPolicy
+  readonly frameBounds?: WorkspaceFrameBounds
+  readonly preferredSurface?: string
+  readonly version?: number
   readonly updatedAt: IsoDateTime
 }
 

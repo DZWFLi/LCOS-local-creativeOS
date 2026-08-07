@@ -97,6 +97,9 @@ export interface Workspace {
   visibleLayers: NodeLayer[]
   focusedViewIds: string[]
   contextPolicy: 'workspace-related' | 'selection-only'
+  frameBounds?: { x: number; y: number; width: number; height: number }
+  preferredSurface?: string
+  version?: number
   createdAt: string
   updatedAt: string
 }

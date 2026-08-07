@@ -20,17 +20,18 @@ export function buildWorkspaceFrame(workspace: Workspace, nodes: CanvasNode[], a
   const top = Math.min(...members.map((node) => node.y))
   const right = Math.max(...members.map((node) => node.x + node.width))
   const bottom = Math.max(...members.map((node) => node.y + node.height))
+  const derived = {
+    x: left - FRAME_PADDING,
+    y: top - FRAME_PADDING - HEADER_HEIGHT,
+    width: right - left + FRAME_PADDING * 2,
+    height: bottom - top + FRAME_PADDING * 2 + HEADER_HEIGHT,
+  }
   return {
     workspaceId: workspace.id,
     label: workspace.label,
     scopeId,
     memberViewIds,
-    bounds: {
-      x: left - FRAME_PADDING,
-      y: top - FRAME_PADDING - HEADER_HEIGHT,
-      width: right - left + FRAME_PADDING * 2,
-      height: bottom - top + FRAME_PADDING * 2 + HEADER_HEIGHT,
-    },
+    bounds: workspace.frameBounds ?? derived,
     active: activeWorkspaceId === workspace.id,
   }
 }

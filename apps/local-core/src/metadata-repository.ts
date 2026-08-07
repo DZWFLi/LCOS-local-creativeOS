@@ -191,7 +191,16 @@ export class SqliteMetadataRepository {
     if (current === 15) { this.#migrate_016_from_v15(); current = 16 }
     if (current === 16) { this.#migrate_017_from_v16(); current = 17 }
     if (current === 17) { this.#migrate_018_from_v17(); current = 18 }
-    if (current !== 18) throw new Error(`Unsupported metadata schema version ${current}.`)
+    if (current === 18) { this.#migrate_019_from_v18(); current = 19 }
+    if (current !== 19) throw new Error(`Unsupported metadata schema version ${current}.`)
+  }
+
+
+  #migrate_019_from_v18(): void {
+    try { this.#database.exec(`ALTER TABLE workspaces ADD COLUMN frame_bounds TEXT`) } catch {}
+    try { this.#database.exec(`ALTER TABLE workspaces ADD COLUMN preferred_surface TEXT`) } catch {}
+    try { this.#database.exec(`ALTER TABLE workspaces ADD COLUMN version INTEGER NOT NULL DEFAULT 0`) } catch {}
+    this.#database.exec(`PRAGMA user_version = 19`)
   }
 
 
@@ -215,6 +224,9 @@ export class SqliteMetadataRepository {
         viewport TEXT NOT NULL, focused_node_ids TEXT NOT NULL DEFAULT '[]',
         visible_layers TEXT NOT NULL DEFAULT '["core","process"]',
         context_policy TEXT NOT NULL DEFAULT 'selection-only',
+        frame_bounds TEXT,
+        preferred_surface TEXT,
+        version INTEGER NOT NULL DEFAULT 0,
         updated_at TEXT NOT NULL
       );
       CREATE TABLE artifacts (
@@ -377,6 +389,9 @@ export class SqliteMetadataRepository {
         viewport TEXT NOT NULL, focused_node_ids TEXT NOT NULL DEFAULT '[]',
         visible_layers TEXT NOT NULL DEFAULT '["core","process"]',
         context_policy TEXT NOT NULL DEFAULT 'selection-only',
+        frame_bounds TEXT,
+        preferred_surface TEXT,
+        version INTEGER NOT NULL DEFAULT 0,
         updated_at TEXT NOT NULL
       );
       CREATE TABLE artifacts (
@@ -437,6 +452,9 @@ export class SqliteMetadataRepository {
     // Add scope_id to workspaces if missing
     try { this.#database.exec(`ALTER TABLE workspaces ADD COLUMN scope_id TEXT NOT NULL DEFAULT ''`) } catch {}
     try { this.#database.exec(`ALTER TABLE workspaces ADD COLUMN context_policy TEXT NOT NULL DEFAULT 'selection-only'`) } catch {}
+    try { this.#database.exec(`ALTER TABLE workspaces ADD COLUMN frame_bounds TEXT`) } catch {}
+    try { this.#database.exec(`ALTER TABLE workspaces ADD COLUMN preferred_surface TEXT`) } catch {}
+    try { this.#database.exec(`ALTER TABLE workspaces ADD COLUMN version INTEGER NOT NULL DEFAULT 0`) } catch {}
     try { this.#database.exec(`ALTER TABLE projects ADD COLUMN graph_version INTEGER NOT NULL DEFAULT 1`) } catch {}
     this.#database.exec(`PRAGMA user_version = 3`)
   }
@@ -495,6 +513,9 @@ export class SqliteMetadataRepository {
         viewport TEXT NOT NULL, focused_node_ids TEXT NOT NULL DEFAULT '[]',
         visible_layers TEXT NOT NULL DEFAULT '["core","process"]',
         context_policy TEXT NOT NULL DEFAULT 'selection-only',
+        frame_bounds TEXT,
+        preferred_surface TEXT,
+        version INTEGER NOT NULL DEFAULT 0,
         updated_at TEXT NOT NULL
       );
       CREATE TABLE context_manifests (
@@ -1177,6 +1198,27 @@ export class SqliteMetadataRepository {
             this.#database.prepare('UPDATE workspaces SET focused_node_ids = ?, visible_layers = ?, updated_at = ? WHERE id = ?')
               .run(JSON.stringify(op.focusedViewIds), JSON.stringify(op.visibleLayers), new Date().toISOString(), op.workspaceId as SQLInputValue)
             break
+          case 'update_workspace_frame': {
+            const current = this.#database.prepare('SELECT version FROM workspaces WHERE id = ?').get(op.workspaceId as SQLInputValue) as Row | undefined
+            if (current === undefined) throw new Error(`WORKSPACE_NOT_FOUND: ${String(op.workspaceId)}`)
+            const currentVersion = (current.version as number) ?? 0
+            if (op.expectedVersion !== undefined && currentVersion !== op.expectedVersion) {
+              const err = new Error(`Workspace frame version conflict: expected ${op.expectedVersion}, current ${currentVersion}.`) as unknown as Record<string, unknown>
+              err.code = 'STALE_WORKSPACE_VERSION'
+              err.currentVersion = currentVersion
+              throw err
+            }
+            const nextVersion = currentVersion + 1
+            this.#database.prepare('UPDATE workspaces SET frame_bounds = ?, preferred_surface = ?, version = ?, updated_at = ? WHERE id = ?')
+              .run(
+                op.frameBounds === undefined ? null : JSON.stringify(op.frameBounds),
+                op.preferredSurface ?? null,
+                nextVersion,
+                new Date().toISOString(),
+                op.workspaceId as SQLInputValue,
+              )
+            break
+          }
           case 'upsert_workspace':
             this.#upsertWorkspace(op.workspace)
             break
@@ -2730,7 +2772,7 @@ export class SqliteMetadataRepository {
     }
   }
 
-  get schemaVersion(): number { return 18 }
+  get schemaVersion(): number { return 19 }
 
   // ==================== Private helpers ====================
 
@@ -2758,13 +2800,17 @@ export class SqliteMetadataRepository {
       referencedTable: 'projects',
       referencedId: String(value.projectId),
     }, `
-      INSERT INTO workspaces VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET name=excluded.name, intent=excluded.intent, scope_id=excluded.scope_id, viewport=excluded.viewport, focused_node_ids=excluded.focused_node_ids, visible_layers=excluded.visible_layers, context_policy=excluded.context_policy, updated_at=excluded.updated_at
+      INSERT INTO workspaces VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET name=excluded.name, intent=excluded.intent, scope_id=excluded.scope_id, viewport=excluded.viewport, focused_node_ids=excluded.focused_node_ids, visible_layers=excluded.visible_layers, context_policy=excluded.context_policy, frame_bounds=excluded.frame_bounds, preferred_surface=excluded.preferred_surface, version=excluded.version, updated_at=excluded.updated_at
     `, [
       value.id as SQLInputValue, value.projectId as SQLInputValue, value.scopeId as SQLInputValue,
       value.name, value.intent, JSON.stringify(value.viewport),
       JSON.stringify(value.focusedViewIds), JSON.stringify(value.visibleLayers),
-      value.contextPolicy, value.updatedAt,
+      value.contextPolicy,
+      value.frameBounds === undefined ? null : JSON.stringify(value.frameBounds),
+      value.preferredSurface ?? null,
+      value.version ?? 0,
+      value.updatedAt,
     ])
   }
 
@@ -3011,7 +3057,16 @@ export class SqliteMetadataRepository {
     const visibleLayers = json<string[]>((row.visible_layers ?? '["core","process"]') as SQLInputValue)
     const contextPolicy = (String(row.context_policy ?? 'selection-only')) as Workspace['contextPolicy']
     const updatedAt = String(row.updated_at)
-    return { id, projectId, scopeId, name, intent, viewport, focusedViewIds, visibleLayers, contextPolicy, updatedAt }
+    const frameBounds = row.frame_bounds === null || row.frame_bounds === undefined ? undefined : json<Workspace['frameBounds']>(row.frame_bounds as SQLInputValue)
+    const preferredSurface = row.preferred_surface === null || row.preferred_surface === undefined ? undefined : String(row.preferred_surface)
+    const version = row.version as number | undefined
+    return {
+      id, projectId, scopeId, name, intent, viewport, focusedViewIds, visibleLayers, contextPolicy,
+      ...(frameBounds === undefined ? {} : { frameBounds }),
+      ...(preferredSurface === undefined ? {} : { preferredSurface }),
+      ...(version === undefined ? {} : { version }),
+      updatedAt,
+    }
   }
 
   #artifact(row: Row): Artifact {
@@ -3296,6 +3351,7 @@ const PRESENTATION_OPS = new Set([
   'resize_artifact_view',
   'update_workspace_viewport',
   'update_workspace_presentation',
+  'update_workspace_frame',
   'update_artifact_view_presentation',
   'delete_artifact_view',
 ])

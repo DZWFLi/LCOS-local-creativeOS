@@ -8,7 +8,7 @@
 
 | GAP | 判定 | 一句话 |
 | --- | --- | --- |
-| B1 Workspace Frame Bounds | EXTEND | viewport/camera 已持久化，缺独立 frameBounds + preferredSurface |
+| B1 Workspace Frame Bounds | **DONE（2026-08-07）** | frameBounds/preferredSurface/version 已持久化 + CAS + 前端拖拽/缩放/刷新恢复 |
 | B2 Aggregate Relation Endpoint | EXTEND | Relation 实体端点仅 artifact/note/scope，缺 workspace/view |
 | B3 Projection Layout Store | FRONTEND_ONLY | 各投影独立布局属视图状态，不进后端 Canonical Truth |
 | B4 Workbench Branch/Merge | EXTEND | 前端已用 collection scope + view ref 实现分支；正式 Merge 缺 Core 收口服务 |
@@ -21,6 +21,8 @@
 ---
 
 ## B1 — Workspace 独立 Frame Bounds 持久化：EXTEND
+
+> 状态更新（2026-08-07）：**已完成**。schema v19 迁移、`update_workspace_frame` mutation（CAS + version 递增、不 bump semantic graphVersion）、前端拖拽/缩放回写与刷新恢复已实现并通过真实浏览器验证。
 
 已存在：
 

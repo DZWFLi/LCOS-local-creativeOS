@@ -23,6 +23,7 @@ interface Props {
   onWorkspaceActivate?: (workspaceId: string) => void
   onPresentationInteractionChange?: (active: boolean) => void
   onPresentationCommit?: (kind: 'node-move' | 'node-resize' | 'workspace-group-move') => void
+  onFrameBoundsChange?: (workspaceId: string, frameBounds: { x: number; y: number; width: number; height: number }) => void
   selectionComposer?: {
     prompt: string
     contextIds: string[]
@@ -52,18 +53,20 @@ interface Props {
 
 type DragCandidate = { id: string; startX: number; startY: number; offsetX: number; offsetY: number; group: Array<{ id: string; dx: number; dy: number }>; originals: Array<{ id: string; x: number; y: number }> }
 type ResizeCandidate = { id: string; startX: number; startY: number; width: number; height: number; moved: boolean }
-type WorkspaceDragCandidate = { workspaceId: string; startX: number; startY: number; members: Array<{ id: string; x: number; y: number }>; moved: boolean }
+type WorkspaceDragCandidate = { workspaceId: string; startX: number; startY: number; members: Array<{ id: string; x: number; y: number }>; moved: boolean; frameBounds?: { x: number; y: number; width: number; height: number }; currentBounds?: { x: number; y: number; width: number; height: number } }
+type FrameResizeCandidate = { workspaceId: string; startX: number; startY: number; bounds: { x: number; y: number; width: number; height: number }; moved: boolean }
 
 function additiveSelection(event: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean }): boolean {
   return event.shiftKey || event.ctrlKey || event.metaKey
 }
 
-export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edges, setEdges, camera, setCamera, selectedId, selectedIds, selectedEdgeId, setSelectedEdgeId, pendingId, runId, runStatus, spaceHeld, locked = false, layoutPreview, workspaceFrames = [], workspaceMemberNodes = nodes, activeWorkspaceId = null, onWorkspaceActivate, onPresentationInteractionChange, onPresentationCommit, selectionComposer, onSelect, onClearSelection, onMarqueeSelect, onSelectEdge, onDoubleClick, onDetails, onRequestAi, onCreateNodeFromAnchor, onFilesDropped, onArrangeSelection, onCopySelection, onDuplicateSelection, onCreateScopeFromSelection, onDeleteSelection, onPointerWorldChange, onSpaceCreate, onStageTransfer }: Props) {
+export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edges, setEdges, camera, setCamera, selectedId, selectedIds, selectedEdgeId, setSelectedEdgeId, pendingId, runId, runStatus, spaceHeld, locked = false, layoutPreview, workspaceFrames = [], workspaceMemberNodes = nodes, activeWorkspaceId = null, onWorkspaceActivate, onPresentationInteractionChange, onPresentationCommit, onFrameBoundsChange, selectionComposer, onSelect, onClearSelection, onMarqueeSelect, onSelectEdge, onDoubleClick, onDetails, onRequestAi, onCreateNodeFromAnchor, onFilesDropped, onArrangeSelection, onCopySelection, onDuplicateSelection, onCreateScopeFromSelection, onDeleteSelection, onPointerWorldChange, onSpaceCreate, onStageTransfer }: Props) {
   const canvasRef = useRef<HTMLDivElement | null>(null)
   const pan = useRef<{ x: number; y: number; camera: Camera } | null>(null)
   const dragCandidate = useRef<DragCandidate | null>(null)
   const resizeCandidate = useRef<ResizeCandidate | null>(null)
   const workspaceDrag = useRef<WorkspaceDragCandidate | null>(null)
+  const frameResize = useRef<FrameResizeCandidate | null>(null)
   const dragging = useRef(false)
   const dragPoint = useRef<{ x: number; y: number } | null>(null)
   const dragFrame = useRef<number | null>(null)
@@ -154,6 +157,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
     dragCandidate.current = null
     resizeCandidate.current = null
     workspaceDrag.current = null
+    frameResize.current = null
     dragPoint.current = null
     autoPanPointer.current = null
     dragging.current = false
@@ -209,6 +213,9 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
     const dy = (autoPanPointer.current ? autoPanPointer.current.y - item.startY : 0) / camera.zoom - cameraDeltaY / camera.zoom
     const starts = new Map(item.members.map((member) => [member.id, member]))
     setNodes((current) => current.map((node) => { const start = starts.get(node.id); return start ? { ...node, x: start.x + dx, y: start.y + dy } : node }))
+    if (item.frameBounds) {
+      item.currentBounds = { ...item.frameBounds, x: item.frameBounds.x + dx, y: item.frameBounds.y + dy }
+    }
   }
   const scheduleAutoPan = (pointer: { x: number; y: number }) => {
     autoPanPointer.current = pointer
@@ -303,6 +310,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
     const draggedId = dragCandidate.current?.id
     const resizedId = resizeCandidate.current?.moved ? resizeCandidate.current.id : undefined
     const draggedWorkspace = workspaceDrag.current?.moved ? workspaceDrag.current.workspaceId : undefined
+    const resizedFrame = frameResize.current?.moved ? frameResize.current : undefined
     if (dragFrame.current !== null) {
       cancelAnimationFrame(dragFrame.current)
       dragFrame.current = null
@@ -319,7 +327,19 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
     }
     if (wasDragging && draggedId) suppressClick.current = draggedId
     if (resizedId) finishPresentationInteraction('node-resize')
-    else if (draggedWorkspace) finishPresentationInteraction('workspace-group-move')
+    else if (resizedFrame) {
+      finishPresentationInteraction('node-resize')
+      onFrameBoundsChange?.(resizedFrame.workspaceId, {
+        x: resizedFrame.bounds.x,
+        y: resizedFrame.bounds.y,
+        width: Math.max(220, resizedFrame.bounds.width),
+        height: Math.max(140, resizedFrame.bounds.height),
+      })
+    }
+    else if (draggedWorkspace) {
+      finishPresentationInteraction('workspace-group-move')
+      if (workspaceDrag.current?.currentBounds) onFrameBoundsChange?.(workspaceDrag.current.workspaceId, workspaceDrag.current.currentBounds)
+    }
     else if (wasDragging && draggedId && !activeDropGutter) finishPresentationInteraction('node-move')
     else if (resizeCandidate.current || workspaceDrag.current) onPresentationInteractionChange?.(false)
     if (activeDropGutter && wasDragging && draggedCandidate) {
@@ -331,6 +351,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
     dragCandidate.current = null
     resizeCandidate.current = null
     workspaceDrag.current = null
+    frameResize.current = null
     dragPoint.current = null
     stopAutoPan()
     dragging.current = false
@@ -426,6 +447,20 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
       scheduleAutoPan({ x: event.clientX, y: event.clientY })
       return
     }
+    if (frameResize.current) {
+      const item = frameResize.current
+      item.moved = item.moved || Math.hypot(event.clientX - item.startX, event.clientY - item.startY) > 2
+      const dx = (event.clientX - item.startX) / camera.zoom
+      const dy = (event.clientY - item.startY) / camera.zoom
+      item.bounds = {
+        x: item.bounds.x,
+        y: item.bounds.y,
+        width: Math.max(220, item.bounds.width + dx),
+        height: Math.max(140, item.bounds.height + dy),
+      }
+      onFrameBoundsChange?.(item.workspaceId, { ...item.bounds })
+      return
+    }
     if (pan.current) {
       const panState = pan.current
       setCamera((current) => ({ ...current, x: panState.camera.x + event.clientX - panState.x, y: panState.camera.y + event.clientY - panState.y }))
@@ -485,7 +520,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
           event.preventDefault(); event.stopPropagation()
           const members = frame.memberViewIds.map((id) => workspaceMemberNodes.find((node) => node.id === id)).filter((node): node is CanvasNode => Boolean(node)).map((node) => ({ id: node.id, x: node.x, y: node.y }))
           if (!members.length) return
-          workspaceDrag.current = { workspaceId: frame.workspaceId, startX: event.clientX, startY: event.clientY, members, moved: false }
+          workspaceDrag.current = { workspaceId: frame.workspaceId, startX: event.clientX, startY: event.clientY, members, moved: false, frameBounds: frame.bounds, currentBounds: frame.bounds }
           onPresentationInteractionChange?.(true)
           setDraggingWorkspaceId(frame.workspaceId)
           onWorkspaceActivate?.(frame.workspaceId)
@@ -493,6 +528,13 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
         }}>
           <span>{frame.label}</span><b>{frame.active ? '当前 · ' : ''}{frame.memberViewIds.length} 项</b>
         </button>
+        <button data-testid={`workspace-frame-resize-${frame.workspaceId}`} className="workspace-frame-resize" type="button" aria-label={`调整 ${frame.label} 框体大小`} title="拖动调整框体范围（不影响成员位置）" onPointerDown={(event) => {
+          if (locked || event.button !== 0) return
+          event.preventDefault(); event.stopPropagation()
+          frameResize.current = { workspaceId: frame.workspaceId, startX: event.clientX, startY: event.clientY, bounds: frame.bounds, moved: false }
+          onPresentationInteractionChange?.(true)
+          try { canvasRef.current?.setPointerCapture(event.pointerId) } catch { /* browser owns capture */ }
+        }}><span /></button>
       </div>)}
       {returnGroups.map((group) => <div key={group.id} className="return-group-mat" data-return-group={group.id} style={{ left: group.x, top: group.y, width: group.width, height: group.height }}><span>{group.id} · {group.count} 个返回结果</span></div>)}
       {pendingZone && <div className="pending-return-zone" style={{ left: pendingZone.x, top: pendingZone.y, width: pendingZone.width, height: pendingZone.height }}><span>待确认结果区</span></div>}

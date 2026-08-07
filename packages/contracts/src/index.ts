@@ -36,6 +36,7 @@ import type {
   Workspace,
   WorkspaceId,
   WorkspaceContextPolicy,
+  WorkspaceFrameBounds,
   WorkspaceViewport,
   WorkspaceMembership,
   WorkspaceMembershipSource,
@@ -520,6 +521,13 @@ export type MutationOperation =
   | { readonly type: 'move_artifact_view'; readonly viewId: ArtifactViewId; readonly x: number; readonly y: number }
   | { readonly type: 'resize_artifact_view'; readonly viewId: ArtifactViewId; readonly width: number; readonly height: number }
   | { readonly type: 'update_workspace_viewport'; readonly workspaceId: WorkspaceId; readonly viewport: WorkspaceViewport }
+  | {
+      readonly type: 'update_workspace_frame'
+      readonly workspaceId: WorkspaceId
+      readonly frameBounds?: WorkspaceFrameBounds
+      readonly preferredSurface?: string
+      readonly expectedVersion?: number
+    }
   | {
       readonly type: 'update_workspace_presentation'
       readonly workspaceId: WorkspaceId

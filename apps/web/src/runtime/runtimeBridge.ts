@@ -406,6 +406,9 @@ export function mapGraphToState(
     visibleLayers: (ws.visibleLayers as Workspace['visibleLayers']) ?? ['core', 'process'],
     focusedViewIds: ws.focusedViewIds.map(String),
     contextPolicy: (ws.contextPolicy ?? 'selection-only') as Workspace['contextPolicy'],
+    ...(ws.frameBounds === undefined ? {} : { frameBounds: { x: ws.frameBounds.x, y: ws.frameBounds.y, width: ws.frameBounds.width, height: ws.frameBounds.height } }),
+    ...(ws.preferredSurface === undefined ? {} : { preferredSurface: ws.preferredSurface }),
+    ...(ws.version === undefined ? {} : { version: ws.version }),
     createdAt: ws.updatedAt, updatedAt: ws.updatedAt,
   }))
 
@@ -479,6 +482,9 @@ export function mapStateToGraph(state: PersistedPrototypeState, projectId: strin
     focusedViewIds: ws.focusedViewIds as unknown as ProjectGraphSnapshot['workspaces'][number]['focusedViewIds'],
     visibleLayers: ws.visibleLayers,
     contextPolicy: (ws.contextPolicy ?? 'selection-only') as WorkspaceContextPolicy,
+    ...(ws.frameBounds === undefined ? {} : { frameBounds: ws.frameBounds }),
+    ...(ws.preferredSurface === undefined ? {} : { preferredSurface: ws.preferredSurface }),
+    ...(ws.version === undefined ? {} : { version: ws.version }),
     updatedAt: now,
   }))
 
@@ -575,6 +581,9 @@ export function diffStateToOps(
       focusedViewIds: ws.focusedViewIds,
       visibleLayers: ws.visibleLayers,
       contextPolicy: ws.contextPolicy ?? 'selection-only',
+      ...(ws.frameBounds === undefined ? {} : { frameBounds: ws.frameBounds }),
+      ...(ws.preferredSurface === undefined ? {} : { preferredSurface: ws.preferredSurface }),
+      ...(ws.version === undefined ? {} : { version: ws.version }),
       updatedAt: now,
     }
     if (before === undefined
@@ -591,6 +600,15 @@ export function diffStateToOps(
         workspaceId: ws.id,
         focusedViewIds: ws.focusedViewIds,
         visibleLayers: ws.visibleLayers,
+      })
+    }
+    if (!sameValue(before.frameBounds, ws.frameBounds) || before.preferredSurface !== ws.preferredSurface) {
+      ops.push({
+        type: 'update_workspace_frame',
+        workspaceId: ws.id,
+        ...(ws.frameBounds === undefined ? {} : { frameBounds: ws.frameBounds }),
+        ...(ws.preferredSurface === undefined ? {} : { preferredSurface: ws.preferredSurface }),
+        expectedVersion: before.version ?? 0,
       })
     }
   }
