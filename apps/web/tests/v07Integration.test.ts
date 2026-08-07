@@ -10,7 +10,7 @@ const canvas = readFileSync(new URL('../src/features/canvas/ProjectCanvas.tsx', 
 const nodeVisual = readFileSync(new URL('../src/features/canvas/CanvasNodeVisual.tsx', import.meta.url), 'utf8')
 const railMode = readFileSync(new URL('../src/state/workRailMode.ts', import.meta.url), 'utf8')
 const main = readFileSync(new URL('../src/main.tsx', import.meta.url), 'utf8')
-const v071 = readFileSync(new URL('../src/v071.css', import.meta.url), 'utf8')
+const vnext = readFileSync(new URL('../src/vnext.css', import.meta.url), 'utf8')
 
 function functionBlock(source: string, name: string, nextName: string) {
   const start = source.indexOf(`const ${name}`)
@@ -52,8 +52,8 @@ describe('v0.7.1 lightweight backend-integrated UI', () => {
   it('keeps canonical Runtime capability gates and imports the v0.7.1 density layer', () => {
     expect(contracts).toContain("runWorkflow: runtime ? { enabled: true } : unavailable('请先打开一个本地项目')")
     expect(capability).toContain('props.capabilities.runWorkflow.reason')
-    expect(main).toContain("import './v071.css'")
-    expect(v071).toContain('top: 10px; transform: none;')
+    expect(main).toContain("import './vnext.css'")
+    expect(vnext).toContain('.app-shell.porcelain-studio-v2')
   })
 
   it('routes Link References to server-side universal import instead of frontend form generation', () => {

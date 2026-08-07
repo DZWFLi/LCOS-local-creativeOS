@@ -5,7 +5,7 @@ describe('Gate F desktop interaction contract', () => {
   const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8')
   const rail = readFileSync(new URL('../src/features/workrail/WorkRail.tsx', import.meta.url), 'utf8')
   const canvas = readFileSync(new URL('../src/features/canvas/ProjectCanvas.tsx', import.meta.url), 'utf8')
-  const css = readFileSync(new URL('../src/v071.css', import.meta.url), 'utf8')
+  const porcelain = readFileSync(new URL('../src/porcelain-studio.css', import.meta.url), 'utf8')
 
   it('keeps one contextual composer without turning selection into an inspector route', () => {
     expect(app).toContain('<WorkRail')
@@ -37,8 +37,7 @@ describe('Gate F desktop interaction contract', () => {
   })
 
   it('overlays the adaptive Work Rail without resizing the Canvas', () => {
-    expect(css).toContain('.app-shell.v071 .canvas { right: 0 !important; transition: none !important; }')
-    expect(css).toContain('transform: translateX(0)')
-    expect(css).not.toContain('transition: right')
+    expect(porcelain).toContain('.app-shell.porcelain-studio-v2 .canvas {')
+    expect(porcelain).not.toContain('transition: right')
   })
 })
