@@ -2,6 +2,7 @@ import type { ProjectCatalog } from '@local-creative-os/contracts'
 import { ActiveContextStore } from './active-context-store.js'
 import { ContextManifestService } from './context-manifest-service.js'
 import { ContextProposalStore } from './context-proposal-store.js'
+import { ContextSnapshotService } from './context-snapshot-service.js'
 import { ConversationImportService } from './conversation-import-service.js'
 import { FileObservationService } from './file-observation-service.js'
 import { FileRegistryService } from './file-registry-service.js'
@@ -46,6 +47,7 @@ export interface LocalCoreServices {
   readonly conversations: ConversationImportService | undefined
   readonly previewWorker: PreviewWorkerService | undefined
   readonly workbench: WorkbenchService | undefined
+  readonly contextSnapshots: ContextSnapshotService | undefined
 }
 
 /** 服务装配：把 options 解析成 createLocalCoreServer 需要的一组服务。 */
@@ -83,5 +85,6 @@ export function composeLocalCoreServices(options: LocalCoreServerOptions = {}): 
         }),
       })),
     workbench: options.workbenchService ?? (metadata === undefined ? undefined : new WorkbenchService(metadata)),
+    contextSnapshots: options.contextSnapshotService ?? (metadata === undefined ? undefined : new ContextSnapshotService(metadata)),
   }
 }

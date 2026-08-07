@@ -77,6 +77,7 @@ import { handleImportsRoute } from './routes/imports.js'
 import { handleLcosprojRoute } from './routes/lcosproj.js'
 import { handleProjectsRoute } from './routes/projects.js'
 import { handleWorkbenchRoute } from './routes/workbench.js'
+import { handleContextSnapshotsRoute } from './routes/context-snapshots.js'
 import { handleResourcesRoute } from './routes/resources.js'
 import { handleRuntimeRoute } from './routes/runtime.js'
 import { handleRunsRoute } from './routes/runs.js'
@@ -170,6 +171,7 @@ export interface LocalCoreServerOptions {
   readonly connectorRegistry?: ResourceConnectorRegistry
   readonly conversationImportService?: ConversationImportService
   readonly workbenchService?: import('./workbench-service.js').WorkbenchService
+  readonly contextSnapshotService?: import('./context-snapshot-service.js').ContextSnapshotService
 }
 
 export interface LocalCoreAddress {
@@ -432,6 +434,17 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
         metadata,
         helpers: routeHelpers,
         workbench: services.workbench,
+      })) return
+      if (await handleContextSnapshotsRoute({
+        method,
+        pathname,
+        url,
+        request,
+        response,
+        controller,
+        metadata,
+        helpers: routeHelpers,
+        contextSnapshots: services.contextSnapshots,
       })) return
       if (await handleContextProposalsRoute({
         method,
