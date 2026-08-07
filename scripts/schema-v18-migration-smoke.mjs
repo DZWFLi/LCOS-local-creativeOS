@@ -62,7 +62,7 @@ try {
 
   const repository = new SqliteMetadataRepository(databasePath)
   try {
-    if (repository.schemaVersion !== 19) throw new Error(`Expected schema 19, got ${repository.schemaVersion}`)
+    if (repository.schemaVersion !== 20) throw new Error(`Expected schema 20, got ${repository.schemaVersion}`)
     if (repository.foreignKeyCheck().length !== 0) throw new Error('Migration produced foreign key errors.')
   } finally {
     repository.close()
@@ -81,7 +81,7 @@ try {
   if (!embedding || embedding.input_hash !== 'content-hash' || embedding.embedding_version !== 'legacy-v0') throw new Error('Embedding row migration failed.')
   if (!refsTable) throw new Error('conversation_file_references table missing.')
   if (!existsSync(`${databasePath}.v17.bak`)) throw new Error('v17 backup was not created.')
-  process.stdout.write(`${JSON.stringify({ ok: true, schemaVersion: 19, backup: true, legacyRowsPreserved: true }, null, 2)}\n`)
+  process.stdout.write(`${JSON.stringify({ ok: true, schemaVersion: 20, backup: true, legacyRowsPreserved: true }, null, 2)}\n`)
 } finally {
   await rm(temp, { recursive: true, force: true })
 }

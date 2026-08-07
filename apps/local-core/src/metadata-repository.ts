@@ -17,6 +17,7 @@ import type {
   FileRecord,
   FileRecordId,
   GraphVersion,
+  HandoffRecord,
   Run,
   RunId,
   RuntimeBinding,
@@ -192,9 +193,33 @@ export class SqliteMetadataRepository {
     if (current === 16) { this.#migrate_017_from_v16(); current = 17 }
     if (current === 17) { this.#migrate_018_from_v17(); current = 18 }
     if (current === 18) { this.#migrate_019_from_v18(); current = 19 }
-    if (current !== 19) throw new Error(`Unsupported metadata schema version ${current}.`)
+    if (current === 19) { this.#migrate_020_from_v19(); current = 20 }
+    if (current !== 20) throw new Error(`Unsupported metadata schema version ${current}.`)
   }
 
+
+  #migrate_020_from_v19(): void {
+    this.#database.exec(`
+      CREATE TABLE IF NOT EXISTS handoffs (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        title TEXT NOT NULL,
+        resume_mode TEXT NOT NULL DEFAULT 'standard-handoff',
+        from_provider TEXT,
+        to_provider TEXT,
+        session_summary_id TEXT,
+        context_snapshot_id TEXT,
+        decisions TEXT NOT NULL DEFAULT '[]',
+        open_questions TEXT NOT NULL DEFAULT '[]',
+        next_actions TEXT NOT NULL DEFAULT '[]',
+        artifact_refs TEXT NOT NULL DEFAULT '[]',
+        message_refs TEXT NOT NULL DEFAULT '[]',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      PRAGMA user_version = 20;
+    `)
+  }
 
   #migrate_019_from_v18(): void {
     try { this.#database.exec(`ALTER TABLE workspaces ADD COLUMN frame_bounds TEXT`) } catch {}
@@ -1632,6 +1657,46 @@ export class SqliteMetadataRepository {
     ).all(projectId as SQLInputValue) as Row[]).map((row) => this.#sessionSummary(row))
   }
 
+  createHandoff(value: HandoffRecord): HandoffRecord {
+    this.#database.prepare(`
+      INSERT INTO handoffs (id, project_id, title, resume_mode, from_provider, to_provider, session_summary_id, context_snapshot_id, decisions, open_questions, next_actions, artifact_refs, message_refs, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      value.id,
+      value.projectId as SQLInputValue,
+      value.title,
+      value.resumeMode,
+      value.fromProvider ?? null,
+      value.toProvider ?? null,
+      value.sessionSummaryId ?? null,
+      value.contextSnapshotId ?? null,
+      JSON.stringify(value.decisions),
+      JSON.stringify(value.openQuestions),
+      JSON.stringify(value.nextActions),
+      JSON.stringify(value.artifactRefs),
+      JSON.stringify(value.messageRefs),
+      value.createdAt,
+      value.updatedAt,
+    )
+    return value
+  }
+
+  getHandoff(handoffId: string): HandoffRecord | undefined {
+    const row = this.#database.prepare('SELECT * FROM handoffs WHERE id = ?').get(handoffId) as Row | undefined
+    return row === undefined ? undefined : this.#handoff(row)
+  }
+
+  listHandoffs(projectId: ProjectId): readonly HandoffRecord[] {
+    return (this.#database.prepare(
+      'SELECT * FROM handoffs WHERE project_id = ? ORDER BY created_at DESC, id DESC',
+    ).all(projectId as SQLInputValue) as Row[]).map((row) => this.#handoff(row))
+  }
+
+  deleteHandoff(handoffId: string): boolean {
+    const result = this.#database.prepare('DELETE FROM handoffs WHERE id = ?').run(handoffId)
+    return Number(result.changes) > 0
+  }
+
   getFileRecords(projectId: string): FileRecord[] {
     return (this.#database.prepare('SELECT * FROM file_records WHERE project_id = ?').all(projectId as SQLInputValue) as Row[])
       .map((row) => this.#fileRecord(row))
@@ -2772,7 +2837,7 @@ export class SqliteMetadataRepository {
     }
   }
 
-  get schemaVersion(): number { return 19 }
+  get schemaVersion(): number { return 20 }
 
   // ==================== Private helpers ====================
 
@@ -3141,6 +3206,31 @@ export class SqliteMetadataRepository {
     }
   }
 
+  #handoff(row: Row): HandoffRecord {
+    const decisions = json<string[]>((row.decisions ?? '[]') as SQLInputValue)
+    const openQuestions = json<string[]>((row.open_questions ?? '[]') as SQLInputValue)
+    const nextActions = json<string[]>((row.next_actions ?? '[]') as SQLInputValue)
+    const artifactRefs = json<HandoffRecord['artifactRefs']>((row.artifact_refs ?? '[]') as SQLInputValue)
+    const messageRefs = json<string[]>((row.message_refs ?? '[]') as SQLInputValue)
+    return {
+      id: String(row.id),
+      projectId: String(row.project_id) as ProjectId,
+      title: String(row.title),
+      resumeMode: (String(row.resume_mode ?? 'standard-handoff')) as HandoffRecord['resumeMode'],
+      ...(row.from_provider ? { fromProvider: String(row.from_provider) } : {}),
+      ...(row.to_provider ? { toProvider: String(row.to_provider) } : {}),
+      ...(row.session_summary_id ? { sessionSummaryId: String(row.session_summary_id) } : {}),
+      ...(row.context_snapshot_id ? { contextSnapshotId: String(row.context_snapshot_id) } : {}),
+      decisions,
+      openQuestions,
+      nextActions,
+      artifactRefs,
+      messageRefs,
+      createdAt: String(row.created_at),
+      updatedAt: String(row.updated_at),
+    }
+  }
+
   getActiveContext(projectId: string, workspaceId: string | null): ActiveContextV2 | undefined {
     const row = this.#database.prepare(`SELECT projection_json FROM active_contexts WHERE project_id = ? AND workspace_key = ?`).get(projectId, metadataWorkspaceKey(workspaceId)) as Row | undefined
     return row === undefined ? undefined : json<ActiveContextV2>(row.projection_json as SQLInputValue)
@@ -3380,6 +3470,7 @@ const PROJECT_TRUTH_TABLES: readonly { readonly table: string; readonly where: s
   { table: 'conversation_messages_fts', where: 'message_id IN (SELECT m.id FROM conversation_messages m JOIN conversation_sessions s ON s.id = m.session_id WHERE s.project_id = ? AND m.pinned_as_decision = 1)' },
   { table: 'notes', where: 'project_id = ?' },
   { table: 'checkpoints', where: 'project_id = ?' },
+  { table: 'handoffs', where: 'project_id = ?' },
   { table: 'context_manifests', where: 'project_id = ?' },
   { table: 'runs', where: 'project_id = ?' },
   { table: 'session_summaries', where: 'project_id = ?' },
@@ -3412,6 +3503,7 @@ const PROJECT_TRUTH_DELETE_SQL: readonly string[] = [
   'DELETE FROM session_summaries WHERE project_id = ?',
   'DELETE FROM context_manifests WHERE project_id = ?',
   'DELETE FROM checkpoints WHERE project_id = ?',
+  'DELETE FROM handoffs WHERE project_id = ?',
   'DELETE FROM notes WHERE project_id = ?',
   'DELETE FROM relations WHERE project_id = ?',
   'DELETE FROM artifact_views WHERE artifact_id IN (SELECT id FROM artifacts WHERE project_id = ?)',

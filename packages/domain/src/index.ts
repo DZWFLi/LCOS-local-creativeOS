@@ -249,6 +249,34 @@ export interface SessionSummary {
   readonly updatedAt: IsoDateTime
 }
 
+// ==================== Handoff ====================
+
+export type HandoffResumeMode = 'native-resume' | 'standard-handoff' | 'session-shadow'
+
+export interface HandoffArtifactRef {
+  readonly artifactId: ArtifactId
+  readonly revisionId?: ArtifactRevisionId
+}
+
+/** Provider-neutral Handoff 记录（B6）：跨 Agent 可读的交接语义，不冒充 Native Resume。 */
+export interface HandoffRecord {
+  readonly id: string
+  readonly projectId: ProjectId
+  readonly title: string
+  readonly resumeMode: HandoffResumeMode
+  readonly fromProvider?: string
+  readonly toProvider?: string
+  readonly sessionSummaryId?: string
+  readonly contextSnapshotId?: string
+  readonly decisions: readonly string[]
+  readonly openQuestions: readonly string[]
+  readonly nextActions: readonly string[]
+  readonly artifactRefs: readonly HandoffArtifactRef[]
+  readonly messageRefs: readonly string[]
+  readonly createdAt: IsoDateTime
+  readonly updatedAt: IsoDateTime
+}
+
 // ==================== Preview (unchanged) ====================
 
 export type PreviewState = 'idle' | 'loading' | 'ready' | 'error'

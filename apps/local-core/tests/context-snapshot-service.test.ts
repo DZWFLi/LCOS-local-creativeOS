@@ -21,7 +21,7 @@ function snapshot(): ProjectGraphSnapshot {
   const rootScopeId = 'scope-root' as ScopeId
   const workspaceId = 'workspace-main' as WorkspaceId
   return {
-    schemaVersion: 19,
+    schemaVersion: 20,
     graphVersion: 1,
     project: {
       id: projectId, name: 'Snap', rootPath: 'disposable://snap',

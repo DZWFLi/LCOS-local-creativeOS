@@ -10,7 +10,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { MetadataForeignKeyConstraintError, SqliteMetadataRepository } from '../src/metadata-repository.js'
 
 const cleanup: string[] = []
-const SCHEMA_VERSION = 19
+const SCHEMA_VERSION = 20
 
 function disposableSnapshot(): ProjectGraphSnapshot {
   const now = '2026-07-24T12:00:00.000Z'
@@ -94,6 +94,46 @@ afterEach(async () => {
 })
 
 describe('SqliteMetadataRepository', () => {
+  it('persists provider-neutral handoff records with resume modes (B6)', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'local-core-handoffs-'))
+    cleanup.push(directory)
+    const repository = new SqliteMetadataRepository(join(directory, 'metadata.sqlite'))
+    repository.save(disposableSnapshot())
+    const projectId = 'disposable-portasplit' as ProjectId
+
+    const created = repository.createHandoff({
+      id: 'handoff-1',
+      projectId,
+      title: 'GPT -> Codex',
+      resumeMode: 'standard-handoff',
+      fromProvider: 'gpt',
+      toProvider: 'codex',
+      sessionSummaryId: 'summary-1',
+      contextSnapshotId: 'snap-1',
+      decisions: ['Keep the current canvas layout'],
+      openQuestions: ['Should B-roll be added?'],
+      nextActions: ['Run the golden path'],
+      artifactRefs: [{ artifactId: 'artifact-brief' as never, revisionId: 'rev-1' as never }],
+      messageRefs: ['msg-1', 'msg-2'],
+      createdAt: '2026-08-07T11:00:00.000Z',
+      updatedAt: '2026-08-07T11:00:00.000Z',
+    })
+    expect(created.id).toBe('handoff-1')
+
+    const listed = repository.listHandoffs(projectId)
+    expect(listed).toHaveLength(1)
+    expect(listed[0]?.resumeMode).toBe('standard-handoff')
+    expect(listed[0]?.decisions).toEqual(['Keep the current canvas layout'])
+    expect(listed[0]?.artifactRefs[0]?.artifactId).toBe('artifact-brief')
+
+    const got = repository.getHandoff('handoff-1')
+    expect(got?.toProvider).toBe('codex')
+    expect(got?.contextSnapshotId).toBe('snap-1')
+
+    expect(repository.deleteHandoff('handoff-1')).toBe(true)
+    expect(repository.listHandoffs(projectId)).toHaveLength(0)
+  })
+
   it('persists aggregate relations with view/workspace endpoints (B2)', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'local-core-relation-endpoints-'))
     cleanup.push(directory)
