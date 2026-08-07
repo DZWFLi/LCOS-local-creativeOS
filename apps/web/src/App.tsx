@@ -50,6 +50,15 @@ import { buildScopePath, createId, fileNameFromPath, inferFileType, isTextPrevie
 import { AppShellView } from './features/shell/AppShellView'
 import { parseArtifactRevisions, parseProcessProjection, parseWorkspaceStates, type ArtifactRevisionProvenance, type WorkspaceStateSummary } from './runtime/projectionAdapters'
 import { WorkspaceStatesDialog } from './features/workspace/WorkspaceStatesDialog'
+import { ProjectStripVNext } from './features/shell/ProjectStripVNext'
+import { WorkspaceRailVNext } from './features/shell/WorkspaceRailVNext'
+import { SurfaceDock, type SurfaceId } from './features/shell/SurfaceDock'
+import { ProjectionSurface } from './features/surfaces/ProjectionSurfaces'
+import { SurfaceComposerBar } from './features/surfaces/SurfaceComposerBar'
+import { DropShelf, type DropAnchor, type DropDestination } from './features/drop/DropShelf'
+import { ImmersiveViewer } from './features/viewer/ImmersiveViewer'
+import { resolveArtifactViewerKind } from './features/viewer/artifactViewerRegistry'
+import './vnext.css'
 
 const MVP_SAMPLE_PROJECT_ID = 'disposable-mvp-sample'
 const DEFAULT_PROJECT_ID = MVP_SAMPLE_PROJECT_ID
@@ -85,6 +94,15 @@ export function App() {
   const [projectOpen, setProjectOpen] = useState(true)
   const [workspaces, setWorkspaces] = useState<Workspace[]>(initial.workspaces)
   const [scopes, setScopes] = useState<CanvasScope[]>(initial.scopes)
+  const rootScope = useMemo<CanvasScope>(() => scopes.find((scope) => scope.kind === 'root') ?? scopes[0] ?? {
+    id: 'scope-root',
+    label: '主画布',
+    kind: 'root',
+    parentScopeId: null,
+    camera: { x: 0, y: 0, zoom: 1 },
+    layoutMode: 'manual',
+    updatedAt: new Date().toISOString(),
+  }, [scopes])
   const [workspaceId, setWorkspaceId] = useState<string | null>(null)
   const [scopeId, setScopeId] = useState(initial.scopes.find((scope) => scope.kind === 'root')?.id ?? initial.activeScopeId)
   const [camera, setCamera] = useState<Camera>(() => loadProjectNavigationState(initialProjectId)?.camera ?? initial.scopes.find((scope) => scope.kind === 'root')?.camera ?? { x: 120, y: 72, zoom: 1 })
@@ -117,6 +135,11 @@ export function App() {
   const [selectionProvider, setSelectionProvider] = useState('auto')
   const [selectionCreateAsNewNode, setSelectionCreateAsNewNode] = useState(false)
   const [selectionBaseRevision, setSelectionBaseRevision] = useState<ArtifactRevisionProvenance | null>(null)
+  const [selectionIntent, setSelectionIntent] = useState<RunOutputIntent>('analyze')
+  const [selectionResultPolicy, setSelectionResultPolicy] = useState<ComposerResultPolicy>('reply_only')
+  const [activeSurface, setActiveSurface] = useState<SurfaceId>('arrange')
+  const [stagedTransfer, setStagedTransfer] = useState<{ ids: string[]; anchor: DropAnchor } | null>(null)
+  const [immersiveNodeId, setImmersiveNodeId] = useState<string | null>(null)
   const [runtimeProviders, setRuntimeProviders] = useState<readonly RuntimeProviderStatus[]>([])
   const [runProposal, setRunProposal] = useState<RunProposalResult | null>(null)
   const [, setWorkspaceMemberships] = useState<readonly WorkspaceMembership[]>([])
@@ -1048,6 +1071,170 @@ export function App() {
     if (!activeScope.parentScopeId) return
     enterScope(activeScope.parentScopeId)
   }, [activeScope.parentScopeId, enterScope])
+
+  const workbenchScopeId = `workbench-${activeProjectId}`
+  const workbenchScope = scopes.find((scope) => scope.id === workbenchScopeId) ?? null
+
+  const ensureWorkbenchScope = useCallback(() => {
+    const existing = scopes.find((scope) => scope.id === workbenchScopeId)
+    if (existing) return existing.id
+    const next: CanvasScope = {
+      id: workbenchScopeId,
+      label: '当前现场',
+      kind: 'collection',
+      parentScopeId: rootScope.id,
+      camera: { x: 150, y: 88, zoom: 1 },
+      layoutMode: 'manual',
+      updatedAt: new Date().toISOString(),
+    }
+    setScopes((current) => current.some((scope) => scope.id === next.id) ? current : [...current, next])
+    return next.id
+  }, [rootScope.id, scopes, workbenchScopeId])
+
+  const projectViewsIntoScope = useCallback((sourceIds: readonly string[], targetScopeId: string) => {
+    const selected = nodes.filter((node) => sourceIds.includes(node.id))
+    const targetNodes = nodes.filter((node) => (node.scopeId ?? rootScope.id) === targetScopeId)
+    const canonicalKey = (node: CanvasNode) => node.artifactId ?? node.viewOf ?? node.id
+    const existing = new Map(targetNodes.map((node) => [canonicalKey(node), node]))
+    const sourceToTarget = new Map<string, string>()
+    const newViews: CanvasNode[] = []
+    selected.forEach((node, index) => {
+      const key = canonicalKey(node)
+      const already = existing.get(key)
+      if (already) {
+        sourceToTarget.set(node.id, already.id)
+        return
+      }
+      const id = createId('view')
+      sourceToTarget.set(node.id, id)
+      const column = index % 3
+      const row = Math.floor(index / 3)
+      newViews.push({
+        ...node,
+        id,
+        artifactId: node.artifactId,
+        viewOf: key,
+        scopeId: targetScopeId,
+        workspaceIds: undefined,
+        x: 120 + column * 300,
+        y: 120 + row * 210,
+        opensScopeId: undefined,
+        positionLocked: false,
+      })
+    })
+    const newEdges = edges
+      .filter((edge) => sourceToTarget.has(edge.from) && sourceToTarget.has(edge.to))
+      .flatMap((edge) => {
+        const from = sourceToTarget.get(edge.from)!
+        const to = sourceToTarget.get(edge.to)!
+        const duplicate = edges.some((current) => current.from === from && current.to === to && current.kind === edge.kind)
+        return duplicate ? [] : [{ ...edge, id: createId('edge'), from, to, active: false }]
+      })
+    if (newViews.length || newEdges.length) setGraph({ nodes: [...nodes, ...newViews], edges: [...edges, ...newEdges] })
+    return sourceIds.map((id) => sourceToTarget.get(id)).filter((id): id is string => Boolean(id))
+  }, [edges, nodes, rootScope.id, setGraph])
+
+  const enterScopeKeepingSelection = useCallback((targetScopeId: string, nextSelection: string[]) => {
+    const target = scopes.find((scope) => scope.id === targetScopeId) ?? (targetScopeId === workbenchScopeId ? { id: targetScopeId, label: '当前现场', camera: { x: 150, y: 88, zoom: 1 } } : null)
+    setWorkspaceId(null)
+    setScopeId(targetScopeId)
+    if (target?.camera) setCamera(target.camera)
+    setSelectedIds(nextSelection)
+    setSelectedEdgeId(null)
+    setLayoutPreview(null)
+  }, [scopes, workbenchScopeId])
+
+  const openCurrentWorkbench = useCallback(() => {
+    const id = ensureWorkbenchScope()
+    enterScopeKeepingSelection(id, [])
+    setActiveSurface('arrange')
+    setNotice('已进入当前现场')
+  }, [ensureWorkbenchScope, enterScopeKeepingSelection])
+
+  const mergeWorkbenchViews = useCallback(() => {
+    if (!workbenchScope) { setNotice('当前没有可并回的工作现场'); return }
+    const benchNodes = nodes.filter((node) => (node.scopeId ?? rootScope.id) === workbenchScope.id)
+    if (!benchNodes.length) { enterScopeKeepingSelection(rootScope.id, []); setNotice('当前现场已经是空的'); return }
+    const rootNodes = nodes.filter((node) => (node.scopeId ?? rootScope.id) === rootScope.id)
+    const canonicalKey = (node: CanvasNode) => node.artifactId ?? node.viewOf ?? node.id
+    const existing = new Map(rootNodes.map((node) => [canonicalKey(node), node]))
+    const benchToRoot = new Map<string, string>()
+    const additions: CanvasNode[] = []
+    const isStableOutput = (node: CanvasNode) => node.current === true || node.kind === 'decision' || node.kind === 'note' || node.kind === 'context'
+    benchNodes.forEach((node, index) => {
+      const key = canonicalKey(node)
+      const current = existing.get(key)
+      if (current) { benchToRoot.set(node.id, current.id); return }
+      if (!isStableOutput(node)) return
+      const id = createId('view')
+      benchToRoot.set(node.id, id)
+      additions.push({ ...node, id, artifactId: node.artifactId, viewOf: key, scopeId: rootScope.id, workspaceIds: undefined, x: 180 + (index % 3) * 300, y: 160 + Math.floor(index / 3) * 210, positionLocked: false })
+    })
+    const benchIds = new Set(benchNodes.map((node) => node.id))
+    const retainedEdges = edges.filter((edge) => !benchIds.has(edge.from) && !benchIds.has(edge.to))
+    const mergedEdges = edges.filter((edge) => benchIds.has(edge.from) && benchIds.has(edge.to)).flatMap((edge) => {
+      const from = benchToRoot.get(edge.from), to = benchToRoot.get(edge.to)
+      if (!from || !to || retainedEdges.some((current) => current.from === from && current.to === to && current.kind === edge.kind)) return []
+      return [{ ...edge, id: createId('edge'), from, to, active: false }]
+    })
+    const nextNodes = [...nodes.filter((node) => !benchIds.has(node.id)), ...additions]
+    setGraph({ nodes: nextNodes, edges: [...retainedEdges, ...mergedEdges] })
+    enterScopeKeepingSelection(rootScope.id, [...benchToRoot.values()])
+    setActiveSurface('arrange')
+    setNotice(`已并回 ${additions.length} 个新稳定结果；原项目引用已复位，临时现场已清空`)
+  }, [edges, enterScopeKeepingSelection, nodes, rootScope.id, setGraph, workbenchScope])
+
+  const stageTransfer = useCallback((ids: string[], anchor: DropAnchor) => {
+    if (!ids.length) return
+    setSelectedIds(ids)
+    setStagedTransfer({ ids: [...ids], anchor })
+  }, [])
+
+  const cancelTransfer = useCallback(() => setStagedTransfer(null), [])
+
+  const handleTransfer = useCallback((destination: DropDestination, follow: boolean) => {
+    const payload = stagedTransfer?.ids ?? []
+    if (!payload.length) { setStagedTransfer(null); return }
+    if (destination.kind === 'workspace') {
+      const target = workspaces.find((workspace) => workspace.id === destination.id)
+      if (!target) { setNotice('目标工作空间不存在'); setStagedTransfer(null); return }
+      const targetFrame = buildWorkspaceFrames(workspaces, scopeNodes, workspaceId, scopeId).find((frame) => frame.workspaceId === destination.id)
+      const payloadSet = new Set(payload)
+      setNodes((current) => current.map((node) => {
+        if (!payloadSet.has(node.id)) return node
+        const index = payload.indexOf(node.id)
+        const x = targetFrame ? targetFrame.bounds.x + 28 + (index % 2) * 240 : node.x
+        const y = targetFrame ? targetFrame.bounds.y + 54 + Math.floor(index / 2) * 170 : node.y
+        return { ...node, x, y, workspaceIds: [...new Set([...(node.workspaceIds ?? []).filter((id) => id !== workspaceId), destination.id])] }
+      }))
+      if (bootMode === 'runtime') {
+        if (workspaceId && workspaceId !== destination.id) {
+          void Promise.all(payload.map((viewId) => bridgeRef.current.client.moveWorkspaceMember(workspaceId, { viewId, toWorkspaceId: destination.id }))).then((calls) => {
+            const latest = calls.at(-1)
+            if (latest?.result.ok) applyMembershipProjection(latest.result.value)
+          })
+        } else {
+          void bridgeRef.current.client.addWorkspaceMembers(destination.id, { viewIds: payload, addedBy: 'user' }).then((call) => {
+            if (call.result.ok) applyMembershipProjection(call.result.value)
+          })
+        }
+      }
+      if (follow) {
+        setWorkspaceId(destination.id)
+        window.setTimeout(() => locateWorkspace(destination.id), 0)
+      }
+      setNotice(`${payload.length} 项已投送到「${target.label}」${follow ? '并前往' : ''}`)
+    } else {
+      const targetScopeId = destination.kind === 'workbench' ? ensureWorkbenchScope() : destination.kind === 'root' ? rootScope.id : destination.id
+      const projectedIds = projectViewsIntoScope(payload, targetScopeId)
+      if (follow) {
+        enterScopeKeepingSelection(targetScopeId, projectedIds)
+        if (destination.kind === 'workbench') setActiveSurface('arrange')
+      }
+      setNotice(`${payload.length} 项已投送到「${destination.label}」${follow ? '并前往' : ''}`)
+    }
+    setStagedTransfer(null)
+  }, [applyMembershipProjection, bootMode, ensureWorkbenchScope, enterScopeKeepingSelection, locateWorkspace, projectViewsIntoScope, rootScope.id, scopeId, scopeNodes, setNodes, stagedTransfer, workspaceId, workspaces])
 
 
   const saveWorkspaceEditor = useCallback(({ label, intent }: { label: string; intent: WorkspaceIntent }) => {
@@ -2063,8 +2250,9 @@ export function App() {
 
     const target = selectionCreateAsNewNode ? null : selectionTargetNode
     const baseRevisionId = target ? (selectionBaseRevision?.id ?? target.revisionId) : undefined
-    const fallbackIntent: RunOutputIntent = selectionCreateAsNewNode ? 'create' : target ? 'revise' : 'analyze'
-    const fallbackPolicy: ComposerResultPolicy = fallbackIntent === 'create' ? 'create_artifact' : fallbackIntent === 'revise' ? 'draft_revision_per_target' : 'reply_only'
+    const requestedIntent = selectionIntent
+    const fallbackIntent: RunOutputIntent = selectionCreateAsNewNode ? (requestedIntent === 'revise' ? 'create' : requestedIntent) : requestedIntent === 'create' ? 'create' : target ? 'revise' : 'analyze'
+    const fallbackPolicy: ComposerResultPolicy = selectionResultPolicy === 'reply_only' && fallbackIntent !== 'analyze' ? (fallbackIntent === 'create' ? 'create_artifact' : 'draft_revision_per_target') : selectionResultPolicy
     const contextNodes = selectionContextIds
       .filter((id) => id !== target?.id)
       .map((id) => nodes.find((node) => node.id === id))
@@ -2514,6 +2702,17 @@ export function App() {
       enterScope(node.opensScopeId)
       return
     }
+    const viewerKind = resolveArtifactViewerKind(node)
+    if (viewerKind === 'link') {
+      const url = node.previewText?.match(/^url:\s*(https?:\/\/\S+)/mi)?.[1]
+      if (url) { window.open(url, '_blank', 'noopener,noreferrer'); return }
+    }
+    if (['image', 'pdf', 'presentation', 'audio', 'video'].includes(viewerKind)) {
+      setNodeInfoId(null)
+      setWorkbench(null)
+      setImmersiveNodeId(id)
+      return
+    }
     if (canPreviewArtifact(node) || node.artifactId !== undefined) {
       setNodeInfoId(null)
       setWorkbench({ nodeId: id, focus: 'preview' })
@@ -2549,7 +2748,7 @@ export function App() {
       if (modifier && event.shiftKey && key === 'l') { event.preventDefault(); arrangeSelection(); return }
       if (modifier && key === 'o' && selectedNodes.length === 1) { event.preventDefault(); openNative(selectedNodes[0]); return }
       if (event.code === 'Space') { event.preventDefault(); setSpaceHeld(true); return }
-      if (event.key === 'Escape') { if (workbench) setWorkbench(null); else if (capabilityOpen) setCapabilityOpen(false); else if (nodeInfoId) setNodeInfoId(null); else if (layoutPreview) setLayoutPreview(null); else clearSelection(); return }
+      if (event.key === 'Escape') { if (stagedTransfer) setStagedTransfer(null); else if (immersiveNodeId) setImmersiveNodeId(null); else if (workbench) setWorkbench(null); else if (capabilityOpen) setCapabilityOpen(false); else if (nodeInfoId) setNodeInfoId(null); else if (layoutPreview) setLayoutPreview(null); else clearSelection(); return }
       if (key === 'c') { event.preventDefault(); requestComposerFocus(); return }
       if (event.key === 'Delete' || event.key === 'Backspace') {
         if (selectedIds.length) { deleteNodes(selectedIds); return }
@@ -2559,7 +2758,7 @@ export function App() {
     const release = (event: KeyboardEvent) => { if (event.code === 'Space') setSpaceHeld(false) }
     window.addEventListener('keydown', handler); window.addEventListener('keyup', release)
     return () => { window.removeEventListener('keydown', handler); window.removeEventListener('keyup', release) }
-  }, [arrangeSelection, clearSelection, copySelection, createDialogOpen, deleteNodes, duplicateSelection, capabilityOpen, nodeInfoId, workbench, layoutPreview, openNative, pasteClipboard, projectCreateOpen, redo, requestComposerFocus, requestGlobalRun, requestSelectionRun, scopeCreateOpen, selectedEdgeId, selectedId, selectedIds, selectedNodes, setEdges, undo])
+  }, [arrangeSelection, clearSelection, copySelection, createDialogOpen, deleteNodes, duplicateSelection, capabilityOpen, immersiveNodeId, nodeInfoId, workbench, layoutPreview, openNative, pasteClipboard, projectCreateOpen, redo, requestComposerFocus, requestGlobalRun, requestSelectionRun, scopeCreateOpen, selectedEdgeId, selectedId, selectedIds, selectedNodes, setEdges, stagedTransfer, undo])
 
 
   const refreshProjectCatalog = useCallback(() => {
@@ -2599,19 +2798,16 @@ export function App() {
       onOpen: openProject,
       onCreate: () => setProjectCreateOpen(true),
     }}
-    topBar={{
-      projects,
-      openProjectIds,
-      activeProjectId,
-      scopePath,
+    strip={{
+      projectLabel: activeProject.label,
+      scopeLabel: activeScope.label,
       saveStatus,
       runStatus: activeRun?.status ?? null,
-      workRailCollapsed: workRail.collapsed,
-      onOpenDrive: () => setProjectOpen(false),
-      onOpenProject: openProject,
-      onCloseProject: closeProjectTab,
-      onOpenScope: enterScope,
-      onToggleWorkRail: () => setWorkRail((current) => ({ ...current, collapsed: !current.collapsed })),
+      onOpenProjectDrive: () => setProjectOpen(false),
+      onImport: () => setImportPanelOpen(true),
+      onGlobalChat: () => { if (agentMode) setNotice('Agent Browser 模式下请直接使用宿主 Agent 对话框'); else setWorkRail((current) => ({ ...current, collapsed: false })) },
+      onHistory: () => { if (workspaceId) openWorkspaceStates(workspaceId); else setNotice('先激活一个工作空间，再查看其工作现场历史') },
+      onMore: () => setCapabilityOpen((value) => !value),
     }}
     scene={{
       sceneStyle,
@@ -2634,25 +2830,22 @@ export function App() {
         onOpenComposer: () => { setCapabilityOpen(false); requestComposerFocus() },
         onSelectNode: (id) => { selectNode(id); setCapabilityOpen(false) },
       } : null,
-      dock: {
+      workspaceRail: {
         workspaces: scopeWorkspaces,
         activeId: workspaceId,
-        collapsed: dockCollapsed,
-        onCollapsedChange: setDockCollapsed,
-        capabilitiesOpen: capabilityOpen,
-        onOpenCapabilities: () => setCapabilityOpen((value) => !value),
-        onOverview: activateOverview,
-        onChange: changeWorkspace,
-        onLocate: locateWorkspace,
-        onAddWorkspace: () => setWorkspaceEditor({ mode: 'create' }),
-        onEditWorkspace: (id) => setWorkspaceEditor({ mode: 'edit', id }),
-        onDuplicateWorkspace: duplicateWorkspace,
-        onDeleteWorkspace: deleteWorkspace,
-        onMoveWorkspace: moveWorkspace,
-        onSaveWorkspaceState: saveCurrentWorkspaceState,
-        onOpenWorkspaceStates: openWorkspaceStates,
         runStatus: activeRun?.status ?? null,
+        onOverview: activateOverview,
+        onActivate: changeWorkspace,
+        onLocate: locateWorkspace,
+        onAdd: () => setWorkspaceEditor({ mode: 'create' }),
+        onEdit: (id) => setWorkspaceEditor({ mode: 'edit', id }),
+        onDuplicate: duplicateWorkspace,
+        onDelete: deleteWorkspace,
+        onMove: moveWorkspace,
+        onSaveState: saveCurrentWorkspaceState,
+        onOpenStates: openWorkspaceStates,
       },
+      surface: activeSurface,
       canvas: {
         nodes: visibleNodes,
         setNodes,
@@ -2690,7 +2883,7 @@ export function App() {
           ...(runProposal?.ambiguity?.question ? { ambiguityQuestion: runProposal.ambiguity.question } : {}),
           onPromptChange: setSelectionComposerText,
           onProviderChange: setSelectionProvider,
-          onCreateAsNewNodeChange: (value) => { setSelectionCreateAsNewNode(value); setSelectionBaseRevision(null) },
+          onCreateAsNewNodeChange: (value) => { setSelectionCreateAsNewNode(value); setSelectionIntent(value ? 'create' : 'analyze'); setSelectionResultPolicy(value ? 'create_artifact' : 'reply_only'); setSelectionBaseRevision(null) },
           onToggleContext: toggleContext,
           onSend: requestSelectionRun,
           onAddToWorkspace: addSelectionToActiveWorkspace,
@@ -2714,6 +2907,51 @@ export function App() {
         onDeleteSelection: deleteSelectedViews,
         onPointerWorldChange: rememberCanvasPoint,
         onSpaceCreate: (point) => { lastCanvasPointRef.current = point; setCreateDialogOpen(true) },
+        onStageTransfer: stageTransfer,
+      },
+      projection: {
+        surface: activeSurface as Exclude<SurfaceId, 'arrange'>,
+        nodes: visibleNodes,
+        edges: visibleEdges,
+        selectedIds,
+        onSelect: selectNode,
+        onDoubleClick: handleDoubleClick,
+      },
+      composer: activeSurface !== 'arrange' && selectedIds.length > 0 ? {
+        nodes,
+        selectedIds,
+        prompt: selectionComposerText,
+        intent: selectionIntent,
+        provider: selectionProvider,
+        resultPolicy: selectionResultPolicy,
+        providers: runtimeProviders,
+        busy: runBusy,
+        onPrompt: setSelectionComposerText,
+        onIntent: (intent) => { setSelectionIntent(intent); setSelectionCreateAsNewNode(intent === 'create'); setSelectionResultPolicy(intent === 'create' ? 'create_artifact' : intent === 'revise' ? 'draft_revision_per_target' : 'reply_only') },
+        onProvider: setSelectionProvider,
+        onResult: setSelectionResultPolicy,
+        onSend: requestSelectionRun,
+      } : null,
+      surfaceDock: {
+        surface: activeSurface,
+        scopePath,
+        activeScopeId: scopeId,
+        workbenchScopeId: workbenchScope?.id ?? workbenchScopeId,
+        onSurface: setActiveSurface,
+        onScope: enterScope,
+        onWorkbench: openCurrentWorkbench,
+        onMergeWorkbench: mergeWorkbenchViews,
+      },
+      dropShelf: {
+        open: Boolean(stagedTransfer),
+        anchor: stagedTransfer?.anchor ?? 'left',
+        count: stagedTransfer?.ids.length ?? 0,
+        workspaces: scopeWorkspaces,
+        scopes,
+        rootScopeId: rootScope.id,
+        currentScopeId: scopeId,
+        onCancel: cancelTransfer,
+        onSend: handleTransfer,
       },
       miniMap: {
         nodes: scopeNodes,
@@ -2934,5 +3172,9 @@ export function App() {
         return stateWorkspace ? <WorkspaceStatesDialog workspace={stateWorkspace} states={workspaceStates} loading={workspaceStatesLoading} saving={workspaceStateSaving} restoringId={workspaceStateRestoringId} error={workspaceStatesError} onClose={() => setWorkspaceStatesOpen(false)} onRefresh={() => loadWorkspaceStates(workspaceStatesWorkspaceId)} onSave={(name) => saveCurrentWorkspaceState(workspaceStatesWorkspaceId, name)} onRestore={restoreSavedWorkspaceState} /> : null
       })() : null,
     }}
+    immersive={immersiveNodeId ? (() => {
+      const immersiveNode = nodes.find((node) => node.id === immersiveNodeId)
+      return immersiveNode ? { node: immersiveNode, projectId: activeProjectId, onClose: () => setImmersiveNodeId(null) } : null
+    })() : null}
   />
 }

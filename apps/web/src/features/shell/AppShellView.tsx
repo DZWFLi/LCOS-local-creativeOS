@@ -1,6 +1,8 @@
 import type { ComponentProps } from 'react'
 import { ProjectDrive } from '../project/ProjectDrive'
-import { V07TopBar } from './V07TopBar'
+import { ProjectStripVNext } from './ProjectStripVNext'
+import { ImmersiveViewer } from '../viewer/ImmersiveViewer'
+import type { CanvasNode } from '../../model'
 import { DialogsHost, type DialogsHostProps } from './DialogsHost'
 import { CanvasSceneHost, type CanvasSceneHostProps } from './CanvasSceneHost'
 import { WorkRailHost } from './WorkRailHost'
@@ -15,13 +17,14 @@ export interface AppShellViewProps {
     readonly onOpen: ComponentProps<typeof ProjectDrive>['onOpen']
     readonly onCreate: () => void
   }
-  readonly topBar: ComponentProps<typeof V07TopBar>
+  readonly strip: ComponentProps<typeof ProjectStripVNext>
   readonly scene: CanvasSceneHostProps
   readonly rail: ComponentProps<typeof WorkRail>
   readonly dialogs: DialogsHostProps
+  readonly immersive: { readonly node: CanvasNode; readonly projectId: string; readonly onClose: () => void } | null
 }
 
-/** App Shell 纯展示层：把 Drive / TopBar / Scene / WorkRail / Dialogs 组装成最终布局。 */
+/** App Shell 纯展示层：把 Drive / Strip / Scene / WorkRail / Dialogs 组装成最终布局。 */
 export function AppShellView(props: AppShellViewProps) {
   if (props.drive.open) {
     return <>
@@ -31,9 +34,10 @@ export function AppShellView(props: AppShellViewProps) {
     </>
   }
   return <main className="app-shell v05 v051 v052 v053 v056 v0561 v06 v06-phase2 v06-phase3 v061 v07 v071 porcelain-studio-v2" data-testid="creative-os-app">
-    <V07TopBar {...props.topBar} />
+    <ProjectStripVNext {...props.strip} />
     <CanvasSceneHost {...props.scene} />
     <WorkRailHost rail={props.rail} />
     <DialogsHost {...props.dialogs} />
+    {props.immersive && <ImmersiveViewer node={props.immersive.node} projectId={props.immersive.projectId} onClose={props.immersive.onClose} />}
   </main>
 }

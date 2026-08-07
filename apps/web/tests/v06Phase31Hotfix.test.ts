@@ -8,6 +8,7 @@ const scene = readFileSync(new URL('../src/features/shell/CanvasSceneHost.tsx', 
 const surface = readFileSync(new URL('../src/surface.css', import.meta.url), 'utf8')
 const canvas = readFileSync(new URL('../src/features/canvas/ProjectCanvas.tsx', import.meta.url), 'utf8')
 const topbar = readFileSync(new URL('../src/features/shell/V07TopBar.tsx', import.meta.url), 'utf8')
+const strip = readFileSync(new URL('../src/features/shell/ProjectStripVNext.tsx', import.meta.url), 'utf8')
 
 let counter = 0
 const createId = (prefix: string) => `${prefix}-${++counter}`
@@ -26,10 +27,10 @@ describe('v0.6 phase 3.1 navigation and shortcut hotfix', () => {
     expect(app).not.toContain('setRunConfirmOpen(true)')
   })
 
-  it('exposes a discoverable close control for every project tab', () => {
-    expect(topbar).toContain('aria-label={`关闭 ${project.label}`}')
-    expect(topbar).toContain('props.onCloseProject(id)')
-    expect(app).toContain('onCloseProject: closeProjectTab')
+  it('keeps project close logic while vNext strip converges project switching to the Drive', () => {
+    expect(app).toContain('closeProjectTab')
+    expect(strip).toContain('vnext-project-strip')
+    expect(strip).toContain('onOpenProjectDrive')
   })
 
   it('copies all internal relationships in the normal child-scope creation selection', () => {

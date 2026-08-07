@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import type { RuntimeProviderStatus } from '@local-creative-os/contracts'
-import { Copy, CopyPlus, FolderTree, Grip, LayoutGrid, Trash2 } from 'lucide-react'
+import { ArrowDownToLine, Copy, CopyPlus, FolderTree, Grip, LayoutGrid, Trash2 } from 'lucide-react'
 import type { Camera, CanvasEdge, CanvasNode, NodeDisplayMode, RunStatus, Workspace, WorkspaceFrameVM } from '../../model'
 import { applyWheelGesture, getSelectionBounds, nodeDensity } from './canvasGeometry'
 import { getPendingZoneBounds } from './canvasLayout'
@@ -47,9 +47,10 @@ interface Props {
   }
   onCreateNodeFromAnchor: (kind: 'note' | 'context', x: number, y: number, from: string) => void; onFilesDropped: (files: File[], x: number, y: number) => void
   onArrangeSelection: () => void; onCopySelection: () => void; onDuplicateSelection: () => void; onCreateScopeFromSelection: () => void; onDeleteSelection: () => void; onPointerWorldChange: (point: { x: number; y: number }) => void; onSpaceCreate: (point: { x: number; y: number }) => void
+  onStageTransfer?: (ids: string[], anchor: 'left' | 'bottom') => void
 }
 
-type DragCandidate = { id: string; startX: number; startY: number; offsetX: number; offsetY: number; group: Array<{ id: string; dx: number; dy: number }> }
+type DragCandidate = { id: string; startX: number; startY: number; offsetX: number; offsetY: number; group: Array<{ id: string; dx: number; dy: number }>; originals: Array<{ id: string; x: number; y: number }> }
 type ResizeCandidate = { id: string; startX: number; startY: number; width: number; height: number; moved: boolean }
 type WorkspaceDragCandidate = { workspaceId: string; startX: number; startY: number; members: Array<{ id: string; x: number; y: number }>; moved: boolean }
 
@@ -57,7 +58,7 @@ function additiveSelection(event: { shiftKey: boolean; ctrlKey: boolean; metaKey
   return event.shiftKey || event.ctrlKey || event.metaKey
 }
 
-export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edges, setEdges, camera, setCamera, selectedId, selectedIds, selectedEdgeId, setSelectedEdgeId, pendingId, runId, runStatus, spaceHeld, locked = false, layoutPreview, workspaceFrames = [], workspaceMemberNodes = nodes, activeWorkspaceId = null, onWorkspaceActivate, onPresentationInteractionChange, onPresentationCommit, selectionComposer, onSelect, onClearSelection, onMarqueeSelect, onSelectEdge, onDoubleClick, onDetails, onRequestAi, onCreateNodeFromAnchor, onFilesDropped, onArrangeSelection, onCopySelection, onDuplicateSelection, onCreateScopeFromSelection, onDeleteSelection, onPointerWorldChange, onSpaceCreate }: Props) {
+export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edges, setEdges, camera, setCamera, selectedId, selectedIds, selectedEdgeId, setSelectedEdgeId, pendingId, runId, runStatus, spaceHeld, locked = false, layoutPreview, workspaceFrames = [], workspaceMemberNodes = nodes, activeWorkspaceId = null, onWorkspaceActivate, onPresentationInteractionChange, onPresentationCommit, selectionComposer, onSelect, onClearSelection, onMarqueeSelect, onSelectEdge, onDoubleClick, onDetails, onRequestAi, onCreateNodeFromAnchor, onFilesDropped, onArrangeSelection, onCopySelection, onDuplicateSelection, onCreateScopeFromSelection, onDeleteSelection, onPointerWorldChange, onSpaceCreate, onStageTransfer }: Props) {
   const canvasRef = useRef<HTMLDivElement | null>(null)
   const pan = useRef<{ x: number; y: number; camera: Camera } | null>(null)
   const dragCandidate = useRef<DragCandidate | null>(null)
@@ -84,6 +85,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [resizingId, setResizingId] = useState<string | null>(null)
   const [draggingWorkspaceId, setDraggingWorkspaceId] = useState<string | null>(null)
+  const [dropGutter, setDropGutter] = useState<'left' | 'bottom' | null>(null)
   const marquee = useRef<{ startX: number; startY: number; currentX: number; currentY: number } | null>(null)
   const [marqueeRect, setMarqueeRect] = useState<{ left: number; top: number; width: number; height: number } | null>(null)
   const [createMenu, setCreateMenu] = useState<{ from: string; x: number; y: number; screenX: number; screenY: number } | null>(null)
@@ -274,6 +276,20 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
     onPresentationCommit?.(kind)
   }
 
+  const dropAnchorAt = (clientX: number, clientY: number, rect: DOMRect): 'left' | 'bottom' | null => {
+    const bottomDockTop = rect.bottom - 64
+    const bottomCaptureTop = bottomDockTop - 92
+    if (clientY >= bottomCaptureTop && clientY < bottomDockTop) return 'bottom'
+    if (clientX <= rect.left + 92) return 'left'
+    return null
+  }
+
+  const restoreDraggedOriginals = (candidate: DragCandidate | null) => {
+    if (!candidate) return
+    const originals = new Map(candidate.originals.map((item) => [item.id, item]))
+    setNodes((current) => current.map((node) => { const original = originals.get(node.id); return original ? { ...node, x: original.x, y: original.y } : node }))
+  }
+
   const finishPointer = (event: React.PointerEvent<HTMLDivElement>) => {
     if (locked) {
       event.preventDefault()
@@ -282,6 +298,8 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
       return
     }
     const wasDragging = dragging.current
+    const activeDropGutter = dropGutter
+    const draggedCandidate = dragCandidate.current
     const draggedId = dragCandidate.current?.id
     const resizedId = resizeCandidate.current?.moved ? resizeCandidate.current.id : undefined
     const draggedWorkspace = workspaceDrag.current?.moved ? workspaceDrag.current.workspaceId : undefined
@@ -289,18 +307,26 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
       cancelAnimationFrame(dragFrame.current)
       dragFrame.current = null
       const point = dragPoint.current
-      if (draggedId && point) setNodes((current) => {
+      if (activeDropGutter && wasDragging && draggedCandidate) restoreDraggedOriginals(draggedCandidate)
+      else if (draggedId && point) setNodes((current) => {
         const group = dragCandidate.current?.group ?? []
         return group.length > 1
           ? current.map((node) => { const member = group.find((item) => item.id === node.id); return member ? { ...node, x: point.x + member.dx, y: point.y + member.dy } : node })
           : current.map((node) => node.id === draggedId ? { ...node, x: point.x, y: point.y } : node)
       })
+    } else if (activeDropGutter && wasDragging && draggedCandidate) {
+      restoreDraggedOriginals(draggedCandidate)
     }
     if (wasDragging && draggedId) suppressClick.current = draggedId
     if (resizedId) finishPresentationInteraction('node-resize')
     else if (draggedWorkspace) finishPresentationInteraction('workspace-group-move')
-    else if (wasDragging && draggedId) finishPresentationInteraction('node-move')
+    else if (wasDragging && draggedId && !activeDropGutter) finishPresentationInteraction('node-move')
     else if (resizeCandidate.current || workspaceDrag.current) onPresentationInteractionChange?.(false)
+    if (activeDropGutter && wasDragging && draggedCandidate) {
+      onPresentationInteractionChange?.(false)
+      onStageTransfer?.(draggedCandidate.group.map((item) => item.id), activeDropGutter)
+    }
+    setDropGutter(null)
     pan.current = null
     dragCandidate.current = null
     resizeCandidate.current = null
@@ -421,10 +447,13 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
         try { canvasRef.current?.setPointerCapture(event.pointerId) } catch { /* synthetic or already released */ }
       }
       if (dragging.current) {
+        const anchor = onStageTransfer ? dropAnchorAt(event.clientX, event.clientY, rect) : null
+        setDropGutter((current) => current === anchor ? current : anchor)
         const point = toWorld(event.clientX, event.clientY, rect)
         dragPoint.current = { x: point.x - candidate.offsetX, y: point.y - candidate.offsetY }
         scheduleDraggedNode()
-        scheduleAutoPan({ x: event.clientX, y: event.clientY })
+        if (anchor) stopAutoPan()
+        else scheduleAutoPan({ x: event.clientX, y: event.clientY })
       }
     }
     if (link.current) {
@@ -467,6 +496,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
       </div>)}
       {returnGroups.map((group) => <div key={group.id} className="return-group-mat" data-return-group={group.id} style={{ left: group.x, top: group.y, width: group.width, height: group.height }}><span>{group.id} · {group.count} 个返回结果</span></div>)}
       {pendingZone && <div className="pending-return-zone" style={{ left: pendingZone.x, top: pendingZone.y, width: pendingZone.width, height: pendingZone.height }}><span>待确认结果区</span></div>}
+      {onStageTransfer && draggingId && <><div className={`drop-gutter drop-gutter-left ${dropGutter === 'left' ? 'active' : ''}`} data-testid="drop-gutter-left"><span>投送</span></div><div className={`drop-gutter drop-gutter-bottom ${dropGutter === 'bottom' ? 'active' : ''}`} data-testid="drop-gutter-bottom"><span>投送</span></div></>}
       {layoutPreview?.map((item) => { const node = byId.get(item.id); return node ? <div key={item.id} className="layout-ghost" style={{ left: item.x, top: item.y, width: node.width, height: node.height }}><span>{node.title}</span></div> : null })}
       <svg className="edges" width="1800" height="1100" aria-label="可编辑关系">{renderEdges.map((edge) => <EdgePath key={edge.id} edge={edge} from={byId.get(edge.from)} to={byId.get(edge.to)} selected={selectedEdgeId === edge.id} focused={Boolean(selectedId && (edge.from === selectedId || edge.to === selectedId))} onSelect={onSelectEdge} />)}{link.current && linkPoint && byId.get(link.current.from) && <TemporaryEdge from={byId.get(link.current.from)!} to={linkPoint} />}</svg>
       {selectionBounds && <div data-testid="selection-bounds" className="selection-bounds" style={{ left: selectionBounds.x - 10, top: selectionBounds.y - 10, width: selectionBounds.width + 20, height: selectionBounds.height + 20 }}>
@@ -475,13 +505,14 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
           <button type="button" aria-label="创建额外视图" title="创建额外视图 · Ctrl/Cmd+D" onClick={(event) => { event.stopPropagation(); onDuplicateSelection() }}><CopyPlus size={13} />额外视图</button>
           <button type="button" aria-label="整理所选" title="按语义整理所选 · Ctrl/Cmd+Shift+L" onClick={(event) => { event.stopPropagation(); onArrangeSelection() }}><LayoutGrid size={13} />整理</button>
           <button type="button" aria-label="创建子画布" title="把所选对象整理成子画布" onClick={(event) => { event.stopPropagation(); onCreateScopeFromSelection() }}><FolderTree size={13} />子画布</button>
+          {onStageTransfer && <button type="button" aria-label="投送所选" title="投送到工作空间、子画布或当前现场" onClick={(event) => { event.stopPropagation(); onStageTransfer(selectedIds, 'bottom') }}><ArrowDownToLine size={13} />投送</button>}
           <button aria-label="拖动选中组" title="拖动整组" onPointerDown={(event) => {
             event.stopPropagation()
             const first = nodes.find((node) => selectedIds.includes(node.id))
             if (!first) return
             const nodeElement = canvasRef.current?.querySelector<HTMLElement>(`[data-node-id="${first.id}"]`)
             const rect = nodeElement?.getBoundingClientRect() ?? event.currentTarget.getBoundingClientRect()
-            dragCandidate.current = { id: first.id, startX: event.clientX, startY: event.clientY, offsetX: (event.clientX - rect.left) / camera.zoom, offsetY: (event.clientY - rect.top) / camera.zoom, group: selectedIds.map((id) => { const member = nodes.find((item) => item.id === id)!; return { id, dx: member.x - first.x, dy: member.y - first.y } }) }
+            dragCandidate.current = { id: first.id, startX: event.clientX, startY: event.clientY, offsetX: (event.clientX - rect.left) / camera.zoom, offsetY: (event.clientY - rect.top) / camera.zoom, group: selectedIds.map((id) => { const member = nodes.find((item) => item.id === id)!; return { id, dx: member.x - first.x, dy: member.y - first.y } }), originals: selectedIds.map((id) => { const member = nodes.find((item) => item.id === id)!; return { id, x: member.x, y: member.y } }) }
           }}><Grip size={13} />拖动</button>
           <button type="button" className="danger" aria-label="删除所选" title="删除所选" onClick={(event) => { event.stopPropagation(); onDeleteSelection() }}><Trash2 size={13} /></button>
         </div>
@@ -521,7 +552,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
         }
         onSelect(node.id, additiveSelection(event))
         const groupIds = selectedIds.includes(node.id) && selectedIds.length > 1 ? selectedIds : [node.id]
-        dragCandidate.current = { id: node.id, startX: event.clientX, startY: event.clientY, offsetX: (event.clientX - event.currentTarget.getBoundingClientRect().left) / camera.zoom, offsetY: (event.clientY - event.currentTarget.getBoundingClientRect().top) / camera.zoom, group: groupIds.map((id) => { const member = nodes.find((item) => item.id === id)!; return { id, dx: member.x - node.x, dy: member.y - node.y } }) }
+        dragCandidate.current = { id: node.id, startX: event.clientX, startY: event.clientY, offsetX: (event.clientX - event.currentTarget.getBoundingClientRect().left) / camera.zoom, offsetY: (event.clientY - event.currentTarget.getBoundingClientRect().top) / camera.zoom, group: groupIds.map((id) => { const member = nodes.find((item) => item.id === id)!; return { id, dx: member.x - node.x, dy: member.y - node.y } }), originals: groupIds.map((id) => { const member = nodes.find((item) => item.id === id)!; return { id, x: member.x, y: member.y } }) }
       }} onClick={() => {
         if (suppressClick.current === node.id) suppressClick.current = null
       }} onResizeStart={(event) => {

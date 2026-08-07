@@ -1,11 +1,15 @@
 import type { ComponentProps, CSSProperties } from 'react'
 import { Play } from 'lucide-react'
-import { WorkspaceDock } from '../workspace/WorkspaceDock'
 import { ProjectCanvas } from '../canvas/ProjectCanvas'
 import { CanvasMiniMap } from '../canvas/CanvasMiniMap'
 import { CapabilityPopover } from './CapabilityPopover'
 import { NodeInfoPopover } from '../canvas/NodeInfoPopover'
 import { AgentContextSurface } from './AgentContextSurface'
+import { WorkspaceRailVNext } from './WorkspaceRailVNext'
+import { SurfaceDock, type SurfaceId } from './SurfaceDock'
+import { ProjectionSurface } from '../surfaces/ProjectionSurfaces'
+import { SurfaceComposerBar } from '../surfaces/SurfaceComposerBar'
+import { DropShelf } from '../drop/DropShelf'
 
 export interface CanvasSceneHostProps {
   readonly sceneStyle: CSSProperties
@@ -16,8 +20,13 @@ export interface CanvasSceneHostProps {
     readonly workspaceIntent: string
   }
   readonly capability: ComponentProps<typeof CapabilityPopover> | null
-  readonly dock: ComponentProps<typeof WorkspaceDock>
+  readonly workspaceRail: ComponentProps<typeof WorkspaceRailVNext>
+  readonly surface: SurfaceId
   readonly canvas: ComponentProps<typeof ProjectCanvas>
+  readonly projection: ComponentProps<typeof ProjectionSurface>
+  readonly composer: ComponentProps<typeof SurfaceComposerBar> | null
+  readonly surfaceDock: ComponentProps<typeof SurfaceDock>
+  readonly dropShelf: ComponentProps<typeof DropShelf>
   readonly miniMap: ComponentProps<typeof CanvasMiniMap>
   readonly breadcrumbs: {
     readonly projectLabel: string
@@ -37,9 +46,14 @@ export interface CanvasSceneHostProps {
 export function CanvasSceneHost(props: CanvasSceneHostProps) {
   return <section className={`scene intent-${props.sceneData.workspaceIntent}`} style={props.sceneStyle} data-project-id={props.sceneData.projectId} data-scope-id={props.sceneData.scopeId ?? undefined} data-workspace-id={props.sceneData.workspaceId ?? 'project-overview'} data-workspace-intent={props.sceneData.workspaceIntent}>
     {props.capability && <CapabilityPopover {...props.capability} />}
-    <WorkspaceDock {...props.dock} />
-    <ProjectCanvas {...props.canvas} />
-    <div className="canvas-hud" data-testid="canvas-hud"><CanvasMiniMap {...props.miniMap} /></div>
+    <WorkspaceRailVNext {...props.workspaceRail} />
+    <div className="vnext-surface-host" data-surface={props.surface}>
+      {props.surface === 'arrange' ? <ProjectCanvas {...props.canvas} /> : <ProjectionSurface {...props.projection} />}
+    </div>
+    {props.surface === 'arrange' && <div className="canvas-hud" data-testid="canvas-hud"><CanvasMiniMap {...props.miniMap} /></div>}
+    {props.surface !== 'arrange' && props.composer && <SurfaceComposerBar {...props.composer} />}
+    <SurfaceDock {...props.surfaceDock} />
+    <DropShelf {...props.dropShelf} />
     {props.agentSurface && <AgentContextSurface {...props.agentSurface} />}
     {props.nodeInfo && <NodeInfoPopover {...props.nodeInfo} />}
     {props.runPill && <button className={`run-pill ${props.runPill.status}`} title={props.runPill.status} onClick={props.runPill.onClick}><Play size={13} /> Agent 任务 · {props.runPill.label}</button>}

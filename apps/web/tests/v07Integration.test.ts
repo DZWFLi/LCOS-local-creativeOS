@@ -20,11 +20,11 @@ function functionBlock(source: string, name: string, nextName: string) {
 
 describe('v0.7.1 lightweight backend-integrated UI', () => {
   it('keeps one Workspace rail and replaces the second dock with a compact capability popover', () => {
-    expect(scene).toContain('<WorkspaceDock')
+    expect(scene).toContain('<WorkspaceRailVNext')
     expect(scene).toContain('<CapabilityPopover')
     expect(app).not.toContain('<UtilityDock')
     expect(scene).not.toContain('<UtilityDock')
-    expect(workspace).toContain('capability-launcher')
+    expect(scene).toContain('vnext-surface-host')
     expect(capability).toContain('快捷能力')
   })
 

@@ -164,6 +164,13 @@
 .vnext-workspace-preview span { color:var(--vnext-ink-44); font-size:9.5px; }
 .vnext-workspace-preview button { width:27px; height:27px; display:grid; place-items:center; border:0; border-radius:9px; background:transparent; color:var(--vnext-ink-44); }
 .vnext-workspace-preview button:hover { background:rgba(60,56,77,.05); color:var(--vnext-ink); }
+.vnext-workspace-menu { position:absolute; z-index:5; right:8px; bottom:-4px; transform:translateY(100%); display:grid; min-width:180px; padding:6px; border:1px solid rgba(39,37,49,.1); border-radius:13px; background:rgba(255,255,255,.98); box-shadow:0 16px 40px rgba(47,44,68,.14), inset 0 1px 0 #fff; }
+.vnext-workspace-menu button { display:flex; align-items:center; gap:8px; width:100%; min-height:31px; padding:6px 8px; border:0; border-radius:9px; background:transparent; color:var(--vnext-ink-66); font-size:10.5px; text-align:left; cursor:pointer; }
+.vnext-workspace-menu button:hover { background:rgba(71,66,94,.055); color:var(--vnext-ink); }
+.vnext-workspace-menu button:disabled { opacity:.35; cursor:default; }
+.vnext-workspace-menu button.danger { color:#a24f46; }
+.vnext-workspace-menu button.danger:hover { background:#fff0ed; }
+.vnext-workspace-menu .menu-rule { height:1px; margin:4px 2px; background:var(--vnext-hair); }
 
 /* -------------------------------------------------------------------------- */
 /* Persistent shell / independent surfaces                                    */
