@@ -94,6 +94,47 @@ afterEach(async () => {
 })
 
 describe('SqliteMetadataRepository', () => {
+  it('persists aggregate relations with view/workspace endpoints (B2)', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'local-core-relation-endpoints-'))
+    cleanup.push(directory)
+    const repository = new SqliteMetadataRepository(join(directory, 'metadata.sqlite'))
+    repository.save(disposableSnapshot())
+    const projectId = 'disposable-portasplit' as ProjectId
+    const workspaceId = 'workspace-main' as WorkspaceId
+    const viewId = 'view-brief' as ArtifactViewId
+    const noteId = 'note-1' as Checkpoint['id']
+
+    repository.upsertRelation({
+      id: 'relation-workspace-feedback' as Relation['id'],
+      projectId,
+      sourceEntityType: 'note',
+      sourceEntityId: noteId,
+      targetEntityType: 'workspace',
+      targetEntityId: workspaceId,
+      kind: 'feedback',
+      createdAt: '2026-08-07T08:00:00.000Z',
+      updatedAt: '2026-08-07T08:00:00.000Z',
+    })
+    repository.upsertRelation({
+      id: 'relation-view-delivery' as Relation['id'],
+      projectId,
+      sourceEntityType: 'view',
+      sourceEntityId: viewId,
+      targetEntityType: 'workspace',
+      targetEntityId: workspaceId,
+      kind: 'deliverable',
+      createdAt: '2026-08-07T08:00:00.000Z',
+      updatedAt: '2026-08-07T08:00:00.000Z',
+    })
+
+    const relations = repository.getRelations(projectId)
+    const workspaceTargets = relations.filter((relation) => relation.targetEntityType === 'workspace')
+    expect(workspaceTargets).toHaveLength(2)
+    expect(workspaceTargets.map((relation) => relation.kind)).toEqual(expect.arrayContaining(['feedback', 'deliverable']))
+    const viewSource = relations.find((relation) => relation.sourceEntityType === 'view')
+    expect(viewSource?.sourceEntityId).toBe(viewId)
+  })
+
   it('persists workspace frame bounds with CAS version and no semantic graph bump (B1)', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'local-core-workspace-frame-'))
     cleanup.push(directory)

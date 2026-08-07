@@ -72,6 +72,15 @@ export class RuntimeBridge {
     }
   }
 
+  /** B4 — Core 收口的 Workbench Merge；成功后重载 Project Truth。 */
+  async mergeWorkbench(workbenchScopeId: string): Promise<{ ok: boolean; error?: string; result?: { mergedViews: number; restoredRefs: number; removedViews: number }; state?: PersistedPrototypeState }> {
+    const call = await this.client.mergeWorkbench(this.projectId, workbenchScopeId)
+    if (!call.result.ok) return { ok: false, error: call.result.error.message }
+    const reload = await this.loadProject()
+    if (reload.source !== 'runtime' || reload.state === null) return { ok: false, error: reload.error ?? 'Reload after merge failed.' }
+    return { ok: true, result: call.result.value, state: reload.state }
+  }
+
   async loadCatalog(): Promise<CatalogLoadResult> {
     try {
       const call = await this.client.catalog()

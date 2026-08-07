@@ -4,7 +4,7 @@ export type NodeDisplayMode = 'compact' | 'standard' | 'expanded'
 export type WorkspaceIntent = 'understand' | 'explore' | 'build' | 'decide' | null
 export type RunStatus = 'queued' | 'running' | 'waiting_input' | 'review' | 'completed' | 'failed' | 'cancelled'
 export type ArtifactReviewStatus = 'idle' | 'pending' | 'accepted'
-export type ScopeKind = 'root' | 'collection' | 'context' | 'delivery'
+export type ScopeKind = 'root' | 'collection' | 'context' | 'delivery' | 'temporary-workbench'
 export type PreviewAvailability = 'not-generated' | 'ready' | 'failed' | 'unsupported'
 export type RuntimeImportState = 'temporary' | 'importing' | 'persisted' | 'failed'
 

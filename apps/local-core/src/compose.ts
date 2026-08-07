@@ -19,6 +19,7 @@ import { ResourceUploadSessionService } from './resources/resource-upload-sessio
 import { UniversalResourceImportService } from './resources/universal-resource-import-service.js'
 import type { RuntimeApplicationService } from './runtime-application-service.js'
 import { RuntimeReviewService } from './runtime-review-service.js'
+import { WorkbenchService } from './workbench-service.js'
 import type { LocalCoreServerOptions } from './server.js'
 
 export interface LocalCoreServices {
@@ -44,6 +45,7 @@ export interface LocalCoreServices {
   readonly ownsConversationService: boolean
   readonly conversations: ConversationImportService | undefined
   readonly previewWorker: PreviewWorkerService | undefined
+  readonly workbench: WorkbenchService | undefined
 }
 
 /** 服务装配：把 options 解析成 createLocalCoreServer 需要的一组服务。 */
@@ -80,5 +82,6 @@ export function composeLocalCoreServices(options: LocalCoreServerOptions = {}): 
           cacheRoot: options.previewCacheRoot ?? `${metadata.databasePath}.preview-cache`,
         }),
       })),
+    workbench: options.workbenchService ?? (metadata === undefined ? undefined : new WorkbenchService(metadata)),
   }
 }

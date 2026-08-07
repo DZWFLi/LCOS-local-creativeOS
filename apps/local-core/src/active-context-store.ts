@@ -14,11 +14,13 @@ export interface ActiveContextInput {
   readonly visibleViewIds?: readonly string[]
   readonly expectedVersion?: number
   readonly updatedBy?: 'web' | 'codex' | 'core'
+  readonly sessionId?: string
 }
 
 export interface ActiveContextProjection extends ActiveContextV2 {
   readonly workspaceId: string | null
   readonly scopeId: string | null
+  readonly sessionId?: string
   readonly selectedArtifacts: readonly {
     readonly viewId: string
     readonly artifactId: string
@@ -278,6 +280,7 @@ export class ActiveContextStore {
       version,
       updatedAt,
       updatedBy: input.updatedBy ?? 'web',
+      ...(input.sessionId === undefined ? {} : { sessionId: input.sessionId }),
       selectedArtifacts,
       contextArtifacts,
       ...(targetProjection === undefined ? {} : { targetArtifact: targetProjection }),

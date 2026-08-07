@@ -249,6 +249,7 @@ export interface LocalCoreClient {
   ), signal?: AbortSignal): Promise<RuntimeCall<ProjectCatalogEntry>>
   metadataStatus(signal?: AbortSignal): Promise<RuntimeCall<MetadataStoreStatus>>
   projectGraph(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<ProjectGraphSnapshot>>
+  mergeWorkbench(projectId: string, workbenchScopeId: string, signal?: AbortSignal): Promise<RuntimeCall<{ mergedViews: number; restoredRefs: number; removedViews: number }>>
   createTextArtifact(projectId: string, input: {
     readonly title?: string
     readonly body: string
@@ -772,6 +773,17 @@ export function createLocalCoreClient(): LocalCoreClient {
       return request(`/projects/${encodeURIComponent(projectId)}/graph`, {
         signal,
         decode: decodeResult<ProjectGraphSnapshot>,
+      })
+    },
+    mergeWorkbench(projectId, workbenchScopeId, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/workbench/merge`, {
+        signal,
+        init: {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ workbenchScopeId }),
+        },
+        decode: decodeResult<{ mergedViews: number; restoredRefs: number; removedViews: number }>,
       })
     },
     createTextArtifact(projectId, input, signal) {

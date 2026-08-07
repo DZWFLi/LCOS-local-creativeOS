@@ -54,7 +54,7 @@ export interface Project {
 
 // ==================== Scope ====================
 
-export type ScopeKind = 'root' | 'collection' | 'context' | 'delivery'
+export type ScopeKind = 'root' | 'collection' | 'context' | 'delivery' | 'temporary-workbench'
 
 export interface Scope {
   readonly id: ScopeId
@@ -155,7 +155,10 @@ export interface ArtifactView {
 // Relation connects Domain Entities, not Views.
 // Deleting a view does NOT delete the business relationship.
 
-export type RelationEntityType = 'artifact' | 'note' | 'scope'
+// Relation connects Domain Entities or View/Workspace endpoints.
+// View/Workspace endpoints express aggregate relations (e.g. [Feedback] -> Workspace -> [Deliverable Collection])
+// and do NOT imply a relation for every member node; the Context Compiler expands them per Workspace Context Policy.
+export type RelationEntityType = 'artifact' | 'note' | 'scope' | 'view' | 'workspace'
 
 export interface Relation {
   readonly id: RelationId

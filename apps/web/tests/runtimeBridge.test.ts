@@ -130,6 +130,7 @@ function mockClient(overrides: Partial<LocalCoreClient> = {}): LocalCoreClient {
     importObsidianNotes: unavailable,
     metadataStatus: unavailable,
     projectGraph: vi.fn(async () => call(snapshot())),
+    mergeWorkbench: vi.fn(async () => call({ mergedViews: 0, restoredRefs: 0, removedViews: 0 })),
     createTextArtifact: unavailable,
     exportLcosproj: unavailable,
     exportAllLcosproj: unavailable,

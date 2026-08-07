@@ -1081,7 +1081,7 @@ export function App() {
     const next: CanvasScope = {
       id: workbenchScopeId,
       label: '当前现场',
-      kind: 'collection',
+      kind: 'temporary-workbench',
       parentScopeId: rootScope.id,
       camera: { x: 150, y: 88, zoom: 1 },
       layoutMode: 'manual',
@@ -1153,6 +1153,26 @@ export function App() {
 
   const mergeWorkbenchViews = useCallback(() => {
     if (!workbenchScope) { setNotice('当前没有可并回的工作现场'); return }
+    if (bootMode === 'runtime') {
+      void bridgeRef.current.mergeWorkbench(workbenchScope.id).then((outcome) => {
+        if (!outcome.ok) { setNotice(`并回失败：${outcome.error ?? '未知错误'}`); return }
+        if (outcome.state) {
+          resetGraph({ nodes: outcome.state.nodes, edges: outcome.state.edges })
+          setWorkspaces(outcome.state.workspaces)
+          setScopes(outcome.state.scopes)
+          setWorkspaceId(null)
+          const rootScope = outcome.state.scopes.find((scope) => scope.kind === 'root') ?? outcome.state.scopes[0]
+          setScopeId(rootScope?.id ?? outcome.state.activeScopeId)
+          setSelectedIds([])
+          setSelectedEdgeId(null)
+        }
+        setActiveSurface('arrange')
+        const merged = outcome.result?.mergedViews ?? 0
+        const restored = outcome.result?.restoredRefs ?? 0
+        setNotice(`已并回 ${merged} 个新稳定结果${restored > 0 ? `，复位 ${restored} 个原项目引用` : ''}；临时现场已清空`)
+      })
+      return
+    }
     const benchNodes = nodes.filter((node) => (node.scopeId ?? rootScope.id) === workbenchScope.id)
     if (!benchNodes.length) { enterScopeKeepingSelection(rootScope.id, []); setNotice('当前现场已经是空的'); return }
     const rootNodes = nodes.filter((node) => (node.scopeId ?? rootScope.id) === rootScope.id)

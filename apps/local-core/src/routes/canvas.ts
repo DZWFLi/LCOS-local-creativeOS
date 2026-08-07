@@ -216,7 +216,8 @@ export async function handleCanvasRoute(ctx: CanvasRouteContext): Promise<boolea
       || (input.viewport !== undefined && (!isRecord(input.viewport) || typeof input.viewport.x !== 'number' || typeof input.viewport.y !== 'number' || typeof input.viewport.zoom !== 'number'))
       || (input.expectedVersion !== undefined && typeof input.expectedVersion !== 'number')
       || (input.updatedBy !== undefined && !['web', 'codex', 'core'].includes(String(input.updatedBy)))
-      || Object.keys(input).some((key) => !['workspaceId', 'scopeId', 'selectedViewIds', 'pinnedContextIds', 'excludedContextIds', 'targetArtifactId', 'targetRevisionId', 'visibleViewIds', 'viewport', 'expectedVersion', 'updatedBy'].includes(key))) {
+      || (input.sessionId !== undefined && typeof input.sessionId !== 'string')
+      || Object.keys(input).some((key) => !['workspaceId', 'scopeId', 'selectedViewIds', 'pinnedContextIds', 'excludedContextIds', 'targetArtifactId', 'targetRevisionId', 'visibleViewIds', 'viewport', 'expectedVersion', 'updatedBy', 'sessionId'].includes(key))) {
       sendJson(response, 400, failure('INVALID_ARGUMENT', 'Active Context requires scopeId and string ID arrays.'))
       return true
     }
