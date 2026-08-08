@@ -1,20 +1,26 @@
 import {
-  Clock3,
-  FileImage,
-  FileStack,
-  FileText,
-  Image as ImageIcon,
-  Layers3,
-  Link2,
-  LockKeyhole,
-  MessageSquareText,
   CircleHelp,
-  Play,
-  Presentation,
+  Clock3,
+  FileStack,
+  ImageOff,
   Sparkles,
 } from 'lucide-react'
 import type { CanvasNode, NodeDisplayMode, RunStatus } from '../../model'
-import { nodeMeta, runStatusLabel } from '../../model'
+import { runStatusLabel } from '../../model'
+import {
+  ArchiveGlyph,
+  AudioGlyph,
+  CollectionGlyph,
+  DecisionGlyph,
+  DocumentGlyph,
+  FeedbackGlyph,
+  ImageGlyph,
+  LinkGlyph,
+  NoteGlyph,
+  RunGlyph,
+  SessionGlyph,
+  VideoGlyph,
+} from '../design/LcosGlyphs'
 
 interface Props {
   node: CanvasNode
@@ -27,6 +33,7 @@ interface Props {
 }
 
 export type NodeVisualFamily = 'reference' | 'document' | 'feedback' | 'note' | 'context' | 'process' | 'decision'
+export type FileIdentity = 'image' | 'video' | 'audio' | 'pdf' | 'ppt' | 'markdown' | 'link' | 'archive' | 'file'
 
 export function nodeVisualFamily(node: CanvasNode): NodeVisualFamily {
   if (node.kind === 'process') return 'process'
@@ -35,79 +42,154 @@ export function nodeVisualFamily(node: CanvasNode): NodeVisualFamily {
   const text = `${node.title} ${node.subtitle}`.toLowerCase()
   if (text.includes('feedback') || text.includes('反馈') || text.includes('change：') || text.includes('keep：')) return 'feedback'
   if (node.kind === 'note') return 'note'
-  if (getFileKind(node) === 'image') return 'reference'
-  return 'document'
+  return detectFileIdentity(node) === 'image' ? 'reference' : 'document'
 }
 
-export function CanvasNodeVisual({ node, density, runId, runStatus, pending, onDetails, showDetails }: Props) {
-  const family = nodeVisualFamily(node)
-  if (family === 'process') return <ProcessVisual node={node} density={density} runId={runId} runStatus={runStatus} onDetails={onDetails} showDetails={showDetails} />
-  if (family === 'context') return <ContextVisual node={node} density={density} onDetails={onDetails} showDetails={showDetails} />
-  if (family === 'decision') return <DecisionVisual node={node} density={density} onDetails={onDetails} showDetails={showDetails} />
-  if (family === 'feedback') return <FeedbackVisual node={node} density={density} onDetails={onDetails} showDetails={showDetails} />
-  if (family === 'note') return <NoteVisual node={node} density={density} onDetails={onDetails} showDetails={showDetails} />
-  return <ArtifactVisual node={node} density={density} pending={pending} family={family} onDetails={onDetails} showDetails={showDetails} />
+export function CanvasNodeVisual(props: Props) {
+  const family = nodeVisualFamily(props.node)
+  if (family === 'process') return <RunObject {...props} />
+  if (family === 'context') return <CollectionObject {...props} />
+  if (family === 'decision') return <DecisionObject {...props} />
+  if (family === 'feedback') return <FeedbackObject {...props} />
+  if (family === 'note') return <NoteObject {...props} />
+  return <ContentObject {...props} />
 }
 
-function ArtifactVisual({ node, density, pending, family, onDetails, showDetails }: Pick<Props, 'node' | 'density' | 'pending' | 'onDetails' | 'showDetails'> & { family: 'reference' | 'document' }) {
-  const meta = nodeMeta[node.kind]
-  const fileKind = getFileKind(node)
-  const Icon = fileKind === 'ppt' ? Presentation : fileKind === 'image' ? ImageIcon : fileKind === 'link' ? Link2 : FileText
-  const stateLabel = node.historical ? '历史版本' : node.current ? '当前版本' : node.draft ? 'AI 生成草稿' : '原始来源'
-  const revisionCount = Math.max(1, node.revisionCount ?? (node.revisionId ? 1 : 0))
-  const hasRevisionStack = revisionCount > 1
+function ContentObject({ node, density, pending, onDetails, showDetails }: Props) {
+  const kind = detectFileIdentity(node)
+  if (kind === 'image') return <ImageObject node={node} density={density} pending={pending} onDetails={onDetails} showDetails={showDetails} />
+  if (kind === 'link') return <LinkObject node={node} pending={pending} onDetails={onDetails} showDetails={showDetails} />
+  if (kind === 'video') return <MediaObject node={node} kind="video" onDetails={onDetails} showDetails={showDetails} />
+  if (kind === 'audio') return <MediaObject node={node} kind="audio" onDetails={onDetails} showDetails={showDetails} />
+  return <DocumentObject node={node} kind={kind} density={density} pending={pending} onDetails={onDetails} showDetails={showDetails} />
+}
 
-  return <div className={`artifact-stack-shell family-${family} ${hasRevisionStack ? 'has-revisions' : ''}`} data-revision-count={hasRevisionStack ? revisionCount : undefined}>
-    {hasRevisionStack && <div className="revision-backplates" aria-hidden="true">{Array.from({ length: Math.min(3, revisionCount - 1) }, (_, index) => <i key={index} />)}</div>}
-    <div className={`artifact-visual artifact-family-${family} ${node.kind === 'generated' ? 'artifact-generated-material' : ''}`}>
-      <header className="artifact-topline">
-        <span className="artifact-kind"><i style={{ background: meta.accent }} />{family === 'reference' ? '视觉参考' : meta.label}</span>
-        <span className="artifact-format"><Icon size={12} />{fileKind.toUpperCase()}</span>
-      </header>
-      <PreviewArtwork node={node} density={density} family={family} />
-      <footer className="artifact-copy">
-        <strong>{node.title}</strong>
-        <span>{pending ? '结果待回收 · 等待确认' : node.subtitle}</span>
-        <small className="artifact-source-line"><Clock3 size={10} />{formatNodeTime(node.createdAt)}{node.sourceRunId ? ` · ${node.sourceRunId}` : ''}</small>
-        {density === 'expanded' && <div className="artifact-expanded-meta">
-          <span><Presentation size={11} />{node.pageCount ? `${node.pageCount} 页` : fileKind.toUpperCase()}</span>
-          <span><FileStack size={11} />{node.revisionLabel ?? (node.revisionId ? 'Revision' : 'External')}</span>
-          {node.sourceRunId && <span><Link2 size={11} />{node.sourceRunId}</span>}
-          <span><Clock3 size={11} />{formatNodeTime(node.createdAt)}</span>
-        </div>}
-        {density === 'expanded' && <small className="artifact-provenance">{stateLabel}{node.sourceProvider ? ` · ${node.sourceProvider}` : ''}{node.parentRunId ? ` · ${node.parentRunId}` : ''}</small>}
-      </footer>
-      <div className="artifact-statuses">
-        {node.runtimeState === 'importing' && <span className="status-chip draft">Importing</span>}
-        {node.runtimeState === 'failed' && <span className="status-chip danger">Import failed</span>}
-        {node.historical && <span className="status-chip historical">历史</span>}
-        {node.current && <span className="status-chip current">当前</span>}
-        {node.draft && <span className="status-chip draft">待确认</span>}
-        {node.kind === 'generated' && <span className="iridescent-token" aria-label="AI 生成结果"><Sparkles size={12} /></span>}
-      </div>
-      {node.resultGroupId && <span className="return-origin"><FileStack size={11} />{node.resultGroupId}</span>}
-      {node.kind === 'generated' && <span className="generated-material-glint" aria-hidden="true" />}
-      {!hasRevisionStack && <InfoButton show={showDetails} label={`查看 ${node.title} 信息`} onDetails={onDetails} />}
-    </div>
-    {hasRevisionStack && <button className="revision-stack-trigger pressable" aria-label={`查看 ${node.title} 的 ${revisionCount} 个版本`} title={`${revisionCount} 个版本`} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onDetails() }}><span>{node.revisionLabel ?? `V${revisionCount}`}</span><b>{revisionCount}</b></button>}
+function ImageObject({ node, pending, onDetails, showDetails }: Pick<Props, 'node' | 'density' | 'pending' | 'onDetails' | 'showDetails'>) {
+  const src = node.previewDataUrl ?? node.previewUrl
+  return <div className="lcos-object lcos-image-object">
+    {src ? <img src={src} alt={node.title} draggable={false} onDragStart={(event) => event.preventDefault()} /> : <div className="lcos-image-fallback"><ImageOff size={24}/></div>}
+    <div className="lcos-image-caption"><span className="lcos-type-tag">IMG</span><strong>{node.title}</strong></div>
+    <ObjectState node={node} pending={pending}/>
+    <InfoButton show={showDetails} label={`查看 ${node.title} 信息`} onDetails={onDetails}/>
   </div>
 }
 
-function PreviewArtwork({ node, density }: { node: CanvasNode; density: NodeDisplayMode; family: 'reference' | 'document' }) {
-  const fileKind = getFileKind(node)
-  const previewSource = node.previewDataUrl ?? node.previewUrl
-  const Icon = fileKind === 'ppt' ? Presentation : fileKind === 'image' ? ImageIcon : fileKind === 'link' ? Link2 : FileText
-  if (density === 'compact') return <div className={`preview-art compact source-identity kind-${fileKind}`}><Icon size={20} /><span>{fileKind.toUpperCase()}</span></div>
-  if (previewSource) return <div className="preview-art image"><img src={previewSource} alt={node.title} draggable={false} onDragStart={(event) => event.preventDefault()} /></div>
-  const domain = sourceDomain(node)
-  return <div className={`preview-art source-identity kind-${fileKind}`}>
-    <span className="source-file-icon"><Icon size={fileKind === 'image' ? 34 : 38} strokeWidth={1.45} /></span>
-    <div className="source-file-copy">
-      <small>{fileKind === 'ppt' ? 'POWERPOINT' : fileKind === 'pdf' ? 'PDF DOCUMENT' : fileKind === 'md' ? 'MARKDOWN' : fileKind === 'link' ? domain ?? 'WEB LINK' : fileKind === 'image' ? 'IMAGE SOURCE' : 'LOCAL FILE'}</small>
-      <b>{node.title}</b>
-      <p>{node.previewText?.trim() || (fileKind === 'link' ? node.subtitle || domain || '外部链接引用' : node.subtitle || previewStatusCopy(node))}</p>
+function DocumentObject({ node, kind, density, pending, onDetails, showDetails }: Pick<Props, 'node' | 'density' | 'pending' | 'onDetails' | 'showDetails'> & { kind: FileIdentity }) {
+  const Icon = kind === 'archive' ? ArchiveGlyph : DocumentGlyph
+  const tag = kind === 'markdown' ? 'MD' : kind === 'ppt' ? 'PPT' : kind === 'pdf' ? 'PDF' : kind === 'archive' ? 'ZIP' : fileExtension(node.title) || 'FILE'
+  const preview = node.previewText?.trim()
+  return <div className={`lcos-object lcos-document-object file-${kind}`}>
+    <div className="lcos-document-sheet">
+      <div className="lcos-document-corner"/>
+      <Icon className="lcos-document-glyph"/>
+      {density !== 'compact' && <div className="lcos-document-lines" aria-hidden="true"><i/><i/><i/><i/><i/></div>}
     </div>
+    <div className="lcos-object-caption">
+      <span className="lcos-type-tag">{tag}</span>
+      <strong>{node.title}</strong>
+      {density === 'expanded' && preview && <small>{preview}</small>}
+    </div>
+    {(node.pageCount || node.revisionCount) && <div className="lcos-corner-meta">{node.pageCount ? `${node.pageCount}p` : `${node.revisionCount}v`}</div>}
+    {node.revisionCount && node.revisionCount > 1 && <div className="lcos-revision-stack" aria-hidden="true"><i/><i/></div>}
+    <ObjectState node={node} pending={pending}/>
+    <InfoButton show={showDetails} label={`查看 ${node.title} 信息`} onDetails={onDetails}/>
   </div>
+}
+
+function LinkObject({ node, pending, onDetails, showDetails }: Pick<Props, 'node' | 'pending' | 'onDetails' | 'showDetails'>) {
+  const domain = sourceDomain(node) ?? 'LINK'
+  const initial = domain.replace(/^www\./, '').charAt(0).toUpperCase() || '↗'
+  return <div className="lcos-object lcos-link-object">
+    <span className="lcos-favicon">{initial}</span>
+    <div><small>{domain}</small><strong>{node.title}</strong><span>{node.subtitle}</span></div>
+    <LinkGlyph className="lcos-link-glyph"/>
+    <ObjectState node={node} pending={pending}/>
+    <InfoButton show={showDetails} label={`查看 ${node.title} 信息`} onDetails={onDetails}/>
+  </div>
+}
+
+function MediaObject({ node, kind, onDetails, showDetails }: Pick<Props, 'node' | 'onDetails' | 'showDetails'> & { kind: 'video' | 'audio' }) {
+  const Icon = kind === 'video' ? VideoGlyph : AudioGlyph
+  const src = node.previewDataUrl ?? node.previewUrl
+  return <div className={`lcos-object lcos-media-object media-${kind}`}>
+    <div className="lcos-media-stage">{kind === 'video' && src ? <img src={src} alt="" draggable={false}/> : <Icon className="lcos-media-glyph"/>}</div>
+    <div className="lcos-object-caption"><span className="lcos-type-tag">{kind === 'video' ? 'VID' : 'AUD'}</span><strong>{node.title}</strong></div>
+    <InfoButton show={showDetails} label={`查看 ${node.title} 信息`} onDetails={onDetails}/>
+  </div>
+}
+
+function FeedbackObject({ node, density, onDetails, showDetails }: Props) {
+  const { change, keep } = feedbackSummary(node.subtitle)
+  return <div className="lcos-object lcos-feedback-object">
+    <div className="lcos-feedback-rail"/>
+    <header><FeedbackGlyph/><span className="lcos-type-tag">FBK</span></header>
+    <strong>{node.title}</strong>
+    <p><b>Change</b>{change}</p>
+    {density !== 'compact' && <p><b>Keep</b>{keep}</p>}
+    <InfoButton show={showDetails} label={`查看 ${node.title} 信息`} onDetails={onDetails}/>
+  </div>
+}
+
+function CollectionObject({ node, density, onDetails, showDetails }: Props) {
+  const versions = Math.max(1, node.revisionCount ?? 0)
+  return <div className="lcos-object lcos-collection-object">
+    <header><CollectionGlyph/><span className="lcos-type-tag">CTX</span><strong>{node.title}</strong></header>
+    {density !== 'compact' && <div className="lcos-context-spine" aria-hidden="true"><i/><i/><i/><i/></div>}
+    <footer><span>{node.contextCount ?? node.workspaceIds?.length ?? 0} refs</span>{versions > 1 && <button className="lcos-version-beads" type="button" aria-label={`查看 ${node.title} 的 ${versions} 个上下文版本`} title="查看上下文版本" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onDetails() }}>{Array.from({ length: Math.min(3, versions) }, (_, i) => <i key={i}/>)}</button>}</footer>
+    <InfoButton show={showDetails} label={`查看 ${node.title} 信息`} onDetails={onDetails}/>
+  </div>
+}
+
+function RunObject({ node, runId, runStatus, onDetails, showDetails }: Props) {
+  const status = node.runStatus ?? runStatus
+  const label = status ? runStatusLabel[status] : '执行记录'
+  return <div className={`lcos-object lcos-run-object status-${status ?? 'idle'}`}>
+    <span className="lcos-run-machine"><RunGlyph/></span>
+    <div><span className="lcos-type-tag">RUN</span><strong>{node.title}</strong><small>{node.commandText || node.subtitle || label}</small></div>
+    <div className="lcos-run-state"><i/>{label}</div>
+    {status === 'running' && <span className="lcos-run-pulse" aria-hidden="true"/>}
+    {runId && <span className="lcos-sr-only">{runId}</span>}
+    <InfoButton show={showDetails} label={`查看 ${node.title} 信息`} onDetails={onDetails}/>
+  </div>
+}
+
+function DecisionObject({ node, onDetails, showDetails }: Props) {
+  return <div className="lcos-object lcos-decision-object"><DecisionGlyph/><div><span className="lcos-type-tag">DEC</span><strong>{node.title}</strong><small>{node.subtitle}</small></div><InfoButton show={showDetails} label={`查看 ${node.title} 信息`} onDetails={onDetails}/></div>
+}
+
+function NoteObject({ node, density, onDetails, showDetails }: Props) {
+  return <div className="lcos-object lcos-note-object"><NoteGlyph/><div><span className="lcos-type-tag">NOTE</span><strong>{node.title}</strong>{density !== 'compact' && <small>{node.subtitle}</small>}</div><InfoButton show={showDetails} label={`查看 ${node.title} 信息`} onDetails={onDetails}/></div>
+}
+
+function ObjectState({ node, pending }: { node: CanvasNode; pending: boolean }) {
+  const state = node.runtimeState === 'failed' ? 'failed' : node.fileAvailability === 'stale' ? 'stale' : pending || node.draft ? 'draft' : node.current ? 'current' : null
+  if (!state) return null
+  return <span className={`lcos-object-state state-${state}`} title={state === 'failed' ? '导入失败' : state === 'stale' ? '来源已变化' : state === 'draft' ? 'Draft' : 'Current'} />
+}
+
+function InfoButton({ show, label, onDetails }: { show: boolean; label: string; onDetails: () => void }) {
+  if (!show) return null
+  return <button className="node-details lcos-object-info" aria-label={label} title={label} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onDetails() }}><CircleHelp size={12}/></button>
+}
+
+export function detectFileIdentity(node: CanvasNode): FileIdentity {
+  const name = node.title.toLowerCase()
+  const type = node.fileType?.toLowerCase() ?? node.previewMimeType?.toLowerCase() ?? ''
+  const linkLike = [node.previewText, node.observedPath, node.subtitle, node.title].some((value) => value ? /https?:\/\//i.test(value) : false)
+  if (/\.(mp4|mov|webm|m4v|avi)$/i.test(name) || type.startsWith('video/')) return 'video'
+  if (/\.(mp3|wav|m4a|aac|flac|ogg)$/i.test(name) || type.startsWith('audio/')) return 'audio'
+  if (/\.(jpg|jpeg|png|webp|gif|bmp|svg|avif)$/i.test(name) || type.startsWith('image/') || node.previewDataUrl || (node.previewUrl && !linkLike)) return 'image'
+  if (/\.pdf$/i.test(name) || type.includes('pdf')) return 'pdf'
+  if (/\.(ppt|pptx|key)$/i.test(name) || type.includes('presentation') || node.pageCount) return 'ppt'
+  if (/\.(md|markdown|txt|json)$/i.test(name) || type.includes('markdown') || type === 'text' || type.startsWith('text/')) return 'markdown'
+  if (linkLike || type === 'url' || type === 'link' || type === 'web') return 'link'
+  if (/\.(zip|rar|7z|tar|gz)$/i.test(name) || type.includes('zip') || type.includes('archive')) return 'archive'
+  return 'file'
+}
+
+function fileExtension(name: string) {
+  const match = name.match(/\.([a-z0-9]{1,6})$/i)
+  return match?.[1]?.toUpperCase() ?? ''
 }
 
 function sourceDomain(node: CanvasNode): string | null {
@@ -120,27 +202,6 @@ function sourceDomain(node: CanvasNode): string | null {
   return null
 }
 
-function previewStatusCopy(node: CanvasNode): string {
-  if (node.previewStatus === 'ready') return 'Preview ready'
-  if (node.previewStatus === 'failed') return 'Preview failed'
-  if (node.previewStatus === 'unsupported') return 'Preview unsupported'
-  return 'Preview not generated'
-}
-
-function FeedbackVisual({ node, density, onDetails, showDetails }: { node: CanvasNode; density: NodeDisplayMode; onDetails: () => void; showDetails: boolean }) {
-  const { change, keep } = feedbackSummary(node.subtitle)
-  return <div className="feedback-visual">
-    <header><span><MessageSquareText size={13} />反馈批注</span><small>{node.current ? 'CURRENT' : 'UNRESOLVED'}</small></header>
-    <strong>{node.title}</strong>
-    <div className="feedback-points">
-      <p><b>Change</b><span>{change}</span></p>
-      <p><b>Keep</b><span>{keep}</span></p>
-    </div>
-    {density === 'expanded' && <footer><span>锚定当前提案</span><span>07/17 · 客户</span></footer>}
-    <InfoButton show={showDetails} label={`查看 ${node.title} 信息`} onDetails={onDetails} />
-  </div>
-}
-
 function feedbackSummary(subtitle: string): { change: string; keep: string } {
   const changeMatch = subtitle.match(/Change[：:]\s*([^·]+)/i)
   const keepMatch = subtitle.match(/Keep[：:]\s*(.+)$/i)
@@ -150,61 +211,25 @@ function feedbackSummary(subtitle: string): { change: string; keep: string } {
   }
 }
 
-function ContextVisual({ node, density, onDetails, showDetails }: { node: CanvasNode; density: NodeDisplayMode; onDetails: () => void; showDetails: boolean }) {
-  return <div className="context-visual">
-    <header><span><Layers3 size={13} />内容集合</span><InfoButton show={showDetails} label="查看上下文信息" onDetails={onDetails} /></header>
-    <strong>{node.title}</strong>
-    {density !== 'compact' && <div className="context-stack"><i /><i /><i /></div>}
-    <footer><span>{node.workspaceIds?.length ?? 0} 个工作空间</span><span>{formatNodeTime(node.createdAt)}</span></footer>
-    {density === 'expanded' && <p className="context-summary">{node.subtitle || '集合只负责组织内容；实际语义与下一步由本地 Agent 判断。'}</p>}
-  </div>
-}
-
-function ProcessVisual({ node, density, runId, runStatus, onDetails, showDetails }: { node: CanvasNode; density: NodeDisplayMode; runId: string; runStatus: RunStatus | null; onDetails: () => void; showDetails: boolean }) {
-  const liveStatus = node.runStatus ?? (node.parentRunId === runId ? runStatus : null)
-  const status = liveStatus ?? (node.subtitle.toLowerCase().includes('completed') || node.subtitle.includes('已完成') ? 'completed' : 'archived')
-  const statusCopy = liveStatus ? runStatusLabel[liveStatus] : node.subtitle
-  return <div className={`process-visual status-${status}`}>
-    <span className="process-icon"><Play size={14} fill="currentColor" /></span>
-    <div><small>{node.sourceProvider ? `执行路径 · ${node.sourceProvider}` : '执行路径'}</small><strong>{node.title}</strong><span>{statusCopy}</span><em>{node.commandText ?? node.sourcePrompt ?? '执行上下文与目标由来源 Run 冻结'} · {formatNodeTime(node.createdAt)}</em><footer className="process-counts"><span>Context {node.contextCount ?? 0}</span><span>Target {node.targetCount ?? 0}</span><span>Output {node.outputCount ?? 0}</span></footer></div>
-    <InfoButton show={showDetails} label="查看执行信息" onDetails={onDetails} />
-  </div>
-}
-
-function DecisionVisual({ node, density, onDetails, showDetails }: { node: CanvasNode; density: NodeDisplayMode; onDetails: () => void; showDetails: boolean }) {
-  return <div className="decision-visual decision-material">
-    <span className="decision-icon"><span className="decision-icon-chrome" aria-hidden="true" /><LockKeyhole size={17} /></span>
-    <div><small>已确认决策</small><strong>{node.title}</strong><span>{node.subtitle}</span>{density === 'expanded' && <em>锁定于 {formatNodeTime(node.createdAt)}{node.sourceRunId ? ` · ${node.sourceRunId}` : ''}</em>}</div>
-    <span className="status-chip locked">LOCKED</span>
-    <span className="decision-material-glint" aria-hidden="true" />
-    <InfoButton show={showDetails} label="查看决策信息" onDetails={onDetails} />
-  </div>
-}
-
-
-function NoteVisual({ node, density, onDetails, showDetails }: { node: CanvasNode; density: NodeDisplayMode; onDetails: () => void; showDetails: boolean }) {
-  return <div className="note-visual"><MessageSquareText size={16} /><div><small>文本</small><strong>{node.title}</strong><span>{node.subtitle}</span>{density === 'expanded' && <em>{formatNodeTime(node.createdAt)}{node.sourceRunId ? ` · ${node.sourceRunId}` : ''}</em>}</div><InfoButton show={showDetails} label={`查看 ${node.title} 信息`} onDetails={onDetails} /></div>
-}
-
-function InfoButton({ show, label, onDetails }: { show: boolean; label: string; onDetails: () => void }) {
-  if (!show) return null
-  return <button className="node-details pressable" aria-label={label} title={label} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onDetails() }}><CircleHelp size={12} /></button>
-}
-
 function formatNodeTime(value?: string): string {
-  if (!value) return '时间未记录'
+  if (!value) return ''
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
 }
 
-function getFileKind(node: CanvasNode): 'ppt' | 'pdf' | 'image' | 'md' | 'link' | 'file' {
-  const name = node.title.toLowerCase()
-  const type = node.fileType?.toLowerCase() ?? ''
-  const linkLike = [node.previewText, node.observedPath, node.subtitle, node.title].some((value) => value ? /https?:\/\//i.test(value) : false)
-  if (name.endsWith('.ppt') || name.endsWith('.pptx') || type.includes('presentation') || node.pageCount) return 'ppt'
-  if (name.endsWith('.pdf') || type === 'pdf' || type === 'application/pdf') return 'pdf'
-  if (name.match(/\.(jpg|jpeg|png|webp|gif|bmp|svg|avif)$/) || type.startsWith('image/') || node.previewDataUrl || node.previewUrl) return 'image'
-  if (linkLike || type === 'url' || type === 'link' || type === 'web') return 'link'
-  if (name.endsWith('.md') || name.endsWith('.markdown') || type.includes('markdown') || type === 'text') return 'md'
-  return 'file'
+// Kept for compatibility with older imports that expect these utilities to exist in this module.
+export const nodeTimestamp = formatNodeTime
+export const nodeTypeIcon = (node: CanvasNode) => {
+  const file = detectFileIdentity(node)
+  if (node.kind === 'process') return RunGlyph
+  if (node.kind === 'context') return CollectionGlyph
+  if (node.kind === 'decision') return DecisionGlyph
+  if (node.kind === 'note') return NoteGlyph
+  if (file === 'image') return ImageGlyph
+  if (file === 'link') return LinkGlyph
+  if (file === 'video') return VideoGlyph
+  if (file === 'audio') return AudioGlyph
+  if (file === 'archive') return ArchiveGlyph
+  if (`${node.title} ${node.subtitle}`.toLowerCase().includes('session')) return SessionGlyph
+  return DocumentGlyph
 }

@@ -35,7 +35,7 @@ export function AppShellView(props: AppShellViewProps) {
       <DialogsHost {...props.dialogs} />
     </>
   }
-  return <main className="app-shell porcelain-studio-v2" data-testid="creative-os-app">
+  return <main className="app-shell porcelain-studio-v2 lcos-reconstructed" data-testid="creative-os-app">
     <ProjectStripVNext {...props.strip} />
     <CanvasSceneHost {...props.scene} />
     <WorkRailHost rail={props.rail} />

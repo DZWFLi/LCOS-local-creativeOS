@@ -31,7 +31,7 @@ describe('Gate F desktop interaction contract', () => {
   it('uses Ctrl/Cmd or Shift as additive desktop selection modifiers', () => {
     expect(canvas).toContain('event.shiftKey || event.ctrlKey || event.metaKey')
     expect(canvas).toContain('additiveSelection(event)')
-    expect(canvas).toContain('<NodeContextToolbar')
+    expect(canvas).toContain('onCreateScopeFromSelection')
     expect(app).toContain('if (node.opensScopeId) {')
     expect(app).not.toContain('setFocusPreviewId(id)')
   })

@@ -47,7 +47,7 @@ export function AgentContextSurface({
         ? `已同步 v${projection.version}`
         : '未连接'
   const pendingProposals = proposals.filter((proposal) => proposal.status === 'pending')
-  return <aside className="agent-context-surface" data-testid="agent-context-surface" aria-label="Agent 看到的画布">
+  return <aside className="agent-context-surface" data-details={detailsOpen ? 'open' : 'closed'} data-testid="agent-context-surface" aria-label="Agent 看到的画布">
     <header>
       <span className={`agent-context-live ${error ? 'error' : ''}`} />
       <div><strong>Agent 看到的画布</strong><small>{error ? '暂时无法同步' : '与当前画布同步'}</small></div>

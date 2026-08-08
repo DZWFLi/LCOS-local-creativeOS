@@ -55,6 +55,7 @@ import { WorkspaceRailVNext } from './features/shell/WorkspaceRailVNext'
 import { SurfaceDock, type SurfaceId } from './features/shell/SurfaceDock'
 import { ProjectionSurface } from './features/surfaces/ProjectionSurfaces'
 import { SurfaceComposerBar } from './features/surfaces/SurfaceComposerBar'
+import type { ContextHistoryEntry, ContextSurfaceRuntime, DeliverSurfaceRuntime, SessionHandoffProjection, WorkSurfaceRuntime } from './features/surfaces/surfaceContracts'
 import { DropShelf, type DropAnchor, type DropDestination } from './features/drop/DropShelf'
 import { ImmersiveViewer } from './features/viewer/ImmersiveViewer'
 import { resolveArtifactViewerKind } from './features/viewer/artifactViewerRegistry'
@@ -130,6 +131,7 @@ export function App() {
   const [globalComposerText, setGlobalComposerText] = useState('')
   const [globalProvider, setGlobalProvider] = useState('auto')
   const [globalCreateAsNewNode, setGlobalCreateAsNewNode] = useState(false)
+  const [globalContextScope, setGlobalContextScope] = useState<'workspace' | 'scope' | 'project'>('workspace')
   const [selectionComposerText, setSelectionComposerText] = useState('')
   const [selectionProvider, setSelectionProvider] = useState('auto')
   const [selectionCreateAsNewNode, setSelectionCreateAsNewNode] = useState(false)
@@ -228,6 +230,39 @@ export function App() {
   const visibleNodes = useMemo(() => scopeNodes.filter((node) => visibleLayers.includes(nodeMeta[node.kind].layer)), [scopeNodes, visibleLayers])
   const visibleNodeIds = useMemo(() => new Set(visibleNodes.map((node) => node.id)), [visibleNodes])
   const visibleEdges = useMemo(() => edges.filter((edge) => visibleNodeIds.has(edge.from) && visibleNodeIds.has(edge.to)), [edges, visibleNodeIds])
+  const contextHistoryEntries = useMemo<ContextHistoryEntry[]>(() => {
+    const currentRefs = activeContextProjection?.contextArtifacts.map((item) => item.viewId) ?? []
+    const recent: ContextHistoryEntry[] = (activeContextProjection?.recentChanges ?? []).slice(-6).map((change) => ({
+      id: `context-v${change.version}`,
+      label: `v${change.version}`,
+      title: change.kind === 'viewport' ? '视野上下文' : change.kind === 'selection' ? 'Selection 变化' : change.kind === 'target' ? 'Target 变化' : 'Context 变化',
+      summary: change.summary,
+      current: change.version === activeContextProjection?.version,
+      objectIds: [...currentRefs],
+      createdAt: change.occurredAt,
+    }))
+    if (activeRun?.contextSnapshotId) recent.push({
+      id: activeRun.contextSnapshotId,
+      label: 'Run ctx',
+      title: `${activeRun.provider || 'Agent'} · ${activeRun.command.slice(0, 30)}`,
+      summary: `${activeRun.contextIds.length} frozen refs`,
+      current: activeRun.status === 'running' || activeRun.status === 'waiting_input' || activeRun.status === 'review',
+      sourceRunId: activeRun.id,
+      sourceNodeId: activeRun.processNodeId,
+      objectIds: [...activeRun.contextIds],
+      createdAt: activeRun.createdAt,
+    })
+    return recent
+  }, [activeContextProjection, activeRun])
+  const sessionHandoffProjection = useMemo<SessionHandoffProjection[]>(() => {
+    const byId = new Map(visibleNodes.map((node) => [node.id, node]))
+    const identity = (node: CanvasNode) => node.sourceProvider || (/chatgpt|gpt/i.test(node.title) ? 'ChatGPT' : /codex/i.test(node.title) ? 'Codex' : /workbuddy|buddy/i.test(node.title) ? 'WorkBuddy' : node.title.replace(/\s+(session|run|handoff).*$/i, ''))
+    return visibleEdges.flatMap((edge) => {
+      const from = byId.get(edge.from), to = byId.get(edge.to)
+      if (!from || !to || from.kind !== 'process' || to.kind !== 'process') return []
+      return [{ id: `handoff-${edge.id}`, from: identity(from), to: identity(to), label: edge.kind === 'modify' ? 'Resume' : 'Handoff', sourceNodeId: from.id, targetNodeId: to.id }]
+    })
+  }, [visibleEdges, visibleNodes])
   const workspaceFrames = useMemo(() => buildWorkspaceFrames(workspaces, scopeNodes, workspaceId, scopeId), [scopeId, scopeNodes, workspaceId, workspaces])
   const activeWorkspaceFrames = useMemo(() => workspaceId ? workspaceFrames.filter((frame) => frame.workspaceId === workspaceId) : [], [workspaceFrames, workspaceId])
   const relationNodes = useMemo(() => selectedId ? edges.filter((edge) => edge.from === selectedId || edge.to === selectedId).map((edge) => nodes.find((node) => node.id === (edge.from === selectedId ? edge.to : edge.from))).filter((node): node is CanvasNode => Boolean(node)) : [], [edges, nodes, selectedId])
@@ -235,12 +270,21 @@ export function App() {
   const defaultSelectionContextIds = useMemo(() => selectedIds.length !== 1
     ? [...selectedIds]
     : Array.from(new Set([selectedIds[0], ...relationNodes.map((node) => node.id)])), [relationNodes, selectedIds])
-  const selectionContextIds = useMemo(() => Array.from(new Set([...defaultSelectionContextIds, ...pinnedContextIds]))
-    .filter((id) => !excludedContextIds.includes(id)), [defaultSelectionContextIds, excludedContextIds, pinnedContextIds])
+  const selectionContextIds = useMemo(() => (selectedIds.length > 1
+    ? [...defaultSelectionContextIds]
+    : Array.from(new Set([...defaultSelectionContextIds, ...pinnedContextIds])))
+    .filter((id) => !excludedContextIds.includes(id)), [defaultSelectionContextIds, excludedContextIds, pinnedContextIds, selectedIds.length])
   const globalContextIds = useMemo(() => {
+    if (globalContextScope === 'project') return nodes.map((node) => node.id)
+    if (globalContextScope === 'scope') return scopeNodes.map((node) => node.id)
     if (activeWorkspace) return nodes.filter((node) => node.workspaceIds?.includes(activeWorkspace.id)).map((node) => node.id)
     return scopeNodes.map((node) => node.id)
-  }, [activeWorkspace, nodes, scopeNodes])
+  }, [activeWorkspace, globalContextScope, nodes, scopeNodes])
+  const globalContextLabel = globalContextScope === 'project'
+    ? '整个项目'
+    : globalContextScope === 'scope'
+      ? `Scope「${activeScope.label}」`
+      : activeWorkspace ? `Workspace「${activeWorkspace.label}」` : `Scope「${activeScope.label}」`
   const selectionEditableNodes = useMemo(() => selectedNodes.filter((node) => node.managed === true && node.artifactId && node.revisionId), [selectedNodes])
   const selectionTargetNode = !selectionCreateAsNewNode && selectionEditableNodes.length === 1 ? selectionEditableNodes[0] ?? null : null
   const runBusy = Boolean(activeRun && ['queued', 'running'].includes(activeRun.status))
@@ -1204,6 +1248,31 @@ export function App() {
     const restoredRefs = benchToRoot.size - additions.length
     setNotice(`已并回 ${additions.length} 个新稳定结果${restoredRefs > 0 ? `，复位 ${restoredRefs} 个原项目引用` : ''}；临时现场已清空`)
   }, [edges, enterScopeKeepingSelection, nodes, rootScope.id, setGraph, workbenchScope])
+
+  const branchContextHistoryToWorkbench = useCallback((entry: ContextHistoryEntry) => {
+    const targetScopeId = ensureWorkbenchScope()
+    const sourceIds = entry.objectIds.filter((id) => nodes.some((node) => node.id === id))
+    const projectedIds = projectViewsIntoScope(sourceIds, targetScopeId)
+    enterScopeKeepingSelection(targetScopeId, projectedIds)
+    setActiveSurface('arrange')
+    setNotice(projectedIds.length ? `已从 ${entry.label} 建立当前现场 · ${projectedIds.length} refs` : `已进入从 ${entry.label} 创建的当前现场；历史记录保持只读`)
+  }, [ensureWorkbenchScope, enterScopeKeepingSelection, nodes, projectViewsIntoScope])
+
+  const compareContextHistory = useCallback((entry: ContextHistoryEntry) => {
+    const sourceIds = entry.objectIds.filter((id) => nodes.some((node) => node.id === id))
+    if (sourceIds.length) setSelectedIds(sourceIds)
+    setActiveSurface('context-flow')
+    setNotice(`正在对比 ${entry.label} 与当前 Context；历史 Snapshot 保持只读`)
+  }, [nodes])
+
+  const openContextHistorySource = useCallback((entry: ContextHistoryEntry) => {
+    const node = entry.sourceNodeId ? nodes.find((item) => item.id === entry.sourceNodeId) : undefined
+    if (!node) { setNotice(entry.sourceRunId ? `来源 Run · ${entry.sourceRunId}` : `${entry.label} 暂无可定位来源`); return }
+    if (node.scopeId && node.scopeId !== scopeId) setScopeId(node.scopeId)
+    setSelectedIds([node.id])
+    setActiveSurface(node.kind === 'process' ? 'work' : 'arrange')
+    setNotice(`已定位 ${entry.label} 的来源「${node.title}」`)
+  }, [nodes, scopeId])
 
   const stageTransfer = useCallback((ids: string[], anchor: DropAnchor) => {
     if (!ids.length) return
@@ -2843,6 +2912,40 @@ export function App() {
     setNotice(`已定位「${node.title}」`)
   }, [nodes, safeInsets, scopeId, selectNode])
 
+  const contextSurfaceRuntime = useMemo<ContextSurfaceRuntime>(() => ({
+    history: contextHistoryEntries,
+    handoffs: sessionHandoffProjection,
+    onBranchHistory: branchContextHistoryToWorkbench,
+    onCompareHistory: compareContextHistory,
+    onOpenHistorySource: openContextHistorySource,
+  }), [branchContextHistoryToWorkbench, compareContextHistory, contextHistoryEntries, openContextHistorySource, sessionHandoffProjection])
+  const openCurrentRunReview = useCallback(() => {
+    const review = pendingReviews[0]
+    if (review) { openRunReview(review); return }
+    if (activeRun) { setSelectedIds([activeRun.processNodeId]); setActiveSurface('work'); setNotice(`Run ${activeRun.id} · ${runStatusLabel[activeRun.status]}`); return }
+    setNotice('当前没有待 Review 的 Run')
+  }, [activeRun, openRunReview, pendingReviews])
+  const workSurfaceRuntime = useMemo<WorkSurfaceRuntime>(() => ({
+    activeRun,
+    runEvents,
+    pendingReviewCount: pendingReviews.length,
+    onCancel: cancelActiveRun,
+    onRetry: retryRun,
+    onReview: openCurrentRunReview,
+    onOpenRunDetails: (node) => showNodeDetails(node.id),
+    onAnswerInput: answerActiveRunInput,
+  }), [activeRun, answerActiveRunInput, cancelActiveRun, openCurrentRunReview, pendingReviews.length, retryRun, runEvents, showNodeDetails])
+  const deliverSurfaceRuntime = useMemo<DeliverSurfaceRuntime>(() => ({
+    activeRun,
+    pendingReviewCount: pendingReviews.length,
+    onAccept: acceptRun,
+    onReject: rejectRun,
+    onRetry: retryRun,
+    onReview: openCurrentRunReview,
+    onOpenRevisions: (node) => setWorkbench({ nodeId: node.id, focus: 'revisions' }),
+    onCompareNodes: (left, right) => { setSelectedIds([left.id, right.id]); setWorkbench({ nodeId: right.id, focus: 'revisions' }); setNotice(`Compare · ${left.title} ↔ ${right.title}`) },
+  }), [acceptRun, activeRun, openCurrentRunReview, pendingReviews.length, rejectRun, retryRun])
+
   const editorWorkspace = workspaceEditor?.id ? workspaces.find((workspace) => workspace.id === workspaceEditor.id) : undefined
   const nodeToRename = renameNodeId ? nodes.find((node) => node.id === renameNodeId) : undefined
   const scopePath = buildScopePath(scopes, activeScope)
@@ -2865,7 +2968,7 @@ export function App() {
       onOpenProjectDrive: () => setProjectOpen(false),
       onImport: () => setImportPanelOpen(true),
       onGlobalChat: () => { if (agentMode) setNotice('Agent Browser 模式下请直接使用宿主 Agent 对话框'); else setWorkRail((current) => ({ ...current, collapsed: false })) },
-      onHistory: () => { if (workspaceId) openWorkspaceStates(workspaceId); else setNotice('先激活一个工作空间，再查看其工作现场历史') },
+      onHistory: () => { setActiveSurface('deliver'); setNotice('已进入项目版本与交付历史；Workspace 不再承担历史快照职责') },
       onMore: () => setCapabilityOpen((value) => !value),
     }}
     scene={{
@@ -2934,6 +3037,8 @@ export function App() {
           prompt: selectionComposerText,
           provider: selectionProvider,
           createAsNewNode: selectionCreateAsNewNode,
+          intent: selectionIntent,
+          resultPolicy: selectionResultPolicy,
           ...(selectionBaseRevision ? { baseRevision: selectionBaseRevision } : {}),
           providers: runtimeProviders,
           activeWorkspace,
@@ -2943,7 +3048,9 @@ export function App() {
           ...(runProposal?.ambiguity?.question ? { ambiguityQuestion: runProposal.ambiguity.question } : {}),
           onPromptChange: setSelectionComposerText,
           onProviderChange: setSelectionProvider,
-          onCreateAsNewNodeChange: (value) => { setSelectionCreateAsNewNode(value); setSelectionIntent(value ? 'create' : 'analyze'); setSelectionResultPolicy(value ? 'create_artifact' : 'reply_only'); setSelectionBaseRevision(null) },
+          onCreateAsNewNodeChange: (value) => { setSelectionCreateAsNewNode(value); if (value) { setSelectionIntent('create'); setSelectionResultPolicy('create_artifact') } setSelectionBaseRevision(null) },
+          onIntentChange: (intent) => { setSelectionIntent(intent); setSelectionCreateAsNewNode(intent === 'create'); setSelectionResultPolicy(intent === 'create' ? 'create_artifact' : intent === 'revise' ? 'draft_revision_per_target' : 'reply_only'); if (intent !== 'revise') setSelectionBaseRevision(null) },
+          onResultPolicyChange: setSelectionResultPolicy,
           onToggleContext: toggleContext,
           onSend: requestSelectionRun,
           onAddToWorkspace: addSelectionToActiveWorkspace,
@@ -2970,10 +3077,15 @@ export function App() {
         onStageTransfer: stageTransfer,
       },
       projection: {
+        projectId: activeProjectId,
+        scopeId,
         surface: activeSurface as Exclude<SurfaceId, 'arrange'>,
         nodes: visibleNodes,
         edges: visibleEdges,
         selectedIds,
+        contextRuntime: contextSurfaceRuntime,
+        workRuntime: workSurfaceRuntime,
+        deliverRuntime: deliverSurfaceRuntime,
         onSelect: selectNode,
         onDoubleClick: handleDoubleClick,
       },
@@ -3076,8 +3188,10 @@ export function App() {
       pendingNode,
       collapsed: workRail.collapsed,
       width: effectiveRailWidth,
-      contextLabel: activeWorkspace ? `工作空间「${activeWorkspace.label}」` : '当前画布',
+      contextLabel: globalContextLabel,
       contextCount: globalContextIds.length,
+      contextScope: globalContextScope,
+      onContextScope: setGlobalContextScope,
       composerText: globalComposerText,
       composerRef,
       composerFocusRequest,

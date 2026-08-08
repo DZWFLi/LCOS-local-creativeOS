@@ -38,7 +38,7 @@ describe('vNext intuitive local-agent task loop contract', () => {
   it('accepts returned drafts as current without exposing checkpoint UI', () => {
     expect(app).toContain("kind: 'working'")
     expect(app).toContain("reviewStatus: 'accepted'")
-    expect(rail).toContain('保存当前工作现场')
+    expect(rail).not.toContain('保存当前工作现场')
     expect(app).not.toContain('创建检查点')
   })
 })

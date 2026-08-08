@@ -1,0 +1,50 @@
+import { expect, test } from '@playwright/test'
+
+test.describe('LCOS vNext Phase 4', () => {
+  test('shell keeps project context while surfaces switch independently', async ({ page }) => {
+    await page.goto('/')
+    await expect(page.getByTestId('vnext-bottom-dock')).toBeVisible()
+    await page.getByRole('button', { name: '上下文' }).click()
+    await expect(page.locator('[data-surface-mount="context-flow"]')).toBeVisible()
+    await page.getByRole('button', { name: '运行' }).click()
+    await expect(page.locator('[data-surface-mount="work"]')).toBeVisible()
+    await page.getByRole('button', { name: '整理' }).click()
+    await expect(page.locator('[data-surface-mount="arrange"]')).toBeVisible()
+  })
+
+  test('multi-selection can stage from bottom gutter without treating Lens as destination', async ({ page }) => {
+    await page.goto('/')
+    const nodes = page.locator('[data-node-id]')
+    test.skip(await nodes.count() < 2, 'Seed project needs two visible nodes')
+    await nodes.nth(0).click()
+    await nodes.nth(1).click({ modifiers: ['Control'] })
+    await expect(page.getByTestId('selection-bounds')).toBeVisible()
+    const box = await page.getByTestId('canvas').boundingBox()
+    if (!box) throw new Error('Canvas bounds unavailable')
+    const nodeBox = await nodes.nth(1).boundingBox()
+    if (!nodeBox) throw new Error('Node bounds unavailable')
+    await page.mouse.move(nodeBox.x + nodeBox.width / 2, nodeBox.y + nodeBox.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height - 24, { steps: 8 })
+    await expect(page.getByTestId('drop-gutter-bottom')).toHaveClass(/active/)
+    await page.mouse.up()
+    await expect(page.getByTestId('drop-shelf')).toBeVisible()
+    await expect(page.getByRole('button', { name: '上下文' })).toBeVisible()
+  })
+
+  test('outline/context history/relation editing controls are present', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: '整理' }).click()
+    await page.getByRole('button', { name: '大纲' }).click()
+    await expect(page.locator('.lcos-outline-sheet')).toBeVisible()
+    await page.getByRole('button', { name: '上下文' }).click()
+    await expect(page.locator('.lcos-context-history')).toBeVisible()
+
+    await page.getByRole('button', { name: '整理' }).click()
+    const edge = page.locator('.edge-hit').first()
+    test.skip(await edge.count() === 0, 'Seed project needs at least one relation')
+    await edge.click({ force: true })
+    await expect(page.locator('[data-testid^="edge-controls-"]')).toBeVisible()
+    await expect(page.locator('[data-testid^="edge-cut-"]')).toBeVisible()
+  })
+})

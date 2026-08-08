@@ -1,12 +1,11 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import type { RuntimeProviderStatus } from '@local-creative-os/contracts'
-import { ArrowDownToLine, Copy, CopyPlus, FolderTree, Grip, LayoutGrid, Trash2 } from 'lucide-react'
+import { ArrowDownToLine, Copy, CopyPlus, Ellipsis, FolderTree, LayoutGrid, Sparkles, Trash2 } from 'lucide-react'
 import type { Camera, CanvasEdge, CanvasNode, NodeDisplayMode, RunStatus, Workspace, WorkspaceFrameVM } from '../../model'
 import { applyWheelGesture, getSelectionBounds, nodeDensity } from './canvasGeometry'
 import { getPendingZoneBounds } from './canvasLayout'
 import type { LayoutPreviewItem } from './scopeLayout'
 import { CanvasNodeVisual, nodeVisualFamily } from './CanvasNodeVisual'
-import { NodeContextToolbar } from './NodeContextToolbar'
 import { SelectionComposer } from './SelectionComposer'
 import type { ArtifactRevisionProvenance } from '../../runtime/projectionAdapters'
 
@@ -29,6 +28,8 @@ interface Props {
     contextIds: string[]
     provider: string
     createAsNewNode: boolean
+    intent?: 'analyze' | 'create' | 'revise'
+    resultPolicy?: 'reply_only' | 'create_artifact' | 'create_collection' | 'draft_revision_per_target'
     baseRevision?: ArtifactRevisionProvenance
     providers: readonly RuntimeProviderStatus[]
     activeWorkspace: Workspace | null
@@ -39,6 +40,8 @@ interface Props {
     onPromptChange: (value: string) => void
     onProviderChange: (value: string) => void
     onCreateAsNewNodeChange: (value: boolean) => void
+    onIntentChange?: (value: 'analyze' | 'create' | 'revise') => void
+    onResultPolicyChange?: (value: 'reply_only' | 'create_artifact' | 'create_collection' | 'draft_revision_per_target') => void
     onToggleContext: (id: string) => void
     onSend: () => void
     onAddToWorkspace: () => void
@@ -55,6 +58,7 @@ type DragCandidate = { id: string; startX: number; startY: number; offsetX: numb
 type ResizeCandidate = { id: string; startX: number; startY: number; width: number; height: number; moved: boolean }
 type WorkspaceDragCandidate = { workspaceId: string; startX: number; startY: number; members: Array<{ id: string; x: number; y: number }>; moved: boolean; frameBounds?: { x: number; y: number; width: number; height: number }; currentBounds?: { x: number; y: number; width: number; height: number } }
 type FrameResizeCandidate = { workspaceId: string; startX: number; startY: number; bounds: { x: number; y: number; width: number; height: number }; moved: boolean }
+type EdgeReconnectCandidate = { edgeId: string; endpoint: 'from' | 'to'; fixedId: string }
 
 function additiveSelection(event: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean }): boolean {
   return event.shiftKey || event.ctrlKey || event.metaKey
@@ -82,8 +86,8 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
   const linkTarget = useRef<string | null>(null)
   const linkStart = useRef<{ x: number; y: number } | null>(null)
   const linkMoved = useRef(false)
+  const edgeReconnect = useRef<EdgeReconnectCandidate | null>(null)
   const [linkPoint, setLinkPoint] = useState<{ x: number; y: number } | null>(null)
-  const [linkModeId, setLinkModeId] = useState<string | null>(null)
   const [panning, setPanning] = useState(false)
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [resizingId, setResizingId] = useState<string | null>(null)
@@ -94,10 +98,34 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
   const [createMenu, setCreateMenu] = useState<{ from: string; x: number; y: number; screenX: number; screenY: number } | null>(null)
   const toWorld = (clientX: number, clientY: number, rect: DOMRect) => ({ x: (clientX - rect.left - camera.x) / camera.zoom, y: (clientY - rect.top - camera.y) / camera.zoom })
   const lod = nodes.length >= 300 ? 'overview' : nodes.length >= 150 ? 'simplified' : 'full'
-  const renderNodes = lod === 'overview' ? nodes.filter((_, index) => index % 4 === 0) : nodes
-  const renderIds = new Set(renderNodes.map((node) => node.id))
-  const renderEdges = lod === 'overview' ? edges.filter((edge) => renderIds.has(edge.from) && renderIds.has(edge.to)) : edges
+  const renderNodes = useMemo(() => {
+    if (nodes.length < 150) return nodes
+    const width = canvasRef.current?.clientWidth ?? 1440
+    const height = canvasRef.current?.clientHeight ?? 900
+    const overscan = 460 / Math.max(.2, camera.zoom)
+    const left = -camera.x / camera.zoom - overscan
+    const top = -camera.y / camera.zoom - overscan
+    const right = left + width / camera.zoom + overscan * 2
+    const bottom = top + height / camera.zoom + overscan * 2
+    const keep = new Set([...selectedIds, ...(pendingId ? [pendingId] : [])])
+    const candidates = nodes.filter((node) => keep.has(node.id) || (node.x < right && node.x + node.width > left && node.y < bottom && node.y + node.height > top))
+    if (lod !== 'overview' || candidates.length <= 220) return candidates
+    const selected = candidates.filter((node) => keep.has(node.id))
+    const rest = candidates.filter((node) => !keep.has(node.id))
+    const stride = Math.max(1, Math.ceil(rest.length / Math.max(1, 220 - selected.length)))
+    return [...selected, ...rest.filter((_, index) => index % stride === 0)].slice(0, 220)
+  }, [nodes, selectedIds, pendingId, camera.x, camera.y, camera.zoom, lod])
+  const renderIds = useMemo(() => new Set(renderNodes.map((node) => node.id)), [renderNodes])
+  const renderEdges = useMemo(() => {
+    if (lod === 'full') return edges
+    const visible = (id: string) => renderIds.has(id) || id.startsWith('workspace:')
+    return edges.filter((edge) => visible(edge.from) && visible(edge.to))
+  }, [edges, lod, renderIds])
   const byId = new Map(nodes.map((node) => [node.id, node]))
+  const relationById = new Map(byId)
+  workspaceFrames.forEach((frame) => relationById.set(`workspace:${frame.workspaceId}`, {
+    id: `workspace:${frame.workspaceId}`, title: frame.label, kind: 'context', x: frame.bounds.x, y: frame.bounds.y, width: frame.bounds.width, height: frame.bounds.height,
+  } as CanvasNode))
   const selectedBounds = useMemo(() => selectedIds.length ? getSelectionBounds(nodes, selectedIds) : null, [nodes, selectedIds])
   const selectionBounds = selectedIds.length > 1 ? selectedBounds : null
   const pendingZone = useMemo(() => getPendingZoneBounds(nodes), [nodes])
@@ -126,8 +154,8 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
     const cancel = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return
       setCreateMenu(null)
-      setLinkModeId(null)
       link.current = null
+      edgeReconnect.current = null
       setLinkPoint(null)
     }
     window.addEventListener('keydown', cancel)
@@ -163,6 +191,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
     dragging.current = false
     marquee.current = null
     link.current = null
+    edgeReconnect.current = null
     linkTarget.current = null
     linkStart.current = null
     linkMoved.current = false
@@ -174,7 +203,6 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
     setDraggingWorkspaceId(null)
     setMarqueeRect(null)
     setCreateMenu(null)
-    setLinkModeId(null)
     setLinkPoint(null)
     onPresentationInteractionChange?.(false)
   }, [locked, onPresentationInteractionChange])
@@ -269,14 +297,38 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
   const connect = (from: string, to: string) => {
     if (from === to) return
     const nextId = `edge-${Date.now()}`
-    setSelectedEdgeId(selectedEdgeId ?? nextId)
-    setEdges((current) => {
-      const selected = selectedEdgeId ? current.find((edge) => edge.id === selectedEdgeId) : undefined
-      if (selected && selected.from === from) return current.map((edge) => edge.id === selected.id ? { ...edge, to } : edge)
-      if (current.some((edge) => edge.from === from && edge.to === to)) return current
-      return [...current, { id: nextId, from, to, kind: 'reference' }]
-    })
-    setLinkModeId(null)
+    setSelectedEdgeId(nextId)
+    setEdges((current) => current.some((edge) => edge.from === from && edge.to === to)
+      ? current
+      : [...current, { id: nextId, from, to, kind: 'reference' }])
+  }
+  const relationTargetAt = (clientX: number, clientY: number) => {
+    const element = document.elementFromPoint(clientX, clientY)?.closest<HTMLElement>('[data-relation-target], [data-node-id]')
+    return element?.dataset.relationTarget ?? element?.dataset.nodeId ?? null
+  }
+  const beginRelation = (from: string, event: React.PointerEvent<HTMLElement>, point: { x: number; y: number }) => {
+    event.preventDefault(); event.stopPropagation()
+    edgeReconnect.current = null
+    link.current = { from }
+    linkStart.current = { x: event.clientX, y: event.clientY }
+    linkMoved.current = false
+    setLinkPoint(point)
+    linkPointerId.current = event.pointerId
+    try { canvasRef.current?.setPointerCapture(event.pointerId) } catch { /* synthetic or already released */ }
+  }
+  const beginEdgeReconnect = (edge: CanvasEdge, endpoint: 'from' | 'to', event: React.PointerEvent<SVGCircleElement>) => {
+    event.preventDefault(); event.stopPropagation()
+    const fixedId = endpoint === 'from' ? edge.to : edge.from
+    const currentEndpoint = relationById.get(endpoint === 'from' ? edge.from : edge.to)
+    edgeReconnect.current = { edgeId: edge.id, endpoint, fixedId }
+    link.current = null
+    linkTarget.current = null
+    linkStart.current = { x: event.clientX, y: event.clientY }
+    linkMoved.current = false
+    setSelectedEdgeId(edge.id)
+    setLinkPoint(currentEndpoint ? { x: endpoint === 'from' ? currentEndpoint.x + currentEndpoint.width : currentEndpoint.x, y: currentEndpoint.y + currentEndpoint.height / 2 } : null)
+    linkPointerId.current = event.pointerId
+    try { canvasRef.current?.setPointerCapture(event.pointerId) } catch { /* browser owns capture */ }
   }
   const finishPresentationInteraction = (kind: 'node-move' | 'node-resize' | 'workspace-group-move') => {
     onPresentationInteractionChange?.(false)
@@ -284,9 +336,8 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
   }
 
   const dropAnchorAt = (clientX: number, clientY: number, rect: DOMRect): 'left' | 'bottom' | null => {
-    const bottomDockTop = rect.bottom - 64
-    const bottomCaptureTop = bottomDockTop - 92
-    if (clientY >= bottomCaptureTop && clientY < bottomDockTop) return 'bottom'
+    const bottomCaptureTop = rect.bottom - 92
+    if (clientY >= bottomCaptureTop && clientY < rect.bottom) return 'bottom'
     if (clientX <= rect.left + 92) return 'left'
     return null
   }
@@ -375,9 +426,20 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
       setMarqueeRect(null)
       return
     }
-    if (link.current) {
+    if (edgeReconnect.current) {
+      const reconnect = edgeReconnect.current
+      const target = linkTarget.current ?? relationTargetAt(event.clientX, event.clientY)
+      if (target && target !== reconnect.fixedId) {
+        setEdges((current) => current.map((edge) => edge.id !== reconnect.edgeId ? edge : reconnect.endpoint === 'from' ? { ...edge, from: target } : { ...edge, to: target }))
+      }
+      edgeReconnect.current = null
+      linkTarget.current = null
+      linkStart.current = null
+      linkMoved.current = false
+      setLinkPoint(null)
+    } else if (link.current) {
       const source = link.current.from
-      const target = linkTarget.current ?? document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>('[data-node-id]')?.dataset.nodeId
+      const target = linkTarget.current ?? relationTargetAt(event.clientX, event.clientY)
       if (target && target !== source) {
         connect(source, target)
         link.current = null
@@ -400,7 +462,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
   }
 
-  return <div ref={canvasRef} data-testid="canvas" data-node-count={nodes.length} data-edge-count={edges.length} data-locked={locked || undefined} data-camera-x={camera.x} data-camera-y={camera.y} data-camera-zoom={camera.zoom} aria-busy={locked || undefined} className={`canvas lod-${lod} zoom-band-${zoomBand} ${selectedId ? 'has-focus' : ''} ${panning ? 'panning' : ''} ${linkModeId ? 'relation-mode' : ''} ${locked ? 'is-locked' : ''}`} onPointerDown={(event) => {
+  return <div ref={canvasRef} data-testid="canvas" data-node-count={nodes.length} data-edge-count={edges.length} data-locked={locked || undefined} data-camera-x={camera.x} data-camera-y={camera.y} data-camera-zoom={camera.zoom} aria-busy={locked || undefined} className={`canvas lod-${lod} zoom-band-${zoomBand} ${selectedId ? 'has-focus' : ''} ${panning ? 'panning' : ''} ${locked ? 'is-locked' : ''}`} onPointerDown={(event) => {
     if (locked) { event.preventDefault(); event.stopPropagation(); return }
     if (event.button === 1) {
       event.preventDefault()
@@ -410,7 +472,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
       return
     }
     const target = event.target as HTMLElement
-    const blankCanvas = !target.closest('[data-node-id], button, .edge')
+    const blankCanvas = !target.closest('[data-node-id], [data-workspace-frame], button, .edge, .edge-control')
     if (createMenu && !target.closest('.anchor-create-menu')) setCreateMenu(null)
     if (event.button === 0 && blankCanvas && spaceHeld) {
       event.preventDefault()
@@ -422,7 +484,6 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
     }
     if (event.button === 0 && blankCanvas) {
       onSelectEdge(null)
-      setLinkModeId(null)
       if (!additiveSelection(event)) onClearSelection()
       marquee.current = { startX: event.clientX, startY: event.clientY, currentX: event.clientX, currentY: event.clientY }
       setMarqueeRect({ left: event.clientX, top: event.clientY, width: 0, height: 0 })
@@ -491,10 +552,10 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
         else scheduleAutoPan({ x: event.clientX, y: event.clientY })
       }
     }
-    if (link.current) {
+    if (link.current || edgeReconnect.current) {
       if (linkStart.current && Math.hypot(event.clientX - linkStart.current.x, event.clientY - linkStart.current.y) > 4) linkMoved.current = true
       setLinkPoint(toWorld(event.clientX, event.clientY, rect))
-      linkTarget.current = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>('[data-node-id]')?.dataset.nodeId ?? null
+      linkTarget.current = relationTargetAt(event.clientX, event.clientY)
     }
   }} onPointerUp={finishPointer} onPointerCancel={finishPointer} onWheel={(event) => {
     event.preventDefault()
@@ -528,6 +589,8 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
         }}>
           <span>{frame.label}</span><b>{frame.active ? '当前 · ' : ''}{frame.memberViewIds.length} 项</b>
         </button>
+        <button data-testid={`workspace-relation-in-${frame.workspaceId}`} data-relation-target={`workspace:${frame.workspaceId}`} className="workspace-relation-handle workspace-relation-in" type="button" aria-label={`连接到 Workspace ${frame.label}`} onPointerDown={(event) => event.stopPropagation()} />
+        <button data-testid={`workspace-relation-out-${frame.workspaceId}`} data-relation-target={`workspace:${frame.workspaceId}`} className="workspace-relation-handle workspace-relation-out" type="button" aria-label={`从 Workspace ${frame.label} 建立关系`} onPointerDown={(event) => beginRelation(`workspace:${frame.workspaceId}`, event, { x: frame.bounds.x + frame.bounds.width, y: frame.bounds.y + frame.bounds.height / 2 })} />
         <button data-testid={`workspace-frame-resize-${frame.workspaceId}`} className="workspace-frame-resize" type="button" aria-label={`调整 ${frame.label} 框体大小`} title="拖动调整框体范围（不影响成员位置）" onPointerDown={(event) => {
           if (locked || event.button !== 0) return
           event.preventDefault(); event.stopPropagation()
@@ -540,23 +603,25 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
       {pendingZone && <div className="pending-return-zone" style={{ left: pendingZone.x, top: pendingZone.y, width: pendingZone.width, height: pendingZone.height }}><span>待确认结果区</span></div>}
       {onStageTransfer && draggingId && <><div className={`drop-gutter drop-gutter-left ${dropGutter === 'left' ? 'active' : ''}`} data-testid="drop-gutter-left"><span>投送</span></div><div className={`drop-gutter drop-gutter-bottom ${dropGutter === 'bottom' ? 'active' : ''}`} data-testid="drop-gutter-bottom"><span>投送</span></div></>}
       {layoutPreview?.map((item) => { const node = byId.get(item.id); return node ? <div key={item.id} className="layout-ghost" style={{ left: item.x, top: item.y, width: node.width, height: node.height }}><span>{node.title}</span></div> : null })}
-      <svg className="edges" width="1800" height="1100" aria-label="可编辑关系">{renderEdges.map((edge) => <EdgePath key={edge.id} edge={edge} from={byId.get(edge.from)} to={byId.get(edge.to)} selected={selectedEdgeId === edge.id} focused={Boolean(selectedId && (edge.from === selectedId || edge.to === selectedId))} onSelect={onSelectEdge} />)}{link.current && linkPoint && byId.get(link.current.from) && <TemporaryEdge from={byId.get(link.current.from)!} to={linkPoint} />}</svg>
+      <svg className="edges" width="1800" height="1100" aria-label="可编辑关系">
+        {renderEdges.map((edge) => <EdgePath key={edge.id} edge={edge} from={relationById.get(edge.from)} to={relationById.get(edge.to)} selected={selectedEdgeId === edge.id} focused={Boolean(selectedId && (edge.from === selectedId || edge.to === selectedId))} onSelect={onSelectEdge} onCut={(edgeId) => { setEdges((current) => current.filter((item) => item.id !== edgeId)); onSelectEdge(null) }} onReconnectStart={(endpoint, event) => beginEdgeReconnect(edge, endpoint, event)} />)}
+        {link.current && linkPoint && relationById.get(link.current.from) && <TemporaryEdge from={relationById.get(link.current.from)!} to={linkPoint} />}
+        {edgeReconnect.current && linkPoint && relationById.get(edgeReconnect.current.fixedId) && <ReconnectTemporaryEdge fixed={relationById.get(edgeReconnect.current.fixedId)!} moving={linkPoint} endpoint={edgeReconnect.current.endpoint} />}
+      </svg>
       {selectionBounds && <div data-testid="selection-bounds" className="selection-bounds" style={{ left: selectionBounds.x - 10, top: selectionBounds.y - 10, width: selectionBounds.width + 20, height: selectionBounds.height + 20 }}>
-        <div className="selection-toolbar"><span>已选择 {selectedIds.length} 个对象</span>
-          <button type="button" aria-label="复制所选" title="复制所选 · Ctrl/Cmd+C" onClick={(event) => { event.stopPropagation(); onCopySelection() }}><Copy size={13} />复制</button>
-          <button type="button" aria-label="创建额外视图" title="创建额外视图 · Ctrl/Cmd+D" onClick={(event) => { event.stopPropagation(); onDuplicateSelection() }}><CopyPlus size={13} />额外视图</button>
-          <button type="button" aria-label="整理所选" title="按语义整理所选 · Ctrl/Cmd+Shift+L" onClick={(event) => { event.stopPropagation(); onArrangeSelection() }}><LayoutGrid size={13} />整理</button>
-          <button type="button" aria-label="创建子画布" title="把所选对象整理成子画布" onClick={(event) => { event.stopPropagation(); onCreateScopeFromSelection() }}><FolderTree size={13} />子画布</button>
-          {onStageTransfer && <button type="button" aria-label="投送所选" title="投送到工作空间、子画布或当前现场" onClick={(event) => { event.stopPropagation(); onStageTransfer(selectedIds, 'bottom') }}><ArrowDownToLine size={13} />投送</button>}
-          <button aria-label="拖动选中组" title="拖动整组" onPointerDown={(event) => {
-            event.stopPropagation()
-            const first = nodes.find((node) => selectedIds.includes(node.id))
-            if (!first) return
-            const nodeElement = canvasRef.current?.querySelector<HTMLElement>(`[data-node-id="${first.id}"]`)
-            const rect = nodeElement?.getBoundingClientRect() ?? event.currentTarget.getBoundingClientRect()
-            dragCandidate.current = { id: first.id, startX: event.clientX, startY: event.clientY, offsetX: (event.clientX - rect.left) / camera.zoom, offsetY: (event.clientY - rect.top) / camera.zoom, group: selectedIds.map((id) => { const member = nodes.find((item) => item.id === id)!; return { id, dx: member.x - first.x, dy: member.y - first.y } }), originals: selectedIds.map((id) => { const member = nodes.find((item) => item.id === id)!; return { id, x: member.x, y: member.y } }) }
-          }}><Grip size={13} />拖动</button>
-          <button type="button" className="danger" aria-label="删除所选" title="删除所选" onClick={(event) => { event.stopPropagation(); onDeleteSelection() }}><Trash2 size={13} /></button>
+        <div className="selection-toolbar lcos-selection-strip">
+          <button type="button" aria-label="交给 Agent" title="交给 Agent" onClick={(event) => { event.stopPropagation(); onRequestAi() }}><Sparkles size={13} /><span>Agent</span></button>
+          <button type="button" aria-label="创建 Collection" title="创建 Collection" onClick={(event) => { event.stopPropagation(); onCreateScopeFromSelection() }}><FolderTree size={13} /><span>Collection</span></button>
+          {onStageTransfer && <button type="button" aria-label="投送所选" title="投送到其他空间" onClick={(event) => { event.stopPropagation(); onStageTransfer(selectedIds, 'bottom') }}><ArrowDownToLine size={13} /><span>投送</span></button>}
+          <button type="button" aria-label="整理所选" title="整理所选 · Ctrl/Cmd+Shift+L" onClick={(event) => { event.stopPropagation(); onArrangeSelection() }}><LayoutGrid size={13} /><span>整理</span></button>
+          <details className="lcos-selection-more" onPointerDown={(event) => event.stopPropagation()}>
+            <summary aria-label="更多操作" title="更多操作"><Ellipsis size={14}/></summary>
+            <div>
+              <button type="button" onClick={() => onCopySelection()}><Copy size={12}/>复制</button>
+              <button type="button" onClick={() => onDuplicateSelection()}><CopyPlus size={12}/>额外 View</button>
+              <button type="button" className="danger" onClick={() => onDeleteSelection()}><Trash2 size={12}/>删除 View</button>
+            </div>
+          </details>
         </div>
       </div>}
       {selectionComposer && selectedBounds && camera.zoom > .28 && <SelectionComposer
@@ -567,7 +632,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
         y={selectedBounds.y + selectedBounds.height + 18 / Math.max(.24, camera.zoom)}
         {...selectionComposer}
       />}
-      {renderNodes.map((node) => <CanvasCard key={node.id} node={node} density={nodeDensity(node, lod)} zoom={camera.zoom} showDetails={camera.zoom > .2 && lod !== 'overview'} runId={runId} runStatus={runStatus} selected={selectedIds.includes(node.id)} multiSelected={selectedIds.length > 1 && selectedIds.includes(node.id)} linkMode={linkModeId === node.id} pending={pendingId === node.id} dragging={draggingId === node.id} resizing={resizingId === node.id} workspaceMember={Boolean(activeWorkspaceId && workspaceFrames.find((frame) => frame.workspaceId === activeWorkspaceId)?.memberViewIds.includes(node.id))} onRequestAi={onRequestAi} onDuplicateSelection={onDuplicateSelection} onToggleLinkMode={() => setLinkModeId((current) => current === node.id ? null : node.id)} onDetails={onDetails} onPointerDown={(event) => {
+      {renderNodes.map((node) => <CanvasCard key={node.id} node={node} density={nodeDensity(node, lod)} zoom={camera.zoom} showDetails={camera.zoom > .2 && lod !== 'overview'} runId={runId} runStatus={runStatus} selected={selectedIds.includes(node.id)} multiSelected={selectedIds.length > 1 && selectedIds.includes(node.id)} pending={pendingId === node.id} dragging={draggingId === node.id} resizing={resizingId === node.id} workspaceMember={Boolean(activeWorkspaceId && workspaceFrames.find((frame) => frame.workspaceId === activeWorkspaceId)?.memberViewIds.includes(node.id))} onDetails={onDetails} onPointerDown={(event) => {
         if (event.button !== 0) return
         event.stopPropagation()
         const now = performance.now()
@@ -604,28 +669,31 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
         onPresentationInteractionChange?.(true)
         setResizingId(node.id)
         try { canvasRef.current?.setPointerCapture(event.pointerId) } catch { /* browser owns capture */ }
-      }} onLinkStart={(event) => {
-        event.stopPropagation()
-        link.current = { from: node.id }
-        linkStart.current = { x: event.clientX, y: event.clientY }
-        linkMoved.current = false
-        setLinkPoint({ x: node.x + node.width, y: node.y + node.height / 2 })
-        linkPointerId.current = event.pointerId
-        try { canvasRef.current?.setPointerCapture(event.pointerId) } catch { /* synthetic or already released */ }
-      }} />)}
-      {lod !== 'full' && <div className="lod-badge">{nodes.length} 个节点 · {lod === 'overview' ? '总览聚合' : '简化显示'} · 演示数据</div>}
+      }} onLinkStart={(event) => beginRelation(node.id, event, { x: node.x + node.width, y: node.y + node.height / 2 })} />)}
+      {lod !== 'full' && <div className="lod-badge">{nodes.length} 个节点 · {lod === 'overview' ? '总览聚合' : '视区降密度'}</div>}
     </div>
     {createMenu && <div data-testid="anchor-create-menu" className="anchor-create-menu" style={{ left: createMenu.screenX, top: createMenu.screenY }} onPointerDown={(event) => event.stopPropagation()}><span>在此创建并连接</span><button data-testid="anchor-create-note" onClick={() => { onCreateNodeFromAnchor('note', createMenu.x, createMenu.y, createMenu.from); setCreateMenu(null) }}>文本</button><button data-testid="anchor-create-context" onClick={() => { onCreateNodeFromAnchor('context', createMenu.x, createMenu.y, createMenu.from); setCreateMenu(null) }}>内容集合</button><button className="cancel" onClick={() => setCreateMenu(null)}>取消</button></div>}
     {marqueeRect && (() => { const rect = canvasRef.current?.getBoundingClientRect(); return <div data-testid="selection-marquee" className="marquee" style={{ left: marqueeRect.left - (rect?.left ?? 0), top: marqueeRect.top - (rect?.top ?? 0), width: marqueeRect.width, height: marqueeRect.height }} /> })()}
   </div>
 })
 
-function EdgePath({ edge, from, to, selected, focused, onSelect }: { edge: CanvasEdge; from?: CanvasNode; to?: CanvasNode; selected: boolean; focused: boolean; onSelect: (id: string) => void }) {
+function EdgePath({ edge, from, to, selected, focused, onSelect, onCut, onReconnectStart }: { edge: CanvasEdge; from?: CanvasNode; to?: CanvasNode; selected: boolean; focused: boolean; onSelect: (id: string) => void; onCut: (id: string) => void; onReconnectStart: (endpoint: 'from' | 'to', event: React.PointerEvent<SVGCircleElement>) => void }) {
   if (!from || !to) return null
   const x1 = from.x + from.width, y1 = from.y + from.height / 2, x2 = to.x, y2 = to.y + to.height / 2
   const d = `M ${x1} ${y1} C ${x1 + 80} ${y1}, ${x2 - 80} ${y2}, ${x2} ${y2}`
+  const mx = (x1 + x2) / 2, my = (y1 + y2) / 2
   const select = (event: React.PointerEvent<SVGPathElement>) => { event.stopPropagation(); onSelect(edge.id) }
-  return <><path className="edge-hit" data-edge-id={edge.id} d={d} onPointerDown={select} /><path className={`edge ${edge.kind} ${edge.active ? 'active' : ''} ${focused ? 'focused' : ''} ${selected ? 'selected' : ''}`} data-edge-id={edge.id} data-edge-from={edge.from} data-edge-to={edge.to} d={d} onPointerDown={select} />{edge.active && <circle className="edge-runner" r="2.4"><animateMotion dur="2.4s" repeatCount="indefinite" path={d} /></circle>}</>
+  return <>
+    <path className="edge-hit" data-edge-id={edge.id} d={d} onPointerDown={select} />
+    <path className={`edge ${edge.kind} ${edge.active ? 'active' : ''} ${focused ? 'focused' : ''} ${selected ? 'selected' : ''}`} data-edge-id={edge.id} data-edge-from={edge.from} data-edge-to={edge.to} d={d} onPointerDown={select} />
+    {edge.active && <circle className="edge-runner" r="2.4"><animateMotion dur="2.4s" repeatCount="indefinite" path={d} /></circle>}
+    {selected && <g className="edge-controls" data-testid={`edge-controls-${edge.id}`}>
+      <circle className="edge-control edge-terminal" data-testid={`edge-reconnect-from-${edge.id}`} cx={x1} cy={y1} r="7" onPointerDown={(event) => onReconnectStart('from', event)} />
+      <circle className="edge-control edge-terminal" data-testid={`edge-reconnect-to-${edge.id}`} cx={x2} cy={y2} r="7" onPointerDown={(event) => onReconnectStart('to', event)} />
+      <circle className="edge-control edge-cut-hit" data-testid={`edge-cut-${edge.id}`} cx={mx} cy={my} r="10" onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); onCut(edge.id) }} />
+      <path className="edge-cut-mark" d={`M ${mx - 3} ${my - 3} L ${mx + 3} ${my + 3} M ${mx + 3} ${my - 3} L ${mx - 3} ${my + 3}`} />
+    </g>}
+  </>
 }
 
 function TemporaryEdge({ from, to }: { from: CanvasNode; to: { x: number; y: number } }) {
@@ -633,14 +701,21 @@ function TemporaryEdge({ from, to }: { from: CanvasNode; to: { x: number; y: num
   return <path className="edge temporary" d={`M ${x1} ${y1} C ${x1 + 80} ${y1}, ${to.x - 80} ${to.y}, ${to.x} ${to.y}`} />
 }
 
-function CanvasCard({ node, density, zoom, showDetails, runId, runStatus, selected, multiSelected, linkMode, pending, dragging, resizing, workspaceMember, onRequestAi, onDuplicateSelection, onToggleLinkMode, onDetails, onPointerDown, onClick, onResizeStart, onLinkStart }: {
-  node: CanvasNode; density: NodeDisplayMode; zoom: number; showDetails: boolean; runId: string; runStatus: RunStatus | null; selected: boolean; multiSelected: boolean; linkMode: boolean; pending: boolean; dragging: boolean; resizing: boolean; workspaceMember: boolean
-  onRequestAi: () => void; onDuplicateSelection: () => void; onToggleLinkMode: () => void; onDetails: (id: string) => void; onPointerDown: (event: React.PointerEvent<HTMLDivElement>) => void; onClick: (additive?: boolean) => void; onResizeStart: (event: React.PointerEvent<HTMLButtonElement>) => void; onLinkStart: (event: React.PointerEvent<HTMLButtonElement>) => void
+function ReconnectTemporaryEdge({ fixed, moving, endpoint }: { fixed: CanvasNode; moving: { x: number; y: number }; endpoint: 'from' | 'to' }) {
+  const fixedX = endpoint === 'from' ? fixed.x : fixed.x + fixed.width
+  const fixedY = fixed.y + fixed.height / 2
+  const from = endpoint === 'from' ? moving : { x: fixedX, y: fixedY }
+  const to = endpoint === 'from' ? { x: fixedX, y: fixedY } : moving
+  return <path className="edge temporary reconnecting" d={`M ${from.x} ${from.y} C ${from.x + 72} ${from.y}, ${to.x - 72} ${to.y}, ${to.x} ${to.y}`} />
+}
+
+function CanvasCard({ node, density, zoom, showDetails, runId, runStatus, selected, multiSelected, pending, dragging, resizing, workspaceMember, onDetails, onPointerDown, onClick, onResizeStart, onLinkStart }: {
+  node: CanvasNode; density: NodeDisplayMode; zoom: number; showDetails: boolean; runId: string; runStatus: RunStatus | null; selected: boolean; multiSelected: boolean; pending: boolean; dragging: boolean; resizing: boolean; workspaceMember: boolean
+  onDetails: (id: string) => void; onPointerDown: (event: React.PointerEvent<HTMLDivElement>) => void; onClick: (additive?: boolean) => void; onResizeStart: (event: React.PointerEvent<HTMLButtonElement>) => void; onLinkStart: (event: React.PointerEvent<HTMLButtonElement>) => void
 }) {
   const visualFamily = nodeVisualFamily(node)
   const revisionStack = (node.revisionCount ?? 0) > 1
-  return <div data-node-id={node.id} data-node-kind={node.kind} data-node-visual-family={visualFamily} data-node-current={node.current || undefined} data-node-draft={node.draft || undefined} data-node-historical={node.historical || undefined} data-revision-count={node.revisionCount} data-result-group={node.resultGroupId} data-node-runtime={node.runtimeState} data-run-status={node.runStatus} data-artifact-id={node.artifactId} data-revision-id={node.revisionId} data-file-record-id={node.fileRecordId} data-current-revision={node.followsCurrentRevision || undefined} data-preview-status={node.previewStatus} data-view-of={node.viewOf} data-scope-id={node.scopeId} data-position-locked={node.positionLocked || undefined} data-context-only={node.contextOnly || undefined} data-testid={`canvas-node-${node.id}`} role="button" tabIndex={0} aria-disabled={node.disabled || undefined} className={`canvas-node node-family-${node.kind} visual-family-${visualFamily} density-${density} ${node.kind} ${revisionStack ? 'revision-stack' : ''} ${selected ? 'selected' : ''} ${multiSelected ? 'multi-selected' : ''} ${linkMode ? 'link-mode' : ''} ${pending ? 'pending' : ''} ${dragging ? 'dragging' : ''} ${resizing ? 'resizing' : ''} ${workspaceMember ? 'workspace-active-member' : ''} ${node.error ? 'error' : ''} ${node.disabled ? 'disabled' : ''} ${node.positionLocked ? 'position-locked' : ''}`} style={{ left: node.x, top: node.y, width: node.width, height: node.height, '--node-ui-scale': String(1 / Math.max(.2, zoom)), '--canvas-zoom': String(zoom) } as React.CSSProperties} onPointerDown={(event) => { if (!node.disabled) onPointerDown(event) }} onClick={(event) => { event.stopPropagation(); if (!node.disabled) onClick(additiveSelection(event)) }}>
-    {selected && !multiSelected && <NodeContextToolbar zoom={zoom} onAi={onRequestAi} onRelation={onToggleLinkMode} onDuplicate={onDuplicateSelection} />}
+  return <div data-node-id={node.id} data-node-kind={node.kind} data-node-visual-family={visualFamily} data-node-current={node.current || undefined} data-node-draft={node.draft || undefined} data-node-historical={node.historical || undefined} data-revision-count={node.revisionCount} data-result-group={node.resultGroupId} data-node-runtime={node.runtimeState} data-run-status={node.runStatus} data-artifact-id={node.artifactId} data-revision-id={node.revisionId} data-file-record-id={node.fileRecordId} data-current-revision={node.followsCurrentRevision || undefined} data-preview-status={node.previewStatus} data-view-of={node.viewOf} data-scope-id={node.scopeId} data-position-locked={node.positionLocked || undefined} data-context-only={node.contextOnly || undefined} data-testid={`canvas-node-${node.id}`} role="button" tabIndex={0} aria-disabled={node.disabled || undefined} className={`canvas-node node-family-${node.kind} visual-family-${visualFamily} density-${density} ${node.kind} ${revisionStack ? 'revision-stack' : ''} ${selected ? 'selected' : ''} ${multiSelected ? 'multi-selected' : ''} ${pending ? 'pending' : ''} ${dragging ? 'dragging' : ''} ${resizing ? 'resizing' : ''} ${workspaceMember ? 'workspace-active-member' : ''} ${node.error ? 'error' : ''} ${node.disabled ? 'disabled' : ''} ${node.positionLocked ? 'position-locked' : ''}`} style={{ left: node.x, top: node.y, width: node.width, height: node.height, '--node-ui-scale': String(1 / Math.max(.2, zoom)), '--canvas-zoom': String(zoom) } as React.CSSProperties} onPointerDown={(event) => { if (!node.disabled) onPointerDown(event) }} onClick={(event) => { event.stopPropagation(); if (!node.disabled) onClick(additiveSelection(event)) }}>
     <button data-testid={`anchor-in-${node.id}`} className="anchor anchor-in" aria-label={`连接到 ${node.title}`} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()} />
     <button data-testid={`anchor-out-${node.id}`} className="anchor anchor-out" aria-label={`从 ${node.title} 建立连接`} onPointerDown={onLinkStart} onClick={(event) => event.stopPropagation()} />
     {selected && !multiSelected && <button data-testid={`resize-${node.id}`} className="resize-handle" aria-label={`调整 ${node.title} 大小`} title="拖动调整卡片大小" onPointerDown={onResizeStart} onClick={(event) => event.stopPropagation()} />}

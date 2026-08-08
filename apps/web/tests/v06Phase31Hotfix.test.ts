@@ -9,15 +9,15 @@ const surface = readFileSync(new URL('../src/surface.css', import.meta.url), 'ut
 const canvas = readFileSync(new URL('../src/features/canvas/ProjectCanvas.tsx', import.meta.url), 'utf8')
 const topbar = readFileSync(new URL('../src/features/shell/V07TopBar.tsx', import.meta.url), 'utf8')
 const strip = readFileSync(new URL('../src/features/shell/ProjectStripVNext.tsx', import.meta.url), 'utf8')
+const dock = readFileSync(new URL('../src/features/shell/SurfaceDock.tsx', import.meta.url), 'utf8')
 
 let counter = 0
 const createId = (prefix: string) => `${prefix}-${++counter}`
 
 describe('v0.6 phase 3.1 navigation and shortcut hotfix', () => {
-  it('keeps breadcrumbs clickable and exposes a real parent navigation control', () => {
-    expect(surface).toContain('.v06-breadcrumbs {')
-    expect(surface).toContain('pointer-events: auto')
-    expect(scene).toContain('data-testid="scope-back"')
+  it('keeps scope navigation reachable through the bottom dock and parent exit', () => {
+    expect(dock).toContain('vnext-scope-axis')
+    expect(dock).toContain('onScope')
     expect(app).toContain('enterScope(activeScope.parentScopeId)')
   })
 

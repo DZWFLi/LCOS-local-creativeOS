@@ -28,6 +28,8 @@ interface Props {
   width: number
   contextLabel: string
   contextCount: number
+  contextScope: 'workspace' | 'scope' | 'project'
+  onContextScope: (scope: 'workspace' | 'scope' | 'project') => void
   composerText: string
   composerRef: RefObject<HTMLTextAreaElement | null>
   composerFocusRequest: number
@@ -79,16 +81,11 @@ export function WorkRail(props: Props) {
     }
   }, [props.collapsed, props.composerFocusRequest, props.composerRef])
 
-  if (props.collapsed) {
-    return <aside className="work-rail compact" data-testid="work-rail" data-mode={mode} aria-label="AI 工作栏已折叠">
-      <button className="work-rail-expand pressable" aria-label="展开 AI 工作栏" title="展开 AI 工作栏" onClick={props.onExpand}><ChevronLeft size={15} /></button>
-      {props.activeRun && <button className={`compact-run status-${props.activeRun.status} pressable`} title={runStatusLabel[props.activeRun.status]} onClick={() => { props.onShowRun(); props.onExpand() }}><Play size={14} /></button>}
-      <button className="compact-compose pressable" title={`对${props.contextLabel}执行`} onClick={props.onRequestComposerFocus}><Sparkles size={15} /></button>
-    </aside>
-  }
+  if (props.collapsed) return null
+
 
   return <aside className="work-rail" data-testid="work-rail" data-mode={mode} style={{ width: props.width }}>
-    <WorkRailHeader mode={mode} activeRun={props.activeRun} contextLabel={props.contextLabel} contextCount={props.contextCount} onSaveWorkspaceState={props.onSaveWorkspaceState} onOpenWorkspaceStates={props.onOpenWorkspaceStates} onCollapse={props.onCollapse} />
+    <WorkRailHeader mode={mode} activeRun={props.activeRun} contextLabel={props.contextLabel} contextCount={props.contextCount} contextScope={props.contextScope} onContextScope={props.onContextScope} onCollapse={props.onCollapse} />
     <div className="work-rail-body" data-testid="work-rail-body">
       {mode === 'waiting-input' && props.activeRun
         ? <WaitingState run={props.activeRun} onSync={props.onSyncRun} onAnswer={props.onAnswerInput} />
@@ -97,7 +94,7 @@ export function WorkRail(props: Props) {
           : mode === 'run' && props.activeRun
             ? <RunState run={props.activeRun} nodes={props.nodes} onRetry={props.onRetry} onSync={props.onSyncRun} onCancel={props.onCancelRun} onRecover={props.onRecoverRun} recovering={props.runtimeRecovering} />
             : mode === 'completed' && props.activeRun
-              ? <CompletedState run={props.activeRun} nodes={props.nodes} onSaveWorkspaceState={props.onSaveWorkspaceState} />
+              ? <CompletedState run={props.activeRun} nodes={props.nodes} />
               : <RailIdleState contextLabel={props.contextLabel} contextCount={props.contextCount} />}
       {props.activeRun && <RunActivity events={props.runEvents} error={props.runEventsError} />}
     </div>
@@ -105,13 +102,13 @@ export function WorkRail(props: Props) {
   </aside>
 }
 
-function WorkRailHeader({ mode, activeRun, contextLabel, contextCount, onSaveWorkspaceState, onOpenWorkspaceStates, onCollapse }: {
+function WorkRailHeader({ mode, activeRun, contextLabel, contextCount, contextScope, onContextScope, onCollapse }: {
   mode: WorkRailMode
   activeRun: ActiveRun | null
   contextLabel: string
   contextCount: number
-  onSaveWorkspaceState: () => void
-  onOpenWorkspaceStates: () => void
+  contextScope: 'workspace' | 'scope' | 'project'
+  onContextScope: (scope: 'workspace' | 'scope' | 'project') => void
   onCollapse: () => void
 }) {
   const followsRun = Boolean(activeRun && ['run', 'waiting-input', 'review', 'completed'].includes(mode))
@@ -123,9 +120,8 @@ function WorkRailHeader({ mode, activeRun, contextLabel, contextCount, onSaveWor
     <span className="work-rail-focus-dot" />
     <div><span>{meta}</span><h2>{title}</h2></div>
     <div className="work-rail-header-actions">
-      <button className="pressable" aria-label="保存当前工作现场" title="保存当前工作现场" onClick={onSaveWorkspaceState}><History size={14} /></button>
-      <button className="pressable" aria-label="查看工作现场历史" title="查看工作现场历史" onClick={onOpenWorkspaceStates}><RotateCcw size={14} /></button>
-      <button className="pressable" aria-label="折叠 AI 工作栏" title="折叠 AI 工作栏" onClick={onCollapse}><PanelRightClose size={15} /></button>
+      {!followsRun && <label className="lcos-global-context-scope" title="全局 Agent Context 范围"><select value={contextScope} onChange={(event) => onContextScope(event.target.value as 'workspace' | 'scope' | 'project')}><option value="workspace">Workspace</option><option value="scope">Scope</option><option value="project">Project</option></select><ChevronDown size={10}/></label>}
+      <button className="pressable" aria-label="关闭全局 Agent" title="关闭全局 Agent" onClick={onCollapse}><PanelRightClose size={15} /></button>
     </div>
   </header>
 }
@@ -189,12 +185,11 @@ function ReviewState({ node, run, onAccept, onReject, onRetry, onContinueModify 
   </div>
 }
 
-function CompletedState({ run, nodes, onSaveWorkspaceState }: { run: ActiveRun; nodes: CanvasNode[]; onSaveWorkspaceState: () => void }) {
+function CompletedState({ run, nodes }: { run: ActiveRun; nodes: CanvasNode[] }) {
   const current = run.pendingArtifactId ? nodes.find((node) => node.id === run.pendingArtifactId) : null
   return <div className="rail-section completed-state" data-testid="rail-completed">
     <div className="completed-hero"><Check size={19} /><div><small>Agent 任务</small><h3>{run.resultSummary ? '分析完成' : '结果已归位'}</h3><p>{run.resultSummary ?? `${current?.title ?? run.changedFiles[0] ?? '本次结果'} 已写入项目过程与版本记录。`}</p></div></div>
-    <section className="review-summary"><h4>接下来</h4><ul><li>继续在节点下方输入下一轮要求</li><li>在 Canvas 中查看任务与版本来源</li><li>需要阶段留档时保存当前工作现场</li></ul></section>
-    <button className="rail-secondary pressable" onClick={onSaveWorkspaceState}><History size={14} />保存当前工作现场</button>
+    <section className="review-summary"><h4>接下来</h4><ul><li>继续在节点下方输入下一轮要求</li><li>在 Canvas 中查看任务与版本来源</li><li>需要回看阶段时，从项目历史或 Context Snapshot 进入</li></ul></section>
   </div>
 }
 

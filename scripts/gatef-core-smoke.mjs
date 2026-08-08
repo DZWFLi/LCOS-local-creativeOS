@@ -245,7 +245,7 @@ try {
   metadata = undefined
 
   metadata = new SqliteMetadataRepository(databasePath)
-  assert.equal(metadata.schemaVersion, 18)
+  assert.equal(metadata.schemaVersion, 20)
   assert.equal(metadata.getCommandDraft(projectId, workspaceId, 'selection')?.prompt, '把开场缩短到三秒')
   assert.equal(metadata.getProviderSessionBinding(projectId, 'codex')?.externalSessionId, 'session-gatef-smoke')
   assert.equal(metadata.getContextProposal(projectId, proposal.body.value.proposalId)?.status, 'pending')
