@@ -134,6 +134,7 @@ export function App() {
   const [globalCreateAsNewNode, setGlobalCreateAsNewNode] = useState(false)
   const [globalContextScope, setGlobalContextScope] = useState<'workspace' | 'scope' | 'project'>('workspace')
   const [selectionComposerText, setSelectionComposerText] = useState('')
+  const [selectionComposerOpen, setSelectionComposerOpen] = useState(false)
   const [selectionProvider, setSelectionProvider] = useState('auto')
   const [selectionCreateAsNewNode, setSelectionCreateAsNewNode] = useState(false)
   const [selectionBaseRevision, setSelectionBaseRevision] = useState<ArtifactRevisionProvenance | null>(null)
@@ -951,7 +952,12 @@ export function App() {
     }
   }, [activeRun?.id, activeRun?.inputResolved, activeRun?.pendingArtifactId, activeRun?.status])
 
-  const clearSelection = useCallback(() => { setSelectedIds([]); setSelectedEdgeId(null); setNodeInfoId(null) }, [])
+  const clearSelection = useCallback(() => {
+    setSelectedIds([])
+    setSelectedEdgeId(null)
+    setNodeInfoId(null)
+    setSelectionComposerOpen(false)
+  }, [])
 
   const captureProjectState = useCallback((): PersistedPrototypeState => ({
     version: 10,
@@ -1082,15 +1088,21 @@ export function App() {
   }, [])
   const selectNode = useCallback((id: string, additive = false) => {
     setSelectedEdgeId(null)
+    // 第一次单击只选中；再次单击已选中的节点才唤起提示词浮层，
+    // 避免拖拽/多选时被 nearfield composer 干扰。
+    setSelectionComposerOpen(!additive && selectedIds.includes(id))
     setSelectedIds((current) => additive ? current.includes(id) ? current.filter((item) => item !== id) : [...current, id] : [id])
     if (!additive) setNodeInfoId(null)
-  }, [])
+  }, [selectedIds])
   const selectMarquee = useCallback((ids: string[], additive: boolean) => {
     setSelectedEdgeId(null)
     setSelectedIds((current) => additive ? Array.from(new Set([...current, ...ids])) : ids)
     setNodeInfoId(null)
   }, [])
-  const selectEdge = useCallback((id: string | null) => { setSelectedEdgeId(id); if (id) { setSelectedIds([]); setNodeInfoId(null) } }, [])
+  const selectEdge = useCallback((id: string | null) => {
+    setSelectedEdgeId(id)
+    if (id) { setSelectedIds([]); setNodeInfoId(null); setSelectionComposerOpen(false) }
+  }, [])
 
   const activateOverview = useCallback(() => {
     setWorkspaceId(null)
@@ -2830,6 +2842,7 @@ export function App() {
   }, [activeProjectId, handoffManifest])
 
   const handleDoubleClick = useCallback((id: string) => {
+    setSelectionComposerOpen(false)
     const node = nodes.find((item) => item.id === id)
     if (!node) return
     selectNode(id)
@@ -3077,7 +3090,7 @@ export function App() {
         onPresentationInteractionChange: handlePresentationInteractionChange,
         onPresentationCommit: handlePresentationCommit,
         onFrameBoundsChange: handleFrameBoundsChange,
-        selectionComposer: selectedIds.length ? {
+        selectionComposer: selectedIds.length && selectionComposerOpen ? {
           contextIds: selectionContextIds,
           prompt: selectionComposerText,
           provider: selectionProvider,
@@ -3134,7 +3147,7 @@ export function App() {
         onSelect: selectNode,
         onDoubleClick: handleDoubleClick,
       },
-      composer: activeSurface !== 'arrange' && selectedIds.length > 0 ? {
+      composer: activeSurface !== 'arrange' && selectedIds.length > 0 && selectionComposerOpen ? {
         nodes,
         selectedIds,
         prompt: selectionComposerText,

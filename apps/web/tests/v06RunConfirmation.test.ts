@@ -10,7 +10,7 @@ describe('Gate F plain-language composer contract', () => {
 
   it('launches runs directly from selected context without a technical confirmation page', () => {
     expect(app).not.toContain('<RunConfirmDialog')
-    expect(app).toContain('selectionComposer: selectedIds.length ?')
+    expect(app).toContain('selectionComposer: selectedIds.length && selectionComposerOpen ?')
     expect(app).toContain('onSend: requestSelectionRun')
     expect(composer).toContain('data-testid="selection-composer"')
     expect(composer).toContain('Ctrl/Cmd+Enter')
