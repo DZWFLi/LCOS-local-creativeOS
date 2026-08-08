@@ -18,6 +18,9 @@ import type {
   ContextSnapshotId,
   ContextManifestId,
   GraphVersion,
+  HandoffArtifactRef,
+  HandoffRecord,
+  HandoffResumeMode,
   Note,
   Project,
   ProjectId,
@@ -686,6 +689,9 @@ export type {
   Checkpoint,
   FileRecord,
   GraphVersion,
+  HandoffArtifactRef,
+  HandoffRecord,
+  HandoffResumeMode,
   Note,
   PreviewRecord,
   Project,
@@ -696,6 +702,32 @@ export type {
   Scope,
   Workspace,
   WorkspaceContextPolicy,
+}
+
+// B5 ContextSnapshot boundary types (local-core ContextSnapshotService ↔ web client)
+export interface ContextSnapshotRefsV1 {
+  readonly schemaVersion: 1
+  readonly savedAt: string
+  readonly workspaceId: string | null
+  readonly scopeId: string | null
+  readonly focusedViewIds: readonly string[]
+  readonly artifactIds: readonly string[]
+  readonly relationIds: readonly string[]
+  readonly noteIds: readonly string[]
+  readonly runIds: readonly string[]
+}
+
+export interface SnapshotCompareResultV1 {
+  readonly base: string
+  readonly other: string
+  readonly added: ContextSnapshotRefsV1
+  readonly removed: ContextSnapshotRefsV1
+  readonly kept: ContextSnapshotRefsV1
+}
+
+export interface BranchSnapshotResultV1 {
+  readonly scopeId: string
+  readonly viewIds: readonly string[]
 }
 
 // Universal Resource Import (U0)

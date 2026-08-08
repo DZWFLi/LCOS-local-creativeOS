@@ -1,31 +1,11 @@
 import type { Checkpoint, CheckpointId, JsonValue, ProjectId, ScopeId, WorkspaceId } from '@local-creative-os/domain'
+import type {
+  BranchSnapshotResultV1 as BranchSnapshotResult,
+  ContextSnapshotRefsV1 as ContextSnapshotRefs,
+  SnapshotCompareResultV1 as SnapshotCompareResult,
+} from '@local-creative-os/contracts'
 
 import type { SqliteMetadataRepository } from './metadata-repository.js'
-
-export interface ContextSnapshotRefs {
-  readonly schemaVersion: 1
-  readonly savedAt: string
-  readonly workspaceId: string | null
-  readonly scopeId: string | null
-  readonly focusedViewIds: readonly string[]
-  readonly artifactIds: readonly string[]
-  readonly relationIds: readonly string[]
-  readonly noteIds: readonly string[]
-  readonly runIds: readonly string[]
-}
-
-export interface SnapshotCompareResult {
-  readonly base: string
-  readonly other: string
-  readonly added: ContextSnapshotRefs
-  readonly removed: ContextSnapshotRefs
-  readonly kept: ContextSnapshotRefs
-}
-
-export interface BranchSnapshotResult {
-  readonly scopeId: string
-  readonly viewIds: readonly string[]
-}
 
 function diffRefs(base: ContextSnapshotRefs, other: ContextSnapshotRefs): ContextSnapshotRefs {
   return {
