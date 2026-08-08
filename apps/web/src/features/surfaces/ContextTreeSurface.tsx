@@ -1,5 +1,6 @@
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { useMemo } from 'react'
+import type { CSSProperties } from 'react'
 import type { CanvasEdge, CanvasNode } from '../../model'
 import { useProjectionLayoutState } from '../../state/projectionLayoutState'
 import { ContextHistoryRail } from './ContextHistoryRail'
@@ -31,7 +32,7 @@ export function ContextTreeSurface(props:Props){
   return <section className="lcos-dedicated-surface lcos-context-tree" data-testid="surface-context-tree">
     <header className="lcos-surface-heading"><div><strong>上下文</strong><span>树状</span></div><small>{defaultRoots.length||1} roots · 可折叠</small></header>
     <svg className="lcos-tree-edges" viewBox="0 0 1260 760" preserveAspectRatio="none">{props.edges.map((edge)=>{const from=byPlaced.get(edge.from),to=byPlaced.get(edge.to);if(!from||!to)return null;const x1=from.x+from.w,y1=from.y+from.h/2,x2=to.x,y2=to.y+to.h/2,m=(x1+x2)/2;return <path key={edge.id} d={`M${x1} ${y1} H${m} V${y2} H${x2}`} className={edge.active?'active':''}/>})}</svg>
-    {placed.map((item)=><div key={item.node.id} className="lcos-tree-node" style={{left:item.x,top:item.y,width:item.w,height:item.h}}>{item.hasChildren&&<button className="lcos-tree-fold" type="button" aria-label={state.collapsedIds.includes(item.node.id)?'展开分支':'折叠分支'} onClick={()=>toggle(item.node.id)}>{state.collapsedIds.includes(item.node.id)?<ChevronRight size={11}/>:<ChevronDown size={11}/>}</button>}<SurfaceObject node={item.node} selected={props.selectedIds.includes(item.node.id)} onSelect={props.onSelect} onDoubleClick={props.onDoubleClick}/></div>)}
+    {placed.map((item,index)=><div key={item.node.id} className="lcos-tree-node" style={{left:item.x,top:item.y,width:item.w,height:item.h,'--i':index} as CSSProperties}>{item.hasChildren&&<button className="lcos-tree-fold" type="button" aria-label={state.collapsedIds.includes(item.node.id)?'展开分支':'折叠分支'} onClick={()=>toggle(item.node.id)}>{state.collapsedIds.includes(item.node.id)?<ChevronRight size={11}/>:<ChevronDown size={11}/>}</button>}<SurfaceObject node={item.node} selected={props.selectedIds.includes(item.node.id)} onSelect={props.onSelect} onDoubleClick={props.onDoubleClick}/></div>)}
     {props.runtime&&<ContextHistoryRail history={props.runtime.history} handoffs={props.runtime.handoffs} onBranch={props.runtime.onBranchHistory} onCompare={props.runtime.onCompareHistory} onSource={props.runtime.onOpenHistorySource}/>} 
   </section>
 }

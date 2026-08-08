@@ -1,5 +1,6 @@
 import { Play } from 'lucide-react'
 import { useMemo } from 'react'
+import type { CSSProperties } from 'react'
 import type { CanvasEdge, CanvasNode } from '../../model'
 import { runStatusLabel } from '../../model'
 import { SurfaceObject } from './SurfaceObject'
@@ -34,7 +35,7 @@ export function WorkFreeSurface(props:Props){
     <header className="lcos-surface-heading"><div><strong>运行</strong><span>自由图</span></div><small>{runs} runs · {props.nodes.length} objects</small></header>
     <div className="lcos-workfree-stage">
       <svg className="lcos-workfree-edges" aria-hidden="true">{layout.edges.map(({edge,x1,y1,x2,y2})=><line key={edge.id} x1={`${x1}%`} y1={`${y1}%`} x2={`${x2}%`} y2={`${y2}%`} className={edge.active?'active':''}/>)}</svg>
-      {layout.items.map(({node,left,top,width})=><div key={node.id} className={`lcos-workfree-node ${node.kind==='process'?'is-run':''}`} style={{left:`${left}%`,top:`${top}%`,width:`${width}%`}}>
+      {layout.items.map(({node,left,top,width},index)=><div key={node.id} className={`lcos-workfree-node ${node.kind==='process'?'is-run':''}`} style={{left:`${left}%`,top:`${top}%`,width:`${width}%`,'--i':index} as CSSProperties}>
         <SurfaceObject node={node} compact={node.kind!=='process'} selected={props.selectedIds.includes(node.id)} onSelect={props.onSelect} onDoubleClick={props.onDoubleClick}/>
         {node.kind==='process'&&<span className={`lcos-run-badge status-${node.runStatus??'idle'}`} title={node.runStatus?runStatusLabel[node.runStatus]:'执行记录'}><Play size={9} fill="currentColor"/>{node.runStatus?runStatusLabel[node.runStatus]:'Run'}</span>}
       </div>)}

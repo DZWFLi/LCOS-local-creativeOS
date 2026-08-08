@@ -510,6 +510,9 @@
   inset:0;
   overflow:auto;
   color:var(--lcos-ink);
+  background-image:radial-gradient(circle at center, rgba(120,116,160,.13) 1px, transparent 1.2px);
+  background-size:22px 22px;
+  background-position:center;
   animation:lcos-surface-in .17s cubic-bezier(.2,.72,.2,1) both;
 }
 .lcos-reconstructed .lcos-surface-heading { position:sticky; z-index:10; top:0; height:48px; display:flex; align-items:center; justify-content:space-between; padding:0 22px; pointer-events:none; background:linear-gradient(var(--lcos-ground) 62%,transparent); }
@@ -1064,8 +1067,32 @@
 .lcos-reconstructed .lcos-outline-grip { width:18px; height:28px; display:grid; place-items:center; border:0; background:transparent; color:#c0bcc5; cursor:grab; opacity:.15; transition:opacity 100ms ease; }
 .lcos-reconstructed .lcos-outline-row:hover .lcos-outline-grip { opacity:.75; }
 .lcos-reconstructed .lcos-outline-guides { position:absolute; left:0; top:0; bottom:0; pointer-events:none; }
-.lcos-reconstructed .lcos-outline-guides i { position:absolute; top:0; bottom:0; width:1px; background:rgba(87,81,103,.055); }
+.lcos-reconstructed .lcos-outline-guides i { position:absolute; top:0; bottom:0; width:1px; background:rgba(87,81,103,.09); transition:background .16s ease; }
+.lcos-reconstructed .lcos-outline-row:hover .lcos-outline-guides i.current { background:rgba(139,92,246,.38); }
 .lcos-reconstructed .lcos-outline-row:focus-within { outline:1px solid rgba(115,94,188,.15); outline-offset:-1px; border-radius:7px; }
+
+/* Silk: node entry stagger + connection hover feedback. */
+@keyframes lcos-node-in { from { opacity:0; translate:0 4px; scale:.985; } to { opacity:1; translate:0 0; scale:1; } }
+.lcos-reconstructed .lcos-outline-row,
+.lcos-reconstructed .lcos-tree-node,
+.lcos-reconstructed .lcos-graph-dot,
+.lcos-reconstructed .lcos-workfree-node { animation:lcos-node-in .24s cubic-bezier(.2,.9,.3,1.15) both; animation-delay:calc(var(--i,0) * 16ms); }
+.lcos-reconstructed .lcos-tree-edges path { transition:stroke .16s ease,stroke-width .16s ease; }
+.lcos-reconstructed .lcos-tree-edges path:hover { stroke:rgba(104,93,160,.42); stroke-width:1.5; }
+.lcos-reconstructed .lcos-graph-edges line { transition:stroke .16s ease,stroke-width .16s ease; }
+.lcos-reconstructed .lcos-graph-edges line:hover { stroke:rgba(104,93,160,.42); stroke-width:1.5; }
+.lcos-reconstructed .lcos-workfree-edges line { transition:stroke .16s ease,stroke-width .16s ease; }
+.lcos-reconstructed .lcos-workfree-edges line:hover { stroke:rgba(104,93,160,.42); stroke-width:1.5; }
+
+/* Obsidian-like rings + quiet glyph hover. */
+.lcos-reconstructed .lcos-context-graph::before,
+.lcos-reconstructed .lcos-context-graph::after { content:""; position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); border:1px dashed rgba(120,116,160,.13); border-radius:50%; pointer-events:none; }
+.lcos-reconstructed .lcos-context-graph::before { width:min(42%,420px); aspect-ratio:1; }
+.lcos-reconstructed .lcos-context-graph::after { width:min(70%,680px); aspect-ratio:1; }
+.lcos-reconstructed .lcos-surface-glyph { transition:transform .16s ease,filter .16s ease; }
+.lcos-reconstructed .lcos-surface-glyph:hover { transform:scale(1.08); filter:drop-shadow(0 4px 10px rgba(52,44,84,.16)); }
+.lcos-reconstructed .lcos-surface-glyph.dim { opacity:.55; }
+.lcos-reconstructed .lcos-surface-glyph.dim:hover { opacity:1; }
 
 /* Context Flow: multiple axes first, decoration second. */
 .lcos-reconstructed .lcos-flow-stage { position:relative; width:min(1080px,calc(100% - 300px)); min-height:620px; margin:8px 270px 80px 30px; }

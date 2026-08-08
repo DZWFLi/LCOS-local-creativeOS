@@ -1,5 +1,6 @@
 import { Filter, Orbit } from 'lucide-react'
 import { useMemo } from 'react'
+import type { CSSProperties } from 'react'
 import type { CanvasEdge, CanvasNode } from '../../model'
 import { useProjectionLayoutState } from '../../state/projectionLayoutState'
 import { ContextHistoryRail } from './ContextHistoryRail'
@@ -29,7 +30,7 @@ export function ContextGraphSurface(props:Props){
     <header className="lcos-surface-heading"><div><strong>上下文</strong><span>局部关系</span></div><div className="lcos-graph-controls"><button type="button" className={state.hops===1?'active':''} onClick={()=>setState((current)=>({...current,hops:1}))}>1 hop</button><button type="button" className={state.hops===2?'active':''} onClick={()=>setState((current)=>({...current,hops:2}))}>2 hops</button><details><summary title="关系筛选"><Filter size={12}/></summary><div>{RELATION_KINDS.map((kind)=><label key={kind}><input type="checkbox" checked={state.relationKinds.includes(kind)} onChange={()=>toggleKind(kind)}/><span>{kind}</span></label>)}</div></details></div></header>
     <div className="lcos-graph-orbit" aria-hidden="true"><Orbit size={15}/><span>{dots.length} local objects</span></div>
     <svg className="lcos-graph-edges" viewBox="0 0 100 100" preserveAspectRatio="none">{filteredEdges.filter((edge)=>ids.has(edge.from)&&ids.has(edge.to)).map((edge)=>{const a=pos.get(edge.from)!,b=pos.get(edge.to)!;return <line key={edge.id} x1={a.x} y1={a.y} x2={b.x} y2={b.y} className={edge.active?'active':''}/>})}</svg>
-    {dots.map((dot)=><div key={dot.node.id} className={`lcos-graph-dot ring-${dot.ring}`} style={{left:`${dot.x}%`,top:`${dot.y}%`}}><SurfaceObject node={dot.node} glyph dim={dot.ring===2} selected={props.selectedIds.includes(dot.node.id)} onSelect={props.onSelect} onDoubleClick={props.onDoubleClick}/></div>)}
+    {dots.map((dot,index)=><div key={dot.node.id} className={`lcos-graph-dot ring-${dot.ring}`} style={{left:`${dot.x}%`,top:`${dot.y}%`, '--i':index} as CSSProperties}><SurfaceObject node={dot.node} glyph dim={dot.ring===2} selected={props.selectedIds.includes(dot.node.id)} onSelect={props.onSelect} onDoubleClick={props.onDoubleClick}/></div>)}
     {props.runtime&&<ContextHistoryRail history={props.runtime.history} handoffs={props.runtime.handoffs} onBranch={props.runtime.onBranchHistory} onCompare={props.runtime.onCompareHistory} onSource={props.runtime.onOpenHistorySource}/>} 
   </section>
 }
