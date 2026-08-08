@@ -434,7 +434,7 @@
 .lcos-reconstructed .selection-toolbar,
 .lcos-reconstructed .selection-action-strip {
   padding:4px !important;
-  gap:2px !important;
+  gap:6px !important;
   border:1px solid var(--lcos-hair-strong) !important;
   border-radius:11px !important;
   background:rgba(252,252,254,.90) !important;
@@ -442,7 +442,23 @@
   box-shadow:var(--lcos-shadow-float) !important;
 }
 .lcos-reconstructed .selection-toolbar button,
-.lcos-reconstructed .selection-action-strip button { min-height:27px !important; height:27px !important; padding:0 8px !important; border:0 !important; border-radius:7px !important; background:transparent !important; color:#676270 !important; font-size:9.5px !important; gap:5px; }
+.lcos-reconstructed .selection-action-strip button {
+  display:flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  min-height:30px !important;
+  height:30px !important;
+  padding:0 10px !important;
+  border:0 !important;
+  border-radius:8px !important;
+  background:transparent !important;
+  color:#676270 !important;
+  font-size:10px !important;
+  gap:5px !important;
+  white-space:nowrap !important;
+}
+.lcos-reconstructed .selection-toolbar button svg,
+.lcos-reconstructed .selection-action-strip button svg { width:14px !important; height:14px !important; flex:0 0 auto; }
 .lcos-reconstructed .selection-toolbar button:hover,
 .lcos-reconstructed .selection-action-strip button:hover { background:rgba(82,74,107,.065) !important; color:#312e39 !important; }
 .lcos-reconstructed .selection-toolbar,
@@ -585,10 +601,94 @@
 .lcos-reconstructed .vnext-drop-gutter,
 .lcos-reconstructed .drop-gutter-left,
 .lcos-reconstructed .drop-gutter-bottom { z-index:80 !important; border:0 !important; background:transparent !important; pointer-events:none; }
+.lcos-reconstructed .drop-gutter span {
+  position:absolute;
+  left:50%;
+  top:50%;
+  transform:translate(-50%,-50%) scale(.92);
+  padding:7px 14px;
+  border:1px solid rgba(139,92,246,.24);
+  border-radius:999px;
+  background:rgba(255,255,255,.96);
+  color:#6b4fb5;
+  font-size:10px;
+  font-weight:620;
+  letter-spacing:.04em;
+  white-space:nowrap;
+  box-shadow:0 8px 24px rgba(52,44,84,.16);
+  opacity:0;
+  transition:opacity .06s ease,transform .06s ease;
+}
+.lcos-reconstructed .drop-gutter.active span { opacity:1; transform:translate(-50%,-50%) scale(1); }
+.lcos-reconstructed .drop-gutter.active { background:linear-gradient(0deg,rgba(139,92,246,.13),rgba(139,92,246,.04) 55%,transparent) !important; }
+.lcos-reconstructed .drop-gutter-left.active { background:linear-gradient(90deg,rgba(139,92,246,.13),rgba(139,92,246,.04) 55%,transparent) !important; }
 .lcos-reconstructed .drop-gutter-left::after,
 .lcos-reconstructed .vnext-drop-gutter-left::after { content:""; position:absolute; left:0; top:0; bottom:0; width:7px; background:linear-gradient(90deg,rgba(139,92,246,.18),rgba(59,130,246,.07),transparent); filter:blur(.4px); opacity:.78; }
 .lcos-reconstructed .drop-gutter-bottom::after,
 .lcos-reconstructed .vnext-drop-gutter-bottom::after { content:""; position:absolute; left:0; right:0; bottom:0; height:8px; background:linear-gradient(0deg,rgba(139,92,246,.17),rgba(59,130,246,.06),transparent); opacity:.78; }
+.lcos-reconstructed .drop-gutter.active::after { opacity:1; }
+
+/* Drop ghost — real nodes stay put, a light stack follows the pointer. */
+.lcos-drop-ghost {
+  position:fixed;
+  z-index:120;
+  pointer-events:none;
+  display:flex;
+  align-items:center;
+  gap:7px;
+  padding:6px 10px 6px 6px;
+  border:1px solid rgba(139,92,246,.20);
+  border-radius:14px;
+  background:rgba(251,251,253,.92);
+  backdrop-filter:blur(14px) saturate(1.08);
+  box-shadow:0 14px 34px rgba(52,44,84,.18), inset 0 1px 0 rgba(255,255,255,.9);
+  transform:translate(-50%,-50%);
+}
+.lcos-drop-ghost-stack { position:relative; width:32px; height:24px; }
+.lcos-drop-ghost-stack i { position:absolute; width:23px; height:18px; border-radius:5px; background:#fff; border:1px solid rgba(139,92,246,.20); box-shadow:0 2px 5px rgba(52,44,84,.10); }
+.lcos-drop-ghost-stack i:nth-child(1){ left:1px; top:5px; transform:rotate(-7deg); }
+.lcos-drop-ghost-stack i:nth-child(2){ left:5px; top:2px; transform:rotate(1deg); }
+.lcos-drop-ghost-stack i:nth-child(3){ left:9px; top:0; transform:rotate(7deg); }
+.lcos-drop-ghost strong { min-width:16px; height:16px; display:grid; place-items:center; border-radius:999px; background:var(--lcos-purple); color:#fff; font-size:9px; font-weight:650; }
+.lcos-drop-ghost small { color:#6b4fb5; font-size:10px; font-weight:620; letter-spacing:.02em; }
+
+/* DropShelf — prototype Share Sheet: stacked chips, verbs, spring in. */
+.lcos-reconstructed .vnext-drop-shelf {
+  flex-direction:column;
+  align-items:stretch;
+  width:272px;
+  max-width:calc(100vw - 120px);
+  gap:8px;
+  padding:12px;
+  border-radius:18px;
+  border:1px solid rgba(28,27,34,.08);
+  background:rgba(251,251,253,.86);
+  box-shadow:0 1px 2px rgba(28,27,34,.06),0 28px 60px -32px rgba(28,27,34,.55);
+  backdrop-filter:blur(24px) saturate(1.08);
+  animation:lcos-shelf-spring .26s cubic-bezier(.2,.9,.3,1.15) both;
+}
+@keyframes lcos-shelf-spring {
+  0% { opacity:0; translate:0 12px; scale:.97; }
+  62% { opacity:1; translate:0 -2px; scale:1.005; }
+  100% { opacity:1; translate:0 0; scale:1; }
+}
+.lcos-reconstructed .vnext-drop-payload { width:auto; height:auto; display:flex; align-items:center; gap:9px; border-right:0; padding:0; }
+.lcos-reconstructed .vnext-payload-stack { width:56px; height:40px; }
+.lcos-reconstructed .vnext-payload-stack i { width:38px; height:34px; border-radius:10px; background:#fff; border:1px solid rgba(28,27,34,.08); box-shadow:0 2px 6px rgba(28,27,34,.08); }
+.lcos-reconstructed .vnext-payload-stack i:nth-child(1){ left:2px; top:6px; transform:rotate(-6deg); }
+.lcos-reconstructed .vnext-payload-stack i:nth-child(2){ left:10px; top:2px; transform:rotate(1deg); }
+.lcos-reconstructed .vnext-payload-stack i:nth-child(3){ left:18px; top:0; transform:rotate(6deg); }
+.lcos-reconstructed .vnext-drop-payload strong { position:static; min-width:18px; height:18px; padding:0 5px; border-radius:999px; background:var(--lcos-purple); color:#fff; border:0; font-size:9px; font-weight:650; }
+.lcos-reconstructed .vnext-drop-verbs { display:flex; flex-wrap:wrap; gap:5px; }
+.lcos-reconstructed .vnext-drop-verbs button { height:24px; padding:0 11px; border:0; border-radius:999px; background:rgba(28,27,34,.04); color:#8d8b99; font-size:10px; font-weight:520; transition:background .14s ease,color .14s ease,box-shadow .14s ease,transform .14s ease; }
+.lcos-reconstructed .vnext-drop-verbs button:hover { background:rgba(28,27,34,.07); color:#55535f; }
+.lcos-reconstructed .vnext-drop-verbs button.active { background:var(--lcos-purple); color:#fff; box-shadow:0 3px 10px rgba(139,92,246,.28); transform:translateY(-1px); }
+.lcos-reconstructed .vnext-drop-destinations { flex-direction:column; gap:2px; overflow:visible; }
+.lcos-reconstructed .vnext-destination { border-radius:10px; }
+.lcos-reconstructed .vnext-destination-main { height:34px; min-width:0; width:100%; padding:0 10px; color:#1c1b22; }
+.lcos-reconstructed .vnext-destination-main span { font-size:11px; font-weight:500; }
+.lcos-reconstructed .vnext-destination-follow { width:30px; border-left:1px solid rgba(28,27,34,.07) !important; }
+.lcos-reconstructed .vnext-drop-close { align-self:flex-end; width:28px; height:28px; }
 
 .lcos-reconstructed .vnext-drop-shelf {
   z-index:95 !important;
@@ -776,6 +876,8 @@
 .lcos-reconstructed .vnext-project-actions { margin-left:auto; display:flex; align-items:center; gap:8px; padding-right:4px; }
 .lcos-reconstructed .vnext-project-actions button { width:36px !important; height:36px !important; }
 .lcos-reconstructed .vnext-project-actions button svg { width:18px !important; height:18px !important; }
+.lcos-reconstructed .vnext-pending-entry { position:relative !important; }
+.lcos-reconstructed .vnext-pending-badge { position:absolute; top:2px; right:1px; min-width:14px; height:14px; padding:0 3px; display:inline-flex; align-items:center; justify-content:center; border-radius:999px; background:var(--lcos-purple); color:#fff; font-size:8px; font-weight:650; line-height:1; }
 
 /* Correct scene height for the reconstructed 42px strip. */
 .app-shell.lcos-reconstructed > .scene { height:calc(100vh - var(--lcos-top-h)) !important; }

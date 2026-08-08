@@ -93,6 +93,8 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
   const [resizingId, setResizingId] = useState<string | null>(null)
   const [draggingWorkspaceId, setDraggingWorkspaceId] = useState<string | null>(null)
   const [dropGutter, setDropGutter] = useState<'left' | 'bottom' | null>(null)
+  const [dropGhost, setDropGhost] = useState<{ x: number; y: number; count: number } | null>(null)
+  const dropHoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const marquee = useRef<{ startX: number; startY: number; currentX: number; currentY: number } | null>(null)
   const [marqueeRect, setMarqueeRect] = useState<{ left: number; top: number; width: number; height: number } | null>(null)
   const [createMenu, setCreateMenu] = useState<{ from: string; x: number; y: number; screenX: number; screenY: number } | null>(null)
@@ -336,9 +338,11 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
   }
 
   const dropAnchorAt = (clientX: number, clientY: number, rect: DOMRect): 'left' | 'bottom' | null => {
-    const bottomCaptureTop = rect.bottom - 92
+    // 投送热区必须 >= 自动平移触发区（96px），否则拖到边缘先触发平移，
+    // 节点从指针下溜走，投送永远抢不到。
+    const bottomCaptureTop = rect.bottom - 96
     if (clientY >= bottomCaptureTop && clientY < rect.bottom) return 'bottom'
-    if (clientX <= rect.left + 92) return 'left'
+    if (clientX <= rect.left + 96) return 'left'
     return null
   }
 
@@ -395,9 +399,28 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
     else if (resizeCandidate.current || workspaceDrag.current) onPresentationInteractionChange?.(false)
     if (activeDropGutter && wasDragging && draggedCandidate) {
       onPresentationInteractionChange?.(false)
-      onStageTransfer?.(draggedCandidate.group.map((item) => item.id), activeDropGutter)
+      // 松手三态：
+      // 1) 命中目的地按钮 → 就地投送；
+      // 2) 仍在投送区或面板上 → 打开/保持 Destination Sheet；
+      // 3) 虚影被拖到别处 → 取消投送，节点已回原位。
+      const rect = event.currentTarget.getBoundingClientRect()
+      const at = document.elementFromPoint(event.clientX, event.clientY)
+      const hit = at
+        ?.closest<HTMLButtonElement>('.vnext-destination-main, .vnext-destination-follow')
+      if (hit) {
+        // pointerup 时指针捕获仍在 canvas 上，同步 click 会被事件系统吞掉；
+        // 等捕获释放后再触发目的地投送。
+        window.setTimeout(() => hit.click(), 0)
+      } else if (at?.closest('.vnext-drop-shelf') || dropAnchorAt(event.clientX, event.clientY, rect)) {
+        onStageTransfer?.(draggedCandidate.group.map((item) => item.id), activeDropGutter)
+      }
     }
     setDropGutter(null)
+    setDropGhost(null)
+    if (dropHoverTimer.current !== null) {
+      clearTimeout(dropHoverTimer.current)
+      dropHoverTimer.current = null
+    }
     pan.current = null
     dragCandidate.current = null
     resizeCandidate.current = null
@@ -544,12 +567,51 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
       }
       if (dragging.current) {
         const anchor = onStageTransfer ? dropAnchorAt(event.clientX, event.clientY, rect) : null
-        setDropGutter((current) => current === anchor ? current : anchor)
-        const point = toWorld(event.clientX, event.clientY, rect)
-        dragPoint.current = { x: point.x - candidate.offsetX, y: point.y - candidate.offsetY }
-        scheduleDraggedNode()
-        if (anchor) stopAutoPan()
-        else scheduleAutoPan({ x: event.clientX, y: event.clientY })
+        if (anchor) {
+          // 投送优先：投送区与自动平移区同为 96px，指针进入即激活投送并停平移。
+          setDropGutter(anchor)
+          stopAutoPan()
+          const candidate = dragCandidate.current
+          if (!dropGhost && candidate) {
+            // 进入投送区：真实节点弹回拖拽前的原位，指针下换成虚影，
+            // 投送/取消都不再移动原画布节点。
+            if (candidate.originals.length > 0) {
+              setNodes((current) => current.map((node) => {
+                const original = candidate.originals.find((item) => item.id === node.id)
+                return original ? { ...node, x: original.x, y: original.y } : node
+              }))
+            }
+            setDropGhost({ x: event.clientX, y: event.clientY, count: candidate.group.length })
+          } else if (dropGhost) {
+            setDropGhost((current) => current ? { ...current, x: event.clientX, y: event.clientY } : current)
+          }
+          if (dropHoverTimer.current === null) {
+            // 顿一下（350ms）即视为用户主动进入投送：弹出投送面板，相机保持锁死。
+            dropHoverTimer.current = setTimeout(() => {
+              dropHoverTimer.current = null
+              const candidate = dragCandidate.current
+              if (candidate) onStageTransfer?.(candidate.group.map((item) => item.id), anchor)
+            }, 350)
+          }
+        } else if (dropGhost) {
+          // 投送意图保持：虚影已被激活，允许拖到 DropShelf 面板上；
+          // gutter 保持激活直到松手，由 pointerup 决定投送还是取消。
+          setDropGhost((current) => current ? { ...current, x: event.clientX, y: event.clientY } : current)
+        } else {
+          // 无投送意图：gutter 熄灭（松手不误触发），恢复自动平移。
+          // 96px 外 auto-pan 强度为 0，不会因边界抖动而晃画布。
+          if (dropHoverTimer.current !== null) {
+            clearTimeout(dropHoverTimer.current)
+            dropHoverTimer.current = null
+          }
+          setDropGutter(null)
+          scheduleAutoPan({ x: event.clientX, y: event.clientY })
+        }
+        if (!dropGhost) {
+          const point = toWorld(event.clientX, event.clientY, rect)
+          dragPoint.current = { x: point.x - candidate.offsetX, y: point.y - candidate.offsetY }
+          scheduleDraggedNode()
+        }
       }
     }
     if (link.current || edgeReconnect.current) {
@@ -602,6 +664,11 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
       {returnGroups.map((group) => <div key={group.id} className="return-group-mat" data-return-group={group.id} style={{ left: group.x, top: group.y, width: group.width, height: group.height }}><span>{group.id} · {group.count} 个返回结果</span></div>)}
       {pendingZone && <div className="pending-return-zone" style={{ left: pendingZone.x, top: pendingZone.y, width: pendingZone.width, height: pendingZone.height }}><span>待确认结果区</span></div>}
       {onStageTransfer && draggingId && <><div className={`drop-gutter drop-gutter-left ${dropGutter === 'left' ? 'active' : ''}`} data-testid="drop-gutter-left"><span>投送</span></div><div className={`drop-gutter drop-gutter-bottom ${dropGutter === 'bottom' ? 'active' : ''}`} data-testid="drop-gutter-bottom"><span>投送</span></div></>}
+      {dropGhost && <div className="lcos-drop-ghost" style={{ left: dropGhost.x, top: dropGhost.y }} aria-hidden="true">
+        <span className="lcos-drop-ghost-stack"><i /><i /><i /></span>
+        <strong>{dropGhost.count}</strong>
+        <small>投送</small>
+      </div>}
       {layoutPreview?.map((item) => { const node = byId.get(item.id); return node ? <div key={item.id} className="layout-ghost" style={{ left: item.x, top: item.y, width: node.width, height: node.height }}><span>{node.title}</span></div> : null })}
       <svg className="edges" width="1800" height="1100" aria-label="可编辑关系">
         {renderEdges.map((edge) => <EdgePath key={edge.id} edge={edge} from={relationById.get(edge.from)} to={relationById.get(edge.to)} selected={selectedEdgeId === edge.id} focused={Boolean(selectedId && (edge.from === selectedId || edge.to === selectedId))} onSelect={onSelectEdge} onCut={(edgeId) => { setEdges((current) => current.filter((item) => item.id !== edgeId)); onSelectEdge(null) }} onReconnectStart={(endpoint, event) => beginEdgeReconnect(edge, endpoint, event)} />)}

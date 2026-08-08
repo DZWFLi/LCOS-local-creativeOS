@@ -57,7 +57,7 @@ import { ProjectionSurface } from './features/surfaces/ProjectionSurfaces'
 import { SurfaceComposerBar } from './features/surfaces/SurfaceComposerBar'
 import type { ContextHistoryEntry, ContextSurfaceRuntime, DeliverSurfaceRuntime, SessionHandoffProjection, WorkSurfaceRuntime } from './features/surfaces/surfaceContracts'
 import { adaptContextSnapshotEntries, adaptHandoffProjections } from './features/surfaces/historyProjection'
-import { DropShelf, type DropAnchor, type DropDestination } from './features/drop/DropShelf'
+import { DropShelf, type DropAnchor, type DropDestination, type TransferVerb } from './features/drop/DropShelf'
 import { ImmersiveViewer } from './features/viewer/ImmersiveViewer'
 import { resolveArtifactViewerKind } from './features/viewer/artifactViewerRegistry'
 
@@ -1349,9 +1349,10 @@ export function App() {
 
   const cancelTransfer = useCallback(() => setStagedTransfer(null), [])
 
-  const handleTransfer = useCallback((destination: DropDestination, follow: boolean) => {
+  const handleTransfer = useCallback((destination: DropDestination, verb: TransferVerb) => {
     const payload = stagedTransfer?.ids ?? []
     if (!payload.length) { setStagedTransfer(null); return }
+    const follow = verb === '继续工作'
     if (destination.kind === 'workspace') {
       const target = workspaces.find((workspace) => workspace.id === destination.id)
       if (!target) { setNotice('目标工作空间不存在'); setStagedTransfer(null); return }
@@ -1360,12 +1361,14 @@ export function App() {
       setNodes((current) => current.map((node) => {
         if (!payloadSet.has(node.id)) return node
         const index = payload.indexOf(node.id)
-        const x = targetFrame ? targetFrame.bounds.x + 28 + (index % 2) * 240 : node.x
-        const y = targetFrame ? targetFrame.bounds.y + 54 + Math.floor(index / 2) * 170 : node.y
+        // 加入：真实节点留在原画布位置，只登记进目标空间；移动/继续工作：节点移入目标框体。
+        const moved = verb !== '加入'
+        const x = moved && targetFrame ? targetFrame.bounds.x + 28 + (index % 2) * 240 : node.x
+        const y = moved && targetFrame ? targetFrame.bounds.y + 54 + Math.floor(index / 2) * 170 : node.y
         return { ...node, x, y, workspaceIds: [...new Set([...(node.workspaceIds ?? []).filter((id) => id !== workspaceId), destination.id])] }
       }))
       if (bootMode === 'runtime') {
-        if (workspaceId && workspaceId !== destination.id) {
+        if (workspaceId && workspaceId !== destination.id && verb !== '加入') {
           void Promise.all(payload.map((viewId) => bridgeRef.current.client.moveWorkspaceMember(workspaceId, { viewId, toWorkspaceId: destination.id }))).then((calls) => {
             const latest = calls.at(-1)
             if (latest?.result.ok) applyMembershipProjection(latest.result.value)
@@ -1383,6 +1386,7 @@ export function App() {
       setNotice(`${payload.length} 项已投送到「${target.label}」${follow ? '并前往' : ''}`)
     } else {
       const targetScopeId = destination.kind === 'workbench' ? ensureWorkbenchScope() : destination.kind === 'root' ? rootScope.id : destination.id
+      // workbench/scope 投送即投影：目标 scope 建立视图引用，主画布原视图不动。
       const projectedIds = projectViewsIntoScope(payload, targetScopeId)
       if (follow) {
         enterScopeKeepingSelection(targetScopeId, projectedIds)
@@ -3036,6 +3040,8 @@ export function App() {
       onOpenProjectDrive: () => setProjectOpen(false),
       onImport: () => setImportPanelOpen(true),
       onGlobalChat: () => { if (agentMode) setNotice('Agent Browser 模式下请直接使用宿主 Agent 对话框'); else setWorkRail((current) => ({ ...current, collapsed: false })) },
+      pendingCount: pendingReviews.length,
+      onPending: () => { setActiveSurface('deliver'); setNotice(pendingReviews.length ? `${pendingReviews.length} 项待确认，已进入交付视图` : '当前没有待确认的返回结果') },
       onHistory: () => { setActiveSurface('deliver'); setNotice('已进入项目版本与交付历史；Workspace 不再承担历史快照职责') },
       onMore: () => setCapabilityOpen((value) => !value),
     }}
