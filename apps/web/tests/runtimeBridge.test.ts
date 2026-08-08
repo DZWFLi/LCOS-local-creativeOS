@@ -208,6 +208,13 @@ function mockClient(overrides: Partial<LocalCoreClient> = {}): LocalCoreClient {
     buildConversationSemanticIndex: unavailable,
     applyMutations: unavailable,
     saveProjectGraph: unavailable,
+    listContextSnapshots: unavailable,
+    createContextSnapshot: unavailable,
+    compareContextSnapshots: unavailable,
+    branchContextSnapshot: unavailable,
+    listHandoffs: unavailable,
+    createHandoff: unavailable,
+    deleteHandoff: unavailable,
     ...overrides,
   }
 }

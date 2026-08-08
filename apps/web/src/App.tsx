@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { Command, Play } from 'lucide-react'
-import type { ContextChangeProposalV1, ContextManifestV0, ObsidianVaultScanV1, RunEvent, RunProposalResult, RunReview, RuntimeProviderStatus, WorkspaceMembership } from '@local-creative-os/contracts'
+import type { Checkpoint, ContextChangeProposalV1, ContextManifestV0, HandoffRecord, ObsidianVaultScanV1, RunEvent, RunProposalResult, RunReview, RuntimeProviderStatus, WorkspaceMembership } from '@local-creative-os/contracts'
 import type { ActiveRun, Camera, CanvasNode, CanvasScope, NodeDisplayMode, NodeLayer, PersistedPrototypeState, ProjectPackage, ScopeKind, TargetContextInference, WorkRailPreferences, Workspace, WorkspaceIntent } from './model'
 import { nodeMeta, runStatusLabel } from './model'
 import { ProjectCanvas } from './features/canvas/ProjectCanvas'
@@ -56,6 +56,7 @@ import { SurfaceDock, type SurfaceId } from './features/shell/SurfaceDock'
 import { ProjectionSurface } from './features/surfaces/ProjectionSurfaces'
 import { SurfaceComposerBar } from './features/surfaces/SurfaceComposerBar'
 import type { ContextHistoryEntry, ContextSurfaceRuntime, DeliverSurfaceRuntime, SessionHandoffProjection, WorkSurfaceRuntime } from './features/surfaces/surfaceContracts'
+import { adaptContextSnapshotEntries, adaptHandoffProjections } from './features/surfaces/historyProjection'
 import { DropShelf, type DropAnchor, type DropDestination } from './features/drop/DropShelf'
 import { ImmersiveViewer } from './features/viewer/ImmersiveViewer'
 import { resolveArtifactViewerKind } from './features/viewer/artifactViewerRegistry'
@@ -230,7 +231,26 @@ export function App() {
   const visibleNodes = useMemo(() => scopeNodes.filter((node) => visibleLayers.includes(nodeMeta[node.kind].layer)), [scopeNodes, visibleLayers])
   const visibleNodeIds = useMemo(() => new Set(visibleNodes.map((node) => node.id)), [visibleNodes])
   const visibleEdges = useMemo(() => edges.filter((edge) => visibleNodeIds.has(edge.from) && visibleNodeIds.has(edge.to)), [edges, visibleNodeIds])
+  const [coreContextSnapshots, setCoreContextSnapshots] = useState<readonly Checkpoint[]>([])
+  const [coreHandoffs, setCoreHandoffs] = useState<readonly HandoffRecord[]>([])
+  useEffect(() => {
+    let cancelled = false
+    const projectId = activeProjectId
+    if (!projectId) return
+    Promise.all([
+      bridgeRef.current.client.listContextSnapshots(projectId, workspaceId).then((call) => call.result.ok ? call.result.value : []),
+      bridgeRef.current.client.listHandoffs(projectId).then((call) => call.result.ok ? call.result.value : []),
+    ]).then(([snapshots, handoffs]) => {
+      if (cancelled) return
+      setCoreContextSnapshots(snapshots)
+      setCoreHandoffs(handoffs)
+    }).catch(() => {
+      if (!cancelled) { setCoreContextSnapshots([]); setCoreHandoffs([]) }
+    })
+    return () => { cancelled = true }
+  }, [activeProjectId, workspaceId])
   const contextHistoryEntries = useMemo<ContextHistoryEntry[]>(() => {
+    if (coreContextSnapshots.length > 0) return adaptContextSnapshotEntries(coreContextSnapshots)
     const currentRefs = activeContextProjection?.contextArtifacts.map((item) => item.viewId) ?? []
     const recent: ContextHistoryEntry[] = (activeContextProjection?.recentChanges ?? []).slice(-6).map((change) => ({
       id: `context-v${change.version}`,
@@ -253,8 +273,9 @@ export function App() {
       createdAt: activeRun.createdAt,
     })
     return recent
-  }, [activeContextProjection, activeRun])
+  }, [activeContextProjection, activeRun, coreContextSnapshots])
   const sessionHandoffProjection = useMemo<SessionHandoffProjection[]>(() => {
+    if (coreHandoffs.length > 0) return adaptHandoffProjections(coreHandoffs)
     const byId = new Map(visibleNodes.map((node) => [node.id, node]))
     const identity = (node: CanvasNode) => node.sourceProvider || (/chatgpt|gpt/i.test(node.title) ? 'ChatGPT' : /codex/i.test(node.title) ? 'Codex' : /workbuddy|buddy/i.test(node.title) ? 'WorkBuddy' : node.title.replace(/\s+(session|run|handoff).*$/i, ''))
     return visibleEdges.flatMap((edge) => {
@@ -262,7 +283,7 @@ export function App() {
       if (!from || !to || from.kind !== 'process' || to.kind !== 'process') return []
       return [{ id: `handoff-${edge.id}`, from: identity(from), to: identity(to), label: edge.kind === 'modify' ? 'Resume' : 'Handoff', sourceNodeId: from.id, targetNodeId: to.id }]
     })
-  }, [visibleEdges, visibleNodes])
+  }, [coreHandoffs, visibleEdges, visibleNodes])
   const workspaceFrames = useMemo(() => buildWorkspaceFrames(workspaces, scopeNodes, workspaceId, scopeId), [scopeId, scopeNodes, workspaceId, workspaces])
   const activeWorkspaceFrames = useMemo(() => workspaceId ? workspaceFrames.filter((frame) => frame.workspaceId === workspaceId) : [], [workspaceFrames, workspaceId])
   const relationNodes = useMemo(() => selectedId ? edges.filter((edge) => edge.from === selectedId || edge.to === selectedId).map((edge) => nodes.find((node) => node.id === (edge.from === selectedId ? edge.to : edge.from))).filter((node): node is CanvasNode => Boolean(node)) : [], [edges, nodes, selectedId])
@@ -1250,20 +1271,44 @@ export function App() {
   }, [edges, enterScopeKeepingSelection, nodes, rootScope.id, setGraph, workbenchScope])
 
   const branchContextHistoryToWorkbench = useCallback((entry: ContextHistoryEntry) => {
+    if (coreContextSnapshots.some((snapshot) => String(snapshot.id) === entry.id)) {
+      const targetScopeId = ensureWorkbenchScope()
+      void bridgeRef.current.client.branchContextSnapshot(activeProjectId, entry.id, { label: `从 ${entry.label} 分支`, targetScopeId }).then((call) => {
+        if (!call.result.ok) { setNotice(`分支失败：${call.result.error.message}`); return }
+        const value = call.result.value
+        const viewIds = value.viewIds.filter((id) => nodes.some((node) => node.id === id))
+        enterScopeKeepingSelection(value.scopeId, viewIds)
+        setActiveSurface('arrange')
+        setNotice(viewIds.length ? `已从快照 ${entry.label} 建立当前现场 · ${viewIds.length} refs` : `已进入从快照 ${entry.label} 创建的当前现场；历史记录保持只读`)
+      })
+      return
+    }
     const targetScopeId = ensureWorkbenchScope()
     const sourceIds = entry.objectIds.filter((id) => nodes.some((node) => node.id === id))
     const projectedIds = projectViewsIntoScope(sourceIds, targetScopeId)
     enterScopeKeepingSelection(targetScopeId, projectedIds)
     setActiveSurface('arrange')
     setNotice(projectedIds.length ? `已从 ${entry.label} 建立当前现场 · ${projectedIds.length} refs` : `已进入从 ${entry.label} 创建的当前现场；历史记录保持只读`)
-  }, [ensureWorkbenchScope, enterScopeKeepingSelection, nodes, projectViewsIntoScope])
+  }, [activeProjectId, coreContextSnapshots, ensureWorkbenchScope, enterScopeKeepingSelection, nodes, projectViewsIntoScope])
 
   const compareContextHistory = useCallback((entry: ContextHistoryEntry) => {
+    if (coreContextSnapshots.length > 1 && coreContextSnapshots.some((snapshot) => String(snapshot.id) === entry.id)) {
+      const latest = coreContextSnapshots[coreContextSnapshots.length - 1]
+      void bridgeRef.current.client.compareContextSnapshots(activeProjectId, entry.id, String(latest.id)).then((call) => {
+        if (!call.result.ok) { setNotice(`对比失败：${call.result.error.message}`); return }
+        const diff = call.result.value
+        const targetIds = [...diff.added.focusedViewIds, ...diff.removed.focusedViewIds].filter((id) => nodes.some((node) => node.id === id))
+        if (targetIds.length) setSelectedIds(targetIds)
+        setActiveSurface('context-flow')
+        setNotice(`对比 ${entry.label} ↔ 最新：新增 ${diff.added.artifactIds.length} / 移除 ${diff.removed.artifactIds.length} / 不变 ${diff.kept.artifactIds.length} 对象`)
+      })
+      return
+    }
     const sourceIds = entry.objectIds.filter((id) => nodes.some((node) => node.id === id))
     if (sourceIds.length) setSelectedIds(sourceIds)
     setActiveSurface('context-flow')
     setNotice(`正在对比 ${entry.label} 与当前 Context；历史 Snapshot 保持只读`)
-  }, [nodes])
+  }, [activeProjectId, coreContextSnapshots, nodes])
 
   const openContextHistorySource = useCallback((entry: ContextHistoryEntry) => {
     const node = entry.sourceNodeId ? nodes.find((item) => item.id === entry.sourceNodeId) : undefined

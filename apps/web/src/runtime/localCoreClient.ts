@@ -2,6 +2,8 @@ import type {
   AcceptArtifactReturnInput,
   AcceptArtifactReturnResult,
   AgentExecutionPlanV1,
+  BranchSnapshotResultV1,
+  Checkpoint,
   ContractError,
   CommandDraftV1,
   ContextChangeProposalV1,
@@ -18,6 +20,9 @@ import type {
   ConversationSessionV1,
   CompleteConversationImportResultV1,
   HealthStatus,
+  HandoffArtifactRef,
+  HandoffRecord,
+  HandoffResumeMode,
   MetadataStoreStatus,
   MutationBatch,
   MutationResult,
@@ -37,6 +42,7 @@ import type {
   RunInputRequestV1,
   RunProposalResult,
   RuntimeProviderStatus,
+  SnapshotCompareResultV1,
   ValidatedProjectRoot,
   WorkspaceMembership,
   WorkspaceMembershipSource,
@@ -399,6 +405,25 @@ export interface LocalCoreClient {
   adoptExternalChange(fileRecordId: string, signal?: AbortSignal): Promise<RuntimeCall<AdoptExternalChangeResult>>
   applyMutations(batch: MutationBatch, projectId: string, signal?: AbortSignal): Promise<RuntimeCall<MutationResult>>
   saveProjectGraph(snapshot: ProjectGraphSnapshot, signal?: AbortSignal): Promise<RuntimeCall<ProjectGraphSnapshot>>
+  listContextSnapshots(projectId: string, workspaceId?: string | null, signal?: AbortSignal): Promise<RuntimeCall<readonly Checkpoint[]>>
+  createContextSnapshot(projectId: string, input: { readonly label: string; readonly workspaceId?: string }, signal?: AbortSignal): Promise<RuntimeCall<Checkpoint>>
+  compareContextSnapshots(projectId: string, snapshotId: string, otherSnapshotId: string, signal?: AbortSignal): Promise<RuntimeCall<SnapshotCompareResultV1>>
+  branchContextSnapshot(projectId: string, snapshotId: string, input: { readonly label: string; readonly targetScopeId?: string }, signal?: AbortSignal): Promise<RuntimeCall<BranchSnapshotResultV1>>
+  listHandoffs(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<readonly HandoffRecord[]>>
+  createHandoff(projectId: string, input: {
+    readonly title: string
+    readonly resumeMode?: HandoffResumeMode
+    readonly fromProvider?: string
+    readonly toProvider?: string
+    readonly sessionSummaryId?: string
+    readonly contextSnapshotId?: string
+    readonly decisions?: readonly string[]
+    readonly openQuestions?: readonly string[]
+    readonly nextActions?: readonly string[]
+    readonly artifactRefs?: readonly HandoffArtifactRef[]
+    readonly messageRefs?: readonly string[]
+  }, signal?: AbortSignal): Promise<RuntimeCall<HandoffRecord>>
+  deleteHandoff(projectId: string, handoffId: string, signal?: AbortSignal): Promise<RuntimeCall<{ readonly deleted: boolean }>>
 }
 
 function runtimeError(
@@ -1368,6 +1393,70 @@ export function createLocalCoreClient(): LocalCoreClient {
           body: JSON.stringify(batch),
         },
         decode: decodeResult<MutationResult>,
+      })
+    },
+    listContextSnapshots(projectId, workspaceId, signal) {
+      const query = workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : ''
+      return request(`/projects/${encodeURIComponent(projectId)}/context-snapshots${query}`, {
+        signal,
+        decode: decodeResult<readonly Checkpoint[]>,
+      })
+    },
+    createContextSnapshot(projectId, input, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/context-snapshots`, {
+        signal,
+        init: {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(input),
+        },
+        decode: decodeResult<Checkpoint>,
+      })
+    },
+    compareContextSnapshots(projectId, snapshotId, otherSnapshotId, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/context-snapshots/${encodeURIComponent(snapshotId)}/compare`, {
+        signal,
+        init: {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ otherSnapshotId }),
+        },
+        decode: decodeResult<SnapshotCompareResultV1>,
+      })
+    },
+    branchContextSnapshot(projectId, snapshotId, input, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/context-snapshots/${encodeURIComponent(snapshotId)}/branch`, {
+        signal,
+        init: {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(input),
+        },
+        decode: decodeResult<BranchSnapshotResultV1>,
+      })
+    },
+    listHandoffs(projectId, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/handoffs`, {
+        signal,
+        decode: decodeResult<readonly HandoffRecord[]>,
+      })
+    },
+    createHandoff(projectId, input, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/handoffs`, {
+        signal,
+        init: {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(input),
+        },
+        decode: decodeResult<HandoffRecord>,
+      })
+    },
+    deleteHandoff(projectId, handoffId, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/handoffs/${encodeURIComponent(handoffId)}`, {
+        signal,
+        init: { method: 'DELETE' },
+        decode: decodeResult<{ readonly deleted: boolean }>,
       })
     },
   }
