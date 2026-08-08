@@ -244,9 +244,19 @@
 .lcos-reconstructed .lcos-bottom-dock button[data-label]:hover::after { opacity:1; transform:none; }
 .lcos-reconstructed .lcos-scope-breadcrumb { max-width:150px; }
 .lcos-reconstructed .lcos-scope-breadcrumb span { max-width:126px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:10px; }
-.lcos-reconstructed .lcos-projection-switch { display:flex; align-items:center; gap:8px; margin-left:7px; padding:2px; border:1px solid var(--lcos-hair); border-radius:9px; background:rgba(255,255,255,.48); }
-.lcos-reconstructed .lcos-projection-switch button { min-width:auto; height:27px; padding:0 8px; border-radius:7px; font-size:9.5px; color:var(--lcos-ink-faint); }
-.lcos-reconstructed .lcos-projection-switch button.active { color:var(--lcos-ink); background:rgba(255,255,255,.86); border-color:var(--lcos-hair); box-shadow:0 2px 7px rgba(51,45,70,.06); }
+.lcos-reconstructed .lcos-projection-switch { position:relative; display:flex; align-items:center; gap:0; margin-left:7px; padding:2px; border:1px solid var(--lcos-hair); border-radius:9px; background:rgba(255,255,255,.48); }
+.lcos-reconstructed .lcos-projection-switch button { position:relative; z-index:1; flex:1 1 0; min-width:auto; height:27px; padding:0 10px; border:0 !important; border-radius:7px; font-size:9.5px; color:var(--lcos-ink-faint); background:transparent !important; box-shadow:none !important; transition:color .16s ease; }
+.lcos-reconstructed .lcos-projection-switch button.active { color:var(--lcos-ink); font-weight:600; }
+.lcos-reconstructed .lcos-projection-pill { position:absolute; top:2px; bottom:2px; left:calc(2px + var(--pi) * ((100% - 4px) / var(--n))); width:calc((100% - 4px) / var(--n)); border-radius:7px; background:rgba(255,255,255,.94); box-shadow:0 1px 3px rgba(51,45,70,.10); transition:left .2s cubic-bezier(.2,.8,.2,1); pointer-events:none; }
+
+/* Scope chevron + workbench badge + merge-in breathing. */
+.lcos-reconstructed .lcos-scope-chevron { color:var(--lcos-ink-faint); flex:0 0 auto; }
+.lcos-reconstructed .lcos-workbench-entry { position:relative !important; }
+.lcos-reconstructed .lcos-workbench-badge { position:absolute; top:3px; right:1px; min-width:15px; height:15px; padding:0 4px; display:inline-flex; align-items:center; justify-content:center; border-radius:999px; background:rgba(89,76,132,.11); color:#5b5480; font-size:8.5px; font-weight:640; line-height:1; }
+.lcos-reconstructed .lcos-merge-workbench { animation:lcos-merge-in .24s cubic-bezier(.2,.8,.2,1) both; color:#3d8f6a !important; background:rgba(79,146,113,.10) !important; border-color:rgba(79,146,113,.16) !important; }
+.lcos-reconstructed .lcos-merge-workbench:hover { color:#2f7a58 !important; background:rgba(79,146,113,.17) !important; box-shadow:0 0 0 3px rgba(79,146,113,.08); }
+@keyframes lcos-merge-in { from { opacity:0; transform:translateX(-8px) scale(.92); } to { opacity:1; transform:translateX(0) scale(1); } }
+.lcos-reconstructed .lcos-bottom-dock button.active[data-label]::after { font-weight:620; }
 
 /* Dock zoom controls + axis group labels. */
 .lcos-reconstructed .lcos-zoom-controls { margin-left:auto; display:flex; align-items:center; gap:2px; padding-left:10px; border-left:1px solid var(--lcos-hair); }

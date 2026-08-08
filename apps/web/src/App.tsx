@@ -418,7 +418,15 @@ export function App() {
           ? cameraContentRatio(candidate, contentNodes, window.innerWidth, window.innerHeight)
           : 0
         if (contentRatio >= MIN_RESTORED_CAMERA_CONTENT_RATIO) {
-          setCamera(candidate)
+          // 恢复的相机虽然内容占比达标，但顶部可能被 header 遮挡：
+          // 内容顶边屏幕位置 < safeInsets.top 时下移相机进入安全区。
+          const top = contentNodes.reduce((acc, node) => Math.min(acc, node.y), Number.POSITIVE_INFINITY)
+          const screenTop = candidate.y + top * candidate.zoom
+          if (Number.isFinite(screenTop) && screenTop < safeInsets.top) {
+            setCamera((current) => ({ ...current, y: current.y + (safeInsets.top - screenTop) }))
+          } else {
+            setCamera(candidate)
+          }
         } else if (contentNodes.length > 0) {
           // 恢复的相机已失效（节点全在视口外）：按节点包围盒重新适配，避免打开项目看到空画布。
           const bounds = contentNodes.reduce((acc, node) => ({
@@ -432,6 +440,7 @@ export function App() {
             window.innerWidth,
             window.innerHeight,
             74,
+            safeInsets,
           ))
         }
       }
@@ -440,7 +449,7 @@ export function App() {
       activeContextHydratedKeyRef.current = key
     })
     return () => controller.abort()
-  }, [activeProjectId, bootMode, scopeId, workspaceId])
+  }, [activeProjectId, bootMode, safeInsets, scopeId, workspaceId])
 
   useEffect(() => {
     if (bootMode !== 'runtime') return
@@ -904,8 +913,9 @@ export function App() {
       window.innerWidth,
       window.innerHeight,
       74,
+      safeInsets,
     ))
-  }, [bootMode, cameraValidityKey, scopeNodes, camera, setCamera])
+  }, [bootMode, cameraValidityKey, safeInsets, scopeNodes, camera, setCamera])
 
   useEffect(() => {
     const timer = window.setTimeout(() => saveProjectNavigationState(activeProjectId, camera), 3000)
@@ -3167,6 +3177,7 @@ export function App() {
         scopePath,
         activeScopeId: scopeId,
         workbenchScopeId: workbenchScope?.id ?? workbenchScopeId,
+        workbenchCount: nodes.filter((node) => (node.scopeId ?? rootScope.id) === workbenchScopeId).length,
         zoom: camera.zoom,
         onZoomBy: (factor) => setCamera((current) => ({ ...current, zoom: Math.min(4, Math.max(0.1, current.zoom * factor)) })),
         onZoomReset: () => setCamera((current) => ({ ...current, zoom: 1 })),
