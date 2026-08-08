@@ -18,15 +18,16 @@ async function waitForSeedNodes(page: import('@playwright/test').Page) {
 
 test.describe('LCOS vNext Phase 4', () => {
   const dockButton = (page: import('@playwright/test').Page, name: string) =>
-    page.getByTestId('vnext-bottom-dock').getByRole('button', { name, exact: true })
+    // VNext3 capability 按钮带副标题（如「上下文：对话与上下文视图」），用子串匹配。
+    page.getByTestId('vnext-bottom-dock').getByRole('button', { name, exact: false })
 
   test('shell keeps project context while surfaces switch independently', async ({ page }) => {
     await page.goto(SEED_PROJECT_URL)
     await expect(page.getByTestId('vnext-bottom-dock')).toBeVisible()
     await dockButton(page, '上下文').click()
     await expect(page.locator('[data-surface-mount="context-flow"]')).toBeVisible()
-    await dockButton(page, '运行').click()
-    await expect(page.locator('[data-surface-mount="work"]')).toBeVisible()
+    await dockButton(page, '工作流').click()
+    await expect(page.locator('[data-testid="surface-workflow"]')).toBeVisible()
     await dockButton(page, '整理').click()
     await expect(page.locator('[data-surface-mount="arrange"]')).toBeVisible()
   })
@@ -65,7 +66,7 @@ test.describe('LCOS vNext Phase 4', () => {
     await dockButton(page, '大纲').click()
     await expect(page.locator('.lcos-outline-sheet')).toBeVisible()
     await dockButton(page, '上下文').click()
-    await expect(page.locator('.lcos-context-history')).toBeVisible()
+    await expect(page.locator('[data-testid="surface-context-flow"]')).toBeVisible()
 
     await dockButton(page, '整理').click()
     const edge = page.locator('.edge-hit').first()
