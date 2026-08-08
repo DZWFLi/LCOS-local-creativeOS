@@ -1,12 +1,10 @@
 import { useEffect, useState, type RefObject } from 'react'
-import type { RunEvent, RuntimeProviderStatus } from '@local-creative-os/contracts'
+import type { RunEvent, RunReview, RuntimeProviderStatus } from '@local-creative-os/contracts'
 import {
   Check,
   ChevronDown,
-  ChevronLeft,
   CircleAlert,
   GitCompareArrows,
-  History,
   PanelRightClose,
   Play,
   RefreshCw,
@@ -51,6 +49,8 @@ interface Props {
   onSyncRun: () => void
   onCancelRun: () => void
   runEvents: readonly RunEvent[]
+  runReviews: readonly RunReview[]
+  onOpenRunReview: (review: RunReview) => void
   runEventsError: string | null
   runtimeRecovering: boolean
   onRecoverRun: () => void
@@ -87,6 +87,7 @@ export function WorkRail(props: Props) {
   return <aside className="work-rail" data-testid="work-rail" data-mode={mode} style={{ width: props.width }}>
     <WorkRailHeader mode={mode} activeRun={props.activeRun} contextLabel={props.contextLabel} contextCount={props.contextCount} contextScope={props.contextScope} onContextScope={props.onContextScope} onCollapse={props.onCollapse} />
     <div className="work-rail-body" data-testid="work-rail-body">
+      <RunList activeRun={props.activeRun} reviews={props.runReviews} onOpen={props.onOpenRunReview} />
       {mode === 'waiting-input' && props.activeRun
         ? <WaitingState run={props.activeRun} onSync={props.onSyncRun} onAnswer={props.onAnswerInput} />
         : mode === 'review' && props.activeRun && primary
@@ -100,6 +101,38 @@ export function WorkRail(props: Props) {
     </div>
     <Composer {...props} mode={mode} />
   </aside>
+}
+
+
+function RunList({ activeRun, reviews, onOpen }: { activeRun: ActiveRun | null; reviews: readonly RunReview[]; onOpen: (review: RunReview) => void }) {
+  const unique = reviews.filter((review, index, all) => all.findIndex((item) => String(item.run.id) === String(review.run.id)) === index).slice(0, 12)
+  const activeId = activeRun?.id
+  return <section className="rail-section lcos-run-list" data-testid="run-list">
+    <header><div><span className="lcos-run-list-dot"/><h3>执行</h3></div><small>{unique.length ? `${unique.length} 条最近任务` : activeRun ? '当前任务' : '暂无任务'}</small></header>
+    <div className="lcos-run-list-items">
+      {unique.map((review) => {
+        const id = String(review.run.id)
+        const status = review.presentationPhase
+        const attention = status === 'waiting_input' || status === 'review' || status === 'failed'
+        return <button type="button" key={id} className={`${id===activeId?'active ':''}${attention?'attention':''}`} onClick={() => onOpen(review)} title={review.run.instruction}>
+          <i className={`status-${status}`}/><span><strong>{review.run.instruction.slice(0, 36) || id}</strong><small>{humanRunListStatus(status)} · {String(review.run.provider || 'Agent')}</small></span>
+        </button>
+      })}
+      {!unique.length && activeRun && <div className="lcos-run-list-current"><i className={`status-${activeRun.status}`}/><span><strong>{activeRun.command.slice(0, 36)}</strong><small>{runStatusLabel[activeRun.status]}</small></span></div>}
+      {!unique.length && !activeRun && <p className="rail-empty-copy">从画布或工作流发起任务后，会在这里出现。</p>}
+    </div>
+  </section>
+}
+
+function humanRunListStatus(status: string): string {
+  if (status === 'queued' || status === 'created') return '排队中'
+  if (status === 'running') return '执行中'
+  if (status === 'waiting_input') return '等待输入'
+  if (status === 'review') return '待确认'
+  if (status === 'completed') return '已完成'
+  if (status === 'cancelled') return '已撤回'
+  if (status === 'failed') return '失败'
+  return status
 }
 
 function WorkRailHeader({ mode, activeRun, contextLabel, contextCount, contextScope, onContextScope, onCollapse }: {
@@ -189,7 +222,7 @@ function CompletedState({ run, nodes }: { run: ActiveRun; nodes: CanvasNode[] })
   const current = run.pendingArtifactId ? nodes.find((node) => node.id === run.pendingArtifactId) : null
   return <div className="rail-section completed-state" data-testid="rail-completed">
     <div className="completed-hero"><Check size={19} /><div><small>Agent 任务</small><h3>{run.resultSummary ? '分析完成' : '结果已归位'}</h3><p>{run.resultSummary ?? `${current?.title ?? run.changedFiles[0] ?? '本次结果'} 已写入项目过程与版本记录。`}</p></div></div>
-    <section className="review-summary"><h4>接下来</h4><ul><li>继续在节点下方输入下一轮要求</li><li>在 Canvas 中查看任务与版本来源</li><li>需要回看阶段时，从项目历史或 Context Snapshot 进入</li></ul></section>
+    <section className="review-summary"><h4>接下来</h4><ul><li>继续在节点下方输入下一轮要求</li><li>在 Canvas 中查看任务与版本来源</li><li>需要回看细节时，从对应对话记录或来源信息进入</li></ul></section>
   </div>
 }
 

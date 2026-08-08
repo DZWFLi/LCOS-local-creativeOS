@@ -93,6 +93,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
   const [resizingId, setResizingId] = useState<string | null>(null)
   const [draggingWorkspaceId, setDraggingWorkspaceId] = useState<string | null>(null)
   const [dropGutter, setDropGutter] = useState<'left' | 'bottom' | null>(null)
+  const dropStageAnchor = useRef<'left' | 'bottom' | null>(null)
   const [dropGhost, setDropGhost] = useState<{ x: number; y: number; count: number } | null>(null)
   const dropHoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const marquee = useRef<{ startX: number; startY: number; currentX: number; currentY: number } | null>(null)
@@ -203,6 +204,9 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
     setDraggingId(null)
     setResizingId(null)
     setDraggingWorkspaceId(null)
+    setDropGutter(null)
+    setDropGhost(null)
+    dropStageAnchor.current = null
     setMarqueeRect(null)
     setCreateMenu(null)
     setLinkPoint(null)
@@ -360,7 +364,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
       return
     }
     const wasDragging = dragging.current
-    const activeDropGutter = dropGutter
+    const stagedDropAnchor = dropStageAnchor.current
     const draggedCandidate = dragCandidate.current
     const draggedId = dragCandidate.current?.id
     const resizedId = resizeCandidate.current?.moved ? resizeCandidate.current.id : undefined
@@ -370,14 +374,14 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
       cancelAnimationFrame(dragFrame.current)
       dragFrame.current = null
       const point = dragPoint.current
-      if (activeDropGutter && wasDragging && draggedCandidate) restoreDraggedOriginals(draggedCandidate)
+      if (stagedDropAnchor && wasDragging && draggedCandidate) restoreDraggedOriginals(draggedCandidate)
       else if (draggedId && point) setNodes((current) => {
         const group = dragCandidate.current?.group ?? []
         return group.length > 1
           ? current.map((node) => { const member = group.find((item) => item.id === node.id); return member ? { ...node, x: point.x + member.dx, y: point.y + member.dy } : node })
           : current.map((node) => node.id === draggedId ? { ...node, x: point.x, y: point.y } : node)
       })
-    } else if (activeDropGutter && wasDragging && draggedCandidate) {
+    } else if (stagedDropAnchor && wasDragging && draggedCandidate) {
       restoreDraggedOriginals(draggedCandidate)
     }
     if (wasDragging && draggedId) suppressClick.current = draggedId
@@ -395,9 +399,9 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
       finishPresentationInteraction('workspace-group-move')
       if (workspaceDrag.current?.currentBounds) onFrameBoundsChange?.(workspaceDrag.current.workspaceId, workspaceDrag.current.currentBounds)
     }
-    else if (wasDragging && draggedId && !activeDropGutter) finishPresentationInteraction('node-move')
+    else if (wasDragging && draggedId && !stagedDropAnchor) finishPresentationInteraction('node-move')
     else if (resizeCandidate.current || workspaceDrag.current) onPresentationInteractionChange?.(false)
-    if (activeDropGutter && wasDragging && draggedCandidate) {
+    if (stagedDropAnchor && wasDragging && draggedCandidate) {
       onPresentationInteractionChange?.(false)
       // 松手三态：
       // 1) 命中目的地按钮 → 就地投送；
@@ -412,11 +416,12 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
         // 等捕获释放后再触发目的地投送。
         window.setTimeout(() => hit.click(), 0)
       } else if (at?.closest('.vnext-drop-shelf') || dropAnchorAt(event.clientX, event.clientY, rect)) {
-        onStageTransfer?.(draggedCandidate.group.map((item) => item.id), activeDropGutter)
+        onStageTransfer?.(draggedCandidate.group.map((item) => item.id), stagedDropAnchor)
       }
     }
     setDropGutter(null)
     setDropGhost(null)
+    dropStageAnchor.current = null
     if (dropHoverTimer.current !== null) {
       clearTimeout(dropHoverTimer.current)
       dropHoverTimer.current = null
@@ -569,6 +574,8 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
         const anchor = onStageTransfer ? dropAnchorAt(event.clientX, event.clientY, rect) : null
         if (anchor) {
           // 投送优先：投送区与自动平移区同为 96px，指针进入即激活投送并停平移。
+          // stageAnchor 记录投送意图；dropGutter 只负责“当前仍在边缘”的视觉反馈。
+          dropStageAnchor.current = anchor
           setDropGutter(anchor)
           stopAutoPan()
           const candidate = dragCandidate.current
@@ -594,8 +601,13 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
             }, 350)
           }
         } else if (dropGhost) {
-          // 投送意图保持：虚影已被激活，允许拖到 DropShelf 面板上；
-          // gutter 保持激活直到松手，由 pointerup 决定投送还是取消。
+          // 离开边缘后 gutter 必须立即熄灭。stageAnchor + 虚影仍保留，
+          // 这样可以继续把虚影拖到已经展开的 DropShelf；若在画布中央松手则取消。
+          setDropGutter(null)
+          if (dropHoverTimer.current !== null) {
+            clearTimeout(dropHoverTimer.current)
+            dropHoverTimer.current = null
+          }
           setDropGhost((current) => current ? { ...current, x: event.clientX, y: event.clientY } : current)
         } else {
           // 无投送意图：gutter 熄灭（松手不误触发），恢复自动平移。

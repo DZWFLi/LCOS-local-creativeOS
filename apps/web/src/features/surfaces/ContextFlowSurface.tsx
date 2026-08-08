@@ -1,39 +1,36 @@
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import { MessageSquareText } from 'lucide-react'
 import { useMemo } from 'react'
+import type { CSSProperties } from 'react'
 import type { CanvasEdge, CanvasNode } from '../../model'
-import { useProjectionLayoutState } from '../../state/projectionLayoutState'
 import { ContextHistoryRail } from './ContextHistoryRail'
 import type { ContextSurfaceRuntime } from './surfaceContracts'
 import { SurfaceObject } from './SurfaceObject'
-import { nodeRole, orderedNodes } from './surfaceModel'
 
 interface Props { projectId:string; scopeId:string; nodes:CanvasNode[]; edges:CanvasEdge[]; selectedIds:string[]; runtime?:ContextSurfaceRuntime; onSelect:(id:string, additive?:boolean)=>void; onDoubleClick:(id:string)=>void }
-type Axis={id:string;label:string;hint:string;nodes:CanvasNode[]}
 
+/**
+ * Context Free View: no role lanes and no project taxonomy. It is simply a
+ * flexible projection that local Agents can shape per imported conversation or
+ * per temporary context set.
+ */
 export function ContextFlowSurface(props:Props){
-  const [state,setState]=useProjectionLayoutState(props.projectId,props.scopeId,'context-flow',{collapsedAxisIds:[]})
-  const axes=useMemo<Axis[]>(()=>{
-    const ordered=orderedNodes(props.nodes)
-    const feedback=ordered.filter((node)=>['feedback','decision','note'].includes(nodeRole(node)))
-    const sessions=ordered.filter((node)=>['session','run','context'].includes(nodeRole(node)))
-    const revisions=ordered.filter((node)=>nodeRole(node)==='artifact')
-    return [
-      {id:'feedback',label:'反馈 / 决策',hint:'why',nodes:feedback},
-      {id:'sessions',label:'Session / Run',hint:'who',nodes:sessions},
-      {id:'revisions',label:'版本 / 内容',hint:'what changed',nodes:revisions},
-    ].filter((axis)=>axis.nodes.length)
-  },[props.nodes])
-  const toggle=(id:string)=>setState((current)=>({...current,collapsedAxisIds:current.collapsedAxisIds.includes(id)?current.collapsedAxisIds.filter((item)=>item!==id):[...current.collapsedAxisIds,id]}))
-  return <section className="lcos-dedicated-surface lcos-context-flow" data-testid="surface-context-flow">
-    <header className="lcos-surface-heading"><div><strong>上下文</strong><span>流式轴</span></div><small>{axes.length} axes · {props.nodes.length} objects</small></header>
-    {props.runtime?.handoffs.length ? <div className="lcos-handoff-ribbon" aria-label="Agent handoffs">{props.runtime.handoffs.slice(-6).map((handoff,index)=><span key={handoff.id} className="lcos-handoff-step">{index===0&&<b>{handoff.from}</b>}<i>→</i><b>{handoff.to}</b></span>)}</div> : null}
-    <div className="lcos-flow-stage">
-      {axes.map((axis)=>{const collapsed=state.collapsedAxisIds.includes(axis.id);return <div key={axis.id} className={`lcos-flow-axis axis-${axis.id} ${collapsed?'collapsed':''}`}>
-        <button type="button" className="lcos-flow-axis-label" onClick={()=>toggle(axis.id)}>{collapsed?<ChevronRight size={10}/>:<ChevronDown size={10}/>}<strong>{axis.label}</strong><small>{axis.nodes.length}</small></button>
-        <i className="lcos-flow-baseline" aria-hidden="true"/>
-        {!collapsed&&<div className="lcos-flow-items">{axis.nodes.map((node)=><SurfaceObject key={node.id} node={node} compact selected={props.selectedIds.includes(node.id)} onSelect={props.onSelect} onDoubleClick={props.onDoubleClick}/>)}</div>}
-      </div>})}
+  const layout=useMemo(()=>{
+    if(!props.nodes.length)return{items:[],edges:[]}
+    const left=Math.min(...props.nodes.map((node)=>node.x)),top=Math.min(...props.nodes.map((node)=>node.y))
+    const right=Math.max(...props.nodes.map((node)=>node.x+node.width)),bottom=Math.max(...props.nodes.map((node)=>node.y+node.height))
+    const spanX=Math.max(1,right-left),spanY=Math.max(1,bottom-top)
+    const items=props.nodes.map((node)=>({node,left:10+((node.x-left)/spanX)*80,top:12+((node.y-top)/spanY)*74,width:Math.max(10,Math.min(36,(node.width/spanX)*100))}))
+    const byId=new Map(items.map((item)=>[item.node.id,item]))
+    const edges=props.edges.filter((edge)=>byId.has(edge.from)&&byId.has(edge.to)).map((edge)=>{const a=byId.get(edge.from)!,b=byId.get(edge.to)!;return{edge,x1:a.left+a.width/2,y1:a.top+4,x2:b.left+b.width/2,y2:b.top+4}})
+    return{items,edges}
+  },[props.edges,props.nodes])
+  return <section className="lcos-dedicated-surface lcos-context-free" data-testid="surface-context-flow">
+    <header className="lcos-surface-heading"><div><strong>上下文</strong><span>自由视图</span></div><small>不预设项目语义 · 让 Agent / 用户自己组织</small></header>
+    <div className="lcos-context-free-stage">
+      <svg className="lcos-context-free-edges" aria-hidden="true">{layout.edges.map(({edge,x1,y1,x2,y2})=><line key={edge.id} x1={`${x1}%`} y1={`${y1}%`} x2={`${x2}%`} y2={`${y2}%`} className={edge.active?'active':''}/>)}</svg>
+      {layout.items.map(({node,left,top,width},index)=><div key={node.id} className="lcos-context-free-node" style={{left:`${left}%`,top:`${top}%`,width:`${width}%`,'--i':index} as CSSProperties}><SurfaceObject node={node} compact selected={props.selectedIds.includes(node.id)} onSelect={props.onSelect} onDoubleClick={props.onDoubleClick}/></div>)}
+      {!layout.items.length&&<div className="lcos-context-free-empty"><MessageSquareText size={18}/><strong>没有固定的“项目上下文结构”</strong><span>导入一条对话，或选一批内容，让 Agent 按这次协作需要组织。</span></div>}
     </div>
-    {props.runtime&&<ContextHistoryRail history={props.runtime.history} handoffs={props.runtime.handoffs} onBranch={props.runtime.onBranchHistory} onCompare={props.runtime.onCompareHistory} onSource={props.runtime.onOpenHistorySource}/>} 
+    {props.runtime&&props.runtime.history.length>0&&<ContextHistoryRail history={props.runtime.history} handoffs={props.runtime.handoffs} onBranch={props.runtime.onBranchHistory} onCompare={props.runtime.onCompareHistory} onSource={props.runtime.onOpenHistorySource}/>} 
   </section>
 }

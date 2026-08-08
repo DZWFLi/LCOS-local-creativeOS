@@ -67,11 +67,11 @@ export function WorkspaceRailVNext({ workspaces, activeId, runStatus, onOverview
 
     {preview && <div className="vnext-workspace-preview lcos-workspace-preview" role="dialog" aria-label={`${preview.label} 工作空间`} onPointerEnter={() => setPreviewId(preview.id)} onPointerLeave={() => { if (menuFor !== preview.id) setPreviewId(null) }}>
       <div className="vnext-workspace-preview-map">{miniatureSeed(preview, 2).map((item, i) => <i key={i} style={{ left:item.left*2.15, top:item.top*1.65, width:item.width*2, height:item.height*1.55 }}/>)}</div>
-      <div className="lcos-workspace-preview-copy"><strong>{preview.label}</strong><span>{preview.focusedViewIds.length || '自由'} 项 · {preview.contextPolicy === 'selection-only' ? 'Selection' : 'Workspace'} Context</span></div>
+      <div className="lcos-workspace-preview-copy"><strong>{preview.label}</strong><span>{preview.focusedViewIds.length ? `${preview.focusedViewIds.length} 个聚焦对象` : '自由空间视图'}</span></div>
       <button type="button" aria-label={`仅定位 ${preview.label}`} title="定位 Camera" onClick={(event) => { event.stopPropagation(); onLocate(preview.id); setPreviewId(null) }}><Crosshair size={13}/></button>
       {(onEdit || onDuplicate || onDelete || onMove) && <button type="button" aria-label={`${preview.label} 更多操作`} title="更多操作" onClick={(event) => { event.stopPropagation(); setMenuFor((current) => current === preview.id ? null : preview.id) }}><MoreHorizontal size={13}/></button>}
       {menuFor === preview.id && <div className="vnext-workspace-menu" role="menu" onClick={(event) => event.stopPropagation()}>
-        {onEdit && <button onClick={() => { onEdit(preview.id); setMenuFor(null) }}><Pencil size={12}/>重命名与意图</button>}
+        {onEdit && <button onClick={() => { onEdit(preview.id); setMenuFor(null) }}><Pencil size={12}/>重命名</button>}
         {onDuplicate && <button onClick={() => { onDuplicate(preview.id); setMenuFor(null) }}><Copy size={12}/>复制 Workspace</button>}
         {onMove && <><div className="menu-rule"/><button disabled={workspaces.findIndex((item) => item.id === preview.id) <= 0} onClick={() => { onMove(preview.id,-1); setMenuFor(null) }}><ArrowUp size={12}/>上移</button><button disabled={workspaces.findIndex((item) => item.id === preview.id) >= workspaces.length-1} onClick={() => { onMove(preview.id,1); setMenuFor(null) }}><ArrowDown size={12}/>下移</button></>}
         {onDelete && <><div className="menu-rule"/><button className="danger" disabled={workspaces.length <= 1} onClick={() => { onDelete(preview.id); setMenuFor(null) }}><Trash2 size={12}/>删除 Workspace</button></>}

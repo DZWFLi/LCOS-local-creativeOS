@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { Command, Play } from 'lucide-react'
-import type { Checkpoint, ContextChangeProposalV1, ContextManifestV0, HandoffRecord, ObsidianVaultScanV1, RunEvent, RunProposalResult, RunReview, RuntimeProviderStatus, WorkspaceMembership } from '@local-creative-os/contracts'
-import type { ActiveRun, Camera, CanvasNode, CanvasScope, NodeDisplayMode, NodeLayer, PersistedPrototypeState, ProjectPackage, ScopeKind, TargetContextInference, WorkRailPreferences, Workspace, WorkspaceIntent } from './model'
+import type { Checkpoint, ContextChangeProposalV1, ContextManifestV0, ObsidianVaultScanV1, RunEvent, RunProposalResult, RunReview, RuntimeProviderStatus, WorkspaceMembership } from '@local-creative-os/contracts'
+import type { ActiveRun, Camera, CanvasNode, CanvasScope, NodeDisplayMode, NodeLayer, PersistedPrototypeState, ProjectPackage, ScopeKind, TargetContextInference, WorkRailPreferences, Workspace } from './model'
 import { nodeMeta, runStatusLabel } from './model'
 import { ProjectCanvas } from './features/canvas/ProjectCanvas'
 import type { ComposerResultPolicy } from './features/canvas/SelectionComposer'
@@ -52,11 +52,10 @@ import { parseArtifactRevisions, parseProcessProjection, parseWorkspaceStates, t
 import { WorkspaceStatesDialog } from './features/workspace/WorkspaceStatesDialog'
 import { ProjectStripVNext } from './features/shell/ProjectStripVNext'
 import { WorkspaceRailVNext } from './features/shell/WorkspaceRailVNext'
-import { SurfaceDock, type SurfaceId } from './features/shell/SurfaceDock'
+import { SurfaceDock, normalizeSurfaceId, type SurfaceId } from './features/shell/SurfaceDock'
 import { ProjectionSurface } from './features/surfaces/ProjectionSurfaces'
 import { SurfaceComposerBar } from './features/surfaces/SurfaceComposerBar'
-import type { ContextHistoryEntry, ContextSurfaceRuntime, DeliverSurfaceRuntime, SessionHandoffProjection, WorkSurfaceRuntime } from './features/surfaces/surfaceContracts'
-import { adaptContextSnapshotEntries, adaptHandoffProjections } from './features/surfaces/historyProjection'
+import type { ContextHistoryEntry, ContextSurfaceRuntime, DeliverSurfaceRuntime, WorkSurfaceRuntime } from './features/surfaces/surfaceContracts'
 import { DropShelf, type DropAnchor, type DropDestination, type TransferVerb } from './features/drop/DropShelf'
 import { ImmersiveViewer } from './features/viewer/ImmersiveViewer'
 import { resolveArtifactViewerKind } from './features/viewer/artifactViewerRegistry'
@@ -233,58 +232,15 @@ export function App() {
   const visibleNodeIds = useMemo(() => new Set(visibleNodes.map((node) => node.id)), [visibleNodes])
   const visibleEdges = useMemo(() => edges.filter((edge) => visibleNodeIds.has(edge.from) && visibleNodeIds.has(edge.to)), [edges, visibleNodeIds])
   const [coreContextSnapshots, setCoreContextSnapshots] = useState<readonly Checkpoint[]>([])
-  const [coreHandoffs, setCoreHandoffs] = useState<readonly HandoffRecord[]>([])
   useEffect(() => {
     let cancelled = false
     const projectId = activeProjectId
     if (!projectId) return
-    Promise.all([
-      bridgeRef.current.client.listContextSnapshots(projectId, workspaceId).then((call) => call.result.ok ? call.result.value : []),
-      bridgeRef.current.client.listHandoffs(projectId).then((call) => call.result.ok ? call.result.value : []),
-    ]).then(([snapshots, handoffs]) => {
-      if (cancelled) return
-      setCoreContextSnapshots(snapshots)
-      setCoreHandoffs(handoffs)
-    }).catch(() => {
-      if (!cancelled) { setCoreContextSnapshots([]); setCoreHandoffs([]) }
-    })
+    bridgeRef.current.client.listContextSnapshots(projectId, workspaceId)
+      .then((call) => { if (!cancelled) setCoreContextSnapshots(call.result.ok ? call.result.value : []) })
+      .catch(() => { if (!cancelled) setCoreContextSnapshots([]) })
     return () => { cancelled = true }
   }, [activeProjectId, workspaceId])
-  const contextHistoryEntries = useMemo<ContextHistoryEntry[]>(() => {
-    if (coreContextSnapshots.length > 0) return adaptContextSnapshotEntries(coreContextSnapshots)
-    const currentRefs = activeContextProjection?.contextArtifacts.map((item) => item.viewId) ?? []
-    const recent: ContextHistoryEntry[] = (activeContextProjection?.recentChanges ?? []).slice(-6).map((change) => ({
-      id: `context-v${change.version}`,
-      label: `v${change.version}`,
-      title: change.kind === 'viewport' ? '视野上下文' : change.kind === 'selection' ? 'Selection 变化' : change.kind === 'target' ? 'Target 变化' : 'Context 变化',
-      summary: change.summary,
-      current: change.version === activeContextProjection?.version,
-      objectIds: [...currentRefs],
-      createdAt: change.occurredAt,
-    }))
-    if (activeRun?.contextSnapshotId) recent.push({
-      id: activeRun.contextSnapshotId,
-      label: 'Run ctx',
-      title: `${activeRun.provider || 'Agent'} · ${activeRun.command.slice(0, 30)}`,
-      summary: `${activeRun.contextIds.length} frozen refs`,
-      current: activeRun.status === 'running' || activeRun.status === 'waiting_input' || activeRun.status === 'review',
-      sourceRunId: activeRun.id,
-      sourceNodeId: activeRun.processNodeId,
-      objectIds: [...activeRun.contextIds],
-      createdAt: activeRun.createdAt,
-    })
-    return recent
-  }, [activeContextProjection, activeRun, coreContextSnapshots])
-  const sessionHandoffProjection = useMemo<SessionHandoffProjection[]>(() => {
-    if (coreHandoffs.length > 0) return adaptHandoffProjections(coreHandoffs)
-    const byId = new Map(visibleNodes.map((node) => [node.id, node]))
-    const identity = (node: CanvasNode) => node.sourceProvider || (/chatgpt|gpt/i.test(node.title) ? 'ChatGPT' : /codex/i.test(node.title) ? 'Codex' : /workbuddy|buddy/i.test(node.title) ? 'WorkBuddy' : node.title.replace(/\s+(session|run|handoff).*$/i, ''))
-    return visibleEdges.flatMap((edge) => {
-      const from = byId.get(edge.from), to = byId.get(edge.to)
-      if (!from || !to || from.kind !== 'process' || to.kind !== 'process') return []
-      return [{ id: `handoff-${edge.id}`, from: identity(from), to: identity(to), label: edge.kind === 'modify' ? 'Resume' : 'Handoff', sourceNodeId: from.id, targetNodeId: to.id }]
-    })
-  }, [coreHandoffs, visibleEdges, visibleNodes])
   const workspaceFrames = useMemo(() => buildWorkspaceFrames(workspaces, scopeNodes, workspaceId, scopeId), [scopeId, scopeNodes, workspaceId, workspaces])
   const activeWorkspaceFrames = useMemo(() => workspaceId ? workspaceFrames.filter((frame) => frame.workspaceId === workspaceId) : [], [workspaceFrames, workspaceId])
   const relationNodes = useMemo(() => selectedId ? edges.filter((edge) => edge.from === selectedId || edge.to === selectedId).map((edge) => nodes.find((node) => node.id === (edge.from === selectedId ? edge.to : edge.from))).filter((node): node is CanvasNode => Boolean(node)) : [], [edges, nodes, selectedId])
@@ -564,6 +520,19 @@ export function App() {
       controller.abort()
     }
   }, [activeProjectId, bootMode, camera.x, camera.y, camera.zoom, excludedContextIds, pinnedContextIds, scopeId, selectedIds, selectionBaseRevision?.id, selectionTargetNode?.artifactId, selectionTargetNode?.revisionId, visibleNodes, workspaceId])
+
+  useEffect(() => {
+    if (bootMode !== 'runtime' || workRail.collapsed || !activeProjectId) return
+    let cancelled = false
+    let timer: number | undefined
+    const pollRunList = async () => {
+      const call = await bridgeRef.current.client.projectRunReviews(activeProjectId, 40).catch(() => null)
+      if (!cancelled && call?.result.ok) setRunReviews(call.result.value)
+    }
+    void pollRunList()
+    timer = window.setInterval(() => { void pollRunList() }, 4_000)
+    return () => { cancelled = true; if (timer !== undefined) window.clearInterval(timer) }
+  }, [activeProjectId, bootMode, workRail.collapsed])
 
   useEffect(() => {
     if (!agentMode || !activeProjectId || bootMode !== 'runtime') return
@@ -1127,7 +1096,7 @@ export function App() {
     setLayoutPreview(null)
     // Projection Preference：进入工作空间时恢复它偏好的 Lens（brief 5 Workspace 组成之一）。
     if (next.preferredSurface && next.preferredSurface !== 'arrange') {
-      setActiveSurface(next.preferredSurface as SurfaceId)
+      setActiveSurface(normalizeSurfaceId(next.preferredSurface))
     }
     setNotice(`已激活工作空间「${next.label}」· Scope 与 Camera 未改变`)
   }, [scopeId, workspaces])
@@ -1341,7 +1310,7 @@ export function App() {
     if (!node) { setNotice(entry.sourceRunId ? `来源 Run · ${entry.sourceRunId}` : `${entry.label} 暂无可定位来源`); return }
     if (node.scopeId && node.scopeId !== scopeId) setScopeId(node.scopeId)
     setSelectedIds([node.id])
-    setActiveSurface(node.kind === 'process' ? 'work' : 'arrange')
+    setActiveSurface(node.kind === 'process' ? 'workflow' : 'arrange')
     setNotice(`已定位 ${entry.label} 的来源「${node.title}」`)
   }, [nodes, scopeId])
 
@@ -1402,13 +1371,13 @@ export function App() {
   }, [applyMembershipProjection, bootMode, ensureWorkbenchScope, enterScopeKeepingSelection, locateWorkspace, projectViewsIntoScope, rootScope.id, scopeId, scopeNodes, setNodes, stagedTransfer, workspaceId, workspaces])
 
 
-  const saveWorkspaceEditor = useCallback(({ label, intent }: { label: string; intent: WorkspaceIntent }) => {
+  const saveWorkspaceEditor = useCallback(({ label }: { label: string }) => {
     const now = new Date().toISOString()
     if (workspaceEditor?.mode === 'edit' && workspaceEditor.id) {
-      setWorkspaces((current) => updateWorkspaceRecord(current, workspaceEditor.id!, { label, intent }, now))
+      setWorkspaces((current) => updateWorkspaceRecord(current, workspaceEditor.id!, { label }, now))
       setNotice('工作空间名称与意图已更新')
     } else {
-      const next = createWorkspaceRecord({ id: createId('workspace'), label, intent, camera: { x: 0, y: 0, zoom: 1 }, visibleLayers, now })
+      const next = createWorkspaceRecord({ id: createId('workspace'), label, intent: null, camera: { x: 0, y: 0, zoom: 1 }, visibleLayers, now })
       const workspace: Workspace = { ...next, scopeId, focusedViewIds: selectedIds, contextPolicy: 'workspace-related' }
       setWorkspaces((current) => [...current, workspace])
       if (selectedIds.length) {
@@ -2364,18 +2333,19 @@ export function App() {
 
   const requestConversationSectionAnnotation = useCallback((input: { readonly conversationId: string; readonly sectionId: string; readonly sectionTitle: string }) => {
     const prompt = [
-      '请为 LCOS 对话章节生成一次按需小标注。',
+      '请为 LCOS 当前这一条导入对话的章节生成一次轻量导航标注。',
       `Project ID: ${activeProjectId}`,
       `Conversation ID: ${input.conversationId}`,
       `Section ID: ${input.sectionId}`,
       `当前章节标题: ${input.sectionTitle}`,
       '',
+      '目标：服务 GUI 的“重要变化快速导航”，不要替整个项目建立阶段、业务分类或固定语义层级。',
       '必须通过 local-creative-os MCP：',
       '1. 调用 read_lcos_conversation_section 读取原始消息和 sourceHash；',
-      '2. 生成一个尽量不超过 5 个汉字的短标题；',
-      '3. 提取最多 3 条关键决策、最多 3 条待办和涉及文件；',
+      '2. 生成一个尽量不超过 5 个汉字的短标题，优先表达这一段发生了什么变化；',
+      '3. 在现有 annotation schema 中：decisions 字段写最多 3 条最值得回看的“重要修改 / 方向变化 / 确认点”；todos 字段只写最多 3 条确实还要继续的事项；同时提取涉及文件。若没有重要变化就少写，不凑数；',
       '4. 调用 annotate_lcos_conversation_section，并原样使用读取到的 sourceHash；',
-      '5. 不改原始时间线，不生成文件，不覆盖用户锁定的章节标题。',
+      '5. 不改原始时间线，不生成文件，不覆盖用户锁定的章节标题；不要把 Decision / Todo 字段当成项目级信息架构。',
     ].join('\n')
     setConversationDialogOpen(false)
     startRunFrom(prompt, [], [], 'analyze', 'auto', 'reply_only', `提炼对话章节「${input.sectionTitle}」`)
@@ -2989,16 +2959,19 @@ export function App() {
   }, [nodes, safeInsets, scopeId, selectNode])
 
   const contextSurfaceRuntime = useMemo<ContextSurfaceRuntime>(() => ({
-    history: contextHistoryEntries,
-    handoffs: sessionHandoffProjection,
+    // Project-level ContextSnapshot / Handoff records remain queryable in Core,
+    // but the user-facing Context history belongs to one imported conversation.
+    // Do not project the whole project's history into a generic Context surface.
+    history: [],
+    handoffs: [],
     onBranchHistory: branchContextHistoryToWorkbench,
     onCompareHistory: compareContextHistory,
     onOpenHistorySource: openContextHistorySource,
-  }), [branchContextHistoryToWorkbench, compareContextHistory, contextHistoryEntries, openContextHistorySource, sessionHandoffProjection])
+  }), [branchContextHistoryToWorkbench, compareContextHistory, openContextHistorySource])
   const openCurrentRunReview = useCallback(() => {
     const review = pendingReviews[0]
     if (review) { openRunReview(review); return }
-    if (activeRun) { setSelectedIds([activeRun.processNodeId]); setActiveSurface('work'); setNotice(`Run ${activeRun.id} · ${runStatusLabel[activeRun.status]}`); return }
+    if (activeRun) { setSelectedIds([activeRun.processNodeId]); setWorkRail((current) => ({ ...current, collapsed: false })); setNotice(`Run ${activeRun.id} · ${runStatusLabel[activeRun.status]}`); return }
     setNotice('当前没有待 Review 的 Run')
   }, [activeRun, openRunReview, pendingReviews])
   const workSurfaceRuntime = useMemo<WorkSurfaceRuntime>(() => ({
@@ -3045,8 +3018,8 @@ export function App() {
       onImport: () => setImportPanelOpen(true),
       onGlobalChat: () => { if (agentMode) setNotice('Agent Browser 模式下请直接使用宿主 Agent 对话框'); else setWorkRail((current) => ({ ...current, collapsed: false })) },
       pendingCount: pendingReviews.length,
-      onPending: () => { setActiveSurface('deliver'); setNotice(pendingReviews.length ? `${pendingReviews.length} 项待确认，已进入交付视图` : '当前没有待确认的返回结果') },
-      onHistory: () => { setActiveSurface('deliver'); setNotice('已进入项目版本与交付历史；Workspace 不再承担历史快照职责') },
+      onPending: () => { setWorkRail((current) => ({ ...current, collapsed: false })); if (pendingReviews[0]) openRunReview(pendingReviews[0]); setNotice(pendingReviews.length ? `${pendingReviews.length} 项待确认，已在右侧执行列表中定位` : '当前没有待确认的返回结果') },
+      onHistory: () => { setConversationDialogOpen(true); setNotice('打开已导入对话；历史导航只属于每条对话本身') },
       onMore: () => setCapabilityOpen((value) => !value),
     }}
     scene={{
@@ -3055,7 +3028,7 @@ export function App() {
         projectId: activeProjectId,
         scopeId,
         workspaceId,
-        workspaceIntent: effectiveWorkspace.intent ?? 'blank',
+        workspaceIntent: 'blank',
       },
       capability: capabilityOpen ? {
         capabilities,
@@ -3295,6 +3268,8 @@ export function App() {
       onSyncRun: syncRuntimeRun,
       onCancelRun: cancelActiveRun,
       runEvents,
+      runReviews,
+      onOpenRunReview: openRunReview,
       runEventsError,
       runtimeRecovering,
       onRecoverRun: recoverActiveRun,

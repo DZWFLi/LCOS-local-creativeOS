@@ -1,10 +1,27 @@
 import { CheckCircle2, ChevronRight, ChevronUp, ZoomIn, ZoomOut } from 'lucide-react'
 import type { CSSProperties } from 'react'
 import type { CanvasScope } from '../../model'
-import { ArrangeGlyph, BenchGlyph, ContextGlyph, DeliverGlyph, RootGlyph, WorkGlyph } from '../design/LcosGlyphs'
+import { ArrangeGlyph, BenchGlyph, ContextGlyph, RootGlyph, WorkflowGlyph } from '../design/LcosGlyphs'
 
-export type SurfaceId = 'arrange' | 'outline' | 'context-flow' | 'context-tree' | 'context-graph' | 'work' | 'work-free' | 'deliver' | 'deliver-versions' | 'deliver-pack'
-export type LensId = 'arrange' | 'context' | 'work' | 'deliver'
+/**
+ * `SurfaceId` deliberately keeps the old work / deliver ids for persisted-project
+ * compatibility. The user-facing dock no longer exposes them as product modes.
+ * They are migrated to `workflow` when restored.
+ */
+export type SurfaceId =
+  | 'arrange'
+  | 'outline'
+  | 'context-flow'
+  | 'context-tree'
+  | 'context-graph'
+  | 'workflow'
+  | 'work'
+  | 'work-free'
+  | 'deliver'
+  | 'deliver-versions'
+  | 'deliver-pack'
+
+export type CapabilityId = 'arrange' | 'context' | 'workflow'
 
 interface Props {
   surface: SurfaceId
@@ -21,19 +38,24 @@ interface Props {
   onZoomReset?: () => void
 }
 
-const lensForSurface = (surface: SurfaceId): LensId =>
-  surface === 'outline' || surface === 'arrange'
-    ? 'arrange'
-    : surface === 'context-flow' || surface === 'context-tree' || surface === 'context-graph'
-      ? 'context'
-      : surface === 'work' || surface === 'work-free'
-        ? 'work'
-        : 'deliver'
-const LENSES: Array<{ id: LensId; label: string; Glyph: typeof ArrangeGlyph }> = [
-  { id:'arrange', label:'整理', Glyph:ArrangeGlyph },
-  { id:'context', label:'上下文', Glyph:ContextGlyph },
-  { id:'work', label:'运行', Glyph:WorkGlyph },
-  { id:'deliver', label:'交付', Glyph:DeliverGlyph },
+export const normalizeSurfaceId = (surface?: string | null): SurfaceId => {
+  if (!surface) return 'arrange'
+  if (surface === 'work' || surface === 'work-free' || surface === 'deliver' || surface === 'deliver-versions' || surface === 'deliver-pack') return 'workflow'
+  if (surface === 'arrange' || surface === 'outline' || surface === 'context-flow' || surface === 'context-tree' || surface === 'context-graph' || surface === 'workflow') return surface
+  return 'arrange'
+}
+
+const capabilityForSurface = (surface: SurfaceId): CapabilityId => {
+  const normalized = normalizeSurfaceId(surface)
+  if (normalized === 'arrange' || normalized === 'outline') return 'arrange'
+  if (normalized === 'context-flow' || normalized === 'context-tree' || normalized === 'context-graph') return 'context'
+  return 'workflow'
+}
+
+const CAPABILITIES: Array<{ id: CapabilityId; label: string; hint: string; Glyph: typeof ArrangeGlyph }> = [
+  { id:'arrange', label:'整理', hint:'项目空间与内容', Glyph:ArrangeGlyph },
+  { id:'context', label:'上下文', hint:'对话与上下文视图', Glyph:ContextGlyph },
+  { id:'workflow', label:'工作流', hint:'Skill 与 Agent 协作', Glyph:WorkflowGlyph },
 ]
 
 function ProjectionPills({ options, active, onSelect }: {
@@ -42,18 +64,25 @@ function ProjectionPills({ options, active, onSelect }: {
   onSelect: (id: string) => void
 }) {
   const index = Math.max(0, options.findIndex((option) => option.id === active))
-  return <div className="vnext-projection-switch lcos-projection-switch" style={{ '--n': options.length, '--pi': index } as CSSProperties}>
+  return <div className="vnext-projection-switch lcos-projection-switch" style={{ '--n': options.length, '--pi': index } as CSSProperties} aria-label="视图方式">
     <span className="lcos-projection-pill" aria-hidden="true" />
     {options.map((option) => <button key={option.id} type="button" className={option.id === active ? 'active' : ''} onClick={() => onSelect(option.id)}>{option.label}</button>)}
   </div>
 }
 
 export function SurfaceDock({ surface, scopePath, activeScopeId, workbenchScopeId, onSurface, onScope, onWorkbench, onMergeWorkbench, workbenchCount, zoom, onZoomBy, onZoomReset }: Props) {
-  const lens = lensForSurface(surface)
+  const normalizedSurface = normalizeSurfaceId(surface)
+  const capability = capabilityForSurface(normalizedSurface)
   const currentScope = scopePath.at(-1)
   const parent = scopePath.length > 1 ? scopePath.at(-2) : null
-  const setLens = (next: LensId) => { if(next==='arrange')onSurface('arrange'); if(next==='context')onSurface('context-flow'); if(next==='work')onSurface('work'); if(next==='deliver')onSurface('deliver-versions') }
-  return <nav className="vnext-bottom-dock lcos-bottom-dock" data-testid="vnext-bottom-dock" aria-label="Scope 与工作视图">
+  const setCapability = (next: CapabilityId) => {
+    // Capability buttons are capability presets, not workflow gates. Preserve a
+    // compatible sub-projection when possible instead of forcing a fixed route.
+    if(next === 'arrange') onSurface(capability === 'arrange' ? normalizedSurface : 'arrange')
+    if(next === 'context') onSurface(capability === 'context' ? normalizedSurface : 'context-flow')
+    if(next === 'workflow') onSurface('workflow')
+  }
+  return <nav className="vnext-bottom-dock lcos-bottom-dock" data-testid="vnext-bottom-dock" aria-label="Scope 与能力入口">
     <div className="vnext-scope-axis lcos-scope-axis" aria-label="Scope">
       <button type="button" className={scopePath.length===1?'active':''} data-label="主画布" aria-label="主画布" onClick={() => scopePath[0] && onScope(scopePath[0].id)}><RootGlyph/></button>
       {onWorkbench && <>
@@ -65,12 +94,11 @@ export function SurfaceDock({ surface, scopePath, activeScopeId, workbenchScopeI
       {onMergeWorkbench && workbenchScopeId===activeScopeId && <button type="button" className="vnext-merge-workbench lcos-merge-workbench" data-label="并回" aria-label="并回主画布并清空现场" onClick={onMergeWorkbench}><CheckCircle2 size={14}/></button>}
     </div>
     <span className="lcos-dock-divider"/>
-    <div className="vnext-lens-axis lcos-lens-axis" aria-label="观察方式">
-      {LENSES.map(({id,label,Glyph})=><button key={id} type="button" className={lens===id?'active':''} data-label={label} aria-label={label} onClick={()=>setLens(id)}><Glyph/></button>)}
-      {lens==='arrange' && <ProjectionPills options={[{id:'arrange',label:'自由'},{id:'outline',label:'大纲'}]} active={surface==='outline'?'outline':'arrange'} onSelect={(id)=>onSurface(id as SurfaceId)}/>}
-      {lens==='context' && <ProjectionPills options={[{id:'context-flow',label:'流'},{id:'context-tree',label:'树'},{id:'context-graph',label:'图'}]} active={surface==='context-tree'?'context-tree':surface==='context-graph'?'context-graph':'context-flow'} onSelect={(id)=>onSurface(id as SurfaceId)}/>}
-      {lens==='work' && <ProjectionPills options={[{id:'work',label:'泳道'},{id:'work-free',label:'自由'}]} active={surface==='work-free'?'work-free':'work'} onSelect={(id)=>onSurface(id as SurfaceId)}/>}
-      {lens==='deliver' && <ProjectionPills options={[{id:'deliver-versions',label:'版本'},{id:'deliver-pack',label:'交付包'}]} active={surface==='deliver-pack'?'deliver-pack':'deliver-versions'} onSelect={(id)=>onSurface(id as SurfaceId)}/>}
+    <div className="vnext-lens-axis lcos-lens-axis" aria-label="LCOS 能力">
+      {CAPABILITIES.map(({id,label,hint,Glyph})=><button key={id} type="button" className={capability===id?'active':''} data-label={label} aria-label={`${label}：${hint}`} title={hint} onClick={()=>setCapability(id)}><Glyph/></button>)}
+      {capability==='arrange' && <ProjectionPills options={[{id:'arrange',label:'自由'},{id:'outline',label:'大纲'}]} active={normalizedSurface==='outline'?'outline':'arrange'} onSelect={(id)=>onSurface(id as SurfaceId)}/>} 
+      {capability==='context' && <ProjectionPills options={[{id:'context-flow',label:'自由'},{id:'context-tree',label:'大纲'},{id:'context-graph',label:'关系'}]} active={normalizedSurface==='context-tree'?'context-tree':normalizedSurface==='context-graph'?'context-graph':'context-flow'} onSelect={(id)=>onSurface(id as SurfaceId)}/>} 
+      {capability==='workflow' && <span className="lcos-capability-hint" aria-hidden="true">自由搭建</span>}
     </div>
     {onZoomBy && onZoomReset && <div className="lcos-zoom-controls" aria-label="画布缩放">
       <button type="button" aria-label="缩小" title="缩小画布" onClick={() => onZoomBy(1 / 1.25)}><ZoomOut size={15}/></button>

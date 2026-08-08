@@ -32,7 +32,7 @@ export function ProjectStripVNext({ projectLabel, scopeLabel, saveStatus, runSta
       <button type="button" aria-label="导入" title="导入" onClick={onImport}><Import size={15} /></button>
       <button type="button" aria-label="全局 Agent 对话" title="全局 Agent 对话" onClick={onGlobalChat}><MessageCircle size={15} /></button>
       {onPending && <button type="button" className="vnext-pending-entry" aria-label="待确认" title={`待确认 · ${pendingCount ?? 0} 项`} onClick={onPending}><Inbox size={15} />{(pendingCount ?? 0) > 0 && <b className="vnext-pending-badge">{pendingCount}</b>}</button>}
-      <button type="button" aria-label="项目历史" title="项目历史" onClick={onHistory}><History size={15} /></button>
+      <button type="button" aria-label="对话记录" title="对话记录" onClick={onHistory}><History size={15} /></button>
       <button type="button" aria-label="更多" title="更多" onClick={onMore}><MoreHorizontal size={15} /></button>
     </nav>
   </header>

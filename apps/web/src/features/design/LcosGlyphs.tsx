@@ -27,6 +27,7 @@ export const ArchiveGlyph = (p: P) => <svg {...base(p)}><path d="M2.5 4.5h11v8.2
 export const ArrangeGlyph = (p: P) => <svg {...base(p)}><rect x="2.2" y="2.2" width="5" height="5" rx="1.2"/><rect x="8.8" y="2.2" width="5" height="5" rx="1.2"/><rect x="2.2" y="8.8" width="5" height="5" rx="1.2"/><rect x="8.8" y="8.8" width="5" height="5" rx="1.2"/></svg>
 export const ContextGlyph = (p: P) => <svg {...base(p)}><circle cx="8" cy="8" r="2"/><circle cx="3" cy="3.4" r="1.4"/><circle cx="13" cy="3.4" r="1.4"/><circle cx="13" cy="12.6" r="1.4"/><path d="M4.1 4.5 6.6 6.7M11.9 4.5 9.4 6.7M11.9 11.5 9.5 9.4"/></svg>
 export const WorkGlyph = (p: P) => <svg {...base(p)}><path d="M2.4 12.4V9.2M6.1 12.4V4.6M9.9 12.4V7M13.6 12.4V3"/></svg>
+export const WorkflowGlyph = (p: P) => <svg {...base(p)}><rect x="1.8" y="2.5" width="4.1" height="3.2" rx="1"/><rect x="10.1" y="5.9" width="4.1" height="3.2" rx="1"/><rect x="1.8" y="10.3" width="4.1" height="3.2" rx="1"/><path d="M5.9 4.1h1.7a2 2 0 0 1 2 2v1.4h.5M5.9 11.9h1.7a2 2 0 0 0 2-2V8.7h.5"/></svg>
 export const DeliverGlyph = (p: P) => <svg {...base(p)}><path d="M8 1.9 14 5v6l-6 3.1L2 11V5z"/><path d="M2 5l6 3.1L14 5M8 8.1v6"/></svg>
 export const RootGlyph = (p: P) => <svg {...base(p)}><rect x="2.2" y="2.8" width="11.6" height="10.4" rx="1.8"/><path d="M2.2 6.2h11.6"/></svg>
 export const BenchGlyph = (p: P) => <svg {...base(p)}><path d="M2 6.4h12M3.6 6.4v6.2M12.4 6.4v6.2M2.8 6.4 4.6 3.4h6.8l1.8 3"/></svg>

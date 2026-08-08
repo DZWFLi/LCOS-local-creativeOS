@@ -10,11 +10,12 @@ import { adjacency, orderedNodes } from './surfaceModel'
 
 interface Props { projectId:string; scopeId:string; nodes:CanvasNode[]; edges:CanvasEdge[]; selectedIds:string[]; runtime?:ContextSurfaceRuntime; onSelect:(id:string, additive?:boolean)=>void; onDoubleClick:(id:string)=>void }
 type Dot={node:CanvasNode;x:number;y:number;ring:0|1|2}
-const RELATION_KINDS=['reference','generate','modify','feedback'] as const
 
 export function ContextGraphSurface(props:Props){
-  const [state,setState]=useProjectionLayoutState(props.projectId,props.scopeId,'context-graph',{hops:2,relationKinds:[...RELATION_KINDS]})
-  const filteredEdges=useMemo(()=>props.edges.filter((edge)=>state.relationKinds.includes(edge.kind)),[props.edges,state.relationKinds])
+  const availableRelationKinds=useMemo(()=>Array.from(new Set(props.edges.map((edge)=>edge.kind))),[props.edges])
+  const [state,setState]=useProjectionLayoutState(props.projectId,props.scopeId,'context-graph',{hops:2,relationKinds:availableRelationKinds})
+  const activeRelationKinds=state.relationKinds.length?state.relationKinds:availableRelationKinds
+  const filteredEdges=useMemo(()=>props.edges.filter((edge)=>activeRelationKinds.includes(edge.kind)),[activeRelationKinds,props.edges])
   const dots=useMemo<Dot[]>(()=>{
     const ordered=orderedNodes(props.nodes),focusId=props.selectedIds.at(-1)??ordered[0]?.id;if(!focusId)return[]
     const graph=adjacency(filteredEdges),first=[...(graph.get(focusId)??[])],firstSet=new Set(first),secondSet=new Set<string>()
@@ -25,9 +26,9 @@ export function ContextGraphSurface(props:Props){
     return result
   },[filteredEdges,props.nodes,props.selectedIds,state.hops])
   const ids=new Set(dots.map((dot)=>dot.node.id)),pos=new Map<string,Dot>(dots.map((dot)=>[dot.node.id,dot]))
-  const toggleKind=(kind:string)=>setState((current)=>({...current,relationKinds:current.relationKinds.includes(kind)?current.relationKinds.filter((item)=>item!==kind):[...current.relationKinds,kind]}))
+  const toggleKind=(kind:string)=>setState((current)=>{const source=current.relationKinds.length?current.relationKinds:availableRelationKinds;return{...current,relationKinds:source.includes(kind)?source.filter((item)=>item!==kind):[...source,kind]}})
   return <section className="lcos-dedicated-surface lcos-context-graph" data-testid="surface-context-graph">
-    <header className="lcos-surface-heading"><div><strong>上下文</strong><span>局部关系</span></div><div className="lcos-graph-controls"><button type="button" className={state.hops===1?'active':''} onClick={()=>setState((current)=>({...current,hops:1}))}>1 hop</button><button type="button" className={state.hops===2?'active':''} onClick={()=>setState((current)=>({...current,hops:2}))}>2 hops</button><details><summary title="关系筛选"><Filter size={12}/></summary><div>{RELATION_KINDS.map((kind)=><label key={kind}><input type="checkbox" checked={state.relationKinds.includes(kind)} onChange={()=>toggleKind(kind)}/><span>{kind}</span></label>)}</div></details></div></header>
+    <header className="lcos-surface-heading"><div><strong>上下文</strong><span>局部关系</span></div><div className="lcos-graph-controls"><button type="button" className={state.hops===1?'active':''} onClick={()=>setState((current)=>({...current,hops:1}))}>1 hop</button><button type="button" className={state.hops===2?'active':''} onClick={()=>setState((current)=>({...current,hops:2}))}>2 hops</button><details><summary title="关系筛选"><Filter size={12}/></summary><div>{availableRelationKinds.map((kind)=><label key={kind}><input type="checkbox" checked={activeRelationKinds.includes(kind)} onChange={()=>toggleKind(kind)}/><span>{kind}</span></label>)}</div></details></div></header>
     <div className="lcos-graph-orbit" aria-hidden="true"><Orbit size={15}/><span>{dots.length} local objects</span></div>
     <svg className="lcos-graph-edges" viewBox="0 0 100 100" preserveAspectRatio="none">{filteredEdges.filter((edge)=>ids.has(edge.from)&&ids.has(edge.to)).map((edge)=>{const a=pos.get(edge.from)!,b=pos.get(edge.to)!;return <line key={edge.id} x1={a.x} y1={a.y} x2={b.x} y2={b.y} className={edge.active?'active':''}/>})}</svg>
     {dots.map((dot,index)=><div key={dot.node.id} className={`lcos-graph-dot ring-${dot.ring}`} style={{left:`${dot.x}%`,top:`${dot.y}%`, '--i':index} as CSSProperties}><SurfaceObject node={dot.node} glyph dim={dot.ring===2} selected={props.selectedIds.includes(dot.node.id)} onSelect={props.onSelect} onDoubleClick={props.onDoubleClick}/></div>)}

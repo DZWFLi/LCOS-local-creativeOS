@@ -42,6 +42,8 @@ export function ConversationContextDialog({ open, projectId, scopeId, workspaceI
   const [error, setError] = useState('')
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null)
   const [sectionTitleDraft, setSectionTitleDraft] = useState('')
+  const [focusedSectionId, setFocusedSectionId] = useState<string | null>(null)
+  const focusTimerRef = useRef<number | null>(null)
 
   const loadSessions = useCallback(async () => {
     const call = await client.conversations(projectId)
@@ -65,8 +67,10 @@ export function ConversationContextDialog({ open, projectId, scopeId, workspaceI
   }, [loadSessions, open])
   useEffect(() => {
     if (!open || selectedId === null) { setProjection(null); setMessages([]); return }
+    setFocusedSectionId(null)
     void loadConversation(selectedId).catch((caught) => setError(caught instanceof Error ? caught.message : '无法读取时间线'))
   }, [loadConversation, open, selectedId])
+  useEffect(() => () => { if (focusTimerRef.current !== null) window.clearTimeout(focusTimerRef.current) }, [])
 
   const sectionForMessage = useMemo(() => {
     const map = new Map<number, string>()
@@ -82,6 +86,27 @@ export function ConversationContextDialog({ open, projectId, scopeId, workspaceI
       if (section) map.get(section.id)?.push(message)
     }
     return map
+  }, [messages, projection?.sections])
+  const changePoints = useMemo(() => (projection?.sections ?? []).map((section) => {
+    const sectionMessages = messagesBySection.get(section.id) ?? []
+    const pinnedCount = sectionMessages.filter((message) => message.pinnedAsDecision).length
+    const annotationCount = (section.annotation?.decisions.length ?? 0) + (section.annotation?.todos.length ?? 0)
+    const importance: 'high' | 'medium' | 'low' = pinnedCount > 0 || annotationCount >= 3 ? 'high' : section.annotation || sectionMessages.some((message) => message.fileRefs.length > 0) ? 'medium' : 'low'
+    const summary = section.annotation?.decisions[0] || section.annotation?.todos[0] || sectionMessages.find((message) => message.pinnedAsDecision)?.contentText || sectionMessages.find((message) => message.role === 'user')?.contentText || ''
+    return { section, importance, summary: summary.replace(/\s+/g, ' ').trim().slice(0, 96) }
+  }), [messagesBySection, projection?.sections])
+  const focusedSection = useMemo(() => projection?.sections.find((section) => section.id === focusedSectionId) ?? null, [focusedSectionId, projection?.sections])
+  const locateSection = useCallback((sectionId: string) => {
+    const section = projection?.sections.find((item) => item.id === sectionId)
+    if (!section) return
+    setTab('timeline')
+    setFocusedSectionId(sectionId)
+    if (focusTimerRef.current !== null) window.clearTimeout(focusTimerRef.current)
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+      const message = messages.find((item) => item.seq >= section.startSeq && item.seq <= section.endSeq)
+      if (message) document.getElementById(`conversation-message-${message.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }))
+    focusTimerRef.current = window.setTimeout(() => setFocusedSectionId((current) => current === sectionId ? null : current), 1900)
   }, [messages, projection?.sections])
 
   if (!open) return null
@@ -175,7 +200,7 @@ export function ConversationContextDialog({ open, projectId, scopeId, workspaceI
     try {
       unwrap(await client.pinConversationMessage(projectId, selectedId, message.id, { scopeId, ...(workspaceId === undefined ? {} : { workspaceId }) }))
       await loadConversation(selectedId); onImported()
-    } catch (caught) { setError(caught instanceof Error ? caught.message : '无法提升为决策节点') }
+    } catch (caught) { setError(caught instanceof Error ? caught.message : '无法标记重点消息') }
     finally { setBusy(false) }
   }
   const toggleSectionLock = async (sectionId: string, locked: boolean): Promise<void> => {
@@ -218,7 +243,7 @@ export function ConversationContextDialog({ open, projectId, scopeId, workspaceI
   }
 
   return <div className="modal-backdrop"><section className="conversation-context-dialog" role="dialog" aria-label="对话上下文">
-    <header className="conversation-header"><div><MessageSquare size={18}/><div><h2>对话上下文</h2><p>原始时间线只存一份，章节和索引都可重建。</p></div></div><button type="button" className="icon-button pressable" onClick={onClose} aria-label="关闭"><X size={16}/></button></header>
+    <header className="conversation-header"><div><MessageSquare size={18}/><div><h2>对话上下文</h2><p>这里只记录这一条导入对话。重点导航是视觉索引，完整细节仍保留在原始时间线与本地记忆中。</p></div></div><button type="button" className="icon-button pressable" onClick={onClose} aria-label="关闭"><X size={16}/></button></header>
     <div className="conversation-toolbar">
       <button type="button" className="pressable" disabled={busy} onClick={() => inputRef.current?.click()}><Upload size={15}/>导入 Codex JSONL</button>
       <button type="button" className="pressable" disabled={busy} onClick={() => setManualOpen((value) => !value)}><MessageSquare size={15}/>粘贴时间线</button>
@@ -234,15 +259,48 @@ export function ConversationContextDialog({ open, projectId, scopeId, workspaceI
     <div className="conversation-layout">
       <aside><h3>已导入对话</h3>{sessions.length === 0 && <p className="empty-copy">还没有对话。导入只做解析和全文索引，不调用模型。</p>}{sessions.map((session) => <button type="button" key={session.id} className={selectedId === session.id ? 'active' : ''} onClick={() => setSelectedId(session.id)}><FileJson size={14}/><span><b>{session.title}</b><small>{session.messageCount} 条 · {session.sectionCount} 章</small></span></button>)}</aside>
       <main>
-        {projection && <><div className="conversation-tabs"><button className={tab==='timeline'?'active':''} onClick={() => setTab('timeline')}>时间线</button><button className={tab==='outline'?'active':''} onClick={() => setTab('outline')}>大纲</button><button className={tab==='graph'?'active':''} onClick={() => setTab('graph')}>关系图</button><button className={tab==='search'?'active':''} onClick={() => setTab('search')}>搜索结果</button><span title={`${projection.semanticIndex.provider} · ${projection.semanticIndex.model} · ${projection.semanticIndex.backend ?? '未建立'}`}>{projection.semanticIndex.state === 'ready' ? `语义索引 ${projection.semanticIndex.indexedMessages} · ${projection.semanticIndex.backend === 'sqlite-vec' ? '本地向量' : '兼容存储'}` : '全文索引已用'}</span></div>
-        {tab === 'timeline' && <div className="conversation-timeline">{messages.map((message) => <article id={`conversation-message-${message.id}`} key={message.id} className={`conversation-message role-${message.role}`}><header><b>{message.role === 'user' ? '你' : message.role === 'assistant' ? 'Agent' : message.role === 'tool' ? '工具' : '系统'}</b><small>#{message.seq} · {sectionForMessage.get(message.seq) ?? '未分章'}</small>{message.pinnedAsDecision ? <span className="decision-badge"><Bookmark size={12}/>已提升</span> : <button type="button" disabled={busy} onClick={() => void pin(message)}><Bookmark size={12}/>提升为决策</button>}</header><pre>{message.contentText}</pre>{message.fileRefs.length > 0 && <footer>涉及文件：{message.fileRefs.map((item) => item.normalized ?? item.raw).join('、')}</footer>}</article>)}</div>}
-        {tab === 'outline' && <div className="conversation-outline"><div className="conversation-outline-actions"><button type="button" disabled={busy} onClick={() => void refreshSections()}><RefreshCw size={13}/>重新整理未锁定章节</button></div>{projection.sections.map((section) => <article key={section.id}><header><div>{editingSectionId === section.id ? <form className="conversation-section-rename" onSubmit={(event) => { event.preventDefault(); void renameSection(section.id) }}><input autoFocus value={sectionTitleDraft} onChange={(event) => setSectionTitleDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Escape') { setEditingSectionId(null); setSectionTitleDraft('') } }}/><button type="submit">保存</button></form> : <b>{section.title}</b>}<small>#{section.startSeq}–{section.endSeq} · {section.kind}</small></div><div className="conversation-section-buttons"><button type="button" title={section.annotation ? '让 Agent 重新提炼这一章' : '让 Agent 提炼标题、决策与待办'} disabled={onRequestSectionAnnotation === undefined} onClick={() => { if (selectedId && onRequestSectionAnnotation) { onRequestSectionAnnotation({ conversationId: selectedId, sectionId: section.id, sectionTitle: section.title }); onClose() } }}><Sparkles size={14}/></button><button type="button" title="修改章节标题" onClick={() => { setEditingSectionId(section.id); setSectionTitleDraft(section.title) }}><Pencil size={14}/></button><button type="button" title={section.lockedByUser?'解除锁定':'锁定章节边界'} onClick={() => void toggleSectionLock(section.id, section.lockedByUser)}>{section.lockedByUser?<Lock size={14}/>:<Unlock size={14}/>}</button></div></header>{section.annotation && <div className="conversation-annotation"><b>{section.annotation.title}</b><p>{section.annotation.decisions.join('；') || '暂无关键决策'}</p><small>{section.annotation.todos.join('；') || '暂无待办'}{section.annotation.involvedFiles.length > 0 ? ` · 涉及 ${section.annotation.involvedFiles.join('、')}` : ''}</small></div>}</article>)}</div>}
-        {tab === 'graph' && <div className="conversation-graph" aria-label="对话关系图"><article className="conversation-graph-root"><MessageSquare size={18}/><div><b>{projection.session.title}</b><small>{projection.session.messageCount} 条消息 · {projection.sections.length} 个章节</small></div></article><div className="conversation-graph-branches">{projection.sections.map((section) => { const sectionMessages = messagesBySection.get(section.id) ?? []; const pinned = sectionMessages.filter((message) => message.pinnedAsDecision); const files = [...new Set(sectionMessages.flatMap((message) => message.fileRefs.map((ref) => ref.normalized ?? ref.raw)))]; return <article key={section.id} className="conversation-graph-section"><header><GitBranch size={14}/><div><b>{section.annotation?.title || section.title}</b><small>#{section.startSeq}–{section.endSeq}</small></div></header>{pinned.length > 0 && <div className="conversation-graph-items"><strong>决策</strong>{pinned.map((message) => <button type="button" key={message.id} onClick={() => { setTab('timeline'); document.getElementById(`conversation-message-${message.id}`)?.scrollIntoView({ block: 'center' }) }}><Bookmark size={11}/>{message.contentText.slice(0, 48)}</button>)}</div>}{files.length > 0 && <div className="conversation-graph-items"><strong>涉及文件</strong>{files.slice(0, 8).map((file) => <span key={file}>{file}</span>)}</div>}{pinned.length === 0 && files.length === 0 && <small className="empty-copy">这一章还没有钉选决策或文件关系。</small>}</article> })}</div></div>}
+        {projection && <><div className="conversation-tabs"><button className={tab==='timeline'?'active':''} onClick={() => setTab('timeline')}>对话</button><button className={tab==='outline'?'active':''} onClick={() => setTab('outline')}>大纲</button><button className={tab==='graph'?'active':''} onClick={() => setTab('graph')}>关系</button><button className={tab==='search'?'active':''} onClick={() => setTab('search')}>搜索</button><span title={`${projection.semanticIndex.provider} · ${projection.semanticIndex.model} · ${projection.semanticIndex.backend ?? '未建立'}`}>{projection.semanticIndex.state === 'ready' ? `语义索引 ${projection.semanticIndex.indexedMessages} · ${projection.semanticIndex.backend === 'sqlite-vec' ? '本地向量' : '兼容存储'}` : '全文索引已用'}</span></div>
+        <div className={`conversation-view-shell ${tab === 'search' ? 'without-change-rail' : ''}`}>
+          {tab !== 'search' && <ConversationChangeRail points={changePoints} activeSectionId={focusedSectionId} onLocate={locateSection} onAskAgent={onRequestSectionAnnotation && selectedId ? (section) => { onRequestSectionAnnotation({ conversationId: selectedId, sectionId: section.id, sectionTitle: section.title }); onClose() } : undefined} />}
+          <div className="conversation-view-content">
+        {tab === 'timeline' && <div className="conversation-timeline">{messages.map((message) => { const highlighted = focusedSection ? message.seq >= focusedSection.startSeq && message.seq <= focusedSection.endSeq : false; return <article id={`conversation-message-${message.id}`} key={message.id} className={`conversation-message role-${message.role}${highlighted ? ' is-change-focus' : ''}`}><header><b>{message.role === 'user' ? '你' : message.role === 'assistant' ? 'Agent' : message.role === 'tool' ? '工具' : '系统'}</b><small>#{message.seq} · {sectionForMessage.get(message.seq) ?? '未分章'}</small>{message.pinnedAsDecision ? <span className="decision-badge"><Bookmark size={12}/>重点</span> : <button type="button" disabled={busy} onClick={() => void pin(message)}><Bookmark size={12}/>标为重点</button>}</header><pre>{message.contentText}</pre>{message.fileRefs.length > 0 && <footer>涉及文件：{message.fileRefs.map((item) => item.normalized ?? item.raw).join('、')}</footer>}</article> })}</div>}
+        {tab === 'outline' && <div className="conversation-outline"><div className="conversation-outline-actions"><button type="button" disabled={busy} onClick={() => void refreshSections()}><RefreshCw size={13}/>重新整理未锁定章节</button></div>{projection.sections.map((section) => <article key={section.id}><header><div>{editingSectionId === section.id ? <form className="conversation-section-rename" onSubmit={(event) => { event.preventDefault(); void renameSection(section.id) }}><input autoFocus value={sectionTitleDraft} onChange={(event) => setSectionTitleDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Escape') { setEditingSectionId(null); setSectionTitleDraft('') } }}/><button type="submit">保存</button></form> : <b>{section.title}</b>}<small>#{section.startSeq}–{section.endSeq} · {section.kind}</small></div><div className="conversation-section-buttons"><button type="button" title={section.annotation ? '让 Agent 重新提炼这一段的变化要点' : '让 Agent 提炼重要修改点和继续事项'} disabled={onRequestSectionAnnotation === undefined} onClick={() => { if (selectedId && onRequestSectionAnnotation) { onRequestSectionAnnotation({ conversationId: selectedId, sectionId: section.id, sectionTitle: section.title }); onClose() } }}><Sparkles size={14}/></button><button type="button" title="修改章节标题" onClick={() => { setEditingSectionId(section.id); setSectionTitleDraft(section.title) }}><Pencil size={14}/></button><button type="button" title={section.lockedByUser?'解除锁定':'锁定章节边界'} onClick={() => void toggleSectionLock(section.id, section.lockedByUser)}>{section.lockedByUser?<Lock size={14}/>:<Unlock size={14}/>}</button></div></header>{section.annotation && <div className="conversation-annotation"><b>{section.annotation.title}</b><p>{section.annotation.decisions.join('；') || '暂无需要特别标记的变化'}</p><small>{section.annotation.todos.join('；') || '暂无继续事项'}{section.annotation.involvedFiles.length > 0 ? ` · 涉及 ${section.annotation.involvedFiles.join('、')}` : ''}</small></div>}</article>)}</div>}
+        {tab === 'graph' && <div className="conversation-graph" aria-label="对话关系图"><article className="conversation-graph-root"><MessageSquare size={18}/><div><b>{projection.session.title}</b><small>{projection.session.messageCount} 条消息 · {projection.sections.length} 个章节</small></div></article><div className="conversation-graph-branches">{projection.sections.map((section) => { const sectionMessages = messagesBySection.get(section.id) ?? []; const pinned = sectionMessages.filter((message) => message.pinnedAsDecision); const files = [...new Set(sectionMessages.flatMap((message) => message.fileRefs.map((ref) => ref.normalized ?? ref.raw)))]; return <article key={section.id} className="conversation-graph-section"><header><GitBranch size={14}/><div><b>{section.annotation?.title || section.title}</b><small>#{section.startSeq}–{section.endSeq}</small></div></header>{pinned.length > 0 && <div className="conversation-graph-items"><strong>重点</strong>{pinned.map((message) => <button type="button" key={message.id} onClick={() => { setTab('timeline'); document.getElementById(`conversation-message-${message.id}`)?.scrollIntoView({ block: 'center' }) }}><Bookmark size={11}/>{message.contentText.slice(0, 48)}</button>)}</div>}{files.length > 0 && <div className="conversation-graph-items"><strong>涉及文件</strong>{files.slice(0, 8).map((file) => <span key={file}>{file}</span>)}</div>}{pinned.length === 0 && files.length === 0 && <small className="empty-copy">这一段还没有重点消息或文件关系。</small>}</article> })}</div></div>}
         {tab === 'search' && <div className="conversation-timeline">{hits.length===0?<p className="empty-copy">输入关键词后按 Enter。语义搜索需要本地 Ollama 索引。</p>:hits.map((hit)=><article key={`${hit.message.id}-${hit.hybridScore}`} className="conversation-message"><header><b>{hit.sessionTitle}</b><small>{hit.sectionTitle ?? `#${hit.message.seq}`} · {hit.reasons.join(' + ')}</small><button type="button" onClick={() => { setSelectedId(hit.message.sessionId); setTab('timeline') }}>打开原文</button></header><pre>{hit.message.contentText}</pre></article>)}</div>}
+          </div>
+        </div>
         </>}
       </main>
     </div>
   </section></div>
+}
+
+
+type ConversationChangePoint = {
+  readonly section: ConversationProjectionV1['sections'][number]
+  readonly importance: 'high' | 'medium' | 'low'
+  readonly summary: string
+}
+
+function ConversationChangeRail({ points, activeSectionId, onLocate, onAskAgent }: {
+  readonly points: readonly ConversationChangePoint[]
+  readonly activeSectionId: string | null
+  readonly onLocate: (sectionId: string) => void
+  readonly onAskAgent?: (section: ConversationChangePoint['section']) => void
+}) {
+  if (points.length < 2) return null
+  return <nav className="conversation-change-rail" aria-label="当前对话的重要变化导航">
+    <span className="conversation-change-line" aria-hidden="true" />
+    {points.map((point, index) => <div key={point.section.id} className={`conversation-change-point importance-${point.importance}${activeSectionId === point.section.id ? ' active' : ''}`}>
+      <button type="button" className="conversation-change-marker" aria-label={`定位到 ${point.section.annotation?.title || point.section.title}`} onClick={() => onLocate(point.section.id)}><span /></button>
+      <div className="conversation-change-popover">
+        <small>{index + 1} / {points.length} · #{point.section.startSeq}–{point.section.endSeq}</small>
+        <strong>{point.section.annotation?.title || point.section.title}</strong>
+        {point.summary && <p>{point.summary}</p>}
+        <div><button type="button" onClick={() => onLocate(point.section.id)}><Focus size={12}/>定位</button>{onAskAgent && <button type="button" onClick={() => onAskAgent(point.section)}><Sparkles size={12}/>让 Agent 提炼</button>}</div>
+      </div>
+    </div>)}
+  </nav>
 }
 
 
