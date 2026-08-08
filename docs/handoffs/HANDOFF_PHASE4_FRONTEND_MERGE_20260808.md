@@ -36,11 +36,18 @@ Core domain 此前已把 `RelationEntityType` 扩展为 `'workspace'`；本轮�
 - diff：workspace 端点边进 upsert/delete relation
 - 契约测试新增“persists and projects workspace aggregate relation endpoints”，runtimeBridge 10/10 过
 
-### 边界 2：ContextSnapshot 完整历史 —— ⚠️ 后端已具备，前端未接活
-后端 B5 已有 `ContextSnapshotService`（create/list/compare/branch + 路由）。前端 `ContextHistoryRail` 目前只消费 `ActiveContext.recentChanges` 投影，**尚未调用** `/context-snapshots`、`/compare`、`/branch`。这是下一批真正“后端返回前端”的差距。
+### 边界 2：ContextSnapshot 完整历史 —— ✅ 已接活（2026-08-08 补充）
+后端 B5 `ContextSnapshotService`（create/list/compare/branch + 路由）此前已具备；本轮补齐前端调用链：
+- `packages/contracts` 新增 `ContextSnapshotRefsV1 / SnapshotCompareResultV1 / BranchSnapshotResultV1`，local-core service 改为从 contracts 导入（消除重复定义）
+- `localCoreClient` 新增 `listContextSnapshots / createContextSnapshot / compareContextSnapshots / branchContextSnapshot`
+- `historyProjection.ts` 把 Checkpoint 投影成历史条目（objectIds 取 focusedViewIds，兜底 artifactIds）
+- `ContextHistoryRail` 改为消费真实快照列表（有快照时不再用 recentChanges 内存投影）；“从这里建现场”调 branch API、“对比当前”调 compare API（真实快照条目）
 
-### 边界 3：Session/Handoff 完整历史 —— ⚠️ 后端已具备，前端未显式接
-后端有 `HandoffRecord`（schema v20）+ `/projects/:id/handoffs` 路由；前端 `ContextFlowSurface` 有 `lcos-handoff-ribbon` 投影但 client 未显式接 GET/POST。
+### 边界 3：Session/Handoff 完整历史 —— ✅ 已接活（2026-08-08 补充）
+- `packages/contracts` re-export `HandoffRecord / HandoffResumeMode / HandoffArtifactRef`
+- `localCoreClient` 新增 `listHandoffs / createHandoff / deleteHandoff`
+- `historyProjection.ts` 把 HandoffRecord 投影成 ribbon 条目（fromProvider/toProvider/title）
+- `lcos-handoff-ribbon` 与历史栏交接列表改为读后端记录（有记录时不再用画布边推导兜底，画布边推导保留为空态 fallback）
 
 ### 边界 4：Projection Layout —— ✅ 前端 localStorage，按设计无需后端
 `projectionLayoutState` 已实现，FRONTEND_ONLY 定位不变。
@@ -54,9 +61,19 @@ Core domain 此前已把 `RelationEntityType` 扩展为 `'workspace'`；本轮�
 
 ## 6. 未完成 / 阻塞
 
-- **ContextSnapshot / Handoff 全量 Client 接活**（边界 2/3）：需要 `localCoreClient` 增加 `contextSnapshots / compareSnapshot / branchSnapshot / handoffs` 方法并让 ContextHistoryRail、Handoff ribbon 跨盘使用。是否推进待 Dz 拍板。
 - **E2E 跳过项**：`multi-selection can stage from bottom gutter` 因 seed 项目节点不足跳过（需真实两个节点 + Relation 的项目）。
 - dev 栈为 detached 进程（Core 43121 / Bridge 43122 / Web 5173），`npm run dev:stop` 管不到；后端本轮无 local-core 代码改动，Core 无需重启。
+
+## 8. 接活验证证据（2026-08-08）
+
+- 全量 `npm run check:fast` 绿：web 140/140（新增 historyProjection 6 + runtimeBridge 10）、core 258/258、架构 70/70、build 过
+- 真实 HTTP（Core 43121，disposable-mvp-sample）：
+  - 创建快照 A（workspace-brief-script）→ 2 artifacts + 2 views 冻结
+  - 创建快照 B → compare A↔B：kept=2
+  - branch A → 新 collection scope + 2 views
+  - list（workspace 过滤 3 条 / 全部 4 条）；创建 Handoff（Codex → WorkBuddy）成功
+- 真实浏览器（5173 agent=codex）：上下文 surface 历史栏显示“MVP sample start / Brief / Script / Phase4 验收基线 A / Phase4 验收基线 B”，交接栏显示 Codex → WorkBuddy
+- 说明：初次测试传 `ws-main` 触发 FK 失败，实为测试参数错误（seed 项目真实 workspace id 是 workspace-brief-script 等），非代码缺陷
 
 ## 7. 回滚
 
