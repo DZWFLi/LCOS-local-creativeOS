@@ -1125,6 +1125,10 @@ export function App() {
     if (!next) { setNotice('这个工作空间不属于当前画布'); return }
     setWorkspaceId(id)
     setLayoutPreview(null)
+    // Projection Preference：进入工作空间时恢复它偏好的 Lens（brief 5 Workspace 组成之一）。
+    if (next.preferredSurface && next.preferredSurface !== 'arrange') {
+      setActiveSurface(next.preferredSurface as SurfaceId)
+    }
     setNotice(`已激活工作空间「${next.label}」· Scope 与 Camera 未改变`)
   }, [scopeId, workspaces])
 

@@ -3,7 +3,7 @@ import type { CSSProperties } from 'react'
 import type { CanvasScope } from '../../model'
 import { ArrangeGlyph, BenchGlyph, ContextGlyph, DeliverGlyph, RootGlyph, WorkGlyph } from '../design/LcosGlyphs'
 
-export type SurfaceId = 'arrange' | 'outline' | 'context-flow' | 'context-tree' | 'context-graph' | 'work' | 'deliver'
+export type SurfaceId = 'arrange' | 'outline' | 'context-flow' | 'context-tree' | 'context-graph' | 'work' | 'work-free' | 'deliver' | 'deliver-versions' | 'deliver-pack'
 export type LensId = 'arrange' | 'context' | 'work' | 'deliver'
 
 interface Props {
@@ -26,7 +26,9 @@ const lensForSurface = (surface: SurfaceId): LensId =>
     ? 'arrange'
     : surface === 'context-flow' || surface === 'context-tree' || surface === 'context-graph'
       ? 'context'
-      : surface
+      : surface === 'work' || surface === 'work-free'
+        ? 'work'
+        : 'deliver'
 const LENSES: Array<{ id: LensId; label: string; Glyph: typeof ArrangeGlyph }> = [
   { id:'arrange', label:'整理', Glyph:ArrangeGlyph },
   { id:'context', label:'上下文', Glyph:ContextGlyph },
@@ -50,7 +52,7 @@ export function SurfaceDock({ surface, scopePath, activeScopeId, workbenchScopeI
   const lens = lensForSurface(surface)
   const currentScope = scopePath.at(-1)
   const parent = scopePath.length > 1 ? scopePath.at(-2) : null
-  const setLens = (next: LensId) => { if(next==='arrange')onSurface('arrange'); if(next==='context')onSurface('context-flow'); if(next==='work')onSurface('work'); if(next==='deliver')onSurface('deliver') }
+  const setLens = (next: LensId) => { if(next==='arrange')onSurface('arrange'); if(next==='context')onSurface('context-flow'); if(next==='work')onSurface('work'); if(next==='deliver')onSurface('deliver-versions') }
   return <nav className="vnext-bottom-dock lcos-bottom-dock" data-testid="vnext-bottom-dock" aria-label="Scope 与工作视图">
     <div className="vnext-scope-axis lcos-scope-axis" aria-label="Scope">
       <button type="button" className={scopePath.length===1?'active':''} data-label="主画布" aria-label="主画布" onClick={() => scopePath[0] && onScope(scopePath[0].id)}><RootGlyph/></button>
@@ -67,6 +69,8 @@ export function SurfaceDock({ surface, scopePath, activeScopeId, workbenchScopeI
       {LENSES.map(({id,label,Glyph})=><button key={id} type="button" className={lens===id?'active':''} data-label={label} aria-label={label} onClick={()=>setLens(id)}><Glyph/></button>)}
       {lens==='arrange' && <ProjectionPills options={[{id:'arrange',label:'自由'},{id:'outline',label:'大纲'}]} active={surface==='outline'?'outline':'arrange'} onSelect={(id)=>onSurface(id as SurfaceId)}/>}
       {lens==='context' && <ProjectionPills options={[{id:'context-flow',label:'流'},{id:'context-tree',label:'树'},{id:'context-graph',label:'图'}]} active={surface==='context-tree'?'context-tree':surface==='context-graph'?'context-graph':'context-flow'} onSelect={(id)=>onSurface(id as SurfaceId)}/>}
+      {lens==='work' && <ProjectionPills options={[{id:'work',label:'泳道'},{id:'work-free',label:'自由'}]} active={surface==='work-free'?'work-free':'work'} onSelect={(id)=>onSurface(id as SurfaceId)}/>}
+      {lens==='deliver' && <ProjectionPills options={[{id:'deliver-versions',label:'版本'},{id:'deliver-pack',label:'交付包'}]} active={surface==='deliver-pack'?'deliver-pack':'deliver-versions'} onSelect={(id)=>onSurface(id as SurfaceId)}/>}
     </div>
     {onZoomBy && onZoomReset && <div className="lcos-zoom-controls" aria-label="画布缩放">
       <button type="button" aria-label="缩小" title="缩小画布" onClick={() => onZoomBy(1 / 1.25)}><ZoomOut size={15}/></button>
