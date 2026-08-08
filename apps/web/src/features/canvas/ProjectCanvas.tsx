@@ -462,7 +462,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
   }
 
-  return <div ref={canvasRef} data-testid="canvas" data-node-count={nodes.length} data-edge-count={edges.length} data-locked={locked || undefined} data-camera-x={camera.x} data-camera-y={camera.y} data-camera-zoom={camera.zoom} aria-busy={locked || undefined} className={`canvas lod-${lod} zoom-band-${zoomBand} ${selectedId ? 'has-focus' : ''} ${panning ? 'panning' : ''} ${locked ? 'is-locked' : ''}`} onPointerDown={(event) => {
+  return <div ref={canvasRef} data-testid="canvas" data-node-count={nodes.length} data-edge-count={edges.length} data-locked={locked || undefined} data-camera-x={camera.x} data-camera-y={camera.y} data-camera-zoom={camera.zoom} aria-busy={locked || undefined} className={`canvas lod-${lod} zoom-band-${zoomBand} ${selectedId ? 'has-focus' : ''} ${panning ? 'panning' : ''} ${locked ? 'is-locked' : ''}`} style={{ '--canvas-zoom': String(camera.zoom) } as React.CSSProperties} onPointerDown={(event) => {
     if (locked) { event.preventDefault(); event.stopPropagation(); return }
     if (event.button === 1) {
       event.preventDefault()

@@ -35,7 +35,7 @@
   --lcos-amber:#c2803a;
   --lcos-indigo:#6366f1;
   --lcos-rail-w:52px;
-  --lcos-dock-h:58px;
+  --lcos-dock-h:66px;
   --lcos-top-h:42px;
   font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
 }
@@ -117,9 +117,9 @@
 .lcos-reconstructed .vnext-rail-divider { width:20px; height:1px; margin:1px 0 2px; background:var(--lcos-hair); }
 .lcos-reconstructed .vnext-rail-button,
 .lcos-reconstructed .vnext-workspace-mini {
-  width:36px !important;
-  height:36px !important;
-  min-width:36px !important;
+  width:40px !important;
+  height:40px !important;
+  min-width:40px !important;
   display:grid !important;
   place-items:center !important;
   padding:0 !important;
@@ -131,11 +131,13 @@
   cursor:pointer;
   transition:background .14s ease,border-color .14s ease,transform .14s ease,color .14s ease;
 }
+.lcos-reconstructed .vnext-rail-button svg { width:18px !important; height:18px !important; }
 .lcos-reconstructed .vnext-rail-button:hover,
 .lcos-reconstructed .vnext-workspace-mini:hover { color:#3e3a49 !important; background:rgba(88,79,114,.065) !important; transform:scale(1.035); }
 .lcos-reconstructed .vnext-rail-button.active,
 .lcos-reconstructed .vnext-workspace-mini.active { color:#413b55 !important; background:rgba(91,81,126,.085) !important; border-color:rgba(91,81,126,.075) !important; }
 .lcos-reconstructed .vnext-mini-map { width:25px !important; height:25px !important; position:relative; display:block; border-radius:7px; border:1px solid rgba(73,68,89,.105); background:rgba(255,255,255,.55); overflow:hidden; }
+.lcos-reconstructed .vnext-mini-map { width:28px !important; height:28px !important; }
 .lcos-reconstructed .vnext-mini-map i { position:absolute; display:block; border-radius:1.8px; background:rgba(78,70,105,.30); }
 .lcos-reconstructed .vnext-workspace-mini.active .vnext-mini-map { border-color:rgba(104,79,184,.24); background:rgba(252,251,255,.92); box-shadow:0 0 0 2px rgba(139,92,246,.055); }
 .lcos-reconstructed .vnext-workspace-attention { position:absolute; width:5px; height:5px; right:2px; top:2px; border-radius:50%; background:#e09b43; box-shadow:0 0 0 2px rgba(250,249,253,.9); }
@@ -204,11 +206,14 @@
 .lcos-reconstructed .lcos-dock-divider { width:1px; height:22px; background:var(--lcos-hair); }
 .lcos-reconstructed .lcos-bottom-dock button {
   position:relative;
-  height:34px;
-  min-width:34px;
-  display:grid;
-  place-items:center;
-  padding:0 8px;
+  height:auto;
+  min-width:48px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:3px;
+  padding:7px 6px 5px;
   border:1px solid transparent;
   border-radius:10px;
   color:#777381;
@@ -216,33 +221,40 @@
   cursor:pointer;
   transition:background .14s ease,color .14s ease,transform .14s ease,border-color .14s ease;
 }
-.lcos-reconstructed .lcos-bottom-dock button svg { width:16px; height:16px; }
+.lcos-reconstructed .lcos-bottom-dock button svg { width:19px; height:19px; }
 .lcos-reconstructed .lcos-bottom-dock button:hover { color:#3d3949; background:rgba(83,75,107,.065); transform:translateY(-1px) scale(1.04); }
 .lcos-reconstructed .lcos-bottom-dock button.active { color:#3e3853; background:rgba(89,76,132,.085); border-color:rgba(89,76,132,.08); }
 .lcos-reconstructed .lcos-bottom-dock button[data-label]::after {
   content:attr(data-label);
-  position:absolute;
-  bottom:42px;
-  left:50%;
-  transform:translate(-50%,4px);
+  position:static;
+  transform:none;
   pointer-events:none;
-  opacity:0;
+  opacity:1;
   white-space:nowrap;
-  padding:4px 7px;
-  border:1px solid var(--lcos-hair);
-  border-radius:7px;
-  background:rgba(253,253,254,.96);
-  box-shadow:0 8px 22px rgba(42,36,61,.10);
-  color:#5a5663;
+  padding:0;
+  border:0;
+  border-radius:0;
+  background:none;
+  box-shadow:none;
+  color:inherit;
   font-size:9.5px;
+  line-height:1;
   transition:opacity .12s ease,transform .12s ease;
 }
-.lcos-reconstructed .lcos-bottom-dock button[data-label]:hover::after { opacity:1; transform:translate(-50%,0); }
+.lcos-reconstructed .lcos-bottom-dock button[data-label]:hover::after { opacity:1; transform:none; }
 .lcos-reconstructed .lcos-scope-breadcrumb { max-width:150px; }
 .lcos-reconstructed .lcos-scope-breadcrumb span { max-width:126px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:10px; }
 .lcos-reconstructed .lcos-projection-switch { display:flex; align-items:center; gap:8px; margin-left:7px; padding:2px; border:1px solid var(--lcos-hair); border-radius:9px; background:rgba(255,255,255,.48); }
 .lcos-reconstructed .lcos-projection-switch button { min-width:auto; height:27px; padding:0 8px; border-radius:7px; font-size:9.5px; color:var(--lcos-ink-faint); }
 .lcos-reconstructed .lcos-projection-switch button.active { color:var(--lcos-ink); background:rgba(255,255,255,.86); border-color:var(--lcos-hair); box-shadow:0 2px 7px rgba(51,45,70,.06); }
+
+/* Dock zoom controls + axis group labels. */
+.lcos-reconstructed .lcos-zoom-controls { margin-left:auto; display:flex; align-items:center; gap:2px; padding-left:10px; border-left:1px solid var(--lcos-hair); }
+.lcos-reconstructed .lcos-zoom-controls button { height:30px !important; min-width:30px !important; padding:0 5px !important; display:grid !important; place-items:center !important; gap:0 !important; border-radius:8px !important; }
+.lcos-reconstructed .lcos-zoom-controls button.lcos-zoom-value { min-width:46px !important; font-size:10px !important; color:#5a5663 !important; }
+.lcos-reconstructed .lcos-zoom-controls button svg { width:15px !important; height:15px !important; }
+.lcos-reconstructed .lcos-scope-axis::before { content:"空间"; font-size:8px; letter-spacing:.08em; color:var(--lcos-ink-faint); }
+.lcos-reconstructed .lcos-lens-axis::before { content:"视图"; font-size:8px; letter-spacing:.08em; color:var(--lcos-ink-faint); }
 
 /* ---------- Arrange object anatomy ---------- */
 .lcos-reconstructed .canvas-node {
@@ -396,10 +408,10 @@
 }
 
 /* Hover-proximity connection handles. */
-.lcos-reconstructed .canvas-node .anchor { opacity:0 !important; transform:scale(.72) !important; transition:opacity .12s ease,transform .12s ease !important; }
+.lcos-reconstructed .canvas-node .anchor { opacity:0 !important; transform:scale(calc(.8 / var(--canvas-zoom))) !important; transition:opacity .12s ease,transform .12s ease !important; }
 .lcos-reconstructed .canvas-node:hover .anchor,
-.lcos-reconstructed .canvas-node.selected .anchor { opacity:.52 !important; transform:scale(.88) !important; }
-.lcos-reconstructed .canvas-node .anchor:hover { opacity:1 !important; transform:scale(1) !important; box-shadow:0 0 0 4px rgba(92,75,155,.07) !important; }
+.lcos-reconstructed .canvas-node.selected .anchor { opacity:.62 !important; transform:scale(calc(.92 / var(--canvas-zoom))) !important; }
+.lcos-reconstructed .canvas-node .anchor:hover { opacity:1 !important; transform:scale(calc(1.04 / var(--canvas-zoom))) !important; box-shadow:0 0 0 4px rgba(92,75,155,.07) !important; }
 
 /* Workspace frame should feel like a spatial frame, not a panel. */
 .lcos-reconstructed .workspace-frame { border-color:rgba(103,92,137,.16) !important; background:rgba(255,255,255,.025) !important; box-shadow:none !important; }
@@ -423,6 +435,8 @@
 .lcos-reconstructed .selection-action-strip button { min-height:27px !important; height:27px !important; padding:0 8px !important; border:0 !important; border-radius:7px !important; background:transparent !important; color:#676270 !important; font-size:9.5px !important; gap:5px; }
 .lcos-reconstructed .selection-toolbar button:hover,
 .lcos-reconstructed .selection-action-strip button:hover { background:rgba(82,74,107,.065) !important; color:#312e39 !important; }
+.lcos-reconstructed .selection-toolbar,
+.lcos-reconstructed .selection-action-strip { transform:scale(calc(1 / var(--canvas-zoom))) !important; transform-origin:center !important; }
 
 .lcos-reconstructed .selection-composer.lcos-nearfield-composer {
   width:min(430px,calc(100vw - 110px)) !important;
@@ -750,6 +764,8 @@
 .lcos-reconstructed .vnext-save-dot.state-saving { background:#cf984d; }
 .lcos-reconstructed .vnext-run-dot.status-running { background:#4e83d4; box-shadow:0 0 0 3px rgba(78,131,212,.07); }
 .lcos-reconstructed .vnext-project-actions { margin-left:auto; display:flex; align-items:center; gap:8px; padding-right:4px; }
+.lcos-reconstructed .vnext-project-actions button { width:36px !important; height:36px !important; }
+.lcos-reconstructed .vnext-project-actions button svg { width:18px !important; height:18px !important; }
 
 /* Correct scene height for the reconstructed 42px strip. */
 .app-shell.lcos-reconstructed > .scene { height:calc(100vh - var(--lcos-top-h)) !important; }
@@ -825,7 +841,7 @@
 .lcos-reconstructed .workspace-relation-handle:hover { transform:scale(1.08); }
 
 /* Selected edge endpoints become tangible without reviving a relation mode. */
-.lcos-reconstructed .edge-controls { pointer-events:auto; }
+.lcos-reconstructed .edge-controls { pointer-events:auto !important; transform:scale(calc(1 / var(--canvas-zoom))) !important; transform-box:fill-box !important; transform-origin:center !important; }
 .lcos-reconstructed .edge-control { pointer-events:auto; cursor:crosshair; }
 .lcos-reconstructed .edge-terminal {
   fill:rgba(251,250,254,.98);

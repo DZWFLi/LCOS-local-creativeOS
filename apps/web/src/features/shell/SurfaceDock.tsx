@@ -1,4 +1,4 @@
-import { CheckCircle2, ChevronUp } from 'lucide-react'
+import { CheckCircle2, ChevronUp, ZoomIn, ZoomOut } from 'lucide-react'
 import type { CanvasScope } from '../../model'
 import { ArrangeGlyph, BenchGlyph, ContextGlyph, DeliverGlyph, RootGlyph, WorkGlyph } from '../design/LcosGlyphs'
 
@@ -14,6 +14,9 @@ interface Props {
   onScope: (scopeId: string) => void
   onWorkbench?: () => void
   onMergeWorkbench?: () => void
+  zoom?: number
+  onZoomBy?: (factor: number) => void
+  onZoomReset?: () => void
 }
 
 const lensForSurface = (surface: SurfaceId): LensId =>
@@ -29,7 +32,7 @@ const LENSES: Array<{ id: LensId; label: string; Glyph: typeof ArrangeGlyph }> =
   { id:'deliver', label:'交付', Glyph:DeliverGlyph },
 ]
 
-export function SurfaceDock({ surface, scopePath, activeScopeId, workbenchScopeId, onSurface, onScope, onWorkbench, onMergeWorkbench }: Props) {
+export function SurfaceDock({ surface, scopePath, activeScopeId, workbenchScopeId, onSurface, onScope, onWorkbench, onMergeWorkbench, zoom, onZoomBy, onZoomReset }: Props) {
   const lens = lensForSurface(surface)
   const currentScope = scopePath.at(-1)
   const parent = scopePath.length > 1 ? scopePath.at(-2) : null
@@ -48,5 +51,10 @@ export function SurfaceDock({ surface, scopePath, activeScopeId, workbenchScopeI
       {lens==='arrange' && <div className="vnext-projection-switch lcos-projection-switch"><button className={surface==='arrange'?'active':''} onClick={()=>onSurface('arrange')}>自由</button><button className={surface==='outline'?'active':''} onClick={()=>onSurface('outline')}>大纲</button></div>}
       {lens==='context' && <div className="vnext-projection-switch lcos-projection-switch"><button className={surface==='context-flow'?'active':''} onClick={()=>onSurface('context-flow')}>流</button><button className={surface==='context-tree'?'active':''} onClick={()=>onSurface('context-tree')}>树</button><button className={surface==='context-graph'?'active':''} onClick={()=>onSurface('context-graph')}>图</button></div>}
     </div>
+    {onZoomBy && onZoomReset && <div className="lcos-zoom-controls" aria-label="画布缩放">
+      <button type="button" aria-label="缩小" title="缩小画布" onClick={() => onZoomBy(1 / 1.25)}><ZoomOut size={15}/></button>
+      <button type="button" className="lcos-zoom-value" aria-label="重置缩放" title="重置为 100%" onClick={onZoomReset}>{Math.round((zoom ?? 1) * 100)}%</button>
+      <button type="button" aria-label="放大" title="放大画布" onClick={() => onZoomBy(1.25)}><ZoomIn size={15}/></button>
+    </div>}
   </nav>
 }
