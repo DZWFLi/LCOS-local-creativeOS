@@ -197,7 +197,8 @@
   box-shadow:inset 0 1px 0 rgba(255,255,255,.66) !important;
 }
 .lcos-reconstructed .lcos-scope-axis,
-.lcos-reconstructed .lcos-lens-axis { display:flex; align-items:center; gap:3px; }
+.lcos-reconstructed .lcos-lens-axis { display:flex; align-items:center; gap:8px; }
+.lcos-reconstructed .lcos-scope-axis { gap:8px; }
 .lcos-reconstructed .lcos-scope-axis { margin-right:auto; }
 .lcos-reconstructed .lcos-lens-axis { position:absolute; left:50%; transform:translateX(-50%); }
 .lcos-reconstructed .lcos-dock-divider { width:1px; height:22px; background:var(--lcos-hair); }
@@ -216,7 +217,7 @@
   transition:background .14s ease,color .14s ease,transform .14s ease,border-color .14s ease;
 }
 .lcos-reconstructed .lcos-bottom-dock button svg { width:16px; height:16px; }
-.lcos-reconstructed .lcos-bottom-dock button:hover { color:#3d3949; background:rgba(83,75,107,.065); transform:translateY(-1px); }
+.lcos-reconstructed .lcos-bottom-dock button:hover { color:#3d3949; background:rgba(83,75,107,.065); transform:translateY(-1px) scale(1.04); }
 .lcos-reconstructed .lcos-bottom-dock button.active { color:#3e3853; background:rgba(89,76,132,.085); border-color:rgba(89,76,132,.08); }
 .lcos-reconstructed .lcos-bottom-dock button[data-label]::after {
   content:attr(data-label);
@@ -239,7 +240,7 @@
 .lcos-reconstructed .lcos-bottom-dock button[data-label]:hover::after { opacity:1; transform:translate(-50%,0); }
 .lcos-reconstructed .lcos-scope-breadcrumb { max-width:150px; }
 .lcos-reconstructed .lcos-scope-breadcrumb span { max-width:126px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:10px; }
-.lcos-reconstructed .lcos-projection-switch { display:flex; align-items:center; gap:1px; margin-left:7px; padding:2px; border:1px solid var(--lcos-hair); border-radius:9px; background:rgba(255,255,255,.48); }
+.lcos-reconstructed .lcos-projection-switch { display:flex; align-items:center; gap:8px; margin-left:7px; padding:2px; border:1px solid var(--lcos-hair); border-radius:9px; background:rgba(255,255,255,.48); }
 .lcos-reconstructed .lcos-projection-switch button { min-width:auto; height:27px; padding:0 8px; border-radius:7px; font-size:9.5px; color:var(--lcos-ink-faint); }
 .lcos-reconstructed .lcos-projection-switch button.active { color:var(--lcos-ink); background:rgba(255,255,255,.86); border-color:var(--lcos-hair); box-shadow:0 2px 7px rgba(51,45,70,.06); }
 
@@ -579,7 +580,16 @@
 .lcos-reconstructed .vnext-drop-shelf button:hover { transform:translateY(-1px); }
 
 /* ---------- Minimap ---------- */
-.lcos-reconstructed .canvas-minimap { right:12px !important; bottom:calc(var(--lcos-dock-h) + 12px) !important; border:1px solid var(--lcos-hair) !important; background:rgba(251,251,253,.68) !important; backdrop-filter:blur(14px) !important; box-shadow:0 8px 24px rgba(42,36,60,.07) !important; }
+.lcos-reconstructed .minimap,
+.lcos-reconstructed .canvas-minimap {
+  left:auto !important;
+  right:12px !important;
+  bottom:calc(var(--lcos-dock-h) + 12px) !important;
+  border:1px solid var(--lcos-hair) !important;
+  background:rgba(251,251,253,.68) !important;
+  backdrop-filter:blur(14px) !important;
+  box-shadow:0 8px 24px rgba(42,36,60,.07) !important;
+}
 
 /* ---------- Old WorkRail becomes an on-demand drawer ---------- */
 .lcos-reconstructed .work-rail.collapsed { display:none !important; }
@@ -739,7 +749,7 @@
 .lcos-reconstructed .vnext-save-dot.state-saved { background:#6d9e80; }
 .lcos-reconstructed .vnext-save-dot.state-saving { background:#cf984d; }
 .lcos-reconstructed .vnext-run-dot.status-running { background:#4e83d4; box-shadow:0 0 0 3px rgba(78,131,212,.07); }
-.lcos-reconstructed .vnext-project-actions { margin-left:auto; display:flex; align-items:center; gap:0; }
+.lcos-reconstructed .vnext-project-actions { margin-left:auto; display:flex; align-items:center; gap:8px; padding-right:4px; }
 
 /* Correct scene height for the reconstructed 42px strip. */
 .app-shell.lcos-reconstructed > .scene { height:calc(100vh - var(--lcos-top-h)) !important; }
