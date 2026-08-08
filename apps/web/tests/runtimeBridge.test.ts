@@ -478,6 +478,44 @@ describe('RuntimeBridge mutation serialization', () => {
     expect(ops.some((op) => op.type.startsWith('upsert_'))).toBe(false)
   })
 
+  it('persists and projects workspace aggregate relation endpoints (Phase4 boundary #1)', () => {
+    const workspaceId = 'workspace-main'
+
+    // graph -> state: workspace endpoint becomes a workspace:<id> canvas edge
+    const base = snapshot()
+    const graph = {
+      ...base,
+      relations: [{
+      id: 'rel-ws-1',
+      projectId: base.project.id,
+      sourceEntityType: 'workspace',
+      sourceEntityId: workspaceId,
+      targetEntityType: 'artifact',
+      targetEntityId: 'brief',
+      kind: 'reference',
+      createdAt: NOW,
+      updatedAt: NOW,
+      } as ProjectGraphSnapshot['relations'][number]],
+    }
+    const stateFromGraph = mapGraphToState(graph, 'disposable-portasplit')
+    const wsEdge = stateFromGraph.edges.find((edge) => edge.from === `workspace:${workspaceId}` || edge.to === `workspace:${workspaceId}`)
+    expect(wsEdge).toBeDefined()
+    expect(wsEdge?.from).toBe(`workspace:${workspaceId}`)
+
+    // state -> ops: workspace endpoint edge persists as a workspace-typed relation
+    const before = state()
+    const after = structuredClone(before)
+    after.edges = [...after.edges, { id: 'edge-ws-1', from: `workspace:${workspaceId}`, to: 'brief', kind: 'reference', active: false }]
+    const ops = diffStateToOps(before, after, 'disposable-portasplit')
+    const rel = ops.find((op) => op.type === 'upsert_relation')
+    expect(rel).toBeDefined()
+    if (rel?.type === 'upsert_relation') {
+      expect(rel.relation.sourceEntityType).toBe('workspace')
+      expect(rel.relation.sourceEntityId).toBe(workspaceId)
+      expect(rel.relation.targetEntityType).toBe('artifact')
+    }
+  })
+
   it('returns unsaved on stale 409, reloads once, and never replays the old operation', async () => {
     const projectGraph = vi.fn()
       .mockResolvedValueOnce(call(snapshot('Brief', 4)))

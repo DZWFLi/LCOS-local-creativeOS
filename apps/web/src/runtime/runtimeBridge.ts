@@ -398,10 +398,13 @@ export function mapGraphToState(
     }
   })
 
+  const endpointId = (entityType: string, entityId: string): string => entityType === 'workspace'
+    ? `workspace:${entityId}`
+    : primaryViewByArtifactId.get(String(entityId)) ?? String(entityId)
   const edges: CanvasEdge[] = graph.relations.map((rel) => ({
     id: String(rel.id),
-    from: primaryViewByArtifactId.get(String(rel.sourceEntityId)) ?? String(rel.sourceEntityId),
-    to: primaryViewByArtifactId.get(String(rel.targetEntityId)) ?? String(rel.targetEntityId),
+    from: endpointId(rel.sourceEntityType, rel.sourceEntityId),
+    to: endpointId(rel.targetEntityType, rel.targetEntityId),
     kind: rel.kind === 'feedback' ? 'feedback' as const : (rel.kind === 'informs' || rel.kind === 'reference') ? 'reference' as const : 'modify' as const,
     active: false,
   }))
@@ -523,15 +526,19 @@ export function mapStateToGraph(state: PersistedPrototypeState, projectId: strin
   // Relations: only persist edges between durable content objects.
   // Run / process projection edges are presentation-only and come from the backend.
   const coreNodeIds = new Set(coreNodes.map((node) => node.id))
+  const relationEndpoint = (id: string): { type: 'artifact' | 'workspace'; id: string } => id.startsWith('workspace:')
+    ? { type: 'workspace' as const, id: id.slice('workspace:'.length) }
+    : { type: 'artifact' as const, id }
+  const isDurableEndpoint = (id: string): boolean => coreNodeIds.has(id) || id.startsWith('workspace:')
   const relations: ProjectGraphSnapshot['relations'] = state.edges
-    .filter((edge) => coreNodeIds.has(edge.from) && coreNodeIds.has(edge.to))
+    .filter((edge) => isDurableEndpoint(edge.from) && isDurableEndpoint(edge.to))
     .map((e) => ({
       id: e.id as ProjectGraphSnapshot['relations'][number]['id'],
       projectId: projectId as ProjectGraphSnapshot['relations'][number]['projectId'],
-      sourceEntityType: 'artifact' as const,
-      sourceEntityId: e.from as ProjectGraphSnapshot['relations'][number]['sourceEntityId'],
-      targetEntityType: 'artifact' as const,
-      targetEntityId: e.to as ProjectGraphSnapshot['relations'][number]['targetEntityId'],
+      sourceEntityType: relationEndpoint(e.from).type,
+      sourceEntityId: relationEndpoint(e.from).id as ProjectGraphSnapshot['relations'][number]['sourceEntityId'],
+      targetEntityType: relationEndpoint(e.to).type,
+      targetEntityId: relationEndpoint(e.to).id as ProjectGraphSnapshot['relations'][number]['targetEntityId'],
       kind: e.kind,
       createdAt: now, updatedAt: now,
     }))
@@ -675,15 +682,21 @@ export function diffStateToOps(
   }
 
   const durableNodeIds = new Set(coreNodes.map((node) => node.id))
-  const durableEdges = state.edges.filter((edge) => durableNodeIds.has(edge.from) && durableNodeIds.has(edge.to))
+  const isDurableEndpoint = (id: string): boolean => durableNodeIds.has(id) || id.startsWith('workspace:')
+  const relationEndpoint = (id: string): { type: 'artifact' | 'workspace'; id: string } => id.startsWith('workspace:')
+    ? { type: 'workspace' as const, id: id.slice('workspace:'.length) }
+    : { type: 'artifact' as const, id }
+  const durableEdges = state.edges.filter((edge) => isDurableEndpoint(edge.from) && isDurableEndpoint(edge.to))
   const previousDurableNodeIds = new Set(previous.nodes
     .filter((node) => !node.runtimeTransient && node.kind !== 'process' && node.kind !== 'note' && node.kind !== 'decision')
     .map((node) => node.id))
-  const previousDurableEdges = previous.edges.filter((edge) => previousDurableNodeIds.has(edge.from) && previousDurableNodeIds.has(edge.to))
+  const previousDurableEdges = previous.edges.filter((edge) =>
+    (previousDurableNodeIds.has(edge.from) || edge.from.startsWith('workspace:'))
+    && (previousDurableNodeIds.has(edge.to) || edge.to.startsWith('workspace:')))
   for (const e of durableEdges) {
     const before = previousEdges.get(e.id)
     if (before === undefined || before.from !== e.from || before.to !== e.to || before.kind !== e.kind) {
-      ops.push({ type: 'upsert_relation', relation: { id: e.id, projectId, sourceEntityType: 'artifact', sourceEntityId: e.from, targetEntityType: 'artifact', targetEntityId: e.to, kind: e.kind, createdAt: now, updatedAt: now } })
+      ops.push({ type: 'upsert_relation', relation: { id: e.id, projectId, sourceEntityType: relationEndpoint(e.from).type, sourceEntityId: relationEndpoint(e.from).id, targetEntityType: relationEndpoint(e.to).type, targetEntityId: relationEndpoint(e.to).id, kind: e.kind, createdAt: now, updatedAt: now } })
     }
   }
   const edgeIds = new Set(durableEdges.map((edge) => edge.id))
