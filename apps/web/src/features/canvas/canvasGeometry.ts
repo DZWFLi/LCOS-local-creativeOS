@@ -15,6 +15,7 @@ export const MIN_RESTORED_CAMERA_CONTENT_RATIO = 0.5
 export const MIN_RESTORED_CAMERA_READABLE_RATIO = 0.34
 export const MIN_RESTORED_NODE_SCREEN_WIDTH = 112
 export const MIN_RESTORED_CAMERA_ZOOM = 0.58
+export const MAX_RESTORED_CAMERA_ZOOM = 1.25
 const NO_INSETS: SafeInsets = { left: 0, right: 0, top: 0, bottom: 0 }
 
 export function zoomCameraAt(camera: Camera, zoom: number, anchorX: number, anchorY: number): Camera {
@@ -99,10 +100,15 @@ export function restorationFocusBounds(nodes: readonly BoundedNode[], neighborho
  */
 export function fitBoundsForReading(bounds: Bounds, viewportWidth: number, viewportHeight: number, padding = 74, insets: SafeInsets = NO_INSETS): Camera {
   const fitted = fitBounds(bounds, viewportWidth, viewportHeight, padding, insets)
-  if (fitted.zoom >= MIN_RESTORED_CAMERA_ZOOM) return fitted
-  const anchorX = insets.left + Math.max(1, viewportWidth - insets.left - insets.right) / 2
-  const anchorY = insets.top + Math.max(1, viewportHeight - insets.top - insets.bottom) / 2
-  return zoomCameraAt(fitted, MIN_RESTORED_CAMERA_ZOOM, anchorX, anchorY)
+  const zoom = Math.max(MIN_RESTORED_CAMERA_ZOOM, Math.min(MAX_RESTORED_CAMERA_ZOOM, fitted.zoom))
+  if (zoom === fitted.zoom) return fitted
+  const availableWidth = Math.max(1, viewportWidth - insets.left - insets.right)
+  const availableHeight = Math.max(1, viewportHeight - insets.top - insets.bottom)
+  return {
+    x: insets.left + availableWidth / 2 - (bounds.x + bounds.width / 2) * zoom,
+    y: insets.top + availableHeight / 2 - (bounds.y + bounds.height / 2) * zoom,
+    zoom,
+  }
 }
 
 /** 判断某相机下是否存在至少一个节点落在视口内（用于校验持久化相机是否仍有效）。 */

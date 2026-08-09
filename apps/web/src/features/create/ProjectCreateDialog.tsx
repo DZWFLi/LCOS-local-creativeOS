@@ -5,13 +5,14 @@ import { dismissFromBackdrop } from '../ui/dismissibleLayer'
 interface Inspection { fileCount: number; directoryCount: number; totalBytes: number; skipped: readonly string[]; requiresConfirmation: boolean }
 interface Props {
   open: boolean
+  initialIntent?: 'create' | 'open'
   onCancel: () => void
   onBrowseDirectory: (title: string) => Promise<string | undefined>
   onInspectDirectory: (rootPath: string) => Promise<Inspection>
   onCreate: (value: { label: string; intent: 'create'; parentPath: string; directoryName: string } | { label: string; intent: 'open'; rootPath: string; importExisting?: boolean }) => void
 }
 
-export function ProjectCreateDialog({ open, onCancel, onBrowseDirectory, onInspectDirectory, onCreate }: Props) {
+export function ProjectCreateDialog({ open, initialIntent = 'create', onCancel, onBrowseDirectory, onInspectDirectory, onCreate }: Props) {
   const [label, setLabel] = useState('')
   const [localPath, setLocalPath] = useState('')
   const [intent, setIntent] = useState<'create' | 'open'>('create')
@@ -23,10 +24,10 @@ export function ProjectCreateDialog({ open, onCancel, onBrowseDirectory, onInspe
   const inputRef = useRef<HTMLInputElement | null>(null)
   useEffect(() => {
     if (!open) return
-    setLabel(''); setLocalPath(''); setIntent('create'); setBrowseError(''); setInspection(null); setImportExisting(false)
+    setLabel(''); setLocalPath(''); setIntent(initialIntent); setBrowseError(''); setInspection(null); setImportExisting(false)
     const frame = requestAnimationFrame(() => inputRef.current?.focus())
     return () => cancelAnimationFrame(frame)
-  }, [open])
+  }, [initialIntent, open])
   if (!open) return null
   const submit = async () => {
     const name = label.trim()
@@ -54,6 +55,10 @@ export function ProjectCreateDialog({ open, onCancel, onBrowseDirectory, onInspe
       if (!selectedPath) return
       setLocalPath(selectedPath); setInspection(null); setImportExisting(false)
       if (intent === 'open') {
+        if (!label.trim()) {
+          const folderName = selectedPath.split(/[\\/]/).filter(Boolean).pop()
+          if (folderName) setLabel(folderName)
+        }
         const nextInspection = await onInspectDirectory(selectedPath)
         setInspection(nextInspection)
         setImportExisting(nextInspection.requiresConfirmation)
@@ -64,7 +69,7 @@ export function ProjectCreateDialog({ open, onCancel, onBrowseDirectory, onInspe
   }
   return <div className="project-create-layer" role="presentation" onPointerDown={(event) => dismissFromBackdrop(event, onCancel, browsing || inspecting)}>
     <section className="project-create-dialog" role="dialog" aria-modal="true" aria-labelledby="project-create-title">
-      <header><div><span>新建项目包</span><h2 id="project-create-title">建立一个本地项目现场</h2></div><button aria-label="关闭" onClick={onCancel}><X size={17} /></button></header>
+      <header><div><span>{intent === 'open' ? '打开项目' : '新建项目'}</span><h2 id="project-create-title">{intent === 'open' ? '选择已有创作文件夹' : '创建一个新的项目文件夹'}</h2></div><button aria-label="关闭" onClick={onCancel}><X size={17} /></button></header>
       <div className="project-create-body">
         <div className="project-intent-switch"><button type="button" className={intent === 'create' ? 'active' : ''} onClick={() => { setIntent('create'); setInspection(null); setImportExisting(false) }}>创建新目录</button><button type="button" className={intent === 'open' ? 'active' : ''} onClick={() => setIntent('open')}>打开已有目录</button></div>
         <label><span>项目名称</span><input ref={inputRef} value={label} onChange={(event) => setLabel(event.target.value)} placeholder="例如：PortaSplit 夏季传播" /></label>

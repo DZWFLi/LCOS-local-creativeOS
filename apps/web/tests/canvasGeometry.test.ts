@@ -15,6 +15,9 @@ describe('canvas geometry', () => {
     expect(fitBounds(bounds, 1200, 800).zoom).toBeLessThan(.26)
     expect(fitBoundsForReading(bounds, 1200, 800).zoom).toBe(.58)
   })
+  it('does not inflate a single restored node to fill the screen', () => {
+    expect(fitBoundsForReading({ x: 0, y: 0, width: 264, height: 190 }, 1366, 768).zoom).toBe(1.25)
+  })
   it('rejects a camera that technically sees content but renders every node as a thumbnail', () => {
     expect(restoredCameraIsMeaningful({ x: 400, y: 200, zoom: .25 }, nodes, 1200, 800)).toBe(false)
     expect(restoredCameraIsMeaningful({ x: 400, y: 200, zoom: 1 }, nodes, 1200, 800)).toBe(true)

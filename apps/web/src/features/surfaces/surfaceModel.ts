@@ -27,7 +27,8 @@ export function adjacency(edges: readonly CanvasEdge[]) {
   return map
 }
 
-export function nodeRole(node: CanvasNode): 'artifact' | 'feedback' | 'session' | 'run' | 'decision' | 'context' | 'note' {
+export function nodeRole(node: CanvasNode): 'artifact' | 'feedback' | 'session' | 'run' | 'skill' | 'decision' | 'context' | 'note' {
+  if (/(^|[\\/])SKILL\.md$/i.test(node.observedPath ?? node.title)) return 'skill'
   if (node.kind === 'process') {
     const text = `${node.title} ${node.subtitle}`.toLowerCase()
     return /session|chatgpt|conversation|handoff|对话|会话/.test(text) ? 'session' : 'run'

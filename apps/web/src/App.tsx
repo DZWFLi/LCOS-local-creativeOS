@@ -60,8 +60,7 @@ import { DropShelf, type DropAnchor, type DropDestination, type TransferVerb } f
 import { ImmersiveViewer } from './features/viewer/ImmersiveViewer'
 import { resolveArtifactViewerKind } from './features/viewer/artifactViewerRegistry'
 
-const MVP_SAMPLE_PROJECT_ID = 'disposable-mvp-sample'
-const DEFAULT_PROJECT_ID = MVP_SAMPLE_PROJECT_ID
+const DEFAULT_PROJECT_ID = 'disposable-mvp-sample'
 
 function defaultRailWidth(viewport = typeof window === 'undefined' ? 1440 : window.innerWidth): number {
   if (viewport >= 1600) return 390
@@ -192,6 +191,9 @@ export function App() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [scopeCreateOpen, setScopeCreateOpen] = useState(false)
   const [projectCreateOpen, setProjectCreateOpen] = useState(false)
+  const [projectCreateIntent, setProjectCreateIntent] = useState<'create' | 'open'>('create')
+  const [firstArtifactGuideOpen, setFirstArtifactGuideOpen] = useState(false)
+  const firstArtifactGuideArmedRef = useRef(false)
   const [composerFocusRequest, setComposerFocusRequest] = useState(0)
   const [presentationCommit, setPresentationCommit] = useState(0)
   const [overviewLayers, setOverviewLayers] = useState<NodeLayer[]>(['core', 'process'])
@@ -718,7 +720,7 @@ export function App() {
       }
       bridge.loadCatalog().then((catalog) => {
         const runtimeProjects = catalog.projects
-        const selection = selectRuntimeProject(runtimeProjects, requestedProjectId ?? null, MVP_SAMPLE_PROJECT_ID)
+        const selection = selectRuntimeProject(runtimeProjects, requestedProjectId ?? null)
         if (selection.kind === 'missing-requested') {
           setProjects(runtimeProjects)
           setProjectOpen(false)
@@ -728,6 +730,7 @@ export function App() {
         }
         if (selection.kind === 'empty-catalog') {
           setProjects([])
+          setProjectOpen(false)
           setBootMode('offline')
           setNotice('还没有本地项目，请创建新项目或打开已有文件夹')
           return
@@ -1138,6 +1141,7 @@ export function App() {
     setWorkRail(normalizeRailPreferences(loaded.state.workRail))
     setDataSource('runtime')
     setBootMode('runtime')
+    setActiveSurface('arrange')
     setProjectOpen(true)
     const importedNodes = loaded.state.nodes.filter((node) => node.artifactId !== undefined).length
     setNotice(importedNodes > 0
@@ -1154,6 +1158,22 @@ export function App() {
     if (!call.result.ok) throw new Error(call.result.error.message)
     return call.result.value
   }, [])
+  useEffect(() => {
+    if (bootMode !== 'runtime') {
+      firstArtifactGuideArmedRef.current = false
+      setFirstArtifactGuideOpen(false)
+      return
+    }
+    if (nodes.length === 0) {
+      firstArtifactGuideArmedRef.current = true
+      setFirstArtifactGuideOpen(false)
+      return
+    }
+    if (firstArtifactGuideArmedRef.current) {
+      firstArtifactGuideArmedRef.current = false
+      setFirstArtifactGuideOpen(true)
+    }
+  }, [bootMode, nodes.length])
   const selectNode = useCallback((id: string, additive = false) => {
     selectionContextIntentRef.current.touched = true
     selectionIntentVersionRef.current += 1
@@ -3155,7 +3175,7 @@ export function App() {
       projects,
       openProjectIds,
       onOpen: openProject,
-      onCreate: () => setProjectCreateOpen(true),
+      onCreate: (intent = 'create') => { setProjectCreateIntent(intent); setProjectCreateOpen(true) },
       onDelete: requestDeleteProject,
       onImportLcosproj: importLcosprojFile,
     }}
@@ -3286,11 +3306,22 @@ export function App() {
         nodes: visibleNodes,
         edges: visibleEdges,
         selectedIds,
+        workspaceFocusIds: effectiveWorkspace.focusedViewIds,
         contextRuntime: contextSurfaceRuntime,
         workRuntime: workSurfaceRuntime,
         deliverRuntime: deliverSurfaceRuntime,
         onSelect: selectNode,
         onDoubleClick: handleDoubleClick,
+        onContextStart: (kind) => {
+          if (kind === 'conversation') { setConversationDialogOpen(true); return }
+          if (kind === 'selection') { setNotice(selectedIds.length ? '已用当前 Selection 建立临时 Context View' : '先选择要理解的对象'); return }
+          requestComposerFocus(); setNotice('告诉 Agent 这次需要组织和找回哪段上下文')
+        },
+        onWorkflowStart: (kind) => {
+          if (kind === 'selection') { setNotice(selectedIds.length ? '已从当前 Selection 建立临时工作流 View' : '先选择要进入工作流的对象'); return }
+          if (kind === 'skill') { setCapabilityOpen(true); setNotice('在项目能力中选择 Skill 或已安装能力'); return }
+          requestComposerFocus(); setNotice('告诉 Agent 要如何组织当前项目的工作方法')
+        },
       },
       composer: activeSurface !== 'arrange' && selectedIds.length > 0 && selectionComposerOpen ? {
         nodes,
@@ -3343,6 +3374,12 @@ export function App() {
         safeInsets,
         onLocateContent: locateAndPreviewIslands,
       },
+      emptyState: bootMode === 'runtime' && nodes.length === 0 ? {
+        onImport: () => setImportPanelOpen(true),
+      } : null,
+      firstArtifactGuide: firstArtifactGuideOpen ? {
+        onDismiss: () => setFirstArtifactGuideOpen(false),
+      } : null,
       breadcrumbs: {
         projectLabel: activeProject.label,
         items: scopePath.map((scope, index) => ({ id: scope.id, label: index === 0 ? activeProject.label : scope.label, current: index === scopePath.length - 1 })),
@@ -3433,6 +3470,7 @@ export function App() {
     dialogs={{
       projectCreate: {
         open: projectCreateOpen,
+        initialIntent: projectCreateIntent,
         onCancel: () => setProjectCreateOpen(false),
         onBrowseDirectory: browseProjectDirectory,
         onInspectDirectory: inspectProjectDirectory,

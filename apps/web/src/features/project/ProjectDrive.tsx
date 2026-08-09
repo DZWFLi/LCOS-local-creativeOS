@@ -6,7 +6,7 @@ interface Props {
   projects: ProjectPackage[]
   openProjectIds: string[]
   onOpen: (projectId: string) => void
-  onCreate: () => void
+  onCreate: (intent?: 'create' | 'open') => void
   onDelete?: (project: ProjectPackage) => void
   onImportLcosproj?: (file: File) => void
 }
@@ -40,19 +40,26 @@ export function ProjectDrive({ projects, openProjectIds, onOpen, onCreate, onDel
     projects.filter((project) => Boolean(project.lastOpenedAt)),
     'recent',
   ).slice(0, 6), [projects])
+  const firstRun = projects.length === 0 && query.trim() === ''
 
   return <main className="project-drive" data-testid="project-drive">
     <header className="project-drive-header">
       <div className="project-drive-brand"><HardDrive size={20} /><span>LOCAL CREATIVE OS</span></div>
       <div className="drive-header-actions">
-        {onImportLcosproj && <button className="drive-import chrome-control" onClick={() => lcosprojInput.current?.click()}><Upload size={15} />导入工程文件</button>}
+        {!firstRun && onImportLcosproj && <button className="drive-import chrome-control" onClick={() => lcosprojInput.current?.click()}><Upload size={15} />导入工程文件</button>}
         <input ref={lcosprojInput} hidden type="file" accept=".lcosproj,application/vnd.local-creative-os.project" onChange={(event) => { const file = event.currentTarget.files?.[0]; if (file && onImportLcosproj) onImportLcosproj(file); event.currentTarget.value = '' }} />
-        <button className="drive-create chrome-control" onClick={onCreate}><Plus size={15} />创建项目</button>
+        {!firstRun && <button className="drive-create chrome-control" onClick={() => onCreate('create')}><Plus size={15} />创建项目</button>}
       </div>
     </header>
-    <section className="project-drive-hero"><span>项目磁盘</span><h1>继续一个项目</h1><p>每个项目包是一套长期存在的文件、关系、工作视角和 Canvas Scope。这里负责打开现场，不负责用圆环图假装一切井井有条。</p><label className="drive-search"><Search size={17} /><input aria-label="搜索项目" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索项目或本地目录" /></label></section>
+    <section className={`project-drive-hero ${firstRun ? 'is-first-run' : ''}`}>
+      <span>{firstRun ? '第一次使用 LCOS' : '项目磁盘'}</span>
+      <h1>{firstRun ? '从一个真实项目开始' : '继续一个项目'}</h1>
+      <p>{firstRun ? '选择你正在使用的创作文件夹，LCOS 只建立索引和工作现场，不会移动或覆盖原文件。' : '项目会保留文件、关系、工作视角与 Canvas 现场，随时从上次的位置继续。'}</p>
+      {firstRun && <div className="drive-first-run-actions"><button className="primary" onClick={() => onCreate('open')}><FolderOpen size={18}/>打开已有创作文件夹</button><button onClick={() => onCreate('create')}><Plus size={18}/>创建空白项目</button>{onImportLcosproj && <button onClick={() => lcosprojInput.current?.click()}><Upload size={18}/>导入 LCOS 工程文件</button>}</div>}
+      {!firstRun && <label className="drive-search"><Search size={17} /><input aria-label="搜索项目" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索项目或本地目录" /></label>}
+    </section>
     {recentlyOpened.length > 0 && <section className="project-drive-recent drive-recent-opened"><h2>最近打开</h2>{recentlyOpened.map((project) => <button key={project.id} onClick={() => onOpen(project.id)}><span>{project.label}</span><strong>{project.localPath}</strong><small>{project.lastOpenedAt}</small></button>)}</section>}
-    <section className="project-drive-section"><div className="drive-section-title"><h2>本地项目</h2><label className="drive-sort"><ArrowDownUp size={12} /><select aria-label="项目排序" value={sort} onChange={(event) => setSort(event.target.value as DriveSort)}>{(['updated', 'recent', 'name'] as DriveSort[]).map((value) => <option key={value} value={value}>{sortLabels[value]}</option>)}</select></label><span>{filtered.length} 个项目包</span></div><div className="project-folder-grid">{ordered.map((project) => {
+    {!firstRun && <section className="project-drive-section"><div className="drive-section-title"><h2>本地项目</h2><label className="drive-sort"><ArrowDownUp size={12} /><select aria-label="项目排序" value={sort} onChange={(event) => setSort(event.target.value as DriveSort)}>{(['updated', 'recent', 'name'] as DriveSort[]).map((value) => <option key={value} value={value}>{sortLabels[value]}</option>)}</select></label><span>{filtered.length} 个项目包</span></div><div className="project-folder-grid">{ordered.map((project) => {
       const opened = openProjectIds.includes(project.id)
       return <div className="project-folder" key={project.id}>
         <button className="project-folder-main" onClick={() => onOpen(project.id)}>
@@ -63,7 +70,7 @@ export function ProjectDrive({ projects, openProjectIds, onOpen, onCreate, onDel
         </button>
         {onDelete && <button className="project-folder-delete" aria-label={`删除项目 ${project.label}`} title="从 LCOS 移除（源文件保留）" onClick={() => onDelete(project)}><Trash2 size={13} /></button>}
       </div>
-    })}<button className="project-folder project-folder-new" onClick={onCreate}><span className="project-folder-icon"><Plus size={24} /></span><strong>空白项目</strong><small>创建 Root Canvas 后直接拖入本地文件</small></button></div>{!filtered.length && <div className="drive-empty"><b>没有匹配的项目</b><span>换个关键词，或者创建一个新项目包。</span></div>}</section>
-    <section className="project-drive-recent"><h2>最近待处理</h2>{projects.filter((project) => project.pendingCount > 0).map((project) => <button key={project.id} onClick={() => onOpen(project.id)}><span>{project.label}</span><strong>有 {project.pendingCount} 个结果等待确认</strong><small>{project.updatedAt}</small></button>)}</section>
+    })}<button className="project-folder project-folder-new" onClick={() => onCreate('create')}><span className="project-folder-icon"><Plus size={24} /></span><strong>空白项目</strong><small>创建后直接拖入本地文件</small></button></div>{!filtered.length && <div className="drive-empty"><b>没有匹配的项目</b><span>换个关键词，或者创建一个新项目。</span></div>}</section>}
+    {!firstRun && <section className="project-drive-recent"><h2>最近待处理</h2>{projects.filter((project) => project.pendingCount > 0).map((project) => <button key={project.id} onClick={() => onOpen(project.id)}><span>{project.label}</span><strong>有 {project.pendingCount} 个结果等待确认</strong><small>{project.updatedAt}</small></button>)}</section>}
   </main>
 }

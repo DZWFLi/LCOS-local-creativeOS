@@ -83,12 +83,18 @@ function DocumentObject({ node, kind, density, pending, onDetails, showDetails }
   const Icon = kind === 'archive' ? ArchiveGlyph : DocumentGlyph
   const tag = kind === 'markdown' ? 'MD' : kind === 'ppt' ? 'PPT' : kind === 'pdf' ? 'PDF' : kind === 'archive' ? 'ZIP' : fileExtension(node.title) || 'FILE'
   const preview = node.previewText?.trim()
+  const thumbnailCandidate = node.previewDataUrl ?? node.previewUrl
+  const thumbnail = thumbnailCandidate && (node.previewMimeType?.startsWith('image/') || thumbnailCandidate.startsWith('data:image/')) ? thumbnailCandidate : null
   return <div className={`lcos-object lcos-document-object file-${kind}`}>
-    <div className="lcos-document-sheet">
-      <div className="lcos-document-corner"/>
-      <Icon className="lcos-document-glyph"/>
-      {density !== 'compact' && <div className="lcos-document-lines" aria-hidden="true"><i/><i/><i/><i/><i/></div>}
-    </div>
+    {thumbnail
+      ? <div className="lcos-document-thumbnail"><img src={thumbnail} alt={`${node.title} 预览`} draggable={false} onDragStart={(event) => event.preventDefault()}/><span>{tag}</span></div>
+      : preview && density !== 'compact'
+        ? <div className="lcos-text-thumbnail"><pre>{preview.slice(0, 420)}</pre><span>{tag}</span></div>
+      : <div className={`lcos-file-fallback file-${kind}`}>
+          <span className="lcos-file-icon"><Icon/></span>
+          <strong>{tag}</strong>
+          {density !== 'compact' && <small>{node.previewStatus === 'failed' ? '预览暂不可用' : node.previewStatus === 'not-generated' ? '等待系统预览' : '本地文件'}</small>}
+        </div>}
     <div className="lcos-object-caption">
       <span className="lcos-type-tag">{tag}</span>
       <strong>{node.title}</strong>
@@ -184,9 +190,9 @@ export function detectFileIdentity(node: CanvasNode): FileIdentity {
   const linkLike = [node.previewText, node.observedPath, node.subtitle, node.title].some((value) => value ? /https?:\/\//i.test(value) : false)
   if (/\.(mp4|mov|webm|m4v|avi)$/i.test(name) || type.startsWith('video/')) return 'video'
   if (/\.(mp3|wav|m4a|aac|flac|ogg)$/i.test(name) || type.startsWith('audio/')) return 'audio'
-  if (/\.(jpg|jpeg|png|webp|gif|bmp|svg|avif)$/i.test(name) || type.startsWith('image/') || node.previewDataUrl || (node.previewUrl && !linkLike)) return 'image'
   if (/\.pdf$/i.test(name) || type.includes('pdf')) return 'pdf'
   if (/\.(ppt|pptx|key)$/i.test(name) || type.includes('presentation') || node.pageCount) return 'ppt'
+  if (/\.(jpg|jpeg|png|webp|gif|bmp|svg|avif)$/i.test(name) || type.startsWith('image/')) return 'image'
   if (/\.(md|markdown|txt|json)$/i.test(name) || type.includes('markdown') || type === 'text' || type.startsWith('text/')) return 'markdown'
   if (linkLike || type === 'url' || type === 'link' || type === 'web') return 'link'
   if (/\.(zip|rar|7z|tar|gz)$/i.test(name) || type.includes('zip') || type.includes('archive')) return 'archive'

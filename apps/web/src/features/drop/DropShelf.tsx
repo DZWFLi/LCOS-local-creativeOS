@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import type { CSSProperties } from 'react'
 import { ArrowRight, Boxes, Layers3, LayoutPanelLeft, X } from 'lucide-react'
 import type { CanvasScope, Workspace } from '../../model'
 
@@ -55,7 +56,7 @@ export function DropShelf({ open, anchor, count, workspaces, scopes, rootScopeId
   const iconFor = (destination: DropDestination) => destination.kind === 'workspace' ? <LayoutPanelLeft size={15} /> : destination.kind === 'scope' ? <Layers3 size={15} /> : <Boxes size={15} />
   return <div ref={shelfRef} className={`vnext-drop-shelf anchor-${anchor}`} role="dialog" aria-modal="false" aria-labelledby="drop-shelf-title" tabIndex={-1} data-testid="drop-shelf">
     <header className="vnext-drop-heading">
-      <span className="vnext-drop-payload" aria-hidden="true"><Layers3 size={18}/><strong>{count}</strong></span>
+      <span className="vnext-drop-payload" aria-hidden="true"><span className="lcos-drop-stack">{Array.from({length:Math.min(3,count)},(_,index)=><i key={index} style={{'--stack-index':index} as CSSProperties}><Layers3 size={13}/></i>)}</span><strong>{count}</strong></span>
       <div><strong id="drop-shelf-title">投送 {count} 个对象</strong><span>选择处理方式和目标空间</span></div>
     </header>
     <div className="vnext-drop-verbs" aria-label="投送方式">

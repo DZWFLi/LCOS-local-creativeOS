@@ -18,7 +18,7 @@ export interface AppShellViewProps {
     readonly projects: ComponentProps<typeof ProjectDrive>['projects']
     readonly openProjectIds: ComponentProps<typeof ProjectDrive>['openProjectIds']
     readonly onOpen: ComponentProps<typeof ProjectDrive>['onOpen']
-    readonly onCreate: () => void
+    readonly onCreate: ComponentProps<typeof ProjectDrive>['onCreate']
     readonly onDelete?: ComponentProps<typeof ProjectDrive>['onDelete']
     readonly onImportLcosproj?: ComponentProps<typeof ProjectDrive>['onImportLcosproj']
   }

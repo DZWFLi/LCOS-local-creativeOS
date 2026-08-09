@@ -2,7 +2,7 @@
  * Runtime boot project selection with an explicit Source Gate.
  *
  * The gate rule (approved for MVP closure): when the user explicitly requested a
- * project id, a catalog miss must NEVER silently fall back to the MVP sample,
+ * project id, a catalog miss must NEVER silently fall back to another project,
  * another project, localStorage or Fixture. It is an explicit error state.
  */
 
@@ -15,10 +15,11 @@ export type RuntimeProjectSelection =
   | { readonly kind: 'missing-requested'; readonly requestedProjectId: string }
   | { readonly kind: 'empty-catalog' }
 
+const LEGACY_SAMPLE_PROJECT_ID = 'disposable-mvp-sample'
+
 export function selectRuntimeProject(
   entries: readonly ProjectCatalogLike[],
   requestedProjectId: string | null,
-  fallbackProjectId: string,
 ): RuntimeProjectSelection {
   if (requestedProjectId !== null) {
     if (!entries.some((entry) => entry.id === requestedProjectId)) {
@@ -26,10 +27,7 @@ export function selectRuntimeProject(
     }
     return { kind: 'found', projectId: requestedProjectId }
   }
-  if (entries.some((entry) => entry.id === fallbackProjectId)) {
-    return { kind: 'found', projectId: fallbackProjectId }
-  }
-  const first = entries[0]
+  const first = entries.find((entry) => entry.id !== LEGACY_SAMPLE_PROJECT_ID)
   return first === undefined
     ? { kind: 'empty-catalog' }
     : { kind: 'found', projectId: first.id }

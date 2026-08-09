@@ -1,53 +1,40 @@
-import { Bot, Network, Sparkles, Wrench } from 'lucide-react'
-import { useMemo } from 'react'
-import type { CSSProperties } from 'react'
+import { Bot, Network, Sparkles, Unplug, Wrench } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react'
 import type { CanvasEdge, CanvasNode } from '../../model'
 import { SurfaceObject } from './SurfaceObject'
+import { layoutWorkflowGraph } from './surfaceLayouts'
 
-interface Props {
-  projectId:string
-  scopeId:string
-  nodes:CanvasNode[]
-  edges:CanvasEdge[]
-  selectedIds:string[]
-  onSelect:(id:string, additive?:boolean)=>void
-  onDoubleClick:(id:string)=>void
-}
+interface Props { projectId:string;scopeId:string;nodes:CanvasNode[];edges:CanvasEdge[];selectedIds:string[];onSelect:(id:string,additive?:boolean)=>void;onDoubleClick:(id:string)=>void;onStart?:(kind:'selection'|'skill'|'agent')=>void }
+type Offset={x:number;y:number}
 
-/**
- * A project-defined workflow canvas. LCOS intentionally does not prescribe a
- * workflow schema here: Skill / Agent / file / note / gate objects can coexist,
- * and the user or local Agent decides the meaning of the graph.
- */
+/** Project-defined workflow Presentation; never a fixed DAG schema. */
 export function WorkflowSurface(props:Props){
-  const layout=useMemo(()=>{
-    if(!props.nodes.length)return{items:[],edges:[]}
-    const left=Math.min(...props.nodes.map((node)=>node.x))
-    const top=Math.min(...props.nodes.map((node)=>node.y))
-    const right=Math.max(...props.nodes.map((node)=>node.x+node.width))
-    const bottom=Math.max(...props.nodes.map((node)=>node.y+node.height))
-    const spanX=Math.max(1,right-left),spanY=Math.max(1,bottom-top)
-    const padX=10,padY=12
-    const items=props.nodes.map((node)=>({
-      node,
-      left:padX+((node.x-left)/spanX)*(100-padX*2),
-      top:padY+((node.y-top)/spanY)*(100-padY*2),
-      width:Math.max(10,Math.min(38,(node.width/spanX)*100)),
-    }))
-    const byId=new Map(items.map((item)=>[item.node.id,item]))
-    const edges=props.edges.filter((edge)=>byId.has(edge.from)&&byId.has(edge.to)).map((edge)=>{const a=byId.get(edge.from)!,b=byId.get(edge.to)!;return{edge,x1:a.left+(a.width/2),y1:a.top+4,x2:b.left+(b.width/2),y2:b.top+4}})
-    return{items,edges}
-  },[props.edges,props.nodes])
-
+  const [hiddenIds,setHiddenIds]=useState<string[]>([])
+  const [presentationEdges,setPresentationEdges]=useState<CanvasEdge[]>(props.edges)
+  const [selectedEdge,setSelectedEdge]=useState<string|null>(null)
+  const [offsets,setOffsets]=useState<Record<string,Offset>>({})
+  const stageRef=useRef<HTMLDivElement>(null)
+  const drag=useRef<{id:string;x:number;y:number;origin:Offset}|null>(null)
+  const visibleNodes=props.nodes.filter((node)=>!hiddenIds.includes(node.id))
+  const visibleEdges=presentationEdges.filter((edge)=>!hiddenIds.includes(edge.from)&&!hiddenIds.includes(edge.to))
+  const base=useMemo(()=>layoutWorkflowGraph(visibleNodes,visibleEdges),[visibleEdges,visibleNodes])
+  const items=base.items.map((item)=>({...item,left:item.left+(offsets[item.node.id]?.x??0),top:item.top+(offsets[item.node.id]?.y??0)}))
+  const byId=new Map(items.map((item)=>[item.node.id,item]))
+  const edges=visibleEdges.flatMap((edge)=>{const from=byId.get(edge.from),to=byId.get(edge.to);return from&&to?[{edge,x1:from.left+from.width,y1:from.top+5,x2:to.left,y2:to.top+5}]:[]})
+  useEffect(()=>{const onKey=(event:KeyboardEvent)=>{if((event.key==='Delete'||event.key==='Backspace')&&selectedEdge){event.preventDefault();setPresentationEdges((current)=>current.filter((edge)=>edge.id!==selectedEdge));setSelectedEdge(null)}};window.addEventListener('keydown',onKey);return()=>window.removeEventListener('keydown',onKey)},[selectedEdge])
+  const beginDrag=(event:ReactPointerEvent,id:string)=>{drag.current={id,x:event.clientX,y:event.clientY,origin:offsets[id]??{x:0,y:0}};event.currentTarget.setPointerCapture(event.pointerId)}
+  const moveDrag=(event:ReactPointerEvent)=>{const current=drag.current,stage=stageRef.current;if(!current||!stage)return;const rect=stage.getBoundingClientRect();setOffsets((value)=>({...value,[current.id]:{x:current.origin.x+(event.clientX-current.x)/rect.width*100,y:current.origin.y+(event.clientY-current.y)/rect.height*100}}))}
+  const removeKeepingFlow=(id:string)=>{const incoming=presentationEdges.filter((edge)=>edge.to===id),outgoing=presentationEdges.filter((edge)=>edge.from===id),bridges=incoming.flatMap((from)=>outgoing.map((to,index)=>({id:`presentation:${id}:${from.from}:${to.to}:${index}`,from:from.from,to:to.to,kind:'reference' as const})));setPresentationEdges((current)=>[...current.filter((edge)=>edge.from!==id&&edge.to!==id),...bridges]);setHiddenIds((current)=>[...current,id])}
   return <section className="lcos-dedicated-surface lcos-workflow-surface" data-testid="surface-workflow">
-    <header className="lcos-surface-heading lcos-workflow-heading"><div><strong>工作流</strong><span>项目自己定义怎么工作</span></div><small>{props.nodes.length} objects · {props.edges.length} relations</small></header>
-    <div className="lcos-workflow-stage">
-      <div className="lcos-workflow-hint" aria-hidden="true"><Sparkles size={13}/><span>选中内容后让 Agent 帮你搭 Skill / Agent / Review 关系</span></div>
-      <svg className="lcos-workflow-edges" aria-hidden="true">{layout.edges.map(({edge,x1,y1,x2,y2})=><line key={edge.id} x1={`${x1}%`} y1={`${y1}%`} x2={`${x2}%`} y2={`${y2}%`} className={edge.active?'active':''}/>)}</svg>
-      {layout.items.map(({node,left,top,width},index)=><div key={node.id} className={`lcos-workflow-node ${node.kind==='process'?'is-execution':''}`} style={{left:`${left}%`,top:`${top}%`,width:`${width}%`,'--i':index} as CSSProperties}>
-        <SurfaceObject node={node} compact={node.kind!=='process'} selected={props.selectedIds.includes(node.id)} onSelect={props.onSelect} onDoubleClick={props.onDoubleClick}/>
+    <header className="lcos-surface-heading lcos-workflow-heading"><div><strong>工作流</strong><span>能力与执行现场</span></div><small>项目自己定义怎么工作 · {visibleNodes.length} 个对象 · {visibleEdges.length} 条 Presentation 关系</small></header>
+    <div ref={stageRef} className="lcos-workflow-stage" onPointerUp={()=>{drag.current=null}} onPointerCancel={()=>{drag.current=null}}>
+      <div className="lcos-workflow-hint"><Sparkles size={13}/><span>框选、点空白处描述，或从任意对象开始</span><button type="button" onClick={()=>props.onStart?.('agent')}>交给 Agent</button></div>
+      <svg className="lcos-workflow-edges" viewBox="0 0 100 100" preserveAspectRatio="none">{edges.map(({edge,x1,y1,x2,y2})=>{const m=x1+(x2-x1)*.5;return <path key={edge.id} d={`M${x1} ${y1} C${m} ${y1},${m} ${y2},${x2} ${y2}`} className={`${edge.active?'active':''} ${selectedEdge===edge.id?'selected':''} ${edge.id.startsWith('presentation:')?'presentation':''}`} onClick={()=>setSelectedEdge(edge.id)}/>})}</svg>
+      {items.map(({node,left,top,width},index)=><div key={node.id} className={`lcos-workflow-node ${node.kind==='process'?'is-execution':''}`} style={{left:`${left}%`,top:`${top}%`,width:`${width}%`,'--i':index} as CSSProperties} onPointerDown={(event)=>beginDrag(event,node.id)} onPointerMove={moveDrag}>
+        <SurfaceObject node={node} compact={node.kind!=='process'} selected={props.selectedIds.includes(node.id)} onSelect={props.onSelect} onDoubleClick={props.onDoubleClick}/><button type="button" className="lcos-workflow-bypass" title="从当前 Workflow 移除，但保持上下游连接" aria-label={`保持链条并移除 ${node.title}`} onPointerDown={(event)=>event.stopPropagation()} onClick={()=>removeKeepingFlow(node.id)}><Unplug size={10}/></button>
       </div>)}
-      {!layout.items.length&&<div className="lcos-workflow-empty"><Network size={19}/><strong>这张工作流还没有结构</strong><span>把文件、Skill 或已有节点放进来，或者直接让本地 Agent 按项目理解搭建。</span><div><Wrench size={12}/>Skill <Bot size={12}/>Agent</div></div>}
+      {!items.length&&<div className="lcos-workflow-empty"><Network size={19}/><strong>从项目正在做的事开始</strong><span>工作流不会自动吞入整个项目。选择对象、找到项目 Skill，或让 Agent 按当前 Intent 搭建临时 View。</span><div className="lcos-workflow-start-actions"><button type="button" disabled={!props.selectedIds.length} onClick={()=>props.onStart?.('selection')}><Network size={12}/>从 Selection</button><button type="button" onClick={()=>props.onStart?.('skill')}><Wrench size={12}/>项目 Skill</button><button type="button" onClick={()=>props.onStart?.('agent')}><Bot size={12}/>让 Agent 搭建</button></div></div>}
     </div>
   </section>
 }
