@@ -1,4 +1,4 @@
-import { useEffect, useState, type RefObject } from 'react'
+import { useEffect, useState, type CSSProperties, type RefObject } from 'react'
 import type { RunEvent, RunReview, RuntimeProviderStatus } from '@local-creative-os/contracts'
 import {
   Check,
@@ -84,7 +84,7 @@ export function WorkRail(props: Props) {
   if (props.collapsed) return null
 
 
-  return <aside className="work-rail" data-testid="work-rail" data-mode={mode} style={{ width: props.width }}>
+  return <aside className="work-rail" data-testid="work-rail" data-mode={mode} style={{ width: props.width, '--lcos-runtime-rail-width': `${props.width}px` } as CSSProperties}>
     <WorkRailHeader mode={mode} activeRun={props.activeRun} contextLabel={props.contextLabel} contextCount={props.contextCount} contextScope={props.contextScope} onContextScope={props.onContextScope} onCollapse={props.onCollapse} />
     <div className="work-rail-body" data-testid="work-rail-body">
       <RunList activeRun={props.activeRun} reviews={props.runReviews} onOpen={props.onOpenRunReview} />
@@ -105,10 +105,14 @@ export function WorkRail(props: Props) {
 
 
 function RunList({ activeRun, reviews, onOpen }: { activeRun: ActiveRun | null; reviews: readonly RunReview[]; onOpen: (review: RunReview) => void }) {
-  const unique = reviews.filter((review, index, all) => all.findIndex((item) => String(item.run.id) === String(review.run.id)) === index).slice(0, 12)
+  const allUnique = reviews.filter((review, index, all) => all.findIndex((item) => String(item.run.id) === String(review.run.id)) === index)
   const activeId = activeRun?.id
+  const unique = [...allUnique].sort((a, b) => {
+    const score = (review: RunReview) => String(review.run.id) === activeId ? 0 : ['waiting_input', 'review', 'failed'].includes(review.presentationPhase) ? 1 : 2
+    return score(a) - score(b)
+  }).slice(0, 7)
   return <section className="rail-section lcos-run-list" data-testid="run-list">
-    <header><div><span className="lcos-run-list-dot"/><h3>执行</h3></div><small>{unique.length ? `${unique.length} 条最近任务` : activeRun ? '当前任务' : '暂无任务'}</small></header>
+    <header><div><span className="lcos-run-list-dot"/><h3>执行</h3></div><small>{unique.length ? `${unique.length} 条优先显示${allUnique.length > unique.length ? ` · 共 ${allUnique.length} 条` : ''}` : activeRun ? '当前任务' : '暂无任务'}</small></header>
     <div className="lcos-run-list-items">
       {unique.map((review) => {
         const id = String(review.run.id)
@@ -153,7 +157,7 @@ function WorkRailHeader({ mode, activeRun, contextLabel, contextCount, contextSc
     <span className="work-rail-focus-dot" />
     <div><span>{meta}</span><h2>{title}</h2></div>
     <div className="work-rail-header-actions">
-      {!followsRun && <label className="lcos-global-context-scope" title="全局 Agent Context 范围"><select value={contextScope} onChange={(event) => onContextScope(event.target.value as 'workspace' | 'scope' | 'project')}><option value="workspace">Workspace</option><option value="scope">Scope</option><option value="project">Project</option></select><ChevronDown size={10}/></label>}
+      {!followsRun && <label className="lcos-global-context-scope" title="Agent 参考范围"><select aria-label="Agent 参考范围" value={contextScope} onChange={(event) => onContextScope(event.target.value as 'workspace' | 'scope' | 'project')}><option value="workspace">当前工作空间</option><option value="scope">当前空间</option><option value="project">整个项目</option></select><ChevronDown size={10}/></label>}
       <button className="pressable" aria-label="关闭全局 Agent" title="关闭全局 Agent" onClick={onCollapse}><PanelRightClose size={15} /></button>
     </div>
   </header>

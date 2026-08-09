@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { FolderOpen, X } from 'lucide-react'
+import { dismissFromBackdrop } from '../ui/dismissibleLayer'
 
 interface Inspection { fileCount: number; directoryCount: number; totalBytes: number; skipped: readonly string[]; requiresConfirmation: boolean }
 interface Props {
@@ -61,7 +62,7 @@ export function ProjectCreateDialog({ open, onCancel, onBrowseDirectory, onInspe
       setBrowseError(error instanceof Error ? error.message : '无法打开或检查文件夹')
     } finally { setBrowsing(false) }
   }
-  return <div className="project-create-layer" role="presentation">
+  return <div className="project-create-layer" role="presentation" onPointerDown={(event) => dismissFromBackdrop(event, onCancel, browsing || inspecting)}>
     <section className="project-create-dialog" role="dialog" aria-modal="true" aria-labelledby="project-create-title">
       <header><div><span>新建项目包</span><h2 id="project-create-title">建立一个本地项目现场</h2></div><button aria-label="关闭" onClick={onCancel}><X size={17} /></button></header>
       <div className="project-create-body">

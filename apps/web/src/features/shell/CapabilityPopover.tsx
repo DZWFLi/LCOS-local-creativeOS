@@ -40,7 +40,7 @@ export function CapabilityPopover(props: Props) {
   return <aside ref={popoverRef} className="capability-popover" data-testid="capability-popover" role="dialog" aria-label="快捷能力">
     <header>
       <div><small>快捷能力</small><h2>添加与执行</h2></div>
-      <button className="icon-button pressable" aria-label="关闭快捷能力" onClick={props.onClose}><X size={14} /></button>
+      <button className="dialog-close-action pressable" aria-label="关闭快捷能力" title="关闭" onClick={props.onClose}><X size={14} /><span>关闭</span></button>
     </header>
     <label className="capability-search"><Search size={13} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索能力或资产" /></label>
     <div className="capability-body">

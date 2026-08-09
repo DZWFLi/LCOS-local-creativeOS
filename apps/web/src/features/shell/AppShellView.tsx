@@ -1,4 +1,4 @@
-import type { ComponentProps } from 'react'
+import type { ComponentProps, CSSProperties } from 'react'
 import { ProjectDrive } from '../project/ProjectDrive'
 import { ProjectStripVNext } from './ProjectStripVNext'
 import { ImmersiveViewer } from '../viewer/ImmersiveViewer'
@@ -9,6 +9,9 @@ import { WorkRailHost } from './WorkRailHost'
 import type { WorkRail } from '../workrail/WorkRail'
 
 export interface AppShellViewProps {
+  readonly layoutDensity: 'comfortable' | 'compact' | 'constrained'
+  readonly layoutMode: 'desktop' | 'sidecar'
+  readonly layoutStyle: CSSProperties
   readonly notice: string | null
   readonly drive: {
     readonly open: boolean
@@ -35,10 +38,10 @@ export function AppShellView(props: AppShellViewProps) {
       <DialogsHost {...props.dialogs} />
     </>
   }
-  return <main className="app-shell porcelain-studio-v2 lcos-reconstructed" data-testid="creative-os-app">
+  return <main className="app-shell porcelain-studio-v2 lcos-reconstructed" style={props.layoutStyle} data-testid="creative-os-app" data-layout-density={props.layoutDensity} data-layout-mode={props.layoutMode}>
     <ProjectStripVNext {...props.strip} />
     <CanvasSceneHost {...props.scene} />
-    <WorkRailHost rail={props.rail} />
+    {props.layoutMode === 'desktop' ? <WorkRailHost rail={props.rail} /> : null}
     <DialogsHost {...props.dialogs} />
     {props.immersive && <ImmersiveViewer node={props.immersive.node} projectId={props.immersive.projectId} onClose={props.immersive.onClose} />}
   </main>

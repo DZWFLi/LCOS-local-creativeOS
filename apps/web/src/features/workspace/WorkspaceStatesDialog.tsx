@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Clock3, History, LoaderCircle, RotateCcw, Save, X } from 'lucide-react'
 import type { Workspace } from '../../model'
 import type { WorkspaceStateSummary } from '../../runtime/projectionAdapters'
+import { dismissFromBackdrop } from '../ui/dismissibleLayer'
 
 interface Props {
   workspace: Workspace
@@ -24,7 +25,7 @@ function formatTime(value?: string): string {
 
 export function WorkspaceStatesDialog(props: Props) {
   const [name, setName] = useState('')
-  return <div className="workspace-states-backdrop" role="presentation" onPointerDown={props.onClose}>
+  return <div className="workspace-states-backdrop" role="presentation" onPointerDown={(event) => dismissFromBackdrop(event, props.onClose, props.saving || props.restoringId !== null)}>
     <section className="workspace-states-dialog" role="dialog" aria-modal="true" aria-label={`${props.workspace.label} 工作现场`} onPointerDown={(event) => event.stopPropagation()}>
       <header>
         <div><small>WORKSPACE HISTORY</small><h2>{props.workspace.label}</h2><p>成员、版本组合、视口和关联 Run 的阶段现场。</p></div>

@@ -1,7 +1,7 @@
 import { useMemo, useRef } from 'react'
 import type { Camera, CanvasNode, WorkspaceFrameVM } from '../../model'
 import { Maximize2, Minus, Plus } from 'lucide-react'
-import { CANVAS_ZOOM_STEP, fitBounds, getSelectionBounds, type SafeInsets, zoomCameraAt } from './canvasGeometry'
+import { cameraSafeViewportBounds, CANVAS_ZOOM_STEP, fitBoundsForReading, getSelectionBounds, restorationFocusBounds, type SafeInsets, zoomCameraAt } from './canvasGeometry'
 
 interface Props {
   nodes: CanvasNode[]
@@ -11,6 +11,7 @@ interface Props {
   collapsed: boolean
   onCollapsedChange: (collapsed: boolean) => void
   safeInsets: SafeInsets
+  onLocateContent?: () => void
 }
 
 type MapTransform = {
@@ -52,7 +53,7 @@ function makeTransform(bounds: ReturnType<typeof projectBounds>, mapWidth: numbe
   }
 }
 
-export function CanvasMiniMap({ nodes, workspaceFrames, camera, setCamera, collapsed, onCollapsedChange, safeInsets }: Props) {
+export function CanvasMiniMap({ nodes, workspaceFrames, camera, setCamera, collapsed, onCollapsedChange, safeInsets, onLocateContent }: Props) {
   const mapRef = useRef<HTMLDivElement | null>(null)
   const drag = useRef<{ x: number; y: number; camera: Camera; scale: number } | null>(null)
   const viewport = typeof document !== 'undefined' ? document.querySelector<HTMLElement>('[data-testid="canvas"]')?.getBoundingClientRect() : undefined
@@ -68,22 +69,18 @@ export function CanvasMiniMap({ nodes, workspaceFrames, camera, setCamera, colla
     x: transform.worldX + (x - transform.offsetX) / transform.scale,
     y: transform.worldY + (y - transform.offsetY) / transform.scale,
   })
-  const fitContent = () => {
-    const contentBounds = getSelectionBounds(nodes, nodes.map((node) => node.id))
-    if (contentBounds) setCamera(fitBounds(contentBounds, viewportWidth, viewportHeight, 72, safeInsets))
-  }
   const viewportCenter = {
     x: safeInsets.left + (viewportWidth - safeInsets.left - safeInsets.right) / 2,
     y: safeInsets.top + (viewportHeight - safeInsets.top - safeInsets.bottom) / 2,
   }
+  const fitContent = () => {
+    if (onLocateContent) { onLocateContent(); return }
+    const contentBounds = restorationFocusBounds(nodes) ?? getSelectionBounds(nodes, nodes.map((node) => node.id))
+    if (contentBounds) setCamera(fitBoundsForReading(contentBounds, viewportWidth, viewportHeight, 72, safeInsets))
+  }
   const stepZoom = (delta: number) => setCamera((current) => zoomCameraAt(current, current.zoom + delta, viewportCenter.x, viewportCenter.y))
   const resetZoom = () => setCamera((current) => zoomCameraAt(current, 1, viewportCenter.x, viewportCenter.y))
-  const viewWorld = {
-    x: -camera.x / camera.zoom,
-    y: -camera.y / camera.zoom,
-    width: viewportWidth / camera.zoom,
-    height: viewportHeight / camera.zoom,
-  }
+  const viewWorld = cameraSafeViewportBounds(camera, viewportWidth, viewportHeight, safeInsets)
 
   if (collapsed) return <section className="minimap minimap-collapsed"><button aria-label="展开小地图" onClick={() => onCollapsedChange(false)}><Maximize2 size={13} /></button></section>
 
@@ -99,8 +96,9 @@ export function CanvasMiniMap({ nodes, workspaceFrames, camera, setCamera, colla
           drag.current = { x: event.clientX, y: event.clientY, camera, scale: transform.scale }
         } else {
           const world = mapToWorld(localX, localY)
-          setCamera({ ...camera, x: viewportWidth / 2 - world.x * camera.zoom, y: viewportHeight / 2 - world.y * camera.zoom })
-          drag.current = { x: event.clientX, y: event.clientY, camera: { ...camera, x: viewportWidth / 2 - world.x * camera.zoom, y: viewportHeight / 2 - world.y * camera.zoom }, scale: transform.scale }
+          const located = { ...camera, x: viewportCenter.x - world.x * camera.zoom, y: viewportCenter.y - world.y * camera.zoom }
+          setCamera(located)
+          drag.current = { x: event.clientX, y: event.clientY, camera: located, scale: transform.scale }
         }
         event.currentTarget.setPointerCapture(event.pointerId)
       }}
@@ -119,7 +117,7 @@ export function CanvasMiniMap({ nodes, workspaceFrames, camera, setCamera, colla
         if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
       }}>
       {workspaceFrames.map((frame) => <span key={frame.workspaceId} data-minimap-workspace-frame={frame.workspaceId} className={frame.active ? 'map-workspace active' : 'map-workspace'} style={{ left: worldToMapX(frame.bounds.x), top: worldToMapY(frame.bounds.y), width: frame.bounds.width * transform.scale, height: frame.bounds.height * transform.scale }} />)}
-      {nodes.map((node) => <i key={node.id} data-minimap-node-id={node.id} data-minimap-view-id={node.id} data-minimap-artifact-id={node.artifactId ?? ''} data-minimap-scope-id={node.scopeId ?? 'scope-root'} data-minimap-visible="true" title={`${node.id} / ${node.scopeId ?? 'scope-root'}`} style={{ left: worldToMapX(node.x), top: worldToMapY(node.y), width: Math.max(3, node.width * transform.scale), height: Math.max(2, node.height * transform.scale) }} />)}
+      {nodes.map((node) => <i key={node.id} data-testid={`minimap-node-${node.id}`} data-minimap-node-id={node.id} data-minimap-view-id={node.id} data-minimap-artifact-id={node.artifactId ?? ''} data-minimap-scope-id={node.scopeId ?? 'scope-root'} data-minimap-visible="true" title={`${node.id} / ${node.scopeId ?? 'scope-root'}`} style={{ left: worldToMapX(node.x), top: worldToMapY(node.y), width: Math.max(3, node.width * transform.scale), height: Math.max(2, node.height * transform.scale) }} />)}
       <b data-camera-rect="true" data-testid="minimap-camera-rect" style={{ left: worldToMapX(viewWorld.x), top: worldToMapY(viewWorld.y), width: viewWorld.width * transform.scale, height: viewWorld.height * transform.scale }} />
     </div>
     <div className="map-controls"><button aria-label="缩小画布 5%" onClick={() => stepZoom(-CANVAS_ZOOM_STEP)}><Minus size={13} /></button><button className="map-zoom-value" aria-label="恢复 100% 缩放" title="恢复 100%" onClick={resetZoom}>{Math.round(camera.zoom * 100)}%</button><button aria-label="放大画布 5%" onClick={() => stepZoom(CANVAS_ZOOM_STEP)}><Plus size={13} /></button><button className="map-fit-content" aria-label="定位内容" title="定位内容" onClick={fitContent}><Maximize2 size={12} /></button></div>

@@ -28,6 +28,8 @@ export function DropShelf({ open, anchor, count, workspaces, scopes, rootScopeId
   const [verb, setVerb] = useState<TransferVerb>('加入')
   useEffect(() => {
     if (!open) return
+    setVerb('加入')
+    const focusFrame = window.requestAnimationFrame(() => shelfRef.current?.focus({ preventScroll: true }))
     const onPointerDown = (event: PointerEvent) => {
       if (shelfRef.current?.contains(event.target as Node)) return
       onCancel()
@@ -38,6 +40,7 @@ export function DropShelf({ open, anchor, count, workspaces, scopes, rootScopeId
     window.addEventListener('pointerdown', onPointerDown)
     window.addEventListener('keydown', onKeyDown)
     return () => {
+      window.cancelAnimationFrame(focusFrame)
       window.removeEventListener('pointerdown', onPointerDown)
       window.removeEventListener('keydown', onKeyDown)
     }
@@ -50,11 +53,14 @@ export function DropShelf({ open, anchor, count, workspaces, scopes, rootScopeId
     ...(currentScopeId !== rootScopeId ? [{ kind: 'root' as const, id: rootScopeId, label: '主画布' }] : []),
   ]
   const iconFor = (destination: DropDestination) => destination.kind === 'workspace' ? <LayoutPanelLeft size={15} /> : destination.kind === 'scope' ? <Layers3 size={15} /> : <Boxes size={15} />
-  return <div ref={shelfRef} className={`vnext-drop-shelf anchor-${anchor}`} role="dialog" aria-label="投送到其他空间" data-testid="drop-shelf">
-    <div className="vnext-drop-payload"><span className="vnext-payload-stack"><i /><i /><i /></span><strong>{count}</strong></div>
+  return <div ref={shelfRef} className={`vnext-drop-shelf anchor-${anchor}`} role="dialog" aria-modal="false" aria-labelledby="drop-shelf-title" tabIndex={-1} data-testid="drop-shelf">
+    <header className="vnext-drop-heading">
+      <span className="vnext-drop-payload" aria-hidden="true"><Layers3 size={18}/><strong>{count}</strong></span>
+      <div><strong id="drop-shelf-title">投送 {count} 个对象</strong><span>选择处理方式和目标空间</span></div>
+    </header>
     <div className="vnext-drop-verbs" aria-label="投送方式">
       {(['加入', '移动', '继续工作'] as const).map((item) =>
-        <button key={item} type="button" className={verb === item ? 'active' : ''} onClick={() => setVerb(item)}>{item}</button>
+        <button key={item} type="button" className={verb === item ? 'active' : ''} aria-pressed={verb === item} title={item === '加入' ? '保留原位置，并在目标中建立引用' : item === '移动' ? '从当前空间移出并放入目标' : '复制到当前现场并立即进入'} onClick={() => setVerb(item)}>{item}</button>
       )}
     </div>
     <div className="vnext-drop-destinations">

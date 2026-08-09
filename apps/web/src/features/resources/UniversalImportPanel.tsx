@@ -1,5 +1,6 @@
 import { BookOpen, FileUp, FolderOpen, Link2, MessageSquare, Package, X } from 'lucide-react'
 import { useRef, useState, type ChangeEvent } from 'react'
+import { dismissFromBackdrop } from '../ui/dismissibleLayer'
 
 const MAX_SINGLE_BYTES = 10 * 1024 * 1024
 const MAX_TOTAL_BYTES = 50 * 1024 * 1024
@@ -81,8 +82,8 @@ export function UniversalImportPanel({ open, onClose, onFiles, onDirectory, onAr
     })
   }
 
-  return <div className="modal-backdrop"><section className="universal-import-panel" role="dialog" aria-label="通用资源导入" data-testid="universal-import-panel">
-    <header><div><FileUp size={18} /><h2>导入资源</h2></div><button type="button" className="icon-button pressable" aria-label="关闭" onClick={onClose}><X size={16} /></button></header>
+  return <div className="modal-backdrop" onPointerDown={(event) => dismissFromBackdrop(event, onClose, busy)}><section className="universal-import-panel" role="dialog" aria-label="通用资源导入" data-testid="universal-import-panel">
+    <header><div><FileUp size={18} /><h2>导入资源</h2></div><button type="button" className="dialog-close-action pressable" aria-label="关闭导入资源" title="关闭" onClick={onClose}><X size={16} /><span>关闭</span></button></header>
     <p className="import-hint">拖入、选择或粘贴链接即可；不需要填写用途与分类，系统会尝试理解。</p>
     <div className="import-source-grid">
       <button className="import-source pressable" type="button" disabled={busy} onClick={() => fileInputRef.current?.click()}>

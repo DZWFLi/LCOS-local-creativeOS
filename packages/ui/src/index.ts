@@ -1,8 +1,22 @@
 export const uiTokens = {
-  canvas: '#f5f5f2',
+  app: '#f1f0f7',
+  canvas: '#f4f3f8',
   surface: '#ffffff',
-  ink: '#192837',
-  muted: 'rgba(25, 40, 55, .64)',
-  border: 'rgba(25, 40, 55, .12)',
-  accent: '#7342e2',
+  ink: '#1c1b22',
+  muted: '#8e8b98',
+  border: 'rgba(28, 27, 34, .13)',
+  accent: '#8b5cf6',
+  source: '#6687b8',
+  working: '#496fae',
+  generated: '#7556c9',
+  context: '#4d9084',
+  process: '#6f7d89',
+  decision: '#aa7b3e',
+} as const
+
+export const uiMotion = {
+  fast: 140,
+  standard: 180,
+  slow: 220,
+  easeOut: 'cubic-bezier(.23, 1, .32, 1)',
 } as const

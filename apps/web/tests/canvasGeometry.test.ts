@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyWheelGesture, fitBounds, getSelectionBounds, nodeDensity, nodeDimensions, revealNode, zoomCameraAt } from '../src/features/canvas/canvasGeometry'
+import { applyWheelGesture, cameraSafeViewportBounds, fitBounds, fitBoundsForReading, getSelectionBounds, nodeDensity, nodeDimensions, restorationFocusBounds, restoredCameraIsMeaningful, revealNode, zoomCameraAt } from '../src/features/canvas/canvasGeometry'
 import type { CanvasNode } from '../src/model'
 
 const nodes: CanvasNode[] = [
@@ -10,6 +10,25 @@ const nodes: CanvasNode[] = [
 describe('canvas geometry', () => {
   it('derives persistent selection bounds from selected ids', () => expect(getSelectionBounds(nodes, ['a', 'b'])).toEqual({ x: 10, y: 20, width: 270, height: 170 }))
   it('fits content with padding and zoom clamp', () => expect(fitBounds({ x: 10, y: 20, width: 270, height: 170 }, 1000, 700).zoom).toBeGreaterThan(.38))
+  it('keeps explicit overview fitting while restoring invalid cameras at a readable floor', () => {
+    const bounds = { x: 0, y: 0, width: 4200, height: 2400 }
+    expect(fitBounds(bounds, 1200, 800).zoom).toBeLessThan(.26)
+    expect(fitBoundsForReading(bounds, 1200, 800).zoom).toBe(.58)
+  })
+  it('rejects a camera that technically sees content but renders every node as a thumbnail', () => {
+    expect(restoredCameraIsMeaningful({ x: 400, y: 200, zoom: .25 }, nodes, 1200, 800)).toBe(false)
+    expect(restoredCameraIsMeaningful({ x: 400, y: 200, zoom: 1 }, nodes, 1200, 800)).toBe(true)
+  })
+  it('restores to the densest content neighborhood instead of the empty center between islands', () => {
+    const scattered = [
+      { x: 0, y: 0, width: 260, height: 190 },
+      { x: 340, y: 40, width: 260, height: 190 },
+      { x: 140, y: 330, width: 260, height: 190 },
+      { x: 3200, y: 0, width: 260, height: 190 },
+      { x: 3540, y: 40, width: 260, height: 190 },
+    ]
+    expect(restorationFocusBounds(scattered)).toEqual({ x: 0, y: 0, width: 600, height: 520 })
+  })
   it('uses explicit density modes and keeps overview compact', () => {
     expect(nodeDensity({ ...nodes[0], displayMode: 'expanded' }, 'full')).toBe('expanded')
     expect(nodeDensity({ ...nodes[0], displayMode: 'expanded' }, 'overview')).toBe('compact')
@@ -39,9 +58,13 @@ describe('canvas geometry', () => {
     expect(precision.zoom).toBeGreaterThan(camera.zoom)
     expect(precision.zoom).toBeLessThan(normal.zoom)
   })
-  it('clamps zoom to the 25 percent overview floor', () => {
+  it('projects the minimap camera rectangle from the unobstructed shell safe area', () => {
+    expect(cameraSafeViewportBounds({ x: 100, y: 50, zoom: .5 }, 1200, 800, { left: 60, right: 40, top: 50, bottom: 150 }))
+      .toEqual({ x: -80, y: 0, width: 2200, height: 1200 })
+  })
+  it('clamps zoom to the 2 percent overview floor', () => {
     const next = applyWheelGesture({ x: 0, y: 0, zoom: .02 }, { deltaX: 0, deltaY: 1000, zoom: true, anchorX: 400, anchorY: 300 })
-    expect(next.zoom).toBe(.25)
+    expect(next.zoom).toBe(.02)
   })
   it('steps or resets around an explicit viewport anchor', () => {
     const next = zoomCameraAt({ x: 100, y: 50, zoom: 1 }, 1.05, 500, 350)

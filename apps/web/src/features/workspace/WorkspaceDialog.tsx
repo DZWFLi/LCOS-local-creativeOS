@@ -1,6 +1,7 @@
 import { useEffect, useId, useState } from 'react'
 import { X } from 'lucide-react'
 import type { Camera, Workspace } from '../../model'
+import { dismissFromBackdrop } from '../ui/dismissibleLayer'
 
 interface Props {
   mode: 'create' | 'edit'
@@ -28,7 +29,7 @@ export function WorkspaceDialog({ mode, workspace, currentCamera: _currentCamera
     onSave({ label: trimmed })
   }
 
-  return <div className="editor-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onCancel() }}>
+  return <div className="editor-backdrop" role="presentation" onPointerDown={(event) => dismissFromBackdrop(event, onCancel)}>
     <form className="entity-editor lcos-workspace-editor" role="dialog" aria-modal="true" aria-labelledby={titleId} onSubmit={submit}>
       <header>
         <div><span>工作空间</span><h2 id={titleId}>{mode === 'create' ? '新建工作空间' : '重命名工作空间'}</h2></div>

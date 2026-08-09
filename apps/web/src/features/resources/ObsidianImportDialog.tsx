@@ -1,6 +1,7 @@
 import type { ObsidianVaultScanV1 } from '@local-creative-os/contracts'
 import { BookOpen, CheckSquare, Search, Square, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
+import { dismissFromBackdrop } from '../ui/dismissibleLayer'
 
 export function ObsidianImportDialog({ scan, busy, error, onClose, onImport }: {
   readonly scan: ObsidianVaultScanV1 | null
@@ -40,8 +41,8 @@ export function ObsidianImportDialog({ scan, busy, error, onClose, onImport }: {
     return next
   })
 
-  return <div className="modal-backdrop"><section className="obsidian-import-dialog" role="dialog" aria-label="导入 Obsidian 笔记" data-testid="obsidian-import-dialog">
-    <header><div><BookOpen size={18} /><div><h2>{scan.vaultName}</h2><p>只读扫描 · {scan.noteCount} 篇 Markdown</p></div></div><button type="button" className="icon-button pressable" aria-label="关闭" onClick={onClose}><X size={16} /></button></header>
+  return <div className="modal-backdrop" onPointerDown={(event) => dismissFromBackdrop(event, onClose, busy)}><section className="obsidian-import-dialog" role="dialog" aria-label="导入 Obsidian 笔记" data-testid="obsidian-import-dialog">
+    <header><div><BookOpen size={18} /><div><h2>{scan.vaultName}</h2><p>只读扫描 · {scan.noteCount} 篇 Markdown</p></div></div><button type="button" className="dialog-close-action pressable" aria-label="关闭 Obsidian 导入" onClick={onClose}><X size={16} /><span>关闭</span></button></header>
     <div className="obsidian-search"><Search size={14} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索标题、路径或标签" /></div>
     <div className="obsidian-selection-bar"><button type="button" className="pressable" onClick={toggleVisible}>{allVisibleSelected ? <CheckSquare size={14} /> : <Square size={14} />}{allVisibleSelected ? '取消当前结果' : '选择当前结果'}</button><span>已选择 {selected.size} 篇，导入后会复制进项目，不修改 Vault。</span></div>
     <div className="obsidian-note-list">

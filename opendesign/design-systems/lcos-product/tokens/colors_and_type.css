@@ -1,0 +1,75 @@
+:root {
+  /* Raw palette */
+  --lcos-raw-ink-900: #1c1b22;
+  --lcos-raw-ink-700: #55535f;
+  --lcos-raw-ink-600: #696673;
+  --lcos-raw-ink-500: #777381;
+  --lcos-raw-ink-400: #8e8b98;
+  --lcos-raw-ink-300: #aaa7b3;
+  --lcos-raw-ground-100: #f1f0f7;
+  --lcos-raw-ground-200: #e9e8f2;
+  --lcos-raw-surface-0: #ffffff;
+  --lcos-raw-surface-50: #fbfbfd;
+  --lcos-raw-purple-500: #8b5cf6;
+  --lcos-raw-blue-500: #3b82f6;
+  --lcos-raw-cyan-400: #22d3ee;
+  --lcos-raw-teal-600: #0f8c82;
+  --lcos-raw-amber-600: #b87532;
+  --lcos-raw-green-600: #4d8f73;
+  --lcos-raw-red-600: #b85852;
+
+  /* Typography */
+  --lcos-font-ui: Inter, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --lcos-font-mono: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  --lcos-type-title: 600 13px/1.25 var(--lcos-font-ui);
+  --lcos-type-body: 450 12px/1.45 var(--lcos-font-ui);
+  --lcos-type-control: 560 11px/1.2 var(--lcos-font-ui);
+  --lcos-type-caption: 500 10px/1.3 var(--lcos-font-ui);
+  --lcos-type-micro: 650 8px/1 var(--lcos-font-mono);
+
+  /* Semantic color */
+  --lcos-color-app: var(--lcos-raw-ground-100);
+  --lcos-color-canvas: #f4f3f8;
+  --lcos-color-surface: rgba(255, 255, 255, .82);
+  --lcos-color-surface-strong: rgba(255, 255, 255, .96);
+  --lcos-color-surface-recessed: rgba(233, 232, 242, .68);
+  --lcos-color-text: var(--lcos-raw-ink-900);
+  --lcos-color-text-soft: var(--lcos-raw-ink-700);
+  /* Small product labels must remain readable on both white and canvas ground. */
+  --lcos-color-text-muted: var(--lcos-raw-ink-600);
+  --lcos-color-text-faint: var(--lcos-raw-ink-500);
+  --lcos-color-border-subtle: rgba(28, 27, 34, .075);
+  --lcos-color-border: rgba(28, 27, 34, .13);
+  --lcos-color-accent: var(--lcos-raw-purple-500);
+  --lcos-color-focus: #6758d8;
+  --lcos-color-source: #6687b8;
+  --lcos-color-working: #496fae;
+  --lcos-color-generated: #7556c9;
+  --lcos-color-context: #4d9084;
+  --lcos-color-process: #6f7d89;
+  --lcos-color-decision: #aa7b3e;
+  --lcos-color-success: var(--lcos-raw-green-600);
+  --lcos-color-warning: var(--lcos-raw-amber-600);
+  --lcos-color-danger: var(--lcos-raw-red-600);
+
+  /* Geometry */
+  --lcos-space-1: 4px;
+  --lcos-space-2: 8px;
+  --lcos-space-3: 12px;
+  --lcos-space-4: 16px;
+  --lcos-space-5: 24px;
+  --lcos-radius-control: 8px;
+  --lcos-radius-row: 10px;
+  --lcos-radius-object: 12px;
+  --lcos-radius-panel: 16px;
+  --lcos-radius-sheet: 20px;
+  --lcos-shadow-object: 0 1px 2px rgba(28, 27, 34, .04), 0 10px 24px -16px rgba(28, 27, 34, .30);
+  --lcos-shadow-panel: 0 2px 8px rgba(39, 34, 59, .06), 0 24px 58px rgba(39, 34, 59, .14);
+
+  /* Motion */
+  --lcos-motion-fast: 140ms;
+  --lcos-motion-standard: 180ms;
+  --lcos-motion-slow: 220ms;
+  --lcos-ease-out: cubic-bezier(.23, 1, .32, 1);
+  --lcos-ease-standard: cubic-bezier(.2, .8, .2, 1);
+}

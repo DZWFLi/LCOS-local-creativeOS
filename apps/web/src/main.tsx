@@ -6,6 +6,8 @@ import './surface.css'
 import './porcelain-studio.css'
 import './vnext.css'
 import './reconstruction.css'
+import '../../../opendesign/design-systems/lcos-product/tokens/colors_and_type.css'
+import './product-interface.css'
 
 const diagnosticsRoute = import.meta.env.DEV && window.location.pathname === '/__diagnostics'
 

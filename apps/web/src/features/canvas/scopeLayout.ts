@@ -16,6 +16,35 @@ interface LayoutOptions {
   respectLocked?: boolean
 }
 
+function gapBetween(a: CanvasNode, b: CanvasNode): number {
+  const dx = Math.max(0, Math.max(a.x, b.x) - Math.min(a.x + a.width, b.x + b.width))
+  const dy = Math.max(0, Math.max(a.y, b.y) - Math.min(a.y + a.height, b.y + b.height))
+  return Math.hypot(dx, dy)
+}
+
+function primaryComponent(nodes: CanvasNode[], neighborhoodGap: number): Set<string> {
+  const visited = new Set<number>()
+  let best: number[] = []
+  for (let seed = 0; seed < nodes.length; seed += 1) {
+    if (visited.has(seed)) continue
+    const component: number[] = []
+    const queue = [seed]
+    visited.add(seed)
+    while (queue.length) {
+      const current = queue.shift()
+      if (current === undefined) break
+      component.push(current)
+      for (let candidate = 0; candidate < nodes.length; candidate += 1) {
+        if (visited.has(candidate) || gapBetween(nodes[current], nodes[candidate]) > neighborhoodGap) continue
+        visited.add(candidate)
+        queue.push(candidate)
+      }
+    }
+    if (component.length > best.length) best = component
+  }
+  return new Set(best.map((index) => nodes[index].id))
+}
+
 function overlaps(a: { x: number; y: number; width: number; height: number }, b: { x: number; y: number; width: number; height: number }, gap = 26): boolean {
   return !(a.x + a.width + gap <= b.x || b.x + b.width + gap <= a.x || a.y + a.height + gap <= b.y || b.y + b.height + gap <= a.y)
 }
@@ -65,6 +94,40 @@ export function proposeScopeLayout(nodes: CanvasNode[], scopeId: string, options
       })
   }
 
+  return result
+}
+
+/**
+ * 只把脱离主内容岛的对象归拢到主岛旁边。主岛与固定对象保持原位，调用方
+ * 必须先展示 preview，再由用户确认写入坐标。
+ */
+export function proposeIslandRecoveryLayout(
+  nodes: CanvasNode[],
+  scopeId: string,
+  options: LayoutOptions = { respectLocked: true },
+  neighborhoodGap = 720,
+): LayoutPreviewItem[] {
+  const scopeNodes = nodes.filter((node) => (node.scopeId ?? 'scope-root') === scopeId)
+  if (scopeNodes.length < 2) return []
+  const primaryIds = primaryComponent(scopeNodes, neighborhoodGap)
+  const primary = scopeNodes.filter((node) => primaryIds.has(node.id))
+  const outliers = scopeNodes.filter((node) => !primaryIds.has(node.id) && (options.respectLocked === false || !node.positionLocked))
+  if (!outliers.length) return []
+
+  const right = Math.max(...primary.map((node) => node.x + node.width))
+  const top = Math.min(...primary.map((node) => node.y))
+  const occupied = scopeNodes
+    .filter((node) => primaryIds.has(node.id) || node.positionLocked)
+    .map((node) => ({ x: node.x, y: node.y, width: node.width, height: node.height }))
+  const result: LayoutPreviewItem[] = []
+  let cursorY = top
+
+  for (const node of outliers.toSorted((a, b) => a.y - b.y || a.x - b.x || a.title.localeCompare(b.title))) {
+    const next = nextFreePosition(node, { x: right + 72, y: cursorY }, occupied, false)
+    occupied.push({ ...next, width: node.width, height: node.height })
+    result.push({ id: node.id, ...next })
+    cursorY = next.y + node.height + 34
+  }
   return result
 }
 

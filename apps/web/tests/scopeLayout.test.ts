@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { fixtureNodes } from './qa-fixtures/fixtures'
-import { applyScopeLayout, proposeScopeLayout } from '../src/features/canvas/scopeLayout'
+import { applyScopeLayout, proposeIslandRecoveryLayout, proposeScopeLayout } from '../src/features/canvas/scopeLayout'
 
 describe('v0.6 Canvas Scope layout', () => {
   it('only proposes positions for nodes in the active scope', () => {
@@ -30,5 +30,24 @@ describe('fixed layout anchors', () => {
     const preview = proposeScopeLayout(locked, 'scope-reference')
     expect(preview.some((item) => item.id === 'locked-elements')).toBe(false)
     expect(preview.some((item) => item.id === 'ref-view-1')).toBe(true)
+  })
+})
+
+describe('isolated node recovery preview', () => {
+  const node = (id: string, x: number, y: number, positionLocked = false) => ({
+    ...fixtureNodes[0]!, id, title: id, x, y, scopeId: 'scope-islands', positionLocked,
+  })
+
+  it('previews only outliers and leaves the primary content island untouched', () => {
+    const nodes = [node('main-a', 100, 100), node('main-b', 430, 120), node('main-c', 230, 430), node('lost', 8_000, 6_000)]
+    const preview = proposeIslandRecoveryLayout(nodes, 'scope-islands')
+    expect(preview.map((item) => item.id)).toEqual(['lost'])
+    expect(preview[0].x).toBeLessThan(1_500)
+    expect(preview[0].y).toBeLessThan(1_500)
+  })
+
+  it('does not move a fixed outlier', () => {
+    const nodes = [node('main-a', 100, 100), node('main-b', 430, 120), node('locked-lost', 8_000, 6_000, true)]
+    expect(proposeIslandRecoveryLayout(nodes, 'scope-islands')).toEqual([])
   })
 })

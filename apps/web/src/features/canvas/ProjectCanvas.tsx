@@ -57,7 +57,7 @@ interface Props {
 type DragCandidate = { id: string; startX: number; startY: number; offsetX: number; offsetY: number; group: Array<{ id: string; dx: number; dy: number }>; originals: Array<{ id: string; x: number; y: number }> }
 type ResizeCandidate = { id: string; startX: number; startY: number; width: number; height: number; moved: boolean }
 type WorkspaceDragCandidate = { workspaceId: string; startX: number; startY: number; members: Array<{ id: string; x: number; y: number }>; moved: boolean; frameBounds?: { x: number; y: number; width: number; height: number }; currentBounds?: { x: number; y: number; width: number; height: number } }
-type FrameResizeCandidate = { workspaceId: string; startX: number; startY: number; bounds: { x: number; y: number; width: number; height: number }; moved: boolean }
+type FrameResizeCandidate = { workspaceId: string; startX: number; startY: number; originalBounds: { x: number; y: number; width: number; height: number }; bounds: { x: number; y: number; width: number; height: number }; moved: boolean }
 type EdgeReconnectCandidate = { edgeId: string; endpoint: 'from' | 'to'; fixedId: string }
 
 function additiveSelection(event: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean }): boolean {
@@ -81,6 +81,8 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
   const wheelZoom = useRef<{ deltaY: number; anchorX: number; anchorY: number; precision: boolean } | null>(null)
   const suppressClick = useRef<string | null>(null)
   const lastNodePress = useRef<{ id: string; time: number; x: number; y: number } | null>(null)
+  const doublePressCandidate = useRef<string | null>(null)
+  const selectionCollapseCandidate = useRef<string | null>(null)
   const link = useRef<{ from: string } | null>(null)
   const linkPointerId = useRef<number | null>(null)
   const linkTarget = useRef<string | null>(null)
@@ -96,7 +98,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
   const dropStageAnchor = useRef<'left' | 'bottom' | null>(null)
   const [dropGhost, setDropGhost] = useState<{ x: number; y: number; count: number } | null>(null)
   const dropHoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const marquee = useRef<{ startX: number; startY: number; currentX: number; currentY: number } | null>(null)
+  const marquee = useRef<{ startX: number; startY: number; currentX: number; currentY: number; pointerId: number; moved: boolean } | null>(null)
   const [marqueeRect, setMarqueeRect] = useState<{ left: number; top: number; width: number; height: number } | null>(null)
   const [createMenu, setCreateMenu] = useState<{ from: string; x: number; y: number; screenX: number; screenY: number } | null>(null)
   const toWorld = (clientX: number, clientY: number, rect: DOMRect) => ({ x: (clientX - rect.left - camera.x) / camera.zoom, y: (clientY - rect.top - camera.y) / camera.zoom })
@@ -131,6 +133,16 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
   } as CanvasNode))
   const selectedBounds = useMemo(() => selectedIds.length ? getSelectionBounds(nodes, selectedIds) : null, [nodes, selectedIds])
   const selectionBounds = selectedIds.length > 1 ? selectedBounds : null
+  const overlayWidth = canvasRef.current?.clientWidth ?? 1440
+  const overlayHeight = canvasRef.current?.clientHeight ?? 900
+  const selectionToolbarPosition = selectionBounds ? {
+    left: Math.max(12, Math.min(Math.max(12, overlayWidth - 190), camera.x + selectionBounds.x * camera.zoom)),
+    top: Math.max(12, Math.min(Math.max(12, overlayHeight - 46), camera.y + selectionBounds.y * camera.zoom - 40)),
+  } : null
+  const selectionComposerPosition = selectedBounds ? {
+    left: Math.max(12, Math.min(Math.max(12, overlayWidth - Math.min(430, overlayWidth - 24)), camera.x + selectedBounds.x * camera.zoom)),
+    top: Math.max(12, Math.min(Math.max(12, overlayHeight - 128), camera.y + (selectedBounds.y + selectedBounds.height) * camera.zoom + 12)),
+  } : null
   const pendingZone = useMemo(() => getPendingZoneBounds(nodes), [nodes])
   const zoomBand = camera.zoom < .35 ? '20' : camera.zoom < .6 ? '35' : camera.zoom < .9 ? '60' : '90'
   const returnGroups = useMemo(() => {
@@ -199,6 +211,8 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
     linkStart.current = null
     linkMoved.current = false
     lastNodePress.current = null
+    doublePressCandidate.current = null
+    selectionCollapseCandidate.current = null
     suppressClick.current = null
     setPanning(false)
     setDraggingId(null)
@@ -228,9 +242,11 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
   const autoPanBounds = (rect: DOMRect) => {
     const dock = document.querySelector<HTMLElement>('[data-testid="workspace-dock"]')?.getBoundingClientRect()
     const rail = document.querySelector<HTMLElement>('[data-testid="work-rail"]')?.getBoundingClientRect()
+    const dockOccludesLeft = Boolean(dock && dock.left <= rect.left + 1 && dock.right > rect.left)
+    const railOccludesRight = Boolean(rail && rail.right >= rect.right - 1 && rail.left < rect.right)
     return {
-      left: Math.max(rect.left, dock ? dock.right + 10 : rect.left),
-      right: Math.min(rect.right, rail ? rail.left - 10 : rect.right),
+      left: dockOccludesLeft && dock ? Math.min(rect.right, dock.right + 10) : rect.left,
+      right: railOccludesRight && rail ? Math.max(rect.left, rail.left - 10) : rect.right,
       top: rect.top,
       bottom: rect.bottom,
     }
@@ -302,11 +318,14 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
   }
   const connect = (from: string, to: string) => {
     if (from === to) return
+    const existing = edges.find((edge) => edge.from === from && edge.to === to)
+    if (existing) {
+      setSelectedEdgeId(existing.id)
+      return
+    }
     const nextId = `edge-${Date.now()}`
     setSelectedEdgeId(nextId)
-    setEdges((current) => current.some((edge) => edge.from === from && edge.to === to)
-      ? current
-      : [...current, { id: nextId, from, to, kind: 'reference' }])
+    setEdges((current) => [...current, { id: nextId, from, to, kind: 'reference' }])
   }
   const relationTargetAt = (clientX: number, clientY: number) => {
     const element = document.elementFromPoint(clientX, clientY)?.closest<HTMLElement>('[data-relation-target], [data-node-id]')
@@ -320,7 +339,6 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
     linkMoved.current = false
     setLinkPoint(point)
     linkPointerId.current = event.pointerId
-    try { canvasRef.current?.setPointerCapture(event.pointerId) } catch { /* synthetic or already released */ }
   }
   const beginEdgeReconnect = (edge: CanvasEdge, endpoint: 'from' | 'to', event: React.PointerEvent<SVGCircleElement>) => {
     event.preventDefault(); event.stopPropagation()
@@ -334,7 +352,6 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
     setSelectedEdgeId(edge.id)
     setLinkPoint(currentEndpoint ? { x: endpoint === 'from' ? currentEndpoint.x + currentEndpoint.width : currentEndpoint.x, y: currentEndpoint.y + currentEndpoint.height / 2 } : null)
     linkPointerId.current = event.pointerId
-    try { canvasRef.current?.setPointerCapture(event.pointerId) } catch { /* browser owns capture */ }
   }
   const finishPresentationInteraction = (kind: 'node-move' | 'node-resize' | 'workspace-group-move') => {
     onPresentationInteractionChange?.(false)
@@ -356,7 +373,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
     setNodes((current) => current.map((node) => { const original = originals.get(node.id); return original ? { ...node, x: original.x, y: original.y } : node }))
   }
 
-  const finishPointer = (event: React.PointerEvent<HTMLDivElement>) => {
+  const finishPointer = (event: React.PointerEvent<HTMLDivElement>, cancelled = false) => {
     if (locked) {
       event.preventDefault()
       event.stopPropagation()
@@ -370,6 +387,52 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
     const resizedId = resizeCandidate.current?.moved ? resizeCandidate.current.id : undefined
     const draggedWorkspace = workspaceDrag.current?.moved ? workspaceDrag.current.workspaceId : undefined
     const resizedFrame = frameResize.current?.moved ? frameResize.current : undefined
+    if (cancelled) {
+      if (dragFrame.current !== null) cancelAnimationFrame(dragFrame.current)
+      dragFrame.current = null
+      restoreDraggedOriginals(draggedCandidate)
+      if (resizeCandidate.current) {
+        const original = resizeCandidate.current
+        setNodes((current) => current.map((node) => node.id === original.id ? { ...node, width: original.width, height: original.height } : node))
+      }
+      if (workspaceDrag.current) {
+        const originals = new Map(workspaceDrag.current.members.map((member) => [member.id, member]))
+        setNodes((current) => current.map((node) => { const original = originals.get(node.id); return original ? { ...node, x: original.x, y: original.y } : node }))
+      }
+      if (frameResize.current) onFrameBoundsChange?.(frameResize.current.workspaceId, frameResize.current.originalBounds)
+      if (dragCandidate.current || resizeCandidate.current || workspaceDrag.current || frameResize.current) onPresentationInteractionChange?.(false)
+      if (dropHoverTimer.current !== null) clearTimeout(dropHoverTimer.current)
+      dropHoverTimer.current = null
+      pan.current = null
+      dragCandidate.current = null
+      resizeCandidate.current = null
+      workspaceDrag.current = null
+      frameResize.current = null
+      dragPoint.current = null
+      dragging.current = false
+      marquee.current = null
+      link.current = null
+      edgeReconnect.current = null
+      linkTarget.current = null
+      linkStart.current = null
+      linkMoved.current = false
+      linkPointerId.current = null
+      lastNodePress.current = null
+      doublePressCandidate.current = null
+      selectionCollapseCandidate.current = null
+      stopAutoPan()
+      setPanning(false)
+      setDraggingId(null)
+      setResizingId(null)
+      setDraggingWorkspaceId(null)
+      setDropGutter(null)
+      setDropGhost(null)
+      dropStageAnchor.current = null
+      setMarqueeRect(null)
+      setLinkPoint(null)
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
+      return
+    }
     if (dragFrame.current !== null) {
       cancelAnimationFrame(dragFrame.current)
       dragFrame.current = null
@@ -383,6 +446,16 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
       })
     } else if (stagedDropAnchor && wasDragging && draggedCandidate) {
       restoreDraggedOriginals(draggedCandidate)
+    }
+    if (!wasDragging && draggedId && doublePressCandidate.current === draggedId) {
+      suppressClick.current = draggedId
+      doublePressCandidate.current = null
+      selectionCollapseCandidate.current = null
+      lastNodePress.current = null
+      onDoubleClick(draggedId)
+    } else if (!wasDragging && draggedId && selectionCollapseCandidate.current === draggedId) {
+      onSelect(draggedId, false)
+      selectionCollapseCandidate.current = null
     }
     if (wasDragging && draggedId) suppressClick.current = draggedId
     if (resizedId) finishPresentationInteraction('node-resize')
@@ -442,16 +515,19 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
       const box = marquee.current
       const rect = event.currentTarget.getBoundingClientRect()
       const left = Math.min(box.startX, box.currentX), right = Math.max(box.startX, box.currentX), top = Math.min(box.startY, box.currentY), bottom = Math.max(box.startY, box.currentY)
-      const ids = nodes.filter((node) => {
-        const x = rect.left + camera.x + node.x * camera.zoom
-        const y = rect.top + camera.y + node.y * camera.zoom
-        const w = node.width * camera.zoom
-        const h = node.height * camera.zoom
-        return x < right && x + w > left && y < bottom && y + h > top
-      }).map((node) => node.id)
-      onMarqueeSelect(ids, additiveSelection(event))
+      if (box.moved) {
+        const ids = nodes.filter((node) => {
+          const x = rect.left + camera.x + node.x * camera.zoom
+          const y = rect.top + camera.y + node.y * camera.zoom
+          const w = node.width * camera.zoom
+          const h = node.height * camera.zoom
+          return x < right && x + w > left && y < bottom && y + h > top
+        }).map((node) => node.id)
+        onMarqueeSelect(ids, additiveSelection(event))
+      }
       marquee.current = null
       setMarqueeRect(null)
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
       return
     }
     if (edgeReconnect.current) {
@@ -490,7 +566,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
   }
 
-  return <div ref={canvasRef} data-testid="canvas" data-node-count={nodes.length} data-edge-count={edges.length} data-locked={locked || undefined} data-camera-x={camera.x} data-camera-y={camera.y} data-camera-zoom={camera.zoom} aria-busy={locked || undefined} className={`canvas lod-${lod} zoom-band-${zoomBand} ${selectedId ? 'has-focus' : ''} ${panning ? 'panning' : ''} ${locked ? 'is-locked' : ''}`} style={{ '--canvas-zoom': String(camera.zoom) } as React.CSSProperties} onPointerDown={(event) => {
+  return <div ref={canvasRef} data-testid="canvas" tabIndex={-1} data-node-count={nodes.length} data-edge-count={edges.length} data-locked={locked || undefined} data-camera-x={camera.x} data-camera-y={camera.y} data-camera-zoom={camera.zoom} aria-busy={locked || undefined} className={`canvas lod-${lod} zoom-band-${zoomBand} ${selectedId ? 'has-focus' : ''} ${panning ? 'panning' : ''} ${locked ? 'is-locked' : ''}`} style={{ '--canvas-zoom': String(camera.zoom) } as React.CSSProperties} onPointerDown={(event) => {
     if (locked) { event.preventDefault(); event.stopPropagation(); return }
     if (event.button === 1) {
       event.preventDefault()
@@ -501,6 +577,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
     }
     const target = event.target as HTMLElement
     const blankCanvas = !target.closest('[data-node-id], [data-workspace-frame], button, .edge, .edge-control')
+    if (blankCanvas) event.currentTarget.focus({ preventScroll: true })
     if (createMenu && !target.closest('.anchor-create-menu')) setCreateMenu(null)
     if (event.button === 0 && blankCanvas && spaceHeld) {
       event.preventDefault()
@@ -513,8 +590,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
     if (event.button === 0 && blankCanvas) {
       onSelectEdge(null)
       if (!additiveSelection(event)) onClearSelection()
-      marquee.current = { startX: event.clientX, startY: event.clientY, currentX: event.clientX, currentY: event.clientY }
-      setMarqueeRect({ left: event.clientX, top: event.clientY, width: 0, height: 0 })
+      marquee.current = { startX: event.clientX, startY: event.clientY, currentX: event.clientX, currentY: event.clientY, pointerId: event.pointerId, moved: false }
     }
   }} onPointerMove={(event) => {
     if (locked) { event.preventDefault(); event.stopPropagation(); return }
@@ -542,10 +618,10 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
       const dx = (event.clientX - item.startX) / camera.zoom
       const dy = (event.clientY - item.startY) / camera.zoom
       item.bounds = {
-        x: item.bounds.x,
-        y: item.bounds.y,
-        width: Math.max(220, item.bounds.width + dx),
-        height: Math.max(140, item.bounds.height + dy),
+        x: item.originalBounds.x,
+        y: item.originalBounds.y,
+        width: Math.max(220, item.originalBounds.width + dx),
+        height: Math.max(140, item.originalBounds.height + dy),
       }
       onFrameBoundsChange?.(item.workspaceId, { ...item.bounds })
       return
@@ -558,13 +634,23 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
       marquee.current.currentX = event.clientX
       marquee.current.currentY = event.clientY
       const box = marquee.current
-      setMarqueeRect({ left: Math.min(box.startX, box.currentX), top: Math.min(box.startY, box.currentY), width: Math.abs(box.currentX - box.startX), height: Math.abs(box.currentY - box.startY) })
+      const moved = Math.hypot(box.currentX - box.startX, box.currentY - box.startY)
+      if (!box.moved && moved > 4) {
+        box.moved = true
+        try { event.currentTarget.setPointerCapture(box.pointerId) } catch { /* pointer may already be released */ }
+      }
+      if (box.moved) setMarqueeRect({ left: Math.min(box.startX, box.currentX), top: Math.min(box.startY, box.currentY), width: Math.abs(box.currentX - box.startX), height: Math.abs(box.currentY - box.startY) })
     }
     const candidate = dragCandidate.current
     if (candidate) {
       const moved = Math.hypot(event.clientX - candidate.startX, event.clientY - candidate.startY)
       if (!dragging.current && moved > 4) {
         dragging.current = true
+        // 一旦越过拖拽阈值，本次按下就不能继续参与双击识别。
+        // 否则“拖一下 → 松手 → 立刻单击”会被误判为第二次按下并打开 Workbench。
+        lastNodePress.current = null
+        doublePressCandidate.current = null
+        selectionCollapseCandidate.current = null
         onPresentationInteractionChange?.(true)
         setDraggingId(candidate.id)
         linkPointerId.current = event.pointerId
@@ -627,11 +713,16 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
       }
     }
     if (link.current || edgeReconnect.current) {
-      if (linkStart.current && Math.hypot(event.clientX - linkStart.current.x, event.clientY - linkStart.current.y) > 4) linkMoved.current = true
+      if (linkStart.current && Math.hypot(event.clientX - linkStart.current.x, event.clientY - linkStart.current.y) > 4) {
+        if (!linkMoved.current && linkPointerId.current !== null) {
+          try { event.currentTarget.setPointerCapture(linkPointerId.current) } catch { /* pointer may already be released */ }
+        }
+        linkMoved.current = true
+      }
       setLinkPoint(toWorld(event.clientX, event.clientY, rect))
       linkTarget.current = relationTargetAt(event.clientX, event.clientY)
     }
-  }} onPointerUp={finishPointer} onPointerCancel={finishPointer} onWheel={(event) => {
+  }} onPointerUp={finishPointer} onPointerCancel={(event) => finishPointer(event, true)} onWheel={(event) => {
     event.preventDefault()
     if (locked) { event.stopPropagation(); return }
     const rect = event.currentTarget.getBoundingClientRect()
@@ -643,10 +734,14 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
       wheelPan.current = { x: wheelPan.current.x + event.deltaX * unit, y: wheelPan.current.y + event.deltaY * unit }
     }
     scheduleWheel()
-  }} onDragOver={(event) => event.preventDefault()} onDrop={(event) => {
+  }} onDragOver={(event) => {
+    if (event.dataTransfer.types.includes('Files')) event.preventDefault()
+  }} onDrop={(event) => {
+    const files = [...event.dataTransfer.files]
+    if (files.length === 0) return
     event.preventDefault()
     const point = toWorld(event.clientX, event.clientY, event.currentTarget.getBoundingClientRect())
-    onFilesDropped([...event.dataTransfer.files], point.x, point.y)
+    onFilesDropped(files, point.x, point.y)
   }}>
     <div data-testid="canvas-world" className="canvas-world" style={{ transform: `translate3d(${camera.x}px, ${camera.y}px, 0) scale(${camera.zoom})` }}>
       {workspaceFrames.map((frame) => <div key={frame.workspaceId} data-testid={`workspace-frame-${frame.workspaceId}`} data-workspace-frame={frame.workspaceId} data-member-count={frame.memberViewIds.length} className={`workspace-frame ${frame.active ? 'active' : ''} ${draggingWorkspaceId === frame.workspaceId ? 'dragging' : ''}`} style={{ left: frame.bounds.x, top: frame.bounds.y, width: frame.bounds.width, height: frame.bounds.height }}>
@@ -668,7 +763,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
         <button data-testid={`workspace-frame-resize-${frame.workspaceId}`} className="workspace-frame-resize" type="button" aria-label={`调整 ${frame.label} 框体大小`} title="拖动调整框体范围（不影响成员位置）" onPointerDown={(event) => {
           if (locked || event.button !== 0) return
           event.preventDefault(); event.stopPropagation()
-          frameResize.current = { workspaceId: frame.workspaceId, startX: event.clientX, startY: event.clientY, bounds: frame.bounds, moved: false }
+          frameResize.current = { workspaceId: frame.workspaceId, startX: event.clientX, startY: event.clientY, originalBounds: { ...frame.bounds }, bounds: { ...frame.bounds }, moved: false }
           onPresentationInteractionChange?.(true)
           try { canvasRef.current?.setPointerCapture(event.pointerId) } catch { /* browser owns capture */ }
         }}><span /></button>
@@ -687,30 +782,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
         {link.current && linkPoint && relationById.get(link.current.from) && <TemporaryEdge from={relationById.get(link.current.from)!} to={linkPoint} />}
         {edgeReconnect.current && linkPoint && relationById.get(edgeReconnect.current.fixedId) && <ReconnectTemporaryEdge fixed={relationById.get(edgeReconnect.current.fixedId)!} moving={linkPoint} endpoint={edgeReconnect.current.endpoint} />}
       </svg>
-      {selectionBounds && <div data-testid="selection-bounds" className="selection-bounds" style={{ left: selectionBounds.x - 10, top: selectionBounds.y - 10, width: selectionBounds.width + 20, height: selectionBounds.height + 20 }}>
-        <div className="selection-toolbar lcos-selection-strip">
-          <button type="button" aria-label="交给 Agent" title="交给 Agent" onClick={(event) => { event.stopPropagation(); onRequestAi() }}><Sparkles size={13} /><span>Agent</span></button>
-          <button type="button" aria-label="创建 Collection" title="创建 Collection" onClick={(event) => { event.stopPropagation(); onCreateScopeFromSelection() }}><FolderTree size={13} /><span>Collection</span></button>
-          {onStageTransfer && <button type="button" aria-label="投送所选" title="投送到其他空间" onClick={(event) => { event.stopPropagation(); onStageTransfer(selectedIds, 'bottom') }}><ArrowDownToLine size={13} /><span>投送</span></button>}
-          <button type="button" aria-label="整理所选" title="整理所选 · Ctrl/Cmd+Shift+L" onClick={(event) => { event.stopPropagation(); onArrangeSelection() }}><LayoutGrid size={13} /><span>整理</span></button>
-          <details className="lcos-selection-more" onPointerDown={(event) => event.stopPropagation()}>
-            <summary aria-label="更多操作" title="更多操作"><Ellipsis size={14}/></summary>
-            <div>
-              <button type="button" onClick={() => onCopySelection()}><Copy size={12}/>复制</button>
-              <button type="button" onClick={() => onDuplicateSelection()}><CopyPlus size={12}/>额外 View</button>
-              <button type="button" className="danger" onClick={() => onDeleteSelection()}><Trash2 size={12}/>删除 View</button>
-            </div>
-          </details>
-        </div>
-      </div>}
-      {selectionComposer && selectedBounds && camera.zoom > .28 && <SelectionComposer
-        nodes={nodes}
-        selectedIds={selectedIds}
-        zoom={camera.zoom}
-        x={selectedBounds.x}
-        y={selectedBounds.y + selectedBounds.height + 18 / Math.max(.24, camera.zoom)}
-        {...selectionComposer}
-      />}
+      {selectionBounds && <div data-testid="selection-bounds" className="selection-bounds" style={{ left: selectionBounds.x - 10, top: selectionBounds.y - 10, width: selectionBounds.width + 20, height: selectionBounds.height + 20 }} />}
       {renderNodes.map((node) => <CanvasCard key={node.id} node={node} density={nodeDensity(node, lod)} zoom={camera.zoom} showDetails={camera.zoom > .2 && lod !== 'overview'} runId={runId} runStatus={runStatus} selected={selectedIds.includes(node.id)} multiSelected={selectedIds.length > 1 && selectedIds.includes(node.id)} pending={pendingId === node.id} dragging={draggingId === node.id} resizing={resizingId === node.id} workspaceMember={Boolean(activeWorkspaceId && workspaceFrames.find((frame) => frame.workspaceId === activeWorkspaceId)?.memberViewIds.includes(node.id))} onDetails={onDetails} onPointerDown={(event) => {
         if (event.button !== 0) return
         event.stopPropagation()
@@ -718,15 +790,6 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
         const previous = lastNodePress.current
         const isDoublePress = Boolean(previous && previous.id === node.id && now - previous.time <= 420 && Math.hypot(event.clientX - previous.x, event.clientY - previous.y) <= 12)
         lastNodePress.current = { id: node.id, time: now, x: event.clientX, y: event.clientY }
-        if (isDoublePress) {
-          suppressClick.current = node.id
-          dragCandidate.current = null
-          resizeCandidate.current = null
-          workspaceDrag.current = null
-          lastNodePress.current = null
-          onDoubleClick(node.id)
-          return
-        }
         if (link.current && link.current.from !== node.id) {
           connect(link.current.from, node.id)
           link.current = null
@@ -736,7 +799,11 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
           setLinkPoint(null)
           return
         }
-        onSelect(node.id, additiveSelection(event))
+        doublePressCandidate.current = isDoublePress ? node.id : null
+        const additive = additiveSelection(event)
+        const preserveMultiSelection = !additive && selectedIds.length > 1 && selectedIds.includes(node.id)
+        selectionCollapseCandidate.current = preserveMultiSelection ? node.id : null
+        if (!preserveMultiSelection) onSelect(node.id, additive)
         const groupIds = selectedIds.includes(node.id) && selectedIds.length > 1 ? selectedIds : [node.id]
         dragCandidate.current = { id: node.id, startX: event.clientX, startY: event.clientY, offsetX: (event.clientX - event.currentTarget.getBoundingClientRect().left) / camera.zoom, offsetY: (event.clientY - event.currentTarget.getBoundingClientRect().top) / camera.zoom, group: groupIds.map((id) => { const member = nodes.find((item) => item.id === id)!; return { id, dx: member.x - node.x, dy: member.y - node.y } }), originals: groupIds.map((id) => { const member = nodes.find((item) => item.id === id)!; return { id, x: member.x, y: member.y } }) }
       }} onClick={() => {
@@ -751,6 +818,28 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
       }} onLinkStart={(event) => beginRelation(node.id, event, { x: node.x + node.width, y: node.y + node.height / 2 })} />)}
       {lod !== 'full' && <div className="lod-badge">{nodes.length} 个节点 · {lod === 'overview' ? '总览聚合' : '视区降密度'}</div>}
     </div>
+    {selectionToolbarPosition && <div data-testid="selection-toolbar" className="selection-toolbar lcos-selection-strip" style={selectionToolbarPosition} onPointerDown={(event) => event.stopPropagation()}>
+      <button type="button" aria-label="交给 Agent" title="交给 Agent" onClick={(event) => { event.stopPropagation(); onRequestAi() }}><Sparkles size={15} /><span>Agent</span></button>
+      <button type="button" aria-label="创建 Collection" title="创建 Collection" onClick={(event) => { event.stopPropagation(); onCreateScopeFromSelection() }}><FolderTree size={15} /><span>Collection</span></button>
+      {onStageTransfer && <button type="button" aria-label="投送所选" title="投送到其他空间" onClick={(event) => { event.stopPropagation(); onStageTransfer(selectedIds, 'bottom') }}><ArrowDownToLine size={15} /><span>投送</span></button>}
+      <button type="button" aria-label="整理所选" title="整理所选 · Ctrl/Cmd+Shift+L" onClick={(event) => { event.stopPropagation(); onArrangeSelection() }}><LayoutGrid size={15} /><span>整理</span></button>
+      <details className="lcos-selection-more" onPointerDown={(event) => event.stopPropagation()}>
+        <summary aria-label="更多操作" title="更多操作"><Ellipsis size={15}/></summary>
+        <div>
+          <button type="button" onClick={() => onCopySelection()}><Copy size={12}/>复制</button>
+          <button type="button" onClick={() => onDuplicateSelection()}><CopyPlus size={12}/>额外 View</button>
+          <button type="button" className="danger" onClick={() => onDeleteSelection()}><Trash2 size={12}/>删除 View</button>
+        </div>
+      </details>
+    </div>}
+    {selectionComposer && selectionComposerPosition && <SelectionComposer
+      nodes={nodes}
+      selectedIds={selectedIds}
+      zoom={camera.zoom}
+      x={selectionComposerPosition.left}
+      y={selectionComposerPosition.top}
+      {...selectionComposer}
+    />}
     {createMenu && <div data-testid="anchor-create-menu" className="anchor-create-menu" style={{ left: createMenu.screenX, top: createMenu.screenY }} onPointerDown={(event) => event.stopPropagation()}><span>在此创建并连接</span><button data-testid="anchor-create-note" onClick={() => { onCreateNodeFromAnchor('note', createMenu.x, createMenu.y, createMenu.from); setCreateMenu(null) }}>文本</button><button data-testid="anchor-create-context" onClick={() => { onCreateNodeFromAnchor('context', createMenu.x, createMenu.y, createMenu.from); setCreateMenu(null) }}>内容集合</button><button className="cancel" onClick={() => setCreateMenu(null)}>取消</button></div>}
     {marqueeRect && (() => { const rect = canvasRef.current?.getBoundingClientRect(); return <div data-testid="selection-marquee" className="marquee" style={{ left: marqueeRect.left - (rect?.left ?? 0), top: marqueeRect.top - (rect?.top ?? 0), width: marqueeRect.width, height: marqueeRect.height }} /> })()}
   </div>
@@ -794,7 +883,7 @@ function CanvasCard({ node, density, zoom, showDetails, runId, runStatus, select
 }) {
   const visualFamily = nodeVisualFamily(node)
   const revisionStack = (node.revisionCount ?? 0) > 1
-  return <div data-node-id={node.id} data-node-kind={node.kind} data-node-visual-family={visualFamily} data-node-current={node.current || undefined} data-node-draft={node.draft || undefined} data-node-historical={node.historical || undefined} data-revision-count={node.revisionCount} data-result-group={node.resultGroupId} data-node-runtime={node.runtimeState} data-run-status={node.runStatus} data-artifact-id={node.artifactId} data-revision-id={node.revisionId} data-file-record-id={node.fileRecordId} data-current-revision={node.followsCurrentRevision || undefined} data-preview-status={node.previewStatus} data-view-of={node.viewOf} data-scope-id={node.scopeId} data-position-locked={node.positionLocked || undefined} data-context-only={node.contextOnly || undefined} data-testid={`canvas-node-${node.id}`} role="button" tabIndex={0} aria-disabled={node.disabled || undefined} className={`canvas-node node-family-${node.kind} visual-family-${visualFamily} density-${density} ${node.kind} ${revisionStack ? 'revision-stack' : ''} ${selected ? 'selected' : ''} ${multiSelected ? 'multi-selected' : ''} ${pending ? 'pending' : ''} ${dragging ? 'dragging' : ''} ${resizing ? 'resizing' : ''} ${workspaceMember ? 'workspace-active-member' : ''} ${node.error ? 'error' : ''} ${node.disabled ? 'disabled' : ''} ${node.positionLocked ? 'position-locked' : ''}`} style={{ left: node.x, top: node.y, width: node.width, height: node.height, '--node-ui-scale': String(1 / Math.max(.2, zoom)), '--canvas-zoom': String(zoom) } as React.CSSProperties} onPointerDown={(event) => { if (!node.disabled) onPointerDown(event) }} onClick={(event) => { event.stopPropagation(); if (!node.disabled) onClick(additiveSelection(event)) }}>
+  return <div data-node-id={node.id} data-node-kind={node.kind} data-node-visual-family={visualFamily} data-node-current={node.current || undefined} data-node-draft={node.draft || undefined} data-node-historical={node.historical || undefined} data-revision-count={node.revisionCount} data-result-group={node.resultGroupId} data-node-runtime={node.runtimeState} data-run-status={node.runStatus} data-artifact-id={node.artifactId} data-revision-id={node.revisionId} data-file-record-id={node.fileRecordId} data-current-revision={node.followsCurrentRevision || undefined} data-preview-status={node.previewStatus} data-view-of={node.viewOf} data-scope-id={node.scopeId} data-position-locked={node.positionLocked || undefined} data-context-only={node.contextOnly || undefined} data-testid={`canvas-node-${node.id}`} role="button" tabIndex={0} aria-disabled={node.disabled || undefined} className={`canvas-node node-family-${node.kind} visual-family-${visualFamily} density-${density} ${node.kind} ${revisionStack ? 'revision-stack' : ''} ${selected ? 'selected' : ''} ${multiSelected ? 'multi-selected' : ''} ${pending ? 'pending' : ''} ${dragging ? 'dragging' : ''} ${resizing ? 'resizing' : ''} ${workspaceMember ? 'workspace-active-member' : ''} ${node.error ? 'error' : ''} ${node.disabled ? 'disabled' : ''} ${node.positionLocked ? 'position-locked' : ''}`} style={{ left: node.x, top: node.y, width: node.width, height: node.height, '--node-ui-scale': String(1 / Math.max(.2, zoom)), '--canvas-zoom': String(zoom) } as React.CSSProperties} onDragStart={(event) => event.preventDefault()} onPointerDown={(event) => { if (!node.disabled) onPointerDown(event) }} onClick={(event) => { event.stopPropagation(); if (!node.disabled) onClick(additiveSelection(event)) }}>
     <button data-testid={`anchor-in-${node.id}`} className="anchor anchor-in" aria-label={`连接到 ${node.title}`} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()} />
     <button data-testid={`anchor-out-${node.id}`} className="anchor anchor-out" aria-label={`从 ${node.title} 建立连接`} onPointerDown={onLinkStart} onClick={(event) => event.stopPropagation()} />
     {selected && !multiSelected && <button data-testid={`resize-${node.id}`} className="resize-handle" aria-label={`调整 ${node.title} 大小`} title="拖动调整卡片大小" onPointerDown={onResizeStart} onClick={(event) => event.stopPropagation()} />}

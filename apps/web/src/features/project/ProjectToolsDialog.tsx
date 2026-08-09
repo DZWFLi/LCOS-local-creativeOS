@@ -3,6 +3,7 @@ import { Archive, Download, FolderOpen, Link2Off, Search, X } from 'lucide-react
 import type { ProviderSessionBindingV1 } from '@local-creative-os/contracts'
 import type { ProjectPackage } from '../../model'
 import type { LocalCoreClient } from '../../runtime/localCoreClient'
+import { dismissFromBackdrop } from '../ui/dismissibleLayer'
 
 interface SearchResult {
   readonly id: string
@@ -13,6 +14,7 @@ interface SearchResult {
 
 interface Props {
   open: boolean
+  searchOnly?: boolean
   project: ProjectPackage
   projects: readonly ProjectPackage[]
   client: LocalCoreClient
@@ -37,12 +39,17 @@ export function ProjectToolsDialog(props: Props) {
     setError(null)
     setQuery('')
     setResults([])
+    if (props.searchOnly) {
+      setSession(null)
+      setBusy(null)
+      return
+    }
     setBusy('session')
     void props.client.getProviderSession(props.project.id, 'codex').then((call) => {
       if (call.result.ok) setSession(call.result.value)
       else setError(call.result.error.message)
     }).finally(() => setBusy((current) => current === 'session' ? null : current))
-  }, [props.client, props.open, props.project.id])
+  }, [props.client, props.open, props.project.id, props.searchOnly])
 
   const sessionLabel = useMemo(() => {
     if (session === null) return '尚未建立项目会话'
@@ -115,9 +122,9 @@ export function ProjectToolsDialog(props: Props) {
     setBusy(null)
   }
 
-  return <div className="project-tools-backdrop" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) props.onClose() }}>
-    <section className="project-tools-dialog" role="dialog" aria-modal="true" aria-label="项目工具" data-testid="project-tools-dialog">
-      <header><div><small>项目工具</small><h2>{props.project.label}</h2></div><button className="icon-button pressable" aria-label="关闭" onClick={props.onClose}><X size={15} /></button></header>
+  return <div className="project-tools-backdrop" role="presentation" onPointerDown={(event) => dismissFromBackdrop(event, props.onClose, busy !== null)}>
+    <section className={`project-tools-dialog${props.searchOnly ? ' search-only' : ''}`} role="dialog" aria-modal="true" aria-label={props.searchOnly ? '搜索画布内容' : '项目工具'} data-testid="project-tools-dialog">
+      <header><div><small>{props.searchOnly ? '画布搜索' : '项目工具'}</small><h2>{props.project.label}</h2></div><button className="dialog-close-action pressable" aria-label={props.searchOnly ? '关闭画布搜索' : '关闭项目工具'} title="关闭" onClick={props.onClose}><X size={15} /><span>关闭</span></button></header>
       <div className="project-tools-body">
         <section>
           <h3>查找画布内容</h3>
@@ -126,7 +133,7 @@ export function ProjectToolsDialog(props: Props) {
           {query.trim() && busy !== 'search' && results.length === 0 && <p className="project-tools-empty">没有找到匹配内容。</p>}
         </section>
 
-        <section>
+        {!props.searchOnly && <section>
           <h3>工程文件</h3>
           <div className="project-tools-grid">
             <button className="pressable" disabled={busy !== null} onClick={() => { void downloadCurrent() }}><Download size={15} /><span><b>导出当前工程</b><small>下载可恢复的 .lcosproj</small></span></button>
@@ -135,12 +142,12 @@ export function ProjectToolsDialog(props: Props) {
           </div>
           <input ref={fileInput} hidden type="file" accept=".lcosproj,application/vnd.local-creative-os.project" onChange={(event) => { const file = event.currentTarget.files?.[0]; if (file) void openProjectFile(file); event.currentTarget.value = '' }} />
           <p className="project-tools-note">默认工程包保存项目结构、版本、决策、章节与钉选消息；完整原始对话和可重建向量不默认打包。</p>
-        </section>
+        </section>}
 
-        <section>
+        {!props.searchOnly && <section>
           <h3>Codex 项目会话</h3>
           <div className="project-session-card"><div><b>{sessionLabel}</b><small>{session ? `${session.externalSessionId.slice(0, 12)}… · ${session.origin === 'manual' ? '手动建立' : '自动建立'} · 最近使用 ${formatTime(session.lastSeenAt)}` : '首次执行时自动建立，无需填写 Session ID。'}</small></div>{session && <button className="quiet pressable" disabled={busy === 'session'} onClick={() => { void clearSession() }}><Link2Off size={13} />开启新会话</button>}</div>
-        </section>
+        </section>}
 
         {error && <div className="project-tools-error"><p>{humanError(error)}</p><button className="quiet pressable" onClick={() => { void navigator.clipboard?.writeText(error) }}>复制诊断信息</button></div>}
       </div>

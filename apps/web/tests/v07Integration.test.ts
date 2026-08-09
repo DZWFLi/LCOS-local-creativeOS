@@ -41,7 +41,8 @@ describe('v0.7.1 lightweight backend-integrated UI', () => {
   it('uses direct node controls instead of opening selection details in the Work Rail', () => {
     expect(canvas).toContain('onCreateScopeFromSelection')
     expect(canvas).toContain('onStageTransfer')
-    expect(canvas).toContain('camera.zoom > .28')
+    expect(canvas).toContain('data-testid="selection-toolbar"')
+    expect(canvas).toContain('selectionComposerPosition')
     expect(nodeVisual).toContain('<CircleHelp')
     expect(scene).toContain('<NodeInfoPopover')
     expect(app).not.toContain('<NodeQuickLook')

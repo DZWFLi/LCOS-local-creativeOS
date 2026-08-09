@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { FolderPlus, MessageSquareText, X } from 'lucide-react'
+import { dismissFromBackdrop } from '../ui/dismissibleLayer'
 
 interface Props {
   open: boolean
@@ -40,26 +41,7 @@ export function CreateContentDialog({ open, leftInset, rightInset, onCancel, onC
       className="canvas-create-layer"
       role="presentation"
       style={{ gridTemplateColumns: `${leftInset}px minmax(0, 1fr) ${rightInset}px` }}
-      onPointerDown={(event) => {
-        if (event.target !== event.currentTarget) return
-        event.preventDefault()
-        event.stopPropagation()
-        event.currentTarget.setPointerCapture(event.pointerId)
-      }}
-      onPointerMove={(event) => {
-        if (!event.currentTarget.hasPointerCapture(event.pointerId)) return
-        event.preventDefault()
-        event.stopPropagation()
-      }}
-      onPointerUp={(event) => {
-        if (!event.currentTarget.hasPointerCapture(event.pointerId)) return
-        event.preventDefault()
-        event.stopPropagation()
-        event.currentTarget.releasePointerCapture(event.pointerId)
-      }}
-      onPointerCancel={(event) => {
-        if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
-      }}
+      onPointerDown={(event) => dismissFromBackdrop(event, onCancel)}
       onWheel={(event) => { event.preventDefault(); event.stopPropagation() }}
     >
       <section

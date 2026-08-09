@@ -1,0 +1,1446 @@
+/* LCOS Product Interface Foundation · Round 2
+   A final, token-driven product layer over compatibility styles. Keep this
+   file focused on the active vNext shell; legacy surfaces remain untouched. */
+
+:root {
+  --lcos-ground: var(--lcos-color-app);
+  --lcos-ground-deep: var(--lcos-raw-ground-200);
+  --lcos-strip: var(--lcos-color-surface-strong);
+  --lcos-surface: var(--lcos-color-surface);
+  --lcos-surface-strong: var(--lcos-color-surface-strong);
+  --lcos-ink: var(--lcos-color-text);
+  --lcos-ink-soft: var(--lcos-color-text-soft);
+  --lcos-ink-faint: var(--lcos-color-text-muted);
+  --lcos-hair: var(--lcos-color-border-subtle);
+  --lcos-hair-strong: var(--lcos-color-border);
+  --lcos-purple: var(--lcos-raw-purple-500);
+  --lcos-blue: var(--lcos-raw-blue-500);
+  --lcos-cyan: var(--lcos-raw-cyan-400);
+  --lcos-shadow: var(--lcos-shadow-object);
+  --lcos-shadow-float: var(--lcos-shadow-panel);
+  --lcos-top-h: 48px;
+  --lcos-rail-w: 56px;
+  --lcos-dock-h: 72px;
+}
+
+.lcos-reconstructed,
+.lcos-reconstructed button,
+.lcos-reconstructed textarea,
+.lcos-reconstructed input,
+.lcos-reconstructed select {
+  font-family: var(--lcos-font-ui);
+}
+
+/* The active shell never suppresses keyboard focus. A solid ring preserves
+   at least 3:1 contrast against both the white controls and cool canvas. */
+.lcos-reconstructed button:focus-visible,
+.lcos-reconstructed select:focus-visible,
+.lcos-reconstructed textarea:focus-visible,
+.lcos-reconstructed input:focus-visible,
+.lcos-reconstructed [role="button"]:focus-visible {
+  outline: 2px solid var(--lcos-color-focus) !important;
+  outline-offset: 2px !important;
+}
+
+.lcos-reconstructed .app-main,
+.lcos-reconstructed .canvas-scene,
+.lcos-reconstructed .vnext-surface-host,
+.lcos-reconstructed .lcos-surface-host {
+  background-color: var(--lcos-color-canvas) !important;
+  background-image:
+    radial-gradient(circle at 68% 10%, rgba(139, 92, 246, .035), transparent 28%),
+    radial-gradient(circle at 1px 1px, rgba(73, 67, 93, .095) .7px, transparent .75px) !important;
+  background-size: auto, 20px 20px !important;
+}
+
+/* Project identity is readable without turning the strip into a toolbar wall. */
+.lcos-reconstructed .vnext-project-strip {
+  gap: 12px !important;
+  padding-inline: 10px 12px !important;
+}
+
+.lcos-reconstructed .vnext-project-identity {
+  gap: 8px;
+}
+
+.lcos-reconstructed .vnext-brand-lockup {
+  min-width: 70px !important;
+  width: auto !important;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 9px !important;
+  color: var(--lcos-color-text) !important;
+  font: var(--lcos-type-control);
+  letter-spacing: .015em;
+}
+
+.lcos-reconstructed .vnext-brand-lockup svg {
+  color: var(--lcos-color-accent);
+  stroke-width: 1.8;
+}
+
+.lcos-reconstructed .vnext-project-name {
+  min-width: 0 !important;
+  height: 32px !important;
+  display: inline-flex !important;
+  align-items: baseline;
+  gap: 8px;
+  padding: 0 7px !important;
+}
+
+.lcos-reconstructed .vnext-project-name strong {
+  max-width: min(28vw, 320px);
+  font-size: 13px;
+  font-weight: 630;
+}
+
+.lcos-reconstructed .vnext-project-name span {
+  font-size: 10px;
+  color: var(--lcos-color-text-muted);
+}
+
+.lcos-reconstructed .vnext-project-state {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 0;
+  padding-left: 11px;
+  border-left: 1px solid var(--lcos-color-border-subtle);
+}
+
+.lcos-reconstructed .vnext-save-copy {
+  color: var(--lcos-color-text-muted);
+  font: var(--lcos-type-caption);
+  white-space: nowrap;
+}
+
+.lcos-reconstructed .vnext-project-actions {
+  gap: 4px;
+}
+
+.lcos-reconstructed .vnext-project-actions > button {
+  min-width: 32px;
+  width: 32px;
+  height: 32px;
+}
+
+.lcos-reconstructed .vnext-project-actions .vnext-agent-entry,
+.lcos-reconstructed .vnext-project-actions .vnext-pending-entry {
+  width: auto !important;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 10px !important;
+  font: var(--lcos-type-control);
+}
+
+.lcos-reconstructed .vnext-agent-entry {
+  color: #5f4aa9 !important;
+  background: rgba(139, 92, 246, .075) !important;
+  border: 1px solid rgba(139, 92, 246, .09) !important;
+}
+
+.lcos-reconstructed .vnext-pending-entry {
+  color: var(--lcos-color-text-soft) !important;
+  background: rgba(28, 27, 34, .035) !important;
+  border: 1px solid var(--lcos-color-border-subtle) !important;
+}
+
+.lcos-reconstructed .vnext-pending-entry.has-items {
+  color: #9a632a !important;
+  background: rgba(184, 117, 50, .085) !important;
+  border-color: rgba(184, 117, 50, .10) !important;
+}
+
+/* Narrow spatial rail: strong current-position signal, quiet inactive views. */
+.lcos-reconstructed .vnext-workspace-rail.lcos-workspace-rail {
+  padding: 10px 7px 8px !important;
+  background: rgba(251, 251, 253, .76) !important;
+}
+
+.lcos-reconstructed .vnext-rail-button,
+.lcos-reconstructed .vnext-workspace-mini {
+  width: 42px !important;
+  height: 42px !important;
+  min-width: 42px !important;
+  border-radius: 12px !important;
+}
+
+.lcos-reconstructed .vnext-workspace-mini.active::before,
+.lcos-reconstructed .vnext-rail-button.active::before {
+  content: "";
+  position: absolute;
+  left: -7px;
+  top: 11px;
+  width: 2px;
+  height: 20px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--lcos-purple), var(--lcos-blue), var(--lcos-cyan));
+}
+
+.lcos-reconstructed .vnext-mini-map {
+  width: 30px !important;
+  height: 30px !important;
+  border-radius: 8px;
+}
+
+.lcos-reconstructed .vnext-workspace-preview.lcos-workspace-preview {
+  left: 50px !important;
+  width: 248px !important;
+  min-height: 74px;
+  grid-template-columns: 84px minmax(0, 1fr) 30px 30px !important;
+  padding: 9px !important;
+  border-radius: var(--lcos-radius-panel) !important;
+}
+
+/* Scope and capability stay independent, but become readable axes. */
+.lcos-reconstructed .vnext-bottom-dock.lcos-bottom-dock {
+  justify-content: flex-start !important;
+  gap: 18px !important;
+  padding: 0 14px 0 calc(var(--lcos-rail-w) + 14px) !important;
+}
+
+.lcos-reconstructed .lcos-scope-axis,
+.lcos-reconstructed .lcos-lens-axis {
+  gap: 6px;
+}
+
+.lcos-reconstructed .lcos-scope-axis {
+  margin-right: 0;
+}
+
+.lcos-reconstructed .lcos-lens-axis {
+  position: static;
+  transform: none;
+  margin-inline: auto;
+}
+
+.lcos-reconstructed .lcos-scope-axis::before,
+.lcos-reconstructed .lcos-lens-axis::before,
+.lcos-reconstructed .lcos-bottom-dock button[data-label]::after {
+  display: none !important;
+}
+
+.lcos-reconstructed .lcos-dock-group-title {
+  margin-right: 3px;
+  color: var(--lcos-color-text-faint);
+  font: var(--lcos-type-micro);
+  letter-spacing: .10em;
+}
+
+.lcos-reconstructed .lcos-bottom-dock button {
+  min-width: 58px;
+  min-height: 48px;
+  gap: 4px;
+  padding: 6px 9px 5px;
+  border-radius: 12px;
+}
+
+.lcos-reconstructed .lcos-bottom-dock button svg {
+  width: 18px;
+  height: 18px;
+}
+
+.lcos-reconstructed .lcos-dock-label {
+  color: inherit;
+  font: var(--lcos-type-caption);
+  white-space: nowrap;
+}
+
+.lcos-reconstructed .lcos-bottom-dock button.active {
+  color: #4d4568;
+  background: rgba(89, 76, 132, .09);
+  border-color: rgba(89, 76, 132, .10);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .75);
+}
+
+.lcos-reconstructed .lcos-projection-switch {
+  margin-left: 10px;
+  padding: 3px;
+  border-radius: 10px;
+}
+
+.lcos-reconstructed .lcos-projection-switch button {
+  min-height: 30px !important;
+  height: 30px !important;
+  min-width: 44px;
+  padding-inline: 11px;
+  font-size: 10px;
+}
+
+/* Content objects are quiet but not visually weightless. */
+.lcos-reconstructed .lcos-type-tag {
+  font: var(--lcos-type-micro);
+  letter-spacing: .10em;
+}
+
+.lcos-reconstructed .lcos-object-caption strong {
+  font-size: 12px;
+  font-weight: 610;
+  letter-spacing: -.01em;
+}
+
+.lcos-reconstructed .lcos-document-sheet,
+.lcos-reconstructed .lcos-feedback-object,
+.lcos-reconstructed .lcos-collection-object,
+.lcos-reconstructed .lcos-run-object,
+.lcos-reconstructed .lcos-decision-object,
+.lcos-reconstructed .lcos-note-object,
+.lcos-reconstructed .lcos-link-object {
+  box-shadow: var(--lcos-shadow-object);
+}
+
+.lcos-reconstructed .canvas-node:hover .lcos-document-sheet,
+.lcos-reconstructed .canvas-node:hover .lcos-feedback-object,
+.lcos-reconstructed .canvas-node:hover .lcos-collection-object,
+.lcos-reconstructed .canvas-node:hover .lcos-run-object,
+.lcos-reconstructed .canvas-node:hover .lcos-decision-object,
+.lcos-reconstructed .canvas-node:hover .lcos-note-object,
+.lcos-reconstructed .canvas-node:hover .lcos-link-object {
+  box-shadow: 0 2px 5px rgba(28, 27, 34, .045), 0 14px 30px -17px rgba(28, 27, 34, .34);
+}
+
+.lcos-reconstructed .lcos-object-state {
+  width: auto;
+  height: 18px;
+  right: 6px;
+  bottom: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(251, 251, 253, .92);
+  box-shadow: 0 0 0 1px var(--lcos-color-border-subtle), 0 2px 7px rgba(28, 27, 34, .06);
+}
+
+.lcos-reconstructed .lcos-object-state > i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--lcos-color-text-muted);
+}
+
+.lcos-reconstructed .lcos-object-state > b {
+  display: none;
+  color: var(--lcos-color-text-soft);
+  font-size: 8.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.lcos-reconstructed .canvas-node:hover .lcos-object-state > b,
+.lcos-reconstructed .canvas-node.selected .lcos-object-state > b,
+.lcos-reconstructed .lcos-object-state.state-draft > b,
+.lcos-reconstructed .lcos-object-state.state-failed > b,
+.lcos-reconstructed .lcos-object-state.state-stale > b {
+  display: block;
+}
+
+.lcos-reconstructed .lcos-object-state.state-current > i { background: var(--lcos-color-success); }
+.lcos-reconstructed .lcos-object-state.state-draft > i { background: var(--lcos-color-generated); }
+.lcos-reconstructed .lcos-object-state.state-failed > i { background: var(--lcos-color-danger); }
+.lcos-reconstructed .lcos-object-state.state-stale > i { background: var(--lcos-color-warning); }
+
+.lcos-reconstructed .canvas-node:focus-visible {
+  outline: 0 !important;
+}
+
+.lcos-reconstructed .canvas-node:focus-visible .lcos-object::after {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border: 2px solid var(--lcos-color-focus);
+  border-radius: calc(var(--lcos-radius-object) + 4px);
+  pointer-events: none;
+}
+
+/* On-demand execution rail keeps status readable without becoming a page. */
+.lcos-reconstructed .work-rail:not(.collapsed) {
+  top: calc(var(--lcos-top-h) + 10px) !important;
+  right: 10px !important;
+  bottom: calc(var(--lcos-dock-h) + 10px) !important;
+  width: min(var(--lcos-runtime-rail-width, 390px), calc(100vw - var(--lcos-rail-w) - 20px)) !important;
+  border-radius: var(--lcos-radius-sheet) !important;
+  box-shadow: var(--lcos-shadow-panel) !important;
+}
+
+.lcos-reconstructed .minimap,
+.lcos-reconstructed .canvas-minimap {
+  right: 14px !important;
+  bottom: calc(var(--lcos-dock-h) + 14px) !important;
+  border-radius: var(--lcos-radius-panel) !important;
+}
+
+/* When the on-demand Agent is open, secondary navigation remains reachable
+   instead of sitting underneath the drawer. */
+.lcos-reconstructed:has(.work-rail:not(.collapsed)) .minimap,
+.lcos-reconstructed:has(.work-rail:not(.collapsed)) .canvas-minimap {
+  right: calc(var(--work-rail-width) + 18px) !important;
+  transform: scale(.82);
+  transform-origin: right bottom;
+}
+
+/* Drop Destination Sheet states the consequence before the destination list. */
+.lcos-reconstructed .vnext-drop-shelf {
+  width: 300px;
+  gap: 10px;
+  padding: 14px;
+  border-radius: var(--lcos-radius-sheet) !important;
+}
+
+.lcos-reconstructed .vnext-drop-shelf:focus-visible {
+  outline: 2px solid var(--lcos-color-focus) !important;
+  outline-offset: 3px !important;
+}
+
+.lcos-reconstructed .vnext-drop-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.lcos-reconstructed .vnext-drop-heading > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.lcos-reconstructed .vnext-drop-heading > div > strong {
+  color: var(--lcos-color-text);
+  font: var(--lcos-type-title);
+}
+
+.lcos-reconstructed .vnext-drop-heading > div > span {
+  color: var(--lcos-color-text-muted);
+  font: var(--lcos-type-caption);
+}
+
+.lcos-reconstructed .vnext-drop-payload {
+  flex: 0 0 42px;
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  position: relative;
+  border: 1px solid rgba(139, 92, 246, .12);
+  border-radius: 13px;
+  color: #6750b3;
+  background: rgba(139, 92, 246, .07);
+}
+
+.lcos-reconstructed .vnext-drop-payload > strong {
+  position: absolute;
+  right: -4px;
+  bottom: -3px;
+  min-width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  padding: 0 5px;
+  border: 2px solid var(--lcos-color-surface-strong);
+  border-radius: 999px;
+  color: #fff;
+  background: var(--lcos-color-accent);
+  font-size: 9px;
+}
+
+.lcos-reconstructed .vnext-drop-verbs {
+  gap: 6px;
+}
+
+.lcos-reconstructed .vnext-drop-verbs button {
+  min-height: 30px;
+  padding-inline: 12px;
+  font-size: 10.5px;
+}
+
+.lcos-reconstructed .vnext-destination-main {
+  height: 38px;
+  padding-inline: 11px;
+}
+
+@media (max-width: 1100px) {
+  :root {
+    --lcos-rail-w: 52px;
+  }
+
+  .lcos-reconstructed .vnext-save-copy,
+  .lcos-reconstructed .vnext-project-name span,
+  .lcos-reconstructed .vnext-brand-lockup {
+    min-width: 38px !important;
+  }
+
+  .lcos-reconstructed .vnext-brand-lockup span,
+  .lcos-reconstructed .lcos-dock-group-title,
+  .lcos-reconstructed .lcos-scope-axis > .lcos-dock-group-title {
+    display: none;
+  }
+
+  .lcos-reconstructed .lcos-bottom-dock button {
+    min-width: 52px;
+    padding-inline: 7px;
+  }
+}
+
+/* Codex in-app Browser: the host sidebar produces a narrow desktop viewport,
+   not a phone. Preserve the spatial canvas and reflow chrome by priority. */
+.lcos-reconstructed[data-layout-density="compact"] .vnext-project-strip,
+.lcos-reconstructed[data-layout-density="constrained"] .vnext-project-strip {
+  gap: 8px !important;
+  padding-inline: 7px 8px !important;
+}
+
+.lcos-reconstructed[data-layout-density="compact"] .vnext-project-name strong,
+.lcos-reconstructed[data-layout-density="constrained"] .vnext-project-name strong {
+  max-width: clamp(112px, 20vw, 170px);
+}
+
+.lcos-reconstructed[data-layout-density="compact"] .vnext-project-state,
+.lcos-reconstructed[data-layout-density="constrained"] .vnext-project-state {
+  padding-left: 6px;
+}
+
+.lcos-reconstructed[data-layout-density="compact"] .vnext-project-actions,
+.lcos-reconstructed[data-layout-density="constrained"] .vnext-project-actions {
+  gap: 2px;
+}
+
+.lcos-reconstructed[data-layout-density="compact"] .vnext-project-actions > button,
+.lcos-reconstructed[data-layout-density="constrained"] .vnext-project-actions > button {
+  width: 30px !important;
+  min-width: 30px;
+  height: 32px;
+}
+
+.lcos-reconstructed[data-layout-density="compact"] .vnext-project-actions .vnext-agent-entry,
+.lcos-reconstructed[data-layout-density="constrained"] .vnext-project-actions .vnext-agent-entry {
+  width: auto !important;
+  padding-inline: 8px !important;
+}
+
+.lcos-reconstructed[data-layout-density="compact"] .vnext-agent-entry span,
+.lcos-reconstructed[data-layout-density="constrained"] .vnext-agent-entry span {
+  display: inline !important;
+}
+
+.lcos-reconstructed[data-layout-density="compact"] .vnext-pending-entry:not(.has-items) span,
+.lcos-reconstructed[data-layout-density="constrained"] .vnext-pending-entry:not(.has-items) span {
+  display: none;
+}
+
+.lcos-reconstructed[data-layout-density="compact"] .vnext-bottom-dock.lcos-bottom-dock,
+.lcos-reconstructed[data-layout-density="constrained"] .vnext-bottom-dock.lcos-bottom-dock {
+  display: grid !important;
+  grid-template-columns: max-content minmax(0, 1fr) max-content;
+  gap: 8px !important;
+  padding-inline: calc(var(--lcos-rail-w) + 7px) 8px !important;
+}
+
+.lcos-reconstructed[data-layout-density="compact"] .lcos-lens-axis,
+.lcos-reconstructed[data-layout-density="constrained"] .lcos-lens-axis {
+  justify-self: center;
+  margin: 0;
+}
+
+.lcos-reconstructed[data-layout-density="constrained"] .lcos-bottom-dock button {
+  min-width: 46px;
+  padding-inline: 5px;
+}
+
+.lcos-reconstructed[data-layout-density="constrained"] .lcos-dock-label {
+  font-size: 9px;
+}
+
+.lcos-reconstructed[data-layout-density="constrained"] .work-rail-composer .composer-footer {
+  display: none;
+}
+
+.lcos-reconstructed[data-layout-density="constrained"] .review-previews {
+  grid-template-columns: 1fr;
+}
+
+/* Sidecar Portrait is a distinct collaboration layout, not a shrunken desktop.
+   It is selected from viewport geometry in React so dragging the Codex/browser
+   divider can move continuously between this vertical split and desktop. */
+.lcos-reconstructed[data-layout-mode="sidecar"] {
+  --lcos-top-h: 84px;
+  --lcos-rail-w: 0px;
+  --lcos-dock-h: 96px;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] > .vnext-project-strip {
+  height: 84px !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: 40px 43px;
+  align-items: center;
+  gap: 0 8px !important;
+  padding: 0 8px !important;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .vnext-project-identity {
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .vnext-brand-lockup {
+  min-width: 34px !important;
+  width: 34px !important;
+  padding: 0 !important;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .vnext-brand-lockup span,
+.lcos-reconstructed[data-layout-mode="sidecar"] .vnext-project-name span,
+.lcos-reconstructed[data-layout-mode="sidecar"] .vnext-save-copy {
+  display: none !important;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .vnext-project-name {
+  flex: 1 1 auto;
+  height: 34px !important;
+  padding-inline: 4px !important;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .vnext-project-name strong {
+  max-width: none;
+  font-size: 12.5px;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .vnext-project-state {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 18px;
+  justify-content: flex-end;
+  padding-left: 7px;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .vnext-project-actions {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  width: 100%;
+  justify-content: space-between;
+  gap: 4px;
+  padding-top: 3px;
+  border-top: 1px solid var(--lcos-color-border-subtle);
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .vnext-project-actions > button {
+  width: 34px !important;
+  min-width: 34px !important;
+  height: 34px;
+}
+
+.app-shell.porcelain-studio-v2.lcos-reconstructed[data-layout-mode="sidecar"] > .scene {
+  top: 0 !important;
+  height: calc(100dvh - 84px) !important;
+}
+
+/* Workspace becomes a horizontal spatial toolbelt so the Canvas receives the
+   complete portrait width. Its data and interaction model are unchanged. */
+.lcos-reconstructed[data-layout-mode="sidecar"] .vnext-workspace-rail.lcos-workspace-rail {
+  left: 8px !important;
+  right: 8px !important;
+  top: 7px !important;
+  bottom: auto !important;
+  width: auto !important;
+  height: 48px;
+  max-height: 48px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 5px;
+  padding: 3px 5px !important;
+  transform: none !important;
+  border-radius: 15px !important;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .lcos-rail-primary,
+.lcos-reconstructed[data-layout-mode="sidecar"] .vnext-workspace-stack,
+.lcos-reconstructed[data-layout-mode="sidecar"] .lcos-rail-footer {
+  min-width: 0;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 4px;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .lcos-rail-primary {
+  width: auto;
+  height: 40px;
+  min-height: 40px;
+  flex: 1 1 auto;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .lcos-rail-footer {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  margin-top: 0;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .vnext-workspace-stack {
+  width: auto;
+  height: 40px;
+  min-height: 40px;
+  flex: 1 1 auto;
+  padding: 1px 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .vnext-workspace-stack::-webkit-scrollbar {
+  display: none;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .vnext-rail-button,
+.lcos-reconstructed[data-layout-mode="sidecar"] .vnext-workspace-mini {
+  width: 38px !important;
+  height: 38px !important;
+  min-width: 38px !important;
+  flex-basis: 38px !important;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .vnext-rail-divider {
+  width: 1px;
+  height: 24px;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .vnext-workspace-mini.active::before,
+.lcos-reconstructed[data-layout-mode="sidecar"] .vnext-rail-button.active::before {
+  left: 9px;
+  top: auto;
+  bottom: -4px;
+  width: 20px;
+  height: 2px;
+  background: linear-gradient(90deg, var(--lcos-purple), var(--lcos-blue), var(--lcos-cyan));
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .vnext-workspace-preview.lcos-workspace-preview {
+  left: 0 !important;
+  right: 0 !important;
+  top: 54px !important;
+  width: auto !important;
+  transform: none !important;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .vnext-surface-host.lcos-surface-host {
+  inset: 56px 0 96px !important;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .minimap,
+.lcos-reconstructed[data-layout-mode="sidecar"] .canvas-minimap {
+  right: 10px !important;
+  bottom: 106px !important;
+  transform: scale(.78);
+  transform-origin: right bottom;
+}
+
+/* The portrait dock is a full-width two-row navigation surface: Scope first,
+   capabilities second. It behaves like app chrome, not a floating desktop bar. */
+.lcos-reconstructed[data-layout-mode="sidecar"] .vnext-bottom-dock.lcos-bottom-dock {
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100% !important;
+  min-height: 96px;
+  height: 96px;
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  grid-template-rows: 46px 46px;
+  gap: 0 !important;
+  padding: 2px 8px !important;
+  transform: none !important;
+  border-width: 1px 0 0 !important;
+  border-radius: 18px 18px 0 0 !important;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .lcos-scope-axis,
+.lcos-reconstructed[data-layout-mode="sidecar"] .lcos-lens-axis {
+  width: 100%;
+  min-width: 0;
+  justify-content: center;
+  gap: clamp(2px, 1.2vw, 7px);
+  margin: 0;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .lcos-scope-axis {
+  padding: 0 0 2px;
+  border-right: 0;
+  border-bottom: 1px solid var(--lcos-color-border-subtle);
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .lcos-bottom-dock button {
+  min-width: clamp(42px, 13vw, 58px);
+  min-height: 40px;
+  height: 40px;
+  padding: 4px 6px;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .lcos-dock-label {
+  font-size: clamp(8.5px, 2vw, 10px);
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .lcos-zoom-controls,
+.lcos-reconstructed[data-layout-mode="sidecar"] .lcos-dock-divider,
+.lcos-reconstructed[data-layout-mode="sidecar"] .lcos-capability-hint {
+  display: none !important;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .lcos-projection-switch {
+  margin-left: 2px;
+  padding: 2px;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .lcos-projection-switch button {
+  min-width: 38px;
+  min-height: 28px !important;
+  height: 28px !important;
+  padding-inline: 7px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lcos-reconstructed *,
+  .lcos-reconstructed *::before,
+  .lcos-reconstructed *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: .001ms !important;
+  }
+}
+
+/* Canvas chrome is functional, not a pair of opaque shelves. Keep every entry,
+   but let the workspace remain visually continuous behind the controls. */
+.lcos-reconstructed .vnext-workspace-rail.lcos-workspace-rail,
+.lcos-reconstructed .vnext-bottom-dock.lcos-bottom-dock {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.lcos-reconstructed .vnext-bottom-dock.lcos-bottom-dock {
+  pointer-events: none;
+}
+
+.lcos-reconstructed .vnext-bottom-dock.lcos-bottom-dock > * {
+  pointer-events: none;
+}
+
+.lcos-reconstructed .vnext-bottom-dock.lcos-bottom-dock button,
+.lcos-reconstructed .vnext-bottom-dock.lcos-bottom-dock summary,
+.lcos-reconstructed .vnext-bottom-dock.lcos-bottom-dock details {
+  pointer-events: auto;
+}
+
+.lcos-reconstructed .lcos-zoom-controls {
+  display: none !important;
+}
+
+.lcos-reconstructed .vnext-surface-host.lcos-surface-host {
+  bottom: 0 !important;
+}
+
+.lcos-reconstructed [data-testid="canvas"]:focus {
+  outline: none;
+}
+
+.lcos-reconstructed .minimap,
+.lcos-reconstructed .canvas-minimap {
+  right: 12px !important;
+  bottom: 12px !important;
+}
+
+/* Multi-selection actions live in screen space: fixed-size icons, no white card. */
+.lcos-reconstructed .selection-toolbar.lcos-selection-strip {
+  position: absolute !important;
+  z-index: 58 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 3px !important;
+  width: auto !important;
+  max-width: calc(100% - 24px) !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  transform: none !important;
+  pointer-events: auto !important;
+}
+
+.lcos-reconstructed .selection-toolbar.lcos-selection-strip > button,
+.lcos-reconstructed .selection-toolbar.lcos-selection-strip > details > summary {
+  position: static !important;
+  width: 32px !important;
+  min-width: 32px !important;
+  height: 32px !important;
+  display: grid !important;
+  place-items: center !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 10px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--lcos-color-text-soft) !important;
+  list-style: none;
+}
+
+.lcos-reconstructed .selection-toolbar.lcos-selection-strip > button:hover,
+.lcos-reconstructed .selection-toolbar.lcos-selection-strip > details > summary:hover {
+  color: var(--lcos-color-text) !important;
+  background: rgba(83, 75, 107, .075) !important;
+}
+
+.lcos-reconstructed .selection-toolbar.lcos-selection-strip > button > span {
+  display: none !important;
+}
+
+.lcos-reconstructed .selection-composer.lcos-nearfield-composer {
+  position: absolute !important;
+  z-index: 59 !important;
+  transform: none !important;
+  transform-origin: initial !important;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .vnext-surface-host.lcos-surface-host {
+  bottom: 0 !important;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .minimap,
+.lcos-reconstructed[data-layout-mode="sidecar"] .canvas-minimap {
+  right: 8px !important;
+  bottom: 8px !important;
+  transform: scale(.72);
+  transform-origin: right bottom;
+}
+
+/* Search/import is a complete portrait workflow, not a desktop popover scaled
+   down. Keep every stage inside the sidecar's safe rectangle and give long
+   content one explicit scroll owner. */
+.lcos-reconstructed .capability-popover > header {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.lcos-reconstructed .capability-search {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 10px;
+}
+
+.lcos-reconstructed .capability-search input {
+  min-width: 0;
+  flex: 1;
+  height: 32px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+}
+
+.lcos-reconstructed .capability-body section {
+  min-width: 0;
+  display: grid;
+  gap: 7px;
+}
+
+.lcos-reconstructed .capability-body h3 {
+  margin: 0;
+}
+
+.lcos-reconstructed .capability-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.lcos-reconstructed .capability-card,
+.lcos-reconstructed .capability-row,
+.lcos-reconstructed .capability-asset {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lcos-reconstructed .capability-card > span,
+.lcos-reconstructed .capability-row > span,
+.lcos-reconstructed .capability-asset > span:last-child {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.lcos-reconstructed .capability-card b,
+.lcos-reconstructed .capability-card small,
+.lcos-reconstructed .capability-row b,
+.lcos-reconstructed .capability-row small,
+.lcos-reconstructed .capability-asset b,
+.lcos-reconstructed .capability-asset small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lcos-reconstructed .capability-list {
+  display: grid;
+  gap: 3px;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .capability-popover {
+  position: fixed !important;
+  z-index: 180 !important;
+  left: 8px !important;
+  right: 8px !important;
+  top: 148px !important;
+  bottom: 104px !important;
+  width: auto !important;
+  max-width: none !important;
+  max-height: none !important;
+  display: grid !important;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  overflow: hidden !important;
+  border-radius: 16px !important;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .capability-body {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .capability-grid {
+  grid-template-columns: 1fr !important;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .capability-card,
+.lcos-reconstructed[data-layout-mode="sidecar"] .capability-row,
+.lcos-reconstructed[data-layout-mode="sidecar"] .capability-asset {
+  width: 100%;
+  min-width: 0;
+  text-align: left;
+}
+
+.lcos-reconstructed .universal-import-panel,
+.lcos-reconstructed .resource-detail-dialog {
+  width: min(680px, calc(100vw - 48px));
+  max-height: min(760px, calc(100dvh - 48px));
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  overflow-y: auto;
+  border: 1px solid var(--lcos-color-border-strong);
+  border-radius: 18px;
+  background: rgba(252, 252, 254, .98);
+  box-shadow: var(--lcos-shadow-float);
+}
+
+.lcos-reconstructed .universal-import-panel > header,
+.lcos-reconstructed .resource-detail-dialog > header,
+.lcos-reconstructed .universal-import-panel > header > div,
+.lcos-reconstructed .resource-detail-dialog > header > div {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 9px;
+}
+
+.lcos-reconstructed .universal-import-panel h2,
+.lcos-reconstructed .resource-detail-dialog h2 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.lcos-reconstructed .import-source-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.lcos-reconstructed .import-source {
+  min-width: 0;
+  min-height: 92px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 5px;
+  padding: 12px 8px;
+  border: 1px solid var(--lcos-color-border-subtle);
+  border-radius: 12px;
+  color: var(--lcos-color-text-soft);
+  background: rgba(255, 255, 255, .62);
+  text-align: center;
+}
+
+.lcos-reconstructed .import-source small {
+  color: var(--lcos-color-text-faint);
+  font-size: 9px;
+  line-height: 1.35;
+}
+
+.lcos-reconstructed .import-note {
+  display: grid;
+  gap: 6px;
+  color: var(--lcos-color-text-soft);
+  font-size: 10px;
+}
+
+.lcos-reconstructed .import-note textarea {
+  width: 100%;
+  min-height: 72px;
+  resize: vertical;
+  padding: 9px 10px;
+  border: 1px solid var(--lcos-color-border-subtle);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .72);
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .modal-backdrop,
+.lcos-reconstructed[data-layout-mode="sidecar"] .project-tools-backdrop,
+.lcos-reconstructed[data-layout-mode="sidecar"] .handoff-backdrop {
+  padding: 8px !important;
+  place-items: stretch !important;
+  overflow: hidden !important;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .universal-import-panel,
+.lcos-reconstructed[data-layout-mode="sidecar"] .resource-detail-dialog,
+.lcos-reconstructed[data-layout-mode="sidecar"] .project-tools-dialog,
+.lcos-reconstructed[data-layout-mode="sidecar"] .link-reference-dialog,
+.lcos-reconstructed[data-layout-mode="sidecar"] .handoff-dialog,
+.lcos-reconstructed[data-layout-mode="sidecar"] .obsidian-import-dialog,
+.lcos-reconstructed[data-layout-mode="sidecar"] .conversation-context-dialog {
+  width: 100% !important;
+  max-width: none !important;
+  height: auto !important;
+  max-height: calc(100dvh - 16px) !important;
+  margin: 0 !important;
+  border-radius: 16px !important;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .universal-import-panel,
+.lcos-reconstructed[data-layout-mode="sidecar"] .resource-detail-dialog,
+.lcos-reconstructed[data-layout-mode="sidecar"] .link-reference-dialog,
+.lcos-reconstructed[data-layout-mode="sidecar"] .handoff-dialog {
+  align-self: center;
+  overflow-y: auto !important;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .import-source-grid,
+.lcos-reconstructed[data-layout-mode="sidecar"] .project-tools-grid,
+.lcos-reconstructed[data-layout-mode="sidecar"] .project-tools-results {
+  grid-template-columns: 1fr !important;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .import-source {
+  min-height: 62px;
+  grid-template-columns: 28px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  place-items: start;
+  align-content: center;
+  column-gap: 9px;
+  text-align: left;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .import-source > svg {
+  grid-row: 1 / 3;
+  align-self: center;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .project-tools-body {
+  max-height: calc(100dvh - 76px) !important;
+  padding: 13px 12px 16px;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .project-tools-dialog.search-only {
+  max-height: min(286px, calc(100dvh - 268px)) !important;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .project-tools-dialog.search-only .project-tools-body {
+  max-height: 222px !important;
+  gap: 7px;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .project-tools-search {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .project-tools-search > button {
+  grid-column: 1 / -1;
+  width: 100%;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .conversation-context-dialog {
+  grid-template-rows: auto auto auto auto minmax(0, 1fr);
+  overflow: hidden !important;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .conversation-toolbar {
+  align-items: stretch;
+  flex-wrap: wrap;
+  overflow-y: auto;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .conversation-search {
+  margin-left: 0;
+  flex: 1 0 100%;
+  min-width: 0;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .conversation-layout {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(72px, 24vh) minmax(0, 1fr);
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .conversation-layout > aside {
+  border-right: 0;
+  border-bottom: 1px solid var(--lcos-color-border-subtle);
+}
+
+.lcos-reconstructed .dialog-close-action {
+  width: auto !important;
+  min-width: 58px !important;
+  height: 30px !important;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 9px !important;
+  border: 1px solid var(--lcos-color-border-subtle) !important;
+  border-radius: 9px !important;
+  color: var(--lcos-color-text-soft) !important;
+  background: rgba(255, 255, 255, .58) !important;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.lcos-reconstructed .dialog-close-action:hover {
+  color: var(--lcos-color-text) !important;
+  background: rgba(83, 75, 107, .07) !important;
+}
+
+/* Sidecar tools stay lightweight. They float over a small part of the Canvas
+   and keep the original icon-led character instead of becoming full sheets. */
+.lcos-reconstructed[data-layout-mode="sidecar"] .capability-popover {
+  left: auto !important;
+  right: 8px !important;
+  top: 148px !important;
+  bottom: auto !important;
+  width: min(308px, calc(100vw - 16px)) !important;
+  max-height: min(430px, calc(100dvh - 268px)) !important;
+  grid-template-rows: auto auto minmax(0, 1fr) !important;
+  border-radius: 14px !important;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .capability-popover > header {
+  padding: 9px 10px 7px;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .capability-popover > header h2 {
+  font-size: 12px;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .capability-search {
+  min-height: 30px;
+  margin: 6px 7px 3px;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .capability-body {
+  padding: 4px 6px 7px;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .capability-body section {
+  padding: 5px 1px 3px;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .capability-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 3px;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .capability-card {
+  min-height: 62px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 4px;
+  padding: 5px 3px;
+  text-align: center;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .capability-card > span {
+  justify-items: center;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .capability-card svg {
+  width: 17px;
+  height: 17px;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .capability-card b {
+  max-width: 82px;
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .capability-card small {
+  display: none;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .capability-row,
+.lcos-reconstructed[data-layout-mode="sidecar"] .capability-asset {
+  min-height: 34px;
+  padding: 5px 6px;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .dialog-close-action {
+  width: 28px !important;
+  min-width: 28px !important;
+  height: 28px !important;
+  padding: 0 !important;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .dialog-close-action > span {
+  display: none;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .modal-backdrop:has(.universal-import-panel) {
+  place-items: start end !important;
+  padding: 148px 8px 104px !important;
+  background: transparent !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .universal-import-panel {
+  width: min(308px, calc(100vw - 16px)) !important;
+  max-height: min(430px, calc(100dvh - 268px)) !important;
+  align-self: start;
+  gap: 7px;
+  padding: 11px;
+  border-radius: 14px !important;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .universal-import-panel .import-hint {
+  margin: 0;
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .universal-import-panel .import-source-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 4px;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .universal-import-panel .import-source {
+  min-height: 66px;
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: auto auto;
+  place-items: center;
+  align-content: center;
+  gap: 4px;
+  padding: 6px 3px;
+  text-align: center;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .universal-import-panel .import-source > svg {
+  grid-row: auto;
+  width: 18px;
+  height: 18px;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .universal-import-panel .import-source b {
+  font-size: 9px;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .universal-import-panel .import-source small {
+  display: none;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .universal-import-panel .import-note {
+  gap: 3px;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .universal-import-panel .import-note textarea {
+  min-height: 42px;
+  max-height: 72px;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .project-tools-backdrop {
+  place-items: start end !important;
+  padding: 148px 8px 104px !important;
+  background: transparent !important;
+  backdrop-filter: none !important;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .project-tools-dialog {
+  width: min(308px, calc(100vw - 16px)) !important;
+  max-height: min(430px, calc(100dvh - 268px)) !important;
+  align-self: start;
+  border-radius: 14px !important;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .project-tools-dialog > header {
+  padding: 10px 11px 8px;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .project-tools-body {
+  max-height: 366px !important;
+  gap: 12px;
+  padding: 10px 11px 12px;
+}
+
+/* Sidecar dock controls sit on individual porcelain micro-plates. This keeps
+   both rows legible over the dotted Canvas without restoring a heavy shelf. */
+.lcos-reconstructed[data-layout-mode="sidecar"] .lcos-scope-axis {
+  padding-bottom: 2px;
+  border-bottom: 0 !important;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .lcos-bottom-dock button {
+  border: 1px solid rgba(77, 72, 96, .075) !important;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, .82), rgba(247, 247, 249, .68)) !important;
+  box-shadow:
+    0 3px 9px rgba(43, 39, 58, .045),
+    inset 0 1px 0 rgba(255, 255, 255, .92) !important;
+  backdrop-filter: blur(8px) saturate(1.04);
+  -webkit-backdrop-filter: blur(8px) saturate(1.04);
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .lcos-bottom-dock button:hover {
+  border-color: rgba(86, 75, 127, .12) !important;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, .94), rgba(245, 244, 249, .82)) !important;
+  box-shadow:
+    0 5px 12px rgba(43, 39, 58, .065),
+    inset 0 1px 0 #fff !important;
+}
+
+.lcos-reconstructed[data-layout-mode="sidecar"] .lcos-bottom-dock button.active {
+  color: #4d4568 !important;
+  border-color: rgba(100, 82, 159, .16) !important;
+  background:
+    radial-gradient(circle at 72% 10%, rgba(255, 255, 255, .98), transparent 34%),
+    linear-gradient(145deg, rgba(255, 255, 255, .96), rgba(236, 233, 246, .84)) !important;
+  box-shadow:
+    0 5px 14px rgba(76, 64, 119, .09),
+    inset 0 1px 0 #fff,
+    inset 0 -1px 0 rgba(82, 68, 128, .045) !important;
+}

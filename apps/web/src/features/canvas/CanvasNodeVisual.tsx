@@ -1,10 +1,8 @@
 import {
   CircleHelp,
-  Clock3,
-  FileStack,
   ImageOff,
-  Sparkles,
 } from 'lucide-react'
+import { memo } from 'react'
 import type { CanvasNode, NodeDisplayMode, RunStatus } from '../../model'
 import { runStatusLabel } from '../../model'
 import {
@@ -45,7 +43,7 @@ export function nodeVisualFamily(node: CanvasNode): NodeVisualFamily {
   return detectFileIdentity(node) === 'image' ? 'reference' : 'document'
 }
 
-export function CanvasNodeVisual(props: Props) {
+export const CanvasNodeVisual = memo(function CanvasNodeVisual(props: Props) {
   const family = nodeVisualFamily(props.node)
   if (family === 'process') return <RunObject {...props} />
   if (family === 'context') return <CollectionObject {...props} />
@@ -53,7 +51,14 @@ export function CanvasNodeVisual(props: Props) {
   if (family === 'feedback') return <FeedbackObject {...props} />
   if (family === 'note') return <NoteObject {...props} />
   return <ContentObject {...props} />
-}
+}, (previous, next) => (
+  previous.node === next.node
+  && previous.density === next.density
+  && previous.runId === next.runId
+  && previous.runStatus === next.runStatus
+  && previous.pending === next.pending
+  && previous.showDetails === next.showDetails
+))
 
 function ContentObject({ node, density, pending, onDetails, showDetails }: Props) {
   const kind = detectFileIdentity(node)
@@ -89,8 +94,8 @@ function DocumentObject({ node, kind, density, pending, onDetails, showDetails }
       <strong>{node.title}</strong>
       {density === 'expanded' && preview && <small>{preview}</small>}
     </div>
-    {(node.pageCount || node.revisionCount) && <div className="lcos-corner-meta">{node.pageCount ? `${node.pageCount}p` : `${node.revisionCount}v`}</div>}
-    {node.revisionCount && node.revisionCount > 1 && <div className="lcos-revision-stack" aria-hidden="true"><i/><i/></div>}
+    {Boolean((node.pageCount ?? 0) > 0 || (node.revisionCount ?? 0) > 0) && <div className="lcos-corner-meta">{(node.pageCount ?? 0) > 0 ? `${node.pageCount}p` : `${node.revisionCount}v`}</div>}
+    {Boolean(node.revisionCount && node.revisionCount > 1) && <div className="lcos-revision-stack" aria-hidden="true"><i/><i/></div>}
     <ObjectState node={node} pending={pending}/>
     <InfoButton show={showDetails} label={`查看 ${node.title} 信息`} onDetails={onDetails}/>
   </div>
@@ -164,7 +169,8 @@ function NoteObject({ node, density, onDetails, showDetails }: Props) {
 function ObjectState({ node, pending }: { node: CanvasNode; pending: boolean }) {
   const state = node.runtimeState === 'failed' ? 'failed' : node.fileAvailability === 'stale' ? 'stale' : pending || node.draft ? 'draft' : node.current ? 'current' : null
   if (!state) return null
-  return <span className={`lcos-object-state state-${state}`} title={state === 'failed' ? '导入失败' : state === 'stale' ? '来源已变化' : state === 'draft' ? 'Draft' : 'Current'} />
+  const label = state === 'failed' ? '导入失败' : state === 'stale' ? '来源已变化' : state === 'draft' ? '待确认草稿' : '当前版本'
+  return <span className={`lcos-object-state state-${state}`} title={label} aria-label={label}><i aria-hidden="true"/><b>{label}</b></span>
 }
 
 function InfoButton({ show, label, onDetails }: { show: boolean; label: string; onDetails: () => void }) {

@@ -104,7 +104,7 @@ export function SelectionComposer(props: Props) {
     props.onResultPolicyChange?.(nextResult)
   }
 
-  return <section className="selection-composer lcos-nearfield-composer" data-testid="selection-composer" style={{ left: props.x, top: props.y, '--selection-composer-scale': String(1 / Math.sqrt(Math.max(.24, props.zoom))) } as CSSProperties} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()}>
+  return <section className="selection-composer lcos-nearfield-composer" data-testid="selection-composer" style={{ left: props.x, top: props.y } as CSSProperties} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()}>
     <div className="lcos-composer-input-row">
       <textarea data-testid="selection-composer-input" value={props.prompt} onChange={(event) => props.onPromptChange(event.target.value)} placeholder={selected.length === 1 ? `对「${selected[0]?.title ?? '当前对象'}」做什么…` : `基于已选 ${selected.length} 项继续…`} onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === 'Enter' && !disabled) { event.preventDefault(); props.onSend() } }}/>
       <button type="button" className="lcos-composer-send" disabled={disabled} onClick={props.onSend} title={providerBlocked ? '本地 Agent 暂不可用' : '发送 · Ctrl/Cmd+Enter'}><ArrowUp size={15}/></button>

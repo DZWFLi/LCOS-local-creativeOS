@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { Command, Play } from 'lucide-react'
 import type { Checkpoint, ContextChangeProposalV1, ContextManifestV0, ObsidianVaultScanV1, RunEvent, RunProposalResult, RunReview, RuntimeProviderStatus, WorkspaceMembership } from '@local-creative-os/contracts'
 import type { ActiveRun, Camera, CanvasNode, CanvasScope, NodeDisplayMode, NodeLayer, PersistedPrototypeState, ProjectPackage, ScopeKind, TargetContextInference, WorkRailPreferences, Workspace } from './model'
@@ -32,9 +32,9 @@ import { buildWorkspaceFrames } from './state/workspaceFrames'
 import { RuntimeBridge, type DataSource, type SaveStatus } from './runtime/runtimeBridge'
 import { selectRuntimeProject } from './runtime/runtimeProjectSelection'
 import { createWorkspaceRecord, duplicateWorkspaceRecord, moveWorkspaceRecord, removeWorkspaceRecord, toggleWorkspaceLayer, updateWorkspaceRecord } from './state/workspaceState'
-import { cameraContentRatio, fitBounds, getSelectionBounds, MIN_RESTORED_CAMERA_CONTENT_RATIO, nodeDimensions, revealNode } from './features/canvas/canvasGeometry'
+import { fitBounds, fitBoundsForReading, getSelectionBounds, MIN_CANVAS_ZOOM, nodeDimensions, restorationFocusBounds, restoredCameraIsMeaningful, revealNode } from './features/canvas/canvasGeometry'
 import { findPendingReturnPosition } from './features/canvas/canvasLayout'
-import { applyScopeLayout, proposeScopeLayout, type LayoutPreviewItem } from './features/canvas/scopeLayout'
+import { applyScopeLayout, proposeIslandRecoveryLayout, proposeScopeLayout, type LayoutPreviewItem } from './features/canvas/scopeLayout'
 import { arrangeSelectedNodes } from './features/canvas/selectionLayout'
 import { ArtifactWorkbench, type WorkbenchFocus } from './features/workbench/ArtifactWorkbench'
 import { canPreviewArtifact } from './features/viewer/artifactViewerRegistry'
@@ -67,6 +67,42 @@ function defaultRailWidth(viewport = typeof window === 'undefined' ? 1440 : wind
   if (viewport >= 1600) return 390
   if (viewport >= 1440) return 350
   return 312
+}
+
+type ShellLayoutDensity = 'comfortable' | 'compact' | 'constrained'
+type ShellLayoutMode = 'desktop' | 'sidecar'
+
+function shellLayoutDensity(viewport: number): ShellLayoutDensity {
+  if (viewport >= 1180) return 'comfortable'
+  if (viewport >= 760) return 'compact'
+  return 'constrained'
+}
+
+function shellLayoutMode(width: number, height: number): ShellLayoutMode {
+  return width <= 960 && width / Math.max(height, 1) < 1.35 ? 'sidecar' : 'desktop'
+}
+
+function shellWorkingCenter(width: number, height: number, mode: ShellLayoutMode, railOpen: boolean, railWidth: number) {
+  if (mode === 'sidecar') {
+    const sceneHeight = Math.max(320, height - 84)
+    const top = 56
+    const bottom = 96
+    return { x: width / 2, y: top + Math.max(80, sceneHeight - top - bottom) / 2 }
+  }
+  const left = 56
+  const right = railOpen ? railWidth + 20 : 0
+  const top = 48
+  const bottom = 72
+  return { x: left + Math.max(160, width - left - right) / 2, y: top + Math.max(160, height - top - bottom) / 2 }
+}
+
+function responsiveRailWidth(viewport: number, compareExpanded: boolean): number {
+  if (viewport < 760) return Math.min(320, Math.max(300, viewport - 420))
+  if (viewport < 960) return Math.min(344, Math.max(320, viewport * .39))
+  if (viewport < 1180) return compareExpanded ? 390 : 360
+  if (compareExpanded) return Math.min(520, Math.max(460, viewport * .34))
+  if (viewport >= 1600) return 390
+  return 370
 }
 
 
@@ -126,7 +162,8 @@ export function App() {
   const [dataSource, setDataSource] = useState<DataSource>('none')
   const [bootMode, setBootMode] = useState<'loading' | 'runtime' | 'offline'>('loading')
   const [workRail, setWorkRail] = useState<WorkRailPreferences>(() => normalizeRailPreferences(initial.workRail))
-  const [dockCollapsed, setDockCollapsed] = useState(true)
+  const [viewportWidth, setViewportWidth] = useState(() => typeof window === 'undefined' ? 1440 : window.innerWidth)
+  const [viewportHeight, setViewportHeight] = useState(() => typeof window === 'undefined' ? 900 : window.innerHeight)
   const [miniMapCollapsed, setMiniMapCollapsed] = useState(false)
   const [globalComposerText, setGlobalComposerText] = useState('')
   const [globalProvider, setGlobalProvider] = useState('auto')
@@ -143,6 +180,8 @@ export function App() {
   const [stagedTransfer, setStagedTransfer] = useState<{ ids: string[]; anchor: DropAnchor } | null>(null)
   const [immersiveNodeId, setImmersiveNodeId] = useState<string | null>(null)
   const [runtimeProviders, setRuntimeProviders] = useState<readonly RuntimeProviderStatus[]>([])
+  const runtimeProvidersRef = useRef(runtimeProviders)
+  runtimeProvidersRef.current = runtimeProviders
   const [runProposal, setRunProposal] = useState<RunProposalResult | null>(null)
   const [, setWorkspaceMemberships] = useState<readonly WorkspaceMembership[]>([])
   const [confirmWorkspaceId, setConfirmWorkspaceId] = useState<string | null>(null)
@@ -164,7 +203,7 @@ export function App() {
   const [linkDialogOpen, setLinkDialogOpen] = useState(false)
   const [importPanelOpen, setImportPanelOpen] = useState(false)
   const [conversationDialogOpen, setConversationDialogOpen] = useState(false)
-  const [projectToolsOpen, setProjectToolsOpen] = useState(false)
+  const [projectToolsMode, setProjectToolsMode] = useState<'search' | 'full' | null>(null)
   const [resourceDetailArtifactId, setResourceDetailArtifactId] = useState<string | null>(null)
   const [obsidianScan, setObsidianScan] = useState<ObsidianVaultScanV1 | null>(null)
   const [obsidianBusy, setObsidianBusy] = useState(false)
@@ -200,8 +239,16 @@ export function App() {
   const draftHydratedKeyRef = useRef<string | null>(null)
   const activeContextHydratedKeyRef = useRef<string | null>(null)
   const activeContextVersionRef = useRef(0)
+  const selectionIntentVersionRef = useRef(0)
+  const selectionContextIntentRef = useRef({ key: '', touched: false })
   const restoredDraftContextIdsRef = useRef<string[]>([])
   const runEventSequenceRef = useRef<number | undefined>(undefined)
+  const workbenchEntryFitRef = useRef<{ scopeId: string; enteredAt: number; nodeKey: string }>({ scopeId: '', enteredAt: 0, nodeKey: '' })
+
+  const selectionContextKey = `${activeProjectId}::${workspaceId ?? '__project_overview__'}`
+  if (selectionContextIntentRef.current.key !== selectionContextKey) {
+    selectionContextIntentRef.current = { key: selectionContextKey, touched: false }
+  }
 
   const activeProject = projects.find((project) => project.id === activeProjectId) ?? projects[0] ?? { id: activeProjectId, label: activeProjectId, localPath: '', updatedAt: '', pendingCount: 0 }
   const activeWorkspace = workspaceId ? workspaces.find((workspace) => workspace.id === workspaceId) ?? null : null
@@ -275,15 +322,18 @@ export function App() {
   }, [baseInference, excludedContextIds, manualInference])
   const pendingNode = activeRun?.pendingArtifactId ? nodes.find((node) => node.id === activeRun.pendingArtifactId) ?? null : null
   const compareExpanded = activeRun?.status === 'review' && Boolean(pendingNode)
-  const effectiveRailWidth = workRail.collapsed ? 48 : compareExpanded ? Math.min(520, Math.max(460, typeof window === 'undefined' ? 480 : window.innerWidth * .34)) : 312
-  const sceneStyle = useMemo(() => ({ '--work-rail-width': `${effectiveRailWidth}px` } as CSSProperties), [effectiveRailWidth])
+  const layoutDensity = shellLayoutDensity(viewportWidth)
+  const layoutMode = shellLayoutMode(viewportWidth, viewportHeight)
+  const effectiveRailWidth = workRail.collapsed ? 48 : responsiveRailWidth(viewportWidth, compareExpanded)
+  const sceneStyle = useMemo(() => ({
+    '--work-rail-width': `${effectiveRailWidth}px`,
+  } as CSSProperties), [effectiveRailWidth])
   const safeInsets = useMemo(() => ({
-    left: dockCollapsed ? 66 : 204,
-    right: 28,
-    top: 58,
-    bottom: miniMapCollapsed ? 72 : 164,
-  }), [dockCollapsed, miniMapCollapsed])
-
+    left: layoutMode === 'sidecar' ? 18 : 76,
+    right: layoutMode === 'sidecar' ? 18 : 28,
+    top: layoutMode === 'sidecar' ? 64 : 24,
+    bottom: layoutMode === 'sidecar' ? 106 : miniMapCollapsed ? 72 : 164,
+  }), [layoutMode, miniMapCollapsed])
   useEffect(() => {
     const preventBrowserZoom = (event: WheelEvent) => {
       if (!event.ctrlKey && !event.metaKey) return
@@ -341,10 +391,10 @@ export function App() {
       if (!revision) return
       setSelectionBaseRevision(revision)
       if (revision.prompt) setSelectionComposerText((current) => current || revision.prompt || '')
-      if (revision.provider && runtimeProviders.some((provider) => provider.provider === revision.provider && provider.availability !== 'offline')) setSelectionProvider(revision.provider)
+      if (revision.provider && runtimeProvidersRef.current.some((provider) => provider.provider === revision.provider && provider.availability !== 'offline')) setSelectionProvider(revision.provider)
     })
     return () => controller.abort()
-  }, [bootMode, runtimeProviders, singleSelectedNode?.artifactId, singleSelectedNode?.id, singleSelectedNode?.revisionId])
+  }, [bootMode, singleSelectedNode?.artifactId, singleSelectedNode?.id, singleSelectedNode?.revisionId])
   useEffect(() => { setRunProposal(null) }, [selectionBaseRevision?.id, selectionComposerText, selectionProvider, selectionCreateAsNewNode])
 
   useEffect(() => {
@@ -354,6 +404,7 @@ export function App() {
     activeContextVersionRef.current = 0
     restoredDraftContextIdsRef.current = []
     const controller = new AbortController()
+    const selectionVersionAtRequest = selectionIntentVersionRef.current
     void bridgeRef.current.client.activeContext(activeProjectId, workspaceId, undefined, controller.signal).then((call) => {
       if (controller.signal.aborted) return
       if (!call.result.ok) {
@@ -366,33 +417,32 @@ export function App() {
       activeContextVersionRef.current = value.version
       setPinnedContextIds(Array.from(new Set([...value.pinnedContextIds, ...restoredDraftContextIdsRef.current])))
       setExcludedContextIds([...value.excludedContextIds])
-      if (value.scopeId === scopeId) setSelectedIds([...value.selectedViewIds])
-      if (value.viewport) {
+      if (value.scopeId === scopeId
+        && selectionIntentVersionRef.current === selectionVersionAtRequest
+        && !selectionContextIntentRef.current.touched) {
+        setSelectedIds([...value.selectedViewIds])
+      }
+      // ActiveContext 的相机属于返回值声明的 Scope。进入 Workbench / Collection
+      // 时仍会查询 Project overview，但绝不能让 root viewport 覆盖新 Scope 相机。
+      if (value.viewport && value.scopeId === scopeId) {
         const candidate = { x: value.viewport.x, y: value.viewport.y, zoom: value.viewport.zoom }
         const contentNodes = (value.nodes ?? []).filter((node) => node.kind !== 'process')
-        const contentRatio = contentNodes.length > 0
-          ? cameraContentRatio(candidate, contentNodes, window.innerWidth, window.innerHeight)
-          : 0
-        if (contentRatio >= MIN_RESTORED_CAMERA_CONTENT_RATIO) {
+        if (restoredCameraIsMeaningful(candidate, contentNodes, window.innerWidth, window.innerHeight)) {
           // 恢复的相机虽然内容占比达标，但顶部可能被 header 遮挡：
           // 内容顶边屏幕位置 < safeInsets.top 时下移相机进入安全区。
           const top = contentNodes.reduce((acc, node) => Math.min(acc, node.y), Number.POSITIVE_INFINITY)
           const screenTop = candidate.y + top * candidate.zoom
           if (Number.isFinite(screenTop) && screenTop < safeInsets.top) {
-            setCamera((current) => ({ ...current, y: current.y + (safeInsets.top - screenTop) }))
+            setCamera({ ...candidate, y: candidate.y + (safeInsets.top - screenTop) })
           } else {
             setCamera(candidate)
           }
         } else if (contentNodes.length > 0) {
           // 恢复的相机已失效（节点全在视口外）：按节点包围盒重新适配，避免打开项目看到空画布。
-          const bounds = contentNodes.reduce((acc, node) => ({
-            left: Math.min(acc.left, node.x),
-            top: Math.min(acc.top, node.y),
-            right: Math.max(acc.right, node.x + node.width),
-            bottom: Math.max(acc.bottom, node.y + node.height),
-          }), { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity })
-          setCamera(fitBounds(
-            { x: bounds.left, y: bounds.top, width: bounds.right - bounds.left, height: bounds.bottom - bounds.top },
+          const bounds = restorationFocusBounds(contentNodes)
+          if (!bounds) return
+          setCamera(fitBoundsForReading(
+            bounds,
             window.innerWidth,
             window.innerHeight,
             74,
@@ -809,14 +859,55 @@ export function App() {
   }, [activeProjectId, applyMembershipProjection, bootMode, syncProcessProjection])
 
   useEffect(() => {
+    let frame = 0
     const resize = () => {
-      if (window.innerWidth < 1160) setWorkRail((current) => ({ ...current, collapsed: true }))
-      else setWorkRail((current) => current.collapsed ? current : { ...current, width: defaultRailWidth(window.innerWidth) })
-      if (window.innerWidth <= 1366) setDockCollapsed(true)
+      window.cancelAnimationFrame(frame)
+      frame = window.requestAnimationFrame(() => {
+        const nextWidth = window.innerWidth
+        const nextHeight = window.innerHeight
+        setViewportWidth((current) => current === nextWidth ? current : nextWidth)
+        setViewportHeight((current) => current === nextHeight ? current : nextHeight)
+      })
     }
-    window.addEventListener('resize', resize)
-    return () => window.removeEventListener('resize', resize)
+    window.addEventListener('resize', resize, { passive: true })
+    resize()
+    return () => {
+      window.cancelAnimationFrame(frame)
+      window.removeEventListener('resize', resize)
+    }
   }, [])
+
+  const shellCenterRef = useRef<ReturnType<typeof shellWorkingCenter> | null>(null)
+  const sidecarContentBoundsRef = useRef(restorationFocusBounds(scopeNodes.filter((node) => node.kind !== 'process')))
+  sidecarContentBoundsRef.current = restorationFocusBounds(scopeNodes.filter((node) => node.kind !== 'process'))
+  const previousLayoutModeRef = useRef<ShellLayoutMode | null>(null)
+  useLayoutEffect(() => {
+    const next = shellWorkingCenter(viewportWidth, viewportHeight, layoutMode, layoutMode === 'desktop' && !workRail.collapsed, effectiveRailWidth)
+    const previous = shellCenterRef.current
+    shellCenterRef.current = next
+    if (!previous) return
+    const deltaX = next.x - previous.x
+    const deltaY = next.y - previous.y
+    if (Math.abs(deltaX) < .5 && Math.abs(deltaY) < .5) return
+    // Resize only moves the camera projection so the current world focus stays
+    // inside the newly available Sidecar/Desktop working region. Node anchors
+    // and Project Truth never change.
+    setCamera((current) => ({ ...current, x: current.x + deltaX, y: current.y + deltaY }))
+  }, [effectiveRailWidth, layoutMode, viewportHeight, viewportWidth, workRail.collapsed])
+
+  useLayoutEffect(() => {
+    const previousMode = previousLayoutModeRef.current
+    previousLayoutModeRef.current = layoutMode
+    const bounds = sidecarContentBoundsRef.current
+    if (layoutMode !== 'sidecar' || previousMode === 'sidecar' || !bounds) return
+    setCamera(fitBoundsForReading(
+      bounds,
+      viewportWidth,
+      Math.max(120, viewportHeight - 84 - 56 - 96),
+      24,
+      { left: 18, right: 18, top: 12, bottom: 12 },
+    ))
+  }, [layoutMode, viewportHeight, viewportWidth])
 
   useEffect(() => {
     if (presentationInteractionRef.current) return
@@ -869,22 +960,18 @@ export function App() {
     }
     const contentNodes = scopeNodes.filter((node) => node.kind !== 'process')
     const visibleCandidates = contentNodes.length > 0 ? contentNodes : scopeNodes
-    if (cameraContentRatio(cameraRef.current, visibleCandidates, window.innerWidth, window.innerHeight) >= MIN_RESTORED_CAMERA_CONTENT_RATIO) return
+    if (restoredCameraIsMeaningful(cameraRef.current, visibleCandidates, window.innerWidth, window.innerHeight)) return
     if (now - cameraHealWindowRef.current[cameraValidityKey] > 8_000) return
-    const bounds = visibleCandidates.reduce((acc, node) => ({
-      left: Math.min(acc.left, node.x),
-      top: Math.min(acc.top, node.y),
-      right: Math.max(acc.right, node.x + node.width),
-      bottom: Math.max(acc.bottom, node.y + node.height),
-    }), { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity })
-    setCamera(fitBounds(
-      { x: bounds.left, y: bounds.top, width: bounds.right - bounds.left, height: bounds.bottom - bounds.top },
+    const bounds = restorationFocusBounds(visibleCandidates)
+    if (!bounds) return
+    setCamera(fitBoundsForReading(
+      bounds,
       window.innerWidth,
       window.innerHeight,
       74,
       safeInsets,
     ))
-  }, [bootMode, cameraValidityKey, safeInsets, scopeNodes, camera, setCamera])
+  }, [bootMode, cameraValidityKey, safeInsets, scopeNodes, setCamera])
 
   useEffect(() => {
     const timer = window.setTimeout(() => saveProjectNavigationState(activeProjectId, camera), 3000)
@@ -932,6 +1019,8 @@ export function App() {
   }, [activeRun?.id, activeRun?.inputResolved, activeRun?.pendingArtifactId, activeRun?.status])
 
   const clearSelection = useCallback(() => {
+    selectionContextIntentRef.current.touched = true
+    selectionIntentVersionRef.current += 1
     setSelectedIds([])
     setSelectedEdgeId(null)
     setNodeInfoId(null)
@@ -1066,6 +1155,8 @@ export function App() {
     return call.result.value
   }, [])
   const selectNode = useCallback((id: string, additive = false) => {
+    selectionContextIntentRef.current.touched = true
+    selectionIntentVersionRef.current += 1
     setSelectedEdgeId(null)
     // 第一次单击只选中；再次单击已选中的节点才唤起提示词浮层，
     // 避免拖拽/多选时被 nearfield composer 干扰。
@@ -1074,6 +1165,8 @@ export function App() {
     if (!additive) setNodeInfoId(null)
   }, [selectedIds])
   const selectMarquee = useCallback((ids: string[], additive: boolean) => {
+    selectionContextIntentRef.current.touched = true
+    selectionIntentVersionRef.current += 1
     setSelectedEdgeId(null)
     setSelectedIds((current) => additive ? Array.from(new Set([...current, ...ids])) : ids)
     setNodeInfoId(null)
@@ -1133,6 +1226,20 @@ export function App() {
   }, [activeScope.parentScopeId, enterScope])
 
   const workbenchScopeId = `workbench-${activeProjectId}`
+  // Workbench 的 Run projection 会在切换 Scope 后补入。入口的第一次 fit 可能只
+  // 看见 Artifact；在短暂 hydration 窗口内按稳定 ID 集合再 fit 一次，之后不再
+  // 抢用户相机。
+  useEffect(() => {
+    const entry = workbenchEntryFitRef.current
+    if (scopeId !== workbenchScopeId || entry.scopeId !== scopeId) return
+    if (Date.now() - entry.enteredAt > 1_800 || scopeNodes.length === 0) return
+    const nodeKey = scopeNodes.map((node) => node.id).sort().join('|')
+    if (nodeKey === entry.nodeKey) return
+    entry.nodeKey = nodeKey
+    const bounds = getSelectionBounds(scopeNodes, scopeNodes.map((node) => node.id))
+    if (!bounds) return
+    setCamera(fitBoundsForReading(bounds, window.innerWidth, window.innerHeight, 64, safeInsets))
+  }, [safeInsets, scopeId, scopeNodes, setCamera, workbenchScopeId])
   const workbenchScope = scopes.find((scope) => scope.id === workbenchScopeId) ?? null
 
   const ensureWorkbenchScope = useCallback(() => {
@@ -1206,10 +1313,26 @@ export function App() {
 
   const openCurrentWorkbench = useCallback(() => {
     const id = ensureWorkbenchScope()
+    workbenchEntryFitRef.current = { scopeId: id, enteredAt: Date.now(), nodeKey: '' }
     enterScopeKeepingSelection(id, [])
+    const workbenchNodes = nodes.filter((node) => node.scopeId === id)
+    if (workbenchNodes.length > 0) {
+      // Workbench 是有限、临时的第一工作现场，进入时应看见完整 payload，
+      // 不能像大型 Project overview 一样只挑一个密集岛。
+      const bounds = getSelectionBounds(workbenchNodes, workbenchNodes.map((node) => node.id))
+      if (bounds) {
+        setCamera(fitBoundsForReading(
+          bounds,
+          window.innerWidth,
+          window.innerHeight,
+          64,
+          safeInsets,
+        ))
+      }
+    }
     setActiveSurface('arrange')
     setNotice('已进入当前现场')
-  }, [ensureWorkbenchScope, enterScopeKeepingSelection])
+  }, [ensureWorkbenchScope, enterScopeKeepingSelection, nodes, safeInsets, setCamera])
 
   const mergeWorkbenchViews = useCallback(() => {
     if (!workbenchScope) { setNotice('当前没有可并回的工作现场'); return }
@@ -1661,10 +1784,26 @@ export function App() {
     const projectedScope = projected.filter((node) => (node.scopeId ?? 'scope-root') === scopeId)
     const bounds = getSelectionBounds(projectedScope, projectedScope.map((node) => node.id))
     const viewport = document.querySelector<HTMLElement>('[data-testid="canvas"]')?.getBoundingClientRect()
-    if (bounds) setCamera(fitBounds(bounds, viewport?.width ?? 1000, viewport?.height ?? 820, 72, safeInsets))
+    if (bounds) setCamera(fitBoundsForReading(bounds, viewport?.width ?? 1000, viewport?.height ?? 820, 72, safeInsets))
     setLayoutPreview(null)
-    setNotice('已应用当前子画布的语义布局')
+    setNotice('已应用当前画布布局')
   }, [layoutPreview, nodes, safeInsets, scopeId, setNodes])
+
+  const locateAndPreviewIslands = useCallback(() => {
+    const preview = proposeIslandRecoveryLayout(visibleNodes, scopeId, { respectLocked: true })
+    const viewport = document.querySelector<HTMLElement>('[data-testid="canvas"]')?.getBoundingClientRect()
+    const projected = preview.length ? applyScopeLayout(visibleNodes, preview) : visibleNodes
+    const bounds = preview.length
+      ? getSelectionBounds(projected, projected.map((node) => node.id))
+      : restorationFocusBounds(visibleNodes) ?? getSelectionBounds(visibleNodes, visibleNodes.map((node) => node.id))
+    if (bounds) setCamera(fitBoundsForReading(bounds, viewport?.width ?? 1000, viewport?.height ?? 820, 72, safeInsets))
+    if (preview.length) {
+      setLayoutPreview(preview)
+      setNotice(`发现 ${preview.length} 个孤立对象 · 预览归拢位置，确认后写入`)
+    } else {
+      setNotice('已定位当前内容')
+    }
+  }, [safeInsets, scopeId, visibleNodes])
 
   const createNodeAt = useCallback((kind: 'note' | 'context', x: number, y: number) => {
     if (kind === 'note' && bootMode === 'runtime' && activeProjectId) {
@@ -2875,6 +3014,8 @@ export function App() {
       const isText = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement || target?.isContentEditable
       const modifier = event.metaKey || event.ctrlKey
       const key = event.key.toLowerCase()
+      const activeElement = document.activeElement as HTMLElement | null
+      const canvasActive = Boolean(activeElement?.closest('[data-testid="canvas"]')) && !document.querySelector('[role="dialog"][aria-modal="true"]')
       if (createDialogOpen || scopeCreateOpen || projectCreateOpen) return
       if (modifier && event.key === 'Enter') {
         event.preventDefault()
@@ -2882,6 +3023,12 @@ export function App() {
         return
       }
       if (isText) return
+      if (modifier && key === 'a' && canvasActive) {
+        event.preventDefault()
+        setSelectionComposerOpen(false)
+        selectMarquee(visibleNodes.map((node) => node.id), false)
+        return
+      }
       if (modifier && key === 'c') { event.preventDefault(); copySelection(); return }
       if (modifier && key === 'v') { event.preventDefault(); pasteClipboard(); return }
       if (modifier && key === 'd') { event.preventDefault(); duplicateSelection(); return }
@@ -2900,7 +3047,7 @@ export function App() {
     const release = (event: KeyboardEvent) => { if (event.code === 'Space') setSpaceHeld(false) }
     window.addEventListener('keydown', handler); window.addEventListener('keyup', release)
     return () => { window.removeEventListener('keydown', handler); window.removeEventListener('keyup', release) }
-  }, [arrangeSelection, clearSelection, confirmProjectDelete, confirmWorkspaceId, copySelection, createDialogOpen, deleteNodes, duplicateSelection, capabilityOpen, immersiveNodeId, nodeInfoId, workbench, layoutPreview, openNative, pasteClipboard, projectCreateOpen, redo, requestComposerFocus, requestGlobalRun, requestSelectionRun, scopeCreateOpen, selectedEdgeId, selectedId, selectedIds, selectedNodes, setEdges, stagedTransfer, undo])
+  }, [arrangeSelection, clearSelection, confirmProjectDelete, confirmWorkspaceId, copySelection, createDialogOpen, deleteNodes, duplicateSelection, capabilityOpen, immersiveNodeId, nodeInfoId, workbench, layoutPreview, openNative, pasteClipboard, projectCreateOpen, redo, requestComposerFocus, requestGlobalRun, requestSelectionRun, scopeCreateOpen, selectMarquee, selectedEdgeId, selectedId, selectedIds, selectedNodes, setEdges, stagedTransfer, undo, visibleNodes])
 
 
   const refreshProjectCatalog = useCallback(() => {
@@ -2999,6 +3146,9 @@ export function App() {
   const nodeToRename = renameNodeId ? nodes.find((node) => node.id === renameNodeId) : undefined
   const scopePath = buildScopePath(scopes, activeScope)
   return <AppShellView
+    layoutDensity={layoutDensity}
+    layoutMode={layoutMode}
+    layoutStyle={sceneStyle}
     notice={notice}
     drive={{
       open: !projectOpen,
@@ -3014,8 +3164,10 @@ export function App() {
       scopeLabel: activeScope.label,
       saveStatus,
       runStatus: activeRun?.status ?? null,
+      showWorkRailActions: layoutMode === 'desktop',
       onOpenProjectDrive: () => setProjectOpen(false),
       onImport: () => setImportPanelOpen(true),
+      onSearch: () => setProjectToolsMode('search'),
       onGlobalChat: () => { if (agentMode) setNotice('Agent Browser 模式下请直接使用宿主 Agent 对话框'); else setWorkRail((current) => ({ ...current, collapsed: false })) },
       pendingCount: pendingReviews.length,
       onPending: () => { setWorkRail((current) => ({ ...current, collapsed: false })); if (pendingReviews[0]) openRunReview(pendingReviews[0]); setNotice(pendingReviews.length ? `${pendingReviews.length} 项待确认，已在右侧执行列表中定位` : '当前没有待确认的返回结果') },
@@ -3039,7 +3191,7 @@ export function App() {
         onAddLink: () => { setCapabilityOpen(false); setLinkDialogOpen(true) },
         onUniversalImport: () => { setCapabilityOpen(false); setImportPanelOpen(true) },
         onHandoff: () => { setCapabilityOpen(false); void openHandoff() },
-        onProjectTools: () => { setCapabilityOpen(false); setProjectToolsOpen(true) },
+        onProjectTools: () => { setCapabilityOpen(false); setProjectToolsMode('full') },
         onOpenComposer: () => { setCapabilityOpen(false); requestComposerFocus() },
         onSelectNode: (id) => { selectNode(id); setCapabilityOpen(false) },
       } : null,
@@ -3162,7 +3314,7 @@ export function App() {
         workbenchScopeId: workbenchScope?.id ?? workbenchScopeId,
         workbenchCount: nodes.filter((node) => (node.scopeId ?? rootScope.id) === workbenchScopeId).length,
         zoom: camera.zoom,
-        onZoomBy: (factor) => setCamera((current) => ({ ...current, zoom: Math.min(4, Math.max(0.1, current.zoom * factor)) })),
+        onZoomBy: (factor) => setCamera((current) => ({ ...current, zoom: Math.min(4, Math.max(MIN_CANVAS_ZOOM, current.zoom * factor)) })),
         onZoomReset: () => setCamera((current) => ({ ...current, zoom: 1 })),
         onSurface: setActiveSurface,
         onScope: enterScope,
@@ -3182,13 +3334,14 @@ export function App() {
         onSend: handleTransfer,
       },
       miniMap: {
-        nodes: scopeNodes,
+        nodes: visibleNodes,
         workspaceFrames: activeWorkspaceFrames,
         camera,
         setCamera,
         collapsed: miniMapCollapsed,
         onCollapsedChange: setMiniMapCollapsed,
         safeInsets,
+        onLocateContent: locateAndPreviewIslands,
       },
       breadcrumbs: {
         projectLabel: activeProject.label,
@@ -3285,12 +3438,13 @@ export function App() {
         onInspectDirectory: inspectProjectDirectory,
         onCreate: createProject,
       },
-      projectTools: projectToolsOpen ? {
-        open: projectToolsOpen,
+      projectTools: projectToolsMode ? {
+        open: true,
+        searchOnly: projectToolsMode === 'search',
         project: activeProject,
         projects,
         client: bridgeRef.current.client,
-        onClose: () => setProjectToolsOpen(false),
+        onClose: () => setProjectToolsMode(null),
         onProjectOpened: refreshProjectCatalog,
         onSelectArtifact: selectArtifactFromTools,
         onNotice: setNotice,

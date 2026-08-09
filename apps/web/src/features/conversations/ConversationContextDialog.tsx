@@ -2,6 +2,7 @@ import { Bookmark, Brain, Download, FileJson, Focus, GitBranch, Lock, MessageSqu
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ConversationMessageV1, ConversationProjectionV1, ConversationSearchHitV1, ConversationSessionV1 } from '@local-creative-os/contracts'
 import type { LocalCoreClient } from '../../runtime/localCoreClient'
+import { dismissFromBackdrop } from '../ui/dismissibleLayer'
 
 const CHUNK_BYTES = 4 * 1024 * 1024
 
@@ -242,8 +243,8 @@ export function ConversationContextDialog({ open, projectId, scopeId, workspaceI
     finally { setBusy(false) }
   }
 
-  return <div className="modal-backdrop"><section className="conversation-context-dialog" role="dialog" aria-label="对话上下文">
-    <header className="conversation-header"><div><MessageSquare size={18}/><div><h2>对话上下文</h2><p>这里只记录这一条导入对话。重点导航是视觉索引，完整细节仍保留在原始时间线与本地记忆中。</p></div></div><button type="button" className="icon-button pressable" onClick={onClose} aria-label="关闭"><X size={16}/></button></header>
+  return <div className="modal-backdrop" onPointerDown={(event) => dismissFromBackdrop(event, onClose, busy)}><section className="conversation-context-dialog" role="dialog" aria-label="对话上下文">
+    <header className="conversation-header"><div><MessageSquare size={18}/><div><h2>对话上下文</h2><p>这里只记录这一条导入对话。重点导航是视觉索引，完整细节仍保留在原始时间线与本地记忆中。</p></div></div><button type="button" className="dialog-close-action pressable" onClick={onClose} aria-label="关闭对话上下文"><X size={16}/><span>关闭</span></button></header>
     <div className="conversation-toolbar">
       <button type="button" className="pressable" disabled={busy} onClick={() => inputRef.current?.click()}><Upload size={15}/>导入 Codex JSONL</button>
       <button type="button" className="pressable" disabled={busy} onClick={() => setManualOpen((value) => !value)}><MessageSquare size={15}/>粘贴时间线</button>

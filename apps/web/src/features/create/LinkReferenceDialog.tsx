@@ -1,6 +1,7 @@
 import { Link2, X } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import type { LinkReferenceInput } from '../../runtime/v07UiContracts'
+import { dismissFromBackdrop } from '../ui/dismissibleLayer'
 
 export function LinkReferenceDialog({ open, onClose, onCreate }: {
   open: boolean
@@ -22,8 +23,8 @@ export function LinkReferenceDialog({ open, onClose, onCreate }: {
     })
     setUrl(''); setTitle(''); setNote('')
   }
-  return <div className="modal-backdrop"><form className="link-reference-dialog" onSubmit={submit}>
-    <header><div><Link2 size={18} /><h2>添加 Link Reference</h2></div><button type="button" onClick={onClose}><X size={16} /></button></header>
+  return <div className="modal-backdrop" onPointerDown={(event) => dismissFromBackdrop(event, onClose)}><form className="link-reference-dialog" onSubmit={submit}>
+    <header><div><Link2 size={18} /><h2>添加 Link Reference</h2></div><button type="button" className="dialog-close-action" onClick={onClose}><X size={16} /><span>关闭</span></button></header>
     <label>链接<input value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://…" autoFocus /></label>
     <label>标题 <small>可选，留空自动识别</small><input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="这份资料是什么" /></label>
     <label>备注 <small>可选</small><textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="补充一句即可，不用写用途说明" /></label>

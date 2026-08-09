@@ -2,6 +2,7 @@ import { ArrowLeft, ExternalLink, X } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import type { CanvasNode } from '../../model'
 import { ArtifactViewerHost, resolveArtifactViewerKind } from './artifactViewerRegistry'
+import { dismissFromBackdrop } from '../ui/dismissibleLayer'
 
 interface Props {
   node: CanvasNode
@@ -28,9 +29,7 @@ export function ImmersiveViewer({ node, projectId, onClose }: Props) {
 
   const externalUrl = node.previewText?.match(/^url:\s*(https?:\/\/\S+)/mi)?.[1]
 
-  return <div className="vnext-immersive-backdrop" role="presentation" onPointerDown={(event) => {
-    if (event.currentTarget === event.target) onClose()
-  }}>
+  return <div className="vnext-immersive-backdrop" role="presentation" onPointerDown={(event) => dismissFromBackdrop(event, onClose)}>
     <section ref={panelRef} tabIndex={-1} className={`vnext-immersive-viewer viewer-${kind}`} role="dialog" aria-modal="true" aria-label={`${node.title} 预览`}>
       <header className="vnext-immersive-header">
         <button type="button" className="vnext-immersive-back" onClick={onClose} aria-label="返回画布"><ArrowLeft size={16} /></button>

@@ -1,4 +1,5 @@
 import { CircleAlert, X } from 'lucide-react'
+import { dismissFromBackdrop } from './dismissibleLayer'
 
 interface Props {
   title: string
@@ -8,7 +9,7 @@ interface Props {
 }
 
 export function ConfirmDialog({ title, description, onConfirm, onCancel }: Props) {
-  return <div data-testid="confirm-dialog" className="confirm-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onCancel() }}>
+  return <div data-testid="confirm-dialog" className="confirm-backdrop" role="presentation" onPointerDown={(event) => dismissFromBackdrop(event, onCancel)}>
     <section className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
       <header><CircleAlert size={18} /><div><span>Confirm</span><h2 id="confirm-title">{title}</h2></div><button aria-label="关闭确认" title="取消" onClick={onCancel}><X size={15} /></button></header>
       <p>{description}</p>

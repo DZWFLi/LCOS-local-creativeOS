@@ -84,18 +84,20 @@ export function SurfaceDock({ surface, scopePath, activeScopeId, workbenchScopeI
   }
   return <nav className="vnext-bottom-dock lcos-bottom-dock" data-testid="vnext-bottom-dock" aria-label="Scope 与能力入口">
     <div className="vnext-scope-axis lcos-scope-axis" aria-label="Scope">
-      <button type="button" className={scopePath.length===1?'active':''} data-label="主画布" aria-label="主画布" onClick={() => scopePath[0] && onScope(scopePath[0].id)}><RootGlyph/></button>
+      <span className="lcos-dock-group-title">空间</span>
+      <button type="button" className={scopePath.length===1?'active':''} aria-label="主画布" onClick={() => scopePath[0] && onScope(scopePath[0].id)}><RootGlyph/><span className="lcos-dock-label">主画布</span></button>
       {onWorkbench && <>
         <ChevronRight className="lcos-scope-chevron" size={13} aria-hidden="true" />
-        <button type="button" className={`${workbenchScopeId===activeScopeId?'active':''} lcos-workbench-entry`} data-label="当前现场" aria-label="当前现场" onClick={onWorkbench}><BenchGlyph/>{workbenchCount !== undefined && workbenchCount > 0 && <span className="lcos-workbench-badge">{workbenchCount}</span>}</button>
+        <button type="button" className={`${workbenchScopeId===activeScopeId?'active':''} lcos-workbench-entry`} aria-label="当前现场" onClick={onWorkbench}><BenchGlyph/><span className="lcos-dock-label">当前现场</span>{workbenchCount !== undefined && workbenchCount > 0 && <span className="lcos-workbench-badge">{workbenchCount}</span>}</button>
       </>}
       {parent && <button type="button" data-label={`返回 ${parent.label}`} aria-label={`返回 ${parent.label}`} onClick={()=>onScope(parent.id)}><ChevronUp size={14}/></button>}
-      {currentScope && scopePath.length>1 && <button type="button" className="lcos-scope-breadcrumb" title={currentScope.label} onClick={()=>onScope(currentScope.id)}><span>{currentScope.label}</span></button>}
+      {currentScope && scopePath.length>1 && workbenchScopeId!==activeScopeId && <button type="button" className="lcos-scope-breadcrumb" title={currentScope.label} onClick={()=>onScope(currentScope.id)}><span>{currentScope.label}</span></button>}
       {onMergeWorkbench && workbenchScopeId===activeScopeId && <button type="button" className="vnext-merge-workbench lcos-merge-workbench" data-label="并回" aria-label="并回主画布并清空现场" onClick={onMergeWorkbench}><CheckCircle2 size={14}/></button>}
     </div>
     <span className="lcos-dock-divider"/>
     <div className="vnext-lens-axis lcos-lens-axis" aria-label="LCOS 能力">
-      {CAPABILITIES.map(({id,label,hint,Glyph})=><button key={id} type="button" className={capability===id?'active':''} data-label={label} aria-label={`${label}：${hint}`} title={hint} onClick={()=>setCapability(id)}><Glyph/></button>)}
+      <span className="lcos-dock-group-title">能力</span>
+      {CAPABILITIES.map(({id,label,hint,Glyph})=><button key={id} type="button" className={capability===id?'active':''} aria-label={`${label}：${hint}`} title={hint} onClick={()=>setCapability(id)}><Glyph/><span className="lcos-dock-label">{label}</span></button>)}
       {capability==='arrange' && <ProjectionPills options={[{id:'arrange',label:'自由'},{id:'outline',label:'大纲'}]} active={normalizedSurface==='outline'?'outline':'arrange'} onSelect={(id)=>onSurface(id as SurfaceId)}/>} 
       {capability==='context' && <ProjectionPills options={[{id:'context-flow',label:'自由'},{id:'context-tree',label:'大纲'},{id:'context-graph',label:'关系'}]} active={normalizedSurface==='context-tree'?'context-tree':normalizedSurface==='context-graph'?'context-graph':'context-flow'} onSelect={(id)=>onSurface(id as SurfaceId)}/>} 
       {capability==='workflow' && <span className="lcos-capability-hint" aria-hidden="true">自由搭建</span>}

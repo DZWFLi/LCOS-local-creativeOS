@@ -1,6 +1,7 @@
 import { Clipboard, Download, FileText, LoaderCircle, X } from 'lucide-react'
 
 import type { ContextManifestV0 } from '@local-creative-os/contracts'
+import { dismissFromBackdrop } from '../ui/dismissibleLayer'
 
 interface Props {
   readonly open: boolean
@@ -14,9 +15,7 @@ interface Props {
 
 export function HandoffDialog({ open, loading, manifest, error, onClose, onCopy, onDownload }: Props) {
   if (!open) return null
-  return <div className="handoff-backdrop" role="presentation" onPointerDown={(event) => {
-    if (event.target === event.currentTarget) onClose()
-  }}>
+  return <div className="handoff-backdrop" role="presentation" onPointerDown={(event) => dismissFromBackdrop(event, onClose)}>
     <section className="handoff-dialog" role="dialog" aria-modal="true" aria-labelledby="handoff-title">
       <header>
         <span><FileText size={17} /></span>
@@ -24,7 +23,7 @@ export function HandoffDialog({ open, loading, manifest, error, onClose, onCopy,
           <small>当前选择与项目内容</small>
           <h2 id="handoff-title">交给另一个对话</h2>
         </div>
-        <button aria-label="关闭 Handoff" onClick={onClose}><X size={16} /></button>
+        <button className="dialog-close-action" aria-label="关闭 Handoff" onClick={onClose}><X size={16} /><span>关闭</span></button>
       </header>
       {loading
         ? <div className="handoff-state"><LoaderCircle className="spin" size={20} />正在整理当前上下文…</div>

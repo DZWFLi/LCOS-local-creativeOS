@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { FolderKanban, Layers3, PackageCheck, X } from 'lucide-react'
 import type { ScopeKind } from '../../model'
+import { dismissFromBackdrop } from '../ui/dismissibleLayer'
 
 interface Props {
   open: boolean
@@ -42,15 +43,7 @@ export function ScopeCreateDialog({ open, selectedCount, leftInset, rightInset, 
 
   if (!open) return null
 
-  return <div className="scope-create-layer" style={{ '--scope-left-inset': `${leftInset}px`, '--scope-right-inset': `${rightInset}px` } as React.CSSProperties} data-testid="scope-create-layer" onPointerDown={(event) => {
-    event.preventDefault()
-    event.stopPropagation()
-    event.currentTarget.setPointerCapture(event.pointerId)
-  }} onPointerMove={(event) => { event.preventDefault(); event.stopPropagation() }} onPointerUp={(event) => {
-    event.preventDefault()
-    event.stopPropagation()
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
-  }}>
+  return <div className="scope-create-layer" style={{ '--scope-left-inset': `${leftInset}px`, '--scope-right-inset': `${rightInset}px` } as React.CSSProperties} data-testid="scope-create-layer" onPointerDown={(event) => dismissFromBackdrop(event, onCancel)}>
     <section className="scope-create-dialog" role="dialog" aria-modal="true" aria-labelledby="scope-create-title" onPointerDown={(event) => event.stopPropagation()}>
       <header><div><span>创建子画布</span><h2 id="scope-create-title">把 {selectedCount} 个对象整理成一个空间</h2></div><button aria-label="关闭" onClick={onCancel}><X size={17} /></button></header>
       <div className="scope-create-body">
