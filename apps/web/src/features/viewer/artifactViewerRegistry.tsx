@@ -61,8 +61,8 @@ export function canPreviewArtifact(node: CanvasNode): boolean {
 export function ArtifactViewerHost({ node, projectId }: { node: CanvasNode; projectId: string }) {
   const kind = resolveArtifactViewerKind(node)
   switch (kind) {
-    case 'image': return <ImageViewer node={node} />
-    case 'text': return <TextViewer node={node} />
+    case 'image': return <ImageViewer node={node} projectId={projectId} />
+    case 'text': return <TextViewer node={node} projectId={projectId} />
     case 'pdf':
     case 'presentation': return <DocumentViewer node={node} projectId={projectId} />
     case 'audio': return <MediaViewer node={node} projectId={projectId} media="audio" />
@@ -72,18 +72,76 @@ export function ArtifactViewerHost({ node, projectId }: { node: CanvasNode; proj
   }
 }
 
-function ImageViewer({ node }: { node: CanvasNode }) {
-  if (node.previewDataUrl === undefined) {
-    return <FallbackViewer node={node} note="缩略图尚未生成；请使用「资源理解」或等待 Preview Worker。" />
-  }
-  return <div className="viewer-body image-viewer"><img src={node.previewDataUrl} alt={node.title} draggable={false} onDragStart={(event) => event.preventDefault()} /></div>
+function ImageViewer({ node, projectId }: { node: CanvasNode; projectId: string }) {
+  const [url, setUrl] = useState<string | null>(node.previewDataUrl ?? null)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (node.previewDataUrl !== undefined) {
+      setUrl(node.previewDataUrl)
+      return
+    }
+    if (node.fileRecordId === undefined) {
+      setError('该节点没有可读取的文件记录。')
+      return
+    }
+    const controller = new AbortController()
+    let objectUrl: string | undefined
+    const load = async () => {
+      try {
+        const response = await fetch(`${LOCAL_CORE_API_PREFIX}/projects/${encodeURIComponent(projectId)}/file-records/${encodeURIComponent(String(node.fileRecordId))}/content`, { signal: controller.signal })
+        if (!response.ok) {
+          const detail = await response.json().catch(() => null) as { error?: { message?: string } } | null
+          throw new Error(detail?.error?.message ?? `预览请求失败 (${response.status})`)
+        }
+        objectUrl = URL.createObjectURL(await response.blob())
+        setUrl(objectUrl)
+      } catch (reason) {
+        if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : '预览失败')
+      }
+    }
+    void load()
+    return () => { controller.abort(); if (objectUrl !== undefined) URL.revokeObjectURL(objectUrl) }
+  }, [node.fileRecordId, node.previewDataUrl, projectId])
+
+  if (error) return <div className="viewer-body viewer-error"><strong>无法预览</strong><span>{error}</span></div>
+  if (url === null) return <div className="viewer-body viewer-loading"><LoaderCircle size={20} />正在载入图片…</div>
+  return <div className="viewer-body image-viewer"><img src={url} alt={node.title} draggable={false} onDragStart={(event) => event.preventDefault()} /></div>
 }
 
-function TextViewer({ node }: { node: CanvasNode }) {
-  if (node.previewText === undefined || node.previewText.trim().length === 0) {
-    return <FallbackViewer node={node} note="文本内容尚未载入；预览缓存未生成。" />
-  }
-  return <div className="viewer-body text-viewer"><pre>{node.previewText}</pre></div>
+function TextViewer({ node, projectId }: { node: CanvasNode; projectId: string }) {
+  const [text, setText] = useState<string | null>(node.previewText && node.previewText.trim().length > 0 ? node.previewText : null)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (node.previewText && node.previewText.trim().length > 0) {
+      setText(node.previewText)
+      return
+    }
+    if (node.fileRecordId === undefined) {
+      setError('该节点没有可读取的文件记录。')
+      return
+    }
+    const controller = new AbortController()
+    const load = async () => {
+      try {
+        const response = await fetch(`${LOCAL_CORE_API_PREFIX}/projects/${encodeURIComponent(projectId)}/file-records/${encodeURIComponent(String(node.fileRecordId))}/content`, { signal: controller.signal })
+        if (!response.ok) {
+          const detail = await response.json().catch(() => null) as { error?: { message?: string } } | null
+          throw new Error(detail?.error?.message ?? `预览请求失败 (${response.status})`)
+        }
+        setText(await response.text())
+      } catch (reason) {
+        if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : '预览失败')
+      }
+    }
+    void load()
+    return () => controller.abort()
+  }, [node.fileRecordId, node.previewText, projectId])
+
+  if (error) return <div className="viewer-body viewer-error"><strong>无法预览</strong><span>{error}</span></div>
+  if (text === null) return <div className="viewer-body viewer-loading"><LoaderCircle size={20} />正在载入文本…</div>
+  return <div className="viewer-body text-viewer"><pre>{text}</pre></div>
 }
 
 function DocumentViewer({ node, projectId }: { node: CanvasNode; projectId: string }) {

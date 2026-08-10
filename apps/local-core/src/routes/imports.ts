@@ -2,6 +2,7 @@ import type { Project, RegisterTrustedSourceInput } from '@local-creative-os/con
 import type { ProjectId } from '@local-creative-os/domain'
 import { ImportCopyConflictError, type ImportCopyService } from '../import-copy-service.js'
 import type { FileRegistryService } from '../file-registry-service.js'
+import type { PreviewWorkerService } from '../preview-worker-service.js'
 import type { UniversalResourceImportService } from '../resources/universal-resource-import-service.js'
 import { FORBIDDEN_BROWSER_PATH_FIELDS, routeRequireMetadata, type RouteHttpContext, type RouteHttpHelpers } from './route-context.js'
 import { parseMultipartImport } from './multipart.js'
@@ -12,6 +13,7 @@ export interface ImportsRouteContext extends RouteHttpContext {
   readonly fileRegistry: FileRegistryService | undefined
   readonly importCopy: ImportCopyService | undefined
   readonly resources: UniversalResourceImportService | undefined
+  readonly previewWorker: PreviewWorkerService | undefined
   readonly maxImportBodyBytes: number
 }
 
@@ -20,7 +22,7 @@ export interface ImportsRouteContext extends RouteHttpContext {
  * 原为 server.ts 分发器内联块，外迁后行为不变。
  */
 export async function handleImportsRoute(ctx: ImportsRouteContext): Promise<boolean> {
-  const { method, pathname, request, response, controller, metadata, fileRegistry, importCopy, resources, maxImportBodyBytes } = ctx
+  const { method, pathname, request, response, controller, metadata, fileRegistry, importCopy, resources, previewWorker, maxImportBodyBytes } = ctx
   const { sendJson, failure, readJsonBody, readRawBody, isRecord } = ctx.helpers
 
   // Browser supplies only an opaque trusted selection ID, never a path.
@@ -89,6 +91,17 @@ export async function handleImportsRoute(ctx: ImportsRouteContext): Promise<bool
       const outcome = resources === undefined
         ? undefined
         : await resources.afterImport(projectId as ProjectId, result)
+      if (previewWorker !== undefined) {
+        try {
+          await previewWorker.generate({
+            projectId: projectId as ProjectId,
+            revisionId: result.revision.id as Parameters<typeof previewWorker.generate>[0]['revisionId'],
+            previewProfile: 'thumbnail',
+          })
+        } catch {
+          // 预览生成失败不阻断导入；前端会按需重试或显示可读错误。
+        }
+      }
       sendJson(response, result.reused ? 200 : 201, {
         ok: true,
         value: {

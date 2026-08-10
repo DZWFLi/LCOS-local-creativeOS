@@ -2161,21 +2161,6 @@ export function App() {
     }
   }, [camera, resetGraph, setCamera, setScopes, setWorkRail, setWorkspaces])
 
-  const refreshResourceStatuses = useCallback(async (): Promise<void> => {
-    if (bootMode !== 'runtime') return
-    const call = await bridgeRef.current.client.resourceList(activeProjectId)
-    if (!call.result.ok) return
-    const statusByArtifact = new Map(call.result.value.map((entry) => [entry.artifactId, entry.status]))
-    setNodes((current) => current.map((node) => {
-      if (node.artifactId === undefined) return node
-      const status = statusByArtifact.get(String(node.artifactId))
-      if (status === undefined) return node
-      const label = status === 'ready' ? '已理解' : status === 'partial' ? '部分理解' : status === 'failed' ? '理解失败' : '理解中'
-      if (node.subtitle === label) return node
-      return { ...node, subtitle: label }
-    }))
-  }, [activeProjectId, bootMode, setNodes])
-
   const handleImportDirectory = useCallback((rootName: string, files: readonly DirectoryEntryInput[], note?: string) => {
     const point = lastCanvasPointRef.current ?? { x: 180, y: 160 }
     void bridgeRef.current.client.importResourceDirectory(activeProjectId, {
@@ -2192,11 +2177,10 @@ export function App() {
         return
       }
       if (workspaceId && call.result.value.viewId) await addViewsToWorkspace(workspaceId, [call.result.value.viewId], 'import')
-      setNotice(`${rootName} 已导入，正在理解…`)
+      setNotice(`${rootName} 已导入`)
       await reloadRuntimeProject()
-      await refreshResourceStatuses()
     }).catch(() => setNotice('目录导入失败：连接异常'))
-  }, [activeProjectId, addViewsToWorkspace, refreshResourceStatuses, reloadRuntimeProject, scopeId, workspaceId])
+  }, [activeProjectId, addViewsToWorkspace, reloadRuntimeProject, scopeId, workspaceId])
 
   const handleImportArchive = useCallback((file: File, note?: string) => {
     const point = lastCanvasPointRef.current ?? { x: 180, y: 160 }
@@ -2213,11 +2197,10 @@ export function App() {
         return
       }
       if (workspaceId && call.result.value.viewId) await addViewsToWorkspace(workspaceId, [call.result.value.viewId], 'import')
-      setNotice(`${file.name} 已导入，正在理解…`)
+      setNotice(`${file.name} 已导入`)
       await reloadRuntimeProject()
-      await refreshResourceStatuses()
     }).catch(() => setNotice('压缩包导入失败：连接异常'))
-  }, [activeProjectId, addViewsToWorkspace, refreshResourceStatuses, reloadRuntimeProject, scopeId, workspaceId])
+  }, [activeProjectId, addViewsToWorkspace, reloadRuntimeProject, scopeId, workspaceId])
 
   const handleOpenObsidian = useCallback(() => {
     setObsidianBusy(true)
@@ -2256,16 +2239,9 @@ export function App() {
       setNotice(`已从 ${obsidianScan.vaultName} 导入 ${call.result.value.length} 篇笔记；原 Vault 保持只读。`)
       setObsidianScan(null)
       await reloadRuntimeProject()
-      await refreshResourceStatuses()
     }).catch(() => setObsidianError('Obsidian 笔记导入暂时中断，原 Vault 没有被修改。'))
       .finally(() => setObsidianBusy(false))
-  }, [activeProjectId, addViewsToWorkspace, obsidianScan, refreshResourceStatuses, reloadRuntimeProject, scopeId, workspaceId])
-
-  useEffect(() => {
-    if (bootMode !== 'runtime' || !activeProjectId) return
-    const timer = window.setInterval(() => { void refreshResourceStatuses() }, 60_000)
-    return () => window.clearInterval(timer)
-  }, [activeProjectId, bootMode, refreshResourceStatuses])
+  }, [activeProjectId, addViewsToWorkspace, obsidianScan, reloadRuntimeProject, scopeId, workspaceId])
 
   const applyRuntimeReview = useCallback((review: RunReview, current: ActiveRun, providerError?: string) => {
     const readableProviderError = providerError === undefined ? undefined : humanizeRuntimeMessage(providerError)
@@ -3668,7 +3644,7 @@ export function App() {
         artifactId: resourceDetailArtifactId,
         client: bridgeRef.current.client,
         onClose: () => setResourceDetailArtifactId(null),
-        onChanged: () => { void refreshResourceStatuses() },
+        onChanged: () => undefined,
       } : null,
       extraDialogs: workspaceStatesOpen && workspaceStatesWorkspaceId ? (() => {
         const stateWorkspace = workspaces.find((workspace) => workspace.id === workspaceStatesWorkspaceId)

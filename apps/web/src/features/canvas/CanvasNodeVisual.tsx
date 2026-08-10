@@ -110,7 +110,7 @@ function DocumentObject({ node, kind, density, pending, onDetails, showDetails }
       : <div className={`lcos-file-fallback file-${kind}`}>
           <span className="lcos-file-icon"><Icon/></span>
           <strong>{tag}</strong>
-          {density !== 'compact' && <small>{node.previewStatus === 'failed' ? '预览暂不可用' : node.previewStatus === 'not-generated' ? '等待系统预览' : '本地文件'}</small>}
+          {density !== 'compact' && (node.previewStatus === 'failed' ? <small>预览暂不可用</small> : node.previewStatus === 'ready' ? <small>本地文件</small> : null)}
         </div>}
     <div className="lcos-object-caption">
       <span className="lcos-type-tag">{tag}</span>

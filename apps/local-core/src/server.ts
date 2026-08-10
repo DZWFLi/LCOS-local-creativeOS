@@ -583,6 +583,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
         fileRegistry,
         importCopy,
         resources,
+        previewWorker,
         maxImportBodyBytes: MAX_IMPORT_BODY_BYTES,
         helpers: routeHelpers,
       })) return

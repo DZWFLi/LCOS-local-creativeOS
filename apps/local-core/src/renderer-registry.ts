@@ -32,6 +32,24 @@ export const DEFAULT_RENDERERS: readonly RendererDescriptor[] = [
     previewProfiles: ['thumbnail', 'original'],
     outputMimeType: 'text/plain',
   },
+  {
+    id: 'pdf',
+    version: '1',
+    supportedMimeTypes: ['application/pdf'],
+    previewProfiles: ['thumbnail'],
+    outputMimeType: 'image/png',
+  },
+  {
+    id: 'office',
+    version: '1',
+    supportedMimeTypes: [
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/msword',
+    ],
+    previewProfiles: ['thumbnail'],
+    outputMimeType: 'image/png',
+  },
 ]
 
 export class RendererRegistry {
