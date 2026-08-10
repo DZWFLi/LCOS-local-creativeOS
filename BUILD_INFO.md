@@ -1,44 +1,44 @@
-# LCOS Fullstack Gate F Plus — Build Info
+# LCOS Fullstack — Build Info
 
-> 归档日期：2026-08-05
+> 归档日期：2026-08-10
 > 分支：`codex/backend-hardening-20260802`
-> HEAD：cfe55ca
+> HEAD：<打包时自动填充>
 
-## 关键提交
-
-```text
-6280398  Gate F Final Closeout 包入库
-bd5614b / 387c602 / d755fb9 / 788668c   实机验收修复
-a0ee8ec  P0 轻量导入设计 + 开源借鉴清单
-d7497a4  P0 对话导入项目描述 + 全栈剩余问题总账 + 包清单刷新
-833852c  重生成 MANIFEST.sha256（651 文件，verify PASS）
-```
-
-## 质量链（代码基线自 Gate F 实机验收后无改动）
+## 近期关键提交（自 2026-08-08 起）
 
 ```text
-lint / typecheck / 单测 387 / 架构 57 / 集成 5 / web build / local-core build /
-smoke / Bridge pytest 35/35 / Core smoke（schema v15）/ Obsidian smoke /
-Golden Path / Playwright E2E 7/7 / 浏览器探针全绿
+d136587  docs(audit): current architecture census 20260810（只读盘点）
+f1c1153  docs(handoff): 真实会话实体化到画布 + 上下文来源激活
+53ed897  feat(web): 会话章节实体化 + 「在画布中打开」设为 Context 来源
+ffd1a05  docs(handoff): Spatial Phase E acceptance report（E0-E5）
+96f391f  fix(spatial): wheel passive 修复 + E2E 适配 PhaseD
+497b011  feat(web): merge Spatial Phase A-D source（共享空间画布/布局/drop intent/context renderers）
+0bbe789  feat(gui): reshape first-run context and workflow surfaces
+93c3c23  feat(gui): establish product interaction foundation
 ```
 
-## 真实 Codex 场景
+## 当前基线
 
 ```text
-A 新会话 analyze：PASS（run 8315db15）
-B 会话复用 3 次：PASS（session 019fd094）
-E waiting_input 问答续跑：PASS（run 3042fb98）
+web 单测 251/251（50 文件） / 架构测试 70/70 / E2E 3/3（Phase E）
+真实会话导入验证：713 消息 / 91 章节 → 画布 91 节点 + Context Strands 94 节点（9/9 浏览器检查 PASS）
 ```
 
-## 已知遗留
+注：本包打包前未重跑全量 check:fast；以上为最近一次验证链（Phase E 验收 + 会话实体化浏览器验证）实测结果。
+
+## 已知遗留（详见架构盘点）
 
 ```text
-A1: MCP 注册成功但真实 codex exec 会话未加载工具（显式 REST fallback）——开发必修
-A2: 看门狗主循环单线程同步等待 runner——建议异步化 + 超时护栏
-B1/B2: 真实 Run 完成 4 个，未跑满连续 5 Run；revise/create 真实变体未跑
+G1  Presentation（Strands/大纲/来源）无 Core 契约：前端内存，重启丢失
+G2  Context Pack 不含 Conversation/Section/Decision/OpenLoop
+G3  L3（Ollama + sqlite-vec）代码存在、运行时未激活（.runtime 空、无测试）
+G4  Provider 导入只有 Codex + Manual；ChatGPT/Claude/Gemini/Aider 为枚举占位
+G5  Run 状态三份副本（runs/bridge_tasks/runtime_bindings），10s 轮询收敛
+G6  相机双写（localStorage + active_contexts.viewport）
+G7  Metrics / Memory Graph / Outbox 独立表 ABSENT
 ```
 
-详见 `docs/audit/LCOS_FULLSTACK_REMAINING_ISSUES_MASTER_20260805.md`。
+完整清单：`docs/audit/LCOS_CURRENT_ARCHITECTURE_CENSUS_20260810.md`
 
 ## 启动
 
@@ -52,18 +52,15 @@ npm run dev:open
 
 ```powershell
 npm run check:fast
-npm run smoke:gatef-closeout
-npm run test:golden:full
+npm run smoke:gatef-core
 npm run test:e2e
 ```
 
-## 新增交付文档
+## 本包新增/重点文档
 
 ```text
-docs/product/LCOS_P0_CONVERSATION_IMPORT_PROJECT_BRIEF_20260805.md
-docs/audit/LCOS_FULLSTACK_REMAINING_ISSUES_MASTER_20260805.md
-docs/audit/LCOS_GATEF_REMAINING_GAPS_FOR_DEV_20260805.md（轻量导入设计）
-docs/audit/LCOS_MCP_COMPLETION_HELP_20260805.md（MCP 完善第一优先）
-docs/architecture/LCOS_MCP_BRIDGE_DECOUPLING_DESIGN_20260805.md（MCP/Bridge 解耦 + 开源借鉴）
-docs/testing/fixtures/conversation-import-sample/（真实会话导入样本）
+docs/audit/LCOS_CURRENT_ARCHITECTURE_CENSUS_20260810.md（本次全栈盘点）
+docs/handoffs/HANDOFF_REAL_CONVERSATION_CANVAS_20260810.md（会话实体化）
+docs/handoffs/PHASE_E_ACCEPTANCE_20260810.md（Spatial Phase E）
+docs/design/LCOS_PRODUCTION_INTERACTION_CONSOLIDATION_CONSTRUCTION_PLAN_20260803.md
 ```

@@ -16,7 +16,7 @@ if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
 $excludeDirs = @(
   '.git', 'node_modules', 'dist', 'build', 'test-results',
   '.codex-runtime', '.dev-launcher', '.workbuddy', '.agents',
-  'coverage', '.data'
+  'coverage', '.data', '.tmp', '__pycache__', '.pytest_cache', '.venv', 'venv'
 )
 $excludeFiles = @('.env', '.env.local', '.env.development', '.env.production')
 $excludeExts = @('.db', '.sqlite', '.sqlite3', '.log')
