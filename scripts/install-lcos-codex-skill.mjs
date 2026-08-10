@@ -9,6 +9,7 @@ const skillsRoot = join(codexHome, 'skills')
 const managedSkills = [
   'lcos-project-context',
   'lcos-project-curator',
+  'lcos-skill-author',
   'lcos-executor-run',
   'local-creative-os-backend-flow',
   'local-creative-os-frontend-loop',
