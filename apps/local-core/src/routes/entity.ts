@@ -34,6 +34,12 @@ function relationEntityBelongsToProject(
   if (entityType === 'artifact') return String(metadata.getArtifact(entityId)?.projectId ?? '') === projectId
   if (entityType === 'note') return String(metadata.getNote(entityId)?.projectId ?? '') === projectId
   if (entityType === 'scope') return metadata.get(projectId)?.scopes.some((scope) => String(scope.id) === entityId) ?? false
+  if (entityType === 'view') {
+    const view = metadata.getArtifactView(entityId)
+    if (view === undefined) return false
+    return String(metadata.getArtifact(String(view.artifactId))?.projectId ?? '') === projectId
+  }
+  if (entityType === 'workspace') return String(metadata.getWorkspace(entityId)?.projectId ?? '') === projectId
   return false
 }
 
