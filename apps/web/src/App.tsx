@@ -30,6 +30,7 @@ import { loadProjectCatalog, loadPrototypeState, saveProjectCatalog, savePrototy
 import { clearProjectNavigationState, loadProjectNavigationState, saveProjectNavigationState } from './state/projectNavigation'
 import { isRuntimeProjectMode } from './runtime/projectMode'
 import { usePresentationMembership } from './state/presentationViewState'
+import { loadPresentationLayoutEngines } from './features/layout/layoutEngines'
 import { buildWorkspaceFrames } from './state/workspaceFrames'
 import { RuntimeBridge, type DataSource, type SaveStatus } from './runtime/runtimeBridge'
 import { selectRuntimeProject } from './runtime/runtimeProjectSelection'
@@ -300,6 +301,12 @@ export function App() {
     setMembers: setWorkflowPresentationIds,
     seedMembers: () => [],
   })
+  // Phase C: preload layout engines in the background so the first 整理 click
+  // does not pay for the ELK/fCoSE bundle import.
+  useEffect(() => {
+    if (!isRuntimeProjectMode(bootMode)) return
+    void loadPresentationLayoutEngines().catch(() => { /* builtin fallback stays available */ })
+  }, [bootMode])
   const selectedNodes = selectedIds.map((id) => nodes.find((node) => node.id === id)).filter((node): node is CanvasNode => Boolean(node))
   const selectedId = selectedIds.at(-1) ?? null
   const singleSelectedNode = selectedIds.length === 1 ? selectedNodes[0] ?? null : null
