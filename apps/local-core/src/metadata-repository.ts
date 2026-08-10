@@ -50,6 +50,7 @@ import type {
   AnswerRunInputRequestV1,
   MutationBatch,
   PersistedContextManifestV0,
+  PresentationViewV0,
   ProjectGraphSnapshot,
   RejectArtifactReturnResult,
   ResourceDescriptorV0,
@@ -194,7 +195,30 @@ export class SqliteMetadataRepository {
     if (current === 17) { this.#migrate_018_from_v17(); current = 18 }
     if (current === 18) { this.#migrate_019_from_v18(); current = 19 }
     if (current === 19) { this.#migrate_020_from_v19(); current = 20 }
-    if (current !== 20) throw new Error(`Unsupported metadata schema version ${current}.`)
+    if (current === 20) { this.#migrate_021_from_v20(); current = 21 }
+    if (current !== 21) throw new Error(`Unsupported metadata schema version ${current}.`)
+  }
+
+  #migrate_021_from_v20(): void {
+    this.#database.exec(`
+      CREATE TABLE IF NOT EXISTS presentation_views (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        scope_id TEXT NOT NULL REFERENCES scopes(id) ON DELETE CASCADE,
+        capability TEXT NOT NULL,
+        renderer TEXT NOT NULL,
+        state_json TEXT NOT NULL,
+        version INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        updated_by TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_presentation_views_project
+      ON presentation_views(project_id);
+      CREATE INDEX IF NOT EXISTS idx_presentation_views_scope
+      ON presentation_views(project_id, scope_id);
+      PRAGMA user_version = 21;
+    `)
   }
 
 
@@ -1600,6 +1624,49 @@ export class SqliteMetadataRepository {
   upsertRelation(value: Relation): void { this.#upsertRelation(value) }
   deleteRelation(relationId: string): void { this.#database.prepare('DELETE FROM relations WHERE id = ?').run(relationId as SQLInputValue) }
 
+  // ==================== Presentation Views (schema v21) ====================
+
+  getPresentationView(projectId: string, id: string): PresentationViewV0 | undefined {
+    const rows = this.#database.prepare('SELECT * FROM presentation_views WHERE id = ? AND project_id = ?').all(id as SQLInputValue, projectId as SQLInputValue) as Row[]
+    return rows.length ? this.#presentationView(rows[0] as Row) : undefined
+  }
+
+  listPresentationViews(projectId: string): PresentationViewV0[] {
+    return (this.#database.prepare('SELECT * FROM presentation_views WHERE project_id = ? ORDER BY id').all(projectId as SQLInputValue) as Row[])
+      .map((row) => this.#presentationView(row))
+  }
+
+  insertPresentationView(value: PresentationViewV0): void {
+    this.#database.prepare(`
+      INSERT INTO presentation_views (id, project_id, scope_id, capability, renderer, state_json, version, created_at, updated_at, updated_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      value.id as SQLInputValue, value.projectId as SQLInputValue, value.scopeId as SQLInputValue,
+      value.capability, value.renderer, JSON.stringify(value.state), value.version,
+      value.createdAt, value.updatedAt, value.updatedBy,
+    )
+  }
+
+  compareAndSwapPresentationView(value: PresentationViewV0, expectedVersion: number): { readonly updated: boolean; readonly currentVersion: number } {
+    const existing = this.#database.prepare('SELECT version FROM presentation_views WHERE id = ? AND project_id = ?').get(value.id as SQLInputValue, value.projectId as SQLInputValue) as Row | undefined
+    if (existing === undefined) return { updated: false, currentVersion: 0 }
+    const currentVersion = Number(existing.version ?? 0)
+    if (currentVersion !== expectedVersion) return { updated: false, currentVersion }
+    const result = this.#database.prepare(`
+      UPDATE presentation_views
+      SET scope_id = ?, capability = ?, renderer = ?, state_json = ?, version = version + 1, updated_at = ?, updated_by = ?
+      WHERE id = ? AND project_id = ? AND version = ?
+    `).run(
+      value.scopeId as SQLInputValue, value.capability, value.renderer, JSON.stringify(value.state),
+      value.updatedAt, value.updatedBy, value.id as SQLInputValue, value.projectId as SQLInputValue, expectedVersion,
+    )
+    return { updated: result.changes === 1, currentVersion: expectedVersion + 1 }
+  }
+
+  deletePresentationView(projectId: string, id: string): void {
+    this.#database.prepare('DELETE FROM presentation_views WHERE id = ? AND project_id = ?').run(id as SQLInputValue, projectId as SQLInputValue)
+  }
+
   getNotes(projectId: string): Note[] {
     return (this.#database.prepare('SELECT * FROM notes WHERE project_id = ?').all(projectId as SQLInputValue) as Row[]).map((r) => this.#note(r))
   }
@@ -2851,7 +2918,7 @@ export class SqliteMetadataRepository {
     }
   }
 
-  get schemaVersion(): number { return 20 }
+  get schemaVersion(): number { return 21 }
 
   // ==================== Private helpers ====================
 
@@ -2908,6 +2975,24 @@ export class SqliteMetadataRepository {
       INSERT INTO artifacts VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET title=excluded.title, kind=excluded.kind, local_path=excluded.local_path, availability=excluded.availability, current_revision_id=excluded.current_revision_id, managed=excluded.managed, updated_at=excluded.updated_at
     `, [value.id as SQLInputValue, value.projectId as SQLInputValue, value.title, value.kind, '', value.availability, value.currentRevisionId as SQLInputValue ?? null, value.createdAt, value.updatedAt, managed])
+  }
+
+  #presentationView(row: Row): PresentationViewV0 {
+    const parsed = JSON.parse(String(row.state_json ?? '{}')) as unknown
+    const state = (parsed !== null && typeof parsed === 'object' ? parsed : {}) as PresentationViewV0['state']
+    return {
+      schemaVersion: 0,
+      id: String(row.id),
+      projectId: String(row.project_id),
+      scopeId: String(row.scope_id),
+      capability: String(row.capability) as PresentationViewV0['capability'],
+      renderer: String(row.renderer),
+      state,
+      version: Number(row.version ?? 0),
+      updatedBy: String(row.updated_by) as PresentationViewV0['updatedBy'],
+      createdAt: String(row.created_at),
+      updatedAt: String(row.updated_at),
+    }
   }
 
   #assertArtifactCurrentRevisionUnchanged(value: Artifact): void {

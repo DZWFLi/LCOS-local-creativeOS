@@ -1,13 +1,14 @@
 import type { PresentationViewV0 } from '@local-creative-os/contracts'
 
 /**
- * PresentationRepository — Phase A skeleton only.
- *
- * No SQLite table exists yet (deliberately). The interface is frozen so
- * routes/services never reach for raw SQL while the storage decision is open.
+ * PresentationRepository — thin SQL + row-mapping boundary only.
+ * It never performs member ownership validation or renderer validation;
+ * those belong to PresentationApplicationService.
  */
 export interface PresentationRepository {
-  getPresentationView(viewId: string): PresentationViewV0 | undefined
-  listPresentationViews(projectId: string, scopeId: string): readonly PresentationViewV0[]
-  savePresentationView(view: PresentationViewV0): void
+  getPresentationView(projectId: string, id: string): PresentationViewV0 | undefined
+  listPresentationViews(projectId: string): readonly PresentationViewV0[]
+  insertPresentationView(value: PresentationViewV0): void
+  compareAndSwapPresentationView(value: PresentationViewV0, expectedVersion: number): { readonly updated: boolean; readonly currentVersion: number }
+  deletePresentationView(projectId: string, id: string): void
 }

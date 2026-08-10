@@ -21,6 +21,7 @@ import { UniversalResourceImportService } from './resources/universal-resource-i
 import type { RuntimeApplicationService } from './runtime-application-service.js'
 import { RuntimeReviewService } from './runtime-review-service.js'
 import { WorkbenchService } from './workbench-service.js'
+import { PresentationApplicationService } from './presentation-application-service.js'
 import type { LocalCoreServerOptions } from './server.js'
 
 export interface LocalCoreServices {
@@ -48,6 +49,7 @@ export interface LocalCoreServices {
   readonly previewWorker: PreviewWorkerService | undefined
   readonly workbench: WorkbenchService | undefined
   readonly contextSnapshots: ContextSnapshotService | undefined
+  readonly presentation: PresentationApplicationService | undefined
 }
 
 /** 服务装配：把 options 解析成 createLocalCoreServer 需要的一组服务。 */
@@ -86,5 +88,6 @@ export function composeLocalCoreServices(options: LocalCoreServerOptions = {}): 
       })),
     workbench: options.workbenchService ?? (metadata === undefined ? undefined : new WorkbenchService(metadata)),
     contextSnapshots: options.contextSnapshotService ?? (metadata === undefined ? undefined : new ContextSnapshotService(metadata)),
+    presentation: metadata === undefined ? undefined : new PresentationApplicationService(metadata, metadata),
   }
 }

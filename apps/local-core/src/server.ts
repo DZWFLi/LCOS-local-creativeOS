@@ -82,6 +82,7 @@ import { handleHandoffsRoute } from './routes/handoffs.js'
 import { handleResourcesRoute } from './routes/resources.js'
 import { handleRuntimeRoute } from './routes/runtime.js'
 import { handleRunsRoute } from './routes/runs.js'
+import { handlePresentationsRoute } from './routes/presentations.js'
 import { handleArtifactsRoute } from './routes/artifacts.js'
 import { handleWorkspaceStatesRoute } from './routes/workspace-states.js'
 import { FORBIDDEN_BROWSER_PATH_FIELDS, isRecord, isStringArray } from './routes/route-context.js'
@@ -301,7 +302,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
     catalog, metadata, fileRegistry, fileObservation, importCopy, resources, packages, uploads,
     resourceReader, matcher, contextManifest, runtimeReview, runtimeApplication, activeContext,
     contextProposals, runEventListeners, obsidian, obsidianSessions, connectorRegistry,
-    ownsConversationService, conversations, previewWorker,
+    ownsConversationService, conversations, previewWorker, presentation,
   } = services
   metadata?.setRunEventSink?.((event) => {
     const payloadProjectId = (event.payload as { projectId?: string } | null)?.projectId
@@ -513,6 +514,16 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
         controller,
         metadata,
 
+        helpers: routeHelpers,
+      })) return
+      if (await handlePresentationsRoute({
+        method,
+        pathname,
+        url,
+        request,
+        response,
+        controller,
+        presentation,
         helpers: routeHelpers,
       })) return
       if (await handleRuntimeRoute({
