@@ -1,6 +1,7 @@
 import type { SearchEntityTypeV0 } from '@local-creative-os/contracts'
 
 import type { CurationQueryService } from '../curation-query-service.js'
+import type { CurationCommandService } from '../curation-command-service.js'
 import type { ProjectSearchService } from '../project-search-service.js'
 import type { SqliteMetadataRepository } from '../metadata-repository.js'
 import type { RouteHttpContext, RouteHttpHelpers } from './route-context.js'
@@ -8,6 +9,7 @@ import type { RouteHttpContext, RouteHttpHelpers } from './route-context.js'
 export interface CurationRouteContext extends RouteHttpContext {
   readonly helpers: RouteHttpHelpers
   readonly curation: CurationQueryService | undefined
+  readonly curationCommand: CurationCommandService | undefined
   readonly search: ProjectSearchService | undefined
 }
 
@@ -27,13 +29,15 @@ function titleForEntity(metadata: SqliteMetadataRepository, entityType: string, 
  * Phase D routes: bounded curation read, 1-hop related, federated search.
  */
 export async function handleCurationRoute(ctx: CurationRouteContext): Promise<boolean> {
-  const { method, pathname, url, request, response, controller, metadata, curation, search } = ctx
+  const { method, pathname, url, request, response, controller, metadata, curation, curationCommand, search } = ctx
   const { sendJson, failure, readJsonBody } = ctx.helpers
 
   const readMatch = /^\/projects\/([^/]+)\/curation\/read$/.exec(pathname)
   const relatedMatch = /^\/projects\/([^/]+)\/related$/.exec(pathname)
   const searchMatch = /^\/projects\/([^/]+)\/search$/.exec(pathname)
-  if (readMatch === null && relatedMatch === null && searchMatch === null) return false
+  const applyMatch = /^\/projects\/([^/]+)\/curation\/apply$/.exec(pathname)
+  const textMatch = /^\/projects\/([^/]+)\/curation\/text$/.exec(pathname)
+  if (readMatch === null && relatedMatch === null && searchMatch === null && applyMatch === null && textMatch === null) return false
   if (metadata === undefined) return false
 
   if (readMatch !== null && method === 'POST') {
@@ -103,6 +107,48 @@ export async function handleCurationRoute(ctx: CurationRouteContext): Promise<bo
       ...(types === undefined || types.length === 0 ? {} : { types }),
     })
     sendJson(response, 200, { ok: true, value })
+    return true
+  }
+
+  if (applyMatch !== null && method === 'POST') {
+    if (curationCommand === undefined) {
+      sendJson(response, 503, failure('UNAVAILABLE', 'Curation command service is not configured.'))
+      return true
+    }
+    const projectId = decodeURIComponent(applyMatch[1] ?? '')
+    const body = await readJsonBody(request, controller.signal) as { operationId?: string; schemaVersion?: number; projectId?: string; scopeId?: string; createTexts?: unknown[]; relations?: unknown[]; presentation?: unknown }
+    if (body?.schemaVersion !== 0 || typeof body.scopeId !== 'string' || !Array.isArray(body.createTexts) || !Array.isArray(body.relations)) {
+      sendJson(response, 400, failure('INVALID_ARGUMENT', 'Curation patch requires schemaVersion 0, scopeId, createTexts and relations.'))
+      return true
+    }
+    try {
+      const value = await curationCommand.applyPatch(projectId, body as never)
+      sendJson(response, value.applied ? 200 : 422, { ok: true, value })
+    } catch (error: unknown) {
+      sendJson(response, 400, failure('VALIDATION', error instanceof Error ? error.message : 'Curation patch failed.'))
+    }
+    return true
+  }
+
+  if (textMatch !== null && (method === 'POST' || method === 'PUT')) {
+    if (curationCommand === undefined) {
+      sendJson(response, 503, failure('UNAVAILABLE', 'Curation command service is not configured.'))
+      return true
+    }
+    const projectId = decodeURIComponent(textMatch[1] ?? '')
+    const body = await readJsonBody(request, controller.signal) as { scopeId?: string; title?: string; body?: string; viewId?: string; artifactId?: string }
+    if (typeof body.body !== 'string' || body.body.trim() === '') {
+      sendJson(response, 400, failure('INVALID_ARGUMENT', 'body is required.'))
+      return true
+    }
+    try {
+      const value = method === 'POST'
+        ? await curationCommand.createText(projectId, { scopeId: body.scopeId ?? '', ...(body.title === undefined ? {} : { title: body.title }), body: body.body })
+        : await curationCommand.updateText(projectId, { ...(body.viewId === undefined ? {} : { viewId: body.viewId }), ...(body.artifactId === undefined ? {} : { artifactId: body.artifactId }) }, body.body)
+      sendJson(response, 200, { ok: true, value })
+    } catch (error: unknown) {
+      sendJson(response, 400, failure('VALIDATION', error instanceof Error ? error.message : 'Text curation failed.'))
+    }
     return true
   }
   return false

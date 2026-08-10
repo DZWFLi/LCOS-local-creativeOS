@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { mkdir, stat, writeFile } from 'node:fs/promises'
-import { join, resolve } from 'node:path'
+import { copyFile, mkdir, stat, writeFile } from 'node:fs/promises'
+import { basename, dirname, join, resolve } from 'node:path'
 
 import type {
   Artifact,
@@ -30,6 +30,13 @@ export interface CreateTextArtifactResult {
   readonly viewId: string
   readonly fileRecordId: string
   readonly title: string
+}
+
+export interface ReviseManagedTextResult {
+  readonly artifactId: string
+  readonly viewId: string
+  readonly revisionId: string
+  readonly legacyMigrated: boolean
 }
 
 /**
@@ -111,4 +118,88 @@ export async function createTextArtifact(
     fileRecordId: String(fileRecord.id),
     title,
   }
+}
+
+/**
+ * Phase E (E3/E4/E5): Curation edit of a managed Text Artifact.
+ * - New revision files are immutable: .creative-os/notes/<artifactId>/<revisionId>.md
+ * - Legacy notes/text-<uuid>.md is migrated once on first revise (copied to the
+ *   immutable layout and the old FileRecord re-pointed)
+ * - currentRevisionId switches directly (Curation edit ≠ Managed Run draft)
+ */
+export async function reviseManagedTextArtifact(
+  repository: SqliteMetadataRepository,
+  projectId: ProjectId,
+  target: { readonly viewId?: string; readonly artifactId?: string },
+  body: string,
+  options: { readonly title?: string; readonly createdBy?: string } = {},
+): Promise<ReviseManagedTextResult> {
+  const project = repository.getProject(String(projectId))
+  if (project === undefined) throw new Error('Project not found.')
+  const artifact = target.artifactId === undefined
+    ? (target.viewId === undefined ? undefined : repository.getArtifact(String(repository.getArtifactView(target.viewId)?.artifactId ?? '')))
+    : repository.getArtifact(target.artifactId)
+  if (artifact === undefined || String(artifact.projectId) !== projectId) throw new Error('Managed text artifact not found.')
+  const currentRevisionId = artifact.currentRevisionId
+  if (currentRevisionId === undefined) throw new Error('Managed text artifact has no current revision.')
+  const previousRevision = repository.getArtifactRevision(currentRevisionId)
+  if (previousRevision === undefined) throw new Error('Current revision not found.')
+  const previousFileRecord = repository.getFileRecord(String(previousRevision.fileRecordId))
+  if (previousFileRecord === undefined) throw new Error('Current revision file record not found.')
+
+  const notesDir = resolve(project.rootPath, '.creative-os', 'notes')
+  const artifactDir = join(notesDir, artifact.id)
+  await mkdir(artifactDir, { recursive: true })
+
+  const now = new Date().toISOString()
+  const revisionId = `revision-text-${randomUUID()}`
+  const newPath = join(artifactDir, `${revisionId}.md`)
+  const contentHash = createHash('sha256').update(body, 'utf8').digest('hex')
+  await writeFile(newPath, body, 'utf8')
+
+  let legacyMigrated = false
+  const previousPath = previousFileRecord.observedPath
+  const previousIsLegacy = basename(dirname(previousPath)) === 'notes'
+    || (!previousPath.includes(join('notes', artifact.id)) && basename(previousPath).startsWith('text-'))
+  if (previousIsLegacy) {
+    const legacyRevisionPath = join(artifactDir, `${String(previousRevision.id)}.md`)
+    await copyFile(previousPath, legacyRevisionPath)
+    repository.upsertFileRecord({
+      ...previousFileRecord,
+      observedPath: legacyRevisionPath,
+      observedAt: now,
+    })
+    legacyMigrated = true
+  }
+
+  const newFileRecord: FileRecord = {
+    id: `file-text-${randomUUID()}` as FileRecord['id'],
+    projectId,
+    observedPath: newPath,
+    observedHash: contentHash as FileRecord['observedHash'],
+    size: Buffer.byteLength(body, 'utf8'),
+    modifiedAt: now,
+    mimeType: 'text/markdown' as const,
+    availability: 'current' as const,
+    observedAt: now,
+  }
+  const newRevision: ArtifactRevision = {
+    id: revisionId as ArtifactRevision['id'],
+    artifactId: artifact.id,
+    fileRecordId: newFileRecord.id,
+    parentRevisionId: previousRevision.id,
+    contentHash: contentHash as ArtifactRevision['contentHash'],
+    source: 'external' as const,
+    status: 'current' as const,
+    createdAt: now,
+  }
+  repository.commitManagedTextRevision({
+    artifact,
+    previousRevision,
+    newFileRecord,
+    newRevision,
+  })
+  const view = target.viewId
+    ?? repository.getArtifactViews(String(artifact.id))[0]?.id
+  return { artifactId: artifact.id, viewId: view ?? '', revisionId, legacyMigrated }
 }

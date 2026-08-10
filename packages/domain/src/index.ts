@@ -168,6 +168,11 @@ export interface Relation {
   readonly targetEntityType: RelationEntityType
   readonly targetEntityId: string
   readonly kind: string
+  /** Phase E: provenance — user / agent / system. */
+  readonly origin?: 'user' | 'agent' | 'system'
+  readonly createdBy?: string
+  readonly evidenceRefs?: readonly { readonly kind: 'artifact' | 'resource' | 'conversation' | 'file'; readonly id: string; readonly label?: string }[]
+  readonly confidence?: number
   readonly createdAt: IsoDateTime
   readonly updatedAt: IsoDateTime
 }

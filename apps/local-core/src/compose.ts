@@ -24,6 +24,7 @@ import { WorkbenchService } from './workbench-service.js'
 import { PresentationApplicationService } from './presentation-application-service.js'
 import { CurationQueryService } from './curation-query-service.js'
 import { ProjectSearchService } from './project-search-service.js'
+import { CurationCommandService } from './curation-command-service.js'
 import type { LocalCoreServerOptions } from './server.js'
 
 export interface LocalCoreServices {
@@ -54,12 +55,14 @@ export interface LocalCoreServices {
   readonly presentation: PresentationApplicationService | undefined
   readonly curation: CurationQueryService | undefined
   readonly search: ProjectSearchService | undefined
+  readonly curationCommand: CurationCommandService | undefined
 }
 
 /** 服务装配：把 options 解析成 createLocalCoreServer 需要的一组服务。 */
 export function composeLocalCoreServices(options: LocalCoreServerOptions = {}): LocalCoreServices {
   const metadata = options.metadataRepository
   const conversations = options.conversationImportService ?? (metadata === undefined ? undefined : new ConversationImportService(metadata))
+  const presentation = metadata === undefined ? undefined : new PresentationApplicationService(metadata, metadata)
   const importCopy = options.importCopyService ?? (metadata === undefined ? undefined : new ImportCopyService(metadata))
   const packages = options.resourcePackageService ?? (metadata === undefined ? undefined : new ResourcePackageService(metadata))
   const obsidian = options.obsidianConnector ?? new ObsidianReadOnlyConnector()
@@ -93,11 +96,15 @@ export function composeLocalCoreServices(options: LocalCoreServerOptions = {}): 
       })),
     workbench: options.workbenchService ?? (metadata === undefined ? undefined : new WorkbenchService(metadata)),
     contextSnapshots: options.contextSnapshotService ?? (metadata === undefined ? undefined : new ContextSnapshotService(metadata)),
-    presentation: metadata === undefined ? undefined : new PresentationApplicationService(metadata, metadata),
+    presentation,
     curation: metadata === undefined ? undefined : new CurationQueryService({
       repository: metadata,
       ...(conversations === undefined ? {} : { conversations }),
     }),
     search: metadata === undefined ? undefined : new ProjectSearchService(metadata, conversations),
+    curationCommand: metadata === undefined ? undefined : new CurationCommandService({
+      repository: metadata,
+      presentations: presentation!,
+    }),
   }
 }

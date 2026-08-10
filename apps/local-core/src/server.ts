@@ -303,7 +303,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
     catalog, metadata, fileRegistry, fileObservation, importCopy, resources, packages, uploads,
     resourceReader, matcher, contextManifest, runtimeReview, runtimeApplication, activeContext,
     contextProposals, runEventListeners, obsidian, obsidianSessions, connectorRegistry,
-    ownsConversationService, conversations, previewWorker, presentation, curation, search,
+    ownsConversationService, conversations, previewWorker, presentation, curation, search, curationCommand,
   } = services
   metadata?.setRunEventSink?.((event) => {
     const payloadProjectId = (event.payload as { projectId?: string } | null)?.projectId
@@ -537,6 +537,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
         controller,
         metadata,
         curation,
+        curationCommand,
         search,
         helpers: routeHelpers,
       })) return

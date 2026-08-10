@@ -196,7 +196,16 @@ export class SqliteMetadataRepository {
     if (current === 18) { this.#migrate_019_from_v18(); current = 19 }
     if (current === 19) { this.#migrate_020_from_v19(); current = 20 }
     if (current === 20) { this.#migrate_021_from_v20(); current = 21 }
-    if (current !== 21) throw new Error(`Unsupported metadata schema version ${current}.`)
+    if (current === 21) { this.#migrate_022_from_v21(); current = 22 }
+    if (current !== 22) throw new Error(`Unsupported metadata schema version ${current}.`)
+  }
+
+  #migrate_022_from_v21(): void {
+    try { this.#database.exec(`ALTER TABLE relations ADD COLUMN origin TEXT`) } catch {}
+    try { this.#database.exec(`ALTER TABLE relations ADD COLUMN created_by TEXT`) } catch {}
+    try { this.#database.exec(`ALTER TABLE relations ADD COLUMN evidence_json TEXT`) } catch {}
+    try { this.#database.exec(`ALTER TABLE relations ADD COLUMN confidence REAL`) } catch {}
+    this.#database.exec(`PRAGMA user_version = 22`)
   }
 
   #migrate_021_from_v20(): void {
@@ -1600,6 +1609,39 @@ export class SqliteMetadataRepository {
     this.#upsertArtifact(value)
   }
 
+  /**
+   * Phase E: Curation edit of a managed Text Artifact becomes the new Current
+   * Revision directly (no Draft Review). Managed Run results keep the
+   * draft → review → accept path in runtime services.
+   */
+  commitManagedTextRevision(input: {
+    readonly artifact: Artifact
+    readonly previousRevision: ArtifactRevision
+    readonly newFileRecord: FileRecord
+    readonly newRevision: ArtifactRevision
+  }): ArtifactRevision {
+    const current = this.getArtifact(String(input.artifact.id))?.currentRevisionId
+    if (current === undefined || String(current) !== String(input.previousRevision.id)) {
+      throw new Error('Managed text commit requires the current revision as base.')
+    }
+    if (input.newRevision.status !== 'current' || input.newRevision.source !== 'external') {
+      throw new Error('Managed text revision must be external source with current status.')
+    }
+    this.#database.exec('BEGIN IMMEDIATE;')
+    try {
+      this.#upsertFileRecord(input.newFileRecord)
+      this.#database.prepare('UPDATE artifact_revisions SET status = ? WHERE id = ?').run('superseded', input.previousRevision.id as SQLInputValue)
+      this.#upsertArtifactRevision(input.newRevision)
+      this.#database.prepare('UPDATE artifacts SET current_revision_id = ?, updated_at = ? WHERE id = ?')
+        .run(input.newRevision.id as SQLInputValue, input.newRevision.createdAt, input.artifact.id as SQLInputValue)
+      this.#database.exec('COMMIT;')
+      return input.newRevision
+    } catch (error: unknown) {
+      this.#database.exec('ROLLBACK;')
+      throw error
+    }
+  }
+
   getArtifactViews(artifactId: string): ArtifactView[] {
     return (this.#database.prepare('SELECT * FROM artifact_views WHERE artifact_id = ?').all(artifactId as SQLInputValue) as Row[]).map((r) => this.#artifactView(r))
   }
@@ -2918,7 +2960,7 @@ export class SqliteMetadataRepository {
     }
   }
 
-  get schemaVersion(): number { return 21 }
+  get schemaVersion(): number { return 22 }
 
   // ==================== Private helpers ====================
 
@@ -3055,9 +3097,16 @@ export class SqliteMetadataRepository {
 
   #upsertRelation(value: Relation): void {
     this.#database.prepare(`
-      INSERT INTO relations VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET source_entity_type=excluded.source_entity_type, source_entity_id=excluded.source_entity_id, target_entity_type=excluded.target_entity_type, target_entity_id=excluded.target_entity_id, kind=excluded.kind, updated_at=excluded.updated_at
-    `).run(value.id as SQLInputValue, value.projectId as SQLInputValue, value.sourceEntityType, value.sourceEntityId, value.targetEntityType, value.targetEntityId, value.kind, value.createdAt, value.updatedAt)
+      INSERT INTO relations (id, project_id, source_entity_type, source_entity_id, target_entity_type, target_entity_id, kind, created_at, updated_at, origin, created_by, evidence_json, confidence)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET source_entity_type=excluded.source_entity_type, source_entity_id=excluded.source_entity_id, target_entity_type=excluded.target_entity_type, target_entity_id=excluded.target_entity_id, kind=excluded.kind, updated_at=excluded.updated_at, origin=excluded.origin, created_by=excluded.created_by, evidence_json=excluded.evidence_json, confidence=excluded.confidence
+    `).run(
+      value.id as SQLInputValue, value.projectId as SQLInputValue, value.sourceEntityType, value.sourceEntityId,
+      value.targetEntityType, value.targetEntityId, value.kind, value.createdAt, value.updatedAt,
+      value.origin ?? null, value.createdBy ?? null,
+      value.evidenceRefs === undefined ? null : JSON.stringify(value.evidenceRefs),
+      value.confidence ?? null,
+    )
   }
 
   #upsertArtifactRevision(value: ArtifactRevision): void {
@@ -3243,7 +3292,21 @@ export class SqliteMetadataRepository {
   }
 
   #relation(row: Row): Relation {
-    return { id: row.id as RelationId, projectId: row.project_id as ProjectId, sourceEntityType: String(row.source_entity_type) as Relation['sourceEntityType'], sourceEntityId: String(row.source_entity_id), targetEntityType: String(row.target_entity_type) as Relation['targetEntityType'], targetEntityId: String(row.target_entity_id), kind: String(row.kind), createdAt: String(row.created_at), updatedAt: String(row.updated_at) }
+    return {
+      id: row.id as RelationId,
+      projectId: row.project_id as ProjectId,
+      sourceEntityType: String(row.source_entity_type) as Relation['sourceEntityType'],
+      sourceEntityId: String(row.source_entity_id),
+      targetEntityType: String(row.target_entity_type) as Relation['targetEntityType'],
+      targetEntityId: String(row.target_entity_id),
+      kind: String(row.kind),
+      createdAt: String(row.created_at),
+      updatedAt: String(row.updated_at),
+      ...(row.origin ? { origin: String(row.origin) as Relation['origin'] } : {}),
+      ...(row.created_by ? { createdBy: String(row.created_by) } : {}),
+      ...(row.evidence_json ? { evidenceRefs: JSON.parse(String(row.evidence_json)) as Relation['evidenceRefs'] } : {}),
+      ...(row.confidence !== undefined && row.confidence !== null ? { confidence: Number(row.confidence) } : {}),
+    } as Relation
   }
 
   #artifactRevision(row: Row): ArtifactRevision {
