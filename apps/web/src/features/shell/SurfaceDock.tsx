@@ -47,8 +47,8 @@ export const normalizeSurfaceId = (surface?: string | null): SurfaceId => {
 
 const capabilityForSurface = (surface: SurfaceId): CapabilityId => {
   const normalized = normalizeSurfaceId(surface)
-  if (normalized === 'arrange' || normalized === 'outline') return 'arrange'
-  if (normalized === 'context-flow' || normalized === 'context-tree' || normalized === 'context-graph') return 'context'
+  if (normalized === 'arrange') return 'arrange'
+  if (normalized === 'outline' || normalized === 'context-flow' || normalized === 'context-tree' || normalized === 'context-graph') return 'context'
   return 'workflow'
 }
 
@@ -98,8 +98,7 @@ export function SurfaceDock({ surface, scopePath, activeScopeId, workbenchScopeI
     <div className="vnext-lens-axis lcos-lens-axis" aria-label="LCOS 能力">
       <span className="lcos-dock-group-title">能力</span>
       {CAPABILITIES.map(({id,label,hint,Glyph})=><button key={id} type="button" className={capability===id?'active':''} aria-label={`${label}：${hint}`} title={hint} onClick={()=>setCapability(id)}><Glyph/><span className="lcos-dock-label">{label}</span></button>)}
-      {capability==='arrange' && <ProjectionPills options={[{id:'arrange',label:'自由'},{id:'outline',label:'大纲'}]} active={normalizedSurface==='outline'?'outline':'arrange'} onSelect={(id)=>onSurface(id as SurfaceId)}/>} 
-      {capability==='context' && <ProjectionPills options={[{id:'context-flow',label:'轨迹'},{id:'context-tree',label:'思维导图'},{id:'context-graph',label:'关系'}]} active={normalizedSurface==='context-tree'?'context-tree':normalizedSurface==='context-graph'?'context-graph':'context-flow'} onSelect={(id)=>onSurface(id as SurfaceId)}/>}
+      {capability==='context' && <ProjectionPills options={[{id:'context-flow',label:'轨迹'},{id:'outline',label:'大纲'},{id:'context-tree',label:'思维导图'},{id:'context-graph',label:'关系'}]} active={normalizedSurface==='outline'?'outline':normalizedSurface==='context-tree'?'context-tree':normalizedSurface==='context-graph'?'context-graph':'context-flow'} onSelect={(id)=>onSurface(id as SurfaceId)}/>}
       {capability==='workflow' && <span className="lcos-capability-hint" aria-hidden="true">自由搭建</span>}
     </div>
     {onZoomBy && onZoomReset && <div className="lcos-zoom-controls" aria-label="画布缩放">

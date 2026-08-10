@@ -615,35 +615,11 @@
 .lcos-reconstructed .lcos-package-list { display:grid; gap:9px; }
 
 /* ---------- Drop ---------- */
-.lcos-reconstructed .vnext-drop-gutter,
-.lcos-reconstructed .drop-gutter-left,
-.lcos-reconstructed .drop-gutter-bottom { z-index:80 !important; border:0 !important; background:transparent !important; pointer-events:none; }
-.lcos-reconstructed .drop-gutter span {
-  position:absolute;
-  left:50%;
-  top:50%;
-  transform:translate(-50%,-50%) scale(.92);
-  padding:7px 14px;
-  border:1px solid rgba(139,92,246,.24);
-  border-radius:999px;
-  background:rgba(255,255,255,.96);
-  color:#6b4fb5;
-  font-size:10px;
-  font-weight:620;
-  letter-spacing:.04em;
-  white-space:nowrap;
-  box-shadow:0 8px 24px rgba(52,44,84,.16);
-  opacity:0;
-  transition:opacity .06s ease,transform .06s ease;
-}
-.lcos-reconstructed .drop-gutter.active span { opacity:1; transform:translate(-50%,-50%) scale(1); }
-.lcos-reconstructed .drop-gutter.active { background:linear-gradient(0deg,rgba(139,92,246,.13),rgba(139,92,246,.04) 55%,transparent) !important; }
-.lcos-reconstructed .drop-gutter-left.active { background:linear-gradient(90deg,rgba(139,92,246,.13),rgba(139,92,246,.04) 55%,transparent) !important; }
-.lcos-reconstructed .drop-gutter-left::after,
-.lcos-reconstructed .vnext-drop-gutter-left::after { content:""; position:absolute; left:0; top:0; bottom:0; width:7px; background:linear-gradient(90deg,rgba(139,92,246,.18),rgba(59,130,246,.07),transparent); filter:blur(.4px); opacity:.78; }
-.lcos-reconstructed .drop-gutter-bottom::after,
-.lcos-reconstructed .vnext-drop-gutter-bottom::after { content:""; position:absolute; left:0; right:0; bottom:0; height:8px; background:linear-gradient(0deg,rgba(139,92,246,.17),rgba(59,130,246,.06),transparent); opacity:.78; }
-.lcos-reconstructed .drop-gutter.active::after { opacity:1; }
+/* Screen-space progressive cue. No persistent dual gutter: edge scrolling stays active until dwell completes. */
+.lcos-reconstructed .drop-edge-cue { z-index:80; border:0; pointer-events:none; }
+.lcos-reconstructed .drop-edge-cue.anchor-left { background:linear-gradient(90deg,rgba(139,92,246,.065),rgba(139,92,246,.015) 62%,transparent); }
+.lcos-reconstructed .drop-edge-cue.anchor-bottom { background:linear-gradient(0deg,rgba(59,130,246,.065),rgba(59,130,246,.014) 62%,transparent); }
+.lcos-reconstructed .drop-edge-cue.phase-preview { background:transparent; }
 
 /* Drop ghost — real nodes stay put, a light stack follows the pointer. */
 .lcos-drop-ghost {
@@ -781,12 +757,6 @@
   .lcos-reconstructed *::before,
   .lcos-reconstructed *::after { scroll-behavior:auto !important; animation-duration:.001ms !important; animation-iteration-count:1 !important; transition-duration:.001ms !important; }
 }
-
-/* The reconstructed SurfaceHost already excludes the persistent dock, so gutter
-   capture occupies the actual canvas edge rather than reserving a second 64px dock. */
-.lcos-reconstructed .drop-gutter-left { left:0 !important; top:0 !important; bottom:0 !important; width:92px !important; }
-.lcos-reconstructed .drop-gutter-bottom { left:0 !important; right:0 !important; bottom:0 !important; height:92px !important; }
-.lcos-reconstructed .drop-gutter span { display:none !important; }
 
 /* Actual dedicated-surface markup alignment. */
 .lcos-reconstructed .lcos-context-graph > .lcos-graph-edges { position:absolute; z-index:0; inset:48px 0 0; width:100%; height:calc(100% - 48px); pointer-events:none; }

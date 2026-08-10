@@ -28,6 +28,7 @@ export function SurfaceObject({ node, selected, compact = false, glyph = false, 
       {selected && <><span className="lcos-selected-bloom"/><span className="lcos-selected-ring"/></>}
       <Icon/>
       {(hover || selected) && <span className="lcos-glyph-label">{node.title}</span>}
+      {hover && <span className="lcos-surface-hover-card lcos-glyph-hover-card" aria-hidden="true"><strong>{node.title}</strong><small>{node.subtitle || node.previewText || '双击查看详细内容与一度关系'}</small><em>{node.observedPath || node.sourceProvider || role}</em></span>}
     </button>
   }
   return <button type="button" data-surface-role={role} className={`lcos-surface-object role-${role} file-${fileKind} ${selected ? 'selected' : ''} ${compact ? 'compact' : ''} ${dim ? 'dim' : ''}`} onPointerEnter={() => setHover(true)} onPointerLeave={() => setHover(false)} onClick={(event) => onSelect(node.id, event.shiftKey || event.metaKey || event.ctrlKey)} onDoubleClick={() => onDoubleClick(node.id)}>

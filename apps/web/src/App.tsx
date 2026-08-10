@@ -34,8 +34,8 @@ import { selectRuntimeProject } from './runtime/runtimeProjectSelection'
 import { createWorkspaceRecord, duplicateWorkspaceRecord, moveWorkspaceRecord, removeWorkspaceRecord, toggleWorkspaceLayer, updateWorkspaceRecord } from './state/workspaceState'
 import { fitBounds, fitBoundsForReading, getSelectionBounds, MIN_CANVAS_ZOOM, nodeDimensions, restorationFocusBounds, restoredCameraIsMeaningful, revealNode } from './features/canvas/canvasGeometry'
 import { findPendingReturnPosition } from './features/canvas/canvasLayout'
-import { applyScopeLayout, proposeIslandRecoveryLayout, proposeScopeLayout, type LayoutPreviewItem } from './features/canvas/scopeLayout'
-import { arrangeSelectedNodes } from './features/canvas/selectionLayout'
+import { applyScopeLayout, proposeIslandRecoveryLayout, type LayoutPreviewItem } from './features/canvas/scopeLayout'
+import { chooseLayoutStrategy, layoutPreviewSync } from './features/layout/layoutService'
 import { ArtifactWorkbench, type WorkbenchFocus } from './features/workbench/ArtifactWorkbench'
 import { canPreviewArtifact } from './features/viewer/artifactViewerRegistry'
 import { copyCanvasSelection, pasteCanvasNodes, pasteRelationTemplate, type CanvasClipboardPayload } from './state/canvasClipboard'
@@ -176,6 +176,10 @@ export function App() {
   const [selectionIntent, setSelectionIntent] = useState<RunOutputIntent>('analyze')
   const [selectionResultPolicy, setSelectionResultPolicy] = useState<ComposerResultPolicy>('reply_only')
   const [activeSurface, setActiveSurface] = useState<SurfaceId>('arrange')
+  // UI-only Presentation membership until the Local Core Presentation contract is approved.
+  // Selection never writes these implicitly.
+  const [contextPresentationIds, setContextPresentationIds] = useState<string[]>([])
+  const [workflowPresentationIds, setWorkflowPresentationIds] = useState<string[]>([])
   const [stagedTransfer, setStagedTransfer] = useState<{ ids: string[]; anchor: DropAnchor } | null>(null)
   const [immersiveNodeId, setImmersiveNodeId] = useState<string | null>(null)
   const [runtimeProviders, setRuntimeProviders] = useState<readonly RuntimeProviderStatus[]>([])
@@ -188,6 +192,7 @@ export function App() {
   const [workspaceEditor, setWorkspaceEditor] = useState<{ mode: 'create' | 'edit'; id?: string } | null>(null)
   const [renameNodeId, setRenameNodeId] = useState<string | null>(null)
   const [layoutPreview, setLayoutPreview] = useState<LayoutPreviewItem[] | null>(null)
+  const [layoutPreviewFocusIds, setLayoutPreviewFocusIds] = useState<string[] | null>(null)
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [scopeCreateOpen, setScopeCreateOpen] = useState(false)
   const [projectCreateOpen, setProjectCreateOpen] = useState(false)
@@ -225,6 +230,11 @@ export function App() {
   const [runEvents, setRunEvents] = useState<readonly RunEvent[]>([])
   const [runEventsError, setRunEventsError] = useState<string | null>(null)
   const [runtimeRecovering, setRuntimeRecovering] = useState(false)
+
+  useEffect(() => {
+    setContextPresentationIds([])
+    setWorkflowPresentationIds([])
+  }, [activeProjectId, scopeId])
 
   const objectUrls = useRef<Set<string>>(new Set())
   const clipboardRef = useRef<CanvasClipboardPayload | null>(null)
@@ -1787,27 +1797,41 @@ export function App() {
 
   const arrangeSelection = useCallback(() => {
     if (selectedIds.length < 2) { setNotice('至少选择两个对象后再整理'); return }
-    setNodes((current) => arrangeSelectedNodes(current, selectedIds)); setNotice('已整理所选对象')
-  }, [selectedIds, setNodes])
-
-  const previewScopeLayout = useCallback(() => {
-    const preview = proposeScopeLayout(nodes, scopeId, { respectLocked: true })
-    const lockedCount = nodes.filter((node) => (node.scopeId ?? 'scope-root') === scopeId && node.positionLocked).length
-    setLayoutPreview(preview)
-    setNotice(`正在预览语义布局${lockedCount ? ` · 已避开 ${lockedCount} 个固定对象` : ''}`)
-  }, [nodes, scopeId])
+    const selectedSet = new Set(selectedIds)
+    const selected = nodes.filter((node) => selectedSet.has(node.id))
+    const internalEdges = edges.filter((edge) => selectedSet.has(edge.from) && selectedSet.has(edge.to))
+    const bounds = getSelectionBounds(selected, selected.map((node) => node.id))
+    const requestBase = {
+      nodes: selected.map((node) => ({ id: node.id, x: node.x, y: node.y, width: node.width, height: node.height, pinned: Boolean(node.positionLocked) })),
+      edges: internalEdges,
+      gap: 30,
+      componentGap: 110,
+      origin: bounds ? { x: bounds.x, y: bounds.y } : undefined,
+      preserveManualAnchors: true,
+    }
+    const strategy = chooseLayoutStrategy(requestBase)
+    const proposal = layoutPreviewSync({ ...requestBase, strategy })
+    setLayoutPreview([...proposal.positions])
+    setLayoutPreviewFocusIds(selected.map((node) => node.id))
+    const anchorCount = selected.filter((node) => node.positionLocked).length
+    setNotice(strategy === 'manual'
+      ? `布局预览 · 当前 Selection 没有明确内部关系，只做碰撞修复${anchorCount ? ` · 保留 ${anchorCount} 个固定对象` : ''}`
+      : `关系布局预览 · ${proposal.componentCount} 个关系簇${anchorCount ? ` · 保留 ${anchorCount} 个固定对象` : ''}`)
+  }, [edges, nodes, selectedIds])
   const applyLayout = useCallback(() => {
     if (!layoutPreview) return
     const projected = applyScopeLayout(nodes, layoutPreview)
     setNodes(projected)
     setScopes((current) => current.map((scope) => scope.id === scopeId ? { ...scope, layoutMode: 'semantic', updatedAt: new Date().toISOString() } : scope))
     const projectedScope = projected.filter((node) => (node.scopeId ?? 'scope-root') === scopeId)
-    const bounds = getSelectionBounds(projectedScope, projectedScope.map((node) => node.id))
+    const focusIds = layoutPreviewFocusIds?.length ? layoutPreviewFocusIds : projectedScope.map((node) => node.id)
+    const bounds = getSelectionBounds(projected, focusIds)
     const viewport = document.querySelector<HTMLElement>('[data-testid="canvas"]')?.getBoundingClientRect()
     if (bounds) setCamera(fitBoundsForReading(bounds, viewport?.width ?? 1000, viewport?.height ?? 820, 72, safeInsets))
     setLayoutPreview(null)
-    setNotice('已应用当前画布布局')
-  }, [layoutPreview, nodes, safeInsets, scopeId, setNodes])
+    setLayoutPreviewFocusIds(null)
+    setNotice('已应用当前布局建议')
+  }, [layoutPreview, layoutPreviewFocusIds, nodes, safeInsets, scopeId, setNodes])
 
   const locateAndPreviewIslands = useCallback(() => {
     const preview = proposeIslandRecoveryLayout(visibleNodes, scopeId, { respectLocked: true })
@@ -1819,6 +1843,7 @@ export function App() {
     if (bounds) setCamera(fitBoundsForReading(bounds, viewport?.width ?? 1000, viewport?.height ?? 820, 72, safeInsets))
     if (preview.length) {
       setLayoutPreview(preview)
+      setLayoutPreviewFocusIds(null)
       setNotice(`发现 ${preview.length} 个孤立对象 · 预览归拢位置，确认后写入`)
     } else {
       setNotice('已定位当前内容')
@@ -3057,7 +3082,7 @@ export function App() {
       if (modifier && event.shiftKey && key === 'l') { event.preventDefault(); arrangeSelection(); return }
       if (modifier && key === 'o' && selectedNodes.length === 1) { event.preventDefault(); openNative(selectedNodes[0]); return }
       if (event.code === 'Space') { event.preventDefault(); setSpaceHeld(true); return }
-      if (event.key === 'Escape') { if (confirmProjectDelete) setConfirmProjectDelete(null); else if (confirmWorkspaceId) setConfirmWorkspaceId(null); else if (stagedTransfer) setStagedTransfer(null); else if (immersiveNodeId) setImmersiveNodeId(null); else if (workbench) setWorkbench(null); else if (capabilityOpen) setCapabilityOpen(false); else if (nodeInfoId) setNodeInfoId(null); else if (layoutPreview) setLayoutPreview(null); else clearSelection(); return }
+      if (event.key === 'Escape') { if (confirmProjectDelete) setConfirmProjectDelete(null); else if (confirmWorkspaceId) setConfirmWorkspaceId(null); else if (stagedTransfer) setStagedTransfer(null); else if (immersiveNodeId) setImmersiveNodeId(null); else if (workbench) setWorkbench(null); else if (capabilityOpen) setCapabilityOpen(false); else if (nodeInfoId) setNodeInfoId(null); else if (layoutPreview) { setLayoutPreview(null); setLayoutPreviewFocusIds(null) } else clearSelection(); return }
       if (key === 'c') { event.preventDefault(); requestComposerFocus(); return }
       if (event.key === 'Delete' || event.key === 'Backspace') {
         if (selectedIds.length) { deleteNodes(selectedIds); return }
@@ -3298,6 +3323,7 @@ export function App() {
         onPointerWorldChange: rememberCanvasPoint,
         onSpaceCreate: (point) => { lastCanvasPointRef.current = point; setCreateDialogOpen(true) },
         onStageTransfer: stageTransfer,
+        onCancelStageTransfer: cancelTransfer,
       },
       projection: {
         projectId: activeProjectId,
@@ -3306,6 +3332,8 @@ export function App() {
         nodes: visibleNodes,
         edges: visibleEdges,
         selectedIds,
+        presentationIds: activeSurface === 'workflow' ? workflowPresentationIds : activeSurface.startsWith('context-') ? contextPresentationIds : undefined,
+        presentationIncludeOneHop: true,
         workspaceFocusIds: effectiveWorkspace.focusedViewIds,
         contextRuntime: contextSurfaceRuntime,
         workRuntime: workSurfaceRuntime,
@@ -3314,11 +3342,21 @@ export function App() {
         onDoubleClick: handleDoubleClick,
         onContextStart: (kind) => {
           if (kind === 'conversation') { setConversationDialogOpen(true); return }
-          if (kind === 'selection') { setNotice(selectedIds.length ? '已用当前 Selection 建立临时 Context View' : '先选择要理解的对象'); return }
+          if (kind === 'selection') {
+            if (!selectedIds.length) { setNotice('先选择要理解的对象'); return }
+            setContextPresentationIds([...selectedIds])
+            setNotice(`已用当前 Selection 建立临时 Context View · ${selectedIds.length} 项`)
+            return
+          }
           requestComposerFocus(); setNotice('告诉 Agent 这次需要组织和找回哪段上下文')
         },
         onWorkflowStart: (kind) => {
-          if (kind === 'selection') { setNotice(selectedIds.length ? '已从当前 Selection 建立临时工作流 View' : '先选择要进入工作流的对象'); return }
+          if (kind === 'selection') {
+            if (!selectedIds.length) { setNotice('先选择要进入工作流的对象'); return }
+            setWorkflowPresentationIds([...selectedIds])
+            setNotice(`已从当前 Selection 建立临时工作流 View · ${selectedIds.length} 项`)
+            return
+          }
           if (kind === 'skill') { setCapabilityOpen(true); setNotice('在项目能力中选择 Skill 或已安装能力'); return }
           requestComposerFocus(); setNotice('告诉 Agent 要如何组织当前项目的工作方法')
         },
@@ -3394,7 +3432,7 @@ export function App() {
       } : null,
       layoutPreview: layoutPreview ? {
         onApply: applyLayout,
-        onCancel: () => setLayoutPreview(null),
+        onCancel: () => { setLayoutPreview(null); setLayoutPreviewFocusIds(null) },
       } : null,
       notice,
       nodeInfo: nodeInfoNode ? {

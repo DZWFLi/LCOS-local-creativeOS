@@ -9,6 +9,9 @@ const src = (relative: string) => fs.readFileSync(path.join(here, '..', 'src', r
 const app = src('App.tsx')
 const scene = src('features/shell/CanvasSceneHost.tsx')
 const canvas = src('features/canvas/ProjectCanvas.tsx')
+const spatialCanvas = src('features/spatial/SpatialCanvas.tsx')
+const spatialViewport = src('features/spatial/SpatialViewport.tsx')
+const spatialInteraction = src('features/spatial/spatialInteractionMachine.ts')
 const minimap = src('features/canvas/CanvasMiniMap.tsx')
 const navigation = src('state/projectNavigation.ts')
 const model = src('model.ts')
@@ -21,20 +24,21 @@ describe('v0.6.1 canvas interaction architecture', () => {
     expect(model).toContain('ProjectNavigationState')
   })
 
-  it('keeps zoom transform on CanvasWorld and screen HUD outside it', () => {
-    expect(canvas).toContain('data-testid="canvas-world"')
-    expect(canvas).toContain('scale(${camera.zoom})')
+  it('keeps zoom transform on the shared SpatialViewport and screen HUD outside it', () => {
+    expect(canvas).toContain('worldTestId="canvas-world"')
+    expect(spatialCanvas).toContain('<SpatialViewport')
+    expect(spatialViewport).toContain('spatialCameraTransform(camera)')
     expect(scene).toContain('data-testid="canvas-hud"')
   })
 
-  it('keeps anchor create menu outside the transformed CanvasWorld', () => {
-    const worldIndex = canvas.indexOf('data-testid="canvas-world"')
-    const worldEndIndex = canvas.indexOf('{marqueeRect &&', worldIndex)
-    const menuIndex = canvas.indexOf('data-testid="anchor-create-menu"', worldIndex)
-    expect(worldIndex).toBeGreaterThan(-1)
-    expect(menuIndex).toBeGreaterThan(worldIndex)
-    expect(menuIndex).toBeLessThan(worldEndIndex)
-    expect(canvas.slice(worldIndex, menuIndex)).toContain('</div>')
+  it('keeps anchor create menu in the shared screen-space overlay layer', () => {
+    expect(canvas).toContain('const spatialOverlays = <>')
+    expect(canvas).toContain('data-testid="anchor-create-menu"')
+    expect(canvas).toContain('overlays={spatialOverlays}')
+    const viewportIndex = spatialCanvas.indexOf('<SpatialViewport')
+    const overlayIndex = spatialCanvas.indexOf('<SpatialOverlayLayer>')
+    expect(viewportIndex).toBeGreaterThan(-1)
+    expect(overlayIndex).toBeGreaterThan(viewportIndex)
   })
 
   it('supports resize, workspace frame drag and active-scope minimap nodes', () => {
@@ -70,27 +74,28 @@ describe('v0.6.1 canvas interaction architecture', () => {
   })
 
   it('keeps selection actions and the prompt composer in screen space', () => {
-    const worldIndex = canvas.indexOf('data-testid="canvas-world"')
-    const toolbarIndex = canvas.indexOf('data-testid="selection-toolbar"')
+    const overlayIndex = canvas.indexOf('const spatialOverlays = <>')
+    const toolbarIndex = canvas.indexOf('data-testid="selection-toolbar"', overlayIndex)
     const composerIndex = canvas.indexOf('<SelectionComposer', toolbarIndex)
-    expect(worldIndex).toBeGreaterThan(-1)
-    expect(toolbarIndex).toBeGreaterThan(worldIndex)
-    expect(canvas.slice(worldIndex, toolbarIndex)).toContain('</div>')
+    expect(overlayIndex).toBeGreaterThan(-1)
+    expect(toolbarIndex).toBeGreaterThan(overlayIndex)
     expect(composerIndex).toBeGreaterThan(toolbarIndex)
+    expect(canvas).toContain('overlays={spatialOverlays}')
     expect(canvas).not.toContain('camera.zoom > .28')
   })
 
   it('captures marquee and relation pointers only after the shared drag threshold', () => {
-    expect(canvas).toContain('moved > 4')
-    expect(canvas).toContain('if (!box.moved && moved > 4)')
-    expect(canvas).toContain('event.currentTarget.setPointerCapture(box.pointerId)')
+      expect(canvas).toContain('advanceSpatialMarquee(session, { x: event.clientX, y: event.clientY }, 4)')
+      expect(spatialInteraction).toContain('Math.hypot(point.x - session.start.x, point.y - session.start.y) > threshold')
+      expect(canvas).toContain("if (next.kind === 'marquee' && !wasMoved && next.moved)")
+      expect(canvas).toContain('event.currentTarget.setPointerCapture(next.pointerId)')
     expect(canvas).toContain('if (!linkMoved.current && linkPointerId.current !== null)')
     const beginRelation = canvas.slice(canvas.indexOf('const beginRelation'), canvas.indexOf('const beginEdgeReconnect'))
     expect(beginRelation).not.toContain('setPointerCapture')
   })
 
   it('treats pointer cancellation as rollback rather than a successful commit', () => {
-    expect(canvas).toContain('onPointerCancel={(event) => finishPointer(event, true)}')
+    expect(canvas).toContain('onPointerCancel={({ event }) => finishPointer(event, true)}')
     expect(canvas).toContain('restoreDraggedOriginals(draggedCandidate)')
     expect(canvas).toContain('if (frameResize.current) onFrameBoundsChange?.(frameResize.current.workspaceId, frameResize.current.originalBounds)')
     expect(canvas).toContain('width: Math.max(220, item.originalBounds.width + dx)')
@@ -109,7 +114,8 @@ describe('v0.6.1 canvas interaction architecture', () => {
     expect(canvas).toContain('selectionCollapseCandidate.current = preserveMultiSelection ? node.id : null')
     expect(canvas).toContain('if (!wasDragging && draggedId && doublePressCandidate.current === draggedId)')
     expect(canvas).toContain('else if (!wasDragging && draggedId && selectionCollapseCandidate.current === draggedId)')
-    expect(canvas).toContain('doublePressCandidate.current = null\n        selectionCollapseCandidate.current = null')
+      expect(canvas).toContain('doublePressCandidate.current = null')
+      expect(canvas).toContain('selectionCollapseCandidate.current = null')
   })
 
   it('does not let stale Active Context hydration overwrite newer user selection intent', () => {
@@ -120,7 +126,7 @@ describe('v0.6.1 canvas interaction architecture', () => {
   })
 
   it('selects every visible node with Ctrl/Cmd+A only while the canvas owns focus', () => {
-    expect(canvas).toContain('data-testid="canvas" tabIndex={-1}')
+    expect(canvas).toContain('testId="canvas" tabIndex={-1}')
     expect(canvas).toContain("if (blankCanvas) event.currentTarget.focus({ preventScroll: true })")
     expect(app).toContain("activeElement?.closest('[data-testid=\"canvas\"]')")
     expect(app).toContain("modifier && key === 'a' && canvasActive")
@@ -132,10 +138,11 @@ describe('v0.6.1 canvas interaction architecture', () => {
     expect(selectAll).toBeGreaterThan(textGuard)
   })
 
-  it('routes only real external files into the Canvas import drop path', () => {
-    expect(canvas).toContain("if (event.dataTransfer.types.includes('Files')) event.preventDefault()")
-    expect(canvas).toContain('if (files.length === 0) return')
-    expect(canvas).toContain('onFilesDropped(files, point.x, point.y)')
+  it('routes only real external files through the shared Canvas import drop path', () => {
+    expect(spatialCanvas).toContain("event.dataTransfer.types.includes('Files')")
+    expect(spatialCanvas).toContain('if (!files.length) return')
+    expect(spatialCanvas).toContain('onFilesDropped(files, spatialScreenToWorld')
+    expect(canvas).toContain('onFilesDropped={(files, point) => onFilesDropped(files, point.x, point.y)}')
     expect(canvas).toContain('onDragStart={(event) => event.preventDefault()}')
   })
 

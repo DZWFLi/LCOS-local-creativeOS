@@ -18,7 +18,7 @@ describe('capability view resolver', () => {
     expect(view.edges.map((item) => item.id)).toEqual(['a-b'])
   })
 
-  it('uses Selection plus one hop without swallowing the project', () => {
+  it('uses explicitly committed objects plus one hop without swallowing the project', () => {
     const view = resolveContextView(nodes, edges, { explicitObjectIds: ['a'], includeOneHop: true }, [])
     expect(view.sourceKind).toBe('selection')
     expect(view.nodes.map((item) => item.id)).toEqual(['a', 'b'])

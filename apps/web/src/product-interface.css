@@ -1813,3 +1813,272 @@
   .first-artifact-guide > div { padding: 5px 6px; }
   .first-artifact-guide small { display: none; }
 }
+
+/* -------------------------------------------------------------------------- */
+/* VNext Spatial Canvas · Phase B shared interaction / presentation substrate  */
+/* -------------------------------------------------------------------------- */
+.lcos-reconstructed .lcos-spatial-canvas {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  touch-action: none;
+  overscroll-behavior: none;
+}
+.lcos-reconstructed .canvas.lcos-spatial-canvas { position:absolute; inset:0; }
+.lcos-reconstructed .lcos-spatial-viewport {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+.lcos-reconstructed .canvas-world.lcos-spatial-viewport { width:1180px; height:760px; }
+.lcos-reconstructed .lcos-presentation-world { width:1200px; height:760px; }
+.lcos-reconstructed .lcos-mind-map-world { width:1260px; height:760px; }
+.lcos-reconstructed .lcos-spatial-node-layer { position:absolute; inset:0; width:1px; height:1px; }
+.lcos-reconstructed .lcos-spatial-edge-layer {
+  position: absolute;
+  overflow: visible;
+  pointer-events: none;
+}
+.lcos-reconstructed .lcos-spatial-overlay-layer {
+  position: absolute;
+  z-index: 30;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.lcos-reconstructed .lcos-spatial-overlay-layer button,
+.lcos-reconstructed .lcos-spatial-overlay-layer input,
+.lcos-reconstructed .lcos-spatial-overlay-layer textarea,
+.lcos-reconstructed .lcos-spatial-overlay-layer select,
+.lcos-reconstructed .lcos-spatial-overlay-layer a,
+.lcos-reconstructed .lcos-spatial-overlay-layer summary { pointer-events:auto; }
+.lcos-reconstructed .lcos-spatial-placement { position:absolute; transform:none; }
+
+/* Arrange is now an adapter over the shared camera/viewport while preserving its world geometry. */
+.lcos-reconstructed .lcos-arrange-structure-layer,
+.lcos-reconstructed .lcos-arrange-node-layer { width:1px; height:1px; }
+
+/* Context + Workflow adapters share one camera grammar without forcing one renderer. */
+.lcos-reconstructed .lcos-context-free-stage.lcos-presentation-spatial,
+.lcos-reconstructed .lcos-workflow-stage.lcos-presentation-spatial {
+  position:relative;
+  height:calc(100% - 48px);
+  overflow:hidden;
+}
+.lcos-reconstructed .lcos-graph-stage.lcos-presentation-spatial,
+.lcos-reconstructed .lcos-mind-map-stage.lcos-presentation-spatial {
+  position:absolute;
+  inset:48px 0 0;
+  min-width:0;
+  min-height:0;
+  overflow:hidden;
+}
+.lcos-reconstructed .lcos-context-free-edges.lcos-spatial-edge-layer,
+.lcos-reconstructed .lcos-workflow-edges.lcos-spatial-edge-layer,
+.lcos-reconstructed .lcos-graph-edges.lcos-spatial-edge-layer,
+.lcos-reconstructed .lcos-mind-map-edges.lcos-spatial-edge-layer {
+  inset:auto;
+}
+.lcos-reconstructed .lcos-context-free-edges line,
+.lcos-reconstructed .lcos-graph-edges line { vector-effect:non-scaling-stroke; }
+.lcos-reconstructed .lcos-context-source-links path {
+  fill:none;
+  stroke:rgba(99,86,137,.17);
+  stroke-width:1.1;
+  stroke-dasharray:3 5;
+  vector-effect:non-scaling-stroke;
+}
+.lcos-reconstructed .lcos-context-free-node,
+.lcos-reconstructed .lcos-workflow-node { transform:none; }
+.lcos-reconstructed .lcos-context-free-node::before { display:none; }
+
+/* Obsidian-style local depth rings now live in world space, so pan/zoom never splits the diagram. */
+.lcos-reconstructed .lcos-context-graph::before,
+.lcos-reconstructed .lcos-context-graph::after { display:none; }
+.lcos-reconstructed .lcos-graph-ring {
+  position:absolute;
+  left:600px;
+  top:380px;
+  border:1px dashed rgba(120,116,160,.13);
+  border-radius:50%;
+  transform:translate(-50%,-50%);
+  pointer-events:none;
+}
+.lcos-reconstructed .lcos-graph-ring.ring-1 { width:420px; height:420px; }
+.lcos-reconstructed .lcos-graph-ring.ring-2 { width:680px; height:680px; }
+.lcos-reconstructed .lcos-graph-dot { transform:translate(-50%,-50%); }
+
+/* Mind-map root and topics keep their authored world coordinates inside the same viewport. */
+.lcos-reconstructed .lcos-mind-map-root { top:376px; left:118px; }
+
+/* Sidecars/overlays compact from actual spatial viewport density rather than renderer-specific guesses. */
+.lcos-reconstructed [data-spatial-density="compact"] .lcos-workflow-hint span { display:none; }
+.lcos-reconstructed [data-spatial-density="compact"] .lcos-workflow-hint { gap:4px; }
+.lcos-reconstructed [data-spatial-density="constrained"] .lcos-workflow-hint { left:8px; top:8px; padding:5px; }
+.lcos-reconstructed [data-spatial-density="constrained"] .lcos-workflow-hint span,
+.lcos-reconstructed [data-spatial-density="constrained"] .lcos-workflow-hint > svg { display:none; }
+.lcos-reconstructed [data-spatial-density="constrained"] .lcos-context-free-empty,
+.lcos-reconstructed [data-spatial-density="constrained"] .lcos-workflow-empty { width:min(330px,calc(100% - 28px)); }
+@media (max-width:980px) {
+  .lcos-reconstructed .lcos-context-history { right:12px; width:196px; }
+  .lcos-reconstructed .lcos-capability-source { max-width:min(270px,calc(100% - 28px)); }
+}
+
+@supports selector(:has(*)) {
+  .lcos-reconstructed .lcos-dedicated-surface:has([data-spatial-density="compact"]) .lcos-context-history { width:196px; right:14px; }
+  .lcos-reconstructed .lcos-dedicated-surface:has([data-spatial-density="constrained"]) .lcos-context-history { width:168px; right:8px; top:54px; padding:7px; }
+  .lcos-reconstructed .lcos-dedicated-surface:has([data-spatial-density="constrained"]) .lcos-context-history .lcos-handoff-mini-list { display:none; }
+  .lcos-reconstructed .lcos-dedicated-surface:has([data-spatial-density="compact"]) .lcos-capability-source { max-width:250px; }
+  .lcos-reconstructed .lcos-dedicated-surface:has([data-spatial-density="constrained"]) .lcos-capability-source { left:10px; max-width:210px; }
+  .lcos-reconstructed .lcos-dedicated-surface:has([data-spatial-density="constrained"]) .lcos-capability-source summary small { display:none; }
+}
+
+/* Shared Arrange edge layer owns explicit world bounds; legacy .edges inset must not win. */
+.lcos-reconstructed .edges.lcos-spatial-edge-layer { inset:auto; }
+
+/* Phase C — relation-aware layout is preview-first and preserves manual spatial anchors. */
+.lcos-reconstructed .lcos-layout-tools { display:flex; align-items:center; justify-content:flex-end; gap:6px; min-width:0; }
+.lcos-reconstructed .lcos-layout-tools > small { max-width:min(52vw,520px); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.lcos-reconstructed .lcos-layout-tools > button { height:26px; display:inline-flex; align-items:center; gap:5px; padding:0 8px; border:1px solid rgba(91,82,126,.10); border-radius:8px; color:rgba(49,47,58,.66); background:rgba(255,255,255,.58); font-size:8.5px; font-weight:620; }
+.lcos-reconstructed .lcos-layout-tools > button:hover:not(:disabled) { border-color:rgba(94,77,161,.20); color:#574c74; background:rgba(247,245,253,.92); }
+.lcos-reconstructed .lcos-layout-tools > button.quiet { border-color:transparent; background:transparent; color:rgba(49,47,58,.42); }
+.lcos-reconstructed .lcos-layout-tools > button:disabled { opacity:.38; cursor:default; }
+
+.lcos-reconstructed .lcos-spatial-layout-preview { position:absolute; z-index:48; left:50%; bottom:18px; min-height:38px; display:flex; align-items:center; gap:7px; padding:6px 7px 6px 10px; transform:translateX(-50%); border:1px solid rgba(96,79,159,.16); border-radius:12px; color:rgba(42,39,51,.72); background:rgba(253,252,255,.95); backdrop-filter:blur(18px) saturate(1.05); box-shadow:0 16px 38px rgba(45,38,66,.13); pointer-events:auto; }
+.lcos-reconstructed .lcos-spatial-layout-preview > span { display:grid; grid-template-columns:auto auto; grid-template-rows:auto auto; align-items:center; column-gap:5px; min-width:158px; }
+.lcos-reconstructed .lcos-spatial-layout-preview > span > svg { grid-row:1 / 3; color:#7565a8; }
+.lcos-reconstructed .lcos-spatial-layout-preview strong { font-size:9px; font-weight:680; }
+.lcos-reconstructed .lcos-spatial-layout-preview small { color:rgba(49,47,58,.42); font-size:7.5px; font-weight:520; }
+.lcos-reconstructed .lcos-spatial-layout-preview > button { height:27px; padding:0 9px; border:0; border-radius:8px; color:#fff; background:#65559a; font-size:8.5px; font-weight:670; }
+.lcos-reconstructed .lcos-spatial-layout-preview > button.quiet { color:rgba(49,47,58,.55); background:rgba(86,76,118,.055); }
+
+.lcos-reconstructed .lcos-layout-ghost { position:absolute; z-index:7; box-sizing:border-box; border:1px dashed rgba(100,82,167,.42); border-radius:11px; background:rgba(112,91,186,.055); box-shadow:0 0 0 4px rgba(112,91,186,.025); pointer-events:none; }
+.lcos-reconstructed .lcos-layout-ghost::before { content:""; position:absolute; inset:4px; border-radius:7px; background:linear-gradient(135deg,rgba(255,255,255,.42),rgba(119,98,188,.035)); }
+.lcos-reconstructed .lcos-layout-ghost > span { position:absolute; left:8px; right:8px; bottom:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:rgba(75,62,119,.62); font-size:7.5px; font-weight:620; }
+.lcos-reconstructed .lcos-workflow-stage.has-layout-preview .lcos-workflow-node { opacity:.72; }
+.lcos-reconstructed .lcos-workflow-stage.has-layout-preview .lcos-workflow-node.is-manual-anchor { opacity:1; }
+.lcos-reconstructed .lcos-workflow-edges .layout-preview-edge { fill:none; stroke:rgba(104,84,170,.34); stroke-width:1.25; stroke-dasharray:4 5; pointer-events:none; }
+.lcos-reconstructed .lcos-manual-anchor-mark { position:absolute; z-index:8; right:-4px; top:-4px; width:7px; height:7px; border:2px solid rgba(253,252,255,.96); border-radius:50%; background:#7565a8; box-shadow:0 1px 4px rgba(49,42,72,.2); pointer-events:none; }
+
+@media (max-width:860px) {
+  .lcos-reconstructed .lcos-layout-tools > small { display:none; }
+  .lcos-reconstructed .lcos-spatial-layout-preview { bottom:12px; max-width:calc(100% - 24px); }
+}
+
+/* Phase D — Context renderers share one Presentation model instead of separate demo state. */
+.lcos-reconstructed .lcos-renderer-source {
+  position:absolute;
+  z-index:22;
+  top:54px;
+  right:22px;
+  display:flex;
+  align-items:center;
+  gap:6px;
+  max-width:min(340px,calc(100% - 44px));
+  padding:5px 8px;
+  border:1px solid rgba(72,64,92,.07);
+  border-radius:9px;
+  color:rgba(62,56,76,.56);
+  background:rgba(253,252,254,.66);
+  backdrop-filter:blur(12px);
+  font-size:8px;
+  pointer-events:none;
+}
+.lcos-reconstructed .lcos-renderer-source > i { width:5px; height:5px; flex:0 0 auto; border-radius:50%; background:rgba(103,83,158,.52); }
+.lcos-reconstructed .lcos-renderer-source > span { overflow:hidden; color:rgba(55,49,70,.68); text-overflow:ellipsis; white-space:nowrap; }
+.lcos-reconstructed .lcos-renderer-source > small { color:rgba(67,61,80,.36); white-space:nowrap; }
+
+.lcos-reconstructed .lcos-mind-map-root { box-sizing:border-box; }
+.lcos-reconstructed .lcos-mind-topic-wrap.side-left .lcos-mind-topic { flex-direction:row-reverse; text-align:right; }
+.lcos-reconstructed .lcos-mind-topic-wrap.side-left .lcos-mind-topic-tools { right:auto; left:-30px; }
+.lcos-reconstructed .lcos-mind-topic-wrap.side-left .lcos-mind-topic > span { text-align:right; }
+.lcos-reconstructed .lcos-mind-map-edges path { stroke-linecap:round; stroke-linejoin:round; }
+
+.lcos-reconstructed .lcos-graph-edges path {
+  fill:none;
+  stroke:rgba(92,85,109,.15);
+  stroke-width:1;
+  vector-effect:non-scaling-stroke;
+  transition:stroke .16s ease,opacity .16s ease,stroke-width .16s ease;
+}
+.lcos-reconstructed .lcos-graph-edges path.secondary-edge { opacity:.44; }
+.lcos-reconstructed .lcos-graph-edges path.focus-edge { stroke:rgba(91,76,153,.34); opacity:.88; }
+.lcos-reconstructed .lcos-graph-edges path.active { stroke:rgba(76,92,180,.48); stroke-width:1.35; }
+.lcos-reconstructed .lcos-graph-dot.is-manual-anchor::after {
+  content:"";
+  position:absolute;
+  z-index:8;
+  right:-5px;
+  bottom:-5px;
+  width:6px;
+  height:6px;
+  border:1px solid rgba(95,78,153,.30);
+  border-radius:50%;
+  background:rgba(250,249,253,.94);
+}
+
+.lcos-reconstructed .lcos-context-strands-world { min-width:1200px; min-height:760px; }
+.lcos-reconstructed .lcos-context-strand-band {
+  position:absolute;
+  z-index:0;
+  box-sizing:border-box;
+  border-top:1px solid rgba(83,75,105,.075);
+  border-bottom:1px solid rgba(83,75,105,.035);
+  border-radius:14px;
+  background:linear-gradient(90deg,rgba(114,95,168,.018),rgba(255,255,255,.02) 52%,transparent);
+  pointer-events:none;
+}
+.lcos-reconstructed .lcos-context-strand-band > span {
+  position:absolute;
+  top:-13px;
+  left:8px;
+  color:rgba(76,69,91,.30);
+  font:600 7px/1 "JetBrains Mono",monospace;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+.lcos-reconstructed .lcos-context-free-edges path {
+  fill:none;
+  stroke:rgba(91,86,109,.18);
+  stroke-width:1.05;
+  vector-effect:non-scaling-stroke;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+}
+.lcos-reconstructed .lcos-context-free-edges path.active { stroke:rgba(92,80,176,.42); stroke-width:1.4; }
+.lcos-reconstructed .lcos-context-source-links path { stroke:rgba(102,87,149,.18); stroke-dasharray:3 5; }
+
+@media (max-width:1100px) {
+  .lcos-reconstructed .lcos-renderer-source { display:none; }
+  .lcos-reconstructed .lcos-projection-switch button { min-width:38px; padding-inline:8px; }
+}
+
+
+/* Phase D Context renderer maturity: editable Presentation strands and rich hover overlays. */
+.lcos-reconstructed .lcos-context-strands-heading { align-items:center; }
+.lcos-reconstructed .lcos-strand-controls { display:flex; align-items:center; gap:5px; }
+.lcos-reconstructed .lcos-strand-controls > small { margin-right:3px; color:rgba(58,52,72,.38); font-size:8px; }
+.lcos-reconstructed .lcos-strand-controls > button { display:flex; height:24px; align-items:center; gap:4px; padding:0 7px; border:1px solid rgba(72,64,94,.08); border-radius:8px; color:rgba(65,56,89,.62); background:rgba(255,255,255,.68); font-size:8px; }
+.lcos-reconstructed .lcos-strand-controls > button:hover:not(:disabled) { border-color:rgba(94,77,161,.18); color:#574c74; background:rgba(249,247,253,.92); }
+.lcos-reconstructed .lcos-strand-controls > button:disabled { opacity:.34; cursor:default; }
+.lcos-reconstructed .lcos-strand-controls > button.quiet { background:transparent; box-shadow:none; }
+.lcos-reconstructed .lcos-context-strand-band { pointer-events:none; }
+.lcos-reconstructed .lcos-context-strand-band.is-manual-anchor { border-color:rgba(103,82,164,.11); background:linear-gradient(90deg,rgba(114,95,168,.035),rgba(255,255,255,.025) 52%,transparent); }
+.lcos-reconstructed .lcos-context-strand-handle { position:absolute; z-index:2; top:-18px; left:8px; display:flex; height:19px; align-items:center; gap:4px; padding:0 6px; border:1px solid transparent; border-radius:7px; color:rgba(76,69,91,.32); background:transparent; font:600 7px/1 "JetBrains Mono",monospace; letter-spacing:.06em; text-transform:uppercase; pointer-events:auto; cursor:grab; touch-action:none; user-select:none; }
+.lcos-reconstructed .lcos-context-strand-handle:hover,.lcos-reconstructed .lcos-context-strand-handle:focus-visible { border-color:rgba(91,75,145,.10); color:rgba(76,62,118,.62); background:rgba(253,252,255,.80); }
+.lcos-reconstructed .lcos-context-strand-handle:active { cursor:grabbing; }
+.lcos-reconstructed .lcos-context-strand-band > span { display:none; }
+.lcos-reconstructed .lcos-context-free-edges > path { pointer-events:stroke; cursor:pointer; }
+.lcos-reconstructed .lcos-context-free-edges > path.presentation-edge { stroke:rgba(88,103,170,.36); stroke-dasharray:4 4; }
+.lcos-reconstructed .lcos-context-free-edges > path.selected { stroke:rgba(92,69,185,.70); stroke-width:1.7; }
+.lcos-reconstructed .lcos-context-source-links { pointer-events:none; }
+.lcos-reconstructed .lcos-glyph-hover-card { min-width:196px; }
+.lcos-reconstructed .lcos-mind-hover-card { top:calc(100% + 8px); opacity:0; visibility:hidden; animation:none; transform:translate(-50%,-3px) scale(.985); transition:opacity .14s ease,visibility .14s ease,transform .16s cubic-bezier(.22,1,.36,1); }
+.lcos-reconstructed .lcos-mind-topic-wrap:hover > .lcos-mind-hover-card,.lcos-reconstructed .lcos-mind-topic-wrap:focus-within > .lcos-mind-hover-card { opacity:1; visibility:visible; transform:translate(-50%,0) scale(1); }
+@media (max-width:1100px) {
+  .lcos-reconstructed .lcos-strand-controls > small { display:none; }
+  .lcos-reconstructed .lcos-strand-controls > button { padding-inline:6px; }
+}

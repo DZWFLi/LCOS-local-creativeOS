@@ -2,12 +2,21 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import type { RuntimeProviderStatus } from '@local-creative-os/contracts'
 import { ArrowDownToLine, Copy, CopyPlus, Ellipsis, FolderTree, LayoutGrid, Sparkles, Trash2 } from 'lucide-react'
 import type { Camera, CanvasEdge, CanvasNode, NodeDisplayMode, RunStatus, Workspace, WorkspaceFrameVM } from '../../model'
-import { applyWheelGesture, getSelectionBounds, nodeDensity } from './canvasGeometry'
+import { getSelectionBounds, nodeDensity } from './canvasGeometry'
 import { getPendingZoneBounds } from './canvasLayout'
 import type { LayoutPreviewItem } from './scopeLayout'
 import { CanvasNodeVisual, nodeVisualFamily } from './CanvasNodeVisual'
 import { SelectionComposer } from './SelectionComposer'
 import type { ArtifactRevisionProvenance } from '../../runtime/projectionAdapters'
+import { advanceDropIntent, completeDropDwell, dropDwellRemainingMs, DROP_INTENT_TOKENS, idleDropIntent, type DropIntentState } from '../drop/dropIntentMachine'
+import { SpatialCanvas } from '../spatial/SpatialCanvas'
+import { SpatialEdgeLayer } from '../spatial/SpatialEdgeLayer'
+import { SpatialNodeLayer } from '../spatial/SpatialNodeLayer'
+import { edgeScrollDelta, spatialBoundsForPlacements, spatialScreenToWorld, spatialViewportWorldBounds, spatialWorldToScreen } from '../spatial/spatialCamera'
+import { spatialIdsIntersectingScreenRect } from '../spatial/spatialHitTest'
+import { spatialLodForCount } from '../spatial/spatialLod'
+import { advanceSpatialMarquee, beginSpatialMarquee, endSpatialPointer, spatialMarqueeRect } from '../spatial/spatialInteractionMachine'
+import { IDLE_SPATIAL_POINTER, type SpatialPointerSession } from '../spatial/spatialTypes'
 
 interface Props {
   nodes: CanvasNode[]; setNodes: (nodes: CanvasNode[] | ((current: CanvasNode[]) => CanvasNode[])) => void
@@ -52,6 +61,7 @@ interface Props {
   onCreateNodeFromAnchor: (kind: 'note' | 'context', x: number, y: number, from: string) => void; onFilesDropped: (files: File[], x: number, y: number) => void
   onArrangeSelection: () => void; onCopySelection: () => void; onDuplicateSelection: () => void; onCreateScopeFromSelection: () => void; onDeleteSelection: () => void; onPointerWorldChange: (point: { x: number; y: number }) => void; onSpaceCreate: (point: { x: number; y: number }) => void
   onStageTransfer?: (ids: string[], anchor: 'left' | 'bottom') => void
+  onCancelStageTransfer?: () => void
 }
 
 type DragCandidate = { id: string; startX: number; startY: number; offsetX: number; offsetY: number; group: Array<{ id: string; dx: number; dy: number }>; originals: Array<{ id: string; x: number; y: number }> }
@@ -64,9 +74,8 @@ function additiveSelection(event: { shiftKey: boolean; ctrlKey: boolean; metaKey
   return event.shiftKey || event.ctrlKey || event.metaKey
 }
 
-export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edges, setEdges, camera, setCamera, selectedId, selectedIds, selectedEdgeId, setSelectedEdgeId, pendingId, runId, runStatus, spaceHeld, locked = false, layoutPreview, workspaceFrames = [], workspaceMemberNodes = nodes, activeWorkspaceId = null, onWorkspaceActivate, onPresentationInteractionChange, onPresentationCommit, onFrameBoundsChange, selectionComposer, onSelect, onClearSelection, onMarqueeSelect, onSelectEdge, onDoubleClick, onDetails, onRequestAi, onCreateNodeFromAnchor, onFilesDropped, onArrangeSelection, onCopySelection, onDuplicateSelection, onCreateScopeFromSelection, onDeleteSelection, onPointerWorldChange, onSpaceCreate, onStageTransfer }: Props) {
+export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edges, setEdges, camera, setCamera, selectedId, selectedIds, selectedEdgeId, setSelectedEdgeId, pendingId, runId, runStatus, spaceHeld, locked = false, layoutPreview, workspaceFrames = [], workspaceMemberNodes = nodes, activeWorkspaceId = null, onWorkspaceActivate, onPresentationInteractionChange, onPresentationCommit, onFrameBoundsChange, selectionComposer, onSelect, onClearSelection, onMarqueeSelect, onSelectEdge, onDoubleClick, onDetails, onRequestAi, onCreateNodeFromAnchor, onFilesDropped, onArrangeSelection, onCopySelection, onDuplicateSelection, onCreateScopeFromSelection, onDeleteSelection, onPointerWorldChange, onSpaceCreate, onStageTransfer, onCancelStageTransfer }: Props) {
   const canvasRef = useRef<HTMLDivElement | null>(null)
-  const pan = useRef<{ x: number; y: number; camera: Camera } | null>(null)
   const dragCandidate = useRef<DragCandidate | null>(null)
   const resizeCandidate = useRef<ResizeCandidate | null>(null)
   const workspaceDrag = useRef<WorkspaceDragCandidate | null>(null)
@@ -76,9 +85,6 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
   const dragFrame = useRef<number | null>(null)
   const autoPanFrame = useRef<number | null>(null)
   const autoPanPointer = useRef<{ x: number; y: number } | null>(null)
-  const wheelFrame = useRef<number | null>(null)
-  const wheelPan = useRef({ x: 0, y: 0 })
-  const wheelZoom = useRef<{ deltaY: number; anchorX: number; anchorY: number; precision: boolean } | null>(null)
   const suppressClick = useRef<string | null>(null)
   const lastNodePress = useRef<{ id: string; time: number; x: number; y: number } | null>(null)
   const doublePressCandidate = useRef<string | null>(null)
@@ -90,28 +96,26 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
   const linkMoved = useRef(false)
   const edgeReconnect = useRef<EdgeReconnectCandidate | null>(null)
   const [linkPoint, setLinkPoint] = useState<{ x: number; y: number } | null>(null)
-  const [panning, setPanning] = useState(false)
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [resizingId, setResizingId] = useState<string | null>(null)
   const [draggingWorkspaceId, setDraggingWorkspaceId] = useState<string | null>(null)
-  const [dropGutter, setDropGutter] = useState<'left' | 'bottom' | null>(null)
+  const dropIntent = useRef<DropIntentState>(idleDropIntent())
   const dropStageAnchor = useRef<'left' | 'bottom' | null>(null)
+  const [dropCue, setDropCue] = useState<{ anchor: 'left' | 'bottom'; phase: 'dwell' | 'preview'; key: number } | null>(null)
   const [dropGhost, setDropGhost] = useState<{ x: number; y: number; count: number } | null>(null)
-  const dropHoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const marquee = useRef<{ startX: number; startY: number; currentX: number; currentY: number; pointerId: number; moved: boolean } | null>(null)
+  const dropDwellTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const marquee = useRef<SpatialPointerSession>(IDLE_SPATIAL_POINTER)
   const [marqueeRect, setMarqueeRect] = useState<{ left: number; top: number; width: number; height: number } | null>(null)
   const [createMenu, setCreateMenu] = useState<{ from: string; x: number; y: number; screenX: number; screenY: number } | null>(null)
-  const toWorld = (clientX: number, clientY: number, rect: DOMRect) => ({ x: (clientX - rect.left - camera.x) / camera.zoom, y: (clientY - rect.top - camera.y) / camera.zoom })
-  const lod = nodes.length >= 300 ? 'overview' : nodes.length >= 150 ? 'simplified' : 'full'
+  const toWorld = (clientX: number, clientY: number, rect: DOMRect) => spatialScreenToWorld(clientX, clientY, rect, camera)
+  const lod = spatialLodForCount(nodes.length)
   const renderNodes = useMemo(() => {
     if (nodes.length < 150) return nodes
-    const width = canvasRef.current?.clientWidth ?? 1440
-    const height = canvasRef.current?.clientHeight ?? 900
-    const overscan = 460 / Math.max(.2, camera.zoom)
-    const left = -camera.x / camera.zoom - overscan
-    const top = -camera.y / camera.zoom - overscan
-    const right = left + width / camera.zoom + overscan * 2
-    const bottom = top + height / camera.zoom + overscan * 2
+    const viewport = spatialViewportWorldBounds(camera, { width: canvasRef.current?.clientWidth ?? 1440, height: canvasRef.current?.clientHeight ?? 900 }, 460)
+    const left = viewport.x
+    const top = viewport.y
+    const right = viewport.x + viewport.width
+    const bottom = viewport.y + viewport.height
     const keep = new Set([...selectedIds, ...(pendingId ? [pendingId] : [])])
     const candidates = nodes.filter((node) => keep.has(node.id) || (node.x < right && node.x + node.width > left && node.y < bottom && node.y + node.height > top))
     if (lod !== 'overview' || candidates.length <= 220) return candidates
@@ -135,13 +139,15 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
   const selectionBounds = selectedIds.length > 1 ? selectedBounds : null
   const overlayWidth = canvasRef.current?.clientWidth ?? 1440
   const overlayHeight = canvasRef.current?.clientHeight ?? 900
-  const selectionToolbarPosition = selectionBounds ? {
-    left: Math.max(12, Math.min(Math.max(12, overlayWidth - 190), camera.x + selectionBounds.x * camera.zoom)),
-    top: Math.max(12, Math.min(Math.max(12, overlayHeight - 46), camera.y + selectionBounds.y * camera.zoom - 40)),
+  const selectionToolbarAnchor = selectionBounds ? spatialWorldToScreen({ x: selectionBounds.x, y: selectionBounds.y }, camera) : null
+  const selectionComposerAnchor = selectedBounds ? spatialWorldToScreen({ x: selectedBounds.x, y: selectedBounds.y + selectedBounds.height }, camera) : null
+  const selectionToolbarPosition = selectionToolbarAnchor ? {
+    left: Math.max(12, Math.min(Math.max(12, overlayWidth - 190), selectionToolbarAnchor.x)),
+    top: Math.max(12, Math.min(Math.max(12, overlayHeight - 46), selectionToolbarAnchor.y - 40)),
   } : null
-  const selectionComposerPosition = selectedBounds ? {
-    left: Math.max(12, Math.min(Math.max(12, overlayWidth - Math.min(430, overlayWidth - 24)), camera.x + selectedBounds.x * camera.zoom)),
-    top: Math.max(12, Math.min(Math.max(12, overlayHeight - 128), camera.y + (selectedBounds.y + selectedBounds.height) * camera.zoom + 12)),
+  const selectionComposerPosition = selectionComposerAnchor ? {
+    left: Math.max(12, Math.min(Math.max(12, overlayWidth - Math.min(430, overlayWidth - 24)), selectionComposerAnchor.x)),
+    top: Math.max(12, Math.min(Math.max(12, overlayHeight - 128), selectionComposerAnchor.y + 12)),
   } : null
   const pendingZone = useMemo(() => getPendingZoneBounds(nodes), [nodes])
   const zoomBand = camera.zoom < .35 ? '20' : camera.zoom < .6 ? '35' : camera.zoom < .9 ? '60' : '90'
@@ -163,7 +169,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
   useEffect(() => () => {
     if (dragFrame.current !== null) cancelAnimationFrame(dragFrame.current)
     if (autoPanFrame.current !== null) cancelAnimationFrame(autoPanFrame.current)
-    if (wheelFrame.current !== null) cancelAnimationFrame(wheelFrame.current)
+    if (dropDwellTimer.current !== null) clearTimeout(dropDwellTimer.current)
   }, [])
   useEffect(() => {
     const cancel = (event: KeyboardEvent) => {
@@ -186,17 +192,10 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
       cancelAnimationFrame(autoPanFrame.current)
       autoPanFrame.current = null
     }
-    if (wheelFrame.current !== null) {
-      cancelAnimationFrame(wheelFrame.current)
-      wheelFrame.current = null
-    }
-    wheelPan.current = { x: 0, y: 0 }
-    wheelZoom.current = null
     if (linkPointerId.current !== null && canvasRef.current?.hasPointerCapture(linkPointerId.current)) {
       canvasRef.current.releasePointerCapture(linkPointerId.current)
     }
     linkPointerId.current = null
-    pan.current = null
     dragCandidate.current = null
     resizeCandidate.current = null
     workspaceDrag.current = null
@@ -204,7 +203,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
     dragPoint.current = null
     autoPanPointer.current = null
     dragging.current = false
-    marquee.current = null
+    marquee.current = endSpatialPointer()
     link.current = null
     edgeReconnect.current = null
     linkTarget.current = null
@@ -214,13 +213,15 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
     doublePressCandidate.current = null
     selectionCollapseCandidate.current = null
     suppressClick.current = null
-    setPanning(false)
     setDraggingId(null)
     setResizingId(null)
     setDraggingWorkspaceId(null)
-    setDropGutter(null)
+    setDropCue(null)
     setDropGhost(null)
+    dropIntent.current = idleDropIntent()
     dropStageAnchor.current = null
+    if (dropDwellTimer.current !== null) clearTimeout(dropDwellTimer.current)
+    dropDwellTimer.current = null
     setMarqueeRect(null)
     setCreateMenu(null)
     setLinkPoint(null)
@@ -280,15 +281,9 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
         return
       }
       const bounds = autoPanBounds(rect)
-      const edge = 96
-      const maxStep = 18
-      const strength = (distance: number) => Math.min(1, Math.max(0, (edge - distance) / edge))
-      const left = strength(currentPointer.x - bounds.left)
-      const right = strength(bounds.right - currentPointer.x)
-      const top = strength(currentPointer.y - bounds.top)
-      const bottom = strength(bounds.bottom - currentPointer.y)
-      const cameraDeltaX = (left - right) * maxStep
-      const cameraDeltaY = (top - bottom) * maxStep
+      const cameraDelta = edgeScrollDelta(currentPointer, bounds, DROP_INTENT_TOKENS.edgeScrollBand, DROP_INTENT_TOKENS.edgeScrollMaxPxPerFrame)
+      const cameraDeltaX = cameraDelta.x
+      const cameraDeltaY = cameraDelta.y
       if (cameraDeltaX || cameraDeltaY) {
         setCamera((current) => ({ ...current, x: current.x + cameraDeltaX, y: current.y + cameraDeltaY }))
         if (dragCandidate.current && dragPoint.current) {
@@ -300,21 +295,6 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
       autoPanFrame.current = requestAnimationFrame(tick)
     }
     autoPanFrame.current = requestAnimationFrame(tick)
-  }
-  const scheduleWheel = () => {
-    if (wheelFrame.current !== null) return
-    wheelFrame.current = requestAnimationFrame(() => {
-      wheelFrame.current = null
-      const panDelta = wheelPan.current
-      const zoomGesture = wheelZoom.current
-      wheelPan.current = { x: 0, y: 0 }
-      wheelZoom.current = null
-      setCamera((current) => {
-        let next = applyWheelGesture(current, { deltaX: panDelta.x, deltaY: panDelta.y, zoom: false, anchorX: 0, anchorY: 0 })
-        if (zoomGesture) next = applyWheelGesture(next, { deltaX: 0, deltaY: zoomGesture.deltaY, zoom: true, anchorX: zoomGesture.anchorX, anchorY: zoomGesture.anchorY, precision: zoomGesture.precision })
-        return next
-      })
-    })
   }
   const connect = (from: string, to: string) => {
     if (from === to) return
@@ -358,19 +338,62 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
     onPresentationCommit?.(kind)
   }
 
-  const dropAnchorAt = (clientX: number, clientY: number, rect: DOMRect): 'left' | 'bottom' | null => {
-    // 投送热区必须 >= 自动平移触发区（96px），否则拖到边缘先触发平移，
-    // 节点从指针下溜走，投送永远抢不到。
-    const bottomCaptureTop = rect.bottom - 96
-    if (clientY >= bottomCaptureTop && clientY < rect.bottom) return 'bottom'
-    if (clientX <= rect.left + 96) return 'left'
-    return null
-  }
-
   const restoreDraggedOriginals = (candidate: DragCandidate | null) => {
     if (!candidate) return
     const originals = new Map(candidate.originals.map((item) => [item.id, item]))
     setNodes((current) => current.map((node) => { const original = originals.get(node.id); return original ? { ...node, x: original.x, y: original.y } : node }))
+  }
+
+  const clearDropDwellTimer = () => {
+    if (dropDwellTimer.current !== null) clearTimeout(dropDwellTimer.current)
+    dropDwellTimer.current = null
+  }
+
+  const beginDropPreview = (state: Extract<DropIntentState, { status: 'preview' }>) => {
+    const candidate = dragCandidate.current
+    const pointer = autoPanPointer.current
+    if (!candidate || !pointer) return
+    restoreDraggedOriginals(candidate)
+    stopAutoPan()
+    dropIntent.current = state
+    dropStageAnchor.current = state.anchor
+    setDropCue({ anchor: state.anchor, phase: 'preview', key: performance.now() })
+    setDropGhost({ x: pointer.x, y: pointer.y, count: candidate.group.length })
+    onStageTransfer?.(candidate.group.map((item) => item.id), state.anchor)
+  }
+
+  const armDropDwell = (state: Extract<DropIntentState, { status: 'dwell' }>) => {
+    clearDropDwellTimer()
+    setDropCue({ anchor: state.anchor, phase: 'dwell', key: state.startedAt })
+    dropDwellTimer.current = setTimeout(() => {
+      dropDwellTimer.current = null
+      const next = completeDropDwell(dropIntent.current, performance.now())
+      if (next.status !== 'preview') return
+      beginDropPreview(next)
+    }, dropDwellRemainingMs(state, performance.now()))
+  }
+
+  const updateDropIntentForDrag = (point: { x: number; y: number }, rect: DOMRect) => {
+    const previous = dropIntent.current
+    const overDestination = Boolean(document.elementFromPoint(point.x, point.y)?.closest('.vnext-drop-shelf'))
+    const next = advanceDropIntent(previous, point, rect, performance.now(), overDestination)
+    dropIntent.current = next
+    if (next.status === 'dwell') {
+      const changed = previous.status !== 'dwell' || previous.anchor !== next.anchor || previous.startedAt !== next.startedAt
+      if (changed) armDropDwell(next)
+    } else if (next.status === 'preview') {
+      clearDropDwellTimer()
+      setDropCue((current) => current?.phase === 'preview' && current.anchor === next.anchor ? current : { anchor: next.anchor, phase: 'preview', key: performance.now() })
+    } else {
+      clearDropDwellTimer()
+      setDropCue(null)
+      if (previous.status === 'preview') {
+        dropStageAnchor.current = null
+        setDropGhost(null)
+        onCancelStageTransfer?.()
+      }
+    }
+    return next
   }
 
   const finishPointer = (event: React.PointerEvent<HTMLDivElement>, cancelled = false) => {
@@ -401,16 +424,14 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
       }
       if (frameResize.current) onFrameBoundsChange?.(frameResize.current.workspaceId, frameResize.current.originalBounds)
       if (dragCandidate.current || resizeCandidate.current || workspaceDrag.current || frameResize.current) onPresentationInteractionChange?.(false)
-      if (dropHoverTimer.current !== null) clearTimeout(dropHoverTimer.current)
-      dropHoverTimer.current = null
-      pan.current = null
-      dragCandidate.current = null
+      clearDropDwellTimer()
+        dragCandidate.current = null
       resizeCandidate.current = null
       workspaceDrag.current = null
       frameResize.current = null
       dragPoint.current = null
       dragging.current = false
-      marquee.current = null
+      marquee.current = endSpatialPointer()
       link.current = null
       edgeReconnect.current = null
       linkTarget.current = null
@@ -421,13 +442,14 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
       doublePressCandidate.current = null
       selectionCollapseCandidate.current = null
       stopAutoPan()
-      setPanning(false)
-      setDraggingId(null)
+        setDraggingId(null)
       setResizingId(null)
       setDraggingWorkspaceId(null)
-      setDropGutter(null)
+      setDropCue(null)
       setDropGhost(null)
+      dropIntent.current = idleDropIntent()
       dropStageAnchor.current = null
+      onCancelStageTransfer?.()
       setMarqueeRect(null)
       setLinkPoint(null)
       if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
@@ -488,18 +510,19 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
         // pointerup 时指针捕获仍在 canvas 上，同步 click 会被事件系统吞掉；
         // 等捕获释放后再触发目的地投送。
         window.setTimeout(() => hit.click(), 0)
-      } else if (at?.closest('.vnext-drop-shelf') || dropAnchorAt(event.clientX, event.clientY, rect)) {
-        onStageTransfer?.(draggedCandidate.group.map((item) => item.id), stagedDropAnchor)
+      } else {
+        const overShelf = Boolean(at?.closest('.vnext-drop-shelf'))
+        const carry = advanceDropIntent({ status: 'preview', anchor: stagedDropAnchor }, { x: event.clientX, y: event.clientY }, rect, performance.now(), overShelf)
+        if (carry.status === 'preview') onStageTransfer?.(draggedCandidate.group.map((item) => item.id), stagedDropAnchor)
+        else onCancelStageTransfer?.()
       }
     }
-    setDropGutter(null)
+    setDropCue(null)
     setDropGhost(null)
+    dropIntent.current = idleDropIntent()
     dropStageAnchor.current = null
-    if (dropHoverTimer.current !== null) {
-      clearTimeout(dropHoverTimer.current)
-      dropHoverTimer.current = null
-    }
-    pan.current = null
+    if (dropDwellTimer.current !== null) clearTimeout(dropDwellTimer.current)
+    dropDwellTimer.current = null
     dragCandidate.current = null
     resizeCandidate.current = null
     workspaceDrag.current = null
@@ -507,25 +530,18 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
     dragPoint.current = null
     stopAutoPan()
     dragging.current = false
-    setPanning(false)
     setDraggingId(null)
     setResizingId(null)
     setDraggingWorkspaceId(null)
-    if (marquee.current) {
+    if (marquee.current.kind === 'marquee') {
       const box = marquee.current
       const rect = event.currentTarget.getBoundingClientRect()
-      const left = Math.min(box.startX, box.currentX), right = Math.max(box.startX, box.currentX), top = Math.min(box.startY, box.currentY), bottom = Math.max(box.startY, box.currentY)
+      const left = Math.min(box.start.x, box.current.x), right = Math.max(box.start.x, box.current.x), top = Math.min(box.start.y, box.current.y), bottom = Math.max(box.start.y, box.current.y)
       if (box.moved) {
-        const ids = nodes.filter((node) => {
-          const x = rect.left + camera.x + node.x * camera.zoom
-          const y = rect.top + camera.y + node.y * camera.zoom
-          const w = node.width * camera.zoom
-          const h = node.height * camera.zoom
-          return x < right && x + w > left && y < bottom && y + h > top
-        }).map((node) => node.id)
+        const ids = spatialIdsIntersectingScreenRect(nodes, { x: left, y: top, width: right - left, height: bottom - top }, camera, { x: rect.left, y: rect.top })
         onMarqueeSelect(ids, additiveSelection(event))
       }
-      marquee.current = null
+      marquee.current = endSpatialPointer()
       setMarqueeRect(null)
       if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
       return
@@ -566,15 +582,48 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
   }
 
-  return <div ref={canvasRef} data-testid="canvas" tabIndex={-1} data-node-count={nodes.length} data-edge-count={edges.length} data-locked={locked || undefined} data-camera-x={camera.x} data-camera-y={camera.y} data-camera-zoom={camera.zoom} aria-busy={locked || undefined} className={`canvas lod-${lod} zoom-band-${zoomBand} ${selectedId ? 'has-focus' : ''} ${panning ? 'panning' : ''} ${locked ? 'is-locked' : ''}`} style={{ '--canvas-zoom': String(camera.zoom) } as React.CSSProperties} onPointerDown={(event) => {
-    if (locked) { event.preventDefault(); event.stopPropagation(); return }
-    if (event.button === 1) {
-      event.preventDefault()
-      pan.current = { x: event.clientX, y: event.clientY, camera }
-      setPanning(true)
-      event.currentTarget.setPointerCapture(event.pointerId)
-      return
-    }
+
+  const edgeLayerBounds = useMemo(() => spatialBoundsForPlacements([
+    ...nodes.map((node) => ({ x: node.x, y: node.y, width: node.width, height: node.height })),
+    ...workspaceFrames.map((frame) => frame.bounds),
+    ...(linkPoint ? [{ x: linkPoint.x, y: linkPoint.y, width: 1, height: 1 }] : []),
+  ], 520), [linkPoint, nodes, workspaceFrames])
+
+  const spatialOverlays = <>
+      {lod !== 'full' && <div className="lod-badge">{nodes.length} 个节点 · {lod === 'overview' ? '总览聚合' : '视区降密度'}</div>}
+    {dropCue && <div key={dropCue.key} className={`drop-edge-cue anchor-${dropCue.anchor} phase-${dropCue.phase}`} data-testid={`drop-edge-cue-${dropCue.anchor}`} aria-hidden="true"><i/><span>{dropCue.phase === 'preview' ? '投送' : '停住以投送'}</span></div>}
+    {dropGhost && <div className="lcos-drop-ghost" style={{ left: dropGhost.x, top: dropGhost.y }} aria-hidden="true">
+      <span className="lcos-drop-ghost-stack"><i /><i /><i /></span>
+      <strong>{dropGhost.count}</strong>
+      <small>投送</small>
+    </div>}
+    {selectionToolbarPosition && <div data-testid="selection-toolbar" className="selection-toolbar lcos-selection-strip" style={selectionToolbarPosition} onPointerDown={(event) => event.stopPropagation()}>
+      <button type="button" aria-label="交给 Agent" title="交给 Agent" onClick={(event) => { event.stopPropagation(); onRequestAi() }}><Sparkles size={15} /><span>Agent</span></button>
+      <button type="button" aria-label="创建 Collection" title="创建 Collection" onClick={(event) => { event.stopPropagation(); onCreateScopeFromSelection() }}><FolderTree size={15} /><span>Collection</span></button>
+      {onStageTransfer && <button type="button" aria-label="投送所选" title="投送到其他空间" onClick={(event) => { event.stopPropagation(); onStageTransfer(selectedIds, 'bottom') }}><ArrowDownToLine size={15} /><span>投送</span></button>}
+      <button type="button" aria-label="整理所选" title="整理所选 · Ctrl/Cmd+Shift+L" onClick={(event) => { event.stopPropagation(); onArrangeSelection() }}><LayoutGrid size={15} /><span>整理</span></button>
+      <details className="lcos-selection-more" onPointerDown={(event) => event.stopPropagation()}>
+        <summary aria-label="更多操作" title="更多操作"><Ellipsis size={15}/></summary>
+        <div>
+          <button type="button" onClick={() => onCopySelection()}><Copy size={12}/>复制</button>
+          <button type="button" onClick={() => onDuplicateSelection()}><CopyPlus size={12}/>额外 View</button>
+          <button type="button" className="danger" onClick={() => onDeleteSelection()}><Trash2 size={12}/>删除 View</button>
+        </div>
+      </details>
+    </div>}
+    {selectionComposer && selectionComposerPosition && <SelectionComposer
+      nodes={nodes}
+      selectedIds={selectedIds}
+      zoom={camera.zoom}
+      x={selectionComposerPosition.left}
+      y={selectionComposerPosition.top}
+      {...selectionComposer}
+    />}
+    {createMenu && <div data-testid="anchor-create-menu" className="anchor-create-menu" style={{ left: createMenu.screenX, top: createMenu.screenY }} onPointerDown={(event) => event.stopPropagation()}><span>在此创建并连接</span><button data-testid="anchor-create-note" onClick={() => { onCreateNodeFromAnchor('note', createMenu.x, createMenu.y, createMenu.from); setCreateMenu(null) }}>文本</button><button data-testid="anchor-create-context" onClick={() => { onCreateNodeFromAnchor('context', createMenu.x, createMenu.y, createMenu.from); setCreateMenu(null) }}>内容集合</button><button className="cancel" onClick={() => setCreateMenu(null)}>取消</button></div>}
+    {marqueeRect && (() => { const rect = canvasRef.current?.getBoundingClientRect(); return <div data-testid="selection-marquee" className="marquee" style={{ left: marqueeRect.left - (rect?.left ?? 0), top: marqueeRect.top - (rect?.top ?? 0), width: marqueeRect.width, height: marqueeRect.height }} /> })()}
+  </>
+
+  return <SpatialCanvas ref={canvasRef} testId="canvas" tabIndex={-1} camera={camera} setCamera={setCamera} disabled={locked} ariaBusy={locked} locked={locked} nodeCount={nodes.length} edgeCount={edges.length} className={`canvas lod-${lod} zoom-band-${zoomBand} ${selectedId ? 'has-focus' : ''} ${locked ? 'is-locked' : ''}`} worldClassName="canvas-world" worldTestId="canvas-world" style={{ '--canvas-zoom': String(camera.zoom) } as React.CSSProperties} onPointerDown={({ event }) => {
     const target = event.target as HTMLElement
     const blankCanvas = !target.closest('[data-node-id], [data-workspace-frame], button, .edge, .edge-control')
     if (blankCanvas) event.currentTarget.focus({ preventScroll: true })
@@ -590,12 +639,9 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
     if (event.button === 0 && blankCanvas) {
       onSelectEdge(null)
       if (!additiveSelection(event)) onClearSelection()
-      marquee.current = { startX: event.clientX, startY: event.clientY, currentX: event.clientX, currentY: event.clientY, pointerId: event.pointerId, moved: false }
+      marquee.current = beginSpatialMarquee(event.pointerId, { x: event.clientX, y: event.clientY })
     }
-  }} onPointerMove={(event) => {
-    if (locked) { event.preventDefault(); event.stopPropagation(); return }
-    const rect = event.currentTarget.getBoundingClientRect()
-    onPointerWorldChange(toWorld(event.clientX, event.clientY, rect))
+  }} onPointerMove={({ event, rect }) => {
     if (resizeCandidate.current) {
       const item = resizeCandidate.current
       item.moved = item.moved || Math.hypot(event.clientX - item.startX, event.clientY - item.startY) > 2
@@ -626,20 +672,16 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
       onFrameBoundsChange?.(item.workspaceId, { ...item.bounds })
       return
     }
-    if (pan.current) {
-      const panState = pan.current
-      setCamera((current) => ({ ...current, x: panState.camera.x + event.clientX - panState.x, y: panState.camera.y + event.clientY - panState.y }))
-    }
-    if (marquee.current) {
-      marquee.current.currentX = event.clientX
-      marquee.current.currentY = event.clientY
-      const box = marquee.current
-      const moved = Math.hypot(box.currentX - box.startX, box.currentY - box.startY)
-      if (!box.moved && moved > 4) {
-        box.moved = true
-        try { event.currentTarget.setPointerCapture(box.pointerId) } catch { /* pointer may already be released */ }
+    if (marquee.current.kind === 'marquee') {
+      const session = marquee.current
+      const wasMoved = session.moved
+      const next = advanceSpatialMarquee(session, { x: event.clientX, y: event.clientY }, 4)
+      marquee.current = next
+      if (next.kind === 'marquee' && !wasMoved && next.moved) {
+        try { event.currentTarget.setPointerCapture(next.pointerId) } catch { /* pointer may already be released */ }
       }
-      if (box.moved) setMarqueeRect({ left: Math.min(box.startX, box.currentX), top: Math.min(box.startY, box.currentY), width: Math.abs(box.currentX - box.startX), height: Math.abs(box.currentY - box.startY) })
+      const visual = spatialMarqueeRect(next)
+      if (visual) setMarqueeRect(visual)
     }
     const candidate = dragCandidate.current
     if (candidate) {
@@ -657,55 +699,18 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
         try { canvasRef.current?.setPointerCapture(event.pointerId) } catch { /* synthetic or already released */ }
       }
       if (dragging.current) {
-        const anchor = onStageTransfer ? dropAnchorAt(event.clientX, event.clientY, rect) : null
-        if (anchor) {
-          // 投送优先：投送区与自动平移区同为 96px，指针进入即激活投送并停平移。
-          // stageAnchor 记录投送意图；dropGutter 只负责“当前仍在边缘”的视觉反馈。
-          dropStageAnchor.current = anchor
-          setDropGutter(anchor)
+        const pointer = { x: event.clientX, y: event.clientY }
+        autoPanPointer.current = pointer
+        const intent = onStageTransfer ? updateDropIntentForDrag(pointer, rect) : idleDropIntent()
+        const previewing = intent.status === 'preview'
+
+        if (previewing) {
           stopAutoPan()
-          const candidate = dragCandidate.current
-          if (!dropGhost && candidate) {
-            // 进入投送区：真实节点弹回拖拽前的原位，指针下换成虚影，
-            // 投送/取消都不再移动原画布节点。
-            if (candidate.originals.length > 0) {
-              setNodes((current) => current.map((node) => {
-                const original = candidate.originals.find((item) => item.id === node.id)
-                return original ? { ...node, x: original.x, y: original.y } : node
-              }))
-            }
-            setDropGhost({ x: event.clientX, y: event.clientY, count: candidate.group.length })
-          } else if (dropGhost) {
-            setDropGhost((current) => current ? { ...current, x: event.clientX, y: event.clientY } : current)
-          }
-          if (dropHoverTimer.current === null) {
-            // 顿一下（350ms）即视为用户主动进入投送：弹出投送面板，相机保持锁死。
-            dropHoverTimer.current = setTimeout(() => {
-              dropHoverTimer.current = null
-              const candidate = dragCandidate.current
-              if (candidate) onStageTransfer?.(candidate.group.map((item) => item.id), anchor)
-            }, 350)
-          }
-        } else if (dropGhost) {
-          // 离开边缘后 gutter 必须立即熄灭。stageAnchor + 虚影仍保留，
-          // 这样可以继续把虚影拖到已经展开的 DropShelf；若在画布中央松手则取消。
-          setDropGutter(null)
-          if (dropHoverTimer.current !== null) {
-            clearTimeout(dropHoverTimer.current)
-            dropHoverTimer.current = null
-          }
           setDropGhost((current) => current ? { ...current, x: event.clientX, y: event.clientY } : current)
         } else {
-          // 无投送意图：gutter 熄灭（松手不误触发），恢复自动平移。
-          // 96px 外 auto-pan 强度为 0，不会因边界抖动而晃画布。
-          if (dropHoverTimer.current !== null) {
-            clearTimeout(dropHoverTimer.current)
-            dropHoverTimer.current = null
-          }
-          setDropGutter(null)
-          scheduleAutoPan({ x: event.clientX, y: event.clientY })
-        }
-        if (!dropGhost) {
+          // Edge scrolling remains a normal camera behavior while the real nodes keep following the pointer.
+          // The narrower dwell band only arms a possible Drop; it does not steal the drag session.
+          scheduleAutoPan(pointer)
           const point = toWorld(event.clientX, event.clientY, rect)
           dragPoint.current = { x: point.x - candidate.offsetX, y: point.y - candidate.offsetY }
           scheduleDraggedNode()
@@ -722,28 +727,8 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
       setLinkPoint(toWorld(event.clientX, event.clientY, rect))
       linkTarget.current = relationTargetAt(event.clientX, event.clientY)
     }
-  }} onPointerUp={finishPointer} onPointerCancel={(event) => finishPointer(event, true)} onWheel={(event) => {
-    event.preventDefault()
-    if (locked) { event.stopPropagation(); return }
-    const rect = event.currentTarget.getBoundingClientRect()
-    const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? rect.height : 1
-    if (event.ctrlKey || event.metaKey) {
-      const current = wheelZoom.current
-      wheelZoom.current = { deltaY: (current?.deltaY ?? 0) + event.deltaY * unit, anchorX: event.clientX - rect.left, anchorY: event.clientY - rect.top, precision: event.shiftKey }
-    } else {
-      wheelPan.current = { x: wheelPan.current.x + event.deltaX * unit, y: wheelPan.current.y + event.deltaY * unit }
-    }
-    scheduleWheel()
-  }} onDragOver={(event) => {
-    if (event.dataTransfer.types.includes('Files')) event.preventDefault()
-  }} onDrop={(event) => {
-    const files = [...event.dataTransfer.files]
-    if (files.length === 0) return
-    event.preventDefault()
-    const point = toWorld(event.clientX, event.clientY, event.currentTarget.getBoundingClientRect())
-    onFilesDropped(files, point.x, point.y)
-  }}>
-    <div data-testid="canvas-world" className="canvas-world" style={{ transform: `translate3d(${camera.x}px, ${camera.y}px, 0) scale(${camera.zoom})` }}>
+  }} onPointerUp={({ event }) => finishPointer(event)} onPointerCancel={({ event }) => finishPointer(event, true)} onPointerWorldChange={onPointerWorldChange} onFilesDropped={(files, point) => onFilesDropped(files, point.x, point.y)} overlays={spatialOverlays}>
+    <SpatialNodeLayer className="lcos-arrange-structure-layer">
       {workspaceFrames.map((frame) => <div key={frame.workspaceId} data-testid={`workspace-frame-${frame.workspaceId}`} data-workspace-frame={frame.workspaceId} data-member-count={frame.memberViewIds.length} className={`workspace-frame ${frame.active ? 'active' : ''} ${draggingWorkspaceId === frame.workspaceId ? 'dragging' : ''}`} style={{ left: frame.bounds.x, top: frame.bounds.y, width: frame.bounds.width, height: frame.bounds.height }}>
         <button data-testid={`workspace-frame-header-${frame.workspaceId}`} className="workspace-frame-header" type="button" onClick={(event) => { event.stopPropagation(); onWorkspaceActivate?.(frame.workspaceId) }} onPointerDown={(event) => {
           if (locked || event.button !== 0) return
@@ -770,18 +755,14 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
       </div>)}
       {returnGroups.map((group) => <div key={group.id} className="return-group-mat" data-return-group={group.id} style={{ left: group.x, top: group.y, width: group.width, height: group.height }}><span>{group.id} · {group.count} 个返回结果</span></div>)}
       {pendingZone && <div className="pending-return-zone" style={{ left: pendingZone.x, top: pendingZone.y, width: pendingZone.width, height: pendingZone.height }}><span>待确认结果区</span></div>}
-      {onStageTransfer && draggingId && <><div className={`drop-gutter drop-gutter-left ${dropGutter === 'left' ? 'active' : ''}`} data-testid="drop-gutter-left"><span>投送</span></div><div className={`drop-gutter drop-gutter-bottom ${dropGutter === 'bottom' ? 'active' : ''}`} data-testid="drop-gutter-bottom"><span>投送</span></div></>}
-      {dropGhost && <div className="lcos-drop-ghost" style={{ left: dropGhost.x, top: dropGhost.y }} aria-hidden="true">
-        <span className="lcos-drop-ghost-stack"><i /><i /><i /></span>
-        <strong>{dropGhost.count}</strong>
-        <small>投送</small>
-      </div>}
       {layoutPreview?.map((item) => { const node = byId.get(item.id); return node ? <div key={item.id} className="layout-ghost" style={{ left: item.x, top: item.y, width: node.width, height: node.height }}><span>{node.title}</span></div> : null })}
-      <svg className="edges" width="1800" height="1100" aria-label="可编辑关系">
+    </SpatialNodeLayer>
+    <SpatialEdgeLayer bounds={edgeLayerBounds} className="edges" ariaLabel="可编辑关系">
         {renderEdges.map((edge) => <EdgePath key={edge.id} edge={edge} from={relationById.get(edge.from)} to={relationById.get(edge.to)} selected={selectedEdgeId === edge.id} focused={Boolean(selectedId && (edge.from === selectedId || edge.to === selectedId))} onSelect={onSelectEdge} onCut={(edgeId) => { setEdges((current) => current.filter((item) => item.id !== edgeId)); onSelectEdge(null) }} onReconnectStart={(endpoint, event) => beginEdgeReconnect(edge, endpoint, event)} />)}
         {link.current && linkPoint && relationById.get(link.current.from) && <TemporaryEdge from={relationById.get(link.current.from)!} to={linkPoint} />}
         {edgeReconnect.current && linkPoint && relationById.get(edgeReconnect.current.fixedId) && <ReconnectTemporaryEdge fixed={relationById.get(edgeReconnect.current.fixedId)!} moving={linkPoint} endpoint={edgeReconnect.current.endpoint} />}
-      </svg>
+    </SpatialEdgeLayer>
+    <SpatialNodeLayer className="lcos-arrange-node-layer">
       {selectionBounds && <div data-testid="selection-bounds" className="selection-bounds" style={{ left: selectionBounds.x - 10, top: selectionBounds.y - 10, width: selectionBounds.width + 20, height: selectionBounds.height + 20 }} />}
       {renderNodes.map((node) => <CanvasCard key={node.id} node={node} density={nodeDensity(node, lod)} zoom={camera.zoom} showDetails={camera.zoom > .2 && lod !== 'overview'} runId={runId} runStatus={runStatus} selected={selectedIds.includes(node.id)} multiSelected={selectedIds.length > 1 && selectedIds.includes(node.id)} pending={pendingId === node.id} dragging={draggingId === node.id} resizing={resizingId === node.id} workspaceMember={Boolean(activeWorkspaceId && workspaceFrames.find((frame) => frame.workspaceId === activeWorkspaceId)?.memberViewIds.includes(node.id))} onDetails={onDetails} onPointerDown={(event) => {
         if (event.button !== 0) return
@@ -816,33 +797,8 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
         setResizingId(node.id)
         try { canvasRef.current?.setPointerCapture(event.pointerId) } catch { /* browser owns capture */ }
       }} onLinkStart={(event) => beginRelation(node.id, event, { x: node.x + node.width, y: node.y + node.height / 2 })} />)}
-      {lod !== 'full' && <div className="lod-badge">{nodes.length} 个节点 · {lod === 'overview' ? '总览聚合' : '视区降密度'}</div>}
-    </div>
-    {selectionToolbarPosition && <div data-testid="selection-toolbar" className="selection-toolbar lcos-selection-strip" style={selectionToolbarPosition} onPointerDown={(event) => event.stopPropagation()}>
-      <button type="button" aria-label="交给 Agent" title="交给 Agent" onClick={(event) => { event.stopPropagation(); onRequestAi() }}><Sparkles size={15} /><span>Agent</span></button>
-      <button type="button" aria-label="创建 Collection" title="创建 Collection" onClick={(event) => { event.stopPropagation(); onCreateScopeFromSelection() }}><FolderTree size={15} /><span>Collection</span></button>
-      {onStageTransfer && <button type="button" aria-label="投送所选" title="投送到其他空间" onClick={(event) => { event.stopPropagation(); onStageTransfer(selectedIds, 'bottom') }}><ArrowDownToLine size={15} /><span>投送</span></button>}
-      <button type="button" aria-label="整理所选" title="整理所选 · Ctrl/Cmd+Shift+L" onClick={(event) => { event.stopPropagation(); onArrangeSelection() }}><LayoutGrid size={15} /><span>整理</span></button>
-      <details className="lcos-selection-more" onPointerDown={(event) => event.stopPropagation()}>
-        <summary aria-label="更多操作" title="更多操作"><Ellipsis size={15}/></summary>
-        <div>
-          <button type="button" onClick={() => onCopySelection()}><Copy size={12}/>复制</button>
-          <button type="button" onClick={() => onDuplicateSelection()}><CopyPlus size={12}/>额外 View</button>
-          <button type="button" className="danger" onClick={() => onDeleteSelection()}><Trash2 size={12}/>删除 View</button>
-        </div>
-      </details>
-    </div>}
-    {selectionComposer && selectionComposerPosition && <SelectionComposer
-      nodes={nodes}
-      selectedIds={selectedIds}
-      zoom={camera.zoom}
-      x={selectionComposerPosition.left}
-      y={selectionComposerPosition.top}
-      {...selectionComposer}
-    />}
-    {createMenu && <div data-testid="anchor-create-menu" className="anchor-create-menu" style={{ left: createMenu.screenX, top: createMenu.screenY }} onPointerDown={(event) => event.stopPropagation()}><span>在此创建并连接</span><button data-testid="anchor-create-note" onClick={() => { onCreateNodeFromAnchor('note', createMenu.x, createMenu.y, createMenu.from); setCreateMenu(null) }}>文本</button><button data-testid="anchor-create-context" onClick={() => { onCreateNodeFromAnchor('context', createMenu.x, createMenu.y, createMenu.from); setCreateMenu(null) }}>内容集合</button><button className="cancel" onClick={() => setCreateMenu(null)}>取消</button></div>}
-    {marqueeRect && (() => { const rect = canvasRef.current?.getBoundingClientRect(); return <div data-testid="selection-marquee" className="marquee" style={{ left: marqueeRect.left - (rect?.left ?? 0), top: marqueeRect.top - (rect?.top ?? 0), width: marqueeRect.width, height: marqueeRect.height }} /> })()}
-  </div>
+    </SpatialNodeLayer>
+  </SpatialCanvas>
 })
 
 function EdgePath({ edge, from, to, selected, focused, onSelect, onCut, onReconnectStart }: { edge: CanvasEdge; from?: CanvasNode; to?: CanvasNode; selected: boolean; focused: boolean; onSelect: (id: string) => void; onCut: (id: string) => void; onReconnectStart: (endpoint: 'from' | 'to', event: React.PointerEvent<SVGCircleElement>) => void }) {

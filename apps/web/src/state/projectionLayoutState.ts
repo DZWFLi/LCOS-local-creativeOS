@@ -2,11 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 
 export type ProjectionSurfaceKey = 'outline' | 'context-flow' | 'context-tree' | 'context-graph' | 'work' | 'deliver'
 
+/** Disposable renderer preferences only. Presentation hierarchy/geometry lives elsewhere. */
 export interface ProjectionLayoutState {
-  orderIds: string[]
-  depthById: Record<string, number>
-  collapsedIds: string[]
-  rootIds: string[]
   collapsedAxisIds: string[]
   hops: 1 | 2
   relationKinds: string[]
@@ -14,13 +11,9 @@ export interface ProjectionLayoutState {
 }
 
 const EMPTY: ProjectionLayoutState = {
-  orderIds: [],
-  depthById: {},
-  collapsedIds: [],
-  rootIds: [],
   collapsedAxisIds: [],
-  hops: 2,
-  relationKinds: ['reference', 'generate', 'modify', 'feedback'],
+  hops: 1,
+  relationKinds: [],
   selectedRevisionIds: [],
 }
 
@@ -53,7 +46,7 @@ function write(key: string, value: ProjectionLayoutState) {
   try { window.localStorage.setItem(key, JSON.stringify(value)) } catch { /* local browser policy */ }
 }
 
-/** Projection-only UI state. It never writes Arrange coordinates or canonical project objects. */
+/** Renderer preferences only. It never writes membership, hierarchy, positions or canonical project objects. */
 export function useProjectionLayoutState(projectId: string, scopeId: string, surface: ProjectionSurfaceKey, fallback: Partial<ProjectionLayoutState> = {}) {
   const key = useMemo(() => keyOf(projectId, scopeId, surface), [projectId, scopeId, surface])
   const [state, setState] = useState<ProjectionLayoutState>(() => read(key, fallback))

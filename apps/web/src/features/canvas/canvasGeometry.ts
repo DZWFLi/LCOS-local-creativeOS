@@ -1,15 +1,13 @@
 import type { Camera, CanvasNode, NodeDisplayMode } from '../../model'
+import { applySpatialWheelGesture, MAX_SPATIAL_ZOOM, MIN_SPATIAL_ZOOM, zoomSpatialCameraAt } from '../spatial/spatialCamera'
 
 export interface Bounds { x: number; y: number; width: number; height: number }
 export interface WheelGesture { deltaX: number; deltaY: number; zoom: boolean; anchorX: number; anchorY: number; precision?: boolean }
 export interface SafeInsets { left: number; right: number; top: number; bottom: number }
 type BoundedNode = { x: number; y: number; width: number; height: number }
 
-const TOUCHPAD_PAN_SENSITIVITY = 0.5
-const WHEEL_ZOOM_SENSITIVITY = 0.0035
-const PRECISION_ZOOM_MULTIPLIER = 0.35
-export const MIN_CANVAS_ZOOM = 0.02
-export const MAX_CANVAS_ZOOM = 2
+export const MIN_CANVAS_ZOOM = MIN_SPATIAL_ZOOM
+export const MAX_CANVAS_ZOOM = MAX_SPATIAL_ZOOM
 export const CANVAS_ZOOM_STEP = 0.05
 export const MIN_RESTORED_CAMERA_CONTENT_RATIO = 0.5
 export const MIN_RESTORED_CAMERA_READABLE_RATIO = 0.34
@@ -19,16 +17,11 @@ export const MAX_RESTORED_CAMERA_ZOOM = 1.25
 const NO_INSETS: SafeInsets = { left: 0, right: 0, top: 0, bottom: 0 }
 
 export function zoomCameraAt(camera: Camera, zoom: number, anchorX: number, anchorY: number): Camera {
-  const nextZoom = Math.max(MIN_CANVAS_ZOOM, Math.min(MAX_CANVAS_ZOOM, zoom))
-  const worldX = (anchorX - camera.x) / camera.zoom
-  const worldY = (anchorY - camera.y) / camera.zoom
-  return { x: anchorX - worldX * nextZoom, y: anchorY - worldY * nextZoom, zoom: nextZoom }
+  return zoomSpatialCameraAt(camera, zoom, anchorX, anchorY)
 }
 
 export function applyWheelGesture(camera: Camera, gesture: WheelGesture): Camera {
-  if (!gesture.zoom) return { ...camera, x: camera.x - gesture.deltaX * TOUCHPAD_PAN_SENSITIVITY, y: camera.y - gesture.deltaY * TOUCHPAD_PAN_SENSITIVITY }
-  const sensitivity = WHEEL_ZOOM_SENSITIVITY * (gesture.precision ? PRECISION_ZOOM_MULTIPLIER : 1)
-  return zoomCameraAt(camera, camera.zoom * Math.exp(-gesture.deltaY * sensitivity), gesture.anchorX, gesture.anchorY)
+  return applySpatialWheelGesture(camera, gesture)
 }
 
 export function getSelectionBounds(nodes: CanvasNode[], selectedIds: string[]): Bounds | null {
