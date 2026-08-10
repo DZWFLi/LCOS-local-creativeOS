@@ -28,14 +28,17 @@ export interface CurationSourceRefV0 {
 
 export interface CurationNodeV0 {
   readonly stableRef: string
+  readonly viewId?: string
   readonly title: string
   readonly contentKind: CurationContentKindV0
   readonly boundedText: string
   readonly fileHints?: readonly string[]
+  readonly urlHints?: readonly string[]
   readonly resourceHints?: readonly string[]
   readonly sourceRefs: readonly CurationSourceRefV0[]
   readonly currentRevisionId?: string
   readonly updatedAt?: string
+  readonly truncated: boolean
 }
 
 export interface CurationReadResultV0 {
@@ -43,5 +46,12 @@ export interface CurationReadResultV0 {
   readonly nodes: readonly CurationNodeV0[]
   readonly totalMatches: number
   readonly truncated: boolean
+  readonly budget?: CurationReadBudgetV0
   readonly generatedAt: string
+}
+
+export interface CurationReadBudgetV0 {
+  readonly maxItems?: number
+  readonly maxCharsPerItem?: number
+  readonly maxTotalChars?: number
 }

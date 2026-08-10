@@ -710,6 +710,14 @@ try {
   } else if (group === "open") {
     const projectId = action;
     result = { url: `http://127.0.0.1:5173/?agent=1${projectId ? `&project=${encodeURIComponent(projectId)}` : ""}` };
+  } else if (group === "node" || group === "selection" || group === "presentation" || group === "search") {
+    if (group === "search") {
+      const { runSearchCommand } = await import("./commands/search.mjs");
+      result = await runSearchCommand({ action, rest, coreRequest });
+    } else {
+      const { runCurationCommand } = await import("./commands/curation-query.mjs");
+      result = await runCurationCommand({ group, action, rest, coreRequest });
+    }
   } else {
     printHelp();
     process.exit(0);

@@ -22,6 +22,8 @@ import type { RuntimeApplicationService } from './runtime-application-service.js
 import { RuntimeReviewService } from './runtime-review-service.js'
 import { WorkbenchService } from './workbench-service.js'
 import { PresentationApplicationService } from './presentation-application-service.js'
+import { CurationQueryService } from './curation-query-service.js'
+import { ProjectSearchService } from './project-search-service.js'
 import type { LocalCoreServerOptions } from './server.js'
 
 export interface LocalCoreServices {
@@ -50,11 +52,14 @@ export interface LocalCoreServices {
   readonly workbench: WorkbenchService | undefined
   readonly contextSnapshots: ContextSnapshotService | undefined
   readonly presentation: PresentationApplicationService | undefined
+  readonly curation: CurationQueryService | undefined
+  readonly search: ProjectSearchService | undefined
 }
 
 /** 服务装配：把 options 解析成 createLocalCoreServer 需要的一组服务。 */
 export function composeLocalCoreServices(options: LocalCoreServerOptions = {}): LocalCoreServices {
   const metadata = options.metadataRepository
+  const conversations = options.conversationImportService ?? (metadata === undefined ? undefined : new ConversationImportService(metadata))
   const importCopy = options.importCopyService ?? (metadata === undefined ? undefined : new ImportCopyService(metadata))
   const packages = options.resourcePackageService ?? (metadata === undefined ? undefined : new ResourcePackageService(metadata))
   const obsidian = options.obsidianConnector ?? new ObsidianReadOnlyConnector()
@@ -79,7 +84,7 @@ export function composeLocalCoreServices(options: LocalCoreServerOptions = {}): 
     obsidianSessions: options.obsidianSessions ?? new ObsidianConnectorSessionStore(),
     connectorRegistry: options.connectorRegistry ?? new ResourceConnectorRegistry([obsidian]),
     ownsConversationService: options.conversationImportService === undefined && metadata !== undefined,
-    conversations: options.conversationImportService ?? (metadata === undefined ? undefined : new ConversationImportService(metadata)),
+    conversations,
     previewWorker: options.previewWorkerService
       ?? (metadata === undefined ? undefined : new PreviewWorkerService(metadata, {
         cacheService: new PreviewCacheService(metadata, {
@@ -89,5 +94,10 @@ export function composeLocalCoreServices(options: LocalCoreServerOptions = {}): 
     workbench: options.workbenchService ?? (metadata === undefined ? undefined : new WorkbenchService(metadata)),
     contextSnapshots: options.contextSnapshotService ?? (metadata === undefined ? undefined : new ContextSnapshotService(metadata)),
     presentation: metadata === undefined ? undefined : new PresentationApplicationService(metadata, metadata),
+    curation: metadata === undefined ? undefined : new CurationQueryService({
+      repository: metadata,
+      ...(conversations === undefined ? {} : { conversations }),
+    }),
+    search: metadata === undefined ? undefined : new ProjectSearchService(metadata, conversations),
   }
 }
