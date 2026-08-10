@@ -53,8 +53,10 @@ test.describe('LCOS vNext Phase 4', () => {
     const pick = selectedBoxes.reduce((a, b) => (b.y > a.y ? b : a))
     await page.mouse.move(pick.x + pick.w / 2, pick.y + pick.h / 2)
     await page.mouse.down()
+    // PhaseD drop intent: 进入底部 dwell band（44px）并停住 >520ms → phase-preview，再松手 commit
     await page.mouse.move(box.x + box.width / 2, box.y + box.height - 24, { steps: 8 })
-    await expect(page.getByTestId('drop-gutter-bottom')).toHaveClass(/active/)
+    await expect(page.locator('.drop-edge-cue.anchor-bottom')).toHaveClass(/phase-dwell/)
+    await expect(page.locator('.drop-edge-cue.anchor-bottom')).toHaveClass(/phase-preview/, { timeout: 3000 })
     await page.mouse.up()
     await expect(page.getByTestId('drop-shelf')).toBeVisible()
     await expect(dockButton(page, '上下文')).toBeVisible()
@@ -62,12 +64,10 @@ test.describe('LCOS vNext Phase 4', () => {
 
   test('outline/context history/relation editing controls are present', async ({ page }) => {
     await waitForSeedNodes(page)
-    await dockButton(page, '整理').click()
+    // PhaseD: 大纲/思维导图等投影归属「上下文」capability
+    await dockButton(page, '上下文').click()
     await dockButton(page, '大纲').click()
     await expect(page.locator('.lcos-outline-sheet')).toBeVisible()
-    await dockButton(page, '上下文').click()
-    await expect(page.locator('[data-testid="surface-context-flow"]')).toBeVisible()
-
     await dockButton(page, '整理').click()
     const edge = page.locator('.edge-hit').first()
     test.skip(await edge.count() === 0, 'Seed project needs at least one relation')

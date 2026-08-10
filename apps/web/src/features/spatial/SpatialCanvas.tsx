@@ -70,6 +70,7 @@ export const SpatialCanvas = forwardRef<HTMLDivElement, Props>(function SpatialC
   onPanningChange,
 }, forwardedRef) {
   const rootRef = useRef<HTMLDivElement | null>(null)
+  const wheelHandlerRef = useRef<(event: globalThis.WheelEvent) => void>(() => {})
   const pointerSession = useRef<SpatialPointerSession>(IDLE_SPATIAL_POINTER)
   const wheelFrame = useRef<number | null>(null)
   const wheelPan = useRef({ x: 0, y: 0 })
@@ -169,6 +170,19 @@ export const SpatialCanvas = forwardRef<HTMLDivElement, Props>(function SpatialC
     scheduleWheel()
   }
 
+  // React onWheel 是 passive 监听，preventDefault 会被拒绝并触发控制台警告；
+  // 改为原生 non-passive wheel 监听，保证缩放时能正确拦截页面滚动。
+  wheelHandlerRef.current = (event: globalThis.WheelEvent) => {
+    handleWheel(event as unknown as WheelEvent<HTMLDivElement>)
+  }
+  useEffect(() => {
+    const el = rootRef.current
+    if (!el) return
+    const onWheel = (event: globalThis.WheelEvent) => wheelHandlerRef.current(event)
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [])
+
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
     if (!onFilesDropped) return
     const files = [...event.dataTransfer.files]
@@ -199,7 +213,6 @@ export const SpatialCanvas = forwardRef<HTMLDivElement, Props>(function SpatialC
     onPointerMove={handlePointerMove}
     onPointerUp={(event) => { if (!finishPan(event)) onPointerUp?.(contextFor(event)) }}
     onPointerCancel={(event) => { if (!finishPan(event)) onPointerCancel?.(contextFor(event)) }}
-    onWheel={handleWheel}
     onDragOver={(event) => { if (onFilesDropped && event.dataTransfer.types.includes('Files')) event.preventDefault() }}
     onDrop={handleDrop}
   >
