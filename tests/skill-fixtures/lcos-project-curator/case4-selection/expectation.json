@@ -1,0 +1,8 @@
+{
+  "invariants": {
+    "scopeOnly": true,
+    "noRearrange": true,
+    "selectionRead": true
+  },
+  "notes": "只重组 Selection 内对象；不重排用户整个项目；用 selection read"
+}

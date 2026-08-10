@@ -8,6 +8,7 @@ const codexHome = resolve(process.env.CODEX_HOME || join(homedir(), '.codex'))
 const skillsRoot = join(codexHome, 'skills')
 const managedSkills = [
   'lcos-project-context',
+  'lcos-project-curator',
   'lcos-executor-run',
   'local-creative-os-backend-flow',
   'local-creative-os-frontend-loop',

@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "scenario": "三轮对话，无已有项目重复",
+  "sourceScope": "今天这三轮对话",
+  "rounds": [
+    { "round": 1, "user": "EP02 开场还是想用反差钩子，3 秒内抓人。", "assistant": "可以，保留产品轮子卖点，用情景剧氛围开场。" },
+    { "round": 2, "user": "David 对 pan 的执念要用特写点一下，不然观众不知道为什么。", "assistant": "加一个手持 pan 的特写戏剧镜头，把死装搞笑的点提出来。" },
+    { "round": 3, "user": "分屏先保留，但结构回到 recipe how to，参考海信框架。", "assistant": "好，视频结构回到 how-to，分屏作为表现手段保留。" }
+  ]
+}
