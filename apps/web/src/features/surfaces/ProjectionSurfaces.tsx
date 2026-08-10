@@ -25,7 +25,12 @@ export function ProjectionSurface(props:Props){
   const workflow=resolveWorkflowView(props.nodes,props.edges,intent)
   const isContext=props.surface==='outline'||props.surface==='context-flow'||props.surface==='context-tree'||props.surface==='context-graph'
   const resolved=isContext?context:props.surface==='workflow'?workflow:null
-  const common={projectId:props.projectId,scopeId:props.scopeId,nodes:resolved?.nodes??props.nodes,edges:resolved?.edges??props.edges,selectedIds:props.selectedIds,onSelect:props.onSelect,onDoubleClick:props.onDoubleClick}
+  // When the user activated a single-object Context source (e.g. an imported
+  // conversation) and the transient selection has been cleared, keep that
+  // source as the graph center instead of falling back to an arbitrary node.
+  const sourceFocus = context.sourceKind === 'selection' && intent.explicitObjectIds !== undefined && intent.explicitObjectIds.length > 0 ? intent.explicitObjectIds : []
+  const graphFocus = props.selectedIds.length > 0 ? props.selectedIds : sourceFocus
+  const common={projectId:props.projectId,scopeId:props.scopeId,nodes:resolved?.nodes??props.nodes,edges:resolved?.edges??props.edges,selectedIds:props.surface==='context-graph'?graphFocus:props.selectedIds,onSelect:props.onSelect,onDoubleClick:props.onDoubleClick}
   const contextRuntime=context.sourceKind==='conversation'?props.contextRuntime:undefined
   return <Suspense fallback={<SurfaceLoading/>}>{
     props.surface==='outline'?<OutlineSurface {...common} source={{kind:context.sourceKind,label:context.sourceLabel}}/>:

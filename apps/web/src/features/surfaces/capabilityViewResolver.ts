@@ -43,7 +43,9 @@ export function resolveContextView(nodes: readonly CanvasNode[], edges: readonly
   }
   if (intent.explicitObjectIds?.length) {
     const ids = idsForIntent(intent.explicitObjectIds, edges, intent.includeOneHop)
-    return { ...project(nodes, edges, ids), sourceKind: 'selection', sourceLabel: `${intent.explicitObjectIds.length} 个明确对象${intent.includeOneHop ? ' · 推荐 1 hop' : ''}` }
+    const sourceId = intent.explicitObjectIds.length === 1 ? intent.explicitObjectIds[0] : undefined
+    const singleTitle = sourceId === undefined ? undefined : nodes.find((node) => node.id === sourceId)?.title
+    return { ...project(nodes, edges, ids), sourceKind: 'selection', sourceLabel: singleTitle ? `${singleTitle} · 展开 1 hop` : `${intent.explicitObjectIds.length} 个明确对象${intent.includeOneHop ? ' · 推荐 1 hop' : ''}` }
   }
   const source = [...history].reverse().find((entry) => entry.current)
   if (source) {

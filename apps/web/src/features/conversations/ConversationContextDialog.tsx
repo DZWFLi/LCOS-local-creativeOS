@@ -15,7 +15,7 @@ function unwrap<T>(call: { readonly result: { readonly ok: true; readonly value:
   return call.result.value
 }
 
-export function ConversationContextDialog({ open, projectId, scopeId, workspaceId, client, onClose, onImported, onFocusArtifact, onRequestSectionAnnotation }: {
+export function ConversationContextDialog({ open, projectId, scopeId, workspaceId, client, onClose, onImported, onFocusArtifact, onActivateContextSource, onRequestSectionAnnotation }: {
   readonly open: boolean
   readonly projectId: string
   readonly scopeId: string
@@ -24,6 +24,7 @@ export function ConversationContextDialog({ open, projectId, scopeId, workspaceI
   readonly onClose: () => void
   readonly onImported: () => void
   readonly onFocusArtifact?: (artifactId: string) => void
+  readonly onActivateContextSource?: (viewId: string) => void
   readonly onRequestSectionAnnotation?: (input: { readonly conversationId: string; readonly sectionId: string; readonly sectionTitle: string }) => void
 }) {
   const inputRef = useRef<HTMLInputElement | null>(null)
@@ -250,7 +251,7 @@ export function ConversationContextDialog({ open, projectId, scopeId, workspaceI
       <button type="button" className="pressable" disabled={busy} onClick={() => setManualOpen((value) => !value)}><MessageSquare size={15}/>粘贴时间线</button>
       <button type="button" className="pressable" disabled={busy || sessions.length === 0} onClick={() => void buildIndex()}><Brain size={15}/>建立本地语义索引</button>
       <button type="button" className="pressable" disabled={busy || selectedId === null} onClick={() => void exportConversation()}><Download size={15}/>导出当前对话</button>
-      <button type="button" className="pressable" disabled={!projection?.session.conversationArtifactId || onFocusArtifact === undefined} onClick={() => { const artifactId = projection?.session.conversationArtifactId; if (artifactId && onFocusArtifact) { onFocusArtifact(artifactId); onClose() } }}><Focus size={15}/>在画布中打开</button>
+      <button type="button" className="pressable" disabled={!projection?.session.conversationArtifactId || onFocusArtifact === undefined} onClick={() => { const artifactId = projection?.session.conversationArtifactId; const viewId = projection?.session.conversationViewId; if (artifactId && onFocusArtifact) { onFocusArtifact(artifactId); if (viewId && onActivateContextSource) onActivateContextSource(viewId); onClose() } }}><Focus size={15}/>在画布中打开</button>
       <div className="conversation-search"><Search size={14}/><input value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void runSearch() }} placeholder="搜索全部对话"/><label><input type="checkbox" checked={semantic} onChange={(event) => setSemantic(event.target.checked)}/>语义</label></div>
       <input ref={inputRef} hidden type="file" accept=".jsonl,application/x-ndjson" onChange={(event) => { const file = event.target.files?.[0]; event.target.value=''; if (file) void importJsonl(file) }}/>
     </div>

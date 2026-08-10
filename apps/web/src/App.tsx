@@ -3150,6 +3150,11 @@ export function App() {
     setNotice(`已定位「${node.title}」`)
   }, [nodes, safeInsets, scopeId, selectNode])
 
+  const activateConversationContextSource = useCallback((viewId: string) => {
+    setContextPresentationIds([viewId])
+    setNotice('已将该对话设为上下文投影来源，可在上下文视图中展开')
+  }, [])
+
   const contextSurfaceRuntime = useMemo<ContextSurfaceRuntime>(() => ({
     // Project-level ContextSnapshot / Handoff records remain queryable in Core,
     // but the user-facing Context history belongs to one imported conversation.
@@ -3332,7 +3337,7 @@ export function App() {
         nodes: visibleNodes,
         edges: visibleEdges,
         selectedIds,
-        presentationIds: activeSurface === 'workflow' ? workflowPresentationIds : activeSurface.startsWith('context-') ? contextPresentationIds : undefined,
+        presentationIds: activeSurface === 'workflow' ? workflowPresentationIds : (activeSurface === 'outline' || activeSurface.startsWith('context-')) ? contextPresentationIds : undefined,
         presentationIncludeOneHop: true,
         workspaceFocusIds: effectiveWorkspace.focusedViewIds,
         contextRuntime: contextSurfaceRuntime,
@@ -3618,6 +3623,7 @@ export function App() {
         onClose: () => setConversationDialogOpen(false),
         onImported: () => { setNotice('对话上下文已更新'); void openProject(activeProjectId) },
         onFocusArtifact: selectArtifactFromTools,
+        onActivateContextSource: activateConversationContextSource,
         onRequestSectionAnnotation: requestConversationSectionAnnotation,
       } : null,
       obsidianImport: obsidianScan ? {
