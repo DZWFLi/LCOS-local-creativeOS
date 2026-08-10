@@ -7,7 +7,8 @@ export interface FcoseDriverRequest {
   edges: Array<{ id: string; source: string; target: string }>
   options: Record<string, unknown>
 }
-export interface FcoseDriver { run(request: FcoseDriverRequest): Promise<Record<string, LayoutPoint>> }
+export interface FcoseDriverResult extends Record<string, LayoutPoint> {}
+export interface FcoseDriver { run(request: FcoseDriverRequest): Promise<FcoseDriverResult> }
 
 export function fcoseOptions(request: LayoutRequest): Record<string, unknown> {
   const pinned = request.nodes.filter((node) => node.pinned)

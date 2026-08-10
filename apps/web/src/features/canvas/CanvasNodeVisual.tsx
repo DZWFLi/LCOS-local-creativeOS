@@ -5,6 +5,7 @@ import {
 import { memo } from 'react'
 import type { CanvasNode, NodeDisplayMode, RunStatus } from '../../model'
 import { runStatusLabel } from '../../model'
+import { visualFamilyFor } from '../presentation/visualFamily'
 import {
   ArchiveGlyph,
   AudioGlyph,
@@ -34,12 +35,25 @@ export type NodeVisualFamily = 'reference' | 'document' | 'feedback' | 'note' | 
 export type FileIdentity = 'image' | 'video' | 'audio' | 'pdf' | 'ppt' | 'markdown' | 'link' | 'archive' | 'file'
 
 export function nodeVisualFamily(node: CanvasNode): NodeVisualFamily {
+  // Phase C: mechanical visual family takes priority when it recognizes the node.
+  const visual = visualFamilyFor({
+    artifactKind: node.fileType,
+    title: node.title,
+    subtitle: node.subtitle,
+    kind: node.kind,
+    artifactId: node.artifactId,
+    sourceRunId: node.sourceRunId,
+    managed: node.managed,
+  })
+  if (visual === 'conversation' || visual === 'skill' || visual === 'output') return 'document'
   if (node.kind === 'process') return 'process'
   if (node.kind === 'context') return 'context'
   if (node.kind === 'decision') return 'decision'
   // DEPRECATED_BEHAVIORAL_HINT (Phase A): title regex heuristics
   // (feedback/反馈/change：/keep：) infer semantics from display text.
   // New Presentation/Curation code must not reuse this as business truth.
+  // TODO(Phase C C8): feedback title-regex is NOT yet replaced by visualFamily;
+  // keep until a mechanical source exists, then remove this branch.
   const text = `${node.title} ${node.subtitle}`.toLowerCase()
   if (text.includes('feedback') || text.includes('反馈') || text.includes('change：') || text.includes('keep：')) return 'feedback'
   if (node.kind === 'note') return 'note'

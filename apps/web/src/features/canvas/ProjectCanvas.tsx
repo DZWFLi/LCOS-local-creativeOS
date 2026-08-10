@@ -809,7 +809,7 @@ function EdgePath({ edge, from, to, selected, focused, onSelect, onCut, onReconn
   const select = (event: React.PointerEvent<SVGPathElement>) => { event.stopPropagation(); onSelect(edge.id) }
   return <>
     <path className="edge-hit" data-edge-id={edge.id} d={d} onPointerDown={select} />
-    <path className={`edge ${edge.kind} ${edge.active ? 'active' : ''} ${focused ? 'focused' : ''} ${selected ? 'selected' : ''}`} data-edge-id={edge.id} data-edge-from={edge.from} data-edge-to={edge.to} d={d} onPointerDown={select} />
+    <path className={`edge ${edge.kind} ${edge.active ? 'active' : ''} ${edge.scope ? `edge-scope-${edge.scope}` : ''} ${focused ? 'focused' : ''} ${selected ? 'selected' : ''}`} data-edge-id={edge.id} data-edge-from={edge.from} data-edge-to={edge.to} d={d} onPointerDown={select} />
     {edge.active && <circle className="edge-runner" r="2.4"><animateMotion dur="2.4s" repeatCount="indefinite" path={d} /></circle>}
     {selected && <g className="edge-controls" data-testid={`edge-controls-${edge.id}`}>
       <circle className="edge-control edge-terminal" data-testid={`edge-reconnect-from-${edge.id}`} cx={x1} cy={y1} r="7" onPointerDown={(event) => onReconnectStart('from', event)} />

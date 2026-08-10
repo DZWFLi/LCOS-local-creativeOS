@@ -180,7 +180,7 @@ export function ContextFlowSurface(props: Props) {
     </details>
     <SpatialCanvas camera={camera} setCamera={setCamera} className="lcos-context-free-stage lcos-presentation-spatial" worldClassName="lcos-presentation-world lcos-context-strands-world" worldStyle={{ width: layout.width, height: layout.height }} testId="context-flow-spatial" overlays={emptyOverlay} onPointerUp={() => { sourceDrag.current = endSpatialPointer(); strandDrag.current = endSpatialPointer() }} onPointerCancel={() => { sourceDrag.current = endSpatialPointer(); strandDrag.current = endSpatialPointer() }}>
       <SpatialEdgeLayer bounds={edgeBounds} className="lcos-context-free-edges" ariaLabel="上下文关系">
-        {layout.edges.map(({ edge, points }) => <path key={edge.id} d={points.map((point, index) => `${index ? 'L' : 'M'} ${point.x} ${point.y}`).join(' ')} className={`${edge.active ? 'active' : ''} ${edge.id.startsWith('context-temp:') ? 'presentation-edge' : ''} ${selectedEdgeId === edge.id ? 'selected' : ''}`} onClick={(event) => { event.stopPropagation(); setSelectedEdgeId(edge.id) }}/>) }
+        {layout.edges.map(({ edge, points }) => <path key={edge.id} d={points.map((point, index) => `${index ? 'L' : 'M'} ${point.x} ${point.y}`).join(' ')} className={`${edge.active ? 'active' : ''} ${edge.id.startsWith('context-temp:') ? 'presentation-edge' : ''} ${edge.scope ? `edge-scope-${edge.scope}` : ''} ${selectedEdgeId === edge.id ? 'selected' : ''}`} onClick={(event) => { event.stopPropagation(); setSelectedEdgeId(edge.id) }}/>) }
         <g className="lcos-context-source-links">{sourceLinks.map((link) => <path key={link.id} d={link.d}/>)}</g>
       </SpatialEdgeLayer>
       <SpatialNodeLayer>

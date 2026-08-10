@@ -78,6 +78,10 @@ export interface CanvasEdge {
   to: string
   kind: 'reference' | 'generate' | 'modify' | 'feedback'
   active?: boolean
+  /** Phase C: edge provenance — domain (stable), presentation (light), runtime (status). */
+  scope?: 'domain' | 'presentation' | 'runtime'
+  origin?: 'user' | 'agent' | 'system'
+  label?: string
 }
 
 export interface Camera { x: number; y: number; zoom: number }

@@ -1,8 +1,10 @@
 import { Filter, Orbit, PinOff } from 'lucide-react'
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react'
 import type { CanvasEdge, CanvasNode } from '../../model'
-import { layoutPreviewSync } from '../layout/layoutService'
+import { layoutPreviewSync, layoutPreview } from '../layout/layoutService'
+import type { LayoutPosition } from '../layout/layoutTypes'
+import { loadPresentationLayoutEngines } from '../layout/layoutEngines'
 import { buildLocalRelationNodes, relationCurvePath } from '../presentation/relationGraphModel'
 import { SpatialCanvas } from '../spatial/SpatialCanvas'
 import { SpatialEdgeLayer } from '../spatial/SpatialEdgeLayer'
@@ -49,12 +51,12 @@ export function ContextGraphSurface(props: Props) {
   const localNodes = useMemo(() => buildLocalRelationNodes(props.nodes, filteredEdges, props.selectedIds, state.hops), [filteredEdges, props.nodes, props.selectedIds, state.hops])
   const focusIds = useMemo(() => new Set(localNodes.filter((item) => item.ring === 0).map((item) => item.node.id)), [localNodes])
 
-  const dots = useMemo<Dot[]>(() => {
+  const seeds = useMemo(() => {
     if (!localNodes.length) return []
     const ringCounts = new Map<number, number>()
     localNodes.forEach((item) => ringCounts.set(item.ring, (ringCounts.get(item.ring) ?? 0) + 1))
     const ringIndex = new Map<number, number>()
-    const seeds = localNodes.map((item) => {
+    return localNodes.map((item) => {
       const index = ringIndex.get(item.ring) ?? 0
       ringIndex.set(item.ring, index + 1)
       const count = ringCounts.get(item.ring) ?? 1
@@ -71,6 +73,10 @@ export function ContextGraphSurface(props: Props) {
         pinned: focusIds.has(item.node.id) || pinnedIds.includes(item.node.id),
       }
     })
+  }, [draftPositions, focusIds, localNodes, pinnedIds])
+
+  const builtinDots = useMemo<Dot[]>(() => {
+    if (!seeds.length) return []
     const ids = new Set(seeds.map((seed) => seed.item.node.id))
     const result = layoutPreviewSync({
       strategy: 'relational',
@@ -86,7 +92,41 @@ export function ContextGraphSurface(props: Props) {
       const point = positions.get(seed.item.node.id) ?? seed
       return { node: seed.item.node, ring: seed.item.ring, px: point.x, py: point.y, x: point.x + NODE_WIDTH / 2, y: point.y + NODE_HEIGHT / 2 }
     })
-  }, [draftPositions, filteredEdges, focusIds, localNodes, pinnedIds])
+  }, [filteredEdges, seeds])
+
+  const [enginePositions, setEnginePositions] = useState<ReadonlyMap<string, LayoutPosition> | null>(null)
+  useEffect(() => {
+    if (!seeds.length) return
+    let cancelled = false
+    setEnginePositions(null)
+    const ids = new Set(seeds.map((seed) => seed.item.node.id))
+    const request = {
+      strategy: 'relational' as const,
+      nodes: seeds.map((seed) => ({ id: seed.item.node.id, x: seed.x, y: seed.y, width: NODE_WIDTH, height: NODE_HEIGHT, pinned: seed.pinned })),
+      edges: filteredEdges.filter((edge) => ids.has(edge.from) && ids.has(edge.to)),
+      gap: 28,
+      componentGap: 96,
+      origin: { x: WORLD_WIDTH * .14, y: WORLD_HEIGHT * .12 },
+      preserveManualAnchors: true,
+    }
+    void loadPresentationLayoutEngines()
+      .then((engines) => (engines.relational === undefined ? null : layoutPreview(request, { relational: engines.relational })))
+      .then((result) => {
+        if (cancelled || result === null) return
+        setEnginePositions(new Map(result.positions.map((position) => [position.id, position])))
+      })
+      .catch(() => { /* builtin dots remain the stable fallback */ })
+    return () => { cancelled = true }
+  }, [filteredEdges, seeds])
+
+  const dots = useMemo<Dot[]>(() => {
+    if (!seeds.length) return []
+    const positions = enginePositions ?? new Map(builtinDots.map((dot) => [dot.node.id, { x: dot.px, y: dot.py }]))
+    return seeds.map((seed) => {
+      const point = positions.get(seed.item.node.id) ?? seed
+      return { node: seed.item.node, ring: seed.item.ring, px: point.x, py: point.y, x: point.x + NODE_WIDTH / 2, y: point.y + NODE_HEIGHT / 2 }
+    })
+  }, [builtinDots, enginePositions, seeds])
 
   const ids = useMemo(() => new Set(dots.map((dot) => dot.node.id)), [dots])
   const pos = useMemo(() => new Map(dots.map((dot) => [dot.node.id, dot])), [dots])
