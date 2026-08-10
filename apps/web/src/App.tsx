@@ -28,6 +28,7 @@ import { ConversationContextDialog } from './features/conversations/Conversation
 import { capabilitiesFor, type LinkReferenceInput, type RunOutputIntent } from './runtime/v07UiContracts'
 import { loadProjectCatalog, loadPrototypeState, saveProjectCatalog, savePrototypeState } from './state/prototypeStorage'
 import { clearProjectNavigationState, loadProjectNavigationState, saveProjectNavigationState } from './state/projectNavigation'
+import { isRuntimeProjectMode } from './runtime/projectMode'
 import { buildWorkspaceFrames } from './state/workspaceFrames'
 import { RuntimeBridge, type DataSource, type SaveStatus } from './runtime/runtimeBridge'
 import { selectRuntimeProject } from './runtime/runtimeProjectSelection'
@@ -930,7 +931,7 @@ export function App() {
       const rootScopeId = scopes.find((scope) => scope.kind === 'root')?.id ?? scopes[0]?.id ?? 'scope-root'
       const snapshot: PersistedPrototypeState = { version: 10, projectId: activeProjectId, nodes, edges, workspaces, scopes, activeWorkspaceId: null, activeScopeId: rootScopeId, workRail }
       projectStateCacheRef.current.set(activeProjectId, snapshot)
-      if (bootMode === 'runtime') {
+      if (isRuntimeProjectMode(bootMode)) {
         const bridge = bridgeRef.current
         bridge.saveMutations(snapshot).then((result) => {
           if (result.status === 'saved') {

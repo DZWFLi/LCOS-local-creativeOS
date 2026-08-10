@@ -37,6 +37,9 @@ export function nodeVisualFamily(node: CanvasNode): NodeVisualFamily {
   if (node.kind === 'process') return 'process'
   if (node.kind === 'context') return 'context'
   if (node.kind === 'decision') return 'decision'
+  // DEPRECATED_BEHAVIORAL_HINT (Phase A): title regex heuristics
+  // (feedback/反馈/change：/keep：) infer semantics from display text.
+  // New Presentation/Curation code must not reuse this as business truth.
   const text = `${node.title} ${node.subtitle}`.toLowerCase()
   if (text.includes('feedback') || text.includes('反馈') || text.includes('change：') || text.includes('keep：')) return 'feedback'
   if (node.kind === 'note') return 'note'

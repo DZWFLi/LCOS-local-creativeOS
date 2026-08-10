@@ -501,6 +501,9 @@ export function mapStateToGraph(state: PersistedPrototypeState, projectId: strin
     updatedAt: now,
   }))
 
+  // DEPRECATED_BEHAVIORAL_HINT (Phase A): filtering by node kind
+  // (process/note/decision) is a legacy heuristic; Presentation membership
+  // must not be derived from these kinds in new code.
   // Artifacts + ArtifactViews from core nodes (filter out process/note/decision)
   const coreNodes = state.nodes.filter((n) => !n.runtimeTransient && n.kind !== 'process' && n.kind !== 'note' && n.kind !== 'decision')
   const artifacts: ProjectGraphSnapshot['artifacts'] = coreNodes.map((n) => ({

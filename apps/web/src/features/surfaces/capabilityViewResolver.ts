@@ -70,6 +70,9 @@ export function resolveWorkflowView(nodes: readonly CanvasNode[], edges: readonl
   if (intent.workspaceFocusIds?.length) {
     return { ...project(nodes, edges, new Set(intent.workspaceFocusIds)), sourceKind: 'workspace', sourceLabel: `Workspace Focus · ${intent.workspaceFocusIds.length} 个对象` }
   }
+  // DEPRECATED_BEHAVIORAL_HINT (Phase A): process-node heuristic membership.
+  // New Presentation/Curation code must not derive workflow membership from
+  // node.kind === 'process'.
   const processIds = nodes.filter((node) => node.kind === 'process').map((node) => node.id)
   if (processIds.length) {
     const resolved = project(nodes, edges, expandOneHop(processIds, edges))

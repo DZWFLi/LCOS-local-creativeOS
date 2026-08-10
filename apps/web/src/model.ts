@@ -1,6 +1,11 @@
+// DEPRECATED_BEHAVIORAL_HINT (Phase A): NodeKind carries legacy visual/heuristic
+// semantics (process/decision/note). New Presentation/Curation code must not
+// treat these kinds as business truth; use Artifact kind + Relation + Metadata.
 export type NodeKind = 'source' | 'working' | 'generated' | 'context' | 'process' | 'decision' | 'note'
 export type NodeLayer = 'core' | 'process'
 export type NodeDisplayMode = 'compact' | 'standard' | 'expanded'
+// DEPRECATED_BEHAVIORAL_HINT (Phase A): WorkspaceIntent is a legacy label,
+// not a business stage. New Presentation/Curation code must not branch on it.
 export type WorkspaceIntent = 'understand' | 'explore' | 'build' | 'decide' | null
 export type RunStatus = 'queued' | 'running' | 'waiting_input' | 'review' | 'completed' | 'failed' | 'cancelled'
 export type ArtifactReviewStatus = 'idle' | 'pending' | 'accepted'
