@@ -44,16 +44,24 @@ let exitCode = 0;
 try {
   let result;
   if (group === "doctor") {
-    const [core, bridge] = await Promise.all([
+    const [core, bridge, ollama] = await Promise.all([
       probe(coreRequest("/health")),
       probe(coreRequest("/executor/health")),
+      probe(fetch("http://127.0.0.1:11434/api/tags", { signal: AbortSignal.timeout(2000) }).then((response) => response.json())),
     ]);
+    const { existsSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const vec0 = existsSync(join(process.cwd(), ".runtime", "sqlite-vec", "vec0.dll"));
     const capabilities = bridge.ok ? await probe(coreRequest("/executor/capabilities")) : null;
     const healthy = core.ok && bridge.ok;
     result = {
       healthy,
       core: core.ok ? { ok: true, ...core.value } : { ok: false, error: core.error },
       bridge: bridge.ok ? { ok: true, ...bridge.value } : { ok: false, error: bridge.error },
+      semantic: {
+        ollama: ollama.ok ? "available" : "unavailable",
+        sqliteVec: vec0 ? "native-file-present" : "unavailable",
+      },
       capabilities: capabilities === null ? null : capabilities.ok ? capabilities.value : { error: capabilities.error },
     };
     if (!healthy) exitCode = 1;

@@ -9,7 +9,7 @@ const packageRoot = join(runtimeRoot, 'package')
 mkdirSync(runtimeRoot, { recursive: true })
 
 function run(command, args, cwd = runtimeRoot) {
-  const result = spawnSync(command, args, { cwd, encoding: 'utf8', windowsHide: true, shell: false })
+  const result = spawnSync(command, args, { cwd, encoding: 'utf8', windowsHide: true, shell: process.platform === 'win32' })
   if (result.error || (result.status ?? 1) !== 0) {
     throw new Error(`${command} ${args.join(' ')} 失败\n${result.error?.message ?? ''}\n${result.stdout ?? ''}\n${result.stderr ?? ''}`.trim())
   }
@@ -30,10 +30,24 @@ if (existsSync(existing)) {
   process.exit(0)
 }
 rmSync(packageRoot, { recursive: true, force: true })
-const archive = run(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['pack', `sqlite-vec@${VERSION}`, '--registry=https://registry.npmjs.org', '--silent'])
+const platformPackage = process.platform === 'win32'
+  ? `sqlite-vec-windows-x64@${VERSION}`
+  : process.platform === 'darwin'
+    ? (process.arch === 'arm64' ? `sqlite-vec-darwin-arm64@${VERSION}` : `sqlite-vec-darwin-x64@${VERSION}`)
+    : process.arch === 'arm64'
+      ? `sqlite-vec-linux-arm64@${VERSION}`
+      : `sqlite-vec-linux-x64@${VERSION}`
+const npmCli = process.env.npm_execpath !== undefined
+  ? process.execPath
+  : (process.platform === 'win32' ? 'npm.cmd' : 'npm')
+const packArgs = process.env.npm_execpath !== undefined
+  ? [process.env.npm_execpath, 'pack', platformPackage, '--registry=https://registry.npmjs.org', '--silent']
+  : ['pack', platformPackage, '--registry=https://registry.npmjs.org', '--silent']
+const archive = run(npmCli, packArgs)
 const archivePath = join(runtimeRoot, archive.split(/\r?\n/).at(-1))
 run('tar', ['-xf', archivePath], runtimeRoot)
 const candidate = walk(packageRoot).find((path) => path.toLowerCase().endsWith(targetName.toLowerCase()))
+  ?? walk(join(runtimeRoot, 'package')).find((path) => path.toLowerCase().endsWith(targetName.toLowerCase()))
 if (!candidate) throw new Error(`sqlite-vec npm 包中没有找到 ${targetName}`)
 renameSync(candidate, existing)
 rmSync(archivePath, { force: true })

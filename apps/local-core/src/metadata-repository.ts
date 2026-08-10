@@ -197,7 +197,42 @@ export class SqliteMetadataRepository {
     if (current === 19) { this.#migrate_020_from_v19(); current = 20 }
     if (current === 20) { this.#migrate_021_from_v20(); current = 21 }
     if (current === 21) { this.#migrate_022_from_v21(); current = 22 }
-    if (current !== 22) throw new Error(`Unsupported metadata schema version ${current}.`)
+    if (current === 22) { this.#migrate_023_from_v22(); current = 23 }
+    if (current !== 23) throw new Error(`Unsupported metadata schema version ${current}.`)
+  }
+
+  #migrate_023_from_v22(): void {
+    this.#database.exec(`
+      CREATE TABLE IF NOT EXISTS search_documents (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        entity_type TEXT NOT NULL,
+        entity_id TEXT NOT NULL,
+        title TEXT,
+        body TEXT NOT NULL,
+        content_hash TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(project_id, entity_type, entity_id)
+      );
+      CREATE VIRTUAL TABLE IF NOT EXISTS search_documents_fts USING fts5(
+        entity_id UNINDEXED,
+        project_id UNINDEXED,
+        title,
+        body
+      );
+      CREATE TABLE IF NOT EXISTS search_document_embeddings (
+        entity_id TEXT NOT NULL,
+        model TEXT NOT NULL,
+        dimensions INTEGER,
+        content_hash TEXT NOT NULL,
+        embedding_blob BLOB,
+        indexed_at TEXT NOT NULL,
+        PRIMARY KEY(entity_id, model)
+      );
+      CREATE INDEX IF NOT EXISTS idx_search_documents_project
+      ON search_documents(project_id);
+      PRAGMA user_version = 23;
+    `)
   }
 
   #migrate_022_from_v21(): void {
@@ -1709,6 +1744,89 @@ export class SqliteMetadataRepository {
     this.#database.prepare('DELETE FROM presentation_views WHERE id = ? AND project_id = ?').run(id as SQLInputValue, projectId as SQLInputValue)
   }
 
+  // ==================== Search Documents (schema v23, derived index) ====================
+
+  getSearchDocument(projectId: string, entityType: string, entityId: string): { readonly contentHash: string } | undefined {
+    const row = this.#database.prepare('SELECT content_hash FROM search_documents WHERE project_id = ? AND entity_type = ? AND entity_id = ?')
+      .get(projectId as SQLInputValue, entityType, entityId) as Row | undefined
+    return row === undefined ? undefined : { contentHash: String(row.content_hash) }
+  }
+
+  upsertSearchDocument(doc: { readonly id: string; readonly projectId: string; readonly entityType: string; readonly entityId: string; readonly title: string; readonly body: string; readonly contentHash: string; readonly updatedAt: string }): void {
+    this.#database.exec('BEGIN IMMEDIATE;')
+    try {
+      this.#database.prepare('DELETE FROM search_documents_fts WHERE entity_id = ? AND project_id = ?').run(doc.entityId, doc.projectId)
+      this.#database.prepare(`
+        INSERT INTO search_documents (id, project_id, entity_type, entity_id, title, body, content_hash, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(project_id, entity_type, entity_id) DO UPDATE SET
+          id=excluded.id, title=excluded.title, body=excluded.body, content_hash=excluded.content_hash, updated_at=excluded.updated_at
+      `).run(doc.id, doc.projectId, doc.entityType, doc.entityId, doc.title, doc.body, doc.contentHash, doc.updatedAt)
+      this.#database.prepare('INSERT INTO search_documents_fts (entity_id, project_id, title, body) VALUES (?, ?, ?, ?)')
+        .run(doc.entityId, doc.projectId, doc.title, doc.body)
+      this.#database.exec('COMMIT;')
+    } catch (error: unknown) {
+      this.#database.exec('ROLLBACK;')
+      throw error
+    }
+  }
+
+  deleteSearchDocument(projectId: string, entityType: string, entityId: string): void {
+    this.#database.prepare('DELETE FROM search_documents_fts WHERE entity_id = ? AND project_id = ?').run(entityId, projectId)
+    this.#database.prepare('DELETE FROM search_documents WHERE project_id = ? AND entity_type = ? AND entity_id = ?').run(projectId, entityType, entityId)
+    this.#database.prepare('DELETE FROM search_document_embeddings WHERE entity_id = ?').run(entityId)
+  }
+
+  upsertSearchDocumentEmbedding(embedding: { readonly entityId: string; readonly model: string; readonly dimensions: number; readonly contentHash: string; readonly embeddingBlob: Buffer; readonly indexedAt: string }): void {
+    this.#database.prepare(`
+      INSERT INTO search_document_embeddings (entity_id, model, dimensions, content_hash, embedding_blob, indexed_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(entity_id, model) DO UPDATE SET
+        dimensions=excluded.dimensions, content_hash=excluded.content_hash, embedding_blob=excluded.embedding_blob, indexed_at=excluded.indexed_at
+    `).run(embedding.entityId, embedding.model, embedding.dimensions, embedding.contentHash, embedding.embeddingBlob, embedding.indexedAt)
+  }
+
+  searchDocumentsFts(projectId: string, query: string, limit: number): Array<{ readonly entityId: string; readonly title: string; readonly body: string }> {
+    const sanitized = query.replace(/["*^~():|&!-]/g, ' ').trim()
+    if (sanitized === '') return []
+    const rows = this.#database.prepare(`
+      SELECT f.entity_id, f.title, f.body FROM search_documents_fts f
+      WHERE f.project_id = ? AND search_documents_fts MATCH ?
+      LIMIT ?
+    `).all(projectId as SQLInputValue, sanitized, limit) as Row[]
+    return rows.map((row) => ({ entityId: String(row.entity_id), title: String(row.title ?? ''), body: String(row.body) }))
+  }
+
+  loadVectorExtension(path: string): boolean {
+    try {
+      this.#database.loadExtension(path)
+      this.#database.prepare('SELECT vec_version()').get()
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  querySearchVectors(model: string, vector: readonly number[], limit: number): Array<{ readonly entityId: string; readonly distance: number }> {
+    try {
+      const rows = this.#database.prepare(`
+        SELECT e.entity_id, e.embedding_blob FROM search_document_embeddings e
+        WHERE e.model = ?
+      `).all(model) as Row[]
+      const scores = rows.map((row) => {
+        const raw = Buffer.isBuffer(row.embedding_blob) ? row.embedding_blob : Buffer.from(String(row.embedding_blob ?? ''), 'base64')
+        const otherF = new Float32Array(raw.buffer, raw.byteOffset, raw.byteLength / 4)
+        let dot = 0
+        const length = Math.min(otherF.length, vector.length)
+        for (let index = 0; index < length; index += 1) dot += otherF[index]! * vector[index]!
+        return { entityId: String(row.entity_id), distance: -dot }
+      })
+      return scores.sort((left, right) => left.distance - right.distance).slice(0, limit)
+    } catch {
+      return []
+    }
+  }
+
   getNotes(projectId: string): Note[] {
     return (this.#database.prepare('SELECT * FROM notes WHERE project_id = ?').all(projectId as SQLInputValue) as Row[]).map((r) => this.#note(r))
   }
@@ -2960,7 +3078,7 @@ export class SqliteMetadataRepository {
     }
   }
 
-  get schemaVersion(): number { return 22 }
+  get schemaVersion(): number { return 23 }
 
   // ==================== Private helpers ====================
 

@@ -48,8 +48,8 @@ describe('lcos-project-curator contract (Phase F)', () => {
     }
   })
 
-  it('golden fixtures cover all five cases with invariant-based expectations', () => {
-    for (const caseName of ['case1-rounds', 'case2-session', 'case3-duplicate', 'case4-selection', 'case5-references']) {
+  it('golden fixtures cover all cases with invariant-based expectations', () => {
+    for (const caseName of ['case1-rounds', 'case2-session', 'case3-duplicate', 'case4-selection', 'case5-references', 'case6-long-project']) {
       const expectation = JSON.parse(readFileSync(join(fixtures, caseName, 'expectation.json'), 'utf8')) as { invariants: Record<string, boolean> }
       expect(expectation.invariants).toBeTruthy()
     }

@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "scenario": "长期项目：已有 50+ Text Nodes 与多个会话，今天新增一轮相似讨论",
+  "existing": {
+    "nodeCount": 52,
+    "sources": ["会话 A（EP02）", "会话 B（EP03）", "客户要求"],
+    "similarNode": { "title": "EP02 开场钩子", "content": "3 秒反差钩子，保留轮子卖点" }
+  },
+  "todayRound": "EP02 开场再确认一遍：3 秒钩子不变，轮子卖点保留；邻居关系交代要加在第二集开头。"
+}
