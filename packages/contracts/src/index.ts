@@ -757,3 +757,5 @@ export type {
 export * from './conversations.js'
 export * from './resources.js'
 export * from './connectors.js'
+export * from './presentations.js'
+export * from './curation.js'
