@@ -1,6 +1,7 @@
 import type { ContractError, Result } from '@local-creative-os/contracts'
 
 export type LocalCoreErrorCode =
+  | 'STALE_PRESENTATION_VERSION'
   | 'NOT_FOUND'
   | 'UNAVAILABLE'
   | 'VALIDATION'

@@ -29,6 +29,7 @@ import { capabilitiesFor, type LinkReferenceInput, type RunOutputIntent } from '
 import { loadProjectCatalog, loadPrototypeState, saveProjectCatalog, savePrototypeState } from './state/prototypeStorage'
 import { clearProjectNavigationState, loadProjectNavigationState, saveProjectNavigationState } from './state/projectNavigation'
 import { isRuntimeProjectMode } from './runtime/projectMode'
+import { usePresentationMembership } from './state/presentationViewState'
 import { buildWorkspaceFrames } from './state/workspaceFrames'
 import { RuntimeBridge, type DataSource, type SaveStatus } from './runtime/runtimeBridge'
 import { selectRuntimeProject } from './runtime/runtimeProjectSelection'
@@ -279,6 +280,26 @@ export function App() {
     updatedAt: 'local-ui',
   }), [activeScope.id, overviewLayers])
   const effectiveWorkspace = activeWorkspace ?? overviewWorkspace
+  usePresentationMembership({
+    projectId: activeProjectId,
+    scopeId,
+    capability: 'context',
+    renderer: 'context',
+    client: isRuntimeProjectMode(bootMode) ? bridgeRef.current.client : null,
+    members: contextPresentationIds,
+    setMembers: setContextPresentationIds,
+    seedMembers: () => (effectiveWorkspace?.focusedViewIds ?? []).filter((id) => nodes.some((node) => node.id === id)),
+  })
+  usePresentationMembership({
+    projectId: activeProjectId,
+    scopeId,
+    capability: 'workflow',
+    renderer: 'workflow',
+    client: isRuntimeProjectMode(bootMode) ? bridgeRef.current.client : null,
+    members: workflowPresentationIds,
+    setMembers: setWorkflowPresentationIds,
+    seedMembers: () => [],
+  })
   const selectedNodes = selectedIds.map((id) => nodes.find((node) => node.id === id)).filter((node): node is CanvasNode => Boolean(node))
   const selectedId = selectedIds.at(-1) ?? null
   const singleSelectedNode = selectedIds.length === 1 ? selectedNodes[0] ?? null : null

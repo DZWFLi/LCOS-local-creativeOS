@@ -215,6 +215,11 @@ function mockClient(overrides: Partial<LocalCoreClient> = {}): LocalCoreClient {
     listHandoffs: unavailable,
     createHandoff: unavailable,
     deleteHandoff: unavailable,
+    presentationList: unavailable,
+    presentationGet: unavailable,
+    presentationSave: unavailable,
+    presentationDelete: unavailable,
+    streamPresentation: unavailable,
     ...overrides,
   }
 }

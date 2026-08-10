@@ -49,6 +49,8 @@ describe('Presentation contract boundaries (Phase A)', () => {
       expect(service, `service legacy ${legacy}`).not.toContain(legacy)
       expect(repository, `repository legacy ${legacy}`).not.toContain(legacy)
     }
-    expect(draftState).toContain('PresentationView contract is approved')
+    // Phase B: memory store now mirrors into the persistent PresentationView.
+    expect(draftState).toContain('getPresentationBridge')
+    expect(draftState).toContain('flushSoon')
   })
 })

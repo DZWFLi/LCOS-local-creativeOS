@@ -1,10 +1,49 @@
 import type { CanvasEdge, CanvasNode } from '../../model'
+import type { PresentationHierarchyV0 } from '@local-creative-os/contracts'
 
 export interface PresentationHierarchyState {
   orderIds: string[]
   depthById: Record<string, number>
   collapsedIds: string[]
   version: number
+}
+
+/** Phase B: flatten UI hierarchy (order+depth) into the contract shape. */
+export function hierarchyToContract(state: PresentationHierarchyState): PresentationHierarchyV0 {
+  const parentByViewId: Record<string, string | null> = {}
+  const stack: Array<{ id: string; depth: number }> = []
+  for (const id of state.orderIds) {
+    const depth = state.depthById[id] ?? 0
+    while (stack.length > 0 && stack[stack.length - 1]!.depth >= depth) stack.pop()
+    parentByViewId[id] = stack.length > 0 ? stack[stack.length - 1]!.id : null
+    stack.push({ id, depth })
+  }
+  const orderByParent: Record<string, string[]> = {}
+  for (const id of state.orderIds) {
+    const parent = parentByViewId[id] ?? ''
+    const list = orderByParent[parent] ?? []
+    list.push(id)
+    orderByParent[parent] = list
+  }
+  return { parentByViewId, orderByParent }
+}
+
+/** Phase B: restore UI hierarchy from the contract, keeping current collapse state. */
+export function contractToHierarchy(contract: PresentationHierarchyV0, state: PresentationHierarchyState): PresentationHierarchyState {
+  if (Object.keys(contract.parentByViewId).length === 0) return state
+  const orderIds: string[] = []
+  const depthById: Record<string, number> = {}
+  const visit = (id: string, depth: number): void => {
+    if (orderIds.includes(id)) return
+    orderIds.push(id)
+    depthById[id] = depth
+    for (const child of contract.orderByParent[id] ?? []) visit(child, depth + 1)
+  }
+  for (const root of contract.orderByParent[''] ?? []) visit(root, 0)
+  for (const id of Object.keys(contract.parentByViewId)) {
+    if (!orderIds.includes(id)) visit(id, 0)
+  }
+  return { ...state, orderIds, depthById, version: state.version + 1 }
 }
 
 export interface PresentationHierarchyRow {

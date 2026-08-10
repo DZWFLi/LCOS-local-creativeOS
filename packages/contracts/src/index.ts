@@ -77,6 +77,7 @@ export interface ContractError {
     | 'PROJECT_ROOT_NOT_READABLE'
     | 'PATH_OUTSIDE_ALLOWED_ROOT'
     | 'ACTIVE_CONTEXT_CONFLICT'
+    | 'STALE_PRESENTATION_VERSION'
     | 'ABORTED'
     | 'INTERNAL'
   readonly message: string

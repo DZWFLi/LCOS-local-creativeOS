@@ -17,6 +17,7 @@ import type {
   ConversationSectionAnnotationV1,
   ConversationSectionV1,
   ConversationSemanticIndexStatusV1,
+  PresentationViewV0,
   ConversationSessionV1,
   CompleteConversationImportResultV1,
   HealthStatus,
@@ -247,6 +248,11 @@ export interface LocalCoreClient {
   pinConversationMessage(projectId: string, conversationId: string, messageId: string, input: { readonly title?: string; readonly summary?: string; readonly scopeId: string; readonly workspaceId?: string; readonly x?: number; readonly y?: number }, signal?: AbortSignal): Promise<RuntimeCall<ConversationMessageV1>>
   conversationSemanticStatus(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<ConversationSemanticIndexStatusV1>>
   buildConversationSemanticIndex(projectId: string, input?: { readonly model?: string; readonly sessionId?: string; readonly force?: boolean; readonly batchSize?: number }, signal?: AbortSignal): Promise<RuntimeCall<ConversationSemanticIndexStatusV1>>
+  presentationList(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<readonly PresentationViewV0[]>>
+  presentationGet(projectId: string, presentationId: string, signal?: AbortSignal): Promise<RuntimeCall<PresentationViewV0>>
+  presentationSave(projectId: string, presentationId: string, contract: PresentationViewV0, expectedVersion: number, signal?: AbortSignal): Promise<RuntimeCall<PresentationViewV0>>
+  presentationDelete(projectId: string, presentationId: string, signal?: AbortSignal): Promise<RuntimeCall<null>>
+  streamPresentation(projectId: string, presentationId: string, afterVersion: number | undefined, handlers: { readonly onChange?: (value: { readonly presentationId: string; readonly version: number; readonly updatedAt: string; readonly updatedBy: string }) => void }, signal?: AbortSignal): Promise<void>
   createProject(input: {
     readonly name: string
   } & (
@@ -671,6 +677,54 @@ export function createLocalCoreClient(): LocalCoreClient {
     pinConversationMessage(projectId, conversationId, messageId, input, signal) { return request(`/projects/${encodeURIComponent(projectId)}/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/pin`, { signal, init: { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) }, decode: decodeResult<ConversationMessageV1> }) },
     conversationSemanticStatus(projectId, signal) { return request(`/projects/${encodeURIComponent(projectId)}/conversations/semantic-index`, { signal, decode: decodeResult<ConversationSemanticIndexStatusV1> }) },
     buildConversationSemanticIndex(projectId, input = {}, signal) { return request(`/projects/${encodeURIComponent(projectId)}/conversations/semantic-index`, { signal, timeoutMs: 120_000, init: { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) }, decode: decodeResult<ConversationSemanticIndexStatusV1> }) },
+    presentationList(projectId, signal) { return request(`/projects/${encodeURIComponent(projectId)}/presentations`, { signal, decode: decodeResult<readonly PresentationViewV0[]> }) },
+    presentationGet(projectId, presentationId, signal) { return request(`/projects/${encodeURIComponent(projectId)}/presentations/${encodeURIComponent(presentationId)}`, { signal, decode: decodeResult<PresentationViewV0> }) },
+    presentationSave(projectId, presentationId, contract, expectedVersion, signal) { return request(`/projects/${encodeURIComponent(projectId)}/presentations/${encodeURIComponent(presentationId)}`, { signal, init: { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ contract, expectedVersion }) }, decode: decodeResult<PresentationViewV0> }) },
+    presentationDelete(projectId, presentationId, signal) { return request(`/projects/${encodeURIComponent(projectId)}/presentations/${encodeURIComponent(presentationId)}`, { signal, init: { method: 'DELETE' }, decode: decodeResult<null> }) },
+    async streamPresentation(projectId, presentationId, afterVersion, handlers, signal) {
+      const query = afterVersion === undefined ? '' : `?afterVersion=${afterVersion}`
+      const response = await fetch(
+        `${LOCAL_CORE_API_PREFIX}/projects/${encodeURIComponent(projectId)}/presentations/${encodeURIComponent(presentationId)}/stream${query}`,
+        { signal },
+      )
+      if (!response.ok || response.body === null) {
+        throw new Error(`Local Core presentation SSE unavailable (HTTP ${response.status}).`)
+      }
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let eventName = 'message'
+      const dispatch = (event: string, data: string): void => {
+        if (!data) return
+        try {
+          const parsed: unknown = JSON.parse(data)
+          const value = (parsed as { value?: unknown } | null)?.value
+          if (value === undefined || typeof value !== 'object') return
+          if (event === 'snapshot' || event === 'update') {
+            handlers.onChange?.(value as { presentationId: string; version: number; updatedAt: string; updatedBy: string })
+          }
+        } catch {
+          // Malformed frames are skipped; heartbeat keeps the stream alive.
+        }
+      }
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        let boundary: number
+        while ((boundary = buffer.indexOf('\n\n')) >= 0) {
+          const frame = buffer.slice(0, boundary)
+          buffer = buffer.slice(boundary + 2)
+          let data = ''
+          for (const line of frame.split('\n')) {
+            if (line.startsWith('event:')) eventName = line.slice(6).trim()
+            else if (line.startsWith('data:')) data += `${line.slice(5).trim()}\n`
+          }
+          if (data) dispatch(eventName, data.trim())
+          eventName = 'message'
+        }
+      }
+    },
     createProject(input, signal) {
       return request('/projects', {
         signal,
