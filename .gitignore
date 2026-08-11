@@ -49,3 +49,7 @@ Local_Creative_OS_Codex_Development_Package_20260719_073944.zip
 *.pyc
 *.pyo
 *.egg-info/
+
+# 本地调试残留
+.tmp/
+pnpm-lock.yaml
