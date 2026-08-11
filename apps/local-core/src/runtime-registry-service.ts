@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { randomBytes } from 'node:crypto'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 
@@ -23,6 +24,7 @@ export interface RuntimeRegistryV0 {
   readonly lastFocusedProjectId?: string
   readonly pinnedCaptureProjectId?: string
   readonly browserTabBindings?: Readonly<Record<string, string>>
+  readonly extensionToken?: string
 }
 
 interface MutableProjectState {
@@ -39,6 +41,7 @@ interface MutableRegistry {
   lastFocusedProjectId?: string
   pinnedCaptureProjectId?: string
   browserTabBindings?: Record<string, string>
+  extensionToken?: string
 }
 
 function defaultRegistryPath(): string {
@@ -163,5 +166,14 @@ export class RuntimeRegistryService {
 
   resolveBrowserTabBinding(profileId: string, tabId: number): string | undefined {
     return this.#registry.browserTabBindings?.[`${profileId}:${tabId}`]
+  }
+
+  /** Phase C：Extension 配对 token（幂等：已存在则复用）。调用方需持有 Core token。 */
+  ensureExtensionToken(): string {
+    if (this.#registry.extensionToken === undefined) {
+      this.#registry.extensionToken = randomBytes(32).toString('base64url')
+      this.#persist()
+    }
+    return this.#registry.extensionToken
   }
 }

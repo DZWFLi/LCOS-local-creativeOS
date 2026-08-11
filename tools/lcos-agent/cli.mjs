@@ -740,6 +740,28 @@ try {
     const id = required(positional[0], "capture id");
     const projectId = required(option("project"), "--project");
     result = await coreRequest(`/runtime/captures/${encodeURIComponent(id)}/resolve`, { method: "POST", body: JSON.stringify({ projectId }) });
+  } else if (group === "capture" && action === "send") {
+    const kind = option("kind") ?? (option("url") ? "web_page" : option("text") ? "clipboard_text" : option("file") ? "local_file" : undefined);
+    if (!kind) throw new Error("capture send 需要 --url / --text / --file 之一");
+    const payload = option("url") ? { type: "url", url: required(option("url"), "--url") }
+      : option("text") ? { type: "text", text: required(option("text"), "--text") }
+      : { type: "local_path", path: required(option("file"), "--file") };
+    const body = {
+      schemaVersion: 0,
+      operationId: `cli-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      kind,
+      source: {
+        app: "lcos-cli",
+        capturedAt: new Date().toISOString(),
+        ...(option("session") ? { sessionId: option("session") } : {}),
+      },
+      payload,
+      ...(option("title") ? { hints: { title: option("title") } } : {}),
+      ...(option("project") ? { targetHint: { projectId: option("project") } } : {}),
+    };
+    result = await coreRequest("/capture", { method: "POST", body: JSON.stringify(body) });
+  } else if (group === "runtime" && action === "extension-token") {
+    result = await coreRequest("/runtime/extension-token", { method: "POST", body: "{}" });
   } else if (group === "project" && action === "pin-capture") {
     const projectId = required(positional[0], "project id");
     result = await coreRequest("/runtime/registry/capture-target", { method: "POST", body: JSON.stringify({ projectId }) });

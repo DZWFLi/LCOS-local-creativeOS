@@ -43,7 +43,9 @@ import type {
 import type {
   AcceptArtifactReturnResult,
   ActiveContextV2,
+  CaptureReceiptV0,
   CaptureStagingItemV0,
+  CaptureWatchRuleV0,
   CommandDraftV1,
   ContextChangeProposalV1,
   ProviderSessionBindingV1,
@@ -219,7 +221,37 @@ export class SqliteMetadataRepository {
     if (current === 22) { this.#migrate_023_from_v22(); current = 23 }
     if (current === 23) { this.#migrate_024_from_v23(); current = 24 }
     if (current === 24) { this.#migrate_025_from_v24(); current = 25 }
-    if (current !== 25) throw new Error(`Unsupported metadata schema version ${current}.`)
+    if (current === 25) { this.#migrate_026_from_v25(); current = 26 }
+    if (current === 26) { this.#migrate_027_from_v26(); current = 27 }
+    if (current !== 27) throw new Error(`Unsupported metadata schema version ${current}.`)
+  }
+
+  #migrate_027_from_v26(): void {
+    // Phase C: Capture Watch 规则（截图/文件夹监控）。
+    this.#database.exec(`
+      CREATE TABLE IF NOT EXISTS capture_watch_rules (
+        id TEXT PRIMARY KEY,
+        path TEXT NOT NULL,
+        patterns_json TEXT NOT NULL,
+        project_hint TEXT,
+        settle_ms INTEGER NOT NULL DEFAULT 750,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL
+      );
+      PRAGMA user_version = 27;
+    `)
+  }
+
+  #migrate_026_from_v25(): void {
+    // Phase C: Capture receipts —— operationId 幂等，<2s 返回收据。
+    this.#database.exec(`
+      CREATE TABLE IF NOT EXISTS capture_receipts (
+        operation_id TEXT PRIMARY KEY,
+        receipt_json TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+      PRAGMA user_version = 26;
+    `)
   }
 
   #migrate_025_from_v24(): void {
@@ -1539,6 +1571,10 @@ export class SqliteMetadataRepository {
     return rows.length ? this.#project(rows[0] as Row) : undefined
   }
 
+  getScopes(projectId: string): Scope[] {
+    return (this.#database.prepare('SELECT * FROM scopes WHERE project_id = ?').all(projectId as SQLInputValue) as Row[]).map((row) => this.#scope(row as Row))
+  }
+
   /**
    * Phase A：更新任意可展示实体的显示标题。
    * mode='manual'（用户改过）→ Agent 不得自动覆盖；mode='locked' → 任何 Agent 不能改。
@@ -2055,6 +2091,58 @@ export class SqliteMetadataRepository {
       'UPDATE capture_staging_items SET resolved_project_id = ?, resolved_at = ? WHERE id = ? AND resolved_project_id IS NULL',
     ).run(projectId, resolvedAt, id as SQLInputValue)
     return result.changes === 1
+  }
+
+  getCaptureReceipt(operationId: string): CaptureReceiptV0 | undefined {
+    const row = this.#database.prepare('SELECT receipt_json FROM capture_receipts WHERE operation_id = ?').get(operationId as SQLInputValue) as { receipt_json?: string } | undefined
+    if (row === undefined || row.receipt_json === undefined) return undefined
+    return JSON.parse(row.receipt_json) as CaptureReceiptV0
+  }
+
+  saveCaptureReceipt(receipt: CaptureReceiptV0): void {
+    this.#database.prepare(`
+      INSERT INTO capture_receipts (operation_id, receipt_json, created_at)
+      VALUES (?, ?, ?)
+      ON CONFLICT(operation_id) DO UPDATE SET receipt_json = excluded.receipt_json
+    `).run(receipt.operationId, JSON.stringify(receipt), new Date().toISOString())
+  }
+
+  listCaptureWatchRules(): CaptureWatchRuleV0[] {
+    const rows = this.#database.prepare('SELECT * FROM capture_watch_rules ORDER BY created_at, id').all() as Row[]
+    return rows.map((row) => ({
+      id: String(row.id),
+      path: String(row.path),
+      patterns: JSON.parse(String(row.patterns_json)) as string[],
+      ...(row.project_hint ? { projectHint: String(row.project_hint) } : {}),
+      settleMs: Number(row.settle_ms ?? 750),
+      enabled: Number(row.enabled) === 1,
+    }))
+  }
+
+  upsertCaptureWatchRule(rule: CaptureWatchRuleV0): void {
+    this.#database.prepare(`
+      INSERT INTO capture_watch_rules (id, path, patterns_json, project_hint, settle_ms, enabled, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        path = excluded.path,
+        patterns_json = excluded.patterns_json,
+        project_hint = excluded.project_hint,
+        settle_ms = excluded.settle_ms,
+        enabled = excluded.enabled
+    `).run(
+      rule.id,
+      rule.path,
+      JSON.stringify(rule.patterns),
+      rule.projectHint ?? null,
+      rule.settleMs,
+      rule.enabled ? 1 : 0,
+      new Date().toISOString(),
+    )
+  }
+
+  deleteCaptureWatchRule(id: string): boolean {
+    const result = this.#database.prepare('DELETE FROM capture_watch_rules WHERE id = ?').run(id)
+    return Number(result.changes) > 0
   }
 
   #captureStagingItem(row: Row): CaptureStagingItemV0 {
@@ -3212,7 +3300,7 @@ export class SqliteMetadataRepository {
     }
   }
 
-  get schemaVersion(): number { return 25 }
+  get schemaVersion(): number { return 27 }
 
   // ==================== Private helpers ====================
 

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>LCOS Capture</title>
+  <style>
+    body { width: 280px; margin: 0; padding: 14px; font: 13px/1.5 system-ui, sans-serif; color: #222; }
+    h1 { font-size: 14px; margin: 0 0 8px; }
+    p { margin: 6px 0; color: #666; font-size: 12px; }
+    input { width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid #ccc; border-radius: 8px; }
+    button { margin-top: 8px; width: 100%; padding: 7px; border: 0; border-radius: 8px; background: #7047d8; color: #fff; cursor: pointer; }
+    button.secondary { background: #eee; color: #333; }
+    .status { margin-top: 8px; font-size: 12px; min-height: 18px; }
+    .ok { color: #1a7f37; }
+    .err { color: #b42318; }
+  </style>
+</head>
+<body>
+  <h1>LCOS Capture</h1>
+  <p>配对码（从 LCOS 运行端获取：<code>lcos runtime extension-token</code>）</p>
+  <input id="token" type="password" placeholder="粘贴配对码" autocomplete="off" />
+  <button id="save">保存配对码</button>
+  <button id="capture" class="secondary">保存当前页面</button>
+  <div id="status" class="status"></div>
+  <script src="popup.js" type="module"></script>
+</body>
+</html>

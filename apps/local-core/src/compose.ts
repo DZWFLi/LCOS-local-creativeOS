@@ -1,4 +1,6 @@
 import type { ProjectCatalog } from '@local-creative-os/contracts'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import { ActiveContextStore } from './active-context-store.js'
 import { ContextManifestService } from './context-manifest-service.js'
 import { ContextProposalStore } from './context-proposal-store.js'
@@ -29,6 +31,8 @@ import { SemanticIndexService } from './semantic-index-service.js'
 import { RuntimeRegistryService } from './runtime-registry-service.js'
 import { LocalIntelligenceService } from './local-intelligence-service.js'
 import { CaptureStagingService } from './capture-staging-service.js'
+import { CaptureApplicationService } from './capture-application-service.js'
+import { CaptureWatchService } from './capture-watch-service.js'
 import { resolveProjectAffinity } from './project-affinity-service.js'
 import type { LocalCoreServerOptions } from './server.js'
 
@@ -66,6 +70,8 @@ export interface LocalCoreServices {
   readonly localIntelligence: LocalIntelligenceService
   readonly captureStaging: CaptureStagingService | undefined
   readonly resolveProjectAffinity: typeof resolveProjectAffinity
+  readonly captureApplication: CaptureApplicationService | undefined
+  readonly captureWatch: CaptureWatchService | undefined
 }
 
 /** 服务装配：把 options 解析成 createLocalCoreServer 需要的一组服务。 */
@@ -79,14 +85,23 @@ export function composeLocalCoreServices(options: LocalCoreServerOptions = {}): 
   const captureStaging = metadata === undefined ? undefined : options.captureStagingService ?? new CaptureStagingService(metadata)
   const importCopy = options.importCopyService ?? (metadata === undefined ? undefined : new ImportCopyService(metadata))
   const packages = options.resourcePackageService ?? (metadata === undefined ? undefined : new ResourcePackageService(metadata))
+  const resources = options.resourceImportService ?? (metadata === undefined || importCopy === undefined ? undefined : new UniversalResourceImportService(metadata, importCopy))
   const obsidian = options.obsidianConnector ?? new ObsidianReadOnlyConnector()
+  const captureApplication = metadata === undefined || resources === undefined || captureStaging === undefined
+    ? undefined
+    : options.captureApplicationService ?? new CaptureApplicationService(metadata, resources, captureStaging, runtimeRegistry, {
+        blobRoot: process.env.LCOS_CAPTURE_STAGING_ROOT ?? join(homedir(), '.lcos', 'capture-staging', 'blobs'),
+      })
+  const captureWatch = metadata === undefined || captureApplication === undefined
+    ? undefined
+    : options.captureWatchService ?? new CaptureWatchService(metadata, (request) => captureApplication.capture(request))
   return {
     catalog: options.catalog ?? new ExplicitProjectCatalog([]),
     metadata,
     fileRegistry: options.fileRegistryService,
     fileObservation: options.fileObservationService ?? (metadata === undefined ? undefined : new FileObservationService(metadata)),
     importCopy,
-    resources: options.resourceImportService ?? (metadata === undefined || importCopy === undefined ? undefined : new UniversalResourceImportService(metadata, importCopy)),
+    resources,
     packages,
     uploads: metadata === undefined || packages === undefined ? undefined : new ResourceUploadSessionService(metadata, packages),
     resourceReader: options.resourceReader ?? (metadata === undefined ? undefined : new ResourceReader(metadata)),
@@ -125,5 +140,7 @@ export function composeLocalCoreServices(options: LocalCoreServerOptions = {}): 
     localIntelligence,
     captureStaging,
     resolveProjectAffinity,
+    captureApplication,
+    captureWatch,
   }
 }

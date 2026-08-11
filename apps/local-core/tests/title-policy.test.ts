@@ -11,7 +11,7 @@ function disposableSnapshot(): ProjectGraphSnapshot {
   const now = '2026-08-11T12:00:00.000Z'
   const projectId = 'title-policy-project' as ProjectGraphSnapshot['project']['id']
   return {
-    schemaVersion: 25,
+    schemaVersion: 27,
     graphVersion: 1 as ProjectGraphSnapshot['graphVersion'],
     project: {
       id: projectId, name: '未命名', rootPath: 'disposable://title-policy',
@@ -52,7 +52,7 @@ describe('Title Policy (Phase A Zero Naming)', () => {
     const directory = await mkdtemp(join(tmpdir(), 'local-core-title-policy-'))
     cleanup.push(directory)
     const repository = new SqliteMetadataRepository(join(directory, 'metadata.sqlite'))
-    expect(repository.schemaVersion).toBe(25)
+    expect(repository.schemaVersion).toBe(27)
     repository.save(disposableSnapshot())
     expect(repository.getEntityTitleMode('project', 'title-policy-project')).toBe('auto')
     expect(repository.getEntityTitleMode('workspace', 'workspace-main')).toBe('auto')
@@ -93,3 +93,5 @@ describe('Title Policy (Phase A Zero Naming)', () => {
     expect(repository.getEntityTitleMode('project', 'missing-project')).toBeUndefined()
   })
 })
+
+

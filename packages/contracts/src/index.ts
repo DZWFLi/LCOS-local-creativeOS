@@ -51,7 +51,13 @@ export type {
   ProjectAffinityInputV0,
   ProjectAffinityResultV0,
 } from './project-affinity.js'
-export type { CaptureStagingItemV0 } from './capture.js'
+export type {
+  CaptureKindV0,
+  CaptureReceiptV0,
+  CaptureRequestV0,
+  CaptureStagingItemV0,
+  CaptureWatchRuleV0,
+} from './capture.js'
 
 // Re-add types that were removed from domain (keep contracts boundary stable)
 export interface WorkspaceQuery {

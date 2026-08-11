@@ -182,6 +182,8 @@ export interface LocalCoreServerOptions {
   readonly runtimeRegistryService?: RuntimeRegistryService
   readonly localIntelligenceService?: LocalIntelligenceService
   readonly captureStagingService?: import('./capture-staging-service.js').CaptureStagingService
+  readonly captureApplicationService?: import('./capture-application-service.js').CaptureApplicationService
+  readonly captureWatchService?: import('./capture-watch-service.js').CaptureWatchService
 }
 
 export interface LocalCoreAddress {
@@ -311,7 +313,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
     resourceReader, matcher, contextManifest, runtimeReview, runtimeApplication, activeContext,
     contextProposals, runEventListeners, obsidian, obsidianSessions, connectorRegistry,
     ownsConversationService, conversations, previewWorker, presentation, curation, search, curationCommand,
-    runtimeRegistry, localIntelligence, captureStaging, resolveProjectAffinity,
+    runtimeRegistry, localIntelligence, captureStaging, resolveProjectAffinity, captureApplication, captureWatch,
   } = services
   metadata?.setRunEventSink?.((event) => {
     const payloadProjectId = (event.payload as { projectId?: string } | null)?.projectId
@@ -430,6 +432,12 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
         return
       }
 
+      if (method === 'POST' && pathname === '/runtime/extension-token') {
+        // 需要已有 Core token（全局 Bearer 检查已过）才能获取/复用 Extension token。
+        sendJson(response, 200, { ok: true, value: { token: runtimeRegistry.ensureExtensionToken() } })
+        return
+      }
+
       if (method === 'POST' && pathname === '/runtime/registry/capture-target') {
         let input: unknown
         try { input = await readJsonBody(request, controller.signal) } catch {
@@ -460,6 +468,29 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
       }
 
       // ---- Phase B: Project Affinity + Capture Staging ----
+      if (method === 'POST' && pathname === '/capture') {
+        if (captureApplication === undefined) {
+          sendJson(response, 503, failure('UNAVAILABLE', 'Capture application service is not configured.'))
+          return
+        }
+        let input: unknown
+        try { input = await readJsonBody(request, controller.signal) } catch {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Request body must be valid JSON under 1 MiB.'))
+          return
+        }
+        if (!isRecord(input) || typeof input.operationId !== 'string' || !isRecord(input.source) || !isRecord(input.payload)) {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Capture requires operationId, source, payload.'))
+          return
+        }
+        try {
+          const receipt = await captureApplication.capture(input as unknown as import('@local-creative-os/contracts').CaptureRequestV0)
+          sendJson(response, 201, { ok: true, value: receipt })
+        } catch (error: unknown) {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', error instanceof Error ? error.message : 'Capture failed.'))
+        }
+        return
+      }
+
       if (method === 'POST' && pathname === '/runtime/affinity/resolve') {
         const db = routeRequireMetadata({ metadata, response, helpers: routeHelpers }); if (db === undefined) return
         let input: unknown
@@ -569,6 +600,46 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
         }
         const registry = runtimeRegistry.setBrowserTabBinding(input.profileId, input.tabId, input.projectId)
         sendJson(response, 200, { ok: true, value: registry })
+        return
+      }
+
+      if (pathname === '/runtime/capture-watch/rules' && (method === 'GET' || method === 'POST' || method === 'DELETE')) {
+        const db = routeRequireMetadata({ metadata, response, helpers: routeHelpers }); if (db === undefined) return
+        if (captureWatch === undefined) {
+          sendJson(response, 503, failure('UNAVAILABLE', 'Capture watch service is not configured.'))
+          return
+        }
+        if (method === 'GET') {
+          sendJson(response, 200, { ok: true, value: captureWatch.listRules() })
+          return
+        }
+        if (method === 'DELETE') {
+          const id = url.searchParams.get('id')
+          if (id === null || id.length === 0) {
+            sendJson(response, 400, failure('INVALID_ARGUMENT', 'DELETE requires ?id='))
+            return
+          }
+          sendJson(response, 200, { ok: true, value: { deleted: captureWatch.deleteRule(id) } })
+          return
+        }
+        let input: unknown
+        try { input = await readJsonBody(request, controller.signal) } catch {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Request body must be valid JSON.'))
+          return
+        }
+        if (!isRecord(input) || typeof input.id !== 'string' || typeof input.path !== 'string' || !Array.isArray(input.patterns)) {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Watch rule requires id, path, patterns.'))
+          return
+        }
+        captureWatch.upsertRule({
+          id: input.id,
+          path: input.path,
+          patterns: input.patterns as string[],
+          ...(typeof input.projectHint === 'string' ? { projectHint: input.projectHint } : {}),
+          settleMs: typeof input.settleMs === 'number' ? input.settleMs : 750,
+          enabled: input.enabled !== false,
+        })
+        sendJson(response, 200, { ok: true, value: captureWatch.listRules() })
         return
       }
 
@@ -903,6 +974,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
         throw new Error('Local Core did not receive a TCP address.')
       }
       currentAddress = { host: LOOPBACK_HOST, port: bound.port }
+      captureWatch?.start()
       if (signal !== undefined) {
         if (signal.aborted) { await api.close(); throw new DOMException('Start aborted', 'AbortError') }
         lifecycleSignal = signal
@@ -914,6 +986,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
     },
 
     async close(): Promise<void> {
+      captureWatch?.stop()
       const activeServer = server
       if (activeServer === undefined) return
       if (lifecycleSignal !== undefined && lifecycleAbort !== undefined) {
