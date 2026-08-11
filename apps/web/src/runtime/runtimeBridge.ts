@@ -401,11 +401,19 @@ export function mapGraphToState(
   const endpointId = (entityType: string, entityId: string): string => entityType === 'workspace'
     ? `workspace:${entityId}`
     : primaryViewByArtifactId.get(String(entityId)) ?? String(entityId)
+  const HIERARCHY_RELATION_KINDS = new Set([
+    '包含', '归组', '来源于', '层级', '父子', '父', '子', '上级', '下级',
+    'hierarchy', 'parent', 'child', 'contains', 'part-of', 'source-of', 'derived-from',
+  ])
   const edges: CanvasEdge[] = graph.relations.map((rel) => ({
     id: String(rel.id),
     from: endpointId(rel.sourceEntityType, rel.sourceEntityId),
     to: endpointId(rel.targetEntityType, rel.targetEntityId),
-    kind: rel.kind === 'feedback' ? 'feedback' as const : (rel.kind === 'informs' || rel.kind === 'reference') ? 'reference' as const : 'modify' as const,
+    kind: HIERARCHY_RELATION_KINDS.has(String(rel.kind))
+      ? 'hierarchy' as const
+      : rel.kind === 'feedback' ? 'feedback' as const
+      : (rel.kind === 'informs' || rel.kind === 'reference') ? 'reference' as const
+      : 'modify' as const,
     active: false,
   }))
 

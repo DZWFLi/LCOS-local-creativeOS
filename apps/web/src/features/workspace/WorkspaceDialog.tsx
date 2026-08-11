@@ -25,7 +25,8 @@ export function WorkspaceDialog({ mode, workspace, currentCamera: _currentCamera
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault()
-    if (!trimmed) return
+    // Phase A Zero Naming：创建模式允许空名（fallback 由调用方给）；编辑模式仍需名称。
+    if (mode === 'edit' && !trimmed) return
     onSave({ label: trimmed })
   }
 
@@ -37,7 +38,7 @@ export function WorkspaceDialog({ mode, workspace, currentCamera: _currentCamera
       </header>
       <label className="editor-field">名称<input autoFocus value={label} maxLength={48} placeholder="例如：冰箱篇 / 本周反馈 / Prompt 实验" onChange={(event) => setLabel(event.target.value)} /></label>
       <p className="editor-help">Workspace 只保存你或 Agent 组织出来的空间范围、成员与视图偏好。LCOS 不替项目定义“理解 / 探索 / 构建 / 决策”等业务阶段。</p>
-      <footer><button type="button" className="secondary-action" onClick={onCancel}>取消</button><button type="submit" className="primary-action" disabled={!trimmed}>{mode === 'create' ? '创建工作空间' : '保存名称'}</button></footer>
+      <footer><button type="button" className="secondary-action" onClick={onCancel}>取消</button><button type="submit" className="primary-action" disabled={mode === 'edit' && !trimmed}>{mode === 'create' ? '立即创建' : '保存名称'}</button></footer>
     </form>
   </div>
 }

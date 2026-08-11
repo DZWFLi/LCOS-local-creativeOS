@@ -86,8 +86,11 @@ import { handlePresentationsRoute } from './routes/presentations.js'
 import { handleCurationRoute } from './routes/curation.js'
 import { handleArtifactsRoute } from './routes/artifacts.js'
 import { handleWorkspaceStatesRoute } from './routes/workspace-states.js'
-import { FORBIDDEN_BROWSER_PATH_FIELDS, isRecord, isStringArray } from './routes/route-context.js'
+import { FORBIDDEN_BROWSER_PATH_FIELDS, isRecord, isStringArray, routeRequireMetadata, routeRequireProject } from './routes/route-context.js'
 import { ContextProposalStore } from './context-proposal-store.js'
+import { RuntimeRegistryService } from './runtime-registry-service.js'
+import { LocalIntelligenceService } from './local-intelligence-service.js'
+import { revealRegisteredPath } from './os-integration.js'
 import { selectNativeDirectory, type DirectoryPickerInput, type DirectoryPickerResult } from './native-directory-picker.js'
 import { indexProjectRoot, inspectProjectRoot } from './project-root-indexer.js'
 import { ObsidianConnectorSessionStore, ObsidianReadOnlyConnector } from './connectors/obsidian-connector.js'
@@ -175,6 +178,8 @@ export interface LocalCoreServerOptions {
   readonly conversationImportService?: ConversationImportService
   readonly workbenchService?: import('./workbench-service.js').WorkbenchService
   readonly contextSnapshotService?: import('./context-snapshot-service.js').ContextSnapshotService
+  readonly runtimeRegistryService?: RuntimeRegistryService
+  readonly localIntelligenceService?: LocalIntelligenceService
 }
 
 export interface LocalCoreAddress {
@@ -304,6 +309,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
     resourceReader, matcher, contextManifest, runtimeReview, runtimeApplication, activeContext,
     contextProposals, runEventListeners, obsidian, obsidianSessions, connectorRegistry,
     ownsConversationService, conversations, previewWorker, presentation, curation, search, curationCommand,
+    runtimeRegistry, localIntelligence,
   } = services
   metadata?.setRunEventSink?.((event) => {
     const payloadProjectId = (event.payload as { projectId?: string } | null)?.projectId
@@ -399,6 +405,116 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
         conversations,
         helpers: routeHelpers,
       })) return
+
+      // ---- Phase A: Runtime Registry + Focus Signal + Reveal + Local Intelligence ----
+      const focusMatch = /^\/runtime\/projects\/([^/]+)\/focus$/.exec(pathname)
+      if (method === 'POST' && focusMatch !== null) {
+        const projectId = decodeURIComponent(focusMatch[1] ?? '')
+        if (projectId.length === 0 || projectId.length > 200) {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Invalid project id.'))
+          return
+        }
+        if (metadata !== undefined && metadata.getProject(projectId) === undefined) {
+          sendJson(response, 404, failure('NOT_FOUND', 'Project not found.'))
+          return
+        }
+        const registry = runtimeRegistry.recordFocus(projectId)
+        sendJson(response, 200, { ok: true, value: registry })
+        return
+      }
+
+      if (method === 'GET' && pathname === '/runtime/registry') {
+        sendJson(response, 200, { ok: true, value: runtimeRegistry.getRegistry() })
+        return
+      }
+
+      if (method === 'POST' && pathname === '/runtime/registry/capture-target') {
+        let input: unknown
+        try { input = await readJsonBody(request, controller.signal) } catch {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Request body must be valid JSON under 64 KiB.'))
+          return
+        }
+        if (!isRecord(input) || !('projectId' in input) || (input.projectId !== null && typeof input.projectId !== 'string')) {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'capture-target requires projectId or null.'))
+          return
+        }
+        const projectId = input.projectId
+        if (typeof projectId === 'string' && metadata !== undefined && metadata.getProject(projectId) === undefined) {
+          sendJson(response, 404, failure('NOT_FOUND', 'Project not found.'))
+          return
+        }
+        const registry = runtimeRegistry.setPinnedCaptureProject(projectId)
+        sendJson(response, 200, { ok: true, value: registry })
+        return
+      }
+
+      if (method === 'GET' && pathname === '/runtime/local-intelligence') {
+        try {
+          sendJson(response, 200, { ok: true, value: await localIntelligence.status() })
+        } catch (error: unknown) {
+          sendJson(response, 503, failure('UNAVAILABLE', error instanceof Error ? error.message : 'Local intelligence probe failed.'))
+        }
+        return
+      }
+
+      const revealMatch = /^\/projects\/([^/]+)\/reveal$/.exec(pathname)
+      if (method === 'POST' && revealMatch !== null) {
+        const projectId = decodeURIComponent(revealMatch[1] ?? '')
+        const db = routeRequireMetadata({ metadata, response, helpers: routeHelpers }); if (db === undefined) return
+        const project = routeRequireProject(projectId, { metadata: db, response, helpers: routeHelpers }); if (project === undefined) return
+        if (typeof project.rootPath !== 'string' || project.rootPath.length === 0) {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Project has no registered root path.'))
+          return
+        }
+        try {
+          const result = await revealRegisteredPath(project.rootPath)
+          if (!result.ok) {
+            sendJson(response, 500, failure('INTERNAL', result.error ?? 'Failed to reveal project folder.'))
+            return
+          }
+          sendJson(response, 200, { ok: true, value: { projectId, revealed: true } })
+        } catch (error: unknown) {
+          sendJson(response, 500, failure('INTERNAL', error instanceof Error ? error.message : 'Failed to reveal project folder.'))
+        }
+        return
+      }
+
+      const titleMatch = /^\/entities\/(project|workspace|artifact|scope)\/([^/]+)\/title$/.exec(pathname)
+      if (method === 'POST' && titleMatch !== null) {
+        const db = routeRequireMetadata({ metadata, response, helpers: routeHelpers }); if (db === undefined) return
+        const entity = titleMatch[1] as 'project' | 'workspace' | 'artifact' | 'scope'
+        const id = decodeURIComponent(titleMatch[2] ?? '')
+        let input: unknown
+        try { input = await readJsonBody(request, controller.signal) } catch {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Request body must be valid JSON under 64 KiB.'))
+          return
+        }
+        if (!isRecord(input) || typeof input.title !== 'string' || input.title.trim().length === 0) {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'title is required.'))
+          return
+        }
+        const mode = input.mode === 'manual' || input.mode === 'locked' ? input.mode : input.mode === 'auto' ? 'auto' : undefined
+        if (mode === undefined) {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', "mode must be 'auto' | 'manual' | 'locked'."))
+          return
+        }
+        if (Object.keys(input).some((key) => !['title', 'mode', 'generatedBy'].includes(key))) {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Unexpected field in title update.'))
+          return
+        }
+        try {
+          db.updateEntityTitle(entity, id, {
+            title: input.title,
+            mode,
+            ...(typeof input.generatedBy === 'string' && input.generatedBy.length > 0 ? { generatedBy: input.generatedBy } : {}),
+          })
+          sendJson(response, 200, { ok: true, value: { id, entity, title: input.title, mode } })
+        } catch (error: unknown) {
+          sendJson(response, 404, failure('NOT_FOUND', error instanceof Error ? error.message : `${entity} not found.`))
+        }
+        return
+      }
+
       if (await handleProjectsRoute({
         method,
         pathname,

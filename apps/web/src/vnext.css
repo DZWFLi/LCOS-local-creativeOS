@@ -79,6 +79,8 @@
 .vnext-brand-dot:hover,
 .vnext-project-actions button:hover { color: var(--vnext-ink); background: rgba(67,62,91,.055); transform: scale(1.035); }
 .vnext-project-name { min-width: 0; display: flex; align-items: baseline; gap: 8px; padding: 4px 6px; border: 0; background: transparent; text-align: left; }
+.vnext-project-reveal { width: 26px; height: 26px; display: grid; place-items: center; border: 0; border-radius: 8px; color: var(--vnext-ink-44); background: transparent; cursor: pointer; flex: none; }
+.vnext-project-reveal:hover { background: rgba(70,90,190,.09); color: #4a5fc7; }
 .vnext-project-name strong { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--vnext-ink); font-size: 12.5px; font-weight: 660; letter-spacing: -.015em; }
 .vnext-project-name span { color: var(--vnext-ink-44); font-size: 10px; }
 .vnext-project-state { display: flex; gap: 5px; margin-left: 2px; }

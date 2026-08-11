@@ -2372,6 +2372,10 @@ body,
 .project-folder-main { display: grid; gap: 8px; align-content: start; padding: 0; border: 0; background: transparent; text-align: left; color: inherit; cursor: pointer; }
 .project-folder-delete { position: absolute; top: 10px; right: 10px; width: 26px; height: 26px; display: grid; place-items: center; border: 0; border-radius: 8px; color: rgba(24,36,49,.35); background: transparent; cursor: pointer; }
 .project-folder-delete:hover { background: rgba(190,60,50,.09); color: #a23b33; }
+.project-folder-actions { position: absolute; top: 10px; right: 10px; display: flex; gap: 4px; }
+.project-folder-actions button { width: 26px; height: 26px; display: grid; place-items: center; border: 0; border-radius: 8px; color: rgba(24,36,49,.35); background: transparent; cursor: pointer; }
+.project-folder-actions .project-folder-reveal:hover { background: rgba(70,90,190,.09); color: #4a5fc7; }
+.project-folder-actions .project-folder-delete { position: static; }
 .drive-sort { display: inline-flex; align-items: center; gap: 4px; margin-right: 10px; color: var(--v06-muted); font-size: 10px; }
 .drive-sort select { padding: 3px 6px; border: 1px solid rgba(29,45,60,.1); border-radius: 8px; background: #fff; color: inherit; font-size: 10px; }
 .drive-recent-opened { padding-top: 8px; }

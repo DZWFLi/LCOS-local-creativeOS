@@ -1129,6 +1129,42 @@ export function App() {
     setNotice(`已打开 ${projects.find((project) => project.id === projectId)?.label ?? '项目'}`)
   }, [activeProjectId, applyProjectState, bootMode, camera, captureProjectState, projectOpen, projects])
 
+  // Phase A: Project Home 是 Launcher —— 卡片点击在新标签页打开项目，实例互不干扰。
+  const openProjectInNewTab = useCallback((projectId: string) => {
+    const url = `${window.location.origin}${window.location.pathname}?project=${encodeURIComponent(projectId)}`
+    window.open(url, '_blank', 'noopener')
+    setProjectOpen(false)
+  }, [])
+
+  const revealProjectFolder = useCallback((projectId: string) => {
+    if (bootMode !== 'runtime') {
+      setNotice('原型模式没有可打开的本地项目目录')
+      return
+    }
+    void bridgeRef.current.client.revealProject(projectId).then((call) => {
+      if (call.result.ok) setNotice('已在资源管理器中打开项目目录')
+      else setNotice(`打开失败：${call.result.error.message}`)
+    })
+  }, [bootMode])
+
+  // Phase A: Project Focus Signal —— 项目 Tab 获得焦点时上报 Runtime Registry（Capture 亲和性基础）。
+  useEffect(() => {
+    if (bootMode !== 'runtime' || !activeProjectId) return
+    const report = () => {
+      void bridgeRef.current.client.runtimeFocusProject(activeProjectId).catch(() => { /* 上报失败不影响界面 */ })
+    }
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') report()
+    }
+    report()
+    window.addEventListener('focus', report)
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => {
+      window.removeEventListener('focus', report)
+      document.removeEventListener('visibilitychange', handleVisibility)
+    }
+  }, [activeProjectId, bootMode])
+
   const closeProjectTab = useCallback((projectId: string) => {
     if (projectId === activeProjectId) { saveProjectNavigationState(projectId, camera); projectStateCacheRef.current.set(projectId, captureProjectState()) }
     const remaining = openProjectIds.filter((id) => id !== projectId)
@@ -1559,7 +1595,8 @@ export function App() {
       setWorkspaces((current) => updateWorkspaceRecord(current, workspaceEditor.id!, { label }, now))
       setNotice('工作空间名称与意图已更新')
     } else {
-      const next = createWorkspaceRecord({ id: createId('workspace'), label, intent: null, camera: { x: 0, y: 0, zoom: 1 }, visibleLayers, now })
+      const finalLabel = label.trim() || '新工作区'
+      const next = createWorkspaceRecord({ id: createId('workspace'), label: finalLabel, intent: null, camera: { x: 0, y: 0, zoom: 1 }, visibleLayers, now })
       const workspace: Workspace = { ...next, scopeId, focusedViewIds: selectedIds, contextPolicy: 'workspace-related' }
       setWorkspaces((current) => [...current, workspace])
       if (selectedIds.length) {
@@ -1567,7 +1604,7 @@ export function App() {
         setNodes((current) => current.map((node) => selected.has(node.id) ? { ...node, workspaceIds: Array.from(new Set([...(node.workspaceIds ?? []), workspace.id])) } : node))
       }
       setWorkspaceId(workspace.id)
-      setNotice(`${label} 已创建为长期工作空间`)
+      setNotice(`${finalLabel} 已创建为长期工作空间`)
     }
     setWorkspaceEditor(null)
   }, [scopeId, selectedIds, setNodes, visibleLayers, workspaceEditor])
@@ -1766,7 +1803,20 @@ export function App() {
     setPresentationCommit((current) => current + 1)
   }, [])
 
-  const renameNodeTitle = useCallback((id: string, title: string) => { setNodes((current) => current.map((node) => node.id === id ? { ...node, title } : node)); setRenameNodeId(null); setNotice('名称已更新') }, [setNodes])
+  const renameNodeTitle = useCallback((id: string, title: string) => {
+    setNodes((current) => current.map((node) => node.id === id ? { ...node, title } : node))
+    setRenameNodeId(null)
+    const node = nodes.find((item) => item.id === id)
+    if (bootMode === 'runtime' && node?.artifactId) {
+      // Phase A14: 用户改名 → manual mode，Agent 后续不得自动覆盖。
+      void bridgeRef.current.client.updateEntityTitle('artifact', node.artifactId, { title, mode: 'manual', generatedBy: 'user' }).then((call) => {
+        if (call.result.ok) setNotice('名称已更新（手动模式）')
+        else setNotice(`名称更新失败：${call.result.error.message}`)
+      })
+    } else {
+      setNotice('名称已更新')
+    }
+  }, [bootMode, nodes, setNodes])
 
   const getPasteTarget = useCallback(() => {
     if (lastCanvasPointRef.current) return lastCanvasPointRef.current
@@ -1956,10 +2006,11 @@ export function App() {
 
   const createScopeFromSelection = useCallback(({ label, kind }: { label: string; kind: Exclude<ScopeKind, 'root'> }) => {
     if (!selectedIds.length) { setScopeCreateOpen(false); return }
+    const finalLabel = label.trim() || (kind === 'context' ? '新参考与上下文' : kind === 'delivery' ? '新交付集合' : '新内容集合')
     const bounds = getSelectionBounds(nodes, selectedIds)
     const result = createChildScopeFromSelection(nodes, edges, {
       parentScopeId: scopeId,
-      label,
+      label: finalLabel,
       kind,
       selectedIds,
       containerPosition: { x: (bounds?.x ?? 420) + (bounds?.width ?? 260) + 72, y: bounds?.y ?? 160 },
@@ -1978,7 +2029,7 @@ export function App() {
     setSelectedEdgeId(null)
     setNodeInfoId(null)
     setLayoutPreview(null)
-    setNotice(`已创建子画布「${label}」· ${result.views.length} 个视图 · ${result.edges.length} 条内部关系`)
+    setNotice(`已创建子画布「${finalLabel}」· ${result.views.length} 个视图 · ${result.edges.length} 条内部关系`)
   }, [edges, nodes, scopeId, selectedIds, setGraph])
 
   const togglePositionLock = useCallback((nodeId: string) => {
@@ -3209,7 +3260,8 @@ export function App() {
       open: !projectOpen,
       projects,
       openProjectIds,
-      onOpen: openProject,
+      onOpen: openProjectInNewTab,
+      onRevealFolder: revealProjectFolder,
       onCreate: (intent = 'create') => { setProjectCreateIntent(intent); setProjectCreateOpen(true) },
       onDelete: requestDeleteProject,
       onImportLcosproj: importLcosprojFile,
@@ -3228,6 +3280,7 @@ export function App() {
       onPending: () => { setWorkRail((current) => ({ ...current, collapsed: false })); if (pendingReviews[0]) openRunReview(pendingReviews[0]); setNotice(pendingReviews.length ? `${pendingReviews.length} 项待确认，已在右侧执行列表中定位` : '当前没有待确认的返回结果') },
       onHistory: () => { setConversationDialogOpen(true); setNotice('打开已导入对话；历史导航只属于每条对话本身') },
       onMore: () => setCapabilityOpen((value) => !value),
+      onRevealFolder: () => revealProjectFolder(activeProjectId),
     }}
     scene={{
       sceneStyle,

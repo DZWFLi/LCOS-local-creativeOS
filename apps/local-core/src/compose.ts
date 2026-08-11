@@ -26,6 +26,8 @@ import { CurationQueryService } from './curation-query-service.js'
 import { ProjectSearchService } from './project-search-service.js'
 import { CurationCommandService } from './curation-command-service.js'
 import { SemanticIndexService } from './semantic-index-service.js'
+import { RuntimeRegistryService } from './runtime-registry-service.js'
+import { LocalIntelligenceService } from './local-intelligence-service.js'
 import type { LocalCoreServerOptions } from './server.js'
 
 export interface LocalCoreServices {
@@ -58,6 +60,8 @@ export interface LocalCoreServices {
   readonly search: ProjectSearchService | undefined
   readonly curationCommand: CurationCommandService | undefined
   readonly semantic: SemanticIndexService | undefined
+  readonly runtimeRegistry: RuntimeRegistryService
+  readonly localIntelligence: LocalIntelligenceService
 }
 
 /** 服务装配：把 options 解析成 createLocalCoreServer 需要的一组服务。 */
@@ -66,6 +70,8 @@ export function composeLocalCoreServices(options: LocalCoreServerOptions = {}): 
   const conversations = options.conversationImportService ?? (metadata === undefined ? undefined : new ConversationImportService(metadata))
   const presentation = metadata === undefined ? undefined : new PresentationApplicationService(metadata, metadata)
   const semantic = metadata === undefined ? undefined : new SemanticIndexService(metadata)
+  const runtimeRegistry = options.runtimeRegistryService ?? new RuntimeRegistryService()
+  const localIntelligence = options.localIntelligenceService ?? new LocalIntelligenceService()
   const importCopy = options.importCopyService ?? (metadata === undefined ? undefined : new ImportCopyService(metadata))
   const packages = options.resourcePackageService ?? (metadata === undefined ? undefined : new ResourcePackageService(metadata))
   const obsidian = options.obsidianConnector ?? new ObsidianReadOnlyConnector()
@@ -110,5 +116,7 @@ export function composeLocalCoreServices(options: LocalCoreServerOptions = {}): 
       repository: metadata,
       presentations: presentation!,
     }),
+    runtimeRegistry,
+    localIntelligence,
   }
 }

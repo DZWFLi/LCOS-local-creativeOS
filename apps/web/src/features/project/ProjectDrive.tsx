@@ -9,6 +9,7 @@ interface Props {
   onCreate: (intent?: 'create' | 'open') => void
   onDelete?: (project: ProjectPackage) => void
   onImportLcosproj?: (file: File) => void
+  onRevealFolder?: (projectId: string) => void
 }
 
 type DriveSort = 'updated' | 'recent' | 'name'
@@ -26,7 +27,7 @@ function sortProjects(projects: ProjectPackage[], sort: DriveSort): ProjectPacka
   return copy.sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')))
 }
 
-export function ProjectDrive({ projects, openProjectIds, onOpen, onCreate, onDelete, onImportLcosproj }: Props) {
+export function ProjectDrive({ projects, openProjectIds, onOpen, onCreate, onDelete, onImportLcosproj, onRevealFolder }: Props) {
   const lcosprojInput = useRef<HTMLInputElement | null>(null)
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<DriveSort>('updated')
@@ -68,7 +69,10 @@ export function ProjectDrive({ projects, openProjectIds, onOpen, onCreate, onDel
           <small>{project.localPath}</small>
           <footer><span><Clock3 size={12} />{project.updatedAt}</span>{project.pendingCount > 0 && <b>{project.pendingCount} 个待确认</b>}{opened && <em>已打开</em>}</footer>
         </button>
-        {onDelete && <button className="project-folder-delete" aria-label={`删除项目 ${project.label}`} title="从 LCOS 移除（源文件保留）" onClick={() => onDelete(project)}><Trash2 size={13} /></button>}
+        <div className="project-folder-actions">
+          {onRevealFolder && <button className="project-folder-reveal" aria-label={`打开项目目录 ${project.label}`} title="在资源管理器中打开项目目录" onClick={() => onRevealFolder(project.id)}><FolderOpen size={13} /></button>}
+          {onDelete && <button className="project-folder-delete" aria-label={`删除项目 ${project.label}`} title="从 LCOS 移除（源文件保留）" onClick={() => onDelete(project)}><Trash2 size={13} /></button>}
+        </div>
       </div>
     })}<button className="project-folder project-folder-new" onClick={() => onCreate('create')}><span className="project-folder-icon"><Plus size={24} /></span><strong>空白项目</strong><small>创建后直接拖入本地文件</small></button></div>{!filtered.length && <div className="drive-empty"><b>没有匹配的项目</b><span>换个关键词，或者创建一个新项目。</span></div>}</section>}
     {!firstRun && <section className="project-drive-recent"><h2>最近待处理</h2>{projects.filter((project) => project.pendingCount > 0).map((project) => <button key={project.id} onClick={() => onOpen(project.id)}><span>{project.label}</span><strong>有 {project.pendingCount} 个结果等待确认</strong><small>{project.updatedAt}</small></button>)}</section>}

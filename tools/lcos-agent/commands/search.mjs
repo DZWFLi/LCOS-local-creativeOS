@@ -27,5 +27,5 @@ export async function runSearchCommand({ action, rest, coreRequest }) {
   const types = option(rest, 'types')
   if (limit !== undefined) params.set('limit', limit)
   if (types !== undefined) params.set('types', types)
-  return coreRequest(`/projects/${encodeURIComponent(projectId)}/search?${params.toString()}`)
+  return coreRequest(`/projects/${encodeURIComponent(projectId)}/search?${params.toString()}`, { timeoutMs: 120_000 })
 }

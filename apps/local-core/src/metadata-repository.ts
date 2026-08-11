@@ -92,6 +92,24 @@ export class MetadataForeignKeyConstraintError extends Error {
   }
 }
 
+/** Phase A：统一 TitlePolicy。名称 ≠ Identity；mode 决定谁可以改显示名。 */
+export type TitleModeV0 = 'auto' | 'manual' | 'locked'
+
+export interface EntityTitleInputV0 {
+  readonly title: string
+  readonly mode: TitleModeV0
+  readonly generatedBy?: string
+}
+
+const TITLE_TABLE_COLUMN: Record<'project' | 'workspace' | 'artifact' | 'scope', { readonly table: string; readonly column: string }> = {
+  project: { table: 'projects', column: 'name' },
+  workspace: { table: 'workspaces', column: 'name' },
+  artifact: { table: 'artifacts', column: 'title' },
+  scope: { table: 'scopes', column: 'name' },
+}
+
+export type TitleEntityKind = keyof typeof TITLE_TABLE_COLUMN
+
 function json<T>(value: SQLInputValue): T {
   if (typeof value !== 'string') return JSON.parse('null') as unknown as T
   try { return JSON.parse(value) as T } catch { return JSON.parse('null') as unknown as T }
@@ -198,7 +216,19 @@ export class SqliteMetadataRepository {
     if (current === 20) { this.#migrate_021_from_v20(); current = 21 }
     if (current === 21) { this.#migrate_022_from_v21(); current = 22 }
     if (current === 22) { this.#migrate_023_from_v22(); current = 23 }
-    if (current !== 23) throw new Error(`Unsupported metadata schema version ${current}.`)
+    if (current === 23) { this.#migrate_024_from_v23(); current = 24 }
+    if (current !== 24) throw new Error(`Unsupported metadata schema version ${current}.`)
+  }
+
+  #migrate_024_from_v23(): void {
+    // Phase A: Zero Naming —— display title 与 identity 解耦。
+    // title_mode: 'auto'（默认，Agent 可改）| 'manual'（用户改过，Agent 不覆盖）| 'locked'
+    // 兼容策略：name/title 仍 NOT NULL（第一阶段存内部 fallback），只加 mode 标记。
+    try { this.#database.exec(`ALTER TABLE projects ADD COLUMN title_mode TEXT NOT NULL DEFAULT 'auto'`) } catch {}
+    try { this.#database.exec(`ALTER TABLE scopes ADD COLUMN title_mode TEXT NOT NULL DEFAULT 'auto'`) } catch {}
+    try { this.#database.exec(`ALTER TABLE workspaces ADD COLUMN title_mode TEXT NOT NULL DEFAULT 'auto'`) } catch {}
+    try { this.#database.exec(`ALTER TABLE artifacts ADD COLUMN title_mode TEXT NOT NULL DEFAULT 'auto'`) } catch {}
+    this.#database.exec(`PRAGMA user_version = 24`)
   }
 
   #migrate_023_from_v22(): void {
@@ -1484,6 +1514,29 @@ export class SqliteMetadataRepository {
   getProject(projectId: string): Project | undefined {
     const rows = this.#database.prepare('SELECT * FROM projects WHERE id = ?').all(projectId as SQLInputValue) as Row[]
     return rows.length ? this.#project(rows[0] as Row) : undefined
+  }
+
+  /**
+   * Phase A：更新任意可展示实体的显示标题。
+   * mode='manual'（用户改过）→ Agent 不得自动覆盖；mode='locked' → 任何 Agent 不能改。
+   * 表/列来自内部白名单，不接受外部拼接。
+   */
+  updateEntityTitle(entity: TitleEntityKind, id: string, input: EntityTitleInputV0): void {
+    const { table, column } = TITLE_TABLE_COLUMN[entity]
+    const title = input.title.trim()
+    if (title.length === 0 || title.length > 500) throw new Error('Title must be 1..500 characters.')
+    const now = new Date().toISOString()
+    const result = this.#database.prepare(
+      `UPDATE ${table} SET ${column} = ?, title_mode = ?, updated_at = ? WHERE id = ?`,
+    ).run(title, input.mode, now, id as SQLInputValue)
+    if (result.changes !== 1) throw new Error(`${entity} not found.`)
+  }
+
+  getEntityTitleMode(entity: TitleEntityKind, id: string): TitleModeV0 | undefined {
+    const { table } = TITLE_TABLE_COLUMN[entity]
+    const row = this.#database.prepare(`SELECT title_mode FROM ${table} WHERE id = ?`).get(id as SQLInputValue) as Row | undefined
+    if (row === undefined || row.title_mode === undefined || row.title_mode === null) return undefined
+    return String(row.title_mode) as TitleModeV0
   }
 
   listProjects(): Project[] {
@@ -3078,20 +3131,22 @@ export class SqliteMetadataRepository {
     }
   }
 
-  get schemaVersion(): number { return 23 }
+  get schemaVersion(): number { return 24 }
 
   // ==================== Private helpers ====================
 
   #upsertProject(value: Project): void {
     this.#database.prepare(`
-      INSERT INTO projects VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO projects (id, name, root_path, graph_version, created_at, updated_at, last_opened_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET name=excluded.name, root_path=excluded.root_path, graph_version=excluded.graph_version, last_opened_at=excluded.last_opened_at, updated_at=excluded.updated_at
     `).run(value.id as SQLInputValue, value.name, value.rootPath, value.graphVersion as unknown as number, value.createdAt, value.updatedAt, value.lastOpenedAt ?? null)
   }
 
   #upsertScope(value: Scope, projectId: ProjectId): void {
     this.#database.prepare(`
-      INSERT INTO scopes VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO scopes (id, project_id, parent_scope_id, container_view_id, kind, name, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET parent_scope_id=excluded.parent_scope_id, name=excluded.name, updated_at=excluded.updated_at
     `).run(value.id as SQLInputValue, projectId as SQLInputValue, value.parentScopeId as SQLInputValue ?? null, value.containerViewId as SQLInputValue ?? null, value.kind, value.name, value.createdAt, value.updatedAt)
   }
@@ -3132,7 +3187,8 @@ export class SqliteMetadataRepository {
       referencedTable: 'projects',
       referencedId: String(value.projectId),
     }, `
-      INSERT INTO artifacts VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO artifacts (id, project_id, title, kind, local_path, availability, current_revision_id, created_at, updated_at, managed)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET title=excluded.title, kind=excluded.kind, local_path=excluded.local_path, availability=excluded.availability, current_revision_id=excluded.current_revision_id, managed=excluded.managed, updated_at=excluded.updated_at
     `, [value.id as SQLInputValue, value.projectId as SQLInputValue, value.title, value.kind, '', value.availability, value.currentRevisionId as SQLInputValue ?? null, value.createdAt, value.updatedAt, managed])
   }

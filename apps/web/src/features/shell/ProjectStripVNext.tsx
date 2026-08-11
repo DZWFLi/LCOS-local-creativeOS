@@ -1,4 +1,4 @@
-import { History, Import, Inbox, Layers3, MessageCircle, MoreHorizontal, Search } from 'lucide-react'
+import { FolderOpen, History, Import, Inbox, Layers3, MessageCircle, MoreHorizontal, Search } from 'lucide-react'
 import type { RunStatus } from '../../model'
 import type { SaveStatus } from '../../runtime/runtimeBridge'
 
@@ -16,13 +16,15 @@ interface Props {
   onMore?: () => void
   pendingCount?: number
   onPending?: () => void
+  onRevealFolder?: () => void
 }
 
-export function ProjectStripVNext({ projectLabel, scopeLabel, saveStatus, runStatus, showWorkRailActions = true, onOpenProjectDrive, onImport, onGlobalChat, onHistory, onSearch, onMore, pendingCount, onPending }: Props) {
+export function ProjectStripVNext({ projectLabel, scopeLabel, saveStatus, runStatus, showWorkRailActions = true, onOpenProjectDrive, onImport, onGlobalChat, onHistory, onSearch, onMore, pendingCount, onPending, onRevealFolder }: Props) {
   return <header className="vnext-project-strip" data-testid="vnext-project-strip">
     <div className="vnext-project-identity">
       <button type="button" className="vnext-brand-lockup" aria-label="打开项目列表" title="项目列表" onClick={onOpenProjectDrive}><Layers3 size={16}/><span>LCOS</span></button>
       <button type="button" className="vnext-project-name" onClick={onOpenProjectDrive} title="打开项目列表"><strong>{projectLabel}</strong><span>{scopeLabel}</span></button>
+      {onRevealFolder && <button type="button" className="vnext-project-reveal" aria-label="在资源管理器中打开项目目录" title="在资源管理器中打开项目目录" onClick={onRevealFolder}><FolderOpen size={15} /></button>}
     </div>
     <div className="vnext-project-state" aria-label="项目状态">
       <span className={`vnext-save-dot state-${saveStatus}`} title={`保存状态：${saveStatus}`} />

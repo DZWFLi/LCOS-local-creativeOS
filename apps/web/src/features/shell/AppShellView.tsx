@@ -21,6 +21,7 @@ export interface AppShellViewProps {
     readonly onCreate: ComponentProps<typeof ProjectDrive>['onCreate']
     readonly onDelete?: ComponentProps<typeof ProjectDrive>['onDelete']
     readonly onImportLcosproj?: ComponentProps<typeof ProjectDrive>['onImportLcosproj']
+    readonly onRevealFolder?: ComponentProps<typeof ProjectDrive>['onRevealFolder']
   }
   readonly strip: ComponentProps<typeof ProjectStripVNext>
   readonly scene: CanvasSceneHostProps
@@ -34,7 +35,7 @@ export function AppShellView(props: AppShellViewProps) {
   if (props.drive.open) {
     return <>
       {props.notice && <div data-testid="toast" className="notice" role="status" aria-live="polite">{props.notice}</div>}
-      <ProjectDrive projects={props.drive.projects} openProjectIds={props.drive.openProjectIds} onOpen={props.drive.onOpen} onCreate={props.drive.onCreate} onDelete={props.drive.onDelete} onImportLcosproj={props.drive.onImportLcosproj} />
+      <ProjectDrive projects={props.drive.projects} openProjectIds={props.drive.openProjectIds} onOpen={props.drive.onOpen} onCreate={props.drive.onCreate} onDelete={props.drive.onDelete} onImportLcosproj={props.drive.onImportLcosproj} onRevealFolder={props.drive.onRevealFolder} />
       <DialogsHost {...props.dialogs} />
     </>
   }

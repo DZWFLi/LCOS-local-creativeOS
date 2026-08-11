@@ -190,7 +190,7 @@ try {
     result = await coreRequest(activeContextPath(required(positional[0], "project id")));
   } else if (group === "context" && action === "search") {
     const projectId = required(positional[0], "project id");
-    result = await coreRequest(`/projects/${encodeURIComponent(projectId)}/artifacts/search?q=${encodeURIComponent(option("q") || "")}`);
+    result = await coreRequest(`/projects/${encodeURIComponent(projectId)}/artifacts/search?q=${encodeURIComponent(option("q") || "")}`, { timeoutMs: 120_000 });
   } else if (group === "target" && action === "set") {
     const projectId = required(positional[0], "project id");
     const artifactId = required(positional[1], "artifact id");
@@ -567,7 +567,7 @@ try {
     result = await coreRequest(`/projects/${encodeURIComponent(required(positional[0], "project id"))}/conversations/${encodeURIComponent(required(positional[1], "conversation id"))}/messages?${query}`);
   } else if (group === "conversation" && action === "search") {
     const query = new URLSearchParams({ q: required(option("q"), "--q") }); if (rest.includes("--lexical-only")) query.set("semantic", "false"); if (option("limit")) query.set("limit", option("limit"));
-    result = await coreRequest(`/projects/${encodeURIComponent(required(positional[0], "project id"))}/conversations/search?${query}`);
+    result = await coreRequest(`/projects/${encodeURIComponent(required(positional[0], "project id"))}/conversations/search?${query}`, { timeoutMs: 120_000 });
   } else if (group === "conversation" && action === "export") {
     const projectId = required(positional[0], "project id");
     const conversationId = required(positional[1], "conversation id");

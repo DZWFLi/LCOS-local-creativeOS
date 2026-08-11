@@ -35,7 +35,7 @@ export function ScopeCreateDialog({ open, selectedCount, leftInset, rightInset, 
     if (!open) return
     const handler = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onCancel()
-      if ((event.metaKey || event.ctrlKey) && event.key === 'Enter' && label.trim()) onCreate({ label: label.trim(), kind })
+      if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') onCreate({ label: label.trim(), kind })
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
@@ -47,14 +47,14 @@ export function ScopeCreateDialog({ open, selectedCount, leftInset, rightInset, 
     <section className="scope-create-dialog" role="dialog" aria-modal="true" aria-labelledby="scope-create-title" onPointerDown={(event) => event.stopPropagation()}>
       <header><div><span>创建子画布</span><h2 id="scope-create-title">把 {selectedCount} 个对象整理成一个空间</h2></div><button aria-label="关闭" onClick={onCancel}><X size={17} /></button></header>
       <div className="scope-create-body">
-        <label className="scope-name-field"><span>子画布名称</span><input ref={inputRef} value={label} onChange={(event) => setLabel(event.target.value)} placeholder="例如：第二轮客户反馈" /></label>
+        <label className="scope-name-field"><span>子画布名称（可选）</span><input ref={inputRef} value={label} onChange={(event) => setLabel(event.target.value)} placeholder="留空稍后自动命名" /></label>
         <div className="scope-kind-options">{options.map((option) => {
           const Icon = option.icon
           return <button key={option.value} className={kind === option.value ? 'active' : ''} onClick={() => setKind(option.value)}><Icon size={17} /><span><b>{option.label}</b><small>{option.description}</small></span></button>
         })}</div>
         <div className="scope-create-note">原对象仍保留在当前画布。系统会在新子画布中创建同一 Artifact 的引用视图，并复制所选对象之间的内部关系。</div>
       </div>
-      <footer><button className="secondary" onClick={onCancel}>取消</button><button className="primary" disabled={!label.trim()} onClick={() => onCreate({ label: label.trim(), kind })}>创建并进入</button></footer>
+      <footer><button className="secondary" onClick={onCancel}>取消</button><button className="primary" onClick={() => onCreate({ label: label.trim(), kind })}>立即创建</button></footer>
     </section>
   </div>
 }

@@ -173,6 +173,12 @@ export interface ActiveContextProjection {
 export interface LocalCoreClient {
   health(signal?: AbortSignal): Promise<RuntimeCall<HealthStatus>>
   catalog(signal?: AbortSignal): Promise<RuntimeCall<readonly ProjectCatalogEntry[]>>
+  runtimeRegistry(signal?: AbortSignal): Promise<RuntimeCall<{ readonly schemaVersion: 0; readonly recentProjects: readonly { readonly projectId: string; readonly rootPath?: string; readonly displayTitle?: string; readonly lastOpenedAt?: string; readonly lastFocusedAt?: string }[]; readonly lastFocusedProjectId?: string; readonly pinnedCaptureProjectId?: string }>>
+  runtimeFocusProject(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<unknown>>
+  setPinnedCaptureProject(projectId: string | null, signal?: AbortSignal): Promise<RuntimeCall<unknown>>
+  revealProject(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<{ readonly projectId: string; readonly revealed: boolean }>>
+  updateEntityTitle(entity: 'project' | 'workspace' | 'artifact' | 'scope', id: string, input: { readonly title: string; readonly mode: 'auto' | 'manual' | 'locked'; readonly generatedBy?: string }, signal?: AbortSignal): Promise<RuntimeCall<{ readonly id: string; readonly entity: string; readonly title: string; readonly mode: string }>>
+  localIntelligence(signal?: AbortSignal): Promise<RuntimeCall<{ readonly provider: 'ollama' | 'none'; readonly available: boolean; readonly endpoint?: string; readonly version?: string; readonly embeddingModels: readonly string[]; readonly generativeModels: readonly string[] }>>
   validateProjectRoot(rootPath: string, signal?: AbortSignal): Promise<RuntimeCall<ValidatedProjectRoot>>
   selectDirectory(title: string, signal?: AbortSignal): Promise<RuntimeCall<{ readonly path?: string; readonly cancelled: boolean }>>
   inspectProjectRoot(rootPath: string, signal?: AbortSignal): Promise<RuntimeCall<{ readonly fileCount: number; readonly directoryCount: number; readonly totalBytes: number; readonly skipped: readonly string[]; readonly requiresConfirmation: boolean }>>
@@ -616,6 +622,40 @@ export function createLocalCoreClient(): LocalCoreClient {
         signal,
         decode: decodeResult<readonly ProjectCatalogEntry[]>,
       })
+    },
+    runtimeRegistry(signal) {
+      return request('/runtime/registry', { signal, decode: decodeResult<{ readonly schemaVersion: 0; readonly recentProjects: readonly { readonly projectId: string; readonly rootPath?: string; readonly displayTitle?: string; readonly lastOpenedAt?: string; readonly lastFocusedAt?: string }[]; readonly lastFocusedProjectId?: string; readonly pinnedCaptureProjectId?: string }> })
+    },
+    runtimeFocusProject(projectId, signal) {
+      return request(`/runtime/projects/${encodeURIComponent(projectId)}/focus`, {
+        signal,
+        init: { method: 'POST', headers: { 'content-type': 'application/json' } },
+        decode: decodeResult<unknown>,
+      })
+    },
+    setPinnedCaptureProject(projectId, signal) {
+      return request('/runtime/registry/capture-target', {
+        signal,
+        init: { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ projectId }) },
+        decode: decodeResult<unknown>,
+      })
+    },
+    revealProject(projectId, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/reveal`, {
+        signal,
+        init: { method: 'POST', headers: { 'content-type': 'application/json' } },
+        decode: decodeResult<{ readonly projectId: string; readonly revealed: boolean }>,
+      })
+    },
+    updateEntityTitle(entity, id, input, signal) {
+      return request(`/entities/${entity}/${encodeURIComponent(id)}/title`, {
+        signal,
+        init: { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) },
+        decode: decodeResult<{ readonly id: string; readonly entity: string; readonly title: string; readonly mode: string }>,
+      })
+    },
+    localIntelligence(signal) {
+      return request('/runtime/local-intelligence', { signal, decode: decodeResult<{ readonly provider: 'ollama' | 'none'; readonly available: boolean; readonly endpoint?: string; readonly version?: string; readonly embeddingModels: readonly string[]; readonly generativeModels: readonly string[] }> })
     },
     validateProjectRoot(rootPath, signal) {
       return request('/project-roots/validate', {

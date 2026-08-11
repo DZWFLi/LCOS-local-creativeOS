@@ -76,7 +76,7 @@ export interface CanvasEdge {
   id: string
   from: string
   to: string
-  kind: 'reference' | 'generate' | 'modify' | 'feedback'
+  kind: 'reference' | 'generate' | 'modify' | 'feedback' | 'hierarchy'
   active?: boolean
   /** Phase C: edge provenance — domain (stable), presentation (light), runtime (status). */
   scope?: 'domain' | 'presentation' | 'runtime'
