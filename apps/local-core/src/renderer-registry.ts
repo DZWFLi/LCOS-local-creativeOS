@@ -13,7 +13,7 @@ const IMAGE_MIME_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'] 
 export const DEFAULT_RENDERERS: readonly RendererDescriptor[] = [
   {
     id: 'image',
-    version: '1',
+    version: '2',
     supportedMimeTypes: IMAGE_MIME_TYPES,
     previewProfiles: ['thumbnail', 'original'],
     outputMimeType: 'image/png',

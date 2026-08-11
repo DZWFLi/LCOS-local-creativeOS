@@ -4,6 +4,7 @@ import { PresentationConflictError, type PresentationApplicationService } from '
 import type { RouteHttpContext, RouteHttpHelpers } from './route-context.js'
 
 export interface PresentationsRouteContext extends RouteHttpContext {
+  readonly helpers: RouteHttpHelpers
   readonly presentation: PresentationApplicationService | undefined
 }
 

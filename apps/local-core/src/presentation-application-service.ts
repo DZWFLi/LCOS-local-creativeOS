@@ -76,13 +76,13 @@ export class PresentationApplicationService {
       const result = this.repository.compareAndSwapPresentationView(view, input.expectedVersion)
       if (!result.updated) throw new PresentationConflictError(result.currentVersion)
     }
-    this.#notify(projectId, input.presentationId, view)
+    this.#notify(projectId, input.presentationId, { version: view.version, updatedAt: view.updatedAt, updatedBy: view.updatedBy })
     return view
   }
 
   delete(projectId: string, presentationId: string): void {
     this.repository.deletePresentationView(projectId, presentationId)
-    this.#notify(projectId, presentationId, { presentationId, version: -1, updatedAt: this.now(), updatedBy: 'core' })
+    this.#notify(projectId, presentationId, { version: -1, updatedAt: this.now(), updatedBy: 'core' })
   }
 
   subscribe(projectId: string, presentationId: string, listener: PresentationChangeListener): () => void {

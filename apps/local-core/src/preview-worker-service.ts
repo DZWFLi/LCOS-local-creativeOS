@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import type { ArtifactRevisionId, PreviewRecord, ProjectId } from '@local-creative-os/domain'
-import { createCanvas, Path2D } from '@napi-rs/canvas'
+import { createCanvas, loadImage, Path2D } from '@napi-rs/canvas'
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist'
 
 import type { SqliteMetadataRepository } from './metadata-repository.js'
@@ -120,15 +120,30 @@ export class PreviewWorkerService {
     this.#throwIfAborted(signal)
     if (renderer.id === 'pdf') return this.#renderPdfThumbnail(path, signal)
     if (renderer.id === 'office') return this.#renderShellThumbnail(path, signal)
+    if (renderer.id === 'image') return this.#renderImageThumbnail(path, signal)
     const bytes = await readFile(path)
     this.#throwIfAborted(signal)
     if (bytes.byteLength > this.#maxSourceBytes) {
       return Buffer.from(bytes.subarray(0, this.#maxSourceBytes))
     }
-    if (renderer.id === 'text' || renderer.id === 'markdown' || renderer.id === 'image') {
+    if (renderer.id === 'text' || renderer.id === 'markdown') {
       return bytes
     }
     throw new Error(`Unsupported renderer: ${renderer.id}`)
+  }
+
+  async #renderImageThumbnail(path: string, signal?: AbortSignal): Promise<Uint8Array> {
+    this.#throwIfAborted(signal)
+    const image = await loadImage(path)
+    this.#throwIfAborted(signal)
+    const scale = Math.min(1, PDF_THUMBNAIL_MAX_WIDTH / Math.max(1, image.width))
+    const width = Math.max(1, Math.round(image.width * scale))
+    const height = Math.max(1, Math.round(image.height * scale))
+    const canvas = createCanvas(width, height)
+    const context = canvas.getContext('2d')
+    context.drawImage(image, 0, 0, width, height)
+    this.#throwIfAborted(signal)
+    return new Uint8Array(canvas.toBuffer('image/png'))
   }
 
   async #renderPdfThumbnail(path: string, signal?: AbortSignal): Promise<Uint8Array> {
