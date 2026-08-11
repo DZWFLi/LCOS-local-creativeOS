@@ -765,6 +765,26 @@ try {
   } else if (group === "skill") {
     const { runSkillCommand } = await import("./commands/skill.mjs");
     result = await runSkillCommand({ action, rest });
+  } else if (group === "local-ai") {
+    if (action === "status") {
+      result = await coreRequest("/runtime/local-intelligence");
+    } else if (action === "models") {
+      const status = await coreRequest("/runtime/local-intelligence");
+      result = { available: status.available, embeddingModels: status.embeddingModels ?? [], generativeModels: status.generativeModels ?? [] };
+    } else if (action === "embed-smoke") {
+      const model = option("model") ?? "nomic-embed-text";
+      const ollama = await fetch(`http://127.0.0.1:11434/api/embed`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ model, input: ["LCOS semantic smoke"], truncate: true, keep_alive: "1m" }),
+        signal: AbortSignal.timeout(30_000),
+      });
+      if (!ollama.ok) throw new Error(`Ollama embed failed: ${ollama.status}`);
+      const body = await ollama.json();
+      result = { model, dimensions: body.embeddings?.[0]?.length ?? 0, ok: (body.embeddings?.length ?? 0) > 0 };
+    } else {
+      throw new Error("Usage: lcos local-ai status|models|embed-smoke [--model name]");
+    }
   } else if (group === "project" && action === "pin-capture") {
     const projectId = required(positional[0], "project id");
     result = await coreRequest("/runtime/registry/capture-target", { method: "POST", body: JSON.stringify({ projectId }) });

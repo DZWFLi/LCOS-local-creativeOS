@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync } from 'node:fs'
 import { createHash } from 'node:crypto'
-import { dirname, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite'
 
 import type {
@@ -167,15 +167,18 @@ export class SqliteMetadataRepository {
   readonly databasePath: string
   readonly #database: DatabaseSync
   readonly #disposableOnly: boolean
+  #vectorLoaded = false
+  #vectorLoadError: string | undefined
 
   constructor(databasePath: string, options: MetadataRepositoryOptions = {}) {
     this.databasePath = resolve(databasePath)
     this.#disposableOnly = options.disposableOnly ?? false
     mkdirSync(dirname(this.databasePath), { recursive: true })
-    this.#database = new DatabaseSync(this.databasePath)
+    this.#database = new DatabaseSync(this.databasePath, { allowExtension: true })
     try {
       this.#database.exec('PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;')
       this.#migrate()
+      this.#tryLoadVectorExtension()
     } catch (error: unknown) {
       this.#database.close()
       throw error
@@ -1921,6 +1924,13 @@ export class SqliteMetadataRepository {
   deleteSearchDocument(projectId: string, entityType: string, entityId: string): void {
     this.#database.prepare('DELETE FROM search_documents_fts WHERE entity_id = ? AND project_id = ?').run(entityId, projectId)
     this.#database.prepare('DELETE FROM search_documents WHERE project_id = ? AND entity_type = ? AND entity_id = ?').run(projectId, entityType, entityId)
+    const modelRows = this.#database.prepare('SELECT model, dimensions FROM search_document_embeddings WHERE entity_id = ?').all(entityId as SQLInputValue) as Row[]
+    for (const row of modelRows) {
+      const table = this.#ensureSearchVecTable(String(row.model), Number(row.dimensions))
+      if (table !== undefined) {
+        try { this.#database.prepare(`DELETE FROM ${table} WHERE entity_id = ?`).run(entityId) } catch { /* best effort */ }
+      }
+    }
     this.#database.prepare('DELETE FROM search_document_embeddings WHERE entity_id = ?').run(entityId)
   }
 
@@ -1931,6 +1941,21 @@ export class SqliteMetadataRepository {
       ON CONFLICT(entity_id, model) DO UPDATE SET
         dimensions=excluded.dimensions, content_hash=excluded.content_hash, embedding_blob=excluded.embedding_blob, indexed_at=excluded.indexed_at
     `).run(embedding.entityId, embedding.model, embedding.dimensions, embedding.contentHash, embedding.embeddingBlob, embedding.indexedAt)
+    const table = this.#ensureSearchVecTable(embedding.model, embedding.dimensions)
+    if (table !== undefined) {
+      try {
+        const floats = new Float32Array(embedding.embeddingBlob.buffer, embedding.embeddingBlob.byteOffset, embedding.embeddingBlob.byteLength / 4)
+        const vector = [...floats]
+        this.#database.prepare(`DELETE FROM ${table} WHERE entity_id = ?`).run(embedding.entityId)
+        this.#database.prepare(`INSERT INTO ${table}(entity_id, project_id, embedding) VALUES (?, ?, ?)`)
+          .run(embedding.entityId, this.#projectIdForSearchDocument(embedding.entityId), JSON.stringify(vector))
+      } catch { /* vec0 写入失败不影响 blob 主索引 */ }
+    }
+  }
+
+  #projectIdForSearchDocument(entityId: string): string {
+    const row = this.#database.prepare('SELECT project_id FROM search_documents WHERE entity_id = ?').get(entityId as SQLInputValue) as { project_id?: string } | undefined
+    return row?.project_id !== undefined ? String(row.project_id) : ''
   }
 
   searchDocumentsFts(projectId: string, query: string, limit: number): Array<{ readonly entityId: string; readonly title: string; readonly body: string }> {
@@ -1948,13 +1973,56 @@ export class SqliteMetadataRepository {
     try {
       this.#database.loadExtension(path)
       this.#database.prepare('SELECT vec_version()').get()
+      this.#vectorLoaded = true
       return true
     } catch {
       return false
     }
   }
 
+  /** 启动时自动尝试加载 vec0（失败静默，query 走 fallback）。 */
+  #tryLoadVectorExtension(): void {
+    if (this.#vectorLoaded) return
+    const repoRoot = process.env.LCOS_REPO_ROOT
+    const candidate = process.env.LCOS_SQLITE_VEC_EXTENSION
+      ?? (repoRoot === undefined ? undefined : join(resolve(repoRoot), '.runtime', 'sqlite-vec', process.platform === 'win32' ? 'vec0.dll' : process.platform === 'darwin' ? 'vec0.dylib' : 'vec0.so'))
+    if (candidate === undefined) return
+    if (!this.loadVectorExtension(candidate)) {
+      this.#vectorLoadError = `sqlite-vec unavailable: ${candidate}`
+    }
+  }
+
+  vectorStatus(): { readonly loaded: boolean; readonly error?: string } {
+    return { loaded: this.#vectorLoaded, ...(this.#vectorLoadError === undefined ? {} : { error: this.#vectorLoadError }) }
+  }
+
+  #ensureSearchVecTable(model: string, dimensions: number): string | undefined {
+    if (!this.#vectorLoaded || !Number.isInteger(dimensions) || dimensions <= 0 || dimensions > 4096) return undefined
+    const key = createHash('sha256').update(`${model}:${dimensions}`).digest('hex').slice(0, 16)
+    const table = `search_document_vec_${key}`
+    try {
+      this.#database.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS ${table} USING vec0(entity_id TEXT, project_id TEXT, embedding float[${dimensions}])`)
+      return table
+    } catch {
+      this.#vectorLoadError = 'Failed to create search_document_vec table.'
+      return undefined
+    }
+  }
+
   querySearchVectors(model: string, vector: readonly number[], limit: number): Array<{ readonly entityId: string; readonly distance: number }> {
+    const table = this.#ensureSearchVecTable(model, vector.length)
+    if (table !== undefined) {
+      try {
+        const rows = this.#database.prepare(`
+          SELECT entity_id, distance FROM ${table}
+          WHERE embedding MATCH ? AND k=?
+          ORDER BY distance
+        `).all(JSON.stringify(vector), Math.max(limit * 5, 50)) as Row[]
+        return rows.slice(0, limit).map((row) => ({ entityId: String(row.entity_id), distance: Number(row.distance) }))
+      } catch {
+        // vec0 查询失败 → fallback 线性扫描
+      }
+    }
     try {
       const rows = this.#database.prepare(`
         SELECT e.entity_id, e.embedding_blob FROM search_document_embeddings e
