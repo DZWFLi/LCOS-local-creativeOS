@@ -34,6 +34,7 @@ import { CaptureStagingService } from './capture-staging-service.js'
 import { CaptureApplicationService } from './capture-application-service.js'
 import { CaptureWatchService } from './capture-watch-service.js'
 import { resolveProjectAffinity } from './project-affinity-service.js'
+import { ReorganizeService } from './reorganize-service.js'
 import type { LocalCoreServerOptions } from './server.js'
 
 export interface LocalCoreServices {
@@ -72,6 +73,7 @@ export interface LocalCoreServices {
   readonly resolveProjectAffinity: typeof resolveProjectAffinity
   readonly captureApplication: CaptureApplicationService | undefined
   readonly captureWatch: CaptureWatchService | undefined
+  readonly reorganize: ReorganizeService | undefined
 }
 
 /** 服务装配：把 options 解析成 createLocalCoreServer 需要的一组服务。 */
@@ -95,6 +97,9 @@ export function composeLocalCoreServices(options: LocalCoreServerOptions = {}): 
   const captureWatch = metadata === undefined || captureApplication === undefined
     ? undefined
     : options.captureWatchService ?? new CaptureWatchService(metadata, (request) => captureApplication.capture(request))
+  const reorganize = metadata === undefined || presentation === undefined
+    ? undefined
+    : options.reorganizeService ?? new ReorganizeService(metadata, presentation)
   return {
     catalog: options.catalog ?? new ExplicitProjectCatalog([]),
     metadata,
@@ -142,5 +147,6 @@ export function composeLocalCoreServices(options: LocalCoreServerOptions = {}): 
     resolveProjectAffinity,
     captureApplication,
     captureWatch,
+    reorganize,
   }
 }

@@ -58,6 +58,7 @@ export type {
   CaptureStagingItemV0,
   CaptureWatchRuleV0,
 } from './capture.js'
+export type { ReorganizePreviewV0, ReorganizeProposalV0 } from './reorganize.js'
 
 // Re-add types that were removed from domain (keep contracts boundary stable)
 export interface WorkspaceQuery {

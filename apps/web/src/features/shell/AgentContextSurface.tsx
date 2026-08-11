@@ -1,4 +1,5 @@
 import { ChevronUp } from 'lucide-react'
+import { useState } from 'react'
 import type { ContextChangeProposalV1, RunReview } from '@local-creative-os/contracts'
 import type { ActiveContextProjection } from '../../runtime/localCoreClient'
 import { humanizeRuntimeMessage } from '../../runtime/messages'
@@ -39,6 +40,8 @@ export function AgentContextSurface({
   readonly onToggleDetails: () => void
   readonly onOpenReview: (review: RunReview) => void
 }) {
+  // Phase D (D24)：默认折叠成小胶囊入口，不常驻大卡片挡画布；点开才是浮层式详情。
+  const [collapsed, setCollapsed] = useState(detailsOpen !== true)
   const syncLabel = syncState === 'conflict'
     ? '冲突：画布已被其它端修改'
     : syncState === 'syncing'
@@ -47,12 +50,22 @@ export function AgentContextSurface({
         ? `已同步 v${projection.version}`
         : '未连接'
   const pendingProposals = proposals.filter((proposal) => proposal.status === 'pending')
+  if (collapsed) {
+    const attention = pendingReviews.length + pendingProposals.length + (pendingRuns > 0 ? 1 : 0)
+    return <button type="button" className="agent-context-surface-collapsed" data-testid="agent-context-surface-collapsed" aria-label="打开 Agent 画布详情"
+      onClick={() => { setCollapsed(false); onToggleDetails() }}
+      title={attention > 0 ? `${attention} 项需要你的确认` : 'Agent 看到的画布'}>
+      <span className={`agent-context-live ${error ? 'error' : ''}`} />
+      <strong>Agent 画布</strong>
+      {attention > 0 ? <em>{attention}</em> : null}
+    </button>
+  }
   return <aside className="agent-context-surface" data-details={detailsOpen ? 'open' : 'closed'} data-testid="agent-context-surface" aria-label="Agent 看到的画布">
     <header>
       <span className={`agent-context-live ${error ? 'error' : ''}`} />
       <div><strong>Agent 看到的画布</strong><small>{error ? '暂时无法同步' : '与当前画布同步'}</small></div>
       <code>v{projection?.version ?? 0}</code>
-      <button type="button" className="icon-only pressable" onClick={onToggleDetails} title={detailsOpen ? '收起详情' : '展开详情'} aria-label="展开或收起详情"><ChevronUp size={13} style={{ transform: detailsOpen ? 'rotate(0deg)' : 'rotate(180deg)' }} /></button>
+      <button type="button" className="icon-only pressable" onClick={() => { setCollapsed(true); onToggleDetails() }} title="收起详情" aria-label="收起详情"><ChevronUp size={13} /></button>
     </header>
     <div className={`agent-sync-badge ${syncState}`}><span>{syncLabel}</span><button type="button" className="icon-only pressable" onClick={onRefresh} title="刷新上下文">⟳</button></div>
     {runLocked && <div className="agent-run-lock" title={runLocked.id}>当前 Agent 任务已锁定 {runLocked.contextCount} 项参考内容；之后的选择只影响下一次任务。</div>}

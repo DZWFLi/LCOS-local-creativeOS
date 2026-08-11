@@ -463,8 +463,8 @@ export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edge
       else if (draggedId && point) setNodes((current) => {
         const group = dragCandidate.current?.group ?? []
         return group.length > 1
-          ? current.map((node) => { const member = group.find((item) => item.id === node.id); return member ? { ...node, x: point.x + member.dx, y: point.y + member.dy } : node })
-          : current.map((node) => node.id === draggedId ? { ...node, x: point.x, y: point.y } : node)
+          ? current.map((node) => { const member = group.find((item) => item.id === node.id); return member ? { ...node, x: point.x + member.dx, y: point.y + member.dy, positionLocked: true } : node })
+          : current.map((node) => node.id === draggedId ? { ...node, x: point.x, y: point.y, positionLocked: true } : node)
       })
     } else if (stagedDropAnchor && wasDragging && draggedCandidate) {
       restoreDraggedOriginals(draggedCandidate)

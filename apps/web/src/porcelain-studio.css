@@ -2006,6 +2006,37 @@
 }
 
 /* Optional agent context overlay */
+.app-shell.porcelain-studio-v2 .agent-context-surface-collapsed {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--ps-border);
+  border-radius: 999px;
+  color: var(--ps-text-strong);
+  background: rgba(252,252,250,.97);
+  box-shadow: var(--ps-shadow-2);
+  cursor: pointer;
+  font: inherit;
+}
+.app-shell.porcelain-studio-v2 .agent-context-surface-collapsed:hover { border-color: var(--ps-accent); }
+.app-shell.porcelain-studio-v2 .agent-context-surface-collapsed strong { font-size: 10.5px; font-weight: 600; }
+.app-shell.porcelain-studio-v2 .agent-context-surface-collapsed em {
+  display: grid;
+  place-items: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  color: #fff;
+  background: var(--ps-accent);
+  font-size: 9px;
+  font-style: normal;
+}
 .app-shell.porcelain-studio-v2 .agent-context-surface {
   width: 236px;
   padding: 8px;

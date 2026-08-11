@@ -184,6 +184,7 @@ export interface LocalCoreServerOptions {
   readonly captureStagingService?: import('./capture-staging-service.js').CaptureStagingService
   readonly captureApplicationService?: import('./capture-application-service.js').CaptureApplicationService
   readonly captureWatchService?: import('./capture-watch-service.js').CaptureWatchService
+  readonly reorganizeService?: import('./reorganize-service.js').ReorganizeService
 }
 
 export interface LocalCoreAddress {
@@ -313,7 +314,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
     resourceReader, matcher, contextManifest, runtimeReview, runtimeApplication, activeContext,
     contextProposals, runEventListeners, obsidian, obsidianSessions, connectorRegistry,
     ownsConversationService, conversations, previewWorker, presentation, curation, search, curationCommand,
-    runtimeRegistry, localIntelligence, captureStaging, resolveProjectAffinity, captureApplication, captureWatch,
+    runtimeRegistry, localIntelligence, captureStaging, resolveProjectAffinity, captureApplication, captureWatch, reorganize,
   } = services
   metadata?.setRunEventSink?.((event) => {
     const payloadProjectId = (event.payload as { projectId?: string } | null)?.projectId
@@ -640,6 +641,78 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
           enabled: input.enabled !== false,
         })
         sendJson(response, 200, { ok: true, value: captureWatch.listRules() })
+        return
+      }
+
+      // ---- Phase D: Reorganize Proposals ----
+      const reorganizeCreateMatch = /^\/projects\/([^/]+)\/reorganize\/proposals$/.exec(pathname)
+      if (method === 'POST' && reorganizeCreateMatch !== null) {
+        if (reorganize === undefined) {
+          sendJson(response, 503, failure('UNAVAILABLE', 'Reorganize service is not configured.'))
+          return
+        }
+        let input: unknown
+        try { input = await readJsonBody(request, controller.signal) } catch {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Request body must be valid JSON under 1 MiB.'))
+          return
+        }
+        if (!isRecord(input) || typeof input.presentationId !== 'string' || typeof input.baseVersion !== 'number') {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Reorganize requires presentationId and baseVersion.'))
+          return
+        }
+        try {
+          const proposal = reorganize.create({
+            projectId: decodeURIComponent(reorganizeCreateMatch[1] ?? ''),
+            presentationId: input.presentationId,
+            baseVersion: input.baseVersion,
+            ...(Array.isArray(input.mergeCandidates) ? { mergeCandidates: input.mergeCandidates as never } : {}),
+            ...(Array.isArray(input.removeMemberViewIds) ? { removeMemberViewIds: input.removeMemberViewIds as string[] } : {}),
+            ...(Array.isArray(input.artifactDeleteCandidates) ? { artifactDeleteCandidates: input.artifactDeleteCandidates as never } : {}),
+            ...(isRecord(input.hierarchyPatch) ? { hierarchyPatch: input.hierarchyPatch as never } : {}),
+            ...(isRecord(input.relationPatch) ? { relationPatch: input.relationPatch as never } : {}),
+            ...(isRecord(input.emphasisPatch) ? { emphasisPatch: input.emphasisPatch as never } : {}),
+            ...(isRecord(input.layoutIntent) ? { layoutIntent: input.layoutIntent as never } : {}),
+          })
+          sendJson(response, 201, { ok: true, value: proposal })
+        } catch (error: unknown) {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', error instanceof Error ? error.message : 'Failed to create reorganize proposal.'))
+        }
+        return
+      }
+
+      const reorganizeActionMatch = /^\/projects\/([^/]+)\/reorganize\/proposals\/([^/]+)\/(preview|apply|rollback|reject)$/.exec(pathname)
+      if (method === 'POST' && reorganizeActionMatch !== null) {
+        if (reorganize === undefined) {
+          sendJson(response, 503, failure('UNAVAILABLE', 'Reorganize service is not configured.'))
+          return
+        }
+        const proposalId = decodeURIComponent(reorganizeActionMatch[2] ?? '')
+        const action = reorganizeActionMatch[3]
+        try {
+          if (action === 'preview') {
+            sendJson(response, 200, { ok: true, value: reorganize.preview(proposalId) })
+          } else if (action === 'apply') {
+            let input: unknown = {}
+            try { input = await readJsonBody(request, controller.signal) } catch { /* body optional */ }
+            const confirm = isRecord(input) && input.confirmDestructive === true
+            sendJson(response, 200, { ok: true, value: reorganize.apply(proposalId, { confirmDestructive: confirm }) })
+          } else if (action === 'rollback') {
+            sendJson(response, 200, { ok: true, value: reorganize.rollback(proposalId) })
+          } else {
+            sendJson(response, 200, { ok: true, value: reorganize.reject(proposalId) })
+          }
+        } catch (error: unknown) {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', error instanceof Error ? error.message : 'Reorganize action failed.'))
+        }
+        return
+      }
+
+      if (method === 'GET' && /^\/projects\/[^/]+\/reorganize\/proposals$/.test(pathname)) {
+        if (reorganize === undefined) {
+          sendJson(response, 503, failure('UNAVAILABLE', 'Reorganize service is not configured.'))
+          return
+        }
+        sendJson(response, 200, { ok: true, value: reorganize.list(decodeURIComponent(/^\/projects\/([^/]+)\/reorganize\/proposals$/.exec(pathname)?.[1] ?? '')) })
         return
       }
 

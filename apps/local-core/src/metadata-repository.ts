@@ -46,6 +46,7 @@ import type {
   CaptureReceiptV0,
   CaptureStagingItemV0,
   CaptureWatchRuleV0,
+  ReorganizeProposalV0,
   CommandDraftV1,
   ContextChangeProposalV1,
   ProviderSessionBindingV1,
@@ -223,7 +224,26 @@ export class SqliteMetadataRepository {
     if (current === 24) { this.#migrate_025_from_v24(); current = 25 }
     if (current === 25) { this.#migrate_026_from_v25(); current = 26 }
     if (current === 26) { this.#migrate_027_from_v26(); current = 27 }
-    if (current !== 27) throw new Error(`Unsupported metadata schema version ${current}.`)
+    if (current === 27) { this.#migrate_028_from_v27(); current = 28 }
+    if (current !== 28) throw new Error(`Unsupported metadata schema version ${current}.`)
+  }
+
+  #migrate_028_from_v27(): void {
+    // Phase D: Reorganize proposals（Agent 画布整理，含回滚快照）。
+    this.#database.exec(`
+      CREATE TABLE IF NOT EXISTS reorganize_proposals (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        proposal_json TEXT NOT NULL,
+        snapshot_json TEXT,
+        status TEXT NOT NULL DEFAULT 'pending',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_reorganize_proposals_project
+      ON reorganize_proposals(project_id);
+      PRAGMA user_version = 28;
+    `)
   }
 
   #migrate_027_from_v26(): void {
@@ -1801,6 +1821,21 @@ export class SqliteMetadataRepository {
   upsertArtifactView(value: ArtifactView): void { this.#upsertArtifactView(value) }
   deleteArtifactView(viewId: string): void { this.#database.prepare('DELETE FROM artifact_views WHERE id = ?').run(viewId as SQLInputValue) }
 
+  /** Phase D：删除 Artifact（级联 views/revisions）。file_records 保留（可能被其他 artifact 引用）。 */
+  deleteArtifact(artifactId: string): boolean {
+    this.#database.exec('BEGIN IMMEDIATE;')
+    try {
+      this.#database.prepare('DELETE FROM artifact_views WHERE artifact_id = ?').run(artifactId as SQLInputValue)
+      this.#database.prepare('DELETE FROM artifact_revisions WHERE artifact_id = ?').run(artifactId as SQLInputValue)
+      const result = this.#database.prepare('DELETE FROM artifacts WHERE id = ?').run(artifactId as SQLInputValue)
+      this.#database.exec('COMMIT;')
+      return Number(result.changes) > 0
+    } catch (error) {
+      this.#database.exec('ROLLBACK;')
+      throw error
+    }
+  }
+
   getRelations(projectId: string): Relation[] {
     return (this.#database.prepare('SELECT * FROM relations WHERE project_id = ?').all(projectId as SQLInputValue) as Row[]).map((r) => this.#relation(r))
   }
@@ -2143,6 +2178,47 @@ export class SqliteMetadataRepository {
   deleteCaptureWatchRule(id: string): boolean {
     const result = this.#database.prepare('DELETE FROM capture_watch_rules WHERE id = ?').run(id)
     return Number(result.changes) > 0
+  }
+
+  createReorganizeProposal(proposal: ReorganizeProposalV0, snapshotJson: string): void {
+    this.#database.prepare(`
+      INSERT INTO reorganize_proposals (id, project_id, proposal_json, snapshot_json, status, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      proposal.id,
+      proposal.projectId,
+      JSON.stringify(proposal),
+      snapshotJson,
+      proposal.status,
+      proposal.createdAt,
+      proposal.createdAt,
+    )
+  }
+
+  getReorganizeProposal(id: string): { readonly proposal: ReorganizeProposalV0; readonly snapshotJson: string | undefined } | undefined {
+    const row = this.#database.prepare('SELECT proposal_json, snapshot_json, status FROM reorganize_proposals WHERE id = ?').get(id as SQLInputValue) as { proposal_json?: string; snapshot_json?: string; status?: string } | undefined
+    if (row === undefined || row.proposal_json === undefined) return undefined
+    const parsed = JSON.parse(row.proposal_json) as ReorganizeProposalV0
+    const proposal = row.status !== undefined && row.status !== parsed.status
+      ? { ...parsed, status: row.status as ReorganizeProposalV0['status'] }
+      : parsed
+    return {
+      proposal,
+      snapshotJson: row.snapshot_json ?? undefined,
+    }
+  }
+
+  updateReorganizeProposalStatus(id: string, status: ReorganizeProposalV0['status']): void {
+    this.#database.prepare(
+      'UPDATE reorganize_proposals SET status = ?, updated_at = ? WHERE id = ?',
+    ).run(status, new Date().toISOString(), id as SQLInputValue)
+  }
+
+  listReorganizeProposals(projectId: string): ReorganizeProposalV0[] {
+    const rows = this.#database.prepare(
+      'SELECT proposal_json FROM reorganize_proposals WHERE project_id = ? ORDER BY created_at DESC LIMIT 20',
+    ).all(projectId as SQLInputValue) as Row[]
+    return rows.map((row) => JSON.parse(String(row.proposal_json)) as ReorganizeProposalV0)
   }
 
   #captureStagingItem(row: Row): CaptureStagingItemV0 {
@@ -3300,7 +3376,7 @@ export class SqliteMetadataRepository {
     }
   }
 
-  get schemaVersion(): number { return 27 }
+  get schemaVersion(): number { return 28 }
 
   // ==================== Private helpers ====================
 
