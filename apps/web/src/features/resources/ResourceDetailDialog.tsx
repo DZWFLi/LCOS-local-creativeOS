@@ -31,7 +31,7 @@ export function ResourceDetailDialog({ open, projectId, artifactId, client, onCl
       if (cancelled || !listed.result.ok) return
       const entry = listed.result.value.find((item) => item.artifactId === artifactId)
       if (entry === undefined) {
-        setError('该对象没有资源理解记录')
+        setError('该对象没有详情记录')
         return
       }
       setResourceId(entry.resourceId)
@@ -65,8 +65,8 @@ export function ResourceDetailDialog({ open, projectId, artifactId, client, onCl
   const statusLabel = descriptor === null ? '' : descriptor.understanding.status
   const confidenceLabel = (value: number): string => value >= 0.8 ? '高可信' : value >= 0.5 ? '可能' : '待确认'
 
-  return <div className="modal-backdrop" onPointerDown={(event) => dismissFromBackdrop(event, onClose, busy)}><section className="resource-detail-dialog" role="dialog" aria-label="资源理解" data-testid="resource-detail-dialog">
-    <header><div><Brain size={18} /><h2>资源理解</h2></div><button type="button" className="icon-button pressable" aria-label="关闭" onClick={onClose}><X size={16} /></button></header>
+  return <div className="modal-backdrop" onPointerDown={(event) => dismissFromBackdrop(event, onClose, busy)}><section className="resource-detail-dialog" role="dialog" aria-label="资源详情" data-testid="resource-detail-dialog">
+    <header><div><Brain size={18} /><h2>资源详情</h2></div><button type="button" className="icon-button pressable" aria-label="关闭" onClick={onClose}><X size={16} /></button></header>
     {error && <p className="import-error" role="alert">{error}</p>}
     {descriptor === null && !error && <p>读取理解结果中…</p>}
     {descriptor !== null && <>

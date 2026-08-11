@@ -63,7 +63,7 @@ export function NodeInfoPopover({ node, camera, relationCount, onClose, onRelati
       </ol>
       <p>恢复旧版会创建新 Draft，不覆盖 Current。</p>
     </section>}
-    <div className="node-info-actions"><button className="pressable" onClick={onRelations}><GitBranch size={13} />查看关联 <span>{relationCount}</span></button>{node.artifactId && onRevisions && <button className="pressable" onClick={() => onRevisions(node)}><FileStack size={13} />版本与来源</button>}{hasReadOnlyPreview && onPreview && <button className="pressable" onClick={() => onPreview(node)}><ExternalLink size={13} />只读预览</button>}{node.artifactId && onShowResource && <button className="pressable" onClick={() => onShowResource(node)}><FileText size={13} />资源理解</button>}{url && <button className="pressable" onClick={() => window.open(url, '_blank', 'noopener,noreferrer')}><ExternalLink size={13} />浏览器打开</button>}</div>
+    <div className="node-info-actions"><button className="pressable" onClick={onRelations}><GitBranch size={13} />查看关联 <span>{relationCount}</span></button>{node.artifactId && onRevisions && <button className="pressable" onClick={() => onRevisions(node)}><FileStack size={13} />版本与来源</button>}{hasReadOnlyPreview && onPreview && <button className="pressable" onClick={() => onPreview(node)}><ExternalLink size={13} />只读预览</button>}{node.artifactId && onShowResource && <button className="pressable" onClick={() => onShowResource(node)}><FileText size={13} />详情</button>}{url && <button className="pressable" onClick={() => window.open(url, '_blank', 'noopener,noreferrer')}><ExternalLink size={13} />浏览器打开</button>}</div>
     <footer>{node.observedPath ?? node.subtitle}</footer>
   </aside>, document.body)
 }
