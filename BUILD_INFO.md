@@ -1,20 +1,22 @@
 # LCOS Fullstack — Build Info
 
-> 归档日期：2026-08-10
-> 分支：`codex/backend-hardening-20260802`
+> 归档日期：2026-08-11
+> 分支：`research/huabu-gap-audit-20260811`（冻结基线 pre-huabu-audit-2026-08-11）
 > HEAD：<打包时自动填充>
 
-## 近期关键提交（自 2026-08-08 起）
+## 近期关键提交（A-H 施工，自 2026-08-11 起）
 
 ```text
-d136587  docs(audit): current architecture census 20260810（只读盘点）
-f1c1153  docs(handoff): 真实会话实体化到画布 + 上下文来源激活
-53ed897  feat(web): 会话章节实体化 + 「在画布中打开」设为 Context 来源
-ffd1a05  docs(handoff): Spatial Phase E acceptance report（E0-E5）
-96f391f  fix(spatial): wheel passive 修复 + E2E 适配 PhaseD
-497b011  feat(web): merge Spatial Phase A-D source（共享空间画布/布局/drop intent/context renderers）
-0bbe789  feat(gui): reshape first-run context and workflow surfaces
-93c3c23  feat(gui): establish product interaction foundation
+21a754d  chore: freeze LCOS pre-Huabu audit baseline（docs/provenance/）
+c8584c3  docs(audit): H-GUI Completion Gate 逐项证据
+4cca5b4  feat(phase-h): GUI closeout + 全阶段 Golden Regression
+67192cf  feat(phase-g): Session Context Continuity + Web Chat provider adapter
+2b34904  feat(phase-f): Native sqlite-vec KNN + local-ai CLI
+d0355dc  feat(phase-e): Indexed Skill Runtime V2
+feb8b1d  feat(phase-d): Agent Reorganize + auto-pin
+f5c4052  feat(phase-c): Capture Plane + browser extension
+21d392e  feat(phase-b): Project Affinity + Capture Staging
+0cc7a73  feat(phase-a): Runtime Registry + Zero Naming + Ollama probe
 ```
 
 ## 当前基线
