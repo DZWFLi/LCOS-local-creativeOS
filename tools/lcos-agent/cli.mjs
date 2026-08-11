@@ -762,6 +762,9 @@ try {
     result = await coreRequest("/capture", { method: "POST", body: JSON.stringify(body) });
   } else if (group === "runtime" && action === "extension-token") {
     result = await coreRequest("/runtime/extension-token", { method: "POST", body: "{}" });
+  } else if (group === "skill") {
+    const { runSkillCommand } = await import("./commands/skill.mjs");
+    result = await runSkillCommand({ action, rest });
   } else if (group === "project" && action === "pin-capture") {
     const projectId = required(positional[0], "project id");
     result = await coreRequest("/runtime/registry/capture-target", { method: "POST", body: JSON.stringify({ projectId }) });

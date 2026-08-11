@@ -1,0 +1,101 @@
+schema_version: 1
+skill: lcos-project-curator
+version: 2.0.0
+
+routes:
+  ingest_conversation:
+    triggers:
+      - "整理这些对话"
+      - "沉淀今天的讨论"
+      - "把这几轮收进 LCOS"
+    entry: routes/ingest-conversation.md
+    base_load:
+      - policies/provenance.md
+      - recipes/conversation-to-nodes.md
+      - cli/search.md
+      - cli/curation-apply.md
+      - diagnostics/verify-ingest.md
+    conditional_load:
+      duplicate_candidates:
+        - policies/dedupe.md
+      file_or_url_refs:
+        - policies/resource-value.md
+      relation_write:
+        - policies/relation-density.md
+      auto_title:
+        - policies/naming.md
+    budget:
+      max_reference_files: 7
+      max_reference_chars: 24000
+
+  ingest_capture_batch:
+    triggers:
+      - "整理刚才收的"
+      - "把刚才这些 reference 收进项目"
+    entry: routes/ingest-capture-batch.md
+    base_load:
+      - policies/provenance.md
+      - policies/resource-value.md
+      - recipes/capture-batch-to-project.md
+      - cli/capture.md
+      - cli/search.md
+      - cli/curation-apply.md
+      - diagnostics/verify-ingest.md
+    conditional_load:
+      ambiguous_project:
+        - policies/dedupe.md
+      auto_title:
+        - policies/naming.md
+    budget:
+      max_reference_files: 8
+      max_reference_chars: 26000
+
+  reorganize:
+    triggers:
+      - "整理一下这张画布"
+      - "归组重排"
+      - "太乱了"
+    entry: routes/reorganize-presentation.md
+    base_load:
+      - policies/destructive-change.md
+      - policies/relation-density.md
+      - recipes/selection-reorganize.md
+      - cli/presentation.md
+      - diagnostics/verify-reorganize.md
+    conditional_load:
+      delete_artifact:
+        - policies/destructive-change.md
+      auto_title:
+        - policies/naming.md
+    budget:
+      max_reference_files: 6
+      max_reference_chars: 20000
+
+  retrieve_for_task:
+    triggers:
+      - "根据当前这些继续"
+      - "按最新要求改"
+    entry: routes/retrieve-for-task.md
+    base_load:
+      - policies/context-budget.md
+      - cli/read.md
+      - cli/search.md
+      - diagnostics/verify-retrieval.md
+    budget:
+      max_reference_files: 4
+      max_reference_chars: 16000
+
+  update_existing_project:
+    triggers:
+      - "把这份文档补进项目"
+      - "更新项目里的 X"
+    entry: routes/update-existing-project.md
+    base_load:
+      - policies/dedupe.md
+      - policies/provenance.md
+      - cli/search.md
+      - cli/curation-apply.md
+      - diagnostics/verify-ingest.md
+    budget:
+      max_reference_files: 6
+      max_reference_chars: 20000
