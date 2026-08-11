@@ -28,6 +28,8 @@ import { CurationCommandService } from './curation-command-service.js'
 import { SemanticIndexService } from './semantic-index-service.js'
 import { RuntimeRegistryService } from './runtime-registry-service.js'
 import { LocalIntelligenceService } from './local-intelligence-service.js'
+import { CaptureStagingService } from './capture-staging-service.js'
+import { resolveProjectAffinity } from './project-affinity-service.js'
 import type { LocalCoreServerOptions } from './server.js'
 
 export interface LocalCoreServices {
@@ -62,6 +64,8 @@ export interface LocalCoreServices {
   readonly semantic: SemanticIndexService | undefined
   readonly runtimeRegistry: RuntimeRegistryService
   readonly localIntelligence: LocalIntelligenceService
+  readonly captureStaging: CaptureStagingService | undefined
+  readonly resolveProjectAffinity: typeof resolveProjectAffinity
 }
 
 /** 服务装配：把 options 解析成 createLocalCoreServer 需要的一组服务。 */
@@ -72,6 +76,7 @@ export function composeLocalCoreServices(options: LocalCoreServerOptions = {}): 
   const semantic = metadata === undefined ? undefined : new SemanticIndexService(metadata)
   const runtimeRegistry = options.runtimeRegistryService ?? new RuntimeRegistryService()
   const localIntelligence = options.localIntelligenceService ?? new LocalIntelligenceService()
+  const captureStaging = metadata === undefined ? undefined : options.captureStagingService ?? new CaptureStagingService(metadata)
   const importCopy = options.importCopyService ?? (metadata === undefined ? undefined : new ImportCopyService(metadata))
   const packages = options.resourcePackageService ?? (metadata === undefined ? undefined : new ResourcePackageService(metadata))
   const obsidian = options.obsidianConnector ?? new ObsidianReadOnlyConnector()
@@ -118,5 +123,7 @@ export function composeLocalCoreServices(options: LocalCoreServerOptions = {}): 
     }),
     runtimeRegistry,
     localIntelligence,
+    captureStaging,
+    resolveProjectAffinity,
   }
 }

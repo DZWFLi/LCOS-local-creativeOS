@@ -2366,6 +2366,11 @@ body,
 .project-drive-recent h2 { margin: 0; font-size: 15px; }
 .drive-section-title span { color: var(--v06-muted); font-size: 10.5px; }
 .project-folder-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 14px; }
+.project-drive-staging { margin-top: 16px; }
+.project-drive-staging-card { display: grid; gap: 4px; padding: 14px 18px; border: 1px dashed rgba(29,45,60,.14); border-radius: 16px; background: rgba(112,71,216,.045); }
+.project-drive-staging-card span { color: var(--v06-muted); font-size: 10px; }
+.project-drive-staging-card strong { color: #7047d8; font-size: 13px; }
+.project-drive-staging-card small { color: var(--v06-muted); font-size: 10.5px; }
 .project-folder { min-height: 170px; display: grid; align-content: start; gap: 8px; padding: 18px; border: 1px solid rgba(29,45,60,.08); border-radius: 22px; text-align: left; background: linear-gradient(145deg,#fff,#f5f6f4); box-shadow: 0 16px 34px rgba(35,52,69,.065), inset 0 1px 0 #fff; }
 .project-folder:hover { transform: translateY(-2px); box-shadow: 0 20px 40px rgba(35,52,69,.09), inset 0 1px 0 #fff; }
 .project-folder { position: relative; }

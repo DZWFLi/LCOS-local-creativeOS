@@ -721,6 +721,33 @@ try {
   } else if (group === "search") {
     const { runSearchCommand } = await import("./commands/search.mjs");
     result = await runSearchCommand({ action, rest, coreRequest });
+  } else if (group === "affinity" && action === "resolve") {
+    const body = { capturedAt: new Date().toISOString() };
+    if (option("explicit")) body.explicitProjectId = option("explicit");
+    if (option("session")) body.sessionId = option("session");
+    if (option("path")) body.localPath = option("path");
+    if (option("tab")) {
+      const [profileId, tabId] = option("tab").split(":");
+      if (!profileId || !tabId) throw new Error("--tab must be profileId:tabId");
+      body.browser = { profileId, tabId: Number(tabId) };
+    }
+    result = await coreRequest("/runtime/affinity/resolve", { method: "POST", body: JSON.stringify(body) });
+  } else if (group === "capture" && action === "pending") {
+    const recent = option("recent") ?? "30m";
+    const ms = recent.endsWith("m") ? Number(recent.slice(0, -1)) * 60_000 : Number(recent);
+    result = await coreRequest(`/runtime/captures/staging?recent=${Number.isFinite(ms) && ms > 0 ? ms : 1_800_000}`);
+  } else if (group === "capture" && action === "resolve") {
+    const id = required(positional[0], "capture id");
+    const projectId = required(option("project"), "--project");
+    result = await coreRequest(`/runtime/captures/${encodeURIComponent(id)}/resolve`, { method: "POST", body: JSON.stringify({ projectId }) });
+  } else if (group === "project" && action === "pin-capture") {
+    const projectId = required(positional[0], "project id");
+    result = await coreRequest("/runtime/registry/capture-target", { method: "POST", body: JSON.stringify({ projectId }) });
+  } else if (group === "project" && action === "unpin-capture") {
+    result = await coreRequest("/runtime/registry/capture-target", { method: "POST", body: JSON.stringify({ projectId: null }) });
+  } else if (group === "project" && action === "reveal") {
+    const projectId = required(positional[0], "project id");
+    result = await coreRequest(`/projects/${encodeURIComponent(projectId)}/reveal`, { method: "POST", body: "{}" });
   } else if (group === "presentation" && action === "patch") {
     const { runPresentationCommand } = await import("./commands/presentation.mjs");
     result = await runPresentationCommand({ action, rest, coreRequest });

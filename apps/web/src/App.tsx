@@ -128,6 +128,7 @@ export function App() {
 
   const [projects, setProjects] = useState<ProjectPackage[]>(() => loadProjectCatalog([]))
   const [activeProjectId, setActiveProjectId] = useState(initialProjectId)
+  const [stagingPendingCount, setStagingPendingCount] = useState(0)
   const [openProjectIds, setOpenProjectIds] = useState<string[]>([initialProjectId])
   const [projectOpen, setProjectOpen] = useState(true)
   const [workspaces, setWorkspaces] = useState<Workspace[]>(initial.workspaces)
@@ -1164,6 +1165,14 @@ export function App() {
       document.removeEventListener('visibilitychange', handleVisibility)
     }
   }, [activeProjectId, bootMode])
+
+  // Phase B: Project Home 显示"未归项目"轻量计数（不是 Inbox 页面）。
+  useEffect(() => {
+    if (projectOpen || bootMode !== 'runtime') return
+    void bridgeRef.current.client.captureStaging(7 * 24 * 60 * 60_000).then((call) => {
+      if (call.result.ok) setStagingPendingCount(call.result.value.pendingCount)
+    }).catch(() => { /* 计数失败不影响列表 */ })
+  }, [bootMode, projectOpen])
 
   const closeProjectTab = useCallback((projectId: string) => {
     if (projectId === activeProjectId) { saveProjectNavigationState(projectId, camera); projectStateCacheRef.current.set(projectId, captureProjectState()) }
@@ -3265,6 +3274,7 @@ export function App() {
       onCreate: (intent = 'create') => { setProjectCreateIntent(intent); setProjectCreateOpen(true) },
       onDelete: requestDeleteProject,
       onImportLcosproj: importLcosprojFile,
+      stagingPendingCount,
     }}
     strip={{
       projectLabel: activeProject.label,

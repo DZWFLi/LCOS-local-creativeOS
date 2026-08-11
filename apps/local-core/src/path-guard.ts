@@ -18,9 +18,14 @@ function comparisonPath(value: string): string {
   return process.platform === 'win32' ? normalized.toLocaleLowerCase('en-US') : normalized
 }
 
-function isContained(root: string, candidate: string): boolean {
+export function isContained(root: string, candidate: string): boolean {
   const fromRoot = relative(comparisonPath(root), comparisonPath(candidate))
   return fromRoot === '' || (!fromRoot.startsWith(`..${sep}`) && fromRoot !== '..' && !isAbsolute(fromRoot))
+}
+
+/** 复用同一 canonicalizer：路径亲和性判断与 path-guard 完全一致。 */
+export function canonicalComparisonPath(value: string): string {
+  return comparisonPath(value)
 }
 
 export function guardTrustedFilePath(

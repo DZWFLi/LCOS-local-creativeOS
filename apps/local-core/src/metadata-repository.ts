@@ -43,6 +43,7 @@ import type {
 import type {
   AcceptArtifactReturnResult,
   ActiveContextV2,
+  CaptureStagingItemV0,
   CommandDraftV1,
   ContextChangeProposalV1,
   ProviderSessionBindingV1,
@@ -217,7 +218,29 @@ export class SqliteMetadataRepository {
     if (current === 21) { this.#migrate_022_from_v21(); current = 22 }
     if (current === 22) { this.#migrate_023_from_v22(); current = 23 }
     if (current === 23) { this.#migrate_024_from_v23(); current = 24 }
-    if (current !== 24) throw new Error(`Unsupported metadata schema version ${current}.`)
+    if (current === 24) { this.#migrate_025_from_v24(); current = 25 }
+    if (current !== 25) throw new Error(`Unsupported metadata schema version ${current}.`)
+  }
+
+  #migrate_025_from_v24(): void {
+    // Phase B: Capture Staging Buffer —— transport buffer，不是 Inbox domain。
+    this.#database.exec(`
+      CREATE TABLE IF NOT EXISTS capture_staging_items (
+        id TEXT PRIMARY KEY,
+        operation_id TEXT NOT NULL UNIQUE,
+        kind TEXT NOT NULL,
+        payload_ref TEXT NOT NULL,
+        source_json TEXT NOT NULL,
+        suggested_projects_json TEXT NOT NULL,
+        semantic_hint_json TEXT,
+        captured_at TEXT NOT NULL,
+        resolved_project_id TEXT,
+        resolved_at TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_capture_staging_captured
+      ON capture_staging_items(captured_at);
+      PRAGMA user_version = 25;
+    `)
   }
 
   #migrate_024_from_v23(): void {
@@ -1991,6 +2014,64 @@ export class SqliteMetadataRepository {
     return Number(result.changes) > 0
   }
 
+  // ==================== Capture Staging Buffer (Phase B) ====================
+
+  createCaptureStagingItem(item: CaptureStagingItemV0): void {
+    this.#database.prepare(`
+      INSERT INTO capture_staging_items (
+        id, operation_id, kind, payload_ref, source_json, suggested_projects_json,
+        semantic_hint_json, captured_at, resolved_project_id, resolved_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      item.id as SQLInputValue,
+      item.operationId,
+      item.kind,
+      item.payloadRef,
+      JSON.stringify(item.source),
+      JSON.stringify(item.suggestedProjects),
+      item.semanticHint === undefined ? null : JSON.stringify(item.semanticHint),
+      item.capturedAt,
+      item.resolvedProjectId ?? null,
+      item.resolvedAt ?? null,
+    )
+  }
+
+  listCaptureStagingItems(sinceIso: string, limit = 50): CaptureStagingItemV0[] {
+    const rows = this.#database.prepare(
+      'SELECT * FROM capture_staging_items WHERE captured_at >= ? ORDER BY captured_at DESC LIMIT ?',
+    ).all(sinceIso as SQLInputValue, limit) as Row[]
+    return rows.map((row) => this.#captureStagingItem(row as Row))
+  }
+
+  countPendingCaptureStagingItems(): number {
+    const row = this.#database.prepare(
+      'SELECT COUNT(*) AS count FROM capture_staging_items WHERE resolved_project_id IS NULL',
+    ).get() as { count: number }
+    return Number(row.count)
+  }
+
+  resolveCaptureStagingItem(id: string, projectId: string, resolvedAt: string): boolean {
+    const result = this.#database.prepare(
+      'UPDATE capture_staging_items SET resolved_project_id = ?, resolved_at = ? WHERE id = ? AND resolved_project_id IS NULL',
+    ).run(projectId, resolvedAt, id as SQLInputValue)
+    return result.changes === 1
+  }
+
+  #captureStagingItem(row: Row): CaptureStagingItemV0 {
+    return {
+      id: String(row.id),
+      operationId: String(row.operation_id),
+      kind: String(row.kind),
+      payloadRef: String(row.payload_ref),
+      source: JSON.parse(String(row.source_json)) as Record<string, unknown>,
+      suggestedProjects: JSON.parse(String(row.suggested_projects_json)) as CaptureStagingItemV0['suggestedProjects'],
+      ...(row.semantic_hint_json === null || row.semantic_hint_json === undefined ? {} : { semanticHint: JSON.parse(String(row.semantic_hint_json)) as NonNullable<CaptureStagingItemV0['semanticHint']> }),
+      capturedAt: String(row.captured_at),
+      ...(row.resolved_project_id ? { resolvedProjectId: String(row.resolved_project_id) } : {}),
+      ...(row.resolved_at ? { resolvedAt: String(row.resolved_at) } : {}),
+    }
+  }
+
   getFileRecords(projectId: string): FileRecord[] {
     return (this.#database.prepare('SELECT * FROM file_records WHERE project_id = ?').all(projectId as SQLInputValue) as Row[])
       .map((row) => this.#fileRecord(row))
@@ -3131,7 +3212,7 @@ export class SqliteMetadataRepository {
     }
   }
 
-  get schemaVersion(): number { return 24 }
+  get schemaVersion(): number { return 25 }
 
   // ==================== Private helpers ====================
 

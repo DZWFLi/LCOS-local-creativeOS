@@ -22,6 +22,7 @@ export interface RuntimeRegistryV0 {
   readonly recentProjects: RuntimeProjectStateV0[]
   readonly lastFocusedProjectId?: string
   readonly pinnedCaptureProjectId?: string
+  readonly browserTabBindings?: Readonly<Record<string, string>>
 }
 
 interface MutableProjectState {
@@ -37,6 +38,7 @@ interface MutableRegistry {
   recentProjects: MutableProjectState[]
   lastFocusedProjectId?: string
   pinnedCaptureProjectId?: string
+  browserTabBindings?: Record<string, string>
 }
 
 function defaultRegistryPath(): string {
@@ -139,5 +141,27 @@ export class RuntimeRegistryService {
     }
     this.#persist()
     return this.getRegistry()
+  }
+
+  /** Phase B：Browser Tab → Project 绑定（key = `${profileId}:${tabId}`）。tab 关闭由调用方清除。 */
+  setBrowserTabBinding(profileId: string, tabId: number, projectId: string | null): RuntimeRegistryV0 {
+    const key = `${profileId}:${tabId}`
+    const bindings = { ...(this.#registry.browserTabBindings ?? {}) }
+    if (projectId === null) {
+      delete bindings[key]
+    } else {
+      bindings[key] = projectId
+    }
+    if (Object.keys(bindings).length === 0) {
+      delete this.#registry.browserTabBindings
+    } else {
+      this.#registry.browserTabBindings = bindings
+    }
+    this.#persist()
+    return this.getRegistry()
+  }
+
+  resolveBrowserTabBinding(profileId: string, tabId: number): string | undefined {
+    return this.#registry.browserTabBindings?.[`${profileId}:${tabId}`]
   }
 }

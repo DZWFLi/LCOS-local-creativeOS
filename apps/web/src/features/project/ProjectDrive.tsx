@@ -10,6 +10,7 @@ interface Props {
   onDelete?: (project: ProjectPackage) => void
   onImportLcosproj?: (file: File) => void
   onRevealFolder?: (projectId: string) => void
+  stagingPendingCount?: number
 }
 
 type DriveSort = 'updated' | 'recent' | 'name'
@@ -27,7 +28,7 @@ function sortProjects(projects: ProjectPackage[], sort: DriveSort): ProjectPacka
   return copy.sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')))
 }
 
-export function ProjectDrive({ projects, openProjectIds, onOpen, onCreate, onDelete, onImportLcosproj, onRevealFolder }: Props) {
+export function ProjectDrive({ projects, openProjectIds, onOpen, onCreate, onDelete, onImportLcosproj, onRevealFolder, stagingPendingCount = 0 }: Props) {
   const lcosprojInput = useRef<HTMLInputElement | null>(null)
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<DriveSort>('updated')
@@ -60,6 +61,7 @@ export function ProjectDrive({ projects, openProjectIds, onOpen, onCreate, onDel
       {!firstRun && <label className="drive-search"><Search size={17} /><input aria-label="搜索项目" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索项目或本地目录" /></label>}
     </section>
     {recentlyOpened.length > 0 && <section className="project-drive-recent drive-recent-opened"><h2>最近打开</h2>{recentlyOpened.map((project) => <button key={project.id} onClick={() => onOpen(project.id)}><span>{project.label}</span><strong>{project.localPath}</strong><small>{project.lastOpenedAt}</small></button>)}</section>}
+    {stagingPendingCount > 0 && <section className="project-drive-staging"><h2>最近捕获</h2><div className="project-drive-staging-card"><span>未归项目</span><strong>{stagingPendingCount} 项等待整理</strong><small>稍后对 Agent 说一句"整理刚才这些"即可归入项目</small></div></section>}
     {!firstRun && <section className="project-drive-section"><div className="drive-section-title"><h2>本地项目</h2><label className="drive-sort"><ArrowDownUp size={12} /><select aria-label="项目排序" value={sort} onChange={(event) => setSort(event.target.value as DriveSort)}>{(['updated', 'recent', 'name'] as DriveSort[]).map((value) => <option key={value} value={value}>{sortLabels[value]}</option>)}</select></label><span>{filtered.length} 个项目包</span></div><div className="project-folder-grid">{ordered.map((project) => {
       const opened = openProjectIds.includes(project.id)
       return <div className="project-folder" key={project.id}>

@@ -45,6 +45,13 @@ import type {
   WorkspaceMembershipSource,
 } from '../../domain/src/index.js'
 import type { ManifestResourceRefV0 } from './resources.js'
+export type {
+  AffinityReasonV0,
+  ProjectAffinityCandidateV0,
+  ProjectAffinityInputV0,
+  ProjectAffinityResultV0,
+} from './project-affinity.js'
+export type { CaptureStagingItemV0 } from './capture.js'
 
 // Re-add types that were removed from domain (keep contracts boundary stable)
 export interface WorkspaceQuery {

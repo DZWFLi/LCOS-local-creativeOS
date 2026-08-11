@@ -179,6 +179,9 @@ export interface LocalCoreClient {
   revealProject(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<{ readonly projectId: string; readonly revealed: boolean }>>
   updateEntityTitle(entity: 'project' | 'workspace' | 'artifact' | 'scope', id: string, input: { readonly title: string; readonly mode: 'auto' | 'manual' | 'locked'; readonly generatedBy?: string }, signal?: AbortSignal): Promise<RuntimeCall<{ readonly id: string; readonly entity: string; readonly title: string; readonly mode: string }>>
   localIntelligence(signal?: AbortSignal): Promise<RuntimeCall<{ readonly provider: 'ollama' | 'none'; readonly available: boolean; readonly endpoint?: string; readonly version?: string; readonly embeddingModels: readonly string[]; readonly generativeModels: readonly string[] }>>
+  captureStaging(recentMs?: number, signal?: AbortSignal): Promise<RuntimeCall<{ readonly items: readonly { readonly id: string; readonly kind: string; readonly payloadRef: string; readonly capturedAt: string; readonly resolvedProjectId?: string }[]; readonly pendingCount: number }>>
+  affinityResolve(input: { readonly explicitProjectId?: string; readonly sessionId?: string; readonly localPath?: string; readonly browser?: { readonly profileId?: string; readonly tabId?: number; readonly url?: string }; readonly capturedAt: string }, signal?: AbortSignal): Promise<RuntimeCall<{ readonly projectId?: string; readonly confidence: number; readonly reason: string; readonly candidates?: readonly { readonly projectId: string; readonly score: number; readonly reason: string }[] }>>
+  resolveCaptureStaging(id: string, projectId: string, signal?: AbortSignal): Promise<RuntimeCall<{ readonly id: string; readonly resolvedProjectId: string }>>
   validateProjectRoot(rootPath: string, signal?: AbortSignal): Promise<RuntimeCall<ValidatedProjectRoot>>
   selectDirectory(title: string, signal?: AbortSignal): Promise<RuntimeCall<{ readonly path?: string; readonly cancelled: boolean }>>
   inspectProjectRoot(rootPath: string, signal?: AbortSignal): Promise<RuntimeCall<{ readonly fileCount: number; readonly directoryCount: number; readonly totalBytes: number; readonly skipped: readonly string[]; readonly requiresConfirmation: boolean }>>
@@ -656,6 +659,23 @@ export function createLocalCoreClient(): LocalCoreClient {
     },
     localIntelligence(signal) {
       return request('/runtime/local-intelligence', { signal, decode: decodeResult<{ readonly provider: 'ollama' | 'none'; readonly available: boolean; readonly endpoint?: string; readonly version?: string; readonly embeddingModels: readonly string[]; readonly generativeModels: readonly string[] }> })
+    },
+    captureStaging(recentMs, signal) {
+      return request(`/runtime/captures/staging${recentMs === undefined ? '' : `?recent=${recentMs}`}`, { signal, decode: decodeResult<{ readonly items: readonly { readonly id: string; readonly kind: string; readonly payloadRef: string; readonly capturedAt: string; readonly resolvedProjectId?: string }[]; readonly pendingCount: number }> })
+    },
+    affinityResolve(input, signal) {
+      return request('/runtime/affinity/resolve', {
+        signal,
+        init: { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) },
+        decode: decodeResult<{ readonly projectId?: string; readonly confidence: number; readonly reason: string; readonly candidates?: readonly { readonly projectId: string; readonly score: number; readonly reason: string }[] }>,
+      })
+    },
+    resolveCaptureStaging(id, projectId, signal) {
+      return request(`/runtime/captures/${encodeURIComponent(id)}/resolve`, {
+        signal,
+        init: { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ projectId }) },
+        decode: decodeResult<{ readonly id: string; readonly resolvedProjectId: string }>,
+      })
     },
     validateProjectRoot(rootPath, signal) {
       return request('/project-roots/validate', {

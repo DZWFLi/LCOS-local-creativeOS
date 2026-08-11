@@ -32,6 +32,7 @@ import type {
   PinConversationMessageInputV1,
   BuildConversationSemanticIndexInputV1,
   CanvasObservationV1,
+  CaptureStagingItemV0,
   RunEvent,
 } from '@local-creative-os/contracts'
 import type { ArtifactReturnId, ArtifactRevisionId, ArtifactViewId, FileRecordId, ProjectId, RunId, WorkspaceId } from '@local-creative-os/domain'
@@ -180,6 +181,7 @@ export interface LocalCoreServerOptions {
   readonly contextSnapshotService?: import('./context-snapshot-service.js').ContextSnapshotService
   readonly runtimeRegistryService?: RuntimeRegistryService
   readonly localIntelligenceService?: LocalIntelligenceService
+  readonly captureStagingService?: import('./capture-staging-service.js').CaptureStagingService
 }
 
 export interface LocalCoreAddress {
@@ -309,7 +311,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
     resourceReader, matcher, contextManifest, runtimeReview, runtimeApplication, activeContext,
     contextProposals, runEventListeners, obsidian, obsidianSessions, connectorRegistry,
     ownsConversationService, conversations, previewWorker, presentation, curation, search, curationCommand,
-    runtimeRegistry, localIntelligence,
+    runtimeRegistry, localIntelligence, captureStaging, resolveProjectAffinity,
   } = services
   metadata?.setRunEventSink?.((event) => {
     const payloadProjectId = (event.payload as { projectId?: string } | null)?.projectId
@@ -454,6 +456,119 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
         } catch (error: unknown) {
           sendJson(response, 503, failure('UNAVAILABLE', error instanceof Error ? error.message : 'Local intelligence probe failed.'))
         }
+        return
+      }
+
+      // ---- Phase B: Project Affinity + Capture Staging ----
+      if (method === 'POST' && pathname === '/runtime/affinity/resolve') {
+        const db = routeRequireMetadata({ metadata, response, helpers: routeHelpers }); if (db === undefined) return
+        let input: unknown
+        try { input = await readJsonBody(request, controller.signal) } catch {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Request body must be valid JSON under 64 KiB.'))
+          return
+        }
+        if (!isRecord(input) || typeof input.capturedAt !== 'string') {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Affinity resolve requires capturedAt and a valid input.'))
+          return
+        }
+        const projectRoots = db.listProjects().map((project) => ({ projectId: String(project.id), rootPath: project.rootPath }))
+        const result = resolveProjectAffinity(input as unknown as Parameters<typeof resolveProjectAffinity>[0], {
+          projectRoots,
+          registry: runtimeRegistry.getRegistry(),
+          now: input.capturedAt,
+        })
+        sendJson(response, 200, { ok: true, value: result })
+        return
+      }
+
+      if (method === 'POST' && pathname === '/runtime/captures/staging') {
+        const db = routeRequireMetadata({ metadata, response, helpers: routeHelpers }); if (db === undefined) return
+        if (captureStaging === undefined) {
+          sendJson(response, 503, failure('UNAVAILABLE', 'Capture staging service is not configured.'))
+          return
+        }
+        let input: unknown
+        try { input = await readJsonBody(request, controller.signal) } catch {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Request body must be valid JSON under 64 KiB.'))
+          return
+        }
+        if (!isRecord(input) || typeof input.operationId !== 'string' || typeof input.kind !== 'string'
+          || !isRecord(input.source) || !Array.isArray(input.suggestedProjects)) {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Staging enqueue requires operationId, kind, source, suggestedProjects.'))
+          return
+        }
+        try {
+          const item = await captureStaging.enqueue({
+            operationId: input.operationId,
+            kind: input.kind,
+            ...(typeof input.payloadRef === 'string' ? { payloadRef: input.payloadRef } : {}),
+            source: input.source as Record<string, unknown>,
+            suggestedProjects: input.suggestedProjects as CaptureStagingItemV0['suggestedProjects'],
+            ...(typeof input.capturedAt === 'string' ? { capturedAt: input.capturedAt } : {}),
+          })
+          sendJson(response, 201, { ok: true, value: item })
+        } catch (error: unknown) {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', error instanceof Error ? error.message : 'Failed to enqueue capture.'))
+        }
+        return
+      }
+
+      if (method === 'GET' && pathname === '/runtime/captures/staging') {
+        const db = routeRequireMetadata({ metadata, response, helpers: routeHelpers }); if (db === undefined) return
+        if (captureStaging === undefined) {
+          sendJson(response, 503, failure('UNAVAILABLE', 'Capture staging service is not configured.'))
+          return
+        }
+        const recentParam = url.searchParams.get('recent')
+        const recentMs = recentParam === null ? 30 * 60_000 : Number(recentParam)
+        const items = captureStaging.listRecent(Number.isFinite(recentMs) && recentMs > 0 ? recentMs : 30 * 60_000)
+        sendJson(response, 200, { ok: true, value: { items, pendingCount: captureStaging.countPending() } })
+        return
+      }
+
+      const stagingResolveMatch = /^\/runtime\/captures\/([^/]+)\/resolve$/.exec(pathname)
+      if (method === 'POST' && stagingResolveMatch !== null) {
+        const db = routeRequireMetadata({ metadata, response, helpers: routeHelpers }); if (db === undefined) return
+        if (captureStaging === undefined) {
+          sendJson(response, 503, failure('UNAVAILABLE', 'Capture staging service is not configured.'))
+          return
+        }
+        const captureId = decodeURIComponent(stagingResolveMatch[1] ?? '')
+        let input: unknown
+        try { input = await readJsonBody(request, controller.signal) } catch {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Request body must be valid JSON.'))
+          return
+        }
+        if (!isRecord(input) || typeof input.projectId !== 'string') {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Resolve requires projectId.'))
+          return
+        }
+        if (db.getProject(input.projectId) === undefined) {
+          sendJson(response, 404, failure('NOT_FOUND', 'Project not found.'))
+          return
+        }
+        const resolved = captureStaging.resolve(captureId, input.projectId)
+        if (!resolved) {
+          sendJson(response, 404, failure('NOT_FOUND', 'Capture item not found or already resolved.'))
+          return
+        }
+        sendJson(response, 200, { ok: true, value: { id: captureId, resolvedProjectId: input.projectId } })
+        return
+      }
+
+      if (method === 'POST' && pathname === '/runtime/registry/browser-tab') {
+        let input: unknown
+        try { input = await readJsonBody(request, controller.signal) } catch {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Request body must be valid JSON.'))
+          return
+        }
+        if (!isRecord(input) || typeof input.profileId !== 'string' || typeof input.tabId !== 'number'
+          || (input.projectId !== null && typeof input.projectId !== 'string')) {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'browser-tab requires profileId, tabId, projectId|null.'))
+          return
+        }
+        const registry = runtimeRegistry.setBrowserTabBinding(input.profileId, input.tabId, input.projectId)
+        sendJson(response, 200, { ok: true, value: registry })
         return
       }
 
