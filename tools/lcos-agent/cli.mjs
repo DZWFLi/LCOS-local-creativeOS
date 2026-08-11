@@ -785,6 +785,23 @@ try {
     } else {
       throw new Error("Usage: lcos local-ai status|models|embed-smoke [--model name]");
     }
+  } else if (group === "session" && action === "bind") {
+    const sessionId = required(positional[0], "session id");
+    const projectId = required(option("project"), "--project");
+    const body = { projectId, status: option("status") ?? "idle" };
+    if (option("views")) body.selectedViewIds = option("views").split(",").filter(Boolean);
+    if (option("refs")) body.retrievalEntityRefs = option("refs").split(",").filter(Boolean);
+    result = await coreRequest(`/runtime/sessions/${encodeURIComponent(sessionId)}/bind`, { method: "POST", body: JSON.stringify(body) });
+  } else if (group === "session" && action === "context") {
+    const sessionId = required(positional[0], "session id");
+    result = await coreRequest(`/runtime/sessions/${encodeURIComponent(sessionId)}/context`);
+  } else if (group === "session" && action === "close") {
+    const sessionId = required(positional[0], "session id");
+    result = await coreRequest(`/runtime/sessions/${encodeURIComponent(sessionId)}/close`, { method: "POST", body: "{}" });
+  } else if (group === "session" && action === "sources") {
+    const sessionId = required(positional[0], "session id");
+    const context = await coreRequest(`/runtime/sessions/${encodeURIComponent(sessionId)}/context`);
+    result = { sources: context.sourceRefs ?? [] };
   } else if (group === "project" && action === "pin-capture") {
     const projectId = required(positional[0], "project id");
     result = await coreRequest("/runtime/registry/capture-target", { method: "POST", body: JSON.stringify({ projectId }) });

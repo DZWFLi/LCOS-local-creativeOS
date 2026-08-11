@@ -228,7 +228,28 @@ export class SqliteMetadataRepository {
     if (current === 25) { this.#migrate_026_from_v25(); current = 26 }
     if (current === 26) { this.#migrate_027_from_v26(); current = 27 }
     if (current === 27) { this.#migrate_028_from_v27(); current = 28 }
-    if (current !== 28) throw new Error(`Unsupported metadata schema version ${current}.`)
+    if (current === 28) { this.#migrate_029_from_v28(); current = 29 }
+    if (current !== 29) throw new Error(`Unsupported metadata schema version ${current}.`)
+  }
+
+  #migrate_029_from_v28(): void {
+    // Phase G: Session Context Continuity —— 只存 refs，不复制完整 Project Context。
+    this.#database.exec(`
+      CREATE TABLE IF NOT EXISTS session_context_refs (
+        session_id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        selected_view_ids TEXT NOT NULL DEFAULT '[]',
+        retrieval_entity_refs TEXT NOT NULL DEFAULT '[]',
+        source_refs_json TEXT NOT NULL DEFAULT '[]',
+        status TEXT NOT NULL DEFAULT 'idle',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        closed_at TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_session_refs_project
+      ON session_context_refs(project_id);
+      PRAGMA user_version = 29;
+    `)
   }
 
   #migrate_028_from_v27(): void {
@@ -2289,6 +2310,70 @@ export class SqliteMetadataRepository {
     return rows.map((row) => JSON.parse(String(row.proposal_json)) as ReorganizeProposalV0)
   }
 
+  // ==================== Session Context Continuity (Phase G) ====================
+
+  upsertSessionContextRef(value: {
+    readonly sessionId: string
+    readonly projectId: string
+    readonly selectedViewIds: readonly string[]
+    readonly retrievalEntityRefs: readonly string[]
+    readonly sourceRefs: readonly { readonly sourceType: string; readonly sourceRef: string; readonly observedAt: string }[]
+    readonly status: 'idle' | 'working' | 'blocked' | 'closed'
+  }): void {
+    const now = new Date().toISOString()
+    this.#database.prepare(`
+      INSERT INTO session_context_refs (session_id, project_id, selected_view_ids, retrieval_entity_refs, source_refs_json, status, created_at, updated_at, closed_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(session_id) DO UPDATE SET
+        project_id = excluded.project_id,
+        selected_view_ids = excluded.selected_view_ids,
+        retrieval_entity_refs = excluded.retrieval_entity_refs,
+        source_refs_json = excluded.source_refs_json,
+        status = excluded.status,
+        updated_at = excluded.updated_at,
+        closed_at = excluded.closed_at
+    `).run(
+      value.sessionId,
+      value.projectId,
+      JSON.stringify(value.selectedViewIds),
+      JSON.stringify(value.retrievalEntityRefs),
+      JSON.stringify(value.sourceRefs),
+      value.status,
+      now,
+      now,
+      value.status === 'closed' ? now : null,
+    )
+  }
+
+  getSessionContextRef(sessionId: string): {
+    readonly sessionId: string
+    readonly projectId: string
+    readonly selectedViewIds: readonly string[]
+    readonly retrievalEntityRefs: readonly string[]
+    readonly sourceRefs: readonly { readonly sourceType: string; readonly sourceRef: string; readonly observedAt: string }[]
+    readonly status: string
+    readonly updatedAt: string
+  } | undefined {
+    const row = this.#database.prepare('SELECT * FROM session_context_refs WHERE session_id = ?').get(sessionId as SQLInputValue) as Row | undefined
+    if (row === undefined) return undefined
+    return {
+      sessionId: String(row.session_id),
+      projectId: String(row.project_id),
+      selectedViewIds: JSON.parse(String(row.selected_view_ids)) as string[],
+      retrievalEntityRefs: JSON.parse(String(row.retrieval_entity_refs)) as string[],
+      sourceRefs: JSON.parse(String(row.source_refs_json)) as { readonly sourceType: string; readonly sourceRef: string; readonly observedAt: string }[],
+      status: String(row.status),
+      updatedAt: String(row.updated_at),
+    }
+  }
+
+  listSessionContextRefs(projectId: string): Array<{ readonly sessionId: string; readonly status: string; readonly updatedAt: string }> {
+    const rows = this.#database.prepare(
+      'SELECT session_id, status, updated_at FROM session_context_refs WHERE project_id = ? ORDER BY updated_at DESC LIMIT 50',
+    ).all(projectId as SQLInputValue) as Row[]
+    return rows.map((row) => ({ sessionId: String(row.session_id), status: String(row.status), updatedAt: String(row.updated_at) }))
+  }
+
   #captureStagingItem(row: Row): CaptureStagingItemV0 {
     return {
       id: String(row.id),
@@ -3444,7 +3529,7 @@ export class SqliteMetadataRepository {
     }
   }
 
-  get schemaVersion(): number { return 28 }
+  get schemaVersion(): number { return 29 }
 
   // ==================== Private helpers ====================
 

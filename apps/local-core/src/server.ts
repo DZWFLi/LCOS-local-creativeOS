@@ -645,6 +645,74 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
       }
 
       // ---- Phase D: Reorganize Proposals ----
+      const sessionBindMatch = /^\/runtime\/sessions\/([^/]+)\/bind$/.exec(pathname)
+      if (method === 'POST' && sessionBindMatch !== null) {
+        const db = routeRequireMetadata({ metadata, response, helpers: routeHelpers }); if (db === undefined) return
+        const sessionId = decodeURIComponent(sessionBindMatch[1] ?? '')
+        let input: unknown
+        try { input = await readJsonBody(request, controller.signal) } catch {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Request body must be valid JSON.'))
+          return
+        }
+        if (!isRecord(input) || typeof input.projectId !== 'string') {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'Session bind requires projectId.'))
+          return
+        }
+        if (db.getProject(input.projectId) === undefined) {
+          sendJson(response, 404, failure('NOT_FOUND', 'Project not found.'))
+          return
+        }
+        const existing = db.getSessionContextRef(sessionId)
+        db.upsertSessionContextRef({
+          sessionId,
+          projectId: input.projectId,
+          selectedViewIds: Array.isArray(input.selectedViewIds) ? (input.selectedViewIds as string[]) : (existing?.selectedViewIds ?? []),
+          retrievalEntityRefs: Array.isArray(input.retrievalEntityRefs) ? (input.retrievalEntityRefs as string[]) : (existing?.retrievalEntityRefs ?? []),
+          sourceRefs: Array.isArray(input.sourceRefs) ? (input.sourceRefs as never) : (existing?.sourceRefs ?? []),
+          status: input.status === 'working' || input.status === 'blocked' || input.status === 'closed' ? input.status : 'idle',
+        })
+        sendJson(response, 200, { ok: true, value: db.getSessionContextRef(sessionId) })
+        return
+      }
+
+      const sessionContextMatch = /^\/runtime\/sessions\/([^/]+)\/context$/.exec(pathname)
+      if (method === 'GET' && sessionContextMatch !== null) {
+        const db = routeRequireMetadata({ metadata, response, helpers: routeHelpers }); if (db === undefined) return
+        const sessionId = decodeURIComponent(sessionContextMatch[1] ?? '')
+        const ref = db.getSessionContextRef(sessionId)
+        if (ref === undefined) {
+          sendJson(response, 404, failure('NOT_FOUND', 'Session context not found.'))
+          return
+        }
+        sendJson(response, 200, { ok: true, value: ref })
+        return
+      }
+
+      const sessionCloseMatch = /^\/runtime\/sessions\/([^/]+)\/close$/.exec(pathname)
+      if (method === 'POST' && sessionCloseMatch !== null) {
+        const db = routeRequireMetadata({ metadata, response, helpers: routeHelpers }); if (db === undefined) return
+        const sessionId = decodeURIComponent(sessionCloseMatch[1] ?? '')
+        const existing = db.getSessionContextRef(sessionId)
+        if (existing === undefined) {
+          sendJson(response, 404, failure('NOT_FOUND', 'Session context not found.'))
+          return
+        }
+        db.upsertSessionContextRef({ ...existing, status: 'closed' })
+        sendJson(response, 200, { ok: true, value: db.getSessionContextRef(sessionId) })
+        return
+      }
+
+      if (method === 'GET' && pathname === '/runtime/sessions/contexts') {
+        const db = routeRequireMetadata({ metadata, response, helpers: routeHelpers }); if (db === undefined) return
+        const projectId = url.searchParams.get('projectId')
+        if (projectId === null || db.getProject(projectId) === undefined) {
+          sendJson(response, 400, failure('INVALID_ARGUMENT', 'projectId is required.'))
+          return
+        }
+        sendJson(response, 200, { ok: true, value: db.listSessionContextRefs(projectId) })
+        return
+      }
+
       const reorganizeCreateMatch = /^\/projects\/([^/]+)\/reorganize\/proposals$/.exec(pathname)
       if (method === 'POST' && reorganizeCreateMatch !== null) {
         if (reorganize === undefined) {

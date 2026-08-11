@@ -21,10 +21,15 @@ chrome.runtime.onInstalled.addListener(() => {
     title: "保存链接到 LCOS",
     contexts: ["link"],
   });
-  chrome.contextMenus.create({
+chrome.contextMenus.create({
     id: "lcos-selection",
     title: "保存选中文字到 LCOS",
     contexts: ["selection"],
+  });
+  chrome.contextMenus.create({
+    id: "lcos-conversation",
+    title: "收集当前 Web Chat 对话引用到 LCOS",
+    contexts: ["page"],
   });
 });
 
@@ -59,6 +64,48 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     await captureFromTab(tab, "web_link", { type: "url", url: info.linkUrl });
   } else if (info.menuItemId === "lcos-selection") {
     await captureFromTab(tab, "web_selection", { type: "text", text: info.selectionText });
+  } else if (info.menuItemId === "lcos-conversation") {
+    try {
+      const { matches, collectVisibleConversationRefs } = await import("./providers/chatgpt.js");
+      if (!matches(info.pageUrl)) throw new Error("当前页面不是支持的 Web Chat 提供方，已回退普通页面捕获");
+      const [{ result: snapshot }] = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: () => {
+          // 在页面上下文执行 adapter 的收集逻辑
+          const url = window.location.href;
+          const sourceRefs = [];
+          for (const anchor of document.querySelectorAll("a[href]")) {
+            const href = anchor.href;
+            const text = (anchor.textContent ?? "").trim();
+            if (!href) continue;
+            const looksLikeFile = /\.(pdf|docx?|xlsx?|pptx?|txt|md|csv|zip|png|jpe?g|webp)(\?|#|$)/i.test(href);
+            if (!looksLikeFile && !text) continue;
+            sourceRefs.push({ sourceType: "url", sourceRef: href, label: text || href.split("/").pop(), observedAt: new Date().toISOString() });
+          }
+          return {
+            provider: "chatgpt",
+            conversationUrl: url,
+            conversationId: new URL(url).searchParams.get("t") ?? undefined,
+            title: document.title || "ChatGPT 对话",
+            visibleRange: "current-tab",
+            sourceRefs,
+          };
+        },
+      });
+      const payload = {
+        schemaVersion: 0,
+        operationId: `conv-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        kind: "conversation_snapshot",
+        source: { app: "lcos-browser-extension", url: snapshot.conversationUrl, title: snapshot.title, capturedAt: new Date().toISOString(), ...(tab.id !== undefined ? { browserProfileId: "default", browserTabId: tab.id } : {}) },
+        payload: { type: "text", text: JSON.stringify(snapshot, null, 2) },
+        hints: { title: `对话引用：${snapshot.title}` },
+      };
+      const receipt = await sendCapture(payload);
+      await notify(receipt.status === "staged" ? "对话引用已收下，稍后整理" : "对话引用已收进项目");
+    } catch (error) {
+      // G9: provider 解析失败 → 回退普通页面捕获，不拖垮扩展
+      await captureFromTab(tab, "web_page", { type: "url", url: info.pageUrl }, { title: tab.title });
+    }
   }
 });
 
