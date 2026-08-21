@@ -1,314 +1,562 @@
-# Local Creative OS
+# LCOS — Local Creative OS
 
-> Canvas 型个人创意项目操作系统
-> 当前阶段：正式开发前基线冻结、技术 Spike 与 Sprint 0
-> 当前原则：先验证真实闭环，再扩展完整平台。
+> **An open context canvas for the local-agent era.**  
+> 面向本地 Agent 时代的开放式项目上下文画布。
 
-## 当前 MVP V1 执行入口
+LCOS 试图回答一个越来越普遍的问题：
 
-`codex/mvp-fast-build` 必须先阅读并遵循：
+**当文件、网页、对话、项目判断、工作流和 Agent 分散在不同工具里时，怎样让一个项目本身持续存在？**
 
-- [`MVP_V1_EXECUTION_README.md`](./MVP_V1_EXECUTION_README.md)
+LCOS 把这些材料重新组织到一个稳定的 **Project Truth** 周围。  
+Agent 可以更换，Session 可以结束，执行工具可以变化，但项目上下文、工作现场、决策和成果继续存在。
 
-当前开发按“真实输入 → 项目理解 → 文件演化 → AI 执行 → 结果回收”五个纵向
-Slice 推进，不再按旧 Stage 编号回退或以 Fixture 能力代替 Runtime 真相。
+对于品牌、创意、营销、研究以及其他以浏览器为主要工作环境的人，可以把 LCOS 理解为一种：
 
-## 1. 项目定位
+> **非代码工作的 Git-like project layer。**
 
-Local Creative OS 是一个以 **Project + 单张持续 Canvas** 为工作容器、以 **Workspace** 为语义视角、以本地项目上下文为核心、由 Codex / Buddy 等执行者完成真实任务的个人 Creative OS。
+这里借用的不是 Git 的界面，而是它更根本的思想：
 
-它不替代 PowerPoint、Figma、Canva、飞书、Notion、图片编辑器或视频编辑器。
-
-它负责：
-
-- 看资料；
-- 形成判断；
-- 组织可追溯 Context；
-- 创建 Command；
-- 派发真实 Run；
-- 追踪执行状态；
-- 回收 Changed Files / Artifact；
-- 管理 Revision、Checkpoint 与交付。
-
-一句话：
-
-> Local Creative OS 不直接制作内容，而是让用户在一个持续项目空间中看懂内容、形成判断、派发任务，并把过程与结果重新归位。
+> **项目应该拥有比某一次工具会话更长的生命。**
 
 ---
 
-## 2. Alpha 要证明什么
+## 0.1：LCOS 在做什么
 
-Alpha 只验证一条真实闭环：
+LCOS 0.1 先从真实的浏览器 + 本地文件 + 本地 Agent 项目工作开始：
 
-```mermaid
-flowchart LR
-    A[打开本地 Project]
-    --> B[进入 Workspace]
-    --> C[Canvas 查看资料]
-    --> D[Preview / Note]
-    --> E[创建 Command]
-    --> F[真实 Codex Run]
-    --> G[Artifact Return]
-    --> H[Accept / Retry]
-    --> I[Checkpoint]
-    --> J[关闭并恢复]
-```
-
-Alpha 成功口径：
-
-- 5 次真实 Codex Run 中至少 4 次结果正确回到项目；
-- 从选中文件到创建 Run 不超过 3 个核心动作；
-- 用户能查看本次 Run 使用了哪些资料；
-- 不打开文件系统也能找到 Changed File；
-- 关闭重开后恢复 Workspace、视口和待确认 Run；
-- 用户无需说明即可区分 Source、AI Draft、Run 与 Decision。
+- 把本地文件、网页参考、图片、PDF / PPT、对话沉淀和项目对象放回同一个 Project；
+- 让同一个对象可以在不同工作现场被使用，而不是复制成多份孤立材料；
+- 把 Context 从“聊天附件”升级成可保存、可组织、可继续交给 Agent 的项目资产；
+- 让 Workflow 从项目上下文自然长出来，而不是强迫用户先画自动化流程图；
+- 让本地 Agent / Codex / Buddy 等执行者成为可替换的施工者，而不是项目状态的主人；
+- 将 Agent 的修改、产物和 Run 收回项目，并通过 Review / Keep / Revert 形成闭环。
 
 ---
 
-## 3. Alpha 范围
+## 三个独立工作现场
 
-### 必做
+LCOS 不是“一张 Canvas 的三个模式”。
 
-- 一个本地 Project；
-- 一张持续存在的 Project Canvas；
-- 2–3 个 Workspace，作为同一 Canvas 的 Semantic Viewport；
-- MD、图片、PPT 输入；
-- Artifact、ArtifactView、ArtifactRevision；
-- 基础 Relation；
-- Preview；
-- 文件级备注；
-- PPT / PDF 当前页级备注；
-- 在原生工具中打开；
-- Command 最小版；
-- Context Lens；
-- Bridge / Codex 真实 Run；
-- `queued / running / waiting_input / review / completed / failed`；
-- Changed Files；
-- Artifact Return；
-- 人工 Accept / Retry；
-- 手动 Checkpoint；
-- 项目关闭与恢复。
-
-### Alpha 不做
-
-- 三视图完整实现；
-- 飞书写回和变化监听；
-- Notion；
-- Buddy 深度集成；
-- Delivery Bundle 完整系统；
-- 跨项目搜索；
-- 自动整理本地目录；
-- 自动版本建议；
-- Figma / Canva 直接执行；
-- 多人协作；
-- Electron / Tauri；
-- 插件市场；
-- 多 Agent 自由编排；
-- 视频逐帧、完整代理与画面级 Diff。
-
----
-
-## 4. 冻结产品模型
-
-### 4.1 Project
-
-Project 是唯一正式项目身份。
-
-一个 Project 对应：
-
-- 一个本地根目录；
-- 一张持续存在的 Project Canvas；
-- 一套 Project Graph；
-- 多个 Workspace；
-- 多个 Artifact、Run、Revision 与 Checkpoint。
-
-### 4.2 Workspace
-
-```text
-Workspace = Semantic Viewport
-```
-
-Workspace 不是页面、路由、独立 Canvas、独立 Graph、真实文件夹或 Codex / Buddy GUI Project。
-
-Workspace 保存：
-
-- viewport；
-- zoom；
-- focusedNodeIds；
-- visibleLayers；
-- layoutPreset；
-- contextPolicy；
-- selectionState；
-- 可选 intent。
-
-`intent` 为可选元数据，可为空、修改和移除，只影响推荐与环境，不限制能力。
-
-### 4.3 Artifact 与 ArtifactView
-
-```mermaid
-flowchart LR
-    A[Artifact<br/>真实内容身份]
-    --> V1[ArtifactView A]
-    --> V2[ArtifactView B]
-    A --> R[ArtifactRevision]
-```
-
-规则：
-
-- 一个 Artifact 可以拥有多个 ArtifactView；
-- 默认一个 Artifact 在同一 Workspace 中只有一个 View；
-- 重复拖入时定位已有 View；
-- 用户明确“创建额外引用”时才增加第二个 View；
-- View 保存独立位置、尺寸、展示状态和可选锁定 Revision；
-- 删除 View 不删除 Artifact；
-- Artifact Note 对所有 View 可见；
-- ArtifactView Note 只在当前引用位置可见。
-
-### 4.4 Run 与 Conversation
-
-Alpha 关系：
-
-```text
-Conversation : Run = 1 : N
-Run : External Thread = 1 : 1
-```
-
-OS / Bridge 保存 Run 真相。Codex GUI Thread 或 Buddy Task 只是执行会话，不是项目状态源。
-
-### 4.5 Checkpoint
-
-Checkpoint 属于 Project，可记录：
-
-- 当前 Workspace；
-- Canvas Snapshot；
-- Context Snapshot；
-- Change Set；
-- 关联 Run；
-- 选中对象；
-- 可选 Delivery Snapshot。
-
-稳定历史统一收拢为 Checkpoint，不再创建另一套“冻结区域”。
-
----
-
-## 5. UI 与交互冻结决策
-
-### 5.1 App Shell
-
-默认常驻：
-
-- Project Tabs；
-- Workspace Dock；
-- Canvas；
-- Mini-map。
-
-Inspector 默认关闭，按需 Overlay。Canvas 保持主要可用面积。
-
-### 5.2 节点交互
-
-- Hover：少量快捷操作与连接锚点；
-- 单击：打开屏幕坐标状态 Overlay；
-- Enter：打开 / 收起选中节点状态；
-- 双击：打开一度关系；
-- `C`：创建 Command；
-- Command 内 `Cmd/Ctrl + Enter`：执行 Run；
-- `Cmd/Ctrl + O`：打开原生工具；
-- `Esc`：按优先级逐级退出；
-- 低于 40% Zoom 时，单击默认只选中，Enter 可强制打开紧凑详情。
-
-状态 Overlay 必须通过 Portal 渲染，不进入 React Flow / ELK / Mini-map 布局。
-
-### 5.3 Inspector
-
-Inspector：
-
-- 单实例；
-- 默认关闭；
-- 局部导航栈；
-- 模式包括 Relation、Preview、Context、Activity、Compare；
-- 一次只呈现一个主要模式；
-- Compare 只扩展当前 Inspector；
-- Workspace 切换时关闭或重置；
-- Esc 按局部栈逐级退出。
-
-### 5.4 Artifact Return
-
-正式落位顺序：
-
-```text
-Target → Working → Run → Pending Return Zone
-```
-
-Target 与 Context 必须分离。返回 Artifact 在用户确认前保持 Draft / Pending，不自动成为 Current。
-
-### 5.5 信息密度
-
-> 当前内容留在 Canvas，辅助内容堆叠，非当前区域折叠，旧过程进入 Activity，稳定历史收拢为 Checkpoint，独立分支才进入 Sub-canvas。
-
-- 同类辅助对象数量达到 4 个且未被选中、Pin 或参与 Run 时进入 Stack；
-- 当前 Workspace Region 展开；
-- 非当前 Region 可折叠；
-- Canvas 只保留 active Run 与最近 completed；
-- 更旧 Run 进入 Activity；
-- Sub-canvas 仅用户主动创建，Alpha 默认不出现。
-
----
-
-## 6. 系统职责
+Main、Context、Workflow 是同一 Project 下三个**独立的一级工作现场**。  
+它们共用空间操作底座和组件语言，但各自拥有自己的布局、镜头、选择状态和工作重点。
 
 ```mermaid
 flowchart TB
-    OS[Local Creative OS]
-    Bridge[MCP Bridge / Execution Router]
-    Codex[Codex GUI / CLI]
-    Buddy[WorkBuddy]
-    FS[Local File System]
+    P[Project Truth]
 
-    OS --> Bridge
-    Bridge --> Codex
-    Bridge --> Buddy
-    Codex --> FS
-    Buddy --> FS
-    FS --> Bridge
-    Bridge --> OS
+    P --> M[Main / 主画布<br/>项目地形]
+    P --> C[Context / 上下文<br/>理解现场]
+    P --> W[Workflow / 工作流<br/>行动现场]
+
+    M --> MP[实体 · 成果物 · 围栏 · 区域 · Portal]
+    C --> CP[来源 · Structure · Evolution · Relationship · Context Pack]
+    W --> WP[Step · Active Path · Review · Workbench · Checkpoint]
+
+    M -.同一 Project Entity.-> C
+    C -.同一 Project Entity.-> W
+    W -.成果与变更回收.-> P
 ```
 
-- OS 管项目、Workspace、Artifact、Context、关系、版本和 UI；
-- Bridge 管 Run、状态、事件、执行者、Changed Files 与 Artifact Return；
-- Codex / Buddy GUI 管执行会话；
-- 文件系统保存真实内容；
-- GUI 项目名称不能成为数据主键；
-- Workspace 不映射为 GUI Project 或真实目录。
+### Main / 主画布
+
+回答：
+
+> **这个项目现在有什么，东西都在哪里？**
+
+它是三张桌子里最开放、最松散的一张。  
+真实材料、成果、参考、区域和人工摆放优先。
+
+### Context / 上下文
+
+回答：
+
+> **这个项目现在应该怎么理解？**
+
+它不是详情页。  
+它是一张完整自由画布，可以同时放：
+
+- 来源和摘录；
+- Structure；
+- Evolution；
+- Relationship；
+- 当前 Focus；
+- Context Pack；
+- Prompt / Skill Workbench。
+
+Structure、Evolution、Relationship 是可移动、可缩放的理解组件，而不是三个独立页面。
+
+### Workflow / 工作流
+
+回答：
+
+> **这个项目接下来怎么继续？**
+
+它仍然是一张自由工作桌面，只是默认更强调：
+
+- 顺序和方向；
+- 输入 / 输出；
+- Active Path；
+- Branch；
+- Review；
+- Checkpoint；
+- Workbench。
+
+LCOS Workflow 不以“自动化流程图”为第一目标。  
+0.1 更关心的是把真实项目步骤、判断、Skill、材料和 Agent 执行串成一条可复查的工作链。
 
 ---
 
-## 7. 建议技术架构
+## 核心范式：Project Truth > Surface > Executor
+
+```mermaid
+flowchart TB
+    PT[Project Truth<br/>稳定项目身份与真实材料]
+
+    PT --> PE[Project Entities<br/>File · Reference · Decision · Feedback · Artifact · Context · Workflow]
+
+    PE --> S1[Main Projection]
+    PE --> S2[Context Projection]
+    PE --> S3[Workflow Projection]
+
+    S1 --> U[User Intent]
+    S2 --> U
+    S3 --> U
+
+    U --> EX[Replaceable Executor<br/>Local Agent · Codex · Buddy · other runtimes]
+    EX --> RUN[Run / ChangeSet / Artifact]
+    RUN --> REV[Review<br/>Keep / Revert]
+    REV --> PT
+```
+
+核心规则：
+
+> **Entity First, Surface Second, Executor Replaceable.**
+
+同一个项目对象可以出现在多个工作现场。
+
+- 移动一个投影，不改变真实对象；
+- 从一个 Surface 移除投影，不删除 Project Entity；
+- Agent 换 Session，不重置项目；
+- GUI 换视图，不重新上传材料。
+
+一句内部原则：
+
+> **同一个东西不换脸，只在不同地方换一句说明。**
+
+---
+
+## Local Agent 时代的项目承接
+
+LCOS 不把 Project 和某个 Agent Session 绑定在一起。
 
 ```mermaid
 flowchart LR
-    Web[React + TypeScript + Vite]
-    --> Core[Node.js + TypeScript Local Core<br/>127.0.0.1]
-    --> DB[SQLite + Project Directory]
-    --> Bridge[Bridge / Runtime Adapter]
-    --> Codex[Codex]
+    P[Project / Work Item<br/>稳定工作身份]
+    --> B[Branch / Workspace<br/>持久施工现场]
+    --> R[Active Receiver<br/>当前接着做的 Agent 对话]
+    --> X[Run<br/>一次实际执行]
+    --> C[ChangeSet / Artifact]
+    --> V[Review<br/>Keep / Revert]
+    --> P
+
+    R -.可替换.-> R2[另一个 Agent Session]
+    R2 --> X
 ```
 
-建议组件：
+这里的关系更接近：
 
-- Canvas：`@xyflow/react`；
-- 自动布局 Spike：ELK.js，只计算坐标；
-- UI 本地交互：Zustand；
-- Local Core 数据：TanStack Query；
-- 实时状态：SSE 优先，必要时 WebSocket；
-- 预览：图片 / Markdown / PDF.js；PPT 通过本地转换生成缩略图或 PDF；
-- 数据库：SQLite，WAL，元数据与关系，不存大 BLOB；
-- Bridge：复用现有任务闭环，逐步补充 Project、Context、waiting_input 与结构化 Artifact Return。
+```text
+Project / Work Item
+= 稳定工作身份
 
-以上是架构基线，不代表允许一次引入全部依赖。新增依赖必须在获批 Sprint 中说明理由。
+Branch / Workspace
+= 持久施工现场
+
+Agent Conversation / Session
+= 当前进入施工现场的人
+
+Run
+= 一次实际执行
+```
+
+因此：
+
+> **branch ≠ session**
+
+Session 可以结束，施工现场和项目继续存在。
 
 ---
 
-## 8. 目标仓库结构
+## Active Receiver：谁接着做
+
+每个 Project 可以连接多个可继续工作的 Agent Conversation，但只有一个默认 **Active Receiver**。
+
+例如：
+
+```text
+现在：Codex · GUI 收口
+```
+
+用户下一次发送默认交给它。
+
+同时支持：
+
+- 切换“谁接着做”；
+- `发送到...` 某个其他已连接对话，但不改变默认 Receiver；
+- `新开对话接着做`，通过 Handoff Pack 接管当前项目；
+- Session 掉线后创建 successor，而不重置三张工作现场。
+
+对话历史和 Active Receiver 是两回事：
+
+```text
+Conversation Archive
+= 以前聊过什么
+
+Connected Conversations
+= 哪些对话现在还能承接项目
+
+Active Receiver
+= 下一步默认谁来接着做
+```
+
+---
+
+## Context 不是 Prompt 附件
+
+LCOS 的 Context 是项目资产。
+
+```mermaid
+flowchart LR
+    SRC[Files · Web · Conversations · Decisions]
+    --> OBJ[Project Entities / Fragments]
+    --> CTX[Saved Context / Context Pack]
+    --> SK[Skill / Task Intent]
+    --> AG[Local Agent]
+    --> OUT[Artifact / ChangeSet]
+    --> RV[Review]
+    --> OBJ
+```
+
+Context 可以：
+
+- 来源可追溯；
+- 被保存；
+- 被重新组合；
+- 被 Structure / Evolution / Relationship 理解；
+- 被 Workflow 和 Workbench 重用；
+- 跨 Agent Session 继续传递。
+
+LCOS 不要求所有对象先完成标签、分类、向量化之后才能使用。
+
+> **Raw context must remain directly usable. Enrichment is a cache, not an ownership gate.**
+
+---
+
+## Skill First
+
+LCOS 将 Skill 看成“这类任务应该如何正确完成”的可复用知识，而不是某个 Agent 的私有 Prompt。
+
+```text
+Project State
+= 项目现在是什么
+
+Skill
+= 这类任务应该怎么做
+
+Executor
+= 这次由谁来做
+
+Run
+= 这一次实际发生了什么
+
+Validation / Review
+= 怎么证明它做对了
+```
+
+执行者可以替换，Skill 和项目判断继续保留。
+
+---
+
+## 系统架构
+
+LCOS 0.1 采用 local-first 架构。
+
+```mermaid
+flowchart TB
+    subgraph GUI[LCOS GUI]
+        MAIN[Main]
+        CONTEXT[Context]
+        WORKFLOW[Workflow]
+        COMP[Project Companion]
+    end
+
+    subgraph CORE[Local Core]
+        TRUTH[Project Truth / Domain]
+        SURFACE[Surface Presentation]
+        CTX[Context / Snapshot]
+        FILES[Managed File Operations]
+        REVIEW[ChangeSet / Review]
+    end
+
+    subgraph RUNTIME[Agent Runtime Layer]
+        BRIDGE[Bridge / Runtime Host]
+        SKILL[Skill Runtime]
+        HANDOFF[Receiver / Handoff]
+    end
+
+    subgraph EXEC[Replaceable Executors]
+        CODEX[Codex]
+        BUDDY[WorkBuddy]
+        OTHER[Other Local Agents]
+    end
+
+    FS[Local File System]
+
+    GUI --> CORE
+    CORE --> RUNTIME
+    RUNTIME --> EXEC
+
+    EXEC --> FS
+    FILES --> FS
+    FS --> CORE
+
+    EXEC --> BRIDGE
+    BRIDGE --> REVIEW
+    REVIEW --> TRUTH
+```
+
+职责边界：
+
+### GUI
+
+负责：
+
+- 三个独立空间工作现场；
+- Search / Focus；
+- Reader / Lens；
+- Selection / Drop；
+- Inspector / Component Shelf；
+- Agent 返回的可见 Review。
+
+### Local Core
+
+负责 Project Truth：
+
+- Entity identity；
+- Context；
+- Workflow；
+- Presentation persistence；
+- file records；
+- managed move / rename；
+- ChangeSet；
+- revision / checkpoint。
+
+### Runtime / Bridge
+
+负责：
+
+- Agent 连接；
+- Run；
+- 状态；
+- receiver / handoff；
+- structured result return；
+- Skill / runtime dispatch。
+
+### Executor
+
+Codex、Buddy 或其他 Agent 是可替换执行者。
+
+它们可以读项目、调用 Skill、修改允许修改的内容并返回结果，但不拥有 Project Truth。
+
+---
+
+## GUI：同一套引擎，三个独立 Surface
+
+三个工作现场共享实现，但不是同一个 Canvas 实例。
+
+```mermaid
+flowchart TB
+    ENGINE[Shared Spatial Surface Engine<br/>Pan · Zoom · Select · Drag · Drop · Resize]
+
+    ENGINE --> MAIN[Main Surface<br/>独立 Camera / Layout / Selection]
+    ENGINE --> CONTEXT[Context Surface<br/>独立 Camera / Layout / Selection]
+    ENGINE --> WORKFLOW[Workflow Surface<br/>独立 Camera / Layout / Selection]
+
+    CAT[Trusted Surface Component Catalog]
+    --> MAIN
+    CAT --> CONTEXT
+    CAT --> WORKFLOW
+
+    AG[Local Agent Surface Composer]
+    --> CAT
+
+    USER[Right-side Component Shelf]
+    --> CAT
+```
+
+共享的是：
+
+- Spatial interaction engine；
+- Surface Component Catalog；
+- Drop contract；
+- Presentation rules；
+- visual primitives；
+- Agent SurfaceOp contract。
+
+独立的是：
+
+- Surface identity；
+- camera；
+- selection；
+- layout；
+- history；
+- current Context / Workflow；
+- project-specific composition。
+
+---
+
+## Surface Component Catalog
+
+LCOS 不让 Agent 为核心 GUI 任意生成 HTML。
+
+用户和 Agent 使用同一套可信组件目录：
+
+```text
+Main
+├─ Entity / Artifact
+├─ Fence
+├─ Region
+└─ Portal
+
+Context
+├─ Fragment / Entity
+├─ Structure
+├─ Evolution
+├─ Relationship
+├─ Context Pack
+└─ Workbench
+
+Workflow
+├─ Workflow Step
+├─ Input / Output
+├─ Active Path
+├─ Checkpoint
+├─ Review
+└─ Workbench
+```
+
+用户从组件架拖进 Surface。
+
+Agent 则通过声明式 Surface Operations 使用同一 Catalog：
+
+```text
+create
+move
+resize
+bind
+group
+remove projection
+```
+
+Agent 改动先形成 Proposal / ChangeSet，再由用户 Keep / Revert。
+
+---
+
+## Visual Language
+
+LCOS 正在形成自己的空间视觉语言，而不是把所有内容画成同一种节点。
+
+```text
+Functional / Spatial Components
+= 真正的内容和工作区域
+
+Light Segments / Bars / Arcs
+= 结构、边界、路径、进度
+
+Matrix Activity
+= 工作、流动、聚散、处理状态
+
+Glyph
+= 小型语义焦点
+```
+
+视觉参考吸收 ROG AniMe Matrix 的离散活性和 Nothing Glyph Interface 的分段光语言，但不复制具体产品造型。
+
+---
+
+## File Organization
+
+LCOS 允许 Project Context 逐步投影到真实本地文件结构，但文件操作必须由 Local Core 管理。
+
+```text
+Agent
+= 理解“应该怎么整理”
+
+Local Core
+= 唯一执行 managed move / rename 的地方
+```
+
+0.1 的安全边界优先：
+
+- trusted project root 内 mkdir / move / rename；
+- stable FileRecord identity；
+- path 改变不等于 Entity 改变；
+- dependency risk 检查；
+- journal；
+- 不默认做 delete / dedupe / destructive content edit。
+
+---
+
+## Search 与 Focus
+
+LCOS 不暴露底层搜索引擎模式。
+
+只保留两种用户心智：
+
+**Search**
+
+> 我不知道它在哪，甚至不确定叫什么。
+
+底层可以融合标题、全文和语义候选。
+
+**Focus**
+
+> 我已经知道这个对象，告诉我它在哪里出现。
+
+Focus 只定位它在：
+
+- Main；
+- Context；
+- Workflow；
+- Workspace；
+- Project View
+
+中的投影。
+
+---
+
+## 0.1 当前边界
+
+LCOS 0.1 的重点是证明：
+
+> Project Truth、自由空间工作现场、Context、Workflow、本地 Agent 和真实文件可以形成稳定闭环。
+
+它目前不是：
+
+- 一个通用白板；
+- 一个飞书 / Notion 替代品；
+- 一个 n8n 式自动化工具；
+- 一个聊天客户端；
+- 一个多 Agent 调度仪表盘；
+- 一个任意 UI 生成平台。
+
+后续阶段会继续探索浏览器工作和结构化工作组件，例如 Worktable、Page Stack、飞书文档链接与投影，但这些不作为 0.1 已完成能力宣传。
+
+---
+
+## Repository
+
+主要目录：
 
 ```text
 apps/
@@ -321,182 +569,74 @@ packages/
 ├── ui/
 └── skills/
 
-projects/
 docs/
-├── product/
-├── architecture/
-├── design/
-├── handoffs/
-├── audit/
-├── qa/
-└── archive/
-
 scripts/
 AGENTS.md
 README.md
-.env.example
-package.json
 ```
 
-现有 AdFrame Review Prototype 作为可复用模块保留，未来归入：
+当前主 GUI 位于：
 
 ```text
-apps/web/src/features/review/
+apps/web/src/
 ```
 
-不要继续把旧三栏 Demo 扩展成主 App Shell。
-
 ---
 
-## 9. 核心领域对象
+## Development discipline
 
-Alpha 最小实体：
+LCOS 避免“语义上好像完成了”的开发方式。
 
-- Project
-- Workspace
-- Artifact
-- ArtifactView
-- ArtifactRevision
-- Relation
-- Note
-- Command
-- Conversation
-- Run
-- ContextSnapshot
-- SkillRef
-- Checkpoint
-- SourceSnapshot
+每个施工包进入下一阶段前必须：
 
-正式开发前必须冻结：
+- 对照 Scope；
+- 对照 Acceptance；
+- 跑自动测试；
+- 做真实交互验证；
+- 明确未完成项；
+- 不在 Handoff 里隐藏欠账。
 
-- TypeScript Domain Types；
-- SQLite Schema；
-- REST / SSE 合同；
-- Runtime Adapter；
-- Connector Adapter；
-- schemaVersion；
-- migration 策略；
-- 文件冲突与回滚规则。
-
----
-
-## 10. 存储与性能预算
-
-### Canvas LOD
-
-- 0–80：完整节点；
-- 81–150：简化节点；
-- 151–300：聚合、Stack、折叠 Process；
-- 300+：总览，不承诺完整节点同屏；
-- 持续流动关系线最多 2 条；
-- Workspace Camera 移动时暂停复杂动画。
-
-### 缓存
-
-- 默认全局可再生缓存预算：5GB；
-- 正式数据、缓存和临时文件必须分开；
-- 原始文件默认链接，不默认复制；
-- SQLite 只保存元数据和关系；
-- 缩略图、Preview、提取文本使用内容哈希缓存；
-- Heavy Task 同时 1 个；
-- Light Task 同时 2–3 个。
-
-### Preview
-
-- 图片节点缩略图最长边 320–480px；
-- Inspector 图片预览最长边 1600–2048px；
-- PPT / PDF：Thumbnail → Page Preview → Original；
-- 优先当前页与可见页；
-- 不预生成全部高清页面；
-- 视频 Alpha 只保存路径、封面和元数据。
-
----
-
-## 11. 安全与文件规则
-
-- Local Core 只绑定 `127.0.0.1`；
-- API Key、OAuth Token 和凭证不得进入前端、项目目录或 Git；
-- GUI / 外部工具不得直接写 `.creative-os`；
-- 高风险移动、重命名、覆盖、删除、上传和写回必须预览、确认、记录并可恢复；
-- Run 开始记录目标文件哈希，写入前重新校验；
-- 发生外部修改时进入 stale / waiting_input，不静默覆盖；
-- Alpha 采用单写 Run；
-- 未绑定 GUI 修改记录为 External Change，不自动归因给最近 Run。
-
----
-
-## 12. 开发阶段
-
-### Sprint 0：基线与 Spike
-
-- 仓库审计；
-- 保护旧 Prototype；
-- 目录与领域边界；
-- Canvas 性能 Spike；
-- 文件 Preview Spike；
-- Local Core / Bridge / Codex Runtime Spike；
-- 飞书读取 / Snapshot Spike；
-- ERD、Schema、接口合同；
-- PortaSplit 可 Reset 样例；
-- Golden Path 与失败路径。
-
-### Sprint 1 及以后
-
-只开发经批准的 Sprint Scope。不得根据完整 PRD 自行展开全部功能。
-
----
-
-## 13. 启动门槛
-
-正式 Alpha 开发前必须满足：
-
-- PRD 与 UI Spec 无核心冲突；
-- Alpha Scope 冻结；
-- Workspace / ArtifactView 规则确认；
-- Command → Run → Return 原型通过；
-- Canvas 与文件 Preview Spike 有基线；
-- Bridge / Codex 真实闭环通过；
-- 数据模型与接口合同冻结；
-- PortaSplit 样例与验收脚本完成；
-- Repo、CI、密钥与回滚规则完成；
-- Sprint 只包含已确认能力。
-
----
-
-## 14. 文档优先级
-
-发生冲突时，按以下顺序执行：
-
-1. 用户当前明确指令；
-2. 当前获批 Sprint / Handoff；
-3. `AGENTS.md`；
-4. 最新 PRD 冻结决策稿；
-5. 最新 UI & Interaction Spec 冻结决策稿；
-6. 本 README；
-7. 已批准 ADR；
-8. 旧 PRD、旧 UI Spec 与 AdFrame 历史文档。
-
-旧文档只用于追溯，不得覆盖最新冻结结论。
-
----
-
-## 15. 当前默认动作
-
-Codex 首次进入仓库时：
-
-1. 阅读 `README.md`、`AGENTS.md` 和当前 Handoff；
-2. 检查 Git 状态、目录、依赖、脚本与现有文档；
-3. 确认旧 Prototype 可运行；
-4. 输出当前架构与差距报告；
-5. 提交 Sprint 0 实施计划；
-6. 在未获确认前，不进行大范围迁移或产品功能开发。
-
-详细执行规则见 `AGENTS.md` 和 `CODEX_START_HERE.md`。
-
-## Gate F Plus（2026-08-05）
-
-当前 MCP / Bridge / Conversation Context Import 收口入口：
+推荐 Git 工作流：
 
 ```text
-GATEF_PLUS_BIG_ROUND_START_HERE.md
+main 拉最新
+↓
+新 branch
+↓
+实现
+↓
+test
+↓
+commit
+↓
+push
+↓
+review branch / commit
+↓
+Gate
+↓
+手测
+↓
+PR
+↓
+merge main
 ```
+
+---
+
+## Why LCOS
+
+我们正在进入一个 Agent 越来越强、Session 越来越廉价的时代。
+
+但大部分知识工作仍然缺少一个稳定的项目层。
+
+聊天窗口知道这次说过什么。  
+文件夹知道文件放在哪里。  
+浏览器知道你开了哪些页面。  
+Agent 知道它这一轮要做什么。
+
+**却没有一个地方持续知道：这个项目是什么、为什么走到今天、现在正在做什么，以及下一个 Agent 应该从哪里接着做。**
+
+LCOS 想成为这一层。
+
+> **An open context canvas for the local-agent era.**
