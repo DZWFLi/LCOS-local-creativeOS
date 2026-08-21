@@ -25,6 +25,9 @@ jobs:
       - name: Install
         run: npm ci
 
+      - name: Build internal packages
+        run: npm run build:domain
+
       - name: Lint
         run: npm run lint
 
