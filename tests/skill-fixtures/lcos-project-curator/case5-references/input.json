@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "scenario": "文件 + URL 引用",
+  "references": [
+    { "kind": "url", "value": "https://example.com/koc-reference" },
+    { "kind": "file", "value": "brief.pdf", "role": "关键判断依据" },
+    { "kind": "file", "value": "node_modules/build.log", "role": "临时日志" }
+  ]
+}

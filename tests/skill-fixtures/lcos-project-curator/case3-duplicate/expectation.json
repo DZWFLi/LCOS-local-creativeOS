@@ -1,0 +1,9 @@
+{
+  "invariants": {
+    "searchFirst": true,
+    "reuseOrUpdate": true,
+    "noDuplicateCreate": true,
+    "noOverwriteUserText": true
+  },
+  "notes": "重复部分不重建；新信息（邻居关系交代）可 update 或新建，不能覆盖原节点手写内容"
+}

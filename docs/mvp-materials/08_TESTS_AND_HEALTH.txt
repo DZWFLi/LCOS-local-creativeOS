@@ -1,0 +1,49 @@
+LCOS MVP Fast Build — Tests and Health
+Date: 2026-07-28
+Branch: codex/mvp-fast-build
+
+Known green quality gates after Stage 2:
+
+Focused:
+
+- npm run typecheck --workspace @local-creative-os/web
+  PASS
+- npx vitest run apps/web/tests/runtimeBridge.test.ts --reporter=verbose
+  PASS, 5 passed
+- npx vitest run apps/local-core/tests/mvp-sample-project.test.ts --reporter=verbose
+  PASS, 2 passed
+
+Full:
+
+- npm run check:fast
+  PASS
+  Web: 26 files / 97 tests
+  Local Core: 10 files / 70 tests
+  Domain: 1 file / 5 tests
+  Contracts: 1 file / 4 tests
+  Architecture: 23 passed / 1 todo
+  Build: PASS
+
+- npm run test:integration
+  PASS, 5 passed
+
+- npm run test:architecture
+  PASS, 23 passed / 1 todo
+
+Expected health check:
+
+- Local Core /health returns service local-core.
+- Web runtime client can read /projects and /projects/:projectId/graph.
+- Runtime diagnostics page can show health/catalog/graph state.
+
+Known non-failing warnings:
+
+- Existing React hook dependency warnings in apps/web/src/App.tsx.
+- Existing Node experimental SQLite warning.
+
+Clean browser validation command:
+
+  npm run dev:open
+
+Do not run launcher from a dirty worktree.
+

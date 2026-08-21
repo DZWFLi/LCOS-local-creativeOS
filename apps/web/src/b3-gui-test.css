@@ -1,0 +1,122 @@
+/* R3.1B3-r2 additive GUI layer. Do not couple to Left Rail internals. */
+
+/* Freeform / Grid --------------------------------------------------------- */
+.lcos-spatial-mode-switch {
+  position: absolute;
+  left: 50%;
+  top: 14px;
+  z-index: 42;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid color-mix(in srgb, var(--border, #8b8797) 22%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--panel, #f8f7fb) 72%, transparent);
+  box-shadow: 0 8px 26px rgba(40, 38, 54, .09), inset 0 1px 0 rgba(255,255,255,.62);
+  backdrop-filter: blur(18px) saturate(122%);
+}
+.lcos-spatial-mode-switch button {
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  padding: 5px 11px;
+  font-size: 11px;
+  color: var(--text-muted, #77727f);
+  cursor: pointer;
+}
+.lcos-spatial-mode-switch button.active {
+  color: var(--text, #25232a);
+  background: color-mix(in srgb, var(--accent, #7776ff) 13%, rgba(255,255,255,.78));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent, #7776ff) 17%, transparent);
+}
+.canvas.layout-mode-freeform .canvas-world {
+  --lcos-layout-dot-opacity: .22;
+}
+.canvas.layout-mode-grid .canvas-world {
+  --lcos-layout-dot-opacity: .46;
+  background-size: 22px 22px, 110px 110px;
+}
+.canvas.layout-mode-grid .lcos-arrange-node-layer [data-node-id] {
+  transition: left 135ms cubic-bezier(.2,.8,.2,1), top 135ms cubic-bezier(.2,.8,.2,1), transform 120ms ease, box-shadow 120ms ease;
+}
+.canvas.layout-mode-grid .lcos-arrange-node-layer [data-node-id].dragging {
+  z-index: 70;
+  transform: scale(1.025);
+  filter: drop-shadow(0 12px 24px rgba(43, 38, 74, .14));
+}
+
+/* Region / Fence --------------------------------------------------------- */
+.lcos-spatial-region {
+  position: absolute;
+  z-index: 1;
+  pointer-events: none;
+  border: 1px dashed color-mix(in srgb, var(--accent, #7776ff) 44%, transparent);
+  border-radius: 22px;
+  background: color-mix(in srgb, var(--accent, #7776ff) 4%, transparent);
+  box-shadow: inset 0 0 36px color-mix(in srgb, var(--accent, #7776ff) 5%, transparent);
+}
+.lcos-spatial-region-head {
+  position: absolute;
+  left: 12px;
+  top: -30px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: auto;
+  font-size: 10px;
+  color: var(--text-muted, #77727f);
+}
+.lcos-spatial-region-head nav { display: flex; gap: 4px; }
+.lcos-spatial-region-head button {
+  border: 1px solid color-mix(in srgb, var(--accent, #7776ff) 18%, transparent);
+  border-radius: 999px;
+  padding: 3px 7px;
+  background: color-mix(in srgb, var(--panel, #fff) 82%, transparent);
+  color: inherit;
+  cursor: pointer;
+  backdrop-filter: blur(12px);
+}
+
+/* DotGlyph --------------------------------------------------------------- */
+.lcos-surface-object-icon .lcos-dot-glyph,
+.lcos-surface-glyph .lcos-dot-glyph { color: var(--accent, #7375ee); }
+.lcos-surface-glyph .lcos-dot-glyph { width: 22px; height: 22px; }
+.lcos-surface-object-icon .lcos-dot-glyph { width: 25px; height: 25px; }
+.lcos-surface-object.file-image .lcos-surface-object-icon.has-preview .lcos-dot-glyph { display: none; }
+
+/* Workflow B3 ------------------------------------------------------------ */
+.lcos-workflow-node.run-active { box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent, #7478ff) 46%, transparent), 0 0 22px color-mix(in srgb, var(--accent, #7478ff) 16%, transparent); }
+.lcos-workflow-node.run-failed { box-shadow: 0 0 0 1px rgba(214,82,96,.42); }
+.lcos-workflow-node.run-completed { opacity: .86; }
+.lcos-workflow-edge-group text { font-size: 9px; fill: color-mix(in srgb, var(--text, #25232a) 62%, transparent); paint-order: stroke; stroke: rgba(250,249,252,.92); stroke-width: 3px; }
+.lcos-workflow-edge-inspector {
+  position: absolute;
+  right: 18px;
+  bottom: 76px;
+  z-index: 50;
+  width: min(300px, calc(100% - 36px));
+  display: grid;
+  gap: 9px;
+  padding: 12px;
+  border: 1px solid rgba(110,104,132,.15);
+  border-radius: 15px;
+  background: color-mix(in srgb, var(--panel, #faf9fc) 84%, transparent);
+  box-shadow: 0 18px 42px rgba(43,39,61,.12), inset 0 1px 0 rgba(255,255,255,.68);
+  backdrop-filter: blur(20px) saturate(120%);
+}
+.lcos-workflow-edge-inspector header { display: flex; justify-content: space-between; align-items: center; }
+.lcos-workflow-edge-inspector header button { border: 0; background: transparent; cursor: pointer; }
+.lcos-workflow-edge-inspector label { display: grid; gap: 5px; font-size: 10px; color: var(--text-muted, #77727f); }
+.lcos-workflow-edge-inspector input { min-width: 0; border: 1px solid rgba(108,102,128,.16); border-radius: 9px; padding: 7px 8px; background: rgba(255,255,255,.62); color: var(--text, #25232a); }
+.lcos-workflow-edge-inspector small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-muted, #77727f); }
+.lcos-workflow-edge-inspector .danger { border: 0; border-radius: 9px; padding: 6px 8px; background: rgba(210,72,87,.09); color: #ad3e4d; cursor: pointer; }
+.lcos-workflow-status-dot { display:inline-block; width:6px; height:6px; margin-left:6px; border-radius:50%; background:rgba(112,108,123,.28); box-shadow:0 0 0 2px rgba(255,255,255,.55); }
+.lcos-workflow-status-dot[data-status="active"] { background:var(--accent,#7478ff); box-shadow:0 0 9px color-mix(in srgb,var(--accent,#7478ff) 58%,transparent); }
+.lcos-workflow-status-dot[data-status="failed"] { background:#d65362; }
+.lcos-workflow-status-dot[data-status="completed"] { background:#53a66d; }
+
+@media (max-width: 760px) {
+  .lcos-spatial-mode-switch { top: 10px; }
+  .lcos-workflow-edge-inspector { right: 10px; bottom: 62px; }
+}

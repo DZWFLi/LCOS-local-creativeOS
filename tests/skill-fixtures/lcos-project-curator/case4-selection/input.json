@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "scenario": "用户当前 Selection",
+  "selection": ["view-text-a1（客户要求）", "view-text-a2（分镜草稿）"],
+  "request": "把当前选中的整理一下"
+}

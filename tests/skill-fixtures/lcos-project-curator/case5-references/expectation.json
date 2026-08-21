@@ -1,0 +1,7 @@
+{
+  "invariants": {
+    "importOnlyHighValue": true,
+    "skipTransient": true
+  },
+  "notes": "brief.pdf（关键判断依据）导入；build.log（临时日志）跳过；URL 作为引用节点或资源"
+}

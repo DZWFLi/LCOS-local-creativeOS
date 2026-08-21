@@ -1,0 +1,41 @@
+name: Phase 2.5 Fast Gate
+
+on:
+  push:
+    branches: [develop, feature/**]
+  pull_request:
+    branches: [develop, main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fast-check:
+    runs-on: windows-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit & Contract Tests
+        run: npx vitest run --reporter=verbose
+
+      - name: Architecture Tests
+        run: npx vitest run tests/architecture --reporter=verbose
+
+      - name: Build
+        run: npm run build

@@ -1,0 +1,3787 @@
+/*
+ * LCOS Interaction System V1 — 2026-08-17
+ *
+ * Final interaction layer for the 0.1 convergence frontend package.
+ * Replaces the additive R3.1A / B1 visual / B3 GUI patch layers.
+ *
+ * Design premise:
+ *   material truth + interaction overlay + dynamic signal + contextual action
+ *
+ * This file intentionally owns interaction appearance only. Product truth stays
+ * in the existing TS contracts and state machines.
+ */
+
+.lcos-reconstructed {
+  --lcos-ui-ink: rgba(37, 34, 44, .93);
+  --lcos-ui-ink-soft: rgba(55, 51, 66, .62);
+  --lcos-ui-ink-faint: rgba(65, 61, 75, .42);
+  --lcos-ui-line: rgba(57, 52, 70, .105);
+  --lcos-ui-line-strong: rgba(72, 63, 98, .19);
+  --lcos-ui-porcelain: rgba(253, 253, 255, .93);
+  --lcos-ui-porcelain-solid: #fdfdff;
+  --lcos-ui-porcelain-soft: rgba(248, 248, 251, .78);
+  --lcos-ui-signal: #6857bd;
+  --lcos-ui-signal-rgb: 104, 87, 189;
+  --lcos-ui-context: #516d9c;
+  --lcos-ui-context-rgb: 81, 109, 156;
+  --lcos-ui-workflow: #6755b7;
+  --lcos-ui-workflow-rgb: 103, 85, 183;
+  --lcos-ui-success: #4f9074;
+  --lcos-ui-danger: #bf5966;
+  --lcos-ui-warning: #a9763e;
+  --lcos-ui-ease-out: cubic-bezier(.18, .84, .28, 1);
+  --lcos-ui-ease-spring: cubic-bezier(.2, .9, .26, 1.18);
+  --lcos-ui-fast: 105ms;
+  --lcos-ui-medium: 165ms;
+  --lcos-ui-slow: 260ms;
+  --lcos-ui-shadow-1: 0 5px 14px rgba(39, 34, 52, .055), 0 1px 2px rgba(39, 34, 52, .035);
+  --lcos-ui-shadow-2: 0 10px 26px rgba(39, 34, 52, .095), 0 2px 5px rgba(39, 34, 52, .04);
+  --lcos-ui-shadow-focus: 0 14px 34px rgba(45, 38, 69, .12), 0 0 0 1px rgba(var(--lcos-ui-signal-rgb), .10);
+}
+
+/* -----------------------------------------------------------------------
+   Dynamic Signal Grammar — canonical 16×16 DotGlyph
+   ----------------------------------------------------------------------- */
+
+.lcos-reconstructed .lcos-dot-glyph {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  overflow: visible;
+  color: var(--lcos-ui-signal);
+  filter: none;
+}
+
+.lcos-reconstructed .lcos-dot-glyph .lcos-dot-cell {
+  fill: currentColor;
+  opacity: .78;
+  transform-box: fill-box;
+  transform-origin: center;
+  transition:
+    opacity var(--lcos-ui-medium) ease,
+    transform var(--lcos-ui-medium) var(--lcos-ui-ease-out),
+    filter var(--lcos-ui-medium) ease;
+}
+.lcos-reconstructed .lcos-dot-glyph .level-1 { opacity: .28; }
+.lcos-reconstructed .lcos-dot-glyph .level-2 { opacity: .72; }
+.lcos-reconstructed .lcos-dot-glyph .level-3 { opacity: 1; }
+
+/* Hover is a probe, not a generic glow. */
+.lcos-reconstructed :is(
+  .canvas-node:hover,
+  .lcos-surface-object:hover,
+  .lcos-surface-glyph:hover,
+  .lcos-context-dot-core:hover,
+  .lcos-context-project-dot:hover,
+  .lcos-workflow-graph-workflow:hover,
+  .lcos-workflow-node:hover
+) .lcos-dot-cell.level-3 {
+  transform: translateY(-.12px) scale(1.13);
+  filter: drop-shadow(0 0 1.2px rgba(var(--lcos-ui-signal-rgb), .28));
+}
+
+.lcos-reconstructed :is(
+  .canvas-node:hover,
+  .lcos-surface-object:hover,
+  .lcos-surface-glyph:hover,
+  .lcos-context-dot-core:hover,
+  .lcos-context-project-dot:hover,
+  .lcos-workflow-graph-workflow:hover,
+  .lcos-workflow-node:hover
+) .lcos-dot-cell.level-2:nth-child(3n) {
+  transform: scale(.82);
+  opacity: .48;
+}
+
+/* Selection completes the signal silhouette rather than simply brightening it. */
+.lcos-reconstructed :is(
+  .canvas-node.selected,
+  .lcos-surface-object.selected,
+  .lcos-surface-glyph.selected,
+  .lcos-context-dot-node.is-selected,
+  .lcos-context-project-dot.is-selected,
+  .lcos-workflow-graph-workflow.is-selected,
+  .lcos-workflow-node.selected
+) .lcos-dot-cell.level-2 {
+  opacity: .96;
+  transform: scale(1.04);
+}
+.lcos-reconstructed :is(
+  .canvas-node.selected,
+  .lcos-surface-object.selected,
+  .lcos-surface-glyph.selected,
+  .lcos-context-dot-node.is-selected,
+  .lcos-context-project-dot.is-selected,
+  .lcos-workflow-graph-workflow.is-selected,
+  .lcos-workflow-node.selected
+) .lcos-dot-cell.level-3 {
+  opacity: 1;
+  transform: scale(1.2);
+  filter: drop-shadow(0 0 1.8px rgba(var(--lcos-ui-signal-rgb), .36));
+}
+
+/* Receiving is intentionally more explicit: the user is about to commit. */
+.lcos-reconstructed :is(.lcos-context-dot-node.is-receiving, .lcos-workflow-node.is-link-target) .lcos-dot-cell {
+  animation: lcos-dot-receive 560ms var(--lcos-ui-ease-out) infinite alternate;
+  animation-delay: calc(var(--cell-i, 0) * 9ms);
+}
+
+/* Running flows through the signal structure, never through the whole card. */
+.lcos-reconstructed :is(.run-active, .status-running) .lcos-dot-cell.level-2,
+.lcos-reconstructed .lcos-workflow-node.run-active .lcos-dot-cell.level-2 {
+  animation: lcos-dot-flow 1080ms ease-in-out infinite;
+  animation-delay: calc(var(--cell-i, 0) * 18ms);
+}
+.lcos-reconstructed :is(.run-active, .status-running) .lcos-dot-cell.level-3,
+.lcos-reconstructed .lcos-workflow-node.run-active .lcos-dot-cell.level-3 {
+  animation: lcos-dot-accent 920ms ease-in-out infinite;
+  animation-delay: calc(var(--cell-i, 0) * 14ms);
+}
+
+@keyframes lcos-dot-receive {
+  from { opacity: .44; transform: scale(.76); }
+  to { opacity: 1; transform: scale(1.15); }
+}
+@keyframes lcos-dot-flow {
+  0%, 100% { opacity: .48; transform: translateX(0) scale(.94); }
+  52% { opacity: .98; transform: translateX(.12px) scale(1.08); }
+}
+@keyframes lcos-dot-accent {
+  0%, 100% { transform: scale(1.02); filter: none; }
+  50% { transform: scale(1.28); filter: drop-shadow(0 0 2px rgba(var(--lcos-ui-signal-rgb), .45)); }
+}
+
+/* -----------------------------------------------------------------------
+   Main canvas — material first, chrome second
+   ----------------------------------------------------------------------- */
+
+.lcos-reconstructed .canvas-node {
+  transform-origin: center;
+}
+
+.lcos-reconstructed .canvas-node > .lcos-object {
+  transition:
+    transform var(--lcos-ui-medium) var(--lcos-ui-ease-out),
+    filter var(--lcos-ui-medium) ease,
+    box-shadow var(--lcos-ui-medium) ease;
+}
+
+.lcos-reconstructed .canvas-node:hover:not(.dragging):not(.resizing) > .lcos-object {
+  transform: translateY(-1.5px);
+  filter: saturate(1.02);
+}
+.lcos-reconstructed .canvas-node.selected:not(.dragging):not(.resizing) > .lcos-object {
+  transform: translateY(-1px);
+}
+.lcos-reconstructed .canvas-node.dragging > .lcos-object {
+  transform: scale(.985) translateY(-2px) !important;
+  filter: drop-shadow(0 12px 24px rgba(43, 37, 61, .13));
+}
+
+/* Selection belongs to the overlay language; remove the old violet bloom. */
+.lcos-reconstructed .canvas-node.selected .lcos-object::before,
+.lcos-reconstructed .lcos-surface-object.selected .lcos-selected-bloom,
+.lcos-reconstructed .lcos-surface-glyph.selected .lcos-selected-bloom {
+  opacity: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+.lcos-reconstructed .canvas-node.selected .lcos-object::after,
+.lcos-reconstructed .lcos-surface-object.selected .lcos-selected-ring,
+.lcos-reconstructed .lcos-surface-glyph.selected .lcos-selected-ring {
+  opacity: 1 !important;
+  border-color: rgba(var(--lcos-ui-signal-rgb), .48) !important;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, .88) inset,
+    0 0 0 3px rgba(var(--lcos-ui-signal-rgb), .07) !important;
+}
+
+/* Material typography: tiny metadata is allowed; content labels are not. */
+.lcos-reconstructed .lcos-type-tag {
+  font-size: 8.5px;
+  letter-spacing: .09em;
+}
+.lcos-reconstructed .lcos-object-caption { gap: 2px; }
+.lcos-reconstructed .lcos-object-caption strong { font-size: 11.5px; font-weight: 620; }
+.lcos-reconstructed .lcos-object-caption small { font-size: 10px; line-height: 1.3; }
+
+/* Documents are paper, not cards inside cards. */
+.lcos-reconstructed .lcos-document-object { gap: 5px; padding: 0; }
+.lcos-reconstructed .lcos-document-thumbnail,
+.lcos-reconstructed .lcos-text-thumbnail,
+.lcos-reconstructed .lcos-file-fallback {
+  border-radius: 7px 11px 9px 9px;
+  box-shadow: var(--lcos-ui-shadow-1);
+}
+
+/* Link is a compact clipping, not a padded dashboard tile. */
+.lcos-reconstructed .lcos-link-object {
+  min-height: 52px;
+  grid-template-columns: 26px minmax(0, 1fr) 16px;
+  gap: 7px;
+  padding: 7px 8px;
+  border-color: var(--lcos-ui-line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .66);
+  box-shadow: var(--lcos-ui-shadow-1);
+}
+.lcos-reconstructed .lcos-favicon,
+.lcos-reconstructed .lcos-link-thumbnail { width: 25px; height: 25px; border-radius: 7px; }
+.lcos-reconstructed .lcos-link-object strong { font-size: 11px; }
+.lcos-reconstructed .lcos-link-object small,
+.lcos-reconstructed .lcos-link-object span:not(.lcos-favicon):not(.lcos-object-state) { font-size: 9px; }
+
+/* Context / Collection material is concise by default. */
+.lcos-reconstructed .lcos-collection-object {
+  min-height: 0;
+  gap: 5px;
+  padding: 7px 8px;
+  border-color: rgba(var(--lcos-ui-context-rgb), .15);
+  border-radius: 11px;
+  background: linear-gradient(145deg, rgba(253, 253, 255, .84), rgba(244, 247, 251, .74));
+  box-shadow: var(--lcos-ui-shadow-1);
+}
+.lcos-reconstructed .lcos-collection-object header { gap: 6px; color: var(--lcos-ui-context); }
+.lcos-reconstructed .lcos-collection-object header strong { font-size: 11px; }
+.lcos-reconstructed .lcos-collection-object .lcos-node-dot-identity {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgba(var(--lcos-ui-context-rgb), .12);
+  border-radius: 7px;
+  background: rgba(255,255,255,.6);
+  color: var(--lcos-ui-context);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.8);
+  backdrop-filter: none;
+}
+.lcos-reconstructed .lcos-collection-object .lcos-node-dot-identity .lcos-dot-glyph { width: 18px; height: 18px; }
+.lcos-reconstructed .lcos-context-spine { padding: 0 3px; }
+.lcos-reconstructed .lcos-context-spine i { width: 3px; height: 3px; border-radius: 1px; }
+.lcos-reconstructed .lcos-collection-object footer { font-size: 9px; }
+
+/* Collection expansion is an anchored material shelf. */
+.lcos-reconstructed .lcos-collection-object.is-expanded { z-index: 8; overflow: visible; }
+.lcos-reconstructed .lcos-collection-inline {
+  position: absolute;
+  left: 7px;
+  top: calc(100% - 4px);
+  width: max(214px, calc(100% - 14px));
+  max-height: 220px;
+  padding: 6px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  overflow: auto;
+  border: 1px solid var(--lcos-ui-line-strong);
+  border-radius: 0 0 11px 11px;
+  background: rgba(252, 252, 254, .97);
+  box-shadow: var(--lcos-ui-shadow-2);
+}
+.lcos-reconstructed .lcos-collection-member {
+  min-width: 0;
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 6px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--lcos-ui-fast) ease, transform var(--lcos-ui-fast) var(--lcos-ui-ease-out), border-color var(--lcos-ui-fast) ease;
+}
+.lcos-reconstructed .lcos-collection-member:hover { transform: translateY(-1px); border-color: var(--lcos-ui-line); background: rgba(255,255,255,.84); }
+.lcos-reconstructed .lcos-collection-member .lcos-dot-glyph { width: 16px; height: 16px; color: var(--lcos-ui-signal); }
+.lcos-reconstructed .lcos-collection-member span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; }
+
+/* Anchors are contextual affordances, not permanent ornaments. */
+.lcos-reconstructed .canvas-node .anchor {
+  width: 11px !important;
+  height: 11px !important;
+  border-radius: 3px !important;
+  border: 1px solid rgba(255,255,255,.96) !important;
+  background: rgba(var(--lcos-ui-signal-rgb), .74) !important;
+  box-shadow: 0 0 0 2px rgba(var(--lcos-ui-signal-rgb), .10) !important;
+  opacity: 0 !important;
+  transform: scale(calc(.68 / var(--canvas-zoom))) !important;
+  transition: opacity var(--lcos-ui-fast) ease, transform var(--lcos-ui-fast) var(--lcos-ui-ease-spring), box-shadow var(--lcos-ui-fast) ease !important;
+}
+.lcos-reconstructed .canvas-node:hover .anchor,
+.lcos-reconstructed .canvas-node.selected .anchor,
+.lcos-reconstructed .canvas-node.link-mode .anchor {
+  opacity: .82 !important;
+  transform: scale(calc(.92 / var(--canvas-zoom))) !important;
+}
+.lcos-reconstructed .canvas-node .anchor:hover {
+  opacity: 1 !important;
+  transform: scale(calc(1.08 / var(--canvas-zoom))) !important;
+  box-shadow: 0 0 0 4px rgba(var(--lcos-ui-signal-rgb), .09) !important;
+}
+
+/* Near-field toolbar follows focus; it should not look like a second app bar. */
+.lcos-reconstructed .selection-toolbar.lcos-selection-strip {
+  gap: 2px !important;
+  padding: 3px !important;
+  border: 1px solid rgba(51, 45, 66, .11) !important;
+  border-radius: 11px !important;
+  background: rgba(253,253,255,.965) !important;
+  box-shadow: 0 8px 22px rgba(39,34,52,.11), 0 1px 2px rgba(39,34,52,.05) !important;
+  backdrop-filter: blur(10px) saturate(108%) !important;
+}
+.lcos-reconstructed .selection-toolbar.lcos-selection-strip > button.selection-primary {
+  min-width: 0 !important;
+  width: auto !important;
+  height: 29px !important;
+  gap: 5px !important;
+  padding: 0 8px !important;
+  border-radius: 8px !important;
+}
+.lcos-reconstructed .selection-toolbar.lcos-selection-strip > button.selection-primary > span { font-size: 10px !important; font-weight: 620 !important; }
+.lcos-reconstructed .selection-toolbar.lcos-selection-strip > details > summary { width: 29px !important; min-width: 29px !important; height: 29px !important; border-radius: 8px !important; }
+
+/* Freeform / Grid is a tiny mode switch, not a floating glass pill. */
+.lcos-reconstructed .lcos-spatial-mode-switch {
+  position: absolute;
+  left: 50%;
+  top: 12px;
+  z-index: 42;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 1px;
+  padding: 2px;
+  border: 1px solid var(--lcos-ui-line);
+  border-radius: 9px;
+  background: rgba(250,250,252,.88);
+  box-shadow: 0 4px 12px rgba(40,36,52,.05);
+  backdrop-filter: blur(8px);
+}
+.lcos-reconstructed .lcos-spatial-mode-switch button {
+  min-height: 25px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--lcos-ui-ink-faint);
+  font-size: 10px;
+  cursor: pointer;
+}
+.lcos-reconstructed .lcos-spatial-mode-switch button.active { color: var(--lcos-ui-ink); background: rgba(var(--lcos-ui-signal-rgb), .08); }
+
+/* Regions are spatial annotations; remove the inflated rounded-glass look. */
+.lcos-reconstructed .lcos-spatial-region {
+  position: absolute;
+  z-index: 1;
+  pointer-events: none;
+  border: 1px dashed rgba(var(--lcos-ui-signal-rgb), .27);
+  border-radius: 12px;
+  background: rgba(var(--lcos-ui-signal-rgb), .018);
+  box-shadow: none;
+}
+.lcos-reconstructed .lcos-spatial-region-head {
+  position: absolute;
+  left: 8px;
+  top: -26px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  pointer-events: auto;
+  color: var(--lcos-ui-ink-faint);
+  font-size: 10px;
+}
+.lcos-reconstructed .lcos-spatial-region-head nav { display: flex; gap: 2px; }
+.lcos-reconstructed .lcos-spatial-region-head button { min-height: 22px; padding: 0 6px; border: 1px solid var(--lcos-ui-line); border-radius: 6px; background: rgba(253,253,255,.92); color: inherit; cursor: pointer; }
+
+/* -----------------------------------------------------------------------
+   Surface objects — common material primitive, not a universal visual card
+   ----------------------------------------------------------------------- */
+
+.lcos-reconstructed .lcos-surface-object {
+  height: 50px;
+  grid-template-columns: 26px minmax(0, 1fr) auto;
+  gap: 7px;
+  padding: 5px 7px;
+  border: 1px solid var(--lcos-ui-line);
+  border-radius: 9px;
+  background: rgba(252,252,254,.78);
+  box-shadow: 0 3px 10px rgba(43,38,58,.035);
+  transition: transform var(--lcos-ui-medium) var(--lcos-ui-ease-out), border-color var(--lcos-ui-fast) ease, background var(--lcos-ui-fast) ease, box-shadow var(--lcos-ui-medium) ease, opacity var(--lcos-ui-fast) ease;
+}
+.lcos-reconstructed .lcos-surface-object.compact { height: 43px; }
+.lcos-reconstructed .lcos-surface-object:hover {
+  transform: translateY(-1px);
+  border-color: var(--lcos-ui-line-strong);
+  background: rgba(255,255,255,.94);
+  box-shadow: var(--lcos-ui-shadow-1);
+}
+.lcos-reconstructed .lcos-surface-object.selected {
+  border-color: rgba(var(--lcos-ui-signal-rgb), .34);
+  background: rgba(255,255,255,.98);
+  box-shadow: 0 6px 16px rgba(43,38,58,.06), 0 0 0 2px rgba(var(--lcos-ui-signal-rgb), .055);
+}
+.lcos-reconstructed .lcos-surface-object.dim { opacity: .38; }
+.lcos-reconstructed .lcos-surface-object-icon {
+  width: 25px;
+  height: 25px;
+  border-radius: 7px;
+  background: rgba(80,70,112,.045);
+}
+.lcos-reconstructed .lcos-surface-object-icon .lcos-dot-glyph { width: 18px; height: 18px; }
+.lcos-reconstructed .lcos-surface-object-copy { gap: 1px; }
+.lcos-reconstructed .lcos-surface-object-copy strong { font-size: 10.8px; font-weight: 620; }
+.lcos-reconstructed .lcos-surface-object-copy small { font-size: 9px; }
+.lcos-reconstructed .lcos-surface-semantic,
+.lcos-reconstructed .lcos-surface-state { font-size: 8.5px; }
+
+.lcos-reconstructed .lcos-surface-glyph {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: rgba(253,253,255,.80);
+  box-shadow: 0 3px 10px rgba(43,38,58,.045);
+}
+.lcos-reconstructed .lcos-surface-glyph .lcos-dot-glyph { width: 20px; height: 20px; }
+.lcos-reconstructed .lcos-glyph-label {
+  position: absolute;
+  top: calc(100% + 5px);
+  left: 50%;
+  width: 116px;
+  transform: translateX(-50%) translateY(-2px);
+  overflow: hidden;
+  opacity: 0;
+  color: var(--lcos-ui-ink-soft);
+  font-size: 9.5px;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+  transition: opacity var(--lcos-ui-fast) ease, transform var(--lcos-ui-medium) var(--lcos-ui-ease-out);
+}
+.lcos-reconstructed .lcos-surface-glyph:hover .lcos-glyph-label,
+.lcos-reconstructed .lcos-surface-glyph.selected .lcos-glyph-label { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* -----------------------------------------------------------------------
+   Context Graph — associative semantic islands, no bubble diagram
+   ----------------------------------------------------------------------- */
+
+.lcos-reconstructed .lcos-context-dot-world { position: relative; }
+
+/* Arrange canvas: node cards and their relation anchors must stay above the
+   edges layer (vnext sets .edges z-index 6), otherwise the 14px .edge-hit
+   stroke covers anchor-out and the drag-to-connect gesture never starts. */
+.lcos-reconstructed .vnext-surface-host .canvas .lcos-arrange-node-layer {
+  z-index: 7;
+}
+.lcos-reconstructed .lcos-context-dot-edges path { fill: none; stroke: rgba(var(--lcos-ui-context-rgb), .20); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.lcos-reconstructed .lcos-context-dot-edges .lcos-context-overlap-edge path { stroke-width: calc(.8px + var(--overlap, .2) * 2px); stroke-dasharray: 2 6; }
+.lcos-reconstructed .lcos-context-dot-edges text { font-size: 9.5px; fill: rgba(62,73,95,.46); }
+
+.lcos-reconstructed .lcos-context-dot-node,
+.lcos-reconstructed .lcos-context-project-dot,
+.lcos-reconstructed .lcos-workflow-graph-workflow { position: absolute; }
+
+.lcos-reconstructed .lcos-context-dot-node {
+  display: block;
+  overflow: visible;
+  border-radius: 12px;
+  transition: filter var(--lcos-ui-medium) ease;
+}
+.lcos-reconstructed .lcos-context-dot-core {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-columns: 31px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 9px;
+  border: 1px solid rgba(var(--lcos-ui-context-rgb), .17);
+  border-radius: 12px;
+  background: linear-gradient(145deg, rgba(253,253,255,.98), rgba(245,248,251,.94));
+  box-shadow: var(--lcos-ui-shadow-1);
+  color: var(--lcos-ui-ink);
+  cursor: pointer;
+  text-align: left;
+  transition: transform var(--lcos-ui-medium) var(--lcos-ui-ease-out), border-color var(--lcos-ui-fast) ease, box-shadow var(--lcos-ui-medium) ease, background var(--lcos-ui-fast) ease;
+}
+.lcos-reconstructed .lcos-context-dot-core:hover {
+  transform: translateY(-2px);
+  border-color: rgba(var(--lcos-ui-context-rgb), .29);
+  box-shadow: var(--lcos-ui-shadow-2);
+}
+.lcos-reconstructed .lcos-context-dot-node.is-selected .lcos-context-dot-core {
+  border-color: rgba(var(--lcos-ui-context-rgb), .44);
+  box-shadow: 0 9px 24px rgba(42,52,70,.09), 0 0 0 2px rgba(var(--lcos-ui-context-rgb), .07);
+}
+.lcos-reconstructed .lcos-context-dot-node.is-receiving .lcos-context-dot-core {
+  border-color: rgba(var(--lcos-ui-context-rgb), .58);
+  background: linear-gradient(145deg, rgba(253,253,255,1), rgba(240,246,251,.98));
+  box-shadow: 0 11px 28px rgba(42,52,70,.11), 0 0 0 4px rgba(var(--lcos-ui-context-rgb), .075);
+  transform: translateY(-2px) scale(1.012);
+}
+.lcos-reconstructed .lcos-context-core-signal {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(var(--lcos-ui-context-rgb), .10);
+  border-radius: 8px;
+  background: rgba(255,255,255,.68);
+  color: var(--lcos-ui-context);
+}
+.lcos-reconstructed .lcos-context-core-signal .lcos-dot-glyph { width: 23px; height: 23px; color: inherit; }
+.lcos-reconstructed .lcos-context-core-copy { min-width: 0; display: grid; gap: 2px; }
+.lcos-reconstructed .lcos-context-core-copy strong { overflow: hidden; font-size: 11.5px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.lcos-reconstructed .lcos-context-core-copy small { overflow: hidden; color: var(--lcos-ui-ink-faint); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.lcos-reconstructed .lcos-context-dot-core > b {
+  min-width: 24px;
+  color: rgba(var(--lcos-ui-context-rgb), .55);
+  font: 680 9px/1 "JetBrains Mono", monospace;
+  text-align: right;
+}
+
+.lcos-reconstructed .lcos-context-project-dot {
+  display: grid;
+  grid-template-columns: 20px minmax(0,1fr);
+  align-items: center;
+  gap: 6px;
+  padding: 5px 7px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: rgba(250,251,253,.72);
+  color: var(--lcos-ui-ink-soft);
+  box-shadow: 0 2px 7px rgba(43,38,58,.025);
+  cursor: pointer;
+  text-align: left;
+  transition: transform var(--lcos-ui-medium) var(--lcos-ui-ease-out), background var(--lcos-ui-fast) ease, border-color var(--lcos-ui-fast) ease, opacity var(--lcos-ui-fast) ease;
+}
+.lcos-reconstructed .lcos-context-project-dot:hover { transform: translateY(-1px); border-color: rgba(var(--lcos-ui-context-rgb), .13); background: rgba(255,255,255,.92); }
+.lcos-reconstructed .lcos-context-project-dot.is-selected { border-color: rgba(var(--lcos-ui-context-rgb), .30); background: rgba(255,255,255,.96); }
+.lcos-reconstructed .lcos-context-project-signal { display: grid; place-items: center; color: rgba(var(--lcos-ui-context-rgb), .82); }
+.lcos-reconstructed .lcos-context-project-signal .lcos-dot-glyph { width: 16px; height: 16px; color: inherit; }
+.lcos-reconstructed .lcos-context-project-copy { min-width: 0; display: grid; gap: 1px; }
+.lcos-reconstructed .lcos-context-project-copy strong { overflow: hidden; color: var(--lcos-ui-ink-soft); font-size: 9.5px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.lcos-reconstructed .lcos-context-project-copy small { overflow: hidden; color: var(--lcos-ui-ink-faint); font-size: 7.8px; text-overflow: ellipsis; white-space: nowrap; }
+
+/* -----------------------------------------------------------------------
+   Context Signal Track — ordered interpretation, not another card canvas
+   ----------------------------------------------------------------------- */
+
+.lcos-reconstructed .lcos-signal-summary { gap: 7px; }
+.lcos-reconstructed .lcos-signal-summary > small { color: var(--lcos-ui-ink-faint); font-size: 9.5px; }
+.lcos-reconstructed .lcos-signal-summary > span {
+  padding: 3px 6px;
+  border: 1px solid rgba(var(--lcos-ui-context-rgb), .10);
+  border-radius: 6px;
+  background: rgba(255,255,255,.56);
+  color: rgba(var(--lcos-ui-context-rgb), .64);
+  font-size: 9px;
+}
+.lcos-reconstructed .lcos-signal-focus-selection { height: 25px; padding: 0 7px; border-color: rgba(var(--lcos-ui-context-rgb), .12); border-radius: 7px; color: rgba(var(--lcos-ui-context-rgb), .72); background: rgba(255,255,255,.72); font-size: 9px; }
+
+.lcos-reconstructed .lcos-signal-spine { stroke: rgba(var(--lcos-ui-context-rgb), .28); stroke-width: 1.35; }
+.lcos-reconstructed .lcos-signal-spur { stroke: rgba(var(--lcos-ui-context-rgb), .24); stroke-width: 1; }
+.lcos-reconstructed .lcos-signal-member-link { stroke: rgba(70,74,84,.13); stroke-width: .85; stroke-dasharray: 2.5 5; }
+
+.lcos-reconstructed .lcos-signal-segment {
+  gap: 4px;
+  padding: 6px 8px 7px;
+  border: 1px solid rgba(60,64,75,.085);
+  border-radius: 10px;
+  background: rgba(252,252,253,.77);
+  box-shadow: 0 5px 16px rgba(45,39,62,.034);
+  transition: transform var(--lcos-ui-medium) var(--lcos-ui-ease-out), border-color var(--lcos-ui-fast) ease, background var(--lcos-ui-fast) ease, box-shadow var(--lcos-ui-medium) ease;
+}
+.lcos-reconstructed .lcos-signal-segment:hover { transform: translateX(2px); border-color: rgba(var(--lcos-ui-context-rgb), .16); background: rgba(255,255,255,.90); box-shadow: var(--lcos-ui-shadow-1); }
+.lcos-reconstructed .lcos-signal-segment::before {
+  left: -42px;
+  top: 24px;
+  width: 8px;
+  height: 8px;
+  border: 1.5px solid rgba(250,250,252,.98);
+  border-radius: 2px;
+  background: rgba(var(--lcos-ui-context-rgb), .67);
+  box-shadow: 0 0 0 2px rgba(var(--lcos-ui-context-rgb), .07);
+  transform: rotate(0deg);
+  transition: transform var(--lcos-ui-medium) var(--lcos-ui-ease-spring), background var(--lcos-ui-fast) ease;
+}
+.lcos-reconstructed .lcos-signal-segment:hover::before { transform: rotate(45deg) scale(1.08); background: rgba(var(--lcos-ui-context-rgb), .90); }
+.lcos-reconstructed .lcos-signal-segment.has-selection { border-color: rgba(var(--lcos-ui-context-rgb), .31); box-shadow: 0 0 0 2px rgba(var(--lcos-ui-context-rgb), .05), var(--lcos-ui-shadow-1); }
+.lcos-reconstructed .lcos-signal-segment.has-selection::before { background: rgba(var(--lcos-ui-context-rgb), .96); box-shadow: 0 0 0 3px rgba(var(--lcos-ui-context-rgb), .09); }
+
+.lcos-reconstructed .lcos-signal-segment-main { grid-template-columns: 28px minmax(0,1fr) 54px 16px; min-height: 38px; gap: 6px; }
+.lcos-reconstructed .lcos-signal-order { color: rgba(var(--lcos-ui-context-rgb), .50); font-size: 9px; }
+.lcos-reconstructed .lcos-signal-copy strong { font-size: 10.5px; }
+.lcos-reconstructed .lcos-signal-copy small { color: var(--lcos-ui-ink-faint); font-size: 9px; }
+.lcos-reconstructed .lcos-signal-wave { height: 20px; gap: 2px; }
+.lcos-reconstructed .lcos-signal-wave i { width: 2px; min-height: 3px; border-radius: 1px; background: rgba(var(--lcos-ui-context-rgb), .42); transition: transform var(--lcos-ui-medium) var(--lcos-ui-ease-out), opacity var(--lcos-ui-medium) ease; }
+.lcos-reconstructed .lcos-signal-segment:hover .lcos-signal-wave i:nth-child(3n) { transform: scaleY(1.22); opacity: .95; }
+.lcos-reconstructed .lcos-signal-segment-tools { gap: 2px; padding-top: 3px; }
+.lcos-reconstructed .lcos-signal-segment-tools button { min-width: 23px; height: 23px; padding: 0 5px; border-radius: 6px; font-size: 9px; }
+.lcos-reconstructed .lcos-signal-insert-gap { height: 18px; border-radius: 5px; }
+.lcos-reconstructed .lcos-signal-insert-gap span { font-size: 9px; }
+.lcos-reconstructed .lcos-signal-insert-gap:hover { color: rgba(var(--lcos-ui-context-rgb), .70); background: rgba(var(--lcos-ui-context-rgb), .055); box-shadow: inset 0 0 0 1px rgba(var(--lcos-ui-context-rgb), .10); }
+.lcos-reconstructed .lcos-signal-member { min-height: 50px; }
+.lcos-reconstructed .lcos-signal-member-remove { top: -5px; right: -5px; width: 18px; height: 18px; border-radius: 5px; }
+
+/* -----------------------------------------------------------------------
+   Workflow Graph (L1) — direction and outcome over spatial decoration
+   ----------------------------------------------------------------------- */
+
+.lcos-reconstructed .lcos-workflow-graph-stage.lcos-presentation-spatial { position: absolute; inset: 48px 0 0; }
+.lcos-reconstructed .lcos-workflow-graph-world { position: relative; }
+.lcos-reconstructed .lcos-workflow-graph-edges path { fill: none; stroke: rgba(76,79,94,.24); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.lcos-reconstructed .lcos-workflow-graph-edges .membership path { stroke: rgba(var(--lcos-ui-workflow-rgb), .36); stroke-width: 1.1; }
+.lcos-reconstructed .lcos-workflow-graph-edges text { font-size: 9px; fill: rgba(61,61,70,.45); paint-order: stroke; stroke: rgba(250,250,252,.95); stroke-width: 3px; }
+
+.lcos-reconstructed .lcos-workflow-graph-workflow {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) 18px;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 9px;
+  border: 1px solid rgba(var(--lcos-ui-workflow-rgb), .16);
+  border-radius: 10px;
+  background: linear-gradient(100deg, rgba(253,253,255,.98), rgba(247,246,252,.96));
+  box-shadow: var(--lcos-ui-shadow-1);
+  color: var(--lcos-ui-ink);
+  text-align: left;
+  cursor: grab;
+  transition: transform var(--lcos-ui-medium) var(--lcos-ui-ease-out), border-color var(--lcos-ui-fast) ease, box-shadow var(--lcos-ui-medium) ease, opacity var(--lcos-ui-fast) ease;
+}
+.lcos-reconstructed .lcos-workflow-graph-workflow:hover { transform: translateX(2px); border-color: rgba(var(--lcos-ui-workflow-rgb), .29); box-shadow: var(--lcos-ui-shadow-2); }
+.lcos-reconstructed .lcos-workflow-graph-workflow.is-selected { border-color: rgba(var(--lcos-ui-workflow-rgb), .43); box-shadow: 0 8px 22px rgba(45,38,70,.08), 0 0 0 2px rgba(var(--lcos-ui-workflow-rgb), .06); }
+.lcos-reconstructed .lcos-workflow-graph-workflow.is-dragging { cursor: grabbing; transform: scale(.985); opacity: .86; box-shadow: 0 14px 28px rgba(45,38,70,.13); }
+.lcos-reconstructed .lcos-workflow-graph-signal { position: relative; width: 29px; height: 29px; display: grid; place-items: center; border: 1px solid rgba(var(--lcos-ui-workflow-rgb), .10); border-radius: 8px; background: rgba(255,255,255,.64); color: var(--lcos-ui-workflow); }
+.lcos-reconstructed .lcos-workflow-graph-signal .lcos-dot-glyph { width: 22px; height: 22px; color: inherit; }
+.lcos-reconstructed .lcos-workflow-status-dot { position: absolute; right: -2px; bottom: -2px; width: 6px; height: 6px; margin: 0; border: 1.5px solid #fff; border-radius: 2px; background: rgba(112,108,123,.36); box-shadow: none; }
+.lcos-reconstructed .lcos-workflow-status-dot[data-status="active"] { background: var(--lcos-ui-workflow); box-shadow: 0 0 0 2px rgba(var(--lcos-ui-workflow-rgb), .10); }
+.lcos-reconstructed .lcos-workflow-status-dot[data-status="failed"] { background: var(--lcos-ui-danger); }
+.lcos-reconstructed .lcos-workflow-status-dot[data-status="completed"] { background: var(--lcos-ui-success); }
+.lcos-reconstructed .lcos-workflow-graph-copy { min-width: 0; display: grid; gap: 1px; }
+.lcos-reconstructed .lcos-workflow-graph-copy small { color: rgba(var(--lcos-ui-workflow-rgb), .56); font: 650 8px/1.2 "JetBrains Mono", monospace; letter-spacing: .04em; }
+.lcos-reconstructed .lcos-workflow-graph-copy strong { overflow: hidden; font-size: 11px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.lcos-reconstructed .lcos-workflow-graph-copy em { overflow: hidden; color: var(--lcos-ui-ink-faint); font-size: 8.8px; font-style: normal; text-overflow: ellipsis; white-space: nowrap; }
+.lcos-reconstructed .lcos-workflow-graph-enter { color: rgba(var(--lcos-ui-workflow-rgb), .40); transition: transform var(--lcos-ui-medium) var(--lcos-ui-ease-out), color var(--lcos-ui-fast) ease; }
+.lcos-reconstructed .lcos-workflow-graph-workflow:hover .lcos-workflow-graph-enter { transform: translateX(2px); color: rgba(var(--lcos-ui-workflow-rgb), .78); }
+.lcos-reconstructed .lcos-workflow-graph-workflow.run-completed { opacity: .78; }
+.lcos-reconstructed .lcos-workflow-graph-workflow.run-failed { border-color: rgba(191,89,102,.34); }
+.lcos-reconstructed .lcos-workflow-graph-source .lcos-surface-object { min-height: 0; }
+
+/* -----------------------------------------------------------------------
+   Workflow Canvas (L2) — directed execution and proximity connection
+   ----------------------------------------------------------------------- */
+
+.lcos-reconstructed .lcos-workflow-node {
+  touch-action: none;
+  transition: opacity var(--lcos-ui-fast) ease, transform var(--lcos-ui-medium) var(--lcos-ui-ease-out), filter var(--lcos-ui-medium) ease;
+}
+.lcos-reconstructed .lcos-workflow-node > .lcos-surface-object { background: rgba(252,252,253,.86); }
+.lcos-reconstructed .lcos-workflow-node:hover > .lcos-surface-object { border-color: rgba(var(--lcos-ui-workflow-rgb), .20); }
+.lcos-reconstructed .lcos-workflow-node.selected > .lcos-surface-object { border-color: rgba(var(--lcos-ui-workflow-rgb), .38); box-shadow: 0 6px 16px rgba(43,38,58,.06), 0 0 0 2px rgba(var(--lcos-ui-workflow-rgb), .055); }
+.lcos-reconstructed .lcos-workflow-node.is-dragging { z-index: 12; transform: scale(.985); filter: drop-shadow(0 10px 18px rgba(43,38,58,.12)); }
+.lcos-reconstructed .lcos-workflow-node.is-link-source > .lcos-surface-object { border-color: rgba(var(--lcos-ui-workflow-rgb), .34); }
+.lcos-reconstructed .lcos-workflow-node.is-link-target > .lcos-surface-object {
+  transform: translateX(2px);
+  border-color: rgba(var(--lcos-ui-workflow-rgb), .56);
+  background: rgba(252,251,255,.98);
+  box-shadow: 0 0 0 4px rgba(var(--lcos-ui-workflow-rgb), .075), var(--lcos-ui-shadow-1);
+}
+
+.lcos-reconstructed .lcos-workflow-port {
+  width: 10px;
+  height: 10px;
+  padding: 0;
+  border: 1.5px solid rgba(255,255,255,.98);
+  border-radius: 3px;
+  opacity: 0;
+  cursor: crosshair;
+  transform: scale(.72);
+  transition: opacity var(--lcos-ui-fast) ease, transform var(--lcos-ui-medium) var(--lcos-ui-ease-spring), box-shadow var(--lcos-ui-fast) ease;
+}
+.lcos-reconstructed .lcos-workflow-node:hover .lcos-workflow-port,
+.lcos-reconstructed .lcos-workflow-node.selected .lcos-workflow-port,
+.lcos-reconstructed .lcos-workflow-node.is-link-source .lcos-workflow-port,
+.lcos-reconstructed .lcos-workflow-node.is-link-target .lcos-workflow-port { opacity: .86; transform: scale(1); }
+.lcos-reconstructed .lcos-workflow-port.input { left: -5px; background: rgba(var(--lcos-ui-context-rgb), .86); box-shadow: 0 0 0 2px rgba(var(--lcos-ui-context-rgb), .09); }
+.lcos-reconstructed .lcos-workflow-port.output { right: -5px; min-width: 10px; width: 10px; height: 10px; border-radius: 3px; background: rgba(var(--lcos-ui-workflow-rgb), .90); box-shadow: 0 0 0 2px rgba(var(--lcos-ui-workflow-rgb), .09); }
+.lcos-reconstructed .lcos-workflow-node.is-link-target .lcos-workflow-port.input { opacity: 1; transform: scale(1.18); box-shadow: 0 0 0 4px rgba(var(--lcos-ui-context-rgb), .10); }
+
+.lcos-reconstructed .lcos-workflow-edges path { fill: none; stroke: rgba(78,73,91,.24); stroke-width: 1; stroke-dasharray: 2 5; vector-effect: non-scaling-stroke; pointer-events: stroke; cursor: pointer; }
+.lcos-reconstructed .lcos-workflow-edges path.active { stroke: rgba(var(--lcos-ui-workflow-rgb), .60); stroke-dasharray: none; }
+.lcos-reconstructed .lcos-workflow-edges path.selected { stroke: rgba(var(--lcos-ui-workflow-rgb), .78); stroke-width: 1.35; stroke-dasharray: none; }
+.lcos-reconstructed .lcos-workflow-edges path.presentation { stroke: rgba(var(--lcos-ui-context-rgb), .38); }
+.lcos-reconstructed .lcos-workflow-edges path.temporary,
+.lcos-reconstructed .lcos-workflow-edges .workflow-link { stroke: rgba(var(--lcos-ui-workflow-rgb), .68); stroke-width: 1.25; stroke-dasharray: 4 5; animation: lcos-edge-march 520ms linear infinite; }
+.lcos-reconstructed .lcos-workflow-edge-group text { font-size: 9.5px; fill: rgba(54,49,65,.58); paint-order: stroke; stroke: rgba(250,249,252,.95); stroke-width: 3px; }
+
+/* Running is a directional signal. */
+.lcos-reconstructed .lcos-workflow-node.run-active { outline: none; }
+.lcos-reconstructed .lcos-workflow-node.run-active > .lcos-surface-object { border-color: rgba(var(--lcos-ui-workflow-rgb), .34); }
+.lcos-reconstructed .lcos-workflow-node.run-completed { outline: none; opacity: .76; }
+.lcos-reconstructed .lcos-workflow-node.run-failed { outline: none; }
+.lcos-reconstructed .lcos-workflow-node.run-failed > .lcos-surface-object { border-color: rgba(191,89,102,.38); }
+@keyframes lcos-edge-march { to { stroke-dashoffset: -9; } }
+
+.lcos-reconstructed .lcos-workflow-edge-inspector {
+  position: absolute;
+  right: 16px;
+  bottom: 68px;
+  z-index: 50;
+  width: min(290px, calc(100% - 32px));
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--lcos-ui-line-strong);
+  border-radius: 11px;
+  background: rgba(253,253,255,.97);
+  box-shadow: var(--lcos-ui-shadow-2);
+  backdrop-filter: blur(10px);
+}
+.lcos-reconstructed .lcos-workflow-edge-inspector header { display: flex; justify-content: space-between; align-items: center; }
+.lcos-reconstructed .lcos-workflow-edge-inspector header strong { font-size: 11px; }
+.lcos-reconstructed .lcos-workflow-edge-inspector header button { border: 0; background: transparent; cursor: pointer; }
+.lcos-reconstructed .lcos-workflow-edge-inspector label { display: grid; gap: 5px; color: var(--lcos-ui-ink-soft); font-size: 10.5px; }
+.lcos-reconstructed .lcos-workflow-edge-inspector input { min-width: 0; padding: 7px 8px; border: 1px solid var(--lcos-ui-line-strong); border-radius: 7px; background: rgba(255,255,255,.82); color: var(--lcos-ui-ink); font-size: 11px; }
+.lcos-reconstructed .lcos-workflow-edge-inspector small { overflow: hidden; color: var(--lcos-ui-ink-faint); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.lcos-reconstructed .lcos-workflow-edge-inspector .danger { padding: 6px 8px; border: 0; border-radius: 7px; background: rgba(191,89,102,.08); color: #a54855; cursor: pointer; }
+
+/* -----------------------------------------------------------------------
+   Local AI + boundary hints — anchored utility, not a second chat product
+   ----------------------------------------------------------------------- */
+
+.lcos-reconstructed .lcos-surface-agent-node {
+  width: min(286px, calc(100% - 24px));
+  padding: 6px;
+  border: 1px solid rgba(var(--lcos-ui-signal-rgb), .15);
+  border-radius: 11px;
+  background: rgba(253,253,255,.975);
+  box-shadow: var(--lcos-ui-shadow-2);
+  backdrop-filter: blur(10px);
+}
+.lcos-reconstructed .lcos-surface-agent-node > header { min-height: 25px; }
+.lcos-reconstructed .lcos-surface-agent-node > header span { gap: 5px; font-size: 10.5px; }
+.lcos-reconstructed .lcos-surface-agent-node > small { margin: 0 3px 4px; font-size: 9px; }
+.lcos-reconstructed .lcos-surface-agent-node textarea { min-height: 58px; padding: 7px 8px; border-color: var(--lcos-ui-line); border-radius: 8px; background: rgba(248,248,251,.72); font-size: 11px; }
+.lcos-reconstructed .lcos-surface-agent-node > footer span { font-size: 8.8px; }
+
+.lcos-reconstructed .lcos-boundary-hint {
+  width: min(292px, calc(100% - 28px));
+  padding: 9px;
+  border: 1px solid var(--lcos-ui-line-strong);
+  border-radius: 11px;
+  background: rgba(253,253,255,.965);
+  box-shadow: var(--lcos-ui-shadow-2);
+  backdrop-filter: blur(9px);
+}
+.lcos-reconstructed .lcos-boundary-hint > header { margin-bottom: 6px; }
+.lcos-reconstructed .lcos-boundary-hint > header span { font-size: 9px; }
+.lcos-reconstructed .lcos-boundary-hint > strong { font-size: 11.5px; }
+.lcos-reconstructed .lcos-boundary-hint > small,
+.lcos-reconstructed .lcos-boundary-hint > p { font-size: 9.5px; }
+.lcos-reconstructed .lcos-boundary-hint > ul { gap: 3px; margin-top: 6px; }
+.lcos-reconstructed .lcos-boundary-hint > ul li { padding: 4px 6px; border-radius: 6px; background: rgba(65,61,75,.03); }
+.lcos-reconstructed .lcos-boundary-hint > ul li span { font-size: 9.8px; }
+.lcos-reconstructed .lcos-boundary-hint > ul li small { font-size: 8.5px; }
+.lcos-reconstructed .lcos-boundary-hint .primary { min-height: 28px; margin-top: 7px; padding: 0 8px; border-radius: 7px; font-size: 9.5px; }
+
+/* Grid modes preserve spatial tone without changing entity semantics. */
+.lcos-reconstructed .canvas.layout-mode-freeform .canvas-world { --lcos-layout-dot-opacity: .20; }
+.lcos-reconstructed .canvas.layout-mode-grid .canvas-world { --lcos-layout-dot-opacity: .38; background-size: 22px 22px, 110px 110px; }
+.lcos-reconstructed .canvas.layout-mode-grid .lcos-arrange-node-layer [data-node-id] { transition: left 135ms var(--lcos-ui-ease-out), top 135ms var(--lcos-ui-ease-out); }
+
+@media (max-width: 760px) {
+  .lcos-reconstructed .lcos-spatial-mode-switch { top: 9px; }
+  .lcos-reconstructed .lcos-workflow-edge-inspector { right: 10px; bottom: 60px; }
+  .lcos-reconstructed .lcos-signal-summary > small { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lcos-reconstructed .lcos-dot-cell,
+  .lcos-reconstructed .lcos-workflow-edges path.temporary,
+  .lcos-reconstructed .lcos-workflow-edges .workflow-link,
+  .lcos-reconstructed .lcos-signal-wave i {
+    animation: none !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Local agent identity uses the same dynamic signal grammar as the surface. */
+.lcos-reconstructed .lcos-agent-node-identity { min-width: 0; }
+.lcos-reconstructed .lcos-agent-node-signal { width: 23px; height: 23px; display: grid; place-items: center; border: 1px solid rgba(var(--lcos-ui-signal-rgb), .11); border-radius: 7px; background: rgba(255,255,255,.62); color: var(--lcos-ui-signal); font-style: normal; }
+.lcos-reconstructed .lcos-agent-node-signal .lcos-dot-glyph { width: 18px; height: 18px; color: inherit; }
+.lcos-reconstructed .lcos-surface-agent-node:hover .lcos-agent-node-signal .level-3 { transform: scale(1.16); }
+.lcos-reconstructed .lcos-surface-agent-node.is-sent .lcos-agent-node-signal .lcos-dot-cell { animation: lcos-dot-flow 860ms ease-in-out 1; animation-delay: calc(var(--cell-i, 0) * 12ms); }
+
+/* Identity-specific structural changes: selected glyphs become a second state,
+   not merely a brighter copy of idle. Kept sub-cell so recognition is stable. */
+.lcos-reconstructed :is(.canvas-node.selected, .lcos-surface-object.selected, .lcos-context-dot-node.is-selected) .lcos-dot-glyph[data-glyph-kind="context"] rect:nth-child(1),
+.lcos-reconstructed :is(.canvas-node.selected, .lcos-surface-object.selected, .lcos-context-dot-node.is-selected) .lcos-dot-glyph[data-glyph-kind="context"] rect:nth-child(2) { transform: translateX(-.34px) scale(1.08); }
+.lcos-reconstructed :is(.canvas-node.selected, .lcos-surface-object.selected, .lcos-context-dot-node.is-selected) .lcos-dot-glyph[data-glyph-kind="context"] rect:nth-last-child(1),
+.lcos-reconstructed :is(.canvas-node.selected, .lcos-surface-object.selected, .lcos-context-dot-node.is-selected) .lcos-dot-glyph[data-glyph-kind="context"] rect:nth-last-child(2) { transform: translateX(.34px) scale(1.08); }
+
+.lcos-reconstructed :is(.lcos-workflow-graph-workflow.is-selected, .lcos-workflow-node.selected) .lcos-dot-glyph[data-glyph-kind="workflow"] rect:nth-child(3n) { transform: translateX(.24px) scale(1.08); }
+.lcos-reconstructed :is(.lcos-workflow-graph-workflow:hover, .lcos-workflow-node:hover) .lcos-dot-glyph[data-glyph-kind="workflow"] rect:nth-child(4n + 1) { transform: translateX(.16px); opacity: .94; }
+
+.lcos-reconstructed .lcos-surface-agent-node:hover .lcos-dot-glyph[data-glyph-kind="agent"] rect:nth-child(odd) { transform: translateY(-.12px); }
+.lcos-reconstructed .lcos-surface-agent-node:focus-within .lcos-dot-glyph[data-glyph-kind="agent"] rect:nth-child(even) { transform: translateY(.10px) scale(1.06); opacity: .96; }
+
+/* Semantic Drop uses the destination itself as the preview. This is shared by
+   Semantic pointer drag, rail drag and HTML5 external drag; no second chooser is needed. */
+.lcos-reconstructed .lcos-context-dot-node.is-direct-drop-target .lcos-context-dot-core,
+.lcos-reconstructed .lcos-context-dot-node.is-receiving .lcos-context-dot-core {
+  border-color: rgba(var(--lcos-ui-context-rgb), .60) !important;
+  box-shadow: 0 10px 26px rgba(42,52,70,.10), 0 0 0 4px rgba(var(--lcos-ui-context-rgb), .08) !important;
+  transform: translateY(-2px) scale(1.012);
+}
+.lcos-reconstructed .lcos-workflow-graph-workflow.is-direct-drop-target {
+  border-color: rgba(var(--lcos-ui-workflow-rgb), .60) !important;
+  background: linear-gradient(100deg, rgba(255,255,255,1), rgba(244,242,252,.98)) !important;
+  box-shadow: 0 10px 26px rgba(45,38,70,.10), 0 0 0 4px rgba(var(--lcos-ui-workflow-rgb), .075) !important;
+  transform: translateX(3px) scale(1.012);
+}
+.lcos-reconstructed .lcos-context-dot-node.is-direct-drop-target .lcos-dot-cell,
+.lcos-reconstructed .lcos-workflow-graph-workflow.is-direct-drop-target .lcos-dot-cell {
+  animation: lcos-dot-receive 520ms var(--lcos-ui-ease-out) infinite alternate;
+  animation-delay: calc(var(--cell-i, 0) * 8ms);
+}
+
+/* Beat the legacy R3.1A4 expanded-folder minimum while keeping in-place expansion. */
+.lcos-reconstructed .lcos-collection-object.is-collection.is-expanded {
+  min-height: 94px;
+  border-color: rgba(var(--lcos-ui-context-rgb), .20);
+  background: rgba(252,253,255,.96);
+  box-shadow: var(--lcos-ui-shadow-2);
+}
+
+.lcos-reconstructed .lcos-context-origin-chip {
+  min-height: 24px;
+  gap: 5px;
+  padding: 0 7px;
+  border-radius: 7px;
+  border-color: rgba(var(--lcos-ui-context-rgb), .09);
+  background: rgba(253,253,255,.76);
+  backdrop-filter: blur(7px);
+}
+.lcos-reconstructed .lcos-context-origin-chip > i { width: 6px; height: 6px; border-radius: 2px; background: rgba(var(--lcos-ui-context-rgb), .62); }
+.lcos-reconstructed .lcos-context-origin-chip > span { font-size: 9.5px; }
+.lcos-reconstructed .lcos-context-origin-chip > small { font-size: 8.5px; }
+
+/* Context drag preview: the exact insertion target opens before commit. */
+.lcos-reconstructed .lcos-signal-segment.is-receiving {
+  transform: translateX(4px);
+  border-color: rgba(var(--lcos-ui-context-rgb), .46);
+  background: rgba(250,253,255,.98);
+  box-shadow: 0 0 0 3px rgba(var(--lcos-ui-context-rgb), .065), var(--lcos-ui-shadow-1);
+}
+.lcos-reconstructed .lcos-signal-segment.is-receiving::before {
+  transform: rotate(45deg) scale(1.18);
+  background: rgba(var(--lcos-ui-context-rgb), 1);
+  box-shadow: 0 0 0 4px rgba(var(--lcos-ui-context-rgb), .10);
+}
+.lcos-reconstructed .lcos-signal-insert-gap.is-receiving {
+  color: rgba(var(--lcos-ui-context-rgb), .82);
+  background: rgba(var(--lcos-ui-context-rgb), .075);
+  box-shadow: inset 0 0 0 1px rgba(var(--lcos-ui-context-rgb), .16);
+}
+.lcos-reconstructed .lcos-signal-insert-gap.is-receiving::before {
+  content: "";
+  position: absolute;
+  left: 5px;
+  right: 5px;
+  top: 50%;
+  height: 2px;
+  border-radius: 1px;
+  background: rgba(var(--lcos-ui-context-rgb), .64);
+  transform: translateY(-50%);
+  opacity: .48;
+}
+.lcos-reconstructed .lcos-signal-insert-gap.is-receiving span { position: relative; z-index: 1; padding: 0 4px; background: rgba(248,251,254,.96); }
+
+/* Capability Dock participates in the same signal language as its surfaces. */
+.lcos-reconstructed .lcos-bottom-dock .lcos-dock-signal {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  color: var(--lcos-ui-ink-faint);
+  transition: color var(--lcos-ui-fast) ease, transform var(--lcos-ui-medium) var(--lcos-ui-ease-out);
+}
+.lcos-reconstructed .lcos-bottom-dock .lcos-dock-signal .lcos-dot-glyph { width: 18px; height: 18px; color: inherit; }
+.lcos-reconstructed .lcos-bottom-dock button:hover .lcos-dock-signal { color: rgba(var(--lcos-ui-signal-rgb), .78); transform: translateY(-1px); }
+.lcos-reconstructed .lcos-bottom-dock button.active .lcos-dock-signal { color: var(--lcos-ui-signal); }
+.lcos-reconstructed .lcos-bottom-dock button.active .lcos-dock-signal .level-2 { opacity: .96; transform: scale(1.04); }
+.lcos-reconstructed .lcos-bottom-dock button.active .lcos-dock-signal .level-3 { transform: scale(1.18); }
+.lcos-reconstructed .lcos-bottom-dock button.is-direct-drop-target .lcos-dock-signal .lcos-dot-cell {
+  animation: lcos-dot-receive 500ms var(--lcos-ui-ease-out) infinite alternate;
+  animation-delay: calc(var(--cell-i, 0) * 8ms);
+}
+
+/* =======================================================================
+   Huabu convergence V2 — 2026-08-17
+   User-owned spatial positions + canonical material faces + dynamic signal.
+   This layer corrects Pass1's over-simplification without reintroducing cards.
+   ======================================================================= */
+
+/* The main canvas has one spatial state: user-owned freeform. Legacy grid
+   selectors remain inert only for backwards-compatible class names. */
+.lcos-reconstructed .canvas.layout-mode-grid .canvas-world,
+.lcos-reconstructed .canvas.layout-mode-freeform .canvas-world {
+  --lcos-layout-dot-opacity: .20;
+  background-size: inherit;
+}
+.lcos-reconstructed .lcos-spatial-mode-switch { display: none !important; }
+
+/* Selection geometry is a local deterministic tool, not a canvas mode. */
+.lcos-reconstructed .selection-toolbar.lcos-selection-strip .lcos-selection-align {
+  position: relative;
+}
+.lcos-reconstructed .selection-toolbar.lcos-selection-strip .lcos-selection-align > summary {
+  list-style: none;
+  display: grid;
+  width: 29px;
+  height: 29px;
+  place-items: center;
+  border-radius: 8px;
+  color: var(--lcos-ui-ink-faint);
+  cursor: pointer;
+}
+.lcos-reconstructed .selection-toolbar.lcos-selection-strip .lcos-selection-align > summary::-webkit-details-marker { display: none; }
+.lcos-reconstructed .selection-toolbar.lcos-selection-strip .lcos-selection-align[open] > summary,
+.lcos-reconstructed .selection-toolbar.lcos-selection-strip .lcos-selection-align > summary:hover {
+  color: var(--lcos-ui-ink);
+  background: rgba(var(--lcos-ui-signal-rgb), .065);
+}
+.lcos-reconstructed .selection-toolbar.lcos-selection-strip .lcos-selection-align > div {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 7px);
+  width: 214px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 3px;
+  padding: 6px;
+  transform: translateX(-50%);
+  border: 1px solid var(--lcos-ui-line-strong);
+  border-radius: 10px;
+  background: rgba(253,253,255,.98);
+  box-shadow: var(--lcos-ui-shadow-2);
+  backdrop-filter: blur(10px);
+}
+.lcos-reconstructed .selection-toolbar.lcos-selection-strip .lcos-selection-align button {
+  min-height: 29px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--lcos-ui-ink-soft);
+  background: transparent;
+  font-size: 10px;
+  cursor: pointer;
+}
+.lcos-reconstructed .selection-toolbar.lcos-selection-strip .lcos-selection-align button:hover {
+  color: var(--lcos-ui-ink);
+  background: rgba(var(--lcos-ui-signal-rgb), .055);
+}
+.lcos-reconstructed .selection-toolbar.lcos-selection-strip .lcos-selection-align button:nth-last-child(-n + 2) {
+  grid-column: span 1;
+  color: rgba(var(--lcos-ui-signal-rgb), .74);
+}
+
+/* -----------------------------------------------------------------------
+   Canonical material face — the same object keeps the same face everywhere.
+   Surface personality lives in placement, relation and usage hint.
+   ----------------------------------------------------------------------- */
+
+.lcos-reconstructed .lcos-material-face {
+  min-width: 0;
+}
+.lcos-reconstructed .lcos-material-caption {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.lcos-reconstructed .lcos-material-caption > strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--lcos-ui-ink);
+  font-size: 11.5px;
+  font-weight: 640;
+  line-height: 1.22;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lcos-reconstructed .lcos-material-caption > small {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--lcos-ui-ink-faint);
+  font-size: 10px;
+  line-height: 1.32;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Images are the object. Chrome appears only as caption/interaction overlay. */
+.lcos-reconstructed .lcos-image-object.lcos-material-face {
+  border-radius: 8px;
+  background: #ecebf0;
+  box-shadow: 0 5px 15px rgba(38,34,49,.065);
+}
+.lcos-reconstructed .lcos-image-object.lcos-material-face > img {
+  object-fit: contain;
+  background: #f0eff3;
+}
+.lcos-reconstructed .lcos-image-object .lcos-image-caption {
+  min-height: 42px;
+  display: grid;
+  align-content: end;
+  gap: 1px;
+  padding: 17px 9px 7px;
+  background: linear-gradient(transparent, rgba(20,19,25,.64));
+}
+.lcos-reconstructed .lcos-image-object .lcos-image-caption strong { color: #fff; font-size: 11px; }
+.lcos-reconstructed .lcos-image-object .lcos-image-caption small { color: rgba(255,255,255,.72); font-size: 9.5px; }
+
+/* PDF/PPT use their real representative page when present. No fake giant file
+   symbol is allowed to occupy the content area. */
+.lcos-reconstructed .lcos-document-object.lcos-material-face {
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 6px;
+  padding: 0;
+}
+.lcos-reconstructed .lcos-real-document-preview {
+  min-height: 0;
+  border-radius: 5px 9px 7px 7px;
+  background: #f4f3f5;
+  box-shadow: 0 5px 16px rgba(42,37,54,.07), inset 0 0 0 1px rgba(49,45,59,.08);
+}
+.lcos-reconstructed .lcos-real-document-preview img {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  object-fit: contain;
+  object-position: top center;
+  background: #fff;
+}
+.lcos-reconstructed .lcos-real-document-preview > span {
+  right: 5px;
+  bottom: 5px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-size: 8px;
+  letter-spacing: .03em;
+}
+
+/* Fallback files stay compact. Format is metadata, not the object's face. */
+.lcos-reconstructed .lcos-file-identity-row {
+  min-height: 48px;
+  display: grid;
+  grid-template-columns: 27px minmax(0,1fr) auto;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 7px;
+  border: 1px solid rgba(52,48,62,.085);
+  border-radius: 8px;
+  background: rgba(249,249,251,.72);
+}
+.lcos-reconstructed .lcos-file-identity-row .lcos-node-dot-identity {
+  width: 27px;
+  height: 27px;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  color: rgba(var(--lcos-ui-signal-rgb), .72);
+  background: rgba(var(--lcos-ui-signal-rgb), .04);
+}
+.lcos-reconstructed .lcos-file-identity-row .lcos-dot-glyph { width: 18px; height: 18px; }
+.lcos-reconstructed .lcos-file-identity-copy { min-width: 0; display: grid; gap: 1px; }
+.lcos-reconstructed .lcos-file-identity-copy strong { font-size: 10px; letter-spacing: .05em; color: var(--lcos-ui-ink-soft); }
+.lcos-reconstructed .lcos-file-identity-copy small { overflow: hidden; color: var(--lcos-ui-ink-faint); font-size: 9.5px; text-overflow: ellipsis; white-space: nowrap; }
+.lcos-reconstructed .lcos-file-identity-row .lcos-file-icon { width: 24px; height: 24px; border-radius: 6px; box-shadow: none; }
+
+/* Text is actual readable material on canvas. There is intentionally no tiny
+   nested scrollbar: the node clips/fades and the full viewer remains one hop. */
+.lcos-reconstructed .lcos-readable-document {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+  padding: 10px 11px 15px;
+  border: 1px solid rgba(52,48,62,.085);
+  border-radius: 7px 10px 8px 8px;
+  background: rgba(255,255,254,.96);
+  box-shadow: 0 5px 16px rgba(42,37,54,.052), inset 0 1px 0 rgba(255,255,255,.96);
+}
+.lcos-reconstructed .lcos-readable-copy {
+  display: grid;
+  align-content: start;
+  gap: 3px;
+  color: rgba(42,39,50,.74);
+  font-size: 10.5px;
+  line-height: 1.42;
+}
+.lcos-reconstructed .lcos-readable-copy > span,
+.lcos-reconstructed .lcos-readable-copy > strong,
+.lcos-reconstructed .lcos-readable-copy > em,
+.lcos-reconstructed .lcos-readable-copy > code {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lcos-reconstructed .lcos-readable-copy .md-heading {
+  margin-top: 2px;
+  color: rgba(33,30,40,.88);
+  font-size: 11.5px;
+  font-weight: 690;
+}
+.lcos-reconstructed .lcos-readable-copy .md-list { position: relative; padding-left: 10px; }
+.lcos-reconstructed .lcos-readable-copy .md-list::before { content: "·"; position: absolute; left: 1px; color: rgba(var(--lcos-ui-signal-rgb), .72); }
+.lcos-reconstructed .lcos-readable-copy .md-quote { padding-left: 8px; border-left: 2px solid rgba(var(--lcos-ui-signal-rgb), .18); color: var(--lcos-ui-ink-soft); font-style: normal; }
+.lcos-reconstructed .lcos-readable-copy code { padding: 2px 4px; border-radius: 4px; background: rgba(49,45,59,.045); font: 9.5px/1.38 "JetBrains Mono", monospace; }
+.lcos-reconstructed .lcos-readable-fade {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 6px;
+  padding-top: 15px;
+  color: rgba(var(--lcos-ui-signal-rgb), .68);
+  background: linear-gradient(transparent, rgba(255,255,254,.98) 56%);
+  font-size: 9px;
+  font-style: normal;
+  text-align: right;
+}
+.lcos-reconstructed .lcos-note-object.is-direct-reading,
+.lcos-reconstructed .lcos-document-object.is-direct-reading { gap: 6px; }
+.lcos-reconstructed .lcos-note-object.is-collapsed-material {
+  display: grid;
+  grid-template-columns: 28px minmax(0,1fr);
+  align-items: center;
+  gap: 7px;
+  padding: 7px 8px;
+  border: 1px solid var(--lcos-ui-line);
+  border-radius: 9px;
+  background: rgba(253,253,255,.78);
+}
+.lcos-reconstructed .lcos-note-identity { width: 27px; height: 27px; display: grid; place-items: center; color: rgba(var(--lcos-ui-signal-rgb), .72); }
+.lcos-reconstructed .lcos-note-identity .lcos-dot-glyph { width: 20px; height: 20px; }
+
+/* SurfaceObject no longer invents a second generic card. It is only an
+   interaction wrapper around the exact same CanvasNodeVisual. */
+.lcos-reconstructed .lcos-surface-object.lcos-surface-material {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 44px;
+  display: block;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  box-shadow: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  isolation: isolate;
+}
+.lcos-reconstructed .lcos-surface-object.lcos-surface-material.compact { height: 100%; }
+.lcos-reconstructed .lcos-surface-object.lcos-surface-material:hover {
+  transform: translateY(-1px);
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.lcos-reconstructed .lcos-surface-object.lcos-surface-material.selected {
+  border: 0;
+  background: transparent;
+  box-shadow: 0 0 0 2px rgba(var(--lcos-ui-signal-rgb), .075);
+}
+.lcos-reconstructed .lcos-surface-object.lcos-surface-material.dim { opacity: .46; }
+.lcos-reconstructed .lcos-surface-object.lcos-surface-material > .lcos-object {
+  width: 100%;
+  height: 100%;
+}
+.lcos-reconstructed .lcos-surface-object.lcos-surface-material > .lcos-image-object,
+.lcos-reconstructed .lcos-surface-object.lcos-surface-material > .lcos-link-object,
+.lcos-reconstructed .lcos-surface-object.lcos-surface-material > .lcos-collection-object,
+.lcos-reconstructed .lcos-surface-object.lcos-surface-material > .lcos-run-object,
+.lcos-reconstructed .lcos-surface-object.lcos-surface-material > .lcos-decision-object,
+.lcos-reconstructed .lcos-surface-object.lcos-surface-material > .lcos-note-object {
+  height: 100%;
+}
+.lcos-reconstructed .lcos-surface-object.lcos-surface-material.compact .lcos-document-object {
+  grid-template-rows: 1fr;
+  min-height: 44px;
+}
+.lcos-reconstructed .lcos-surface-object.lcos-surface-material.compact .lcos-document-object > :is(.lcos-document-thumbnail,.lcos-readable-document,.lcos-file-identity-row) { display: none; }
+.lcos-reconstructed .lcos-surface-object.lcos-surface-material.compact .lcos-document-object .lcos-material-caption,
+.lcos-reconstructed .lcos-surface-object.lcos-surface-material.compact .lcos-note-object .lcos-material-caption {
+  align-self: center;
+  padding: 7px 8px;
+  border: 1px solid var(--lcos-ui-line);
+  border-radius: 8px;
+  background: rgba(253,253,255,.78);
+}
+.lcos-reconstructed .lcos-surface-usage-hint {
+  position: absolute;
+  right: 6px;
+  bottom: -14px;
+  max-width: calc(100% - 12px);
+  overflow: hidden;
+  color: var(--lcos-ui-ink-faint);
+  font-size: 9px;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: .68;
+}
+
+/* -----------------------------------------------------------------------
+   Context = associative relation field. Same materials, different geometry.
+   ----------------------------------------------------------------------- */
+.lcos-reconstructed .lcos-graph-dot {
+  width: 176px;
+  height: 76px;
+  transform: translate(-50%,-50%);
+}
+.lcos-reconstructed .lcos-graph-dot.ring-0 { z-index: 4; }
+.lcos-reconstructed .lcos-graph-dot.ring-1 { z-index: 3; }
+.lcos-reconstructed .lcos-graph-dot.ring-2 { z-index: 2; opacity: .64; }
+.lcos-reconstructed .lcos-graph-dot.ring-0 .lcos-surface-material {
+  box-shadow: 0 0 0 1px rgba(var(--lcos-ui-context-rgb), .08);
+}
+.lcos-reconstructed .lcos-graph-dot.ring-0 .lcos-surface-usage-hint { color: rgba(var(--lcos-ui-context-rgb), .66); }
+.lcos-reconstructed .lcos-graph-dot.ring-1 .lcos-surface-usage-hint,
+.lcos-reconstructed .lcos-graph-dot.ring-2 .lcos-surface-usage-hint { opacity: .52; }
+.lcos-reconstructed .lcos-graph-dot:hover { z-index: 8; opacity: 1; }
+.lcos-reconstructed .lcos-graph-edges path.focus-edge { stroke: rgba(var(--lcos-ui-context-rgb), .48); }
+.lcos-reconstructed .lcos-graph-edges path.secondary-edge { stroke: rgba(var(--lcos-ui-context-rgb), .16); stroke-dasharray: 2 6; }
+
+/* Workflow keeps the same material face. Direction lives in the spine/edge,
+   ports and run state rather than a new node skin. */
+.lcos-reconstructed .lcos-workflow-node > .lcos-surface-material { background: transparent; }
+.lcos-reconstructed .lcos-workflow-node:hover > .lcos-surface-material { border: 0; }
+.lcos-reconstructed .lcos-workflow-node.selected > .lcos-surface-material {
+  border: 0;
+  box-shadow: 0 0 0 2px rgba(var(--lcos-ui-workflow-rgb), .075);
+}
+.lcos-reconstructed .lcos-workflow-node.is-link-target > .lcos-surface-material {
+  transform: translateX(3px);
+  border: 0;
+  background: transparent;
+  box-shadow: 0 0 0 4px rgba(var(--lcos-ui-workflow-rgb), .075);
+}
+.lcos-reconstructed .lcos-workflow-node .lcos-surface-usage-hint { color: rgba(var(--lcos-ui-workflow-rgb), .62); }
+
+/* Dynamic signal points towards the user's drag vector, rather than only
+   glowing. The displacement is sub-cell so the glyph remains recognizable. */
+.lcos-reconstructed .canvas-node.dragging .lcos-dot-glyph {
+  transform: translate(calc(var(--lcos-drag-x, 0) * .65px), calc(var(--lcos-drag-y, 0) * .65px));
+  transition: transform 70ms linear;
+}
+.lcos-reconstructed .canvas-node.dragging .lcos-dot-cell.level-3 {
+  transform: translate(calc(var(--lcos-drag-x, 0) * .22px), calc(var(--lcos-drag-y, 0) * .22px)) scale(1.16);
+  opacity: 1;
+}
+
+/* Pending-review is an unfinished signal, not a yellow AI badge. */
+.lcos-reconstructed :is(.is-pending-review, [data-review-state="pending"]) .lcos-dot-cell.level-3 {
+  animation: lcos-dot-review 1180ms ease-in-out infinite alternate;
+  animation-delay: calc(var(--cell-i, 0) * 11ms);
+}
+@keyframes lcos-dot-review {
+  from { opacity: .46; transform: scale(.82); }
+  to { opacity: 1; transform: scale(1.13); }
+}
+
+@media (max-width: 760px) {
+  .lcos-reconstructed .selection-toolbar.lcos-selection-strip .lcos-selection-align > div { width: 190px; }
+  .lcos-reconstructed .lcos-graph-dot { width: 156px; height: 68px; }
+  .lcos-reconstructed .lcos-readable-copy { font-size: 10px; }
+}
+
+/* Huabu-style organize control: instruction → live apply → pending review.
+   It is a temporary bottom review strip, not a permanent inspector. */
+.lcos-reconstructed .reorganize-panel.lcos-reorganize-review {
+  position: fixed;
+  left: 50%;
+  bottom: 74px;
+  z-index: 140;
+  width: min(430px, calc(100vw - 32px));
+  max-height: min(520px, calc(100vh - 112px));
+  overflow: auto;
+  padding: 9px;
+  transform: translateX(-50%);
+  border: 1px solid var(--lcos-ui-line-strong);
+  border-radius: 12px;
+  background: rgba(253,253,255,.975);
+  box-shadow: 0 16px 42px rgba(35,31,48,.14), 0 2px 6px rgba(35,31,48,.05);
+  backdrop-filter: blur(12px) saturate(108%);
+}
+.lcos-reconstructed .reorganize-panel.lcos-reorganize-review > header {
+  min-height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 7px;
+}
+.lcos-reconstructed .reorganize-panel.lcos-reorganize-review > header > div {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.lcos-reconstructed .reorganize-panel.lcos-reorganize-review > header > div > span:last-child { min-width: 0; display: grid; gap: 1px; }
+.lcos-reconstructed .reorganize-panel.lcos-reorganize-review > header strong { color: var(--lcos-ui-ink); font-size: 11.5px; font-weight: 660; }
+.lcos-reconstructed .reorganize-panel.lcos-reorganize-review > header small { overflow: hidden; color: var(--lcos-ui-ink-faint); font-size: 9.5px; text-overflow: ellipsis; white-space: nowrap; }
+.lcos-reconstructed .lcos-reorganize-signal {
+  width: 27px;
+  height: 27px;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  color: rgba(var(--lcos-ui-signal-rgb), .78);
+  background: rgba(var(--lcos-ui-signal-rgb), .055);
+}
+.lcos-reconstructed .lcos-reorganize-compose { display: grid; gap: 7px; }
+.lcos-reconstructed .lcos-reorganize-compose label { color: var(--lcos-ui-ink-soft); font-size: 10.5px; font-weight: 630; }
+.lcos-reconstructed .lcos-reorganize-compose textarea {
+  width: 100%;
+  min-height: 86px;
+  resize: vertical;
+  padding: 9px 10px;
+  border: 1px solid var(--lcos-ui-line-strong);
+  border-radius: 9px;
+  outline: 0;
+  color: var(--lcos-ui-ink);
+  background: rgba(250,250,252,.72);
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.lcos-reconstructed .lcos-reorganize-compose textarea:focus {
+  border-color: rgba(var(--lcos-ui-signal-rgb), .35);
+  box-shadow: 0 0 0 3px rgba(var(--lcos-ui-signal-rgb), .055);
+  background: #fff;
+}
+.lcos-reconstructed .lcos-reorganize-scope {
+  padding: 6px 8px;
+  border-left: 2px solid rgba(var(--lcos-ui-signal-rgb), .16);
+  color: var(--lcos-ui-ink-faint);
+  background: rgba(var(--lcos-ui-signal-rgb), .025);
+  font-size: 9.5px;
+  line-height: 1.42;
+}
+.lcos-reconstructed .lcos-reorganize-compose > .primary { justify-self: end; min-height: 30px; }
+
+.lcos-reconstructed .lcos-reorganize-running {
+  min-height: 92px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 5px;
+  text-align: center;
+}
+.lcos-reconstructed .lcos-reorganize-running-signal {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  color: var(--lcos-ui-signal);
+  background: rgba(var(--lcos-ui-signal-rgb), .055);
+  animation: lcos-organize-working 900ms ease-in-out infinite alternate;
+}
+.lcos-reconstructed .lcos-reorganize-running strong { font-size: 11.5px; }
+.lcos-reconstructed .lcos-reorganize-running small { color: var(--lcos-ui-ink-faint); font-size: 9.5px; }
+@keyframes lcos-organize-working { from { transform: scale(.96); opacity: .66; } to { transform: scale(1.03); opacity: 1; } }
+
+.lcos-reconstructed .lcos-reorganize-pending { display: grid; gap: 8px; }
+.lcos-reconstructed .lcos-reorganize-review-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.lcos-reconstructed .lcos-reorganize-review-title > div { display: grid; gap: 1px; }
+.lcos-reconstructed .lcos-reorganize-review-title strong { font-size: 12px; }
+.lcos-reconstructed .lcos-reorganize-review-title small { color: var(--lcos-ui-ink-faint); font-size: 9.5px; }
+.lcos-reconstructed .lcos-reorganize-review-title > span {
+  padding: 3px 6px;
+  border: 1px solid rgba(var(--lcos-ui-warning), .16);
+  border-radius: 6px;
+  color: var(--lcos-ui-warning);
+  background: rgba(169,118,62,.055);
+  font-size: 9px;
+}
+.lcos-reconstructed .lcos-reorganize-change-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.lcos-reconstructed .lcos-reorganize-change-summary li {
+  min-height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 5px 7px;
+  border: 1px solid var(--lcos-ui-line);
+  border-radius: 7px;
+  color: var(--lcos-ui-ink-soft);
+  background: rgba(249,249,251,.58);
+  font-size: 9.5px;
+}
+.lcos-reconstructed .lcos-reorganize-change-summary li strong { color: var(--lcos-ui-ink); font: 680 10px/1 "JetBrains Mono", monospace; }
+.lcos-reconstructed .lcos-reorganize-change-summary li.warn { color: var(--lcos-ui-warning); }
+.lcos-reconstructed .lcos-reorganize-core-gap {
+  display: grid;
+  gap: 2px;
+  padding: 7px 8px;
+  border: 1px dashed rgba(var(--lcos-ui-signal-rgb), .18);
+  border-radius: 8px;
+  color: var(--lcos-ui-ink-faint);
+  background: rgba(var(--lcos-ui-signal-rgb), .02);
+}
+.lcos-reconstructed .lcos-reorganize-core-gap strong { font-size: 9.5px; color: var(--lcos-ui-ink-soft); }
+.lcos-reconstructed .lcos-reorganize-core-gap span { font-size: 9px; line-height: 1.42; }
+.lcos-reconstructed .lcos-reorganize-pending .reorganize-actions { display: flex; justify-content: flex-end; gap: 5px; }
+
+@media (max-width: 620px) {
+  .lcos-reconstructed .reorganize-panel.lcos-reorganize-review { bottom: 58px; width: calc(100vw - 18px); }
+  .lcos-reconstructed .lcos-reorganize-change-summary { grid-template-columns: 1fr; }
+}
+
+/* Read-only text viewer: document identity first, then TOC/search, then body. */
+.lcos-reconstructed .lcos-text-reader {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 210px minmax(0, 1fr);
+  overflow: hidden;
+  background: #fff;
+}
+.lcos-reconstructed .lcos-text-reader-nav {
+  min-height: 0;
+  overflow: auto;
+  padding: 12px 9px;
+  border-right: 1px solid var(--lcos-ui-line);
+  background: rgba(248,248,250,.74);
+}
+.lcos-reconstructed .lcos-text-reader-nav > label { display: grid; gap: 5px; margin-bottom: 13px; }
+.lcos-reconstructed .lcos-text-reader-nav > label > span,
+.lcos-reconstructed .lcos-text-reader-nav nav > strong { color: var(--lcos-ui-ink-faint); font-size: 9.5px; font-weight: 650; }
+.lcos-reconstructed .lcos-text-reader-nav input {
+  width: 100%;
+  min-height: 31px;
+  padding: 0 8px;
+  border: 1px solid var(--lcos-ui-line-strong);
+  border-radius: 7px;
+  outline: 0;
+  color: var(--lcos-ui-ink);
+  background: rgba(255,255,255,.88);
+  font-size: 10.5px;
+}
+.lcos-reconstructed .lcos-text-reader-nav input:focus { border-color: rgba(var(--lcos-ui-signal-rgb), .34); box-shadow: 0 0 0 3px rgba(var(--lcos-ui-signal-rgb), .05); }
+.lcos-reconstructed .lcos-text-reader-nav label small { color: var(--lcos-ui-ink-faint); font-size: 9px; }
+.lcos-reconstructed .lcos-text-reader-nav nav { display: grid; gap: 2px; }
+.lcos-reconstructed .lcos-text-reader-nav nav > strong { margin: 0 4px 4px; }
+.lcos-reconstructed .lcos-text-reader-nav nav button {
+  min-width: 0;
+  min-height: 27px;
+  overflow: hidden;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--lcos-ui-ink-soft);
+  background: transparent;
+  font-size: 10px;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.lcos-reconstructed .lcos-text-reader-nav nav button:hover { color: var(--lcos-ui-ink); background: rgba(var(--lcos-ui-signal-rgb), .05); }
+.lcos-reconstructed .lcos-text-reader-document {
+  min-height: 0;
+  overflow: auto;
+  padding: 34px clamp(28px, 6vw, 84px) 90px;
+  color: rgba(40,37,47,.82);
+  background: #fff;
+  font-size: 13.5px;
+  line-height: 1.68;
+  user-select: text;
+}
+.lcos-reconstructed .lcos-text-reader-document > * { max-width: 760px; margin-left: auto; margin-right: auto; }
+.lcos-reconstructed .lcos-text-reader-document h2 { margin-top: 28px; margin-bottom: 10px; color: rgba(30,27,36,.94); font-size: 22px; line-height: 1.28; }
+.lcos-reconstructed .lcos-text-reader-document h3 { margin-top: 24px; margin-bottom: 8px; color: rgba(32,29,38,.90); font-size: 17px; line-height: 1.34; }
+.lcos-reconstructed .lcos-text-reader-document h4 { margin-top: 20px; margin-bottom: 7px; color: rgba(36,33,42,.88); font-size: 14.5px; line-height: 1.4; }
+.lcos-reconstructed .lcos-text-reader-document p { margin-top: 0; margin-bottom: 9px; }
+.lcos-reconstructed .lcos-text-reader-document .reader-space { display: block; height: 10px; }
+.lcos-reconstructed .lcos-text-reader-document .reader-list { display: flex; gap: 8px; margin-bottom: 5px; }
+.lcos-reconstructed .lcos-text-reader-document .reader-list i { width: 4px; height: 4px; flex: 0 0 auto; margin-top: .78em; border-radius: 1px; background: rgba(var(--lcos-ui-signal-rgb), .54); }
+.lcos-reconstructed .lcos-text-reader-document blockquote { margin-top: 12px; margin-bottom: 12px; padding: 5px 0 5px 13px; border-left: 2px solid rgba(var(--lcos-ui-signal-rgb), .22); color: var(--lcos-ui-ink-soft); }
+.lcos-reconstructed .lcos-text-reader-document .reader-code { display: block; margin-top: 4px; margin-bottom: 4px; padding: 6px 8px; border-radius: 6px; background: rgba(45,42,53,.045); font: 11.5px/1.55 "JetBrains Mono", monospace; white-space: pre-wrap; }
+.lcos-reconstructed .lcos-text-reader-document mark { padding: 0 1px; border-radius: 2px; color: inherit; background: rgba(238,195,81,.34); }
+
+@media (max-width: 760px) {
+  .lcos-reconstructed .lcos-text-reader { grid-template-columns: 1fr; }
+  .lcos-reconstructed .lcos-text-reader-nav { max-height: 118px; border-right: 0; border-bottom: 1px solid var(--lcos-ui-line); }
+  .lcos-reconstructed .lcos-text-reader-nav nav { display: none; }
+  .lcos-reconstructed .lcos-text-reader-document { padding: 24px 20px 64px; font-size: 13px; }
+}
+.lcos-reconstructed .selection-toolbar.lcos-selection-strip .lcos-selection-align > summary {
+  width: auto !important;
+  min-width: 52px !important;
+  grid-template-columns: 15px auto;
+  gap: 4px;
+  padding: 0 7px;
+}
+.lcos-reconstructed .selection-toolbar.lcos-selection-strip .lcos-selection-align > summary span { font-size: 10px; font-weight: 620; }
+
+/* =======================================================================
+   PASS3 — Material Drop / maintained React primitives
+   Viewer stays non-modal so pages, slides and selections can be taken out
+   and dropped back into the canvas without closing the source first.
+   ======================================================================= */
+
+.lcos-notice-test-proxy {
+  position: fixed !important;
+  width: 1px !important;
+  height: 1px !important;
+  overflow: hidden !important;
+  clip: rect(0 0 0 0) !important;
+  clip-path: inset(50%) !important;
+  white-space: nowrap !important;
+  pointer-events: none !important;
+}
+
+[data-sonner-toaster] {
+  --width: min(380px, calc(100vw - 28px));
+  font-family: inherit;
+  z-index: 1200 !important;
+}
+[data-sonner-toast].lcos-sonner-toast,
+[data-sonner-toast] {
+  border: 1px solid rgba(67, 62, 82, .12) !important;
+  border-radius: 11px !important;
+  color: rgba(37, 34, 44, .92) !important;
+  background: rgba(253, 253, 255, .965) !important;
+  box-shadow: 0 12px 34px rgba(36, 31, 50, .13), inset 0 1px 0 rgba(255,255,255,.85) !important;
+  backdrop-filter: blur(14px) saturate(110%);
+  font-size: 11px !important;
+}
+[data-sonner-toast] [data-icon] { color: #6857bd; }
+[data-sonner-toast][data-type="error"] [data-icon] { color: #bf5966; }
+[data-sonner-toast][data-type="success"] [data-icon] { color: #4f9074; }
+
+/* Non-modal right reader drawer. No dark backdrop: source and destination
+   must remain in one visual field during Material Drop. */
+.lcos-viewer-drawer-viewport {
+  position: fixed;
+  inset: 0 0 0 auto;
+  z-index: 960;
+  width: min(760px, max(520px, 56vw));
+  pointer-events: none;
+  overflow: hidden;
+}
+.lcos-viewer-drawer-popup {
+  position: absolute;
+  inset: 8px 8px 8px 0;
+  pointer-events: auto;
+  overflow: hidden;
+  border: 1px solid rgba(70, 65, 86, .14);
+  border-radius: 16px;
+  background: rgba(250,250,253,.985);
+  box-shadow: -18px 0 58px rgba(35,31,49,.13), 0 3px 10px rgba(35,31,49,.05);
+  transform: translateX(var(--drawer-swipe-movement-x, 0));
+  transition: transform 220ms cubic-bezier(.2,.82,.28,1), opacity 160ms ease;
+}
+.lcos-viewer-drawer-popup[data-ending-style] { transform: translateX(calc(100% + 18px)); opacity: .7; }
+.lcos-viewer-drawer-popup[data-starting-style] { transform: translateX(calc(100% + 18px)); opacity: .7; }
+.lcos-viewer-drawer-content {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: 44px minmax(0,1fr);
+  outline: 0;
+}
+.lcos-viewer-drawer-grip {
+  position: absolute;
+  left: -1px;
+  top: 50%;
+  z-index: 4;
+  width: 20px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  transform: translate(-50%,-50%);
+  border: 1px solid rgba(70,65,86,.12);
+  border-radius: 9px;
+  color: rgba(68,62,82,.48);
+  background: rgba(253,253,255,.96);
+  box-shadow: 0 5px 14px rgba(35,31,49,.09);
+  pointer-events: none;
+}
+.lcos-viewer-drawer-content .vnext-immersive-header {
+  min-height: 44px;
+  border-radius: 16px 16px 0 0;
+}
+.lcos-viewer-title {
+  max-width: min(470px, 38vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 650;
+  color: #2b2937;
+}
+.lcos-viewer-close {
+  border: 0;
+  background: transparent;
+}
+.lcos-viewer-drawer-content .vnext-immersive-content {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  display: block;
+  background: #f3f3f7;
+}
+.lcos-viewer-drawer-content .viewer-body {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* Page/slide material reader. A thumbnail is a tangible material handle; the
+   large page remains optimized for reading and text selection. */
+.lcos-page-viewer,
+.lcos-document-pages {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+.lcos-document-pages,
+.lcos-page-viewer {
+  display: grid;
+  grid-template-columns: 142px minmax(0,1fr);
+  overflow: hidden;
+}
+.lcos-page-rail {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 9px 8px 24px;
+  border-right: 1px solid rgba(67,62,82,.085);
+  background: rgba(248,248,251,.82);
+  scrollbar-width: thin;
+}
+.lcos-page-rail-heading {
+  position: sticky;
+  top: -9px;
+  z-index: 3;
+  display: grid;
+  gap: 1px;
+  padding: 9px 2px 7px;
+  background: linear-gradient(#f8f8fb 78%, rgba(248,248,251,0));
+}
+.lcos-page-rail-heading strong { font-size: 10.5px; font-weight: 650; color: rgba(37,34,44,.86); }
+.lcos-page-rail-heading small { font-size: 8.8px; color: rgba(65,61,75,.45); }
+.lcos-page-thumb {
+  width: 100%;
+  display: grid;
+  gap: 4px;
+  margin: 0 0 8px;
+  padding: 4px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: rgba(60,55,72,.55);
+  background: transparent;
+  cursor: grab;
+  text-align: left;
+  transition: border-color 120ms ease, background 120ms ease, box-shadow 140ms ease;
+}
+.lcos-page-thumb:hover {
+  border-color: rgba(104,87,189,.12);
+  background: rgba(255,255,255,.72);
+}
+.lcos-page-thumb.is-current {
+  border-color: rgba(104,87,189,.28);
+  background: rgba(255,255,255,.9);
+  box-shadow: 0 4px 12px rgba(45,39,68,.07);
+}
+.lcos-page-thumb[data-dragging="true"] { opacity: .48; cursor: grabbing; }
+.lcos-page-thumb > span:last-child { padding: 0 2px; font-size: 8.5px; font-variant-numeric: tabular-nums; }
+.lcos-page-thumb-canvas,
+.lcos-slide-svg {
+  display: block;
+  overflow: hidden;
+  width: 100%;
+  min-height: 72px;
+  border-radius: 4px;
+  background: #fff;
+  box-shadow: 0 2px 6px rgba(35,31,49,.08);
+}
+.lcos-page-thumb-canvas .react-pdf__Page,
+.lcos-page-thumb-canvas canvas { display: block !important; max-width: 100% !important; height: auto !important; }
+.lcos-slide-svg svg { display: block; width: 100%; height: auto; }
+.lcos-page-stage {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 46px 24px 40px;
+  background: #efeff4;
+}
+.lcos-page-stage-toolbar {
+  position: sticky;
+  top: -37px;
+  z-index: 8;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 auto 10px;
+  padding: 4px 6px 4px 9px;
+  width: min(100%, 680px);
+  border: 1px solid rgba(66,61,80,.10);
+  border-radius: 9px;
+  color: rgba(53,49,64,.66);
+  background: rgba(253,253,255,.92);
+  box-shadow: 0 5px 14px rgba(35,31,49,.06);
+  backdrop-filter: blur(12px);
+  font-size: 9.5px;
+}
+.lcos-page-stage-toolbar > div { display: flex; gap: 2px; }
+.lcos-page-stage-toolbar button {
+  width: 25px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  color: rgba(48,44,60,.72);
+  background: transparent;
+  cursor: pointer;
+}
+.lcos-page-stage-toolbar button:hover { background: rgba(72,65,95,.07); }
+.lcos-page-stage-toolbar small { color: rgba(60,55,72,.42); font-size: 8.7px; }
+.lcos-page-sheet {
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 auto;
+  box-shadow: 0 15px 40px rgba(35,31,49,.13), 0 1px 3px rgba(35,31,49,.07);
+  background: #fff;
+}
+.lcos-page-sheet .react-pdf__Page { max-width: 100%; }
+.lcos-page-sheet canvas { max-width: 100%; height: auto !important; }
+.lcos-slide-sheet { width: min(100%, 760px); aspect-ratio: 16 / 9; overflow: hidden; }
+.lcos-slide-sheet svg { display: block; width: 100%; height: 100%; }
+
+/* Selection affordance: selection is already the command. Hover chrome stays
+   absent until real text has been selected. Click = instant drop near the last
+   canvas working point; drag = explicit placement. */
+.lcos-selection-drop-handle {
+  position: fixed;
+  z-index: 1250;
+  width: 29px;
+  height: 29px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgba(104,87,189,.22);
+  border-radius: 8px;
+  color: #6857bd;
+  background: rgba(253,253,255,.97);
+  box-shadow: 0 7px 20px rgba(45,39,68,.14);
+  cursor: grab;
+}
+.lcos-selection-drop-handle:hover { background: #fff; box-shadow: 0 9px 24px rgba(45,39,68,.18); }
+.lcos-selection-drop-handle:active { cursor: grabbing; transform: scale(.96); }
+
+/* Material receiving is a local canvas state, not a giant drop curtain. */
+.lcos-spatial-canvas.is-material-receiving::after {
+  content: '';
+  position: absolute;
+  inset: 8px;
+  z-index: 18;
+  border: 1px solid rgba(104,87,189,.30);
+  border-radius: 14px;
+  box-shadow: inset 0 0 0 3px rgba(104,87,189,.035);
+  pointer-events: none;
+  animation: lcos-material-receive-frame 650ms ease-in-out infinite alternate;
+}
+@keyframes lcos-material-receive-frame {
+  from { opacity: .48; }
+  to { opacity: 1; }
+}
+
+/* Base UI Drawer wrapper for Huabu-style organize review. Current Core still
+   owns only whole-run apply/rollback; the UI remains honest about that gap. */
+.lcos-review-drawer-viewport {
+  position: fixed;
+  inset: auto 0 0;
+  z-index: 970;
+  height: min(570px, calc(100vh - 92px));
+  pointer-events: none;
+  display: grid;
+  align-items: end;
+  justify-items: center;
+}
+.lcos-review-drawer-popup {
+  width: min(470px, calc(100vw - 22px));
+  max-height: 100%;
+  pointer-events: auto;
+  overflow: hidden;
+  border: 1px solid rgba(67,62,82,.13);
+  border-radius: 15px 15px 0 0;
+  background: rgba(253,253,255,.985);
+  box-shadow: 0 -12px 38px rgba(35,31,49,.12), 0 -1px 4px rgba(35,31,49,.04);
+  transform: translateY(var(--drawer-swipe-movement-y, 0));
+  transition: transform 220ms cubic-bezier(.2,.82,.28,1), opacity 150ms ease;
+}
+.lcos-review-drawer-popup[data-starting-style],
+.lcos-review-drawer-popup[data-ending-style] { transform: translateY(calc(100% + 12px)); opacity: .72; }
+.lcos-review-drawer-content { max-height: 100%; overflow: auto; padding: 7px 9px 10px; outline: none; }
+.lcos-review-drawer-handle { width: 34px; height: 4px; margin: 0 auto 5px; border-radius: 999px; background: rgba(58,53,70,.14); }
+.lcos-review-drawer-popup .reorganize-panel.lcos-reorganize-review {
+  position: static !important;
+  left: auto !important;
+  bottom: auto !important;
+  z-index: auto !important;
+  width: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+  padding: 0 !important;
+  transform: none !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+.lcos-review-drawer-popup .reorganize-panel > header { min-height: 32px; display:flex; align-items:center; justify-content:space-between; gap:8px; margin:0 0 7px; }
+.lcos-review-drawer-popup .reorganize-panel > header > div { min-width:0; display:flex; align-items:center; gap:7px; }
+.lcos-review-drawer-popup .reorganize-panel > header > div > span:last-child { min-width:0; display:grid; gap:1px; }
+.lcos-review-drawer-popup .reorganize-panel > header strong { font-size:11.5px; font-weight:660; color:rgba(37,34,44,.93); }
+.lcos-review-drawer-popup .reorganize-panel > header small { font-size:9.5px; color:rgba(65,61,75,.46); }
+.lcos-review-drawer-popup .lcos-reorganize-compose,
+.lcos-review-drawer-popup .lcos-reorganize-pending { display:grid; gap:8px; }
+.lcos-review-drawer-popup .lcos-reorganize-compose textarea { width:100%; min-height:86px; padding:9px 10px; resize:vertical; border:1px solid rgba(72,63,98,.19); border-radius:9px; outline:none; color:rgba(37,34,44,.93); background:rgba(250,250,252,.72); font:inherit; font-size:11px; line-height:1.5; }
+.lcos-review-drawer-popup .lcos-reorganize-change-summary { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:4px; margin:0; padding:0; list-style:none; }
+.lcos-review-drawer-popup .lcos-reorganize-change-summary li { min-height:30px; display:flex; align-items:center; justify-content:space-between; gap:6px; padding:5px 7px; border:1px solid rgba(57,52,70,.105); border-radius:7px; font-size:9.5px; }
+.lcos-review-drawer-popup .lcos-reorganize-core-gap { display:grid; gap:2px; padding:7px 8px; border:1px dashed rgba(104,87,189,.18); border-radius:8px; color:rgba(65,61,75,.45); background:rgba(104,87,189,.02); }
+.lcos-review-drawer-popup .reorganize-actions { display:flex; justify-content:flex-end; gap:5px; }
+
+@media (max-width: 760px) {
+  .lcos-viewer-drawer-viewport { width: min(92vw, 620px); }
+  .lcos-document-pages,
+  .lcos-page-viewer { grid-template-columns: 112px minmax(0,1fr); }
+  .lcos-page-stage { padding-inline: 14px; }
+  .lcos-review-drawer-popup { width: calc(100vw - 12px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lcos-viewer-drawer-popup,
+  .lcos-review-drawer-popup,
+  .lcos-page-thumb,
+  .lcos-selection-drop-handle { transition-duration: .001ms !important; animation-duration: .001ms !important; }
+  .lcos-spatial-canvas.is-material-receiving::after { animation: none; }
+}
+
+/* =======================================================================
+   PASS4 — Semantic Drop input grammar
+   The interaction is Semantic Drop. Right-drag is only the fastest trigger;
+   Alt/Option + primary drag and the explicit grab handle share the same state.
+   ======================================================================= */
+
+.lcos-reconstructed .lcos-surface-object,
+.lcos-reconstructed .lcos-surface-glyph {
+  position: relative;
+}
+
+.lcos-reconstructed .lcos-semantic-drop-handle {
+  position: absolute;
+  z-index: 8;
+  top: 5px;
+  right: 5px;
+  width: 19px;
+  height: 19px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(69, 62, 86, .10);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, .82);
+  box-shadow: 0 3px 10px rgba(42, 36, 55, .055);
+  color: rgba(54, 49, 67, .52);
+  opacity: 0;
+  transform: translateY(1px) scale(.94);
+  pointer-events: none;
+  cursor: grab;
+  transition:
+    opacity var(--lcos-ui-fast) ease,
+    transform var(--lcos-ui-medium) var(--lcos-ui-ease-out),
+    color var(--lcos-ui-fast) ease,
+    border-color var(--lcos-ui-fast) ease,
+    background var(--lcos-ui-fast) ease;
+}
+
+.lcos-reconstructed :is(.canvas-node:hover, .canvas-node.selected, .lcos-surface-object:hover, .lcos-surface-object.selected, .lcos-surface-glyph:hover, .lcos-surface-glyph.selected, .lcos-workflow-graph-workflow:hover, .lcos-workflow-graph-workflow.is-selected, .lcos-context-dot-core:hover) > .lcos-semantic-drop-handle,
+.lcos-reconstructed .lcos-context-dot-node.is-selected .lcos-context-dot-core > .lcos-semantic-drop-handle {
+  opacity: .92;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+
+.lcos-reconstructed .lcos-semantic-drop-handle:hover {
+  color: var(--lcos-ui-signal);
+  border-color: rgba(var(--lcos-ui-signal-rgb), .24);
+  background: rgba(255, 255, 255, .98);
+}
+.lcos-reconstructed .lcos-semantic-drop-handle:active { cursor: grabbing; transform: scale(.92); }
+
+/* Picking up a semantic projection should feel different from moving the source. */
+.lcos-reconstructed .is-semantic-drop-source > .lcos-object,
+.lcos-reconstructed .lcos-surface-object.is-semantic-drop-source,
+.lcos-reconstructed .lcos-surface-glyph.is-semantic-drop-source {
+  filter: saturate(.96) brightness(.99);
+  opacity: .82;
+}
+.lcos-reconstructed .is-semantic-drop-source .lcos-dot-cell.level-3 {
+  animation: lcos-dot-receive 460ms var(--lcos-ui-ease-out) infinite alternate;
+  animation-delay: calc(var(--cell-i, 0) * 7ms);
+}
+
+.lcos-semantic-drop-ghost[data-semantic-drop-trigger="handle-primary"] > span,
+.lcos-semantic-drop-ghost[data-semantic-drop-trigger="modifier-primary"] > span {
+  transform: rotate(-4deg);
+}
+
+@media (hover: none), (pointer: coarse) {
+  .lcos-reconstructed :is(.canvas-node.selected, .lcos-surface-object.selected, .lcos-surface-glyph.selected, .lcos-workflow-graph-workflow.is-selected) > .lcos-semantic-drop-handle,
+  .lcos-reconstructed .lcos-context-dot-node.is-selected .lcos-context-dot-core > .lcos-semantic-drop-handle {
+    width: 26px;
+    height: 26px;
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+/* =======================================================================
+   PRODUCTIZATION PASS5 — local Agent / Proposal / Revision result upgrade
+   These surfaces are transient utilities, not a second permanent workspace.
+   ======================================================================= */
+
+.lcos-reconstructed .lcos-agent-node-reply {
+  margin-top: 7px;
+  padding: 7px 8px 8px;
+  border-top: 1px solid var(--lcos-ui-line);
+  background: rgba(250, 250, 252, .58);
+  color: var(--lcos-ui-ink-soft, rgba(43, 39, 53, .74));
+}
+.lcos-reconstructed .lcos-agent-node-reply strong {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 9px;
+  font-weight: 680;
+  letter-spacing: .015em;
+  color: var(--lcos-ui-ink, #302d38);
+}
+.lcos-reconstructed .lcos-agent-node-reply p {
+  margin: 0;
+  max-height: 70px;
+  overflow: hidden;
+  font-size: 10.5px;
+  line-height: 1.48;
+  white-space: pre-wrap;
+}
+.lcos-reconstructed .lcos-agent-node-reply.is-error {
+  border-top-color: rgba(176, 72, 62, .16);
+  background: rgba(176, 72, 62, .035);
+}
+.lcos-reconstructed .lcos-surface-agent-node.is-running .lcos-agent-node-signal,
+.lcos-reconstructed .lcos-surface-agent-node.is-queued .lcos-agent-node-signal,
+.lcos-reconstructed .lcos-surface-agent-node.is-created .lcos-agent-node-signal {
+  border-color: rgba(var(--lcos-ui-signal-rgb), .23);
+}
+
+.app-shell.porcelain-studio-v2 .agent-proposal-modify {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  width: 100%;
+  margin-top: 7px;
+}
+.app-shell.porcelain-studio-v2 .agent-proposal-modify input {
+  min-width: 0;
+  height: 30px;
+  box-sizing: border-box;
+  border: 1px solid rgba(76, 68, 96, .13);
+  border-radius: 8px;
+  padding: 0 9px;
+  outline: none;
+  background: rgba(255,255,255,.72);
+  color: var(--lcos-ink);
+  font: inherit;
+  font-size: 10.5px;
+}
+.app-shell.porcelain-studio-v2 .agent-proposal-modify input:focus {
+  border-color: rgba(92, 75, 170, .28);
+  box-shadow: 0 0 0 3px rgba(92, 75, 170, .045);
+}
+.app-shell.porcelain-studio-v2 .agent-proposal-modify button {
+  white-space: nowrap;
+}
+
+.lcos-revision-upgrade-backdrop {
+  position: fixed;
+  z-index: 116;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(25, 23, 31, .16);
+  backdrop-filter: blur(3px);
+}
+.lcos-revision-upgrade-dialog {
+  width: min(520px, calc(100vw - 32px));
+  max-height: min(720px, calc(100vh - 48px));
+  overflow: auto;
+  box-sizing: border-box;
+  padding: 16px;
+  border: 1px solid rgba(63, 57, 78, .12);
+  border-radius: 16px;
+  background: rgba(253, 253, 254, .985);
+  box-shadow: 0 22px 70px rgba(35, 31, 46, .18), inset 0 1px 0 rgba(255,255,255,.9);
+  color: var(--lcos-ink, #302d38);
+}
+.lcos-revision-upgrade-dialog > header {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+.lcos-revision-upgrade-dialog > header > div { min-width: 0; flex: 1; }
+.lcos-revision-upgrade-dialog > header small {
+  display: block;
+  margin-bottom: 3px;
+  color: rgba(69, 63, 82, .54);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.lcos-revision-upgrade-dialog h2 { margin: 0; font-size: 15px; line-height: 1.25; }
+.lcos-revision-upgrade-dialog header p { margin: 5px 0 0; color: rgba(69, 63, 82, .66); font-size: 10.5px; line-height: 1.5; }
+.lcos-revision-upgrade-dialog header > button {
+  width: 28px; height: 28px; display: grid; place-items: center;
+  border: 0; border-radius: 8px; background: transparent; color: inherit; cursor: pointer;
+}
+.lcos-revision-upgrade-dialog header > button:hover:not(:disabled) { background: rgba(71, 65, 88, .065); }
+.lcos-revision-upgrade-dialog > label { display: grid; gap: 5px; margin: 10px 0; }
+.lcos-revision-upgrade-dialog > label > span { font-size: 10px; font-weight: 680; color: rgba(48, 45, 56, .78); }
+.lcos-revision-upgrade-dialog textarea {
+  box-sizing: border-box;
+  width: 100%;
+  resize: vertical;
+  min-height: 54px;
+  border: 1px solid rgba(69, 62, 86, .12);
+  border-radius: 10px;
+  padding: 9px 10px;
+  outline: none;
+  background: rgba(248,248,251,.72);
+  color: inherit;
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.48;
+}
+.lcos-revision-upgrade-dialog textarea:focus {
+  border-color: rgba(92,75,170,.28);
+  box-shadow: 0 0 0 3px rgba(92,75,170,.045);
+}
+.lcos-revision-upgrade-dialog > footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+  padding-top: 11px;
+  border-top: 1px solid rgba(69,62,86,.09);
+}
+.lcos-revision-upgrade-dialog > footer > span { min-width: 0; flex: 1; color: rgba(69,63,82,.55); font-size: 9px; line-height: 1.4; }
+.lcos-revision-upgrade-dialog > footer > button {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  border-radius: 9px;
+  padding: 0 11px;
+  background: var(--lcos-purple, #7658c7);
+  color: #fff;
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 680;
+  cursor: pointer;
+}
+.lcos-revision-upgrade-dialog > footer > button:disabled { opacity: .42; cursor: default; }
+
+/* ========================================================================== */
+/* 0.1 Capture convergence · global Capture Space + desktop Capture Float     */
+/* ========================================================================== */
+
+.capture-space-shell {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: 62px minmax(0, 1fr);
+  grid-template-rows: 52px minmax(0, 1fr);
+  background:
+    radial-gradient(circle at 72% 18%, rgba(var(--lcos-ui-signal-rgb), .025), transparent 32%),
+    #f5f5f7;
+  color: var(--lcos-ui-ink);
+  font-family: var(--lcos-font-ui, Inter, "Noto Sans SC", "Segoe UI", sans-serif);
+}
+
+.capture-space-header {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  z-index: 80;
+  display: grid;
+  grid-template-columns: 118px 1fr auto;
+  align-items: center;
+  min-width: 0;
+  height: 52px;
+  padding: 0 12px 0 10px;
+  border-bottom: 1px solid rgba(45, 42, 54, .075);
+  background: rgba(252, 252, 253, .88);
+  backdrop-filter: blur(18px) saturate(1.08);
+}
+
+.capture-space-back,
+.capture-space-actions button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--lcos-ui-ink-soft);
+  font: 560 11px/1 var(--lcos-font-ui, sans-serif);
+  letter-spacing: -.01em;
+  cursor: pointer;
+  transition: background var(--lcos-ui-fast) ease, color var(--lcos-ui-fast) ease, transform var(--lcos-ui-fast) ease;
+}
+
+.capture-space-back {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 9px;
+  border-radius: 8px;
+}
+
+.capture-space-back:hover,
+.capture-space-actions button:hover:not(:disabled) {
+  color: var(--lcos-ui-ink);
+  background: rgba(46, 43, 56, .055);
+}
+
+.capture-space-title {
+  justify-self: center;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.capture-space-title > svg { color: var(--lcos-ui-signal); opacity: .9; }
+.capture-space-title > div { display: grid; gap: 1px; min-width: 0; }
+.capture-space-title strong { font: 620 12px/1.15 var(--lcos-font-ui, sans-serif); letter-spacing: -.015em; }
+.capture-space-title span { color: var(--lcos-ui-ink-faint); font: 500 9px/1.15 var(--lcos-font-ui, sans-serif); }
+
+.capture-space-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.capture-space-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 9px;
+  border-radius: 8px;
+}
+.capture-space-actions button:disabled { opacity: .38; cursor: default; }
+
+.capture-project-targets {
+  grid-column: 1;
+  grid-row: 2;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  padding: 11px 7px 12px;
+  border-right: 1px solid rgba(45, 42, 54, .07);
+  background: rgba(250, 250, 252, .72);
+  backdrop-filter: blur(14px);
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.capture-project-targets::-webkit-scrollbar { display: none; }
+
+.capture-project-targets > span {
+  writing-mode: vertical-rl;
+  color: var(--lcos-ui-ink-faint);
+  font: 650 8px/1 var(--lcos-font-mono, monospace);
+  letter-spacing: .08em;
+  margin: 1px 0 4px;
+  user-select: none;
+}
+
+.capture-project-targets button {
+  position: relative;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(44, 41, 53, .08);
+  border-radius: 11px;
+  background: rgba(255,255,255,.72);
+  color: var(--lcos-ui-ink-soft);
+  box-shadow: 0 1px 2px rgba(36,32,44,.025);
+  cursor: pointer;
+  transition: transform var(--lcos-ui-medium) var(--lcos-ui-ease-out), border-color var(--lcos-ui-medium) ease, background var(--lcos-ui-medium) ease, box-shadow var(--lcos-ui-medium) ease;
+}
+.capture-project-targets button b {
+  font: 650 12px/1 var(--lcos-font-ui, sans-serif);
+  text-transform: uppercase;
+}
+.capture-project-targets button em {
+  position: absolute;
+  z-index: 10;
+  left: calc(100% + 9px);
+  top: 50%;
+  max-width: 180px;
+  transform: translate(3px,-50%);
+  padding: 5px 7px;
+  border: 1px solid var(--lcos-ui-line);
+  border-radius: 7px;
+  background: rgba(253,253,255,.97);
+  box-shadow: var(--lcos-ui-shadow-1);
+  color: var(--lcos-ui-ink);
+  font: 550 10px/1.15 var(--lcos-font-ui, sans-serif);
+  font-style: normal;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--lcos-ui-fast) ease, transform var(--lcos-ui-fast) var(--lcos-ui-ease-out);
+}
+.capture-project-targets button:hover em,
+.capture-project-targets button:focus-visible em { opacity: 1; transform: translate(0,-50%); }
+.capture-project-targets button:hover { transform: translateY(-1px); border-color: rgba(var(--lcos-ui-signal-rgb), .18); }
+.capture-project-targets button.is-direct-drop-target {
+  transform: scale(1.08);
+  border-color: rgba(var(--lcos-ui-signal-rgb), .62);
+  background: rgba(var(--lcos-ui-signal-rgb), .095);
+  box-shadow: 0 0 0 4px rgba(var(--lcos-ui-signal-rgb), .07), 0 9px 20px rgba(48,40,84,.10);
+  color: var(--lcos-ui-signal);
+}
+
+.capture-space-canvas {
+  position: relative;
+  grid-column: 2;
+  grid-row: 2;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.capture-space-canvas > .lcos-spatial-canvas { position: absolute; inset: 0; }
+.capture-space-shell .canvas { background-color: #f5f5f7; }
+.capture-space-shell .workspace-frame {
+  background: rgba(255,255,255,.15);
+  border-color: rgba(69,63,86,.11);
+  box-shadow: none;
+}
+.capture-space-shell .workspace-frame-header {
+  color: var(--lcos-ui-ink-soft);
+  background: rgba(250,250,252,.58);
+}
+.capture-space-shell .workspace-frame-header b { opacity: .52; }
+.capture-space-shell .lcos-agent-arrange-entry { color: var(--lcos-ui-signal); }
+
+/* The float is a transport affordance, not a miniature project UI. */
+.capture-float {
+  box-sizing: border-box;
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  padding: 10px;
+  display: grid;
+  grid-template-rows: 28px 1fr 28px;
+  gap: 5px;
+  overflow: hidden;
+  border: 1px solid rgba(47,43,57,.12);
+  border-radius: 14px;
+  background: rgba(252,252,253,.955);
+  box-shadow: 0 14px 38px rgba(33,29,43,.14), 0 2px 7px rgba(33,29,43,.06);
+  color: var(--lcos-ui-ink);
+  font-family: var(--lcos-font-ui, Inter, "Noto Sans SC", "Segoe UI", sans-serif);
+  user-select: none;
+  transition: border-color var(--lcos-ui-medium) ease, background var(--lcos-ui-medium) ease, box-shadow var(--lcos-ui-medium) ease;
+}
+.capture-float::before {
+  content: '';
+  position: absolute;
+  inset: 5px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  pointer-events: none;
+  transition: border-color var(--lcos-ui-medium) ease, transform var(--lcos-ui-medium) var(--lcos-ui-ease-out);
+}
+.capture-float.is-receiving {
+  border-color: rgba(var(--lcos-ui-signal-rgb), .4);
+  background: rgba(252,251,255,.98);
+  box-shadow: 0 16px 42px rgba(54,43,101,.16), 0 0 0 4px rgba(var(--lcos-ui-signal-rgb), .055);
+}
+.capture-float.is-receiving::before { border-color: rgba(var(--lcos-ui-signal-rgb), .2); transform: scale(.985); }
+.capture-float header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  -webkit-app-region: drag;
+}
+.capture-float header svg { color: var(--lcos-ui-signal); opacity: .92; }
+.capture-float header strong { font: 640 11px/1 var(--lcos-font-ui, sans-serif); letter-spacing: -.015em; }
+.capture-float header span {
+  margin-left: auto;
+  min-width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background: rgba(var(--lcos-ui-signal-rgb), .07);
+  color: var(--lcos-ui-signal);
+  font: 700 8px/1 var(--lcos-font-mono, monospace);
+}
+.capture-float section {
+  display: grid;
+  align-content: center;
+  min-width: 0;
+  padding: 0 5px;
+}
+.capture-float section b {
+  font: 610 12px/1.2 var(--lcos-font-ui, sans-serif);
+  letter-spacing: -.012em;
+}
+.capture-float section small {
+  display: block;
+  min-width: 0;
+  margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--lcos-ui-ink-faint);
+  font: 500 9px/1.2 var(--lcos-font-ui, sans-serif);
+}
+.capture-float > button {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 25px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 7px;
+  background: rgba(42,39,51,.045);
+  color: var(--lcos-ui-ink-soft);
+  font: 560 9px/1 var(--lcos-font-ui, sans-serif);
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+.capture-float > button:hover { background: rgba(var(--lcos-ui-signal-rgb), .08); color: var(--lcos-ui-signal); }
+
+@media (prefers-reduced-motion: reduce) {
+  .capture-project-targets button,
+  .capture-float,
+  .capture-float::before { transition: none; }
+}
+
+/* -----------------------------------------------------------------------
+   0.1 Collection morphology — Spatial-inspired folder/stack, LCOS-native.
+   A Collection is a persistent grouping object, not a rectangular Region and
+   not a child canvas. The closed state feels like a light folder with a few
+   real member sheets peeking out; opening keeps the folder as a spatial anchor
+   while member Project Views unfold beside it.
+   ----------------------------------------------------------------------- */
+
+.lcos-reconstructed .canvas-node[data-entity-kind="collection"] {
+  min-width: 188px;
+  min-height: 106px;
+  border-color: transparent !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  transition:
+    left 300ms cubic-bezier(.22,1,.36,1),
+    top 300ms cubic-bezier(.22,1,.36,1),
+    opacity 180ms ease,
+    transform 240ms cubic-bezier(.22,1,.36,1) !important;
+}
+.lcos-reconstructed .canvas-node[data-entity-kind="collection"]::before,
+.lcos-reconstructed .canvas-node[data-entity-kind="collection"]::after {
+  display: none !important;
+}
+
+.lcos-reconstructed .lcos-collection-object.is-collection {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: block;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  isolation: isolate;
+}
+
+.lcos-reconstructed .lcos-collection-stack {
+  position: absolute;
+  z-index: 0;
+  inset: 0 9px 21px 9px;
+  pointer-events: none;
+}
+.lcos-reconstructed .lcos-collection-stack-sheet {
+  position: absolute;
+  left: 14px;
+  right: 12px;
+  top: 2px;
+  height: 64px;
+  overflow: hidden;
+  border: 1px solid rgba(49, 52, 62, .09);
+  border-radius: 9px 11px 8px 10px;
+  background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(244,245,243,.98));
+  box-shadow: 0 5px 14px rgba(34, 39, 48, .055);
+  transform-origin: 50% 92%;
+  transition:
+    transform 260ms cubic-bezier(.22,1,.36,1),
+    opacity 180ms ease,
+    filter 180ms ease;
+}
+.lcos-reconstructed .lcos-collection-stack-sheet > img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  object-position: center;
+}
+.lcos-reconstructed .lcos-collection-stack-sheet > i {
+  position: absolute;
+  left: 11px;
+  top: 11px;
+  width: 48%;
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(44, 48, 58, .11);
+  box-shadow: 0 8px 0 rgba(44,48,58,.075), 0 16px 0 rgba(44,48,58,.06);
+}
+.lcos-reconstructed .lcos-collection-stack-sheet > b {
+  position: absolute;
+  right: 9px;
+  bottom: 7px;
+  max-width: 64%;
+  overflow: hidden;
+  color: rgba(42, 45, 54, .34);
+  font-size: 7.5px;
+  font-weight: 560;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lcos-reconstructed .lcos-collection-stack-sheet.stack-sheet-0 { transform: translate(-4px, 1px) rotate(-2.5deg); }
+.lcos-reconstructed .lcos-collection-stack-sheet.stack-sheet-1 { transform: translate(4px, 4px) rotate(2deg); opacity: .93; }
+.lcos-reconstructed .lcos-collection-stack-sheet.stack-sheet-2 { transform: translate(0, 8px) rotate(.3deg); opacity: .88; }
+
+.lcos-reconstructed .lcos-collection-folder-face {
+  position: absolute;
+  z-index: 3;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  min-height: 76px;
+  padding: 22px 38px 12px 13px;
+  overflow: visible;
+  border: 1px solid rgba(var(--lcos-ui-context-rgb), .14);
+  border-radius: 13px 14px 15px 15px;
+  color: var(--lcos-ui-ink);
+  background:
+    linear-gradient(145deg, rgba(250,252,255,.98), rgba(var(--lcos-ui-context-rgb), .075)),
+    rgba(248,250,252,.98);
+  box-shadow:
+    0 8px 20px rgba(35, 42, 54, .075),
+    inset 0 1px 0 rgba(255,255,255,.92);
+  transition:
+    transform 220ms cubic-bezier(.22,1,.36,1),
+    border-color 160ms ease,
+    box-shadow 180ms ease,
+    background-color 160ms ease;
+}
+.lcos-reconstructed .lcos-collection-folder-tab {
+  position: absolute;
+  left: 12px;
+  top: -11px;
+  min-width: 68px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 10px;
+  border: 1px solid rgba(var(--lcos-ui-context-rgb), .13);
+  border-bottom-color: rgba(255,255,255,.18);
+  border-radius: 9px 10px 4px 4px;
+  color: rgba(var(--lcos-ui-context-rgb), .72);
+  background: linear-gradient(180deg, rgba(252,253,255,.99), rgba(var(--lcos-ui-context-rgb), .07));
+  box-shadow: 0 -2px 7px rgba(36,42,53,.03), inset 0 1px 0 rgba(255,255,255,.92);
+  font-size: 8px;
+  font-weight: 650;
+  letter-spacing: .045em;
+}
+.lcos-reconstructed .lcos-collection-folder-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.lcos-reconstructed .lcos-collection-folder-copy small {
+  color: rgba(44, 49, 61, .42);
+  font-size: 8.5px;
+  line-height: 1.1;
+}
+.lcos-reconstructed .lcos-collection-folder-copy strong {
+  min-width: 0;
+  overflow: hidden;
+  color: rgba(34, 39, 49, .86);
+  font-size: 11px;
+  font-weight: 640;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lcos-reconstructed .lcos-collection-folder-mark {
+  position: absolute;
+  right: 13px;
+  bottom: 14px;
+  width: 21px;
+  height: 21px;
+  display: grid;
+  place-items: center;
+  color: rgba(var(--lcos-ui-context-rgb), .60);
+  opacity: .86;
+}
+.lcos-reconstructed .lcos-collection-folder-mark svg { width: 18px; height: 18px; }
+.lcos-reconstructed .lcos-collection-folder-state {
+  position: absolute;
+  right: 10px;
+  top: 8px;
+  width: 17px;
+  height: 17px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(var(--lcos-ui-context-rgb), .10);
+  border-radius: 50%;
+  color: rgba(var(--lcos-ui-context-rgb), .55);
+  background: rgba(255,255,255,.55);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  transition: transform 220ms cubic-bezier(.22,1,.36,1), background-color 160ms ease;
+}
+
+.lcos-reconstructed .canvas-node[data-entity-kind="collection"]:hover .lcos-collection-folder-face,
+.lcos-reconstructed .canvas-node[data-entity-kind="collection"].selected .lcos-collection-folder-face {
+  transform: translateY(-2px);
+  border-color: rgba(var(--lcos-ui-context-rgb), .24);
+  box-shadow: 0 12px 27px rgba(35,42,54,.10), inset 0 1px 0 rgba(255,255,255,.94);
+}
+.lcos-reconstructed .canvas-node[data-entity-kind="collection"]:hover .lcos-collection-stack-sheet.stack-sheet-0 { transform: translate(-7px, -3px) rotate(-4deg); }
+.lcos-reconstructed .canvas-node[data-entity-kind="collection"]:hover .lcos-collection-stack-sheet.stack-sheet-1 { transform: translate(7px, 0) rotate(3.4deg); }
+.lcos-reconstructed .canvas-node[data-entity-kind="collection"]:hover .lcos-collection-stack-sheet.stack-sheet-2 { transform: translate(1px, 4px) rotate(.4deg); }
+
+.lcos-reconstructed .lcos-collection-object.is-collection.is-expanded .lcos-collection-folder-face {
+  border-color: rgba(var(--lcos-ui-context-rgb), .22);
+  background:
+    linear-gradient(145deg, rgba(251,253,255,.99), rgba(var(--lcos-ui-context-rgb), .095)),
+    rgba(248,250,252,.99);
+}
+.lcos-reconstructed .lcos-collection-object.is-collection.is-expanded .lcos-collection-folder-state { transform: rotate(180deg); background: rgba(255,255,255,.78); }
+.lcos-reconstructed .lcos-collection-object.is-collection.is-expanded .lcos-collection-stack-sheet.stack-sheet-0 { transform: translate(-8px, -9px) rotate(-4deg); opacity: .68; }
+.lcos-reconstructed .lcos-collection-object.is-collection.is-expanded .lcos-collection-stack-sheet.stack-sheet-1 { transform: translate(8px, -6px) rotate(3.5deg); opacity: .62; }
+.lcos-reconstructed .lcos-collection-object.is-collection.is-expanded .lcos-collection-stack-sheet.stack-sheet-2 { transform: translate(1px, -3px) rotate(.5deg); opacity: .56; }
+
+/* Rare non-material entity refs stay in a tiny pocket instead of turning the
+   opened Collection back into a card-grid. Physical material members unfold as
+   their original Project Views on the canvas. */
+.lcos-reconstructed .lcos-collection-object.is-collection .lcos-collection-inline {
+  left: 6px;
+  right: 6px;
+  top: calc(100% + 7px);
+  width: auto;
+  max-height: 84px;
+  margin: 0;
+  padding: 5px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  border-color: rgba(var(--lcos-ui-context-rgb), .10);
+  border-radius: 9px;
+  background: rgba(251,252,253,.90);
+  box-shadow: 0 7px 18px rgba(35,42,54,.055);
+  backdrop-filter: blur(12px);
+}
+.lcos-reconstructed .lcos-collection-object.is-collection .lcos-collection-member {
+  min-height: 26px;
+  padding: 4px 5px;
+  border-color: transparent;
+  background: rgba(255,255,255,.42);
+}
+.lcos-reconstructed .lcos-collection-version-beads { position: absolute; left: 13px; bottom: 7px; z-index: 5; opacity: .55; }
+
+/* The fold/unfold path is transient presentation feedback. Committed member
+   coordinates already contain the opened layout; transforms only animate from
+   or back to the folder anchor and are never persisted. */
+.lcos-reconstructed .canvas-node.collection-opening,
+.lcos-reconstructed .canvas-node.collection-closing {
+  pointer-events: none;
+  transform: translate(var(--lcos-collection-fold-x), var(--lcos-collection-fold-y)) scale(.90);
+  opacity: 0;
+  transition:
+    left 300ms cubic-bezier(.22,1,.36,1),
+    top 300ms cubic-bezier(.22,1,.36,1),
+    transform 240ms cubic-bezier(.22,1,.36,1),
+    opacity 175ms ease !important;
+}
+.lcos-reconstructed .canvas-node:not(.dragging):not(.resizing):not([data-entity-kind="collection"]) {
+  transition:
+    left 300ms cubic-bezier(.22,1,.36,1),
+    top 300ms cubic-bezier(.22,1,.36,1),
+    box-shadow 160ms cubic-bezier(.22,1,.36,1),
+    background-color 160ms cubic-bezier(.22,1,.36,1),
+    border-color 160ms cubic-bezier(.22,1,.36,1),
+    color 160ms cubic-bezier(.22,1,.36,1),
+    opacity 175ms ease,
+    transform 240ms cubic-bezier(.22,1,.36,1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lcos-reconstructed .canvas-node[data-entity-kind="collection"],
+  .lcos-reconstructed .canvas-node:not(.dragging):not(.resizing):not([data-entity-kind="collection"]),
+  .lcos-reconstructed .lcos-collection-stack-sheet,
+  .lcos-reconstructed .lcos-collection-folder-face,
+  .lcos-reconstructed .lcos-collection-folder-state {
+    transition-duration: 1ms !important;
+  }
+  .lcos-reconstructed .canvas-node.collection-opening,
+  .lcos-reconstructed .canvas-node.collection-closing {
+    transform: none;
+  }
+}
+
+
+/* 0.1 Context completion — same LCOS shell, one Context truth with three lenses. */
+.lcos-reconstructed .lcos-context-heading-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  min-width: 0;
+}
+.lcos-reconstructed .lcos-context-heading-actions > small {
+  color: var(--lcos-text-tertiary, rgba(37, 42, 50, .48));
+  white-space: nowrap;
+}
+.lcos-reconstructed .lcos-context-lens-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid rgba(83, 89, 101, .10);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .54);
+  box-shadow: 0 1px 2px rgba(40, 46, 55, .035);
+}
+.lcos-reconstructed .lcos-context-lens-switch button {
+  min-height: 24px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: rgba(42, 47, 56, .48);
+  font-size: 10px;
+  font-weight: 560;
+  letter-spacing: .01em;
+  transition: background 150ms ease, color 150ms ease, box-shadow 150ms ease;
+}
+.lcos-reconstructed .lcos-context-lens-switch button:hover {
+  color: rgba(36, 41, 49, .72);
+  background: rgba(255, 255, 255, .64);
+}
+.lcos-reconstructed .lcos-context-lens-switch button.active {
+  color: rgba(30, 34, 41, .88);
+  background: rgba(255, 255, 255, .94);
+  box-shadow: 0 1px 4px rgba(42, 48, 58, .08);
+}
+.lcos-reconstructed .lcos-context-space {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+}
+.lcos-reconstructed .lcos-context-space-stage {
+  position: absolute;
+  inset: 48px 0 0;
+}
+.lcos-reconstructed .lcos-context-space-world {
+  min-width: 1320px;
+  min-height: 860px;
+}
+.lcos-reconstructed .lcos-context-space-node {
+  position: absolute;
+  transform-origin: 50% 50%;
+  transition: left 260ms cubic-bezier(.22,.72,.22,1), top 260ms cubic-bezier(.22,.72,.22,1), opacity 160ms ease;
+}
+.lcos-reconstructed .lcos-context-space-node.is-dragging {
+  z-index: 9;
+  transition: none;
+}
+.lcos-reconstructed .lcos-context-space-node > .lcos-surface-object {
+  width: 100%;
+  min-height: 100%;
+}
+.lcos-reconstructed .lcos-context-space-node[data-attention-bucket="selected"]::after,
+.lcos-reconstructed .lcos-context-space-node[data-attention-bucket="pinned"]::after {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border-radius: 14px;
+  border: 1px solid rgba(91, 105, 135, .14);
+  pointer-events: none;
+}
+.lcos-reconstructed .lcos-context-space-edges path {
+  fill: none;
+  stroke: rgba(87, 94, 107, .18);
+  stroke-width: 1.15;
+  vector-effect: non-scaling-stroke;
+}
+.lcos-reconstructed .lcos-context-space-edges path.active {
+  stroke: rgba(76, 89, 116, .34);
+  stroke-width: 1.35;
+}
+.lcos-reconstructed .lcos-context-space-edges path.relation-blocks,
+.lcos-reconstructed .lcos-context-space-edges path.relation-conflict {
+  stroke-dasharray: 3 4;
+}
+.lcos-reconstructed .lcos-context-space-empty {
+  position: absolute;
+  left: 50%;
+  top: 44%;
+  transform: translate(-50%, -50%);
+  display: grid;
+  justify-items: center;
+  gap: 7px;
+  max-width: 360px;
+  color: rgba(43, 48, 57, .48);
+  text-align: center;
+  pointer-events: none;
+}
+.lcos-reconstructed .lcos-context-space-empty strong { color: rgba(37, 42, 50, .76); font-size: 12px; }
+.lcos-reconstructed .lcos-context-space-empty span { font-size: 10px; line-height: 1.55; }
+
+@media (prefers-reduced-motion: reduce) {
+  .lcos-reconstructed .lcos-context-space-node,
+  .lcos-reconstructed .lcos-context-lens-switch button { transition: none; }
+}
+
+/* -----------------------------------------------------------------------
+   R5 · Spatial-style Project Entity projections on Main
+   Different Project objects get different bodies, not themed generic cards.
+   Collection remains a stack/folder; Context is a researched dossier;
+   Workflow is an action folio; Workspace is a saved board snapshot.
+   ----------------------------------------------------------------------- */
+.lcos-reconstructed .lcos-project-entity-object {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: visible;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--lcos-ui-ink);
+}
+.lcos-reconstructed .lcos-project-entity-heading {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.lcos-reconstructed .lcos-project-entity-heading strong {
+  min-width: 0;
+  overflow: hidden;
+  color: rgba(34,39,49,.88);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lcos-reconstructed .lcos-project-entity-heading small {
+  color: rgba(44,49,61,.44);
+  font-size: 8.5px;
+  line-height: 1.15;
+}
+.lcos-reconstructed .lcos-project-entity-tab {
+  position: absolute;
+  left: 12px;
+  top: -11px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 9px;
+  border: 1px solid rgba(var(--lcos-ui-context-rgb), .14);
+  border-bottom-color: rgba(255,255,255,.18);
+  border-radius: 9px 10px 4px 4px;
+  color: rgba(var(--lcos-ui-context-rgb), .70);
+  background: linear-gradient(180deg, rgba(253,254,255,.99), rgba(var(--lcos-ui-context-rgb), .065));
+  box-shadow: 0 -2px 7px rgba(36,42,53,.025), inset 0 1px 0 rgba(255,255,255,.94);
+  font-size: 8px;
+  font-weight: 650;
+  letter-spacing: .045em;
+}
+
+/* Context = a researched dossier. The rear pages expose that real materials
+   are inside; the front cover exposes a small interpretation structure. */
+.lcos-reconstructed .lcos-context-projection {
+  isolation: isolate;
+}
+.lcos-reconstructed .lcos-context-dossier-back {
+  position: absolute;
+  z-index: 0;
+  inset: 7px 10px 18px 12px;
+  pointer-events: none;
+}
+.lcos-reconstructed .lcos-context-dossier-back > i {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 0;
+  bottom: 11px;
+  border: 1px solid rgba(50,54,65,.085);
+  border-radius: 10px 12px 9px 11px;
+  background: rgba(255,255,255,.90);
+  box-shadow: 0 5px 13px rgba(38,43,54,.045);
+  transform-origin: 50% 90%;
+  transition: transform 240ms cubic-bezier(.22,1,.36,1), opacity 170ms ease;
+}
+.lcos-reconstructed .lcos-context-dossier-back > i:first-child { transform: translate(-4px,-1px) rotate(-2.2deg); }
+.lcos-reconstructed .lcos-context-dossier-back > i:last-child { transform: translate(5px,2px) rotate(2deg); opacity: .84; }
+.lcos-reconstructed .lcos-context-dossier-face {
+  position: absolute;
+  z-index: 2;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: calc(100% - 16px);
+  min-height: 96px;
+  display: grid;
+  grid-template-rows: auto minmax(40px,1fr) auto;
+  gap: 7px;
+  padding: 14px 12px 10px;
+  border: 1px solid rgba(var(--lcos-ui-context-rgb), .15);
+  border-radius: 13px 14px 15px 15px;
+  background:
+    linear-gradient(150deg, rgba(252,253,255,.985), rgba(var(--lcos-ui-context-rgb), .065)),
+    rgba(249,250,252,.98);
+  box-shadow: 0 8px 20px rgba(35,42,54,.07), inset 0 1px 0 rgba(255,255,255,.94);
+  transition: transform 220ms cubic-bezier(.22,1,.36,1), border-color 160ms ease, box-shadow 180ms ease;
+}
+.lcos-reconstructed .lcos-context-dossier-preview {
+  position: relative;
+  min-height: 43px;
+  display: grid;
+  grid-template-columns: minmax(0,1fr) minmax(0,.78fr);
+  gap: 7px;
+  padding: 6px;
+  overflow: hidden;
+  border: 1px solid rgba(var(--lcos-ui-context-rgb), .07);
+  border-radius: 9px;
+  background: rgba(255,255,255,.47);
+}
+.lcos-reconstructed .lcos-projection-preview-tile {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid rgba(48,52,63,.075);
+  border-radius: 6px 7px 6px 7px;
+  background: rgba(250,250,251,.88);
+  box-shadow: 0 2px 6px rgba(39,44,55,.035);
+}
+.lcos-reconstructed .lcos-projection-preview-tile > img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+.lcos-reconstructed .lcos-projection-preview-tile > i {
+  position: absolute;
+  left: 7px;
+  right: 8px;
+  top: 8px;
+  height: 2px;
+  border-radius: 999px;
+  background: rgba(43,48,59,.13);
+  box-shadow: 0 6px 0 rgba(43,48,59,.085), 0 12px 0 rgba(43,48,59,.055);
+}
+.lcos-reconstructed .lcos-projection-preview-tile > b {
+  position: absolute;
+  left: 7px;
+  right: 5px;
+  bottom: 5px;
+  overflow: hidden;
+  color: rgba(42,46,57,.34);
+  font-size: 6.8px;
+  font-weight: 580;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lcos-reconstructed .lcos-projection-fallback-copy,
+.lcos-reconstructed .lcos-projection-fallback-image {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(48,52,63,.07);
+  border-radius: 6px;
+  background: rgba(251,251,252,.82);
+}
+.lcos-reconstructed .lcos-projection-fallback-copy i {
+  position: absolute;
+  left: 7px;
+  right: 8px;
+  height: 2px;
+  border-radius: 2px;
+  background: rgba(43,48,59,.10);
+}
+.lcos-reconstructed .lcos-projection-fallback-copy i:nth-child(1) { top: 9px; }
+.lcos-reconstructed .lcos-projection-fallback-copy i:nth-child(2) { top: 16px; right: 17px; }
+.lcos-reconstructed .lcos-projection-fallback-copy i:nth-child(3) { top: 23px; right: 12px; }
+.lcos-reconstructed .lcos-projection-fallback-image {
+  background: linear-gradient(145deg, rgba(var(--lcos-ui-context-rgb), .055), rgba(244,245,248,.84));
+}
+.lcos-reconstructed .lcos-context-preview-relation {
+  position: absolute;
+  left: 42%;
+  top: 48%;
+  width: 21%;
+  height: 11px;
+  pointer-events: none;
+}
+.lcos-reconstructed .lcos-context-preview-relation > i {
+  position: absolute;
+  left: 0;
+  top: 5px;
+  width: 100%;
+  height: 1px;
+  background: rgba(var(--lcos-ui-context-rgb), .28);
+  transform: rotate(-8deg);
+  transform-origin: left center;
+}
+.lcos-reconstructed .lcos-context-preview-relation > b {
+  position: absolute;
+  right: -1px;
+  top: 1px;
+  width: 4px;
+  height: 4px;
+  border: 1px solid rgba(var(--lcos-ui-context-rgb), .34);
+  border-radius: 2px;
+  background: rgba(253,253,255,.94);
+}
+.lcos-reconstructed .lcos-context-dossier-meta {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: rgba(44,49,61,.40);
+  font-size: 7.8px;
+}
+.lcos-reconstructed .lcos-context-dossier-meta > i { width: 2px; height: 2px; border-radius: 50%; background: currentColor; opacity: .7; }
+.lcos-reconstructed .canvas-node[data-entity-kind="context"]:hover .lcos-context-dossier-face,
+.lcos-reconstructed .canvas-node[data-entity-kind="context"].selected .lcos-context-dossier-face {
+  transform: translateY(-2px);
+  border-color: rgba(var(--lcos-ui-context-rgb), .25);
+  box-shadow: 0 12px 27px rgba(35,42,54,.095), inset 0 1px 0 rgba(255,255,255,.95);
+}
+.lcos-reconstructed .canvas-node[data-entity-kind="context"]:hover .lcos-context-dossier-back > i:first-child { transform: translate(-7px,-4px) rotate(-3.5deg); }
+.lcos-reconstructed .canvas-node[data-entity-kind="context"]:hover .lcos-context-dossier-back > i:last-child { transform: translate(8px,-1px) rotate(3deg); }
+
+/* Context quick lenses live beside the object and appear only after selection.
+   Single click = select/show choices. Double click stays the direct Space path. */
+.lcos-reconstructed .lcos-context-lens-launcher {
+  position: absolute;
+  z-index: 24;
+  left: calc(100% + 8px);
+  top: 50%;
+  width: 38px;
+  display: grid;
+  gap: 3px;
+  padding: 3px;
+  transform: translateY(-50%);
+  border: 1px solid rgba(51,46,64,.10);
+  border-radius: 11px;
+  background: rgba(253,253,255,.96);
+  box-shadow: 0 8px 20px rgba(39,35,51,.095), inset 0 1px 0 rgba(255,255,255,.94);
+  backdrop-filter: blur(10px) saturate(108%);
+}
+.lcos-reconstructed .lcos-context-lens-launcher button {
+  position: relative;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  color: rgba(var(--lcos-ui-context-rgb), .70);
+  background: transparent;
+  cursor: pointer;
+  transition: transform 140ms cubic-bezier(.22,1,.36,1), background 120ms ease, color 120ms ease;
+}
+.lcos-reconstructed .lcos-context-lens-launcher button:hover {
+  transform: translateX(1px);
+  color: rgba(var(--lcos-ui-context-rgb), .96);
+  background: rgba(var(--lcos-ui-context-rgb), .075);
+}
+.lcos-reconstructed .lcos-context-lens-launcher button > span {
+  position: absolute;
+  left: calc(100% + 7px);
+  top: 50%;
+  padding: 3px 6px;
+  transform: translate(-3px,-50%);
+  border: 1px solid rgba(51,46,64,.08);
+  border-radius: 6px;
+  color: rgba(38,40,48,.68);
+  background: rgba(253,253,255,.97);
+  box-shadow: 0 4px 10px rgba(39,35,51,.055);
+  font-size: 8px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 100ms ease, transform 130ms cubic-bezier(.22,1,.36,1);
+}
+.lcos-reconstructed .lcos-context-lens-launcher button:hover > span { opacity: 1; transform: translate(0,-50%); }
+
+/* Workflow = an action folio. The route mark is morphology only until the
+   Workflow Step contract exists; real materials appear as attachment tabs. */
+.lcos-reconstructed .lcos-workflow-projection { isolation: isolate; }
+.lcos-reconstructed .lcos-workflow-folio-sheet {
+  position: absolute;
+  z-index: 0;
+  left: 9px;
+  right: 8px;
+  top: 10px;
+  bottom: 12px;
+  border: 1px solid rgba(var(--lcos-ui-workflow-rgb), .085);
+  border-radius: 11px;
+  background: rgba(252,251,254,.88);
+  box-shadow: 0 5px 13px rgba(42,37,55,.04);
+  transform-origin: 50% 80%;
+  transition: transform 220ms cubic-bezier(.22,1,.36,1), opacity 160ms ease;
+}
+.lcos-reconstructed .lcos-workflow-folio-sheet.back { transform: translate(-3px,1px) rotate(-1.7deg); opacity: .68; }
+.lcos-reconstructed .lcos-workflow-folio-sheet.middle { transform: translate(4px,3px) rotate(1.5deg); opacity: .83; }
+.lcos-reconstructed .lcos-workflow-folio-face {
+  position: absolute;
+  z-index: 2;
+  inset: 4px 0 0;
+  display: grid;
+  grid-template-rows: auto minmax(34px,1fr) 25px;
+  gap: 8px;
+  padding: 11px 12px 9px;
+  overflow: hidden;
+  border: 1px solid rgba(var(--lcos-ui-workflow-rgb), .15);
+  border-radius: 12px 13px 13px 13px;
+  background: linear-gradient(145deg, rgba(253,252,255,.985), rgba(var(--lcos-ui-workflow-rgb), .055));
+  box-shadow: 0 8px 20px rgba(40,35,54,.067), inset 0 1px 0 rgba(255,255,255,.95);
+  transition: transform 220ms cubic-bezier(.22,1,.36,1), border-color 160ms ease, box-shadow 180ms ease;
+}
+.lcos-reconstructed .lcos-workflow-kicker {
+  color: rgba(var(--lcos-ui-workflow-rgb), .72);
+  font-size: 7.8px;
+  font-weight: 680;
+  letter-spacing: .055em;
+  text-transform: uppercase;
+}
+.lcos-reconstructed .lcos-workflow-route-mark {
+  position: relative;
+  display: grid;
+  grid-template-columns: 15px 1fr 15px 1fr 15px;
+  align-items: center;
+  gap: 3px;
+  padding: 0 10px;
+}
+.lcos-reconstructed .lcos-workflow-route-mark > i {
+  position: relative;
+  width: 15px;
+  height: 15px;
+  border: 1px solid rgba(var(--lcos-ui-workflow-rgb), .22);
+  border-radius: 5px;
+  background: rgba(255,255,255,.76);
+  box-shadow: 0 2px 5px rgba(48,42,62,.035);
+}
+.lcos-reconstructed .lcos-workflow-route-mark > i::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  top: 6px;
+  height: 1px;
+  background: rgba(var(--lcos-ui-workflow-rgb), .24);
+}
+.lcos-reconstructed .lcos-workflow-route-mark > b {
+  position: relative;
+  height: 1px;
+  background: rgba(var(--lcos-ui-workflow-rgb), .24);
+}
+.lcos-reconstructed .lcos-workflow-route-mark > b::after {
+  content: "";
+  position: absolute;
+  right: -1px;
+  top: -2px;
+  width: 4px;
+  height: 4px;
+  border-top: 1px solid rgba(var(--lcos-ui-workflow-rgb), .34);
+  border-right: 1px solid rgba(var(--lcos-ui-workflow-rgb), .34);
+  transform: rotate(45deg);
+}
+.lcos-reconstructed .lcos-workflow-attachment-strip {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  padding-left: 3px;
+}
+.lcos-reconstructed .lcos-workflow-attachment,
+.lcos-reconstructed .lcos-workflow-attachment-strip > span {
+  position: relative;
+  width: 30px;
+  height: 21px;
+  overflow: hidden;
+  border: 1px solid rgba(53,49,64,.08);
+  border-radius: 4px 5px 5px 5px;
+  background: rgba(255,255,255,.68);
+  box-shadow: 0 2px 5px rgba(40,36,52,.035);
+}
+.lcos-reconstructed .lcos-workflow-attachment:nth-child(2) { transform: translateY(-2px); }
+.lcos-reconstructed .lcos-workflow-attachment:nth-child(3) { transform: translateY(-1px); }
+.lcos-reconstructed .lcos-workflow-attachment > img { width: 100%; height: 100%; display: block; object-fit: cover; }
+.lcos-reconstructed .lcos-workflow-attachment > i { position: absolute; left: 5px; right: 5px; top: 6px; height: 2px; background: rgba(45,48,58,.11); box-shadow: 0 5px 0 rgba(45,48,58,.07); }
+.lcos-reconstructed .canvas-node[data-entity-kind="workflow"]:hover .lcos-workflow-folio-face,
+.lcos-reconstructed .canvas-node[data-entity-kind="workflow"].selected .lcos-workflow-folio-face {
+  transform: translateY(-2px);
+  border-color: rgba(var(--lcos-ui-workflow-rgb), .25);
+  box-shadow: 0 12px 27px rgba(40,35,54,.092), inset 0 1px 0 rgba(255,255,255,.95);
+}
+.lcos-reconstructed .canvas-node[data-entity-kind="workflow"]:hover .lcos-workflow-folio-sheet.back { transform: translate(-5px,-2px) rotate(-2.6deg); }
+.lcos-reconstructed .canvas-node[data-entity-kind="workflow"]:hover .lcos-workflow-folio-sheet.middle { transform: translate(6px,0) rotate(2.3deg); }
+
+/* Workspace = a saved spatial board snapshot. It uses actual member positions
+   normalized into the miniature scene, so its body describes a place, not a list. */
+.lcos-reconstructed .lcos-workspace-projection {
+  display: grid;
+  grid-template-rows: minmax(0,1fr) auto;
+  gap: 6px;
+  padding: 0 1px;
+}
+.lcos-reconstructed .lcos-workspace-board-rim {
+  position: relative;
+  min-height: 67px;
+  overflow: hidden;
+  border: 1px solid rgba(54,58,68,.115);
+  border-radius: 10px 12px 11px 11px;
+  background: rgba(248,248,250,.92);
+  box-shadow: 0 7px 18px rgba(38,42,52,.065), inset 0 1px 0 rgba(255,255,255,.92);
+  transition: transform 220ms cubic-bezier(.22,1,.36,1), border-color 160ms ease, box-shadow 180ms ease;
+}
+.lcos-reconstructed .lcos-workspace-board-rim::before {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  border: 1px solid rgba(54,58,68,.055);
+  border-radius: 7px;
+  pointer-events: none;
+}
+.lcos-reconstructed .lcos-workspace-board-scene {
+  position: absolute;
+  inset: 8px 9px;
+  overflow: hidden;
+  border-radius: 6px;
+  background:
+    radial-gradient(circle at 1px 1px, rgba(60,63,73,.07) .7px, transparent .8px) 0 0 / 11px 11px,
+    rgba(253,253,254,.74);
+}
+.lcos-reconstructed .lcos-workspace-mini-object {
+  position: absolute;
+  min-width: 9px;
+  min-height: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(55,58,68,.11);
+  border-radius: 3px;
+  background: rgba(255,255,255,.90);
+  box-shadow: 0 1px 3px rgba(42,45,54,.04);
+}
+.lcos-reconstructed .lcos-workspace-mini-object > img { width: 100%; height: 100%; display: block; object-fit: cover; }
+.lcos-reconstructed .lcos-workspace-mini-object.kind-image { border-radius: 4px; background: rgba(231,232,236,.92); }
+.lcos-reconstructed .lcos-workspace-mini-object.kind-markdown,
+.lcos-reconstructed .lcos-workspace-mini-object.kind-pdf,
+.lcos-reconstructed .lcos-workspace-mini-object.kind-ppt { background: linear-gradient(145deg, rgba(255,255,255,.96), rgba(241,242,245,.90)); }
+.lcos-reconstructed .lcos-workspace-mini-object.seed-a { left: 8%; top: 12%; width: 27%; height: 31%; transform: rotate(-1deg); }
+.lcos-reconstructed .lcos-workspace-mini-object.seed-b { left: 45%; top: 27%; width: 34%; height: 24%; }
+.lcos-reconstructed .lcos-workspace-mini-object.seed-c { left: 27%; top: 61%; width: 24%; height: 21%; transform: rotate(1deg); }
+.lcos-reconstructed .lcos-workspace-projection-caption {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+  padding: 0 3px;
+}
+.lcos-reconstructed .lcos-workspace-projection-caption strong {
+  overflow: hidden;
+  color: rgba(35,39,48,.86);
+  font-size: 10.5px;
+  font-weight: 630;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lcos-reconstructed .lcos-workspace-projection-caption small {
+  overflow: hidden;
+  color: rgba(44,49,61,.42);
+  font-size: 8.2px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lcos-reconstructed .canvas-node[data-entity-kind="workspace"]:hover .lcos-workspace-board-rim,
+.lcos-reconstructed .canvas-node[data-entity-kind="workspace"].selected .lcos-workspace-board-rim {
+  transform: translateY(-2px);
+  border-color: rgba(72,73,84,.19);
+  box-shadow: 0 11px 24px rgba(38,42,52,.09), inset 0 1px 0 rgba(255,255,255,.94);
+}
+
+/* System projections own their silhouettes; the generic resize/edge affordances
+   stay contextual and never become permanent chrome. */
+.lcos-reconstructed .canvas-node[data-entity-kind="context"]::before,
+.lcos-reconstructed .canvas-node[data-entity-kind="context"]::after,
+.lcos-reconstructed .canvas-node[data-entity-kind="workflow"]::before,
+.lcos-reconstructed .canvas-node[data-entity-kind="workflow"]::after,
+.lcos-reconstructed .canvas-node[data-entity-kind="workspace"]::before,
+.lcos-reconstructed .canvas-node[data-entity-kind="workspace"]::after { display: none !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  .lcos-reconstructed .lcos-context-dossier-back > i,
+  .lcos-reconstructed .lcos-context-dossier-face,
+  .lcos-reconstructed .lcos-workflow-folio-sheet,
+  .lcos-reconstructed .lcos-workflow-folio-face,
+  .lcos-reconstructed .lcos-workspace-board-rim,
+  .lcos-reconstructed .lcos-context-lens-launcher button { transition-duration: 1ms !important; transform: none !important; }
+}
+
+/* R6 Context completion: Space projects the same hierarchy edited by Structure
+   as low-chrome reading regions. Regions are derived Presentation only. */
+.lcos-reconstructed .lcos-context-understanding-regions {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+.lcos-reconstructed .lcos-context-understanding-region {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1px solid rgba(var(--lcos-ui-context-rgb), .085);
+  border-radius: 13px;
+  background: rgba(var(--lcos-ui-context-rgb), .018);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.42);
+  transition: left 360ms cubic-bezier(.22,1,.36,1), top 360ms cubic-bezier(.22,1,.36,1), width 360ms cubic-bezier(.22,1,.36,1), height 360ms cubic-bezier(.22,1,.36,1), opacity 180ms ease;
+}
+.lcos-reconstructed .lcos-context-understanding-region > span {
+  position: absolute;
+  left: 10px;
+  top: -18px;
+  max-width: 210px;
+  overflow: hidden;
+  color: rgba(var(--lcos-ui-context-rgb), .58);
+  font-size: 9px;
+  font-weight: 640;
+  line-height: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lcos-reconstructed .lcos-context-understanding-region > small {
+  position: absolute;
+  right: 9px;
+  top: -18px;
+  color: rgba(47,52,62,.28);
+  font-size: 7.5px;
+  line-height: 15px;
+}
+.lcos-reconstructed .lcos-context-space-edges { z-index: 1; }
+.lcos-reconstructed .lcos-context-space-node { z-index: 2; }
+.lcos-reconstructed .lcos-context-space-edges marker path { fill: rgba(var(--lcos-ui-context-rgb), .36); }
+.lcos-reconstructed .lcos-context-space-edges .lcos-context-relation > path {
+  fill: none;
+  stroke: rgba(var(--lcos-ui-context-rgb), .22);
+  stroke-width: 1.05;
+  vector-effect: non-scaling-stroke;
+  transition: stroke 150ms ease, stroke-width 150ms ease, opacity 150ms ease;
+}
+.lcos-reconstructed .lcos-context-space-edges .lcos-context-relation.relation-reference > path { stroke: rgba(70,75,86,.16); }
+.lcos-reconstructed .lcos-context-space-edges .lcos-context-relation.relation-feedback > path { stroke-dasharray: 4 3; stroke: rgba(var(--lcos-ui-context-rgb), .31); }
+.lcos-reconstructed .lcos-context-space-edges .lcos-context-relation.relation-modify > path,
+.lcos-reconstructed .lcos-context-space-edges .lcos-context-relation.relation-generate > path { stroke: rgba(var(--lcos-ui-context-rgb), .34); }
+.lcos-reconstructed .lcos-context-space-edges .lcos-context-relation.relation-hierarchy > path { stroke: rgba(var(--lcos-ui-context-rgb), .28); }
+.lcos-reconstructed .lcos-context-space-edges .lcos-context-relation.is-conflict > path { stroke-dasharray: 2 3; stroke: rgba(132,77,84,.52); }
+.lcos-reconstructed .lcos-context-space-edges .lcos-context-relation > text {
+  fill: rgba(54,58,69,.50);
+  font-size: 8px;
+  font-weight: 560;
+  opacity: 0;
+  paint-order: stroke;
+  stroke: rgba(252,252,253,.94);
+  stroke-width: 4px;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+.lcos-reconstructed .lcos-context-space-edges .lcos-context-relation:hover > path,
+.lcos-reconstructed .lcos-context-space-edges .lcos-context-relation.active > path { stroke-width: 1.35; }
+.lcos-reconstructed .lcos-context-space-edges .lcos-context-relation:hover > text,
+.lcos-reconstructed .lcos-context-space-edges .lcos-context-relation.active > text { opacity: 1; }
+
+/* R7 Workflow completion: Step is a Presentation action; material is still the
+   real Project object. Ports and the strong directional skeleton belong to Step. */
+.lcos-reconstructed .lcos-workflow-step-composer {
+  position: absolute;
+  z-index: 46;
+  left: 50%;
+  top: 66px;
+  display: grid;
+  grid-template-columns: minmax(190px,1fr) minmax(220px,340px) auto auto;
+  align-items: center;
+  gap: 8px;
+  width: min(760px, calc(100% - 80px));
+  padding: 8px 9px 8px 12px;
+  transform: translateX(-50%);
+  border: 1px solid rgba(var(--lcos-ui-workflow-rgb), .13);
+  border-radius: 12px;
+  background: rgba(253,253,254,.97);
+  box-shadow: 0 13px 32px rgba(37,34,46,.11), inset 0 1px 0 rgba(255,255,255,.96);
+  backdrop-filter: blur(12px) saturate(110%);
+}
+.lcos-reconstructed .lcos-workflow-step-composer > span { min-width: 0; display: grid; gap: 2px; }
+.lcos-reconstructed .lcos-workflow-step-composer > span strong { color: rgba(35,38,47,.84); font-size: 10.5px; }
+.lcos-reconstructed .lcos-workflow-step-composer > span small { color: rgba(49,52,62,.42); font-size: 8px; }
+.lcos-reconstructed .lcos-workflow-step-composer input {
+  height: 31px;
+  padding: 0 10px;
+  border: 1px solid rgba(55,58,68,.11);
+  border-radius: 9px;
+  outline: 0;
+  color: rgba(34,37,45,.82);
+  background: rgba(249,249,251,.96);
+  font-size: 10px;
+}
+.lcos-reconstructed .lcos-workflow-step-composer input:focus { border-color: rgba(var(--lcos-ui-workflow-rgb), .28); box-shadow: 0 0 0 2px rgba(var(--lcos-ui-workflow-rgb), .055); }
+.lcos-reconstructed .lcos-workflow-step-composer > button { height: 29px; padding: 0 10px; border: 0; border-radius: 8px; color: rgba(255,255,255,.94); background: rgba(var(--lcos-ui-workflow-rgb), .76); font-size: 9px; cursor: pointer; }
+.lcos-reconstructed .lcos-workflow-step-composer > button.quiet { color: rgba(51,53,61,.55); background: transparent; }
+
+.lcos-reconstructed .lcos-workflow-step-empty {
+  position: absolute;
+  z-index: 18;
+  left: 50%;
+  top: 84px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 9px 8px 12px;
+  transform: translateX(-50%);
+  border: 1px solid rgba(var(--lcos-ui-workflow-rgb), .10);
+  border-radius: 11px;
+  background: rgba(252,252,253,.93);
+  box-shadow: 0 7px 20px rgba(41,38,50,.055);
+}
+.lcos-reconstructed .lcos-workflow-step-empty > span { display: grid; gap: 1px; }
+.lcos-reconstructed .lcos-workflow-step-empty strong { color: rgba(40,42,50,.75); font-size: 9.5px; }
+.lcos-reconstructed .lcos-workflow-step-empty small { color: rgba(50,52,60,.40); font-size: 7.8px; }
+.lcos-reconstructed .lcos-workflow-step-empty > button { display: inline-flex; align-items: center; gap: 4px; height: 27px; padding: 0 9px; border: 0; border-radius: 8px; color: rgba(var(--lcos-ui-workflow-rgb), .82); background: rgba(var(--lcos-ui-workflow-rgb), .075); font-size: 8.5px; cursor: pointer; }
+
+.lcos-reconstructed .lcos-workflow-action {
+  position: absolute;
+  z-index: 4;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: 29px minmax(0,1fr) auto;
+  grid-template-rows: minmax(36px,1fr) 22px;
+  column-gap: 8px;
+  padding: 9px 9px 7px 8px;
+  border: 1px solid rgba(var(--lcos-ui-workflow-rgb), .15);
+  border-radius: 12px;
+  background: linear-gradient(145deg, rgba(254,253,255,.985), rgba(var(--lcos-ui-workflow-rgb), .045));
+  box-shadow: 0 7px 18px rgba(41,37,51,.06), inset 0 1px 0 rgba(255,255,255,.96);
+  cursor: grab;
+  transition: transform 170ms cubic-bezier(.22,1,.36,1), border-color 150ms ease, box-shadow 160ms ease;
+}
+.lcos-reconstructed .lcos-workflow-action:hover,
+.lcos-reconstructed .lcos-workflow-action.selected { border-color: rgba(var(--lcos-ui-workflow-rgb), .29); box-shadow: 0 10px 25px rgba(41,37,51,.09), inset 0 1px 0 rgba(255,255,255,.96); }
+.lcos-reconstructed .lcos-workflow-action.is-dragging { cursor: grabbing; transform: scale(1.012); box-shadow: 0 15px 33px rgba(41,37,51,.13); }
+.lcos-reconstructed .lcos-workflow-action.is-link-target { border-color: rgba(var(--lcos-ui-workflow-rgb), .45); box-shadow: 0 0 0 3px rgba(var(--lcos-ui-workflow-rgb), .065), 0 10px 25px rgba(41,37,51,.08); }
+.lcos-reconstructed .lcos-workflow-action-index {
+  grid-row: 1 / span 2;
+  display: grid;
+  place-items: start center;
+  padding-top: 2px;
+  color: rgba(var(--lcos-ui-workflow-rgb), .56);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: .08em;
+}
+.lcos-reconstructed .lcos-workflow-action-copy { min-width: 0; display: grid; align-content: start; gap: 3px; }
+.lcos-reconstructed .lcos-workflow-action-copy strong { overflow: hidden; color: rgba(33,36,45,.86); font-size: 11px; font-weight: 650; line-height: 1.22; text-overflow: ellipsis; white-space: nowrap; }
+.lcos-reconstructed .lcos-workflow-action-copy small { color: rgba(47,50,59,.39); font-size: 8px; }
+.lcos-reconstructed .lcos-workflow-action-attachments {
+  grid-column: 2;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+  color: rgba(var(--lcos-ui-workflow-rgb), .45);
+}
+.lcos-reconstructed .lcos-workflow-action-attachments > span {
+  min-width: 0;
+  max-width: 92px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 4px 2px 5px;
+  overflow: hidden;
+  border: 1px solid rgba(54,55,64,.07);
+  border-radius: 5px;
+  color: rgba(49,51,59,.48);
+  background: rgba(255,255,255,.63);
+  font-size: 7px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lcos-reconstructed .lcos-workflow-action-attachments > span > button { flex: none; width: 11px; height: 11px; padding: 0; border: 0; color: rgba(50,52,60,.34); background: transparent; font-size: 9px; line-height: 10px; cursor: pointer; }
+.lcos-reconstructed .lcos-workflow-action-attachments > em { color: rgba(50,52,60,.34); font-size: 7px; font-style: normal; }
+.lcos-reconstructed .lcos-workflow-action-tools { grid-column: 3; grid-row: 1 / span 2; display: flex; align-items: flex-start; gap: 2px; opacity: 0; transition: opacity 120ms ease; }
+.lcos-reconstructed .lcos-workflow-action:hover .lcos-workflow-action-tools,
+.lcos-reconstructed .lcos-workflow-action.selected .lcos-workflow-action-tools { opacity: 1; }
+.lcos-reconstructed .lcos-workflow-action-tools button { width: 23px; height: 23px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 6px; color: rgba(53,55,64,.45); background: transparent; cursor: pointer; }
+.lcos-reconstructed .lcos-workflow-action-tools button:hover:not(:disabled) { color: rgba(var(--lcos-ui-workflow-rgb), .82); background: rgba(var(--lcos-ui-workflow-rgb), .065); }
+.lcos-reconstructed .lcos-workflow-action-tools button:disabled { opacity: .26; cursor: default; }
+
+.lcos-reconstructed .lcos-workflow-action .lcos-workflow-port { opacity: 0; transition: opacity 110ms ease, transform 130ms cubic-bezier(.22,1,.36,1); }
+.lcos-reconstructed .lcos-workflow-action:hover .lcos-workflow-port,
+.lcos-reconstructed .lcos-workflow-action.selected .lcos-workflow-port,
+.lcos-reconstructed .lcos-workflow-action.is-link-target .lcos-workflow-port,
+.lcos-reconstructed .lcos-workflow-action.is-link-source .lcos-workflow-port { opacity: 1; }
+.lcos-reconstructed .lcos-workflow-action .lcos-workflow-port.output { display: grid; place-items: center; }
+.lcos-reconstructed .lcos-workflow-action .lcos-workflow-port.output svg { pointer-events: none; }
+
+.lcos-reconstructed .lcos-workflow-edges marker path { fill: rgba(var(--lcos-ui-workflow-rgb), .43); }
+.lcos-reconstructed .lcos-workflow-action-edge { cursor: pointer; }
+.lcos-reconstructed .lcos-workflow-action-edge > path {
+  fill: none;
+  stroke: rgba(var(--lcos-ui-workflow-rgb), .37);
+  stroke-width: 1.35;
+  vector-effect: non-scaling-stroke;
+  transition: stroke 140ms ease, stroke-width 140ms ease;
+}
+.lcos-reconstructed .lcos-workflow-action-edge:hover > path,
+.lcos-reconstructed .lcos-workflow-action-edge.selected > path { stroke: rgba(var(--lcos-ui-workflow-rgb), .68); stroke-width: 1.7; }
+.lcos-reconstructed .lcos-workflow-action-edge > text { fill: rgba(51,49,60,.50); font-size: 8px; paint-order: stroke; stroke: rgba(252,252,253,.96); stroke-width: 4px; }
+.lcos-reconstructed .lcos-workflow-edge-group.material-relation { opacity: .52; }
+.lcos-reconstructed .lcos-workflow-edge-group.material-relation:hover,
+.lcos-reconstructed .lcos-workflow-edge-group.material-relation.selected { opacity: .88; }
+
+.lcos-reconstructed .lcos-workflow-material { z-index: 3; }
+.lcos-reconstructed .lcos-workflow-material.is-attached::before {
+  content: "";
+  position: absolute;
+  left: -8px;
+  top: 11px;
+  bottom: 11px;
+  width: 1px;
+  border-radius: 999px;
+  background: rgba(var(--lcos-ui-workflow-rgb), .15);
+}
+.lcos-reconstructed .lcos-workflow-material .lcos-workflow-port { display: none !important; }
+.lcos-reconstructed .lcos-workflow-edge-inspector.action-edge { border-color: rgba(var(--lcos-ui-workflow-rgb), .17); }
+
+@media (prefers-reduced-motion: reduce) {
+  .lcos-reconstructed .lcos-workflow-action,
+  .lcos-reconstructed .lcos-workflow-action-edge > path { transition-duration: 0.01ms !important; }
+}
+
+/* -----------------------------------------------------------------------
+   R8 — Spatial-style material morphology completion
+   Material body communicates identity; the 16×16 system signal no longer
+   moonlights as a PDF/Markdown/file-format badge.
+   ----------------------------------------------------------------------- */
+.lcos-reconstructed .lcos-material-paper-fallback {
+  position: relative;
+  min-height: 78px;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 7px;
+  overflow: hidden;
+  padding: 10px 11px 9px;
+  border: 1px solid rgba(53,49,62,.09);
+  border-radius: 7px 11px 9px 8px;
+  color: rgba(42,39,50,.74);
+  background:
+    linear-gradient(180deg, rgba(255,255,254,.99), rgba(250,250,248,.95));
+  box-shadow: 0 6px 17px rgba(42,37,54,.055), inset 0 1px 0 rgba(255,255,255,.98);
+}
+.lcos-reconstructed .lcos-material-paper-fallback::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(60,54,72,.024) 1px, transparent 1px);
+  background-size: 19px 100%;
+  opacity: .38;
+}
+.lcos-reconstructed .lcos-material-paper-fold,
+.lcos-reconstructed .lcos-collapsed-note-fold {
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  width: 17px;
+  height: 17px;
+  border-left: 1px solid rgba(59,53,71,.08);
+  border-bottom: 1px solid rgba(59,53,71,.08);
+  border-bottom-left-radius: 5px;
+  background: linear-gradient(225deg, rgba(244,244,246,.96) 0 49%, rgba(255,255,255,0) 50%);
+}
+.lcos-reconstructed .lcos-material-paper-type {
+  position: relative;
+  width: max-content;
+  color: rgba(50,46,59,.48);
+  font: 700 8px/1 "JetBrains Mono", monospace;
+  letter-spacing: .08em;
+}
+.lcos-reconstructed .lcos-material-paper-lines {
+  position: relative;
+  display: grid;
+  align-content: center;
+  gap: 5px;
+}
+.lcos-reconstructed .lcos-material-paper-lines i {
+  display: block;
+  height: 2px;
+  border-radius: 999px;
+  background: rgba(53,49,62,.075);
+}
+.lcos-reconstructed .lcos-material-paper-lines i:nth-child(1) { width: 72%; background: rgba(53,49,62,.12); }
+.lcos-reconstructed .lcos-material-paper-lines i:nth-child(2) { width: 87%; }
+.lcos-reconstructed .lcos-material-paper-lines i:nth-child(3) { width: 63%; }
+.lcos-reconstructed .lcos-material-paper-lines i:nth-child(4) { width: 79%; }
+.lcos-reconstructed .lcos-material-paper-fallback > small {
+  position: relative;
+  color: rgba(61,57,69,.35);
+  font-size: 8.5px;
+}
+.lcos-reconstructed .lcos-material-paper-fallback.paper-pdf::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 21px;
+  bottom: 9px;
+  width: 2px;
+  border-radius: 0 2px 2px 0;
+  background: rgba(191,89,102,.22);
+}
+.lcos-reconstructed .lcos-material-paper-fallback.paper-ppt::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  top: 26px;
+  height: 31px;
+  border: 1px solid rgba(53,49,62,.07);
+  border-radius: 4px;
+  background: linear-gradient(150deg, rgba(var(--lcos-ui-signal-rgb),.045), rgba(255,255,255,.55));
+}
+.lcos-reconstructed .lcos-material-paper-archive {
+  position: absolute;
+  right: 9px;
+  bottom: 8px;
+  width: 19px;
+  height: 19px;
+  display: grid;
+  place-items: center;
+  color: rgba(54,50,62,.32);
+}
+.lcos-reconstructed .lcos-material-paper-archive svg { width: 15px; height: 15px; }
+.lcos-reconstructed .lcos-note-object.is-collapsed-material {
+  grid-template-columns: 42px minmax(0,1fr);
+  padding: 6px 7px;
+  background: transparent;
+}
+.lcos-reconstructed .lcos-collapsed-note-paper {
+  position: relative;
+  width: 40px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid rgba(55,50,64,.09);
+  border-radius: 5px 8px 6px 5px;
+  color: rgba(63,58,72,.42);
+  background: rgba(255,255,252,.96);
+  box-shadow: 0 4px 10px rgba(42,37,54,.045);
+}
+.lcos-reconstructed .lcos-collapsed-note-paper > svg { width: 13px; height: 13px; transform: translateY(-6px); opacity: .58; }
+.lcos-reconstructed .lcos-collapsed-note-paper > span:not(.lcos-collapsed-note-fold) {
+  position: absolute;
+  left: 7px;
+  right: 6px;
+  top: 25px;
+  display: grid;
+  gap: 3px;
+}
+.lcos-reconstructed .lcos-collapsed-note-paper > span > i { height: 1.5px; border-radius: 2px; background: rgba(55,50,64,.09); }
+.lcos-reconstructed .lcos-collapsed-note-paper > span > i:nth-child(2) { width: 72%; }
+.lcos-reconstructed .lcos-collapsed-note-paper > span > i:nth-child(3) { width: 84%; }
+.lcos-reconstructed .lcos-collapsed-note-paper > small { display: none; }
+.lcos-reconstructed .lcos-system-object-mark { width: 18px; height: 18px; display: grid; place-items: center; color: rgba(var(--lcos-ui-signal-rgb),.7); }
+.lcos-reconstructed .lcos-system-object-mark svg { width: 15px; height: 15px; }
+
+/* -----------------------------------------------------------------------
+   R9 — LCOS 16×16 Dynamic Language V1
+   One seed, multiple semantic postures. This is action/state language only.
+   ----------------------------------------------------------------------- */
+.lcos-reconstructed .lcos-signal-glyph {
+  width: 16px;
+  height: 16px;
+  overflow: visible;
+  color: rgba(var(--lcos-ui-signal-rgb), .64);
+  pointer-events: none;
+}
+.lcos-reconstructed .lcos-signal-cell {
+  fill: currentColor;
+  opacity: .62;
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform 180ms var(--lcos-ui-ease-out), opacity 180ms ease, filter 180ms ease;
+}
+.lcos-reconstructed .lcos-node-system-signal,
+.lcos-reconstructed .lcos-surface-system-signal,
+.lcos-reconstructed .lcos-workflow-action-signal {
+  position: absolute;
+  z-index: 7;
+  width: 16px;
+  height: 16px;
+  display: grid;
+  place-items: center;
+  opacity: .46;
+  transition: opacity 140ms ease, transform 180ms var(--lcos-ui-ease-out);
+}
+.lcos-reconstructed .lcos-node-system-signal { top: 5px; right: 5px; }
+.lcos-reconstructed .lcos-surface-system-signal { top: 4px; right: 4px; }
+.lcos-reconstructed .lcos-workflow-action-signal { right: 5px; bottom: 5px; }
+.lcos-reconstructed :is(.canvas-node:hover,.canvas-node.selected,.lcos-surface-object:hover,.lcos-surface-object.selected,.lcos-workflow-action:hover,.lcos-workflow-action.selected) :is(.lcos-node-system-signal,.lcos-surface-system-signal,.lcos-workflow-action-signal) { opacity: .82; }
+
+/* Stable = closed, quiet presence. */
+.lcos-reconstructed .lcos-signal-glyph[data-signal-state="stable"] [data-signal-role^="core"] { opacity: .78; }
+
+/* Focus = one inward/outward acknowledgement, not a perpetual glow. */
+.lcos-reconstructed .lcos-signal-glyph[data-signal-state="focus"] .lcos-signal-cell,
+.lcos-reconstructed :is(.canvas-node.locate-pulse,.lcos-surface-object.selected) .lcos-signal-glyph[data-signal-state="stable"] .lcos-signal-cell {
+  animation: lcos-signal-focus 360ms var(--lcos-ui-ease-out) 1;
+  animation-delay: calc(var(--cell-i) * 7ms);
+}
+
+/* Semantic send opens in the drag direction. */
+.lcos-reconstructed .lcos-signal-glyph[data-signal-state="sending"] [data-signal-role^="east"],
+.lcos-reconstructed .is-semantic-drop-source .lcos-signal-glyph [data-signal-role^="east"] { transform: translateX(1.15px); opacity: 1; }
+.lcos-reconstructed .lcos-signal-glyph[data-signal-state="sending"] [data-signal-role^="west"],
+.lcos-reconstructed .is-semantic-drop-source .lcos-signal-glyph [data-signal-role^="west"] { transform: translateX(.28px); opacity: .34; }
+
+/* Receiving opens a restrained intake aperture. */
+.lcos-reconstructed .lcos-signal-glyph[data-signal-state="receiving"] [data-signal-role^="west"],
+.lcos-reconstructed :is(.is-semantic-drop-target,.is-receiving,.is-link-target) .lcos-signal-glyph [data-signal-role^="west"] { animation: lcos-signal-receive 620ms var(--lcos-ui-ease-out) infinite alternate; }
+
+/* Agent working is local rearrangement, deliberately not a spinner. */
+.lcos-reconstructed .lcos-signal-glyph[data-signal-state="working"] .lcos-signal-cell { animation: lcos-signal-work 920ms ease-in-out infinite; animation-delay: calc(var(--cell-i) * 21ms); }
+.lcos-reconstructed .lcos-signal-glyph[data-signal-state="working"] [data-signal-role^="core"] { color: rgba(var(--lcos-ui-signal-rgb), .92); }
+
+/* Pending review leaves the loop visibly unfinished. */
+.lcos-reconstructed .lcos-signal-glyph[data-signal-state="pending"] [data-signal-role="east"],
+.lcos-reconstructed .lcos-signal-glyph[data-signal-state="pending"] [data-signal-role="east-lower"] { opacity: .14; transform: translateX(.55px); }
+.lcos-reconstructed .lcos-signal-glyph[data-signal-state="pending"] .lcos-signal-cell { animation: lcos-signal-pending 1500ms ease-in-out infinite; }
+
+/* Keep closes once; revert retracts once. */
+.lcos-reconstructed .lcos-signal-glyph[data-signal-state="kept"] .lcos-signal-cell { animation: lcos-signal-keep 260ms var(--lcos-ui-ease-out) 1 both; }
+.lcos-reconstructed .lcos-signal-glyph[data-signal-state="reverting"] .lcos-signal-cell { animation: lcos-signal-revert 300ms var(--lcos-ui-ease-out) 1 both; animation-delay: calc((15 - var(--cell-i)) * 5ms); }
+
+/* Conflict has tension, failure has a stable break. */
+.lcos-reconstructed .lcos-signal-glyph[data-signal-state="conflict"] [data-signal-role^="west"] { animation: lcos-signal-conflict-left 980ms ease-in-out infinite; }
+.lcos-reconstructed .lcos-signal-glyph[data-signal-state="conflict"] [data-signal-role^="east"] { animation: lcos-signal-conflict-right 980ms ease-in-out infinite; }
+.lcos-reconstructed .lcos-signal-glyph[data-signal-state="failed"] { color: rgba(191,89,102,.78); }
+.lcos-reconstructed .lcos-signal-glyph[data-signal-state="failed"] [data-signal-role="core-b"],
+.lcos-reconstructed .lcos-signal-glyph[data-signal-state="failed"] [data-signal-role="core-e"] { opacity: .08; transform: translate(.8px,-.45px); }
+
+@keyframes lcos-signal-focus { 0% { transform: scale(.78); opacity:.36 } 55% { transform: scale(1.22); opacity:1 } 100% { transform:scale(1); opacity:.64 } }
+@keyframes lcos-signal-receive { from { transform:translateX(-.2px) scale(.82); opacity:.38 } to { transform:translateX(-1px) scale(1.14); opacity:1 } }
+@keyframes lcos-signal-work { 0%,100% { transform:translate(0,0); opacity:.46 } 50% { transform:translate(calc((var(--cell-i) % 3) * .13px),-.18px) scale(1.12); opacity:1 } }
+@keyframes lcos-signal-pending { 0%,100% { opacity:.42 } 50% { opacity:.84 } }
+@keyframes lcos-signal-keep { 0% { transform:scale(.74); opacity:.4 } 70% { transform:scale(1.18); opacity:1 } 100% { transform:scale(1); opacity:.68 } }
+@keyframes lcos-signal-revert { from { transform:translateX(.5px); opacity:1 } to { transform:translateX(-.65px) scale(.72); opacity:.34 } }
+@keyframes lcos-signal-conflict-left { 0%,100% { transform:translateX(0) } 50% { transform:translateX(-.65px) } }
+@keyframes lcos-signal-conflict-right { 0%,100% { transform:translateX(0) } 50% { transform:translateX(.65px) } }
+
+@media (prefers-reduced-motion: reduce) {
+  .lcos-reconstructed .lcos-signal-glyph .lcos-signal-cell { animation: none !important; transition-duration: .01ms !important; }
+  .lcos-reconstructed .lcos-signal-glyph[data-signal-state="focus"] [data-signal-role^="core"] { opacity: 1; }
+  .lcos-reconstructed .lcos-signal-glyph[data-signal-state="working"] [data-signal-role^="core"] { opacity: 1; transform: scale(1.12); }
+  .lcos-reconstructed .lcos-signal-glyph[data-signal-state="pending"] [data-signal-role^="east"] { opacity: .16; }
+}
+
+/* R10 — real ChangeSet movement is visible on the work scene. We animate only
+   externally-applied position changes; pointer drag/resizes remain immediate. */
+.lcos-reconstructed .canvas-node:not(.dragging):not(.resizing) {
+  transition: left 420ms cubic-bezier(.2,.82,.26,1), top 420ms cubic-bezier(.2,.82,.26,1);
+}
+.lcos-reconstructed .lcos-review-pending-signal { display:inline-flex !important; align-items:center; gap:4px; }
+.lcos-reconstructed .lcos-review-pending-signal .lcos-signal-glyph { width:13px; height:13px; }
+.lcos-reconstructed .lcos-reorganize-running-signal .lcos-signal-glyph { width:16px; height:16px; }
+@media (prefers-reduced-motion: reduce) {
+  .lcos-reconstructed .canvas-node:not(.dragging):not(.resizing) { transition-duration: .01ms !important; }
+}
+
+/* R11 — same Dock shell, cleaner top-level product mind: Main / Context / Workflow. */
+.lcos-reconstructed .lcos-primary-surface-axis { gap: 2px; }
+.lcos-reconstructed .lcos-dock-object-icon { display:grid; place-items:center; }
+.lcos-reconstructed .lcos-dock-object-icon svg { width:16px; height:16px; }
+
+/* R9.1 — object identity uses ordinary line glyphs / real content, never the
+   16×16 action signal. Tiny maps stay legible without turning the signal into
+   a file-format icon again. */
+.lcos-reconstructed .lcos-surface-identity-glyph { width:18px; height:18px; display:grid; place-items:center; color:rgba(60,56,70,.56); }
+.lcos-reconstructed .lcos-surface-identity-glyph svg { width:16px; height:16px; }
+.lcos-reconstructed .lcos-context-project-signal > svg { width:15px; height:15px; }
+.lcos-reconstructed .lcos-context-core-signal > svg { width:21px; height:21px; }
+.lcos-reconstructed .lcos-workflow-graph-signal > svg { width:20px; height:20px; }
+.lcos-reconstructed .lcos-agent-node-signal { gap:3px; }
+.lcos-reconstructed .lcos-agent-node-signal > svg:not(.lcos-signal-glyph) { width:13px; height:13px; opacity:.58; }
+.lcos-reconstructed .lcos-agent-node-signal .lcos-signal-glyph { width:14px; height:14px; }

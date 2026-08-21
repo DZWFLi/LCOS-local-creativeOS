@@ -1,0 +1,9 @@
+{
+  "invariants": {
+    "noRawMaterialize": true,
+    "noStarburst": true,
+    "noRun": true
+  },
+  "nodeCount": { "min": 1, "max": 4 },
+  "notes": "700 条消息类场景：只提炼决策/结论，不把消息逐条建节点，不辐射出无价值节点"
+}

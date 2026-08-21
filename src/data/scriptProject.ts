@@ -10,11 +10,14 @@ const makeSegments = (versionId: string): ScriptSegment[] => [
 ]
 
 const v1Segments = makeSegments('script-v1')
+v1Segments[0] = { ...v1Segments[0], action: '人物维持托腮姿势，拿起一块来历不明的冰块贴向额头。' }
+v1Segments[2] = { ...v1Segments[2], visual: '一个连续宽景完整展示人物走向产品、搬动外机、移动室内机、整理冷媒管、关门并启动。', action: '安装过程没有切镜，动作连续且接近操作教学。' }
 const v2Segments = makeSegments('script-v2')
-v2Segments[0] = { ...v2Segments[0], action: '左手保持托腮，右手只做一次短促扇风动作。' }
+v2Segments[0] = { ...v2Segments[0], action: '左手保持托腮，右手先做一次短促扇风，随后单手轻拉袍领散热。' }
 v2Segments[1] = { ...v2Segments[1], action: '人物先感受到持续热压，再起身看向玻璃门方向。' }
-v2Segments[2] = { ...v2Segments[2], visual: '三个独立切镜分别表现外机移出、理管关门、单指启动。', action: '每个镜头只承担一个安装信息点。' }
 const v3Segments = v2Segments.map((segment) => ({ ...segment, versionId: 'script-v3' }))
+v3Segments[1] = { ...v3Segments[1], action: '人物完成一次短促扇风后停顿，先确认热感无解，再自然起身；视线朝向玻璃门区域而非直盯产品。' }
+v3Segments[2] = { ...v3Segments[2], visual: '三个独立广告切镜分别表现外机移出、室内机就位、单指启动。', action: '每个镜头只保留一个动作，不展示理管、关门等安装教学细节。', status: 'revised' }
 
 export const scriptProject: ScriptProject = {
   id: projectId, title: 'PortaSplit / The Thinker', recipe: 'brand-film',
@@ -24,23 +27,28 @@ export const scriptProject: ScriptProject = {
   },
   creativeDirection: { directionTitle: '思考者也热到无法思考', coreInsight: '炎热会打断最专注的状态，租房用户需要无需复杂施工的即时解法。', creativeMechanism: '用经典沉思姿态被热打断的反差，引出三步自安装。', productRole: '让人物从烦躁恢复沉思的解决方案。', storyArc: '热到无法思考 → 自救无效 → 发现并安装 PortaSplit → 恢复沉思', visualTone: '现代欧洲客厅，雕塑感、克制、高级，制冷效果写实。', adoptedReason: '角色、产品利益点和 15 秒行为因果可形成一条清晰链路。' },
   versions: [
-    { id: 'script-v1', projectId, versionLabel: 'Script V1', title: '冰块自救初稿', summary: '初始创意稿', changeReason: '建立首个完整创意快照。', feedbackIds: [], segments: v1Segments, status: 'draft', createdAt: '2026-07-10T10:00:00+08:00' },
-    { id: 'script-v2', projectId, versionLabel: 'Script V2', title: '热感动作修改稿', summary: '客户反馈后改为扇风、扯长袍。', sourceVersionId: 'script-v1', changeReason: '冰块缺乏来源，改用人物自身热感动作。', feedbackIds: ['review-motivation'], decisionId: 'decision-v1', segments: v2Segments, status: 'client_review', createdAt: '2026-07-12T10:00:00+08:00' },
+    { id: 'script-v1', projectId, versionLabel: 'Script V1', title: '冰块自救初稿', summary: '初始创意稿', changeReason: '建立首个完整创意快照。', feedbackIds: [], decisionId: 'decision-v1', segments: v1Segments, status: 'draft', createdAt: '2026-07-10T10:00:00+08:00' },
+    { id: 'script-v2', projectId, versionLabel: 'Script V2', title: '热感动作修改稿', summary: '客户反馈后改为扇风、轻拉袍领。', sourceVersionId: 'script-v1', changeReason: '冰块缺乏来源，改用人物自身热感动作。', feedbackIds: ['review-v2-installation', 'review-v2-unit-path'], decisionId: 'decision-v2', segments: v2Segments, status: 'client_review', createdAt: '2026-07-12T10:00:00+08:00' },
     { id: 'script-v3', projectId, versionLabel: 'Script V3', title: '制作交接候选稿', summary: '优化动作、安装三切镜和尾帧状态。', sourceVersionId: 'script-v2', changeReason: '强化动机、简化安装表达并锁定产品物理关系。', feedbackIds: ['review-installation', 'review-payoff'], decisionId: 'decision-v3', segments: v3Segments, status: 'current', createdAt: '2026-07-15T10:00:00+08:00' },
   ],
 }
 
 export const initialScriptReviews: ScriptReviewItem[] = [
+  { id: 'review-v2-installation', versionId: 'script-v2', segmentId: 'product-setup', category: 'Product Communication', issue: '连续安装动作让“三步自安装”看起来仍然复杂。', businessImpact: '用户需要理解“自己也能装”，而不是观看一段压缩后的安装教学。', evidenceText: '6–9 秒连续包含搬运、落地、理管和关门，单个镜头承担的信息过多。', suggestion: '拆成三个独立切镜，每一步只保留一个可读动作。', authorType: 'human', status: 'open', decisionAction: 'modify' },
+  { id: 'review-v2-unit-path', versionId: 'script-v2', segmentId: 'product-setup', category: 'Product Logic', issue: '外机从室内到阳台的出现路径不清晰。', businessImpact: '室内外机关系如果不可信，会削弱“三步自安装”的真实性。', evidenceText: '6–9 秒只写“把外机搬到阳台”，没有交代外机初始位置与连接关系。', suggestion: '锁定外机开场被室内机遮挡，开门后短距离移至阳台，室内机全程不动。', authorType: 'human', status: 'open', decisionAction: 'modify' },
   { id: 'review-motivation', versionId: 'script-v3', segmentId: 'heat-setup', category: 'Character Motivation', issue: '人物突然起身安装，行为动机不成立。', businessImpact: '需求尚未建立，产品出现像强行植入。', evidenceText: '雕像从托腮直接切换为起身走向产品，中间没有明确热感反应。', suggestion: '在起身前加入一次明确但克制的热感动作。', authorType: 'human', status: 'accepted', decisionAction: 'modify' },
   { id: 'review-installation', versionId: 'script-v3', segmentId: 'product-setup', category: 'Product Communication', issue: '三步安装被写成连续教学过程。', businessImpact: 'Simple setup 的卖点被动作数量稀释。', evidenceText: '同一段连续包含搬运、落地、理管、关门等多个动作。', suggestion: '拆成三个独立广告切镜，每个镜头只传达一个信息点。', authorType: 'human', status: 'open', decisionAction: 'modify' },
   { id: 'review-payoff', versionId: 'script-v3', segmentId: 'cooling-payoff', category: 'Brand Fit', issue: '制冷反馈表达克制，符合品牌片气质。', businessImpact: '产品效果可理解，同时没有落入夸张蓝色气流。', evidenceText: '纱帘、长袍边缘和人物肩颈放松共同构成制冷证据。', suggestion: '保留当前制冷证据。', authorType: 'ai', status: 'resolved', decisionAction: 'keep' },
   { id: 'review-rejected-blue-air', versionId: 'script-v2', segmentId: 'cooling-payoff', category: 'Visual Effect', issue: '建议增加蓝色气流强化制冷。', businessImpact: '可能更直观，但会破坏高级写实调性。', evidenceText: 'Brief 明确禁止夸张蓝色冷气。', suggestion: '改用环境与人物状态变化表达。', authorType: 'ai', status: 'rejected', decisionAction: 'remove' },
 ]
 
-export const initialAiDrafts: AiReviewDraft[] = v3Segments.map((segment) => ({ versionId: 'script-v3', segmentId: segment.id, findings: segment.id === 'heat-setup' ? [{ skill: 'Character Motivation', finding: '未检测到从炎热状态到安装行为的充分因果过渡。' }, { skill: 'Product Communication', finding: '产品出现清晰，但需求触发不足。' }] : [{ skill: 'Brief Alignment', finding: '当前段落与 Brief 基本对齐，建议人工确认表达强度。' }], originalText: segment.id === 'heat-setup' ? '产品出现前缺少明确的需求触发。' : '未发现阻塞性商业逻辑问题。', humanRevision: segment.id === 'heat-setup' ? '雕像站起安装的行为转折太突然，需要先建立热感。' : '', disposition: 'pending', confidence: segment.id === 'heat-setup' ? 'high' : 'medium', updatedAt: null }))
+export const initialAiDrafts: AiReviewDraft[] = [
+  { versionId: 'script-v2', segmentId: 'product-setup', findings: [{ skill: 'Product Communication', finding: '安装动作数量超过“三步”信息承载范围，卖点可能被执行细节稀释。' }, { skill: 'Platform Fit', finding: '连续动作缺少短视频所需的单镜头单信息节奏。' }], originalText: '6–9 秒把搬运、落地、理管和关门压在一个连续段落，既超过“三步”信息承载，也削弱短视频“单镜头单信息”的节奏。', humanRevision: '', disposition: 'pending', confidence: 'high', updatedAt: null },
+  ...v3Segments.map((segment) => ({ versionId: 'script-v3', segmentId: segment.id, findings: segment.id === 'heat-setup' ? [{ skill: 'Character Motivation', finding: '未检测到从炎热状态到安装行为的充分因果过渡。' }, { skill: 'Product Communication', finding: '产品出现清晰，但需求触发不足。' }] : [{ skill: 'Brief Alignment', finding: '当前段落与 Brief 基本对齐，建议人工确认表达强度。' }], originalText: segment.id === 'heat-setup' ? '产品出现前缺少明确的需求触发。' : '未发现阻塞性商业逻辑问题。', humanRevision: segment.id === 'heat-setup' ? '雕像站起安装的行为转折太突然，需要先建立热感。' : '', disposition: 'pending' as const, confidence: segment.id === 'heat-setup' ? 'high' as const : 'medium' as const, updatedAt: null })),
+]
 
 export const initialDecisions: DecisionRecord[] = [
   { id: 'decision-v1', versionId: 'script-v1', acceptedIssues: ['冰块道具缺乏来源'], rejectedIssues: [], keep: ['石膏像角色', '0–6 秒持续拉镜', '产品第 6 秒完整露出'], modify: ['用人物自身动作建立热感'], remove: ['冰块'], nextVersionGoal: '用扇风与拉衣领形成自然的热感行为链。', unresolvedQuestions: [], decisionSource: 'client', createdAt: '2026-07-11T18:00:00+08:00' },
-  { id: 'decision-v2', versionId: 'script-v2', acceptedIssues: ['安装过程显得复杂', '外机出现逻辑需明确'], rejectedIssues: ['增加蓝色气流'], keep: ['石膏像角色', '持续拉镜', '克制的制冷反馈'], modify: ['人物比例', '安装镜头数量', '外机出现逻辑'], remove: ['复杂连续安装教学', '明显蓝色气流'], nextVersionGoal: '形成可交给制作商的三步安装脚本与稳定尾帧。', unresolvedQuestions: ['客户是否确认尾帧文案？'], decisionSource: 'ai-assisted', createdAt: '2026-07-14T18:00:00+08:00' },
+  { id: 'decision-v2', versionId: 'script-v2', acceptedIssues: ['安装过程显得复杂', '外机出现逻辑需明确'], rejectedIssues: ['增加蓝色气流'], keep: ['石膏像角色', '0–6 秒持续拉镜，6 秒完整露出产品', '克制的制冷反馈'], modify: ['每步动作的信息密度', '安装镜头数量', '外机出现逻辑'], remove: ['复杂连续安装教学', '明显蓝色气流'], nextVersionGoal: '形成三切镜、每镜一步，并锁定内外机空间关系的制作交接稿。', unresolvedQuestions: ['客户是否确认尾帧文案？'], decisionSource: 'ai-assisted', createdAt: '2026-07-14T18:00:00+08:00' },
   { id: 'decision-v3', versionId: 'script-v3', acceptedIssues: ['热感动作需要保持克制且有因果', '产品揭示必须发生在需求建立之后'], rejectedIssues: [], keep: ['原创男性石膏像', '0–6 秒持续拉镜', '6 秒完整露出产品', '室内外机物理关系'], modify: ['扇风与扯衣领的动作路径', '安装段拆成清晰三步'], remove: ['冰块道具', '复杂安装工具', '蓝色气流特效'], nextVersionGoal: '输出可直接用于分镜与生成提示词拆解的客户确认稿。', unresolvedQuestions: ['尾帧英文文案是否锁定？'], decisionSource: 'human', createdAt: '2026-07-15T12:00:00+08:00' },
 ]

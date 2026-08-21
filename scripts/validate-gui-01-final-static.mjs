@@ -1,0 +1,60 @@
+import fs from 'node:fs'
+import path from 'node:path'
+
+const root = process.cwd()
+const read = (file) => fs.readFileSync(path.join(root, file), 'utf8')
+const checks = []
+const check = (name, ok) => checks.push([name, Boolean(ok)])
+
+const app = read('apps/web/src/App.tsx')
+const canvas = read('apps/web/src/features/canvas/ProjectCanvas.tsx')
+const visual = read('apps/web/src/features/canvas/CanvasNodeVisual.tsx')
+const signal = read('apps/web/src/features/design/DotGlyph.tsx')
+const dock = read('apps/web/src/features/shell/SurfaceDock.tsx')
+const surfaceObject = read('apps/web/src/features/surfaces/SurfaceObject.tsx')
+const contextHome = read('apps/web/src/features/surfaces/ContextRelationshipHomeSurface.tsx')
+const contextSpace = read('apps/web/src/features/surfaces/ContextSpaceSurface.tsx')
+const contextStructure = read('apps/web/src/features/surfaces/ContextTreeSurface.tsx')
+const contextEvolution = read('apps/web/src/features/surfaces/ContextFlowSurface.tsx')
+const projection = read('apps/web/src/features/surfaces/ProjectionSurfaces.tsx')
+const workflow = read('apps/web/src/features/surfaces/WorkflowSurface.tsx')
+const workflowGraph = read('apps/web/src/features/surfaces/WorkflowGraphSurface.tsx')
+const reorganize = read('apps/web/src/features/reorganize/ReorganizePanel.tsx')
+const coreReorganize = read('apps/local-core/src/reorganize-service.ts')
+const client = read('apps/web/src/runtime/localCoreClient.ts')
+const presentation = read('packages/contracts/src/presentations.ts')
+const reorganizeContract = read('packages/contracts/src/reorganize.ts')
+const css = read('apps/web/src/interaction-system.css')
+const productCss = read('apps/web/src/product-interface.css')
+
+check('Main is one permanent free spatial work scene', canvas.includes('layout-mode-freeform') && !canvas.includes('lcos-spatial-mode-switch'))
+check('Top-level GUI is Main / Context / Workflow', dock.includes("label:'主画布'") && dock.includes("label:'上下文'") && dock.includes("label:'工作流'") && !dock.includes("label:'整理'"))
+check('Spatial-style Collection body/expand behavior remains', visual.includes('collectionExpanded') && css.includes('lcos-collection-stack'))
+check('Main projections have distinct Context / Workflow / Workspace morphologies', visual.includes('ContextProjectionObject') && visual.includes('WorkflowProjectionObject') && visual.includes('WorkspaceProjectionObject'))
+check('Context projection exposes Space / Structure / Evolution quick lenses', canvas.includes('onOpenContextLens') && app.includes("'context-space'") && app.includes("'context-tree'") && app.includes("'context-flow'"))
+check('Context opens into an Understanding Space by default', projection.includes("props.surface==='context-space'?<ContextSpaceSurface") && contextSpace.includes('理解现场'))
+check('Context Structure / Evolution remain lenses over the same saved membership', contextStructure.includes('共用同一份 Context') && contextEvolution.includes('trackSegments'))
+check('Context Space exposes semantic regions / relation hierarchy without second truth', contextSpace.includes('contextUnderstandingRegions') && contextSpace.includes('lcos-context-understanding-region'))
+check('Context Graph remains project-level and directly spatial', contextHome.includes('Context Graph') && contextHome.includes('<SpatialCanvas'))
+check('Workflow has overview + action scene', workflowGraph.includes('project action network') && projection.includes('!props.activeWorkflowId?<WorkflowGraphSurface'))
+check('Workflow Step contract is Presentation-only and materials remain references', presentation.includes('WorkflowActionV0') && presentation.includes('attachedViewIds') && workflow.includes('attachSelection'))
+check('Only Workflow actions own primary flow ports', workflow.includes('data-workflow-action-input={action.id}') && workflow.includes('className="lcos-workflow-port output"') && !workflow.includes('data-workflow-input={node.id}'))
+check('Material morphology owns file/content identity', visual.includes('MaterialPaperFallback') && visual.includes('CollapsedNotePaper') && !visual.includes('SystemDotGlyph'))
+check('16×16 owns LCOS action/state only', signal.includes('LcosSignalState') && signal.includes("'sending'") && signal.includes("'working'") && signal.includes("'pending'") && signal.includes("'failed'") && !signal.includes('SystemDotGlyph'))
+check('System object identity is separate from 16×16 signal', surfaceObject.includes('SurfaceIdentityGlyph') && surfaceObject.includes('LcosSignalGlyph'))
+check('Reorganize positions are real Presentation ChangeSet data', reorganizeContract.includes('positionPatch?:') && reorganize.includes('positionPatch: Object.fromEntries') && coreReorganize.includes('proposal.positionPatch'))
+check('Whole-ChangeSet review has real Keep / Revert Core closure', reorganize.includes('acceptReorganize') && reorganize.includes('rollbackReorganize') && coreReorganize.includes('accept(id: string)') && client.includes('acceptReorganize'))
+check('Reorganize fails closed on stale Presentation', coreReorganize.includes('STALE_PRESENTATION'))
+check('Reader entry is unified for readable materials', app.includes('One temporary Reader for every readable material') && app.includes('setImmersiveNodeId(id)'))
+check('Search / Focus remain separate', app.includes("if (modifier && key === 'f')") && app.includes("if (key === 'f' && selectedIds.length === 1)"))
+check('Semantic Drop stays core cross-surface language', canvas.includes('lcos-semantic-drop-handle') && app.includes("targetViewId === 'capability:context'") && app.includes("targetViewId === 'capability:workflow'"))
+check('Empty states describe the next action, not old product modes', !contextSpace.includes('不需要先选一种 Context 模式') && !contextEvolution.includes('不需要先执行“添加上下文”') && !workflow.includes('把 Project Entity 直接投进来'))
+check('Existing LCOS visual shell is preserved', productCss.includes('.lcos-reconstructed') && css.includes('.lcos-reconstructed'))
+
+let failed = 0
+for (const [name, ok] of checks) {
+  console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}`)
+  if (!ok) failed += 1
+}
+console.log(`\n${checks.length - failed}/${checks.length} LCOS 0.1 GUI Final static contracts passed`)
+if (failed) process.exit(1)

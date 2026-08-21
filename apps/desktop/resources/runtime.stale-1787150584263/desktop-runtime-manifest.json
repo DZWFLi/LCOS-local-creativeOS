@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "preparedAt": "2026-08-19T14:41:16.999Z",
+  "web": "web/index.html",
+  "localCore": "local-core/dist/index.js",
+  "bridge": "python-fallback",
+  "orchestrator": "tools/codex-orchestrator/watch.mjs"
+}

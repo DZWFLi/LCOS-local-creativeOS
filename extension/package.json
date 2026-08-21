@@ -1,0 +1,7 @@
+{
+  "name": "@local-creative-os/capture-extension",
+  "private": true,
+  "version": "0.1.0",
+  "description": "LCOS Capture 浏览器扩展（MV3）——共享脚本为经典/UMD 浏览器脚本，按 CommonJS 解析以便仓库内 vitest 直接 require。",
+  "type": "commonjs"
+}

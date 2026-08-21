@@ -1,0 +1,9 @@
+{
+  "invariants": {
+    "searchFirst": true,
+    "findOldContent": true,
+    "noDuplicateCreate": true,
+    "newRelationToSource": true
+  },
+  "notes": "能找到旧 EP02 节点；重复部分不建；新信息（邻居交代）update 或新建并连到会话来源"
+}

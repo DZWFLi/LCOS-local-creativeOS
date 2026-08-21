@@ -1,0 +1,672 @@
+diff -ruN '--exclude=node_modules' '--exclude=dist' /mnt/data/lcos_src_pristine/apps/web/src/App.tsx /mnt/data/lcos_src_0bbe/apps/web/src/App.tsx
+--- /mnt/data/lcos_src_pristine/apps/web/src/App.tsx	2026-08-09 16:56:13.000000000 +0000
++++ /mnt/data/lcos_src_0bbe/apps/web/src/App.tsx	2026-08-10 02:58:24.743388862 +0000
+@@ -176,6 +176,10 @@
+   const [selectionIntent, setSelectionIntent] = useState<RunOutputIntent>('analyze')
+   const [selectionResultPolicy, setSelectionResultPolicy] = useState<ComposerResultPolicy>('reply_only')
+   const [activeSurface, setActiveSurface] = useState<SurfaceId>('arrange')
++  // UI-only Presentation membership until the Local Core Presentation contract is approved.
++  // Selection never writes these implicitly.
++  const [contextPresentationIds, setContextPresentationIds] = useState<string[]>([])
++  const [workflowPresentationIds, setWorkflowPresentationIds] = useState<string[]>([])
+   const [stagedTransfer, setStagedTransfer] = useState<{ ids: string[]; anchor: DropAnchor } | null>(null)
+   const [immersiveNodeId, setImmersiveNodeId] = useState<string | null>(null)
+   const [runtimeProviders, setRuntimeProviders] = useState<readonly RuntimeProviderStatus[]>([])
+@@ -226,6 +230,11 @@
+   const [runEventsError, setRunEventsError] = useState<string | null>(null)
+   const [runtimeRecovering, setRuntimeRecovering] = useState(false)
+ 
++  useEffect(() => {
++    setContextPresentationIds([])
++    setWorkflowPresentationIds([])
++  }, [activeProjectId, scopeId])
++
+   const objectUrls = useRef<Set<string>>(new Set())
+   const clipboardRef = useRef<CanvasClipboardPayload | null>(null)
+   const lastCanvasPointRef = useRef<{ x: number; y: number } | null>(null)
+@@ -3298,6 +3307,7 @@
+         onPointerWorldChange: rememberCanvasPoint,
+         onSpaceCreate: (point) => { lastCanvasPointRef.current = point; setCreateDialogOpen(true) },
+         onStageTransfer: stageTransfer,
++        onCancelStageTransfer: cancelTransfer,
+       },
+       projection: {
+         projectId: activeProjectId,
+@@ -3306,6 +3316,8 @@
+         nodes: visibleNodes,
+         edges: visibleEdges,
+         selectedIds,
++        presentationIds: activeSurface === 'workflow' ? workflowPresentationIds : activeSurface.startsWith('context-') ? contextPresentationIds : undefined,
++        presentationIncludeOneHop: true,
+         workspaceFocusIds: effectiveWorkspace.focusedViewIds,
+         contextRuntime: contextSurfaceRuntime,
+         workRuntime: workSurfaceRuntime,
+@@ -3314,11 +3326,21 @@
+         onDoubleClick: handleDoubleClick,
+         onContextStart: (kind) => {
+           if (kind === 'conversation') { setConversationDialogOpen(true); return }
+-          if (kind === 'selection') { setNotice(selectedIds.length ? '已用当前 Selection 建立临时 Context View' : '先选择要理解的对象'); return }
++          if (kind === 'selection') {
++            if (!selectedIds.length) { setNotice('先选择要理解的对象'); return }
++            setContextPresentationIds([...selectedIds])
++            setNotice(`已用当前 Selection 建立临时 Context View · ${selectedIds.length} 项`)
++            return
++          }
+           requestComposerFocus(); setNotice('告诉 Agent 这次需要组织和找回哪段上下文')
+         },
+         onWorkflowStart: (kind) => {
+-          if (kind === 'selection') { setNotice(selectedIds.length ? '已从当前 Selection 建立临时工作流 View' : '先选择要进入工作流的对象'); return }
++          if (kind === 'selection') {
++            if (!selectedIds.length) { setNotice('先选择要进入工作流的对象'); return }
++            setWorkflowPresentationIds([...selectedIds])
++            setNotice(`已从当前 Selection 建立临时工作流 View · ${selectedIds.length} 项`)
++            return
++          }
+           if (kind === 'skill') { setCapabilityOpen(true); setNotice('在项目能力中选择 Skill 或已安装能力'); return }
+           requestComposerFocus(); setNotice('告诉 Agent 要如何组织当前项目的工作方法')
+         },
+diff -ruN '--exclude=node_modules' '--exclude=dist' /mnt/data/lcos_src_pristine/apps/web/src/features/canvas/ProjectCanvas.tsx /mnt/data/lcos_src_0bbe/apps/web/src/features/canvas/ProjectCanvas.tsx
+--- /mnt/data/lcos_src_pristine/apps/web/src/features/canvas/ProjectCanvas.tsx	2026-08-09 16:56:13.000000000 +0000
++++ /mnt/data/lcos_src_0bbe/apps/web/src/features/canvas/ProjectCanvas.tsx	2026-08-10 02:58:24.743786682 +0000
+@@ -8,6 +8,7 @@
+ import { CanvasNodeVisual, nodeVisualFamily } from './CanvasNodeVisual'
+ import { SelectionComposer } from './SelectionComposer'
+ import type { ArtifactRevisionProvenance } from '../../runtime/projectionAdapters'
++import { advanceDropIntent, completeDropDwell, dropDwellRemainingMs, DROP_INTENT_TOKENS, idleDropIntent, type DropIntentState } from '../drop/dropIntentMachine'
+ 
+ interface Props {
+   nodes: CanvasNode[]; setNodes: (nodes: CanvasNode[] | ((current: CanvasNode[]) => CanvasNode[])) => void
+@@ -52,6 +53,7 @@
+   onCreateNodeFromAnchor: (kind: 'note' | 'context', x: number, y: number, from: string) => void; onFilesDropped: (files: File[], x: number, y: number) => void
+   onArrangeSelection: () => void; onCopySelection: () => void; onDuplicateSelection: () => void; onCreateScopeFromSelection: () => void; onDeleteSelection: () => void; onPointerWorldChange: (point: { x: number; y: number }) => void; onSpaceCreate: (point: { x: number; y: number }) => void
+   onStageTransfer?: (ids: string[], anchor: 'left' | 'bottom') => void
++  onCancelStageTransfer?: () => void
+ }
+ 
+ type DragCandidate = { id: string; startX: number; startY: number; offsetX: number; offsetY: number; group: Array<{ id: string; dx: number; dy: number }>; originals: Array<{ id: string; x: number; y: number }> }
+@@ -64,7 +66,7 @@
+   return event.shiftKey || event.ctrlKey || event.metaKey
+ }
+ 
+-export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edges, setEdges, camera, setCamera, selectedId, selectedIds, selectedEdgeId, setSelectedEdgeId, pendingId, runId, runStatus, spaceHeld, locked = false, layoutPreview, workspaceFrames = [], workspaceMemberNodes = nodes, activeWorkspaceId = null, onWorkspaceActivate, onPresentationInteractionChange, onPresentationCommit, onFrameBoundsChange, selectionComposer, onSelect, onClearSelection, onMarqueeSelect, onSelectEdge, onDoubleClick, onDetails, onRequestAi, onCreateNodeFromAnchor, onFilesDropped, onArrangeSelection, onCopySelection, onDuplicateSelection, onCreateScopeFromSelection, onDeleteSelection, onPointerWorldChange, onSpaceCreate, onStageTransfer }: Props) {
++export const ProjectCanvas = memo(function ProjectCanvas({ nodes, setNodes, edges, setEdges, camera, setCamera, selectedId, selectedIds, selectedEdgeId, setSelectedEdgeId, pendingId, runId, runStatus, spaceHeld, locked = false, layoutPreview, workspaceFrames = [], workspaceMemberNodes = nodes, activeWorkspaceId = null, onWorkspaceActivate, onPresentationInteractionChange, onPresentationCommit, onFrameBoundsChange, selectionComposer, onSelect, onClearSelection, onMarqueeSelect, onSelectEdge, onDoubleClick, onDetails, onRequestAi, onCreateNodeFromAnchor, onFilesDropped, onArrangeSelection, onCopySelection, onDuplicateSelection, onCreateScopeFromSelection, onDeleteSelection, onPointerWorldChange, onSpaceCreate, onStageTransfer, onCancelStageTransfer }: Props) {
+   const canvasRef = useRef<HTMLDivElement | null>(null)
+   const pan = useRef<{ x: number; y: number; camera: Camera } | null>(null)
+   const dragCandidate = useRef<DragCandidate | null>(null)
+@@ -94,10 +96,11 @@
+   const [draggingId, setDraggingId] = useState<string | null>(null)
+   const [resizingId, setResizingId] = useState<string | null>(null)
+   const [draggingWorkspaceId, setDraggingWorkspaceId] = useState<string | null>(null)
+-  const [dropGutter, setDropGutter] = useState<'left' | 'bottom' | null>(null)
++  const dropIntent = useRef<DropIntentState>(idleDropIntent())
+   const dropStageAnchor = useRef<'left' | 'bottom' | null>(null)
++  const [dropCue, setDropCue] = useState<{ anchor: 'left' | 'bottom'; phase: 'dwell' | 'preview'; key: number } | null>(null)
+   const [dropGhost, setDropGhost] = useState<{ x: number; y: number; count: number } | null>(null)
+-  const dropHoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
++  const dropDwellTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+   const marquee = useRef<{ startX: number; startY: number; currentX: number; currentY: number; pointerId: number; moved: boolean } | null>(null)
+   const [marqueeRect, setMarqueeRect] = useState<{ left: number; top: number; width: number; height: number } | null>(null)
+   const [createMenu, setCreateMenu] = useState<{ from: string; x: number; y: number; screenX: number; screenY: number } | null>(null)
+@@ -164,6 +167,7 @@
+     if (dragFrame.current !== null) cancelAnimationFrame(dragFrame.current)
+     if (autoPanFrame.current !== null) cancelAnimationFrame(autoPanFrame.current)
+     if (wheelFrame.current !== null) cancelAnimationFrame(wheelFrame.current)
++    if (dropDwellTimer.current !== null) clearTimeout(dropDwellTimer.current)
+   }, [])
+   useEffect(() => {
+     const cancel = (event: KeyboardEvent) => {
+@@ -218,9 +222,12 @@
+     setDraggingId(null)
+     setResizingId(null)
+     setDraggingWorkspaceId(null)
+-    setDropGutter(null)
++    setDropCue(null)
+     setDropGhost(null)
++    dropIntent.current = idleDropIntent()
+     dropStageAnchor.current = null
++    if (dropDwellTimer.current !== null) clearTimeout(dropDwellTimer.current)
++    dropDwellTimer.current = null
+     setMarqueeRect(null)
+     setCreateMenu(null)
+     setLinkPoint(null)
+@@ -280,8 +287,8 @@
+         return
+       }
+       const bounds = autoPanBounds(rect)
+-      const edge = 96
+-      const maxStep = 18
++      const edge = DROP_INTENT_TOKENS.edgeScrollBand
++      const maxStep = DROP_INTENT_TOKENS.edgeScrollMaxPxPerFrame
+       const strength = (distance: number) => Math.min(1, Math.max(0, (edge - distance) / edge))
+       const left = strength(currentPointer.x - bounds.left)
+       const right = strength(bounds.right - currentPointer.x)
+@@ -358,21 +365,64 @@
+     onPresentationCommit?.(kind)
+   }
+ 
+-  const dropAnchorAt = (clientX: number, clientY: number, rect: DOMRect): 'left' | 'bottom' | null => {
+-    // 投送热区必须 >= 自动平移触发区（96px），否则拖到边缘先触发平移，
+-    // 节点从指针下溜走，投送永远抢不到。
+-    const bottomCaptureTop = rect.bottom - 96
+-    if (clientY >= bottomCaptureTop && clientY < rect.bottom) return 'bottom'
+-    if (clientX <= rect.left + 96) return 'left'
+-    return null
+-  }
+-
+   const restoreDraggedOriginals = (candidate: DragCandidate | null) => {
+     if (!candidate) return
+     const originals = new Map(candidate.originals.map((item) => [item.id, item]))
+     setNodes((current) => current.map((node) => { const original = originals.get(node.id); return original ? { ...node, x: original.x, y: original.y } : node }))
+   }
+ 
++  const clearDropDwellTimer = () => {
++    if (dropDwellTimer.current !== null) clearTimeout(dropDwellTimer.current)
++    dropDwellTimer.current = null
++  }
++
++  const beginDropPreview = (state: Extract<DropIntentState, { status: 'preview' }>) => {
++    const candidate = dragCandidate.current
++    const pointer = autoPanPointer.current
++    if (!candidate || !pointer) return
++    restoreDraggedOriginals(candidate)
++    stopAutoPan()
++    dropIntent.current = state
++    dropStageAnchor.current = state.anchor
++    setDropCue({ anchor: state.anchor, phase: 'preview', key: performance.now() })
++    setDropGhost({ x: pointer.x, y: pointer.y, count: candidate.group.length })
++    onStageTransfer?.(candidate.group.map((item) => item.id), state.anchor)
++  }
++
++  const armDropDwell = (state: Extract<DropIntentState, { status: 'dwell' }>) => {
++    clearDropDwellTimer()
++    setDropCue({ anchor: state.anchor, phase: 'dwell', key: state.startedAt })
++    dropDwellTimer.current = setTimeout(() => {
++      dropDwellTimer.current = null
++      const next = completeDropDwell(dropIntent.current, performance.now())
++      if (next.status !== 'preview') return
++      beginDropPreview(next)
++    }, dropDwellRemainingMs(state, performance.now()))
++  }
++
++  const updateDropIntentForDrag = (point: { x: number; y: number }, rect: DOMRect) => {
++    const previous = dropIntent.current
++    const overDestination = Boolean(document.elementFromPoint(point.x, point.y)?.closest('.vnext-drop-shelf'))
++    const next = advanceDropIntent(previous, point, rect, performance.now(), overDestination)
++    dropIntent.current = next
++    if (next.status === 'dwell') {
++      const changed = previous.status !== 'dwell' || previous.anchor !== next.anchor || previous.startedAt !== next.startedAt
++      if (changed) armDropDwell(next)
++    } else if (next.status === 'preview') {
++      clearDropDwellTimer()
++      setDropCue((current) => current?.phase === 'preview' && current.anchor === next.anchor ? current : { anchor: next.anchor, phase: 'preview', key: performance.now() })
++    } else {
++      clearDropDwellTimer()
++      setDropCue(null)
++      if (previous.status === 'preview') {
++        dropStageAnchor.current = null
++        setDropGhost(null)
++        onCancelStageTransfer?.()
++      }
++    }
++    return next
++  }
++
+   const finishPointer = (event: React.PointerEvent<HTMLDivElement>, cancelled = false) => {
+     if (locked) {
+       event.preventDefault()
+@@ -401,8 +451,7 @@
+       }
+       if (frameResize.current) onFrameBoundsChange?.(frameResize.current.workspaceId, frameResize.current.originalBounds)
+       if (dragCandidate.current || resizeCandidate.current || workspaceDrag.current || frameResize.current) onPresentationInteractionChange?.(false)
+-      if (dropHoverTimer.current !== null) clearTimeout(dropHoverTimer.current)
+-      dropHoverTimer.current = null
++      clearDropDwellTimer()
+       pan.current = null
+       dragCandidate.current = null
+       resizeCandidate.current = null
+@@ -425,9 +474,11 @@
+       setDraggingId(null)
+       setResizingId(null)
+       setDraggingWorkspaceId(null)
+-      setDropGutter(null)
++      setDropCue(null)
+       setDropGhost(null)
++      dropIntent.current = idleDropIntent()
+       dropStageAnchor.current = null
++      onCancelStageTransfer?.()
+       setMarqueeRect(null)
+       setLinkPoint(null)
+       if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
+@@ -488,17 +539,19 @@
+         // pointerup 时指针捕获仍在 canvas 上，同步 click 会被事件系统吞掉；
+         // 等捕获释放后再触发目的地投送。
+         window.setTimeout(() => hit.click(), 0)
+-      } else if (at?.closest('.vnext-drop-shelf') || dropAnchorAt(event.clientX, event.clientY, rect)) {
+-        onStageTransfer?.(draggedCandidate.group.map((item) => item.id), stagedDropAnchor)
++      } else {
++        const overShelf = Boolean(at?.closest('.vnext-drop-shelf'))
++        const carry = advanceDropIntent({ status: 'preview', anchor: stagedDropAnchor }, { x: event.clientX, y: event.clientY }, rect, performance.now(), overShelf)
++        if (carry.status === 'preview') onStageTransfer?.(draggedCandidate.group.map((item) => item.id), stagedDropAnchor)
++        else onCancelStageTransfer?.()
+       }
+     }
+-    setDropGutter(null)
++    setDropCue(null)
+     setDropGhost(null)
++    dropIntent.current = idleDropIntent()
+     dropStageAnchor.current = null
+-    if (dropHoverTimer.current !== null) {
+-      clearTimeout(dropHoverTimer.current)
+-      dropHoverTimer.current = null
+-    }
++    if (dropDwellTimer.current !== null) clearTimeout(dropDwellTimer.current)
++    dropDwellTimer.current = null
+     pan.current = null
+     dragCandidate.current = null
+     resizeCandidate.current = null
+@@ -657,55 +710,18 @@
+         try { canvasRef.current?.setPointerCapture(event.pointerId) } catch { /* synthetic or already released */ }
+       }
+       if (dragging.current) {
+-        const anchor = onStageTransfer ? dropAnchorAt(event.clientX, event.clientY, rect) : null
+-        if (anchor) {
+-          // 投送优先：投送区与自动平移区同为 96px，指针进入即激活投送并停平移。
+-          // stageAnchor 记录投送意图；dropGutter 只负责“当前仍在边缘”的视觉反馈。
+-          dropStageAnchor.current = anchor
+-          setDropGutter(anchor)
++        const pointer = { x: event.clientX, y: event.clientY }
++        autoPanPointer.current = pointer
++        const intent = onStageTransfer ? updateDropIntentForDrag(pointer, rect) : idleDropIntent()
++        const previewing = intent.status === 'preview'
++
++        if (previewing) {
+           stopAutoPan()
+-          const candidate = dragCandidate.current
+-          if (!dropGhost && candidate) {
+-            // 进入投送区：真实节点弹回拖拽前的原位，指针下换成虚影，
+-            // 投送/取消都不再移动原画布节点。
+-            if (candidate.originals.length > 0) {
+-              setNodes((current) => current.map((node) => {
+-                const original = candidate.originals.find((item) => item.id === node.id)
+-                return original ? { ...node, x: original.x, y: original.y } : node
+-              }))
+-            }
+-            setDropGhost({ x: event.clientX, y: event.clientY, count: candidate.group.length })
+-          } else if (dropGhost) {
+-            setDropGhost((current) => current ? { ...current, x: event.clientX, y: event.clientY } : current)
+-          }
+-          if (dropHoverTimer.current === null) {
+-            // 顿一下（350ms）即视为用户主动进入投送：弹出投送面板，相机保持锁死。
+-            dropHoverTimer.current = setTimeout(() => {
+-              dropHoverTimer.current = null
+-              const candidate = dragCandidate.current
+-              if (candidate) onStageTransfer?.(candidate.group.map((item) => item.id), anchor)
+-            }, 350)
+-          }
+-        } else if (dropGhost) {
+-          // 离开边缘后 gutter 必须立即熄灭。stageAnchor + 虚影仍保留，
+-          // 这样可以继续把虚影拖到已经展开的 DropShelf；若在画布中央松手则取消。
+-          setDropGutter(null)
+-          if (dropHoverTimer.current !== null) {
+-            clearTimeout(dropHoverTimer.current)
+-            dropHoverTimer.current = null
+-          }
+           setDropGhost((current) => current ? { ...current, x: event.clientX, y: event.clientY } : current)
+         } else {
+-          // 无投送意图：gutter 熄灭（松手不误触发），恢复自动平移。
+-          // 96px 外 auto-pan 强度为 0，不会因边界抖动而晃画布。
+-          if (dropHoverTimer.current !== null) {
+-            clearTimeout(dropHoverTimer.current)
+-            dropHoverTimer.current = null
+-          }
+-          setDropGutter(null)
+-          scheduleAutoPan({ x: event.clientX, y: event.clientY })
+-        }
+-        if (!dropGhost) {
++          // Edge scrolling remains a normal camera behavior while the real nodes keep following the pointer.
++          // The narrower dwell band only arms a possible Drop; it does not steal the drag session.
++          scheduleAutoPan(pointer)
+           const point = toWorld(event.clientX, event.clientY, rect)
+           dragPoint.current = { x: point.x - candidate.offsetX, y: point.y - candidate.offsetY }
+           scheduleDraggedNode()
+@@ -770,12 +786,6 @@
+       </div>)}
+       {returnGroups.map((group) => <div key={group.id} className="return-group-mat" data-return-group={group.id} style={{ left: group.x, top: group.y, width: group.width, height: group.height }}><span>{group.id} · {group.count} 个返回结果</span></div>)}
+       {pendingZone && <div className="pending-return-zone" style={{ left: pendingZone.x, top: pendingZone.y, width: pendingZone.width, height: pendingZone.height }}><span>待确认结果区</span></div>}
+-      {onStageTransfer && draggingId && <><div className={`drop-gutter drop-gutter-left ${dropGutter === 'left' ? 'active' : ''}`} data-testid="drop-gutter-left"><span>投送</span></div><div className={`drop-gutter drop-gutter-bottom ${dropGutter === 'bottom' ? 'active' : ''}`} data-testid="drop-gutter-bottom"><span>投送</span></div></>}
+-      {dropGhost && <div className="lcos-drop-ghost" style={{ left: dropGhost.x, top: dropGhost.y }} aria-hidden="true">
+-        <span className="lcos-drop-ghost-stack"><i /><i /><i /></span>
+-        <strong>{dropGhost.count}</strong>
+-        <small>投送</small>
+-      </div>}
+       {layoutPreview?.map((item) => { const node = byId.get(item.id); return node ? <div key={item.id} className="layout-ghost" style={{ left: item.x, top: item.y, width: node.width, height: node.height }}><span>{node.title}</span></div> : null })}
+       <svg className="edges" width="1800" height="1100" aria-label="可编辑关系">
+         {renderEdges.map((edge) => <EdgePath key={edge.id} edge={edge} from={relationById.get(edge.from)} to={relationById.get(edge.to)} selected={selectedEdgeId === edge.id} focused={Boolean(selectedId && (edge.from === selectedId || edge.to === selectedId))} onSelect={onSelectEdge} onCut={(edgeId) => { setEdges((current) => current.filter((item) => item.id !== edgeId)); onSelectEdge(null) }} onReconnectStart={(endpoint, event) => beginEdgeReconnect(edge, endpoint, event)} />)}
+@@ -818,6 +828,12 @@
+       }} onLinkStart={(event) => beginRelation(node.id, event, { x: node.x + node.width, y: node.y + node.height / 2 })} />)}
+       {lod !== 'full' && <div className="lod-badge">{nodes.length} 个节点 · {lod === 'overview' ? '总览聚合' : '视区降密度'}</div>}
+     </div>
++    {dropCue && <div key={dropCue.key} className={`drop-edge-cue anchor-${dropCue.anchor} phase-${dropCue.phase}`} data-testid={`drop-edge-cue-${dropCue.anchor}`} aria-hidden="true"><i/><span>{dropCue.phase === 'preview' ? '投送' : '停住以投送'}</span></div>}
++    {dropGhost && <div className="lcos-drop-ghost" style={{ left: dropGhost.x, top: dropGhost.y }} aria-hidden="true">
++      <span className="lcos-drop-ghost-stack"><i /><i /><i /></span>
++      <strong>{dropGhost.count}</strong>
++      <small>投送</small>
++    </div>}
+     {selectionToolbarPosition && <div data-testid="selection-toolbar" className="selection-toolbar lcos-selection-strip" style={selectionToolbarPosition} onPointerDown={(event) => event.stopPropagation()}>
+       <button type="button" aria-label="交给 Agent" title="交给 Agent" onClick={(event) => { event.stopPropagation(); onRequestAi() }}><Sparkles size={15} /><span>Agent</span></button>
+       <button type="button" aria-label="创建 Collection" title="创建 Collection" onClick={(event) => { event.stopPropagation(); onCreateScopeFromSelection() }}><FolderTree size={15} /><span>Collection</span></button>
+diff -ruN '--exclude=node_modules' '--exclude=dist' /mnt/data/lcos_src_pristine/apps/web/src/features/drop/dropIntentMachine.ts /mnt/data/lcos_src_0bbe/apps/web/src/features/drop/dropIntentMachine.ts
+--- /mnt/data/lcos_src_pristine/apps/web/src/features/drop/dropIntentMachine.ts	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/lcos_src_0bbe/apps/web/src/features/drop/dropIntentMachine.ts	2026-08-10 02:58:24.744745574 +0000
+@@ -0,0 +1,76 @@
++export type DropIntentAnchor = 'left' | 'bottom'
++
++export const DROP_INTENT_TOKENS = {
++  edgeScrollBand: 96,
++  dwellBand: 44,
++  dwellMs: 520,
++  dwellRadius: 8,
++  cancelDistance: 14,
++  edgeScrollMaxPxPerFrame: 18,
++} as const
++
++export interface DropPoint {
++  readonly x: number
++  readonly y: number
++}
++
++export interface DropBounds {
++  readonly left: number
++  readonly right: number
++  readonly top: number
++  readonly bottom: number
++}
++
++export type DropIntentState =
++  | { readonly status: 'idle' }
++  | { readonly status: 'dwell'; readonly anchor: DropIntentAnchor; readonly origin: DropPoint; readonly startedAt: number }
++  | { readonly status: 'preview'; readonly anchor: DropIntentAnchor }
++
++export const idleDropIntent = (): DropIntentState => ({ status: 'idle' })
++
++export function dropDwellAnchorAt(point: DropPoint, bounds: DropBounds): DropIntentAnchor | null {
++  if (point.y >= bounds.bottom - DROP_INTENT_TOKENS.dwellBand && point.y < bounds.bottom) return 'bottom'
++  if (point.x >= bounds.left && point.x <= bounds.left + DROP_INTENT_TOKENS.dwellBand) return 'left'
++  return null
++}
++
++export function inDropPreviewCarryZone(point: DropPoint, bounds: DropBounds, anchor: DropIntentAnchor): boolean {
++  const hysteresis = DROP_INTENT_TOKENS.cancelDistance
++  if (anchor === 'bottom') {
++    return point.y >= bounds.bottom - DROP_INTENT_TOKENS.edgeScrollBand - hysteresis && point.y < bounds.bottom + hysteresis
++  }
++  return point.x >= bounds.left - hysteresis && point.x <= bounds.left + DROP_INTENT_TOKENS.edgeScrollBand + hysteresis
++}
++
++export function advanceDropIntent(
++  state: DropIntentState,
++  point: DropPoint,
++  bounds: DropBounds,
++  now: number,
++  overDestination = false,
++): DropIntentState {
++  if (state.status === 'preview') {
++    return overDestination || inDropPreviewCarryZone(point, bounds, state.anchor) ? state : idleDropIntent()
++  }
++
++  const anchor = dropDwellAnchorAt(point, bounds)
++  if (!anchor) return idleDropIntent()
++
++  if (state.status === 'dwell' && state.anchor === anchor) {
++    const drift = Math.hypot(point.x - state.origin.x, point.y - state.origin.y)
++    if (drift <= DROP_INTENT_TOKENS.dwellRadius) return state
++  }
++
++  return { status: 'dwell', anchor, origin: point, startedAt: now }
++}
++
++export function completeDropDwell(state: DropIntentState, now: number): DropIntentState {
++  if (state.status !== 'dwell') return state
++  if (now - state.startedAt < DROP_INTENT_TOKENS.dwellMs) return state
++  return { status: 'preview', anchor: state.anchor }
++}
++
++export function dropDwellRemainingMs(state: DropIntentState, now: number): number {
++  if (state.status !== 'dwell') return 0
++  return Math.max(0, DROP_INTENT_TOKENS.dwellMs - (now - state.startedAt))
++}
+diff -ruN '--exclude=node_modules' '--exclude=dist' /mnt/data/lcos_src_pristine/apps/web/src/features/surfaces/ContextFlowSurface.tsx /mnt/data/lcos_src_0bbe/apps/web/src/features/surfaces/ContextFlowSurface.tsx
+--- /mnt/data/lcos_src_pristine/apps/web/src/features/surfaces/ContextFlowSurface.tsx	2026-08-09 16:56:13.000000000 +0000
++++ /mnt/data/lcos_src_0bbe/apps/web/src/features/surfaces/ContextFlowSurface.tsx	2026-08-10 02:58:24.744022922 +0000
+@@ -21,6 +21,10 @@
+   const itemById=new Map(layout.items.map((item)=>[item.node.id,item]))
+   return <section className="lcos-dedicated-surface lcos-context-free" data-testid="surface-context-flow">
+     <header className="lcos-surface-heading"><div><strong>上下文</strong><span>多来源轨迹</span></div><small>来源和链条属于当前 Presentation · 不改变项目原始结构</small></header>
++    <details className={`lcos-capability-source source-${props.source.kind}`}>
++      <summary><i/><strong>{props.source.label}</strong><small>Presentation 来源</small></summary>
++      <div><span>Context Source</span><small>切换来源只改当前视图，不会把 Selection 静默写成成员。</small><nav><button type="button" onClick={()=>props.onStart?.('conversation')}><MessageSquareText size={11}/>对话</button><button type="button" disabled={!props.selectedIds.length} onClick={()=>props.onStart?.('selection')}><MousePointer2 size={11}/>Selection</button><button type="button" onClick={()=>props.onStart?.('agent')}><Bot size={11}/>Agent</button></nav></div>
++    </details>
+     <div className="lcos-context-free-stage">
+       <svg className="lcos-context-free-edges" aria-hidden="true">{layout.edges.map(({edge,x1,y1,x2,y2})=><line key={edge.id} x1={`${x1}%`} y1={`${y1}%`} x2={`${x2}%`} y2={`${y2}%`} className={edge.active?'active':''}/>)}</svg>
+       <svg className="lcos-context-source-links" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">{sources.flatMap((source)=>source.objectIds.slice(0,5).flatMap((id)=>{const item=itemById.get(id);if(!item)return[];const offset=offsets[source.id]??{x:0,y:0},sx=source.x+offset.x/12+15,sy=source.y+offset.y/7.6+3;return <path key={`${source.id}:${id}`} d={`M ${sx} ${sy} C 28 ${sy}, ${Math.max(30,item.left-9)} ${item.top+5}, ${item.left} ${item.top+5}`}/> }))}</svg>
+diff -ruN '--exclude=node_modules' '--exclude=dist' /mnt/data/lcos_src_pristine/apps/web/src/features/surfaces/ProjectionSurfaces.tsx /mnt/data/lcos_src_0bbe/apps/web/src/features/surfaces/ProjectionSurfaces.tsx
+--- /mnt/data/lcos_src_pristine/apps/web/src/features/surfaces/ProjectionSurfaces.tsx	2026-08-09 16:56:13.000000000 +0000
++++ /mnt/data/lcos_src_0bbe/apps/web/src/features/surfaces/ProjectionSurfaces.tsx	2026-08-10 02:58:24.743890446 +0000
+@@ -15,11 +15,12 @@
+ const WorkSurface=lazy(()=>import('./WorkSurface').then((module)=>({default:module.WorkSurface})))
+ const WorkFreeSurface=lazy(()=>import('./WorkFreeSurface').then((module)=>({default:module.WorkFreeSurface})))
+ 
+-interface Props { projectId:string; scopeId:string; surface:Exclude<SurfaceId,'arrange'>; nodes:CanvasNode[]; edges:CanvasEdge[]; selectedIds:string[]; workspaceFocusIds?:string[]; contextRuntime?:ContextSurfaceRuntime; workRuntime?:WorkSurfaceRuntime; deliverRuntime?:DeliverSurfaceRuntime; onSelect:(id:string, additive?:boolean)=>void; onDoubleClick:(id:string)=>void; onContextStart?:(kind:'conversation'|'selection'|'agent')=>void; onWorkflowStart?:(kind:'selection'|'skill'|'agent')=>void }
++interface Props { projectId:string; scopeId:string; surface:Exclude<SurfaceId,'arrange'>; nodes:CanvasNode[]; edges:CanvasEdge[]; selectedIds:string[]; presentationIds?:string[]; presentationIncludeOneHop?:boolean; workspaceFocusIds?:string[]; contextRuntime?:ContextSurfaceRuntime; workRuntime?:WorkSurfaceRuntime; deliverRuntime?:DeliverSurfaceRuntime; onSelect:(id:string, additive?:boolean)=>void; onDoubleClick:(id:string)=>void; onContextStart?:(kind:'conversation'|'selection'|'agent')=>void; onWorkflowStart?:(kind:'selection'|'skill'|'agent')=>void }
+ 
+ /** Dedicated renderers share Project Truth and Selection, not business taxonomy. */
+ export function ProjectionSurface(props:Props){
+-  const intent={explicitObjectIds:props.selectedIds,workspaceFocusIds:props.workspaceFocusIds,includeOneHop:true}
++  // Selection is a transient spatial session. It becomes Presentation membership only after an explicit action.
++  const intent={explicitObjectIds:props.presentationIds,workspaceFocusIds:props.workspaceFocusIds,includeOneHop:props.presentationIncludeOneHop??true}
+   const context=resolveContextView(props.nodes,props.edges,intent,props.contextRuntime?.history??[])
+   const workflow=resolveWorkflowView(props.nodes,props.edges,intent)
+   const isContext=props.surface==='context-flow'||props.surface==='context-tree'||props.surface==='context-graph'
+@@ -31,7 +32,7 @@
+     props.surface==='context-flow'?<ContextFlowSurface {...common} source={{kind:context.sourceKind,label:context.sourceLabel}} runtime={contextRuntime} onStart={props.onContextStart}/>:
+     props.surface==='context-tree'?<ContextTreeSurface {...common} runtime={contextRuntime}/>:
+     props.surface==='context-graph'?<ContextGraphSurface {...common} runtime={contextRuntime}/>:
+-    props.surface==='workflow'?<WorkflowSurface {...common} onStart={props.onWorkflowStart}/>:
++    props.surface==='workflow'?<WorkflowSurface {...common} source={{kind:workflow.sourceKind,label:workflow.sourceLabel}} onStart={props.onWorkflowStart}/>:
+     props.surface==='work'?<WorkSurface {...common} runtime={props.workRuntime}/>:
+     props.surface==='work-free'?<WorkFreeSurface {...common}/>:
+     props.surface==='deliver-versions'?<DeliverSurface {...common} runtime={props.deliverRuntime} variant="versions"/>:
+diff -ruN '--exclude=node_modules' '--exclude=dist' /mnt/data/lcos_src_pristine/apps/web/src/features/surfaces/WorkflowSurface.tsx /mnt/data/lcos_src_0bbe/apps/web/src/features/surfaces/WorkflowSurface.tsx
+--- /mnt/data/lcos_src_pristine/apps/web/src/features/surfaces/WorkflowSurface.tsx	2026-08-09 16:56:13.000000000 +0000
++++ /mnt/data/lcos_src_0bbe/apps/web/src/features/surfaces/WorkflowSurface.tsx	2026-08-10 02:58:24.744102801 +0000
+@@ -5,7 +5,7 @@
+ import { SurfaceObject } from './SurfaceObject'
+ import { layoutWorkflowGraph } from './surfaceLayouts'
+ 
+-interface Props { projectId:string;scopeId:string;nodes:CanvasNode[];edges:CanvasEdge[];selectedIds:string[];onSelect:(id:string,additive?:boolean)=>void;onDoubleClick:(id:string)=>void;onStart?:(kind:'selection'|'skill'|'agent')=>void }
++interface Props { projectId:string;scopeId:string;nodes:CanvasNode[];edges:CanvasEdge[];selectedIds:string[];source?:{kind:string;label:string};onSelect:(id:string,additive?:boolean)=>void;onDoubleClick:(id:string)=>void;onStart?:(kind:'selection'|'skill'|'agent')=>void }
+ type Offset={x:number;y:number}
+ 
+ /** Project-defined workflow Presentation; never a fixed DAG schema. */
+@@ -28,6 +28,10 @@
+   const removeKeepingFlow=(id:string)=>{const incoming=presentationEdges.filter((edge)=>edge.to===id),outgoing=presentationEdges.filter((edge)=>edge.from===id),bridges=incoming.flatMap((from)=>outgoing.map((to,index)=>({id:`presentation:${id}:${from.from}:${to.to}:${index}`,from:from.from,to:to.to,kind:'reference' as const})));setPresentationEdges((current)=>[...current.filter((edge)=>edge.from!==id&&edge.to!==id),...bridges]);setHiddenIds((current)=>[...current,id])}
+   return <section className="lcos-dedicated-surface lcos-workflow-surface" data-testid="surface-workflow">
+     <header className="lcos-surface-heading lcos-workflow-heading"><div><strong>工作流</strong><span>能力与执行现场</span></div><small>项目自己定义怎么工作 · {visibleNodes.length} 个对象 · {visibleEdges.length} 条 Presentation 关系</small></header>
++    <details className={`lcos-capability-source source-${props.source?.kind??'empty'}`}>
++      <summary><i/><strong>{props.source?.label??'尚未组织 Workflow Presentation'}</strong><small>Presentation 来源</small></summary>
++      <div><span>Workflow Source</span><small>启发式内容只是建议。Selection 只有显式加入后才成为当前工作流成员。</small><nav><button type="button" disabled={!props.selectedIds.length} onClick={()=>props.onStart?.('selection')}><Network size={11}/>Selection</button><button type="button" onClick={()=>props.onStart?.('skill')}><Wrench size={11}/>Skill</button><button type="button" onClick={()=>props.onStart?.('agent')}><Bot size={11}/>Agent</button></nav></div>
++    </details>
+     <div ref={stageRef} className="lcos-workflow-stage" onPointerUp={()=>{drag.current=null}} onPointerCancel={()=>{drag.current=null}}>
+       <div className="lcos-workflow-hint"><Sparkles size={13}/><span>框选、点空白处描述，或从任意对象开始</span><button type="button" onClick={()=>props.onStart?.('agent')}>交给 Agent</button></div>
+       <svg className="lcos-workflow-edges" viewBox="0 0 100 100" preserveAspectRatio="none">{edges.map(({edge,x1,y1,x2,y2})=>{const m=x1+(x2-x1)*.5;return <path key={edge.id} d={`M${x1} ${y1} C${m} ${y1},${m} ${y2},${x2} ${y2}`} className={`${edge.active?'active':''} ${selectedEdge===edge.id?'selected':''} ${edge.id.startsWith('presentation:')?'presentation':''}`} onClick={()=>setSelectedEdge(edge.id)}/>})}</svg>
+diff -ruN '--exclude=node_modules' '--exclude=dist' /mnt/data/lcos_src_pristine/apps/web/src/reconstruction.css /mnt/data/lcos_src_0bbe/apps/web/src/reconstruction.css
+--- /mnt/data/lcos_src_pristine/apps/web/src/reconstruction.css	2026-08-09 16:56:13.000000000 +0000
++++ /mnt/data/lcos_src_0bbe/apps/web/src/reconstruction.css	2026-08-10 02:58:24.744615711 +0000
+@@ -615,35 +615,11 @@
+ .lcos-reconstructed .lcos-package-list { display:grid; gap:9px; }
+ 
+ /* ---------- Drop ---------- */
+-.lcos-reconstructed .vnext-drop-gutter,
+-.lcos-reconstructed .drop-gutter-left,
+-.lcos-reconstructed .drop-gutter-bottom { z-index:80 !important; border:0 !important; background:transparent !important; pointer-events:none; }
+-.lcos-reconstructed .drop-gutter span {
+-  position:absolute;
+-  left:50%;
+-  top:50%;
+-  transform:translate(-50%,-50%) scale(.92);
+-  padding:7px 14px;
+-  border:1px solid rgba(139,92,246,.24);
+-  border-radius:999px;
+-  background:rgba(255,255,255,.96);
+-  color:#6b4fb5;
+-  font-size:10px;
+-  font-weight:620;
+-  letter-spacing:.04em;
+-  white-space:nowrap;
+-  box-shadow:0 8px 24px rgba(52,44,84,.16);
+-  opacity:0;
+-  transition:opacity .06s ease,transform .06s ease;
+-}
+-.lcos-reconstructed .drop-gutter.active span { opacity:1; transform:translate(-50%,-50%) scale(1); }
+-.lcos-reconstructed .drop-gutter.active { background:linear-gradient(0deg,rgba(139,92,246,.13),rgba(139,92,246,.04) 55%,transparent) !important; }
+-.lcos-reconstructed .drop-gutter-left.active { background:linear-gradient(90deg,rgba(139,92,246,.13),rgba(139,92,246,.04) 55%,transparent) !important; }
+-.lcos-reconstructed .drop-gutter-left::after,
+-.lcos-reconstructed .vnext-drop-gutter-left::after { content:""; position:absolute; left:0; top:0; bottom:0; width:7px; background:linear-gradient(90deg,rgba(139,92,246,.18),rgba(59,130,246,.07),transparent); filter:blur(.4px); opacity:.78; }
+-.lcos-reconstructed .drop-gutter-bottom::after,
+-.lcos-reconstructed .vnext-drop-gutter-bottom::after { content:""; position:absolute; left:0; right:0; bottom:0; height:8px; background:linear-gradient(0deg,rgba(139,92,246,.17),rgba(59,130,246,.06),transparent); opacity:.78; }
+-.lcos-reconstructed .drop-gutter.active::after { opacity:1; }
++/* Screen-space progressive cue. No persistent dual gutter: edge scrolling stays active until dwell completes. */
++.lcos-reconstructed .drop-edge-cue { z-index:80; border:0; pointer-events:none; }
++.lcos-reconstructed .drop-edge-cue.anchor-left { background:linear-gradient(90deg,rgba(139,92,246,.065),rgba(139,92,246,.015) 62%,transparent); }
++.lcos-reconstructed .drop-edge-cue.anchor-bottom { background:linear-gradient(0deg,rgba(59,130,246,.065),rgba(59,130,246,.014) 62%,transparent); }
++.lcos-reconstructed .drop-edge-cue.phase-preview { background:transparent; }
+ 
+ /* Drop ghost — real nodes stay put, a light stack follows the pointer. */
+ .lcos-drop-ghost {
+@@ -782,12 +758,6 @@
+   .lcos-reconstructed *::after { scroll-behavior:auto !important; animation-duration:.001ms !important; animation-iteration-count:1 !important; transition-duration:.001ms !important; }
+ }
+ 
+-/* The reconstructed SurfaceHost already excludes the persistent dock, so gutter
+-   capture occupies the actual canvas edge rather than reserving a second 64px dock. */
+-.lcos-reconstructed .drop-gutter-left { left:0 !important; top:0 !important; bottom:0 !important; width:92px !important; }
+-.lcos-reconstructed .drop-gutter-bottom { left:0 !important; right:0 !important; bottom:0 !important; height:92px !important; }
+-.lcos-reconstructed .drop-gutter span { display:none !important; }
+-
+ /* Actual dedicated-surface markup alignment. */
+ .lcos-reconstructed .lcos-context-graph > .lcos-graph-edges { position:absolute; z-index:0; inset:48px 0 0; width:100%; height:calc(100% - 48px); pointer-events:none; }
+ .lcos-reconstructed .lcos-context-graph > .lcos-graph-edges line { stroke:rgba(92,85,109,.15); stroke-width:.18; vector-effect:non-scaling-stroke; }
+diff -ruN '--exclude=node_modules' '--exclude=dist' /mnt/data/lcos_src_pristine/apps/web/src/vnext.css /mnt/data/lcos_src_0bbe/apps/web/src/vnext.css
+--- /mnt/data/lcos_src_pristine/apps/web/src/vnext.css	2026-08-09 16:56:13.000000000 +0000
++++ /mnt/data/lcos_src_0bbe/apps/web/src/vnext.css	2026-08-10 02:58:24.744281556 +0000
+@@ -271,13 +271,23 @@
+ /* -------------------------------------------------------------------------- */
+ /* Drop gutters and shelf                                                      */
+ /* -------------------------------------------------------------------------- */
+-.drop-gutter { position:absolute; z-index:45; pointer-events:none; opacity:.42; transition:opacity 110ms ease,background 110ms ease; }
+-.drop-gutter span { opacity:0; font-size:8px; letter-spacing:.1em; color:var(--vnext-ink-26); text-transform:uppercase; }
+-.drop-gutter-left { left:0; top:0; bottom:64px; width:92px; background:linear-gradient(90deg,rgba(139,92,246,.04),transparent); }
+-.drop-gutter-bottom { left:0; right:0; bottom:64px; height:92px; background:linear-gradient(0deg,rgba(59,130,246,.045),transparent); }
+-.drop-gutter.active { opacity:1; }
+-.drop-gutter-left.active { background:linear-gradient(90deg,rgba(139,92,246,.13),rgba(59,130,246,.035) 55%,transparent); box-shadow:inset 2px 0 0 rgba(139,92,246,.24); }
+-.drop-gutter-bottom.active { background:linear-gradient(0deg,rgba(59,130,246,.13),rgba(34,211,238,.025) 55%,transparent); box-shadow:inset 0 -2px 0 rgba(59,130,246,.24); }
++.drop-edge-cue { position:absolute; z-index:78; pointer-events:none; overflow:hidden; opacity:.9; }
++.drop-edge-cue.anchor-left { left:0; top:0; bottom:0; width:44px; background:linear-gradient(90deg,rgba(139,92,246,.055),transparent); }
++.drop-edge-cue.anchor-bottom { left:0; right:0; bottom:0; height:44px; background:linear-gradient(0deg,rgba(59,130,246,.055),transparent); }
++.drop-edge-cue i { position:absolute; display:block; border-radius:999px; background:linear-gradient(180deg,rgba(139,92,246,.52),rgba(59,130,246,.42)); box-shadow:0 0 18px rgba(107,92,222,.18); }
++.drop-edge-cue.anchor-left i { left:0; top:0; width:2px; height:100%; transform:scaleY(0); transform-origin:center top; }
++.drop-edge-cue.anchor-bottom i { left:0; bottom:0; width:100%; height:2px; transform:scaleX(0); transform-origin:left center; }
++.drop-edge-cue.phase-dwell.anchor-left i { animation:lcos-drop-dwell-y 520ms linear forwards; }
++.drop-edge-cue.phase-dwell.anchor-bottom i { animation:lcos-drop-dwell-x 520ms linear forwards; }
++.drop-edge-cue.phase-preview i { transform:none; background:linear-gradient(180deg,rgba(139,92,246,.66),rgba(59,130,246,.54)); }
++.drop-edge-cue span { position:absolute; padding:5px 9px; border:1px solid rgba(92,75,170,.12); border-radius:999px; background:rgba(253,253,255,.82); color:rgba(73,61,122,.7); font-size:9px; font-weight:600; white-space:nowrap; box-shadow:0 6px 18px rgba(44,41,63,.08); backdrop-filter:blur(10px); opacity:0; }
++.drop-edge-cue.anchor-left span { left:9px; top:50%; transform:translateY(-50%); }
++.drop-edge-cue.anchor-bottom span { left:50%; bottom:9px; transform:translateX(-50%); }
++.drop-edge-cue.phase-dwell span { animation:lcos-drop-label-in 1ms linear 312ms forwards; }
++.drop-edge-cue.phase-preview span { opacity:1; }
++@keyframes lcos-drop-dwell-y { to { transform:scaleY(1); } }
++@keyframes lcos-drop-dwell-x { to { transform:scaleX(1); } }
++@keyframes lcos-drop-label-in { to { opacity:.86; } }
+ .vnext-drop-shelf {
+   position:absolute;
+   z-index:70;
+diff -ruN '--exclude=node_modules' '--exclude=dist' /mnt/data/lcos_src_pristine/apps/web/tests/capabilityViewResolver.test.ts /mnt/data/lcos_src_0bbe/apps/web/tests/capabilityViewResolver.test.ts
+--- /mnt/data/lcos_src_pristine/apps/web/tests/capabilityViewResolver.test.ts	2026-08-09 16:56:13.000000000 +0000
++++ /mnt/data/lcos_src_0bbe/apps/web/tests/capabilityViewResolver.test.ts	2026-08-10 02:58:24.744699726 +0000
+@@ -18,7 +18,7 @@
+     expect(view.edges.map((item) => item.id)).toEqual(['a-b'])
+   })
+ 
+-  it('uses Selection plus one hop without swallowing the project', () => {
++  it('uses explicitly committed objects plus one hop without swallowing the project', () => {
+     const view = resolveContextView(nodes, edges, { explicitObjectIds: ['a'], includeOneHop: true }, [])
+     expect(view.sourceKind).toBe('selection')
+     expect(view.nodes.map((item) => item.id)).toEqual(['a', 'b'])
+diff -ruN '--exclude=node_modules' '--exclude=dist' /mnt/data/lcos_src_pristine/apps/web/tests/dropIntentMachine.test.ts /mnt/data/lcos_src_0bbe/apps/web/tests/dropIntentMachine.test.ts
+--- /mnt/data/lcos_src_pristine/apps/web/tests/dropIntentMachine.test.ts	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/lcos_src_0bbe/apps/web/tests/dropIntentMachine.test.ts	2026-08-10 02:58:24.744781267 +0000
+@@ -0,0 +1,49 @@
++import { describe, expect, it } from 'vitest'
++import {
++  advanceDropIntent,
++  completeDropDwell,
++  DROP_INTENT_TOKENS,
++  dropDwellAnchorAt,
++  idleDropIntent,
++} from '../src/features/drop/dropIntentMachine'
++
++const bounds = { left: 100, right: 1100, top: 50, bottom: 750 }
++
++describe('drop intent machine', () => {
++  it('keeps the outer edge-scroll band free from Drop dwell', () => {
++    // 70px from the left edge: inside 96px edge-scroll, outside 44px dwell.
++    expect(dropDwellAnchorAt({ x: 170, y: 400 }, bounds)).toBeNull()
++    expect(advanceDropIntent(idleDropIntent(), { x: 170, y: 400 }, bounds, 0).status).toBe('idle')
++  })
++
++  it('starts dwell only in the inner left or bottom band', () => {
++    expect(dropDwellAnchorAt({ x: 130, y: 400 }, bounds)).toBe('left')
++    expect(dropDwellAnchorAt({ x: 600, y: 725 }, bounds)).toBe('bottom')
++
++    const next = advanceDropIntent(idleDropIntent(), { x: 130, y: 400 }, bounds, 10)
++    expect(next).toMatchObject({ status: 'dwell', anchor: 'left', startedAt: 10 })
++  })
++
++  it('preserves dwell for small pointer drift and restarts it after the dwell radius', () => {
++    const started = advanceDropIntent(idleDropIntent(), { x: 130, y: 400 }, bounds, 10)
++    const stable = advanceDropIntent(started, { x: 136, y: 404 }, bounds, 200)
++    expect(stable).toEqual(started)
++
++    const moved = advanceDropIntent(started, { x: 141, y: 400 }, bounds, 200)
++    expect(moved).toMatchObject({ status: 'dwell', anchor: 'left', startedAt: 200 })
++  })
++
++  it('does not enter preview before 520ms and does after the threshold', () => {
++    const started = advanceDropIntent(idleDropIntent(), { x: 130, y: 400 }, bounds, 100)
++    expect(completeDropDwell(started, 100 + DROP_INTENT_TOKENS.dwellMs - 1).status).toBe('dwell')
++    expect(completeDropDwell(started, 100 + DROP_INTENT_TOKENS.dwellMs)).toEqual({ status: 'preview', anchor: 'left' })
++  })
++
++  it('keeps preview while carried inside the outer edge band or over the destination sheet', () => {
++    const preview = { status: 'preview', anchor: 'left' } as const
++    expect(advanceDropIntent(preview, { x: 180, y: 400 }, bounds, 1000).status).toBe('preview')
++    expect(advanceDropIntent(preview, { x: 205, y: 400 }, bounds, 1000).status).toBe('preview')
++    expect(advanceDropIntent(preview, { x: 400, y: 400 }, bounds, 1000, true).status).toBe('preview')
++    expect(advanceDropIntent(preview, { x: 400, y: 400 }, bounds, 1000, false).status).toBe('idle')
++  })
++})
+diff -ruN '--exclude=node_modules' '--exclude=dist' /mnt/data/lcos_src_pristine/apps/web/tests/presentationMembershipContract.test.ts /mnt/data/lcos_src_0bbe/apps/web/tests/presentationMembershipContract.test.ts
+--- /mnt/data/lcos_src_pristine/apps/web/tests/presentationMembershipContract.test.ts	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/lcos_src_0bbe/apps/web/tests/presentationMembershipContract.test.ts	2026-08-10 02:58:24.744843399 +0000
+@@ -0,0 +1,11 @@
++import { readFileSync } from 'node:fs'
++import { describe, expect, it } from 'vitest'
++
++const projectionSource = readFileSync(new URL('../src/features/surfaces/ProjectionSurfaces.tsx', import.meta.url), 'utf8')
++
++describe('presentation membership contract', () => {
++  it('does not promote transient Selection to Context or Workflow membership', () => {
++    expect(projectionSource).not.toContain('explicitObjectIds:props.selectedIds')
++    expect(projectionSource).toContain('explicitObjectIds:props.presentationIds')
++  })
++})

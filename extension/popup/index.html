@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main class="popup">
+    <h1>捕获到 LCOS</h1>
+    <div class="kinds">
+      <button data-kind="page" class="active">页面</button>
+      <button data-kind="selection">选区</button>
+      <button data-kind="screenshot">截图</button>
+      <button data-kind="clipboard">剪贴板</button>
+    </div>
+    <div class="target">发送到 <strong>Capture Space</strong></div>
+    <button id="capture" class="primary">捕获</button>
+    <p id="status"></p>
+  </main>
+  <script src="../shared/capture-message.js"></script>
+  <script src="../shared/localhost-client.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "runtime": {
+    "dir": ".codex-runtime",
+    "stateFile": "dev-launcher-state.json",
+    "logsDir": "logs",
+    "tokenFile": "local-core-token",
+    "browserProfileDir": "browser-profile",
+    "bridgeRuntimeSubdir": "bridge",
+    "orchestratorLockFile": "lcos-orchestrator-v2.lock"
+  },
+  "services": {
+    "core": {
+      "port": 43121,
+      "health": "/health",
+      "kind": "node",
+      "bind": "127.0.0.1",
+      "dataDir": "apps/local-core/.data",
+      "note": "唯一事实源：SQLite + 文件观察 + SSE"
+    },
+    "bridge": {
+      "port": 43122,
+      "health": "/health",
+      "kind": "python",
+      "bind": "127.0.0.1",
+      "note": "内部 worker 网关：任务租约/认领/心跳/结果信封"
+    },
+    "web": {
+      "port": 5173,
+      "kind": "vite",
+      "bind": "127.0.0.1",
+      "note": "人机界面"
+    },
+    "orchestrator": {
+      "kind": "node",
+      "script": "tools/codex-orchestrator/watch.ps1",
+      "note": "看门狗：派活 + 会话绑定 + 任务定向"
+    },
+    "tray": {
+      "kind": "powershell",
+      "script": "scripts/runtime-host-tray.ps1",
+      "note": "Runtime Host 托盘"
+    }
+  },
+  "mcp": {
+    "agent": {
+      "launcher": "tools/lcos-agent/launch-local-creative-os-mcp.cmd",
+      "role": "agent",
+      "toolCount": 37,
+      "note": "CLI-first 白名单"
+    },
+    "executor": {
+      "launcher": "tools/lcos-agent/launch-lcos-executor-mcp.cmd",
+      "role": "executor",
+      "toolCount": 8,
+      "note": "物理独立文件 executor-tools.mjs"
+    }
+  },
+  "ownership": [
+    "Core 是唯一事实源；Web/CLI/MCP 只做适配，绝不直接写 SQLite",
+    "Bridge 只拥有任务租约/结果信封；看门狗只负责派活与会话绑定",
+    ".creative-os 仅 Local Core 写入；AI 结果在确认前永远是 Draft",
+    "SQLite 不存大 BLOB；缓存用内容哈希且可重建",
+    "所有服务只绑定 127.0.0.1；不开放局域网/公网监听",
+    "双同步分工：RuntimeAutoSyncService=收结果入 Review；看门狗=派新活，二者互补"
+  ],
+  "lifecycle": {
+    "startOrder": ["bridge", "core", "web", "orchestrator", "tray"],
+    "stopOrder": ["web", "orchestrator", "core", "bridge"],
+    "restartPolicy": "每服务独立健康探活与退避；5 分钟窗口内最多 3 次重启"
+  }
+}

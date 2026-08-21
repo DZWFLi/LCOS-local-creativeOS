@@ -1,0 +1,10 @@
+{
+  "contractVersion": "bridge-result-v1",
+  "taskId": "task-replace-me",
+  "lcosRunId": "run-analyze-demo",
+  "providerStatus": "review",
+  "summary": "第二幕缺少明确冲突，产品卖点与人物行动尚未形成因果。",
+  "changedFiles": [],
+  "warnings": ["本次分析未创建项目文件。"],
+  "suggestedNextActions": ["创建一个 revise Run，重写第二幕冲突。"]
+}

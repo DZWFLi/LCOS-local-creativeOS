@@ -1,0 +1,42 @@
+{
+  "contractVersion": "bridge-task-v1",
+  "lcosRunId": "run-create-demo",
+  "idempotencyKey": "run-create-demo",
+  "requestFingerprint": "replace-with-canonical-request-hash",
+  "manifestId": "manifest-create-demo",
+  "manifestHash": "replace-with-manifest-hash",
+  "outputIntent": "create",
+  "instructions": "基于项目上下文，新建一份 Markdown 脚本和一份镜头清单。",
+  "provider": "workbuddy",
+  "taskType": "creative_run",
+  "runtimeInputPackPath": "C:\\LCOS\\runs\\run-create-demo\\runtime-input-pack.json",
+  "outputRoot": "C:\\LCOS\\runs\\run-create-demo\\outputs",
+  "expectedOutputs": [
+    {
+      "outputId": "script",
+      "role": "script",
+      "action": "created",
+      "absolutePath": "C:\\LCOS\\runs\\run-create-demo\\outputs\\script.md",
+      "mediaType": "text/markdown",
+      "suggestedName": "script.md",
+      "required": true
+    },
+    {
+      "outputId": "shot-list",
+      "role": "shot_list",
+      "action": "created",
+      "absolutePath": "C:\\LCOS\\runs\\run-create-demo\\outputs\\shot-list.md",
+      "mediaType": "text/markdown",
+      "suggestedName": "shot-list.md",
+      "required": true
+    }
+  ],
+  "outputPolicy": {
+    "allowZeroFiles": false,
+    "allowAdditionalFiles": false,
+    "maxFiles": 5
+  },
+  "timeoutSeconds": 900,
+  "reportMode": "short",
+  "metadata": {}
+}

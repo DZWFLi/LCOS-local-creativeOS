@@ -1,0 +1,14 @@
+{
+  "name": "@local-creative-os/agent-tools",
+  "private": true,
+  "version": "0.2.0",
+  "type": "module",
+  "bin": {
+    "lcos": "./cli.mjs",
+    "lcos-mcp": "./mcp-server.mjs"
+  },
+  "lcosSkill": "../../packages/skills/lcos-project-context/SKILL.md",
+  "scripts": {
+    "smoke": "node cli.mjs help"
+  }
+}

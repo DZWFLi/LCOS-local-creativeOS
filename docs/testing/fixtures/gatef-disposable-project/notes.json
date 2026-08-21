@@ -1,0 +1,10 @@
+{
+  "project": "disposable-test-project",
+  "purpose": "Codex real-run evidence",
+  "createdAt": "2026-08-05",
+  "notes": [
+    "brief.md 是主文件",
+    "reference-1.png 与 reference-2.png 是视觉参考",
+    "sample-skill.yaml 是 Skill 样本文本"
+  ]
+}

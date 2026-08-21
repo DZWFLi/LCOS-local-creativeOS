@@ -1,0 +1,182 @@
+/* R3.1-A closeout: additive styles only. Keep the current Rail interaction CSS untouched. */
+
+.lcos-workflow-graph-stage.lcos-presentation-spatial {
+  position: absolute;
+  inset: 48px 0 0;
+}
+
+.lcos-workflow-graph-world,
+.lcos-context-dot-world {
+  position: relative;
+}
+
+.lcos-context-dot-edges path {
+  fill: none;
+  stroke: color-mix(in srgb, currentColor 22%, transparent);
+  stroke-width: 1.2;
+}
+
+.lcos-context-dot-edges .lcos-context-overlap-edge path {
+  stroke-width: calc(1px + var(--overlap, .2) * 3px);
+  stroke-dasharray: 3 6;
+}
+
+.lcos-context-dot-edges text {
+  font-size: 10px;
+  fill: color-mix(in srgb, currentColor 48%, transparent);
+}
+
+.lcos-context-dot-node,
+.lcos-context-project-dot,
+.lcos-workflow-graph-workflow {
+  position: absolute;
+}
+
+.lcos-context-dot-node {
+  display: grid;
+  place-items: center;
+  overflow: visible;
+}
+
+.lcos-context-dot-core {
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, #7259d6 30%, transparent);
+  background: radial-gradient(circle at 35% 30%, rgba(255,255,255,.98), rgba(239,236,255,.92) 62%, rgba(218,229,255,.82));
+  box-shadow: 0 10px 34px rgba(80,64,150,.12), inset 0 0 0 5px rgba(255,255,255,.46);
+  color: #43366e;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  gap: 2px;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.lcos-context-dot-core:hover {
+  transform: scale(1.06);
+  box-shadow: 0 13px 38px rgba(80,64,150,.18), inset 0 0 0 5px rgba(255,255,255,.52);
+}
+
+.lcos-context-dot-core b {
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.lcos-context-dot-label {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  width: 160px;
+  transform: translateX(-50%);
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.25;
+  color: color-mix(in srgb, currentColor 78%, transparent);
+  pointer-events: none;
+}
+
+.lcos-context-project-dot {
+  border: 0;
+  border-radius: 999px;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  color: inherit;
+  overflow: visible;
+}
+
+.lcos-context-project-dot > i {
+  position: absolute;
+  inset: 18%;
+  border-radius: 999px;
+  background: color-mix(in srgb, #6b84b8 45%, white);
+  box-shadow: 0 0 0 5px rgba(107,132,184,.07);
+  transition: transform 140ms ease, box-shadow 140ms ease;
+}
+
+.lcos-context-project-dot:hover > i,
+.lcos-context-project-dot.is-selected > i {
+  transform: scale(1.14);
+  box-shadow: 0 0 0 8px rgba(107,132,184,.12);
+}
+
+.lcos-context-project-dot > span {
+  position: absolute;
+  top: calc(100% + 5px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 140px;
+  font-size: 10px;
+  line-height: 1.2;
+  text-align: center;
+  color: color-mix(in srgb, currentColor 68%, transparent);
+  pointer-events: none;
+}
+
+.lcos-workflow-graph-edges path {
+  fill: none;
+  stroke: color-mix(in srgb, #56637a 42%, transparent);
+  stroke-width: 1.5;
+}
+
+.lcos-workflow-graph-edges .membership path {
+  stroke: color-mix(in srgb, #6c57ce 52%, transparent);
+  stroke-width: 1.8;
+}
+
+.lcos-workflow-graph-edges text {
+  font-size: 10px;
+  fill: color-mix(in srgb, currentColor 54%, transparent);
+}
+
+.lcos-workflow-graph-workflow {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto 1fr auto;
+  gap: 5px 12px;
+  align-items: center;
+  padding: 15px 16px;
+  border: 1px solid rgba(95,82,177,.18);
+  border-radius: 20px;
+  background: linear-gradient(135deg, rgba(251,250,255,.97), rgba(240,244,255,.94));
+  box-shadow: 0 12px 34px rgba(68,75,113,.10);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lcos-workflow-graph-workflow > span {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 10px;
+  color: rgba(75,66,135,.66);
+}
+
+.lcos-workflow-graph-workflow > strong {
+  grid-column: 1 / 2;
+  font-size: 14px;
+}
+
+.lcos-workflow-graph-workflow > small {
+  grid-column: 1 / 2;
+  font-size: 10px;
+  opacity: .6;
+}
+
+.lcos-workflow-graph-workflow > svg {
+  grid-column: 2;
+  grid-row: 1 / 4;
+  opacity: .54;
+}
+
+.lcos-workflow-graph-empty {
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  max-width: 360px;
+  margin: auto;
+  text-align: center;
+  opacity: .72;
+}

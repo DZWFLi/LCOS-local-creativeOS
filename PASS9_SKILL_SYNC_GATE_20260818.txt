@@ -1,0 +1,46 @@
+LCOS PASS9 Skill V4.3 Sync Gate · 2026-08-18
+
+== node syntax ==
+PASS installer + validator syntax
+
+== static validator ==
+PASS lcos-project-context: root 3469 bytes
+PASS lcos-project-curator: root 3518 bytes
+PASS lcos-skill-author: root 2835 bytes
+PASS lcos-executor-run: root 2900 bytes
+PASS local-creative-os-backend-flow: root 3009 bytes
+PASS local-creative-os-frontend-loop: root 3163 bytes
+PASS workbuddy-orchestrator: root 2746 bytes
+PASS curator index references checked: 41
+PASS index managed status is converged
+PASS LCOS Skill v2 static validation · 7 managed skills
+
+== resolver 11 routes ==
+PASS ingest_conversation -> routes/ingest-conversation.md (load=5)
+PASS ingest_capture_batch -> routes/ingest-capture-batch.md (load=7)
+PASS reorganize -> routes/reorganize-presentation.md (load=6)
+PASS retrieve_for_task -> routes/retrieve-for-task.md (load=4)
+PASS update_existing_project -> routes/update-existing-project.md (load=6)
+PASS context_build -> routes/context-build.md (load=6)
+PASS context_edit -> routes/context-edit.md (load=5)
+PASS workflow_build -> routes/workflow-build.md (load=5)
+PASS workflow_edit -> routes/workflow-edit.md (load=4)
+PASS filesystem_organize -> routes/filesystem-organize.md (load=5)
+PASS handoff_continue -> routes/handoff-continue.md (load=4)
+
+== managed install in temp CODEX_HOME ==
+Installed LCOS Codex skill: /tmp/tmp.pjh7ieYPfi/.codex/skills/lcos-project-context
+Installed LCOS Codex skill: /tmp/tmp.pjh7ieYPfi/.codex/skills/lcos-project-curator
+Installed LCOS Codex skill: /tmp/tmp.pjh7ieYPfi/.codex/skills/lcos-skill-author
+Installed LCOS Codex skill: /tmp/tmp.pjh7ieYPfi/.codex/skills/lcos-executor-run
+Installed LCOS Codex skill: /tmp/tmp.pjh7ieYPfi/.codex/skills/local-creative-os-backend-flow
+Installed LCOS Codex skill: /tmp/tmp.pjh7ieYPfi/.codex/skills/local-creative-os-frontend-loop
+Installed LCOS Codex skill: /tmp/tmp.pjh7ieYPfi/.codex/skills/workbuddy-orchestrator
+Installed 7 LCOS skills: lcos-project-context, lcos-project-curator, lcos-skill-author, lcos-executor-run, local-creative-os-backend-flow, local-creative-os-frontend-loop, workbuddy-orchestrator
+PASS 7/7 managed install markers/sourceHash
+
+== architecture test availability ==
+BLOCKED: node_modules absent; vitest unavailable in standalone source snapshot.
+
+== package parse ==
+PASS package.json

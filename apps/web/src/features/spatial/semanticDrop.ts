@@ -1,0 +1,163 @@
+import type { PointerEvent as ReactPointerEvent } from 'react'
+
+export const NEW_SCENE_DROP_TARGET_ID = 'workspace:new-scene'
+export const ARRANGE_SURFACE_DROP_TARGET_ID = 'surface:arrange'
+export const CONTEXT_GRAPH_SURFACE_DROP_TARGET_ID = 'surface:context-graph'
+export const CONTEXT_SURFACE_DROP_TARGET_ID = 'surface:context'
+export const WORKFLOW_GRAPH_SURFACE_DROP_TARGET_ID = 'surface:workflow-graph'
+export const WORKFLOW_SURFACE_DROP_TARGET_ID = 'surface:workflow'
+
+export type SemanticDropTrigger = 'secondary-pointer' | 'modifier-primary' | 'handle-primary'
+
+interface DropTargetHit {
+  id: string
+  label: string
+  element: HTMLElement
+}
+
+function eventTargetElement<T extends HTMLElement>(event: ReactPointerEvent<T>): Element | null {
+  return event.target instanceof Element ? event.target : null
+}
+
+/**
+ * Semantic Drop is the interaction; right-drag is only its fastest trigger.
+ *
+ * Supported triggers:
+ * - secondary mouse button drag (default / fastest)
+ * - Alt/Option + primary drag (browser/trackpad fallback)
+ * - primary drag from an element marked with `data-semantic-drop-handle`
+ */
+export function semanticDropTriggerFromPointer<T extends HTMLElement>(event: ReactPointerEvent<T>): SemanticDropTrigger | null {
+  if (event.button === 2) return 'secondary-pointer'
+  if (event.button !== 0) return null
+  if (eventTargetElement(event)?.closest('[data-semantic-drop-handle]')) return 'handle-primary'
+  if (event.altKey) return 'modifier-primary'
+  return null
+}
+
+export function isSemanticDropPointer<T extends HTMLElement>(event: ReactPointerEvent<T>): boolean {
+  return semanticDropTriggerFromPointer(event) !== null
+}
+
+function targetAt(clientX: number, clientY: number): DropTargetHit | null {
+  const element = document.elementFromPoint(clientX, clientY)?.closest<HTMLElement>('[data-project-view-drop-target]') ?? null
+  const id = element?.dataset.projectViewDropTarget
+  if (!element || !id) return null
+  return { id, label: element.dataset.projectViewDropLabel ?? '目标空间', element }
+}
+
+function expectedButtonsMask(trigger: SemanticDropTrigger): number {
+  return trigger === 'secondary-pointer' ? 2 : 1
+}
+
+/**
+ * Shared transient Semantic Drop for non-main-canvas renderers.
+ *
+ * Source objects never move. The gesture only projects the same Project Entity
+ * into another Surface/Entity target. Trigger detection is deliberately kept
+ * here so callers do not hard-code "right click = semantic operation".
+ */
+export function beginSemanticDrop<T extends HTMLElement>(
+  event: ReactPointerEvent<T>,
+  sourceIds: readonly string[],
+  onDrop?: (targetViewId: string, sourceIds: readonly string[]) => void,
+): boolean {
+  const trigger = semanticDropTriggerFromPointer(event)
+  if (!trigger || !onDrop || sourceIds.length === 0) return false
+
+  event.preventDefault()
+  event.stopPropagation()
+
+  const pointerId = event.pointerId
+  const sourceElement = event.currentTarget
+  const startX = event.clientX
+  const startY = event.clientY
+  const buttonMask = expectedButtonsMask(trigger)
+  let moved = false
+  let hovered: HTMLElement | null = null
+  let ghost: HTMLDivElement | null = null
+
+  try { sourceElement.setPointerCapture(pointerId) } catch { /* browser may own capture */ }
+  sourceElement.classList.add('is-semantic-drop-source')
+  sourceElement.dataset.semanticDropTrigger = trigger
+
+  const guardMenu = (menuEvent: Event) => menuEvent.preventDefault()
+  if (trigger === 'secondary-pointer') window.addEventListener('contextmenu', guardMenu, true)
+
+  const clearHover = () => {
+    hovered?.classList.remove('is-direct-drop-target')
+    hovered = null
+  }
+  const ensureGhost = () => {
+    if (ghost) return ghost
+    ghost = document.createElement('div')
+    ghost.className = 'lcos-drop-ghost lcos-projection-drop-ghost lcos-semantic-drop-ghost'
+    ghost.dataset.semanticDropTrigger = trigger
+    ghost.setAttribute('aria-hidden', 'true')
+    ghost.innerHTML = `<span>⇢</span><strong>${sourceIds.length}</strong><small>Semantic Drop</small>`
+    document.body.appendChild(ghost)
+    return ghost
+  }
+  const updateHover = (hit: DropTargetHit | null) => {
+    if (!hit) { clearHover(); return }
+    if (hovered !== hit.element) {
+      clearHover()
+      hit.element.classList.add('is-direct-drop-target')
+      hovered = hit.element
+    }
+    if (ghost) {
+      const label = ghost.querySelector('small')
+      if (label) label.textContent = `加入 ${hit.label}`
+    }
+  }
+  const cleanup = () => {
+    clearHover()
+    ghost?.remove()
+    ghost = null
+    sourceElement.classList.remove('is-semantic-drop-source')
+    delete sourceElement.dataset.semanticDropTrigger
+    try { if (sourceElement.hasPointerCapture(pointerId)) sourceElement.releasePointerCapture(pointerId) } catch { /* already released */ }
+    window.removeEventListener('pointermove', move, true)
+    window.removeEventListener('pointerup', finish, true)
+    window.removeEventListener('pointercancel', cancel, true)
+    window.removeEventListener('keydown', cancelWithEscape, true)
+    if (trigger === 'secondary-pointer') window.removeEventListener('contextmenu', guardMenu, true)
+  }
+  const move = (pointerEvent: PointerEvent) => {
+    if (pointerEvent.pointerId !== pointerId) return
+    // If the browser/OS steals the pressed button, cancel instead of committing
+    // a stale Semantic Drop. This is especially important for Edge mouse gestures.
+    if (pointerEvent.pointerType === 'mouse' && (pointerEvent.buttons & buttonMask) === 0) {
+      cleanup()
+      return
+    }
+    if (!moved && Math.hypot(pointerEvent.clientX - startX, pointerEvent.clientY - startY) > 4) moved = true
+    if (!moved) return
+    pointerEvent.preventDefault()
+    const nextGhost = ensureGhost()
+    nextGhost.style.left = `${pointerEvent.clientX}px`
+    nextGhost.style.top = `${pointerEvent.clientY}px`
+    updateHover(targetAt(pointerEvent.clientX, pointerEvent.clientY))
+  }
+  const finish = (pointerEvent: PointerEvent) => {
+    if (pointerEvent.pointerId !== pointerId) return
+    const hit = moved ? targetAt(pointerEvent.clientX, pointerEvent.clientY) : null
+    cleanup()
+    if (hit) onDrop(hit.id, sourceIds)
+  }
+  const cancel = (pointerEvent: PointerEvent) => {
+    if (pointerEvent.pointerId !== pointerId) return
+    cleanup()
+  }
+  const cancelWithEscape = (keyboardEvent: KeyboardEvent) => {
+    if (keyboardEvent.key !== 'Escape') return
+    keyboardEvent.preventDefault()
+    cleanup()
+  }
+
+  window.addEventListener('pointermove', move, true)
+  window.addEventListener('pointerup', finish, true)
+  window.addEventListener('pointercancel', cancel, true)
+  window.addEventListener('keydown', cancelWithEscape, true)
+  return true
+}

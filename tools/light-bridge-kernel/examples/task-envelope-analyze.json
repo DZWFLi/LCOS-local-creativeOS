@@ -1,0 +1,23 @@
+{
+  "contractVersion": "bridge-task-v1",
+  "lcosRunId": "run-analyze-demo",
+  "idempotencyKey": "run-analyze-demo",
+  "requestFingerprint": "replace-with-canonical-request-hash",
+  "manifestId": "manifest-analyze-demo",
+  "manifestHash": "replace-with-manifest-hash",
+  "outputIntent": "analyze",
+  "instructions": "分析当前创意方向，给出问题、风险和下一步建议。",
+  "provider": "workbuddy",
+  "taskType": "creative_run",
+  "runtimeInputPackPath": "C:\\LCOS\\runs\\run-analyze-demo\\runtime-input-pack.json",
+  "outputRoot": "C:\\LCOS\\runs\\run-analyze-demo\\outputs",
+  "expectedOutputs": [],
+  "outputPolicy": {
+    "allowZeroFiles": true,
+    "allowAdditionalFiles": true,
+    "maxFiles": 5
+  },
+  "timeoutSeconds": 900,
+  "reportMode": "short",
+  "metadata": {}
+}

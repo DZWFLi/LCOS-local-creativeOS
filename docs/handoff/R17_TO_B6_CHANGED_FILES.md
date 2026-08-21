@@ -1,0 +1,41 @@
+# R17 → B6 Changed Files
+
+Total: 39
+
+- `A` `BUILD_INFO_B5-B6_20260816.md`
+- `M` `apps/local-core/src/compose.ts`
+- `A` `apps/local-core/src/continuity-runtime-service.ts`
+- `A` `apps/local-core/src/feedback-revision-service.ts`
+- `M` `apps/local-core/src/metadata-repository.ts`
+- `M` `apps/local-core/src/mutation-safety-service.ts`
+- `M` `apps/local-core/src/reorganize-service.ts`
+- `A` `apps/local-core/src/routes/change-sets.ts`
+- `A` `apps/local-core/src/routes/continuity.ts`
+- `A` `apps/local-core/src/routes/relations.ts`
+- `A` `apps/local-core/src/routes/revision-workflows.ts`
+- `M` `apps/local-core/src/server.ts`
+- `A` `apps/local-core/tests/continuity-runtime-b6.test.ts`
+- `A` `apps/local-core/tests/mutation-safety-b5.test.ts`
+- `M` `apps/web/src/App.tsx`
+- `M` `apps/web/src/features/project/ProjectToolsDialog.tsx`
+- `M` `apps/web/src/features/shell/AgentContextSurface.tsx`
+- `M` `apps/web/src/features/surfaces/ProjectionSurfaces.tsx`
+- `M` `apps/web/src/features/surfaces/WorkflowSurface.tsx`
+- `M` `apps/web/src/product-interface.css`
+- `M` `apps/web/src/runtime/localCoreClient.ts`
+- `M` `apps/web/src/runtime/runtimeBridge.ts`
+- `A` `docs/handoff/0.1_ENTRY_HANDOFF.md`
+- `A` `docs/handoff/B5_CLOSURE_REPORT.md`
+- `A` `docs/handoff/B5_CONTRACT_MATRIX.md`
+- `A` `docs/handoff/B6_CLOSURE_REPORT.md`
+- `A` `docs/handoff/B6_CONTINUITY_E2E_MATRIX.md`
+- `A` `docs/handoff/C_EARLY_HANDOFF.md`
+- `M` `package.json`
+- `A` `packages/contracts/src/continuity.ts`
+- `M` `packages/contracts/src/curation-patch.ts`
+- `M` `packages/contracts/src/index.ts`
+- `M` `packages/contracts/src/project-events.ts`
+- `A` `packages/contracts/src/revision-workflow.ts`
+- `A` `scripts/validate-r31b5-static.mjs`
+- `A` `scripts/validate-r31b6-static.mjs`
+- `M` `tools/lcos-agent/cli.mjs`

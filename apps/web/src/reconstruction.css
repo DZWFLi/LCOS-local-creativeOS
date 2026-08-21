@@ -1,0 +1,1556 @@
+/* LCOS UI Reconstruction Pass — 2026-08-07
+   Project Truth persists; pixels do not. This layer owns the active vNext shell
+   and reconstructed object anatomy while legacy styles remain for compatibility
+   dialogs that have not yet been migrated. */
+
+@property --lcos-ring-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes lcos-ring-travel { to { --lcos-ring-angle: 360deg; } }
+@keyframes lcos-run-breathe { 0%,100% { opacity:.32; transform:scale(.94) } 50% { opacity:.78; transform:scale(1.06) } }
+@keyframes lcos-surface-in { from { opacity:0; transform:scale(1.006) translateY(3px) } to { opacity:1; transform:none } }
+@keyframes lcos-shelf-in-left { from { opacity:0; transform:translateX(-9px) scale(.985) } to { opacity:1; transform:none } }
+@keyframes lcos-shelf-in-bottom { from { opacity:0; transform:translateY(10px) scale(.985) } to { opacity:1; transform:none } }
+
+:root {
+  --lcos-ground:#f1f0f7;
+  --lcos-ground-deep:#e9e8f2;
+  --lcos-strip:rgba(252,252,254,.92);
+  --lcos-surface:rgba(255,255,255,.78);
+  --lcos-surface-strong:rgba(255,255,255,.94);
+  --lcos-ink:#1d1c23;
+  --lcos-ink-soft:#55535f;
+  --lcos-ink-faint:#8e8b98;
+  --lcos-hair:rgba(28,27,34,.075);
+  --lcos-hair-strong:rgba(28,27,34,.135);
+  --lcos-shadow:0 12px 34px rgba(49,43,70,.08), inset 0 1px 0 rgba(255,255,255,.82);
+  --lcos-shadow-float:0 22px 58px rgba(39,34,59,.15), 0 2px 8px rgba(39,34,59,.06), inset 0 1px 0 rgba(255,255,255,.92);
+  --lcos-purple:#8b5cf6;
+  --lcos-blue:#3b82f6;
+  --lcos-cyan:#22d3ee;
+  --lcos-teal:#0f9b8e;
+  --lcos-amber:#c2803a;
+  --lcos-indigo:#6366f1;
+  --lcos-rail-w:52px;
+  --lcos-dock-h:66px;
+  --lcos-top-h:42px;
+  font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+}
+
+.lcos-reconstructed,
+.lcos-reconstructed button,
+.lcos-reconstructed textarea,
+.lcos-reconstructed input,
+.lcos-reconstructed select { font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+
+.lcos-reconstructed { color:var(--lcos-ink); background:var(--lcos-ground); }
+.lcos-reconstructed * { box-sizing:border-box; }
+.lcos-reconstructed button { -webkit-tap-highlight-color:transparent; }
+
+/* ---------- Shell ---------- */
+.lcos-reconstructed .app-main,
+.lcos-reconstructed .canvas-scene,
+.lcos-reconstructed .vnext-surface-host,
+.lcos-reconstructed .lcos-surface-host {
+  background-color:var(--lcos-ground) !important;
+  background-image:radial-gradient(circle at 1px 1px, rgba(73,67,93,.11) .72px, transparent .76px) !important;
+  background-size:18px 18px !important;
+}
+
+.lcos-reconstructed .vnext-project-strip,
+.lcos-reconstructed .lcos-project-strip {
+  height:var(--lcos-top-h) !important;
+  min-height:var(--lcos-top-h) !important;
+  padding:0 9px 0 10px !important;
+  border:0 !important;
+  border-bottom:1px solid var(--lcos-hair) !important;
+  border-radius:0 !important;
+  background:var(--lcos-strip) !important;
+  backdrop-filter:blur(20px) saturate(1.12) !important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.92) !important;
+}
+
+.lcos-reconstructed .vnext-project-strip button,
+.lcos-reconstructed .lcos-project-strip button {
+  border:0 !important;
+  background:transparent !important;
+  color:var(--lcos-ink-soft) !important;
+  border-radius:8px !important;
+  min-width:28px;
+  height:28px;
+  transition:background .14s ease,color .14s ease,transform .14s ease;
+}
+.lcos-reconstructed .vnext-project-strip button:hover,
+.lcos-reconstructed .lcos-project-strip button:hover { background:rgba(79,72,104,.065) !important; color:var(--lcos-ink) !important; }
+.lcos-reconstructed .vnext-project-strip button:active,
+.lcos-reconstructed .lcos-project-strip button:active { transform:scale(.97); }
+
+/* Stable GPT-desktop-like rail: never becomes a full sidebar. */
+.lcos-reconstructed .vnext-workspace-rail.lcos-workspace-rail {
+  position:absolute !important;
+  z-index:44 !important;
+  left:0 !important;
+  top:0 !important;
+  bottom:var(--lcos-dock-h) !important;
+  width:var(--lcos-rail-w) !important;
+  height:auto !important;
+  /* vnext 旧浮动 rail 的 max-height 会把全高 dock rail 钳短；UI 缩放后更明显，去掉。 */
+  max-height:none !important;
+  transform:none !important;
+  display:flex !important;
+  flex-direction:column !important;
+  justify-content:space-between !important;
+  align-items:center !important;
+  padding:8px 6px 7px !important;
+  border:0 !important;
+  border-right:1px solid var(--lcos-hair) !important;
+  border-radius:0 !important;
+  background:rgba(249,249,252,.68) !important;
+  backdrop-filter:blur(18px) saturate(1.08) !important;
+  box-shadow:inset -1px 0 0 rgba(255,255,255,.5) !important;
+}
+.lcos-reconstructed .lcos-rail-primary { width:100%; min-height:0; display:flex; align-items:center; flex-direction:column; gap:6px; }
+.lcos-reconstructed .lcos-new-scene-drop-target {
+  width:40px;
+  min-height:34px;
+  margin-top:1px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:3px;
+  border:1px dashed transparent;
+  border-radius:10px;
+  color:transparent;
+  background:transparent;
+  opacity:0;
+  pointer-events:auto;
+  transition:opacity .14s ease,background .14s ease,border-color .14s ease,color .14s ease;
+}
+.lcos-reconstructed .lcos-new-scene-drop-target span { display:none; }
+.lcos-reconstructed .lcos-new-scene-drop-target.is-direct-drop-target {
+  color:#6747c7;
+  border-color:rgba(103,71,199,.42);
+  background:rgba(244,240,255,.88);
+  box-shadow:0 5px 16px rgba(67,48,112,.12),inset 0 1px rgba(255,255,255,.8);
+  opacity:1;
+}
+.lcos-reconstructed .lcos-rail-footer { margin-top:auto; width:100%; display:grid; place-items:center; }
+.lcos-reconstructed .vnext-workspace-stack { display:flex; min-height:0; width:100%; flex:1; flex-direction:column; align-items:center; gap:7px; overflow-y:auto; overflow-x:visible; padding:1px 0 7px; scrollbar-width:none; }
+.lcos-reconstructed .vnext-workspace-stack::-webkit-scrollbar { display:none; }
+.lcos-reconstructed .vnext-rail-divider { width:20px; height:1px; margin:1px 0 2px; background:var(--lcos-hair); }
+.lcos-reconstructed .vnext-rail-button,
+.lcos-reconstructed .vnext-workspace-mini {
+  width:40px !important;
+  height:40px !important;
+  min-width:40px !important;
+  display:grid !important;
+  place-items:center !important;
+  padding:0 !important;
+  border:1px solid transparent !important;
+  border-radius:10px !important;
+  color:#777381 !important;
+  background:transparent !important;
+  box-shadow:none !important;
+  cursor:pointer;
+  transition:background .14s ease,border-color .14s ease,transform .14s ease,color .14s ease;
+}
+.lcos-reconstructed .vnext-rail-button svg { width:18px !important; height:18px !important; }
+.lcos-reconstructed .vnext-rail-button:hover,
+.lcos-reconstructed .vnext-workspace-mini:hover { color:#3e3a49 !important; background:rgba(88,79,114,.065) !important; transform:scale(1.035); }
+.lcos-reconstructed .vnext-rail-button.active,
+.lcos-reconstructed .vnext-workspace-mini.active { color:#413b55 !important; background:rgba(91,81,126,.085) !important; border-color:rgba(91,81,126,.075) !important; }
+.lcos-reconstructed .vnext-mini-map { width:25px !important; height:25px !important; position:relative; display:block; border-radius:7px; border:1px solid rgba(73,68,89,.105); background:rgba(255,255,255,.55); overflow:hidden; }
+.lcos-reconstructed .vnext-mini-map { width:28px !important; height:28px !important; }
+.lcos-reconstructed .vnext-mini-map i { position:absolute; display:block; border-radius:1.8px; background:rgba(78,70,105,.30); }
+.lcos-reconstructed .vnext-workspace-mini.active .vnext-mini-map { border-color:rgba(104,79,184,.24); background:rgba(252,251,255,.92); box-shadow:0 0 0 2px rgba(139,92,246,.055); }
+.lcos-reconstructed .vnext-workspace-attention { position:absolute; width:5px; height:5px; right:2px; top:2px; border-radius:50%; background:#e09b43; box-shadow:0 0 0 2px rgba(250,249,253,.9); }
+
+.lcos-reconstructed .vnext-workspace-preview.lcos-workspace-preview {
+  position:absolute !important;
+  z-index:90 !important;
+  left:45px !important;
+  width:222px !important;
+  min-height:64px;
+  display:grid !important;
+  grid-template-columns:76px minmax(0,1fr) 26px 26px !important;
+  align-items:center;
+  gap:8px !important;
+  padding:8px !important;
+  border:1px solid var(--lcos-hair-strong) !important;
+  border-radius:14px !important;
+  background:rgba(252,252,254,.92) !important;
+  backdrop-filter:blur(22px) saturate(1.08) !important;
+  box-shadow:var(--lcos-shadow-float) !important;
+  animation:lcos-surface-in .15s ease both;
+}
+.lcos-reconstructed .vnext-workspace-preview-map { height:48px; position:relative; overflow:hidden; border-radius:9px; border:1px solid var(--lcos-hair); background:rgba(241,240,247,.78); }
+.lcos-reconstructed .vnext-workspace-preview-map i { position:absolute; display:block; border-radius:2px; background:rgba(83,74,112,.26); }
+.lcos-reconstructed .lcos-workspace-preview-copy { min-width:0; display:grid; gap:2px; }
+.lcos-reconstructed .lcos-workspace-preview-copy strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11px; font-weight:620; }
+.lcos-reconstructed .lcos-workspace-preview-copy span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:9.5px; color:var(--lcos-ink-faint); }
+.lcos-reconstructed .vnext-workspace-preview > button { width:26px; height:26px; display:grid; place-items:center; padding:0; border:0; border-radius:7px; color:#716c7d; background:transparent; }
+.lcos-reconstructed .vnext-workspace-preview > button:hover { background:rgba(79,72,104,.065); color:#373341; }
+.lcos-reconstructed .vnext-workspace-menu { position:absolute; left:calc(100% - 34px); top:50px; width:168px; padding:5px; border:1px solid var(--lcos-hair-strong); border-radius:12px; background:rgba(253,253,254,.97); box-shadow:var(--lcos-shadow-float); }
+.lcos-reconstructed .vnext-workspace-menu button { width:100%; min-height:28px; display:flex; align-items:center; gap:8px; padding:0 8px; border:0; border-radius:7px; background:transparent; color:var(--lcos-ink-soft); font-size:10px; text-align:left; }
+.lcos-reconstructed .vnext-workspace-menu button:hover { background:rgba(81,74,104,.065); color:var(--lcos-ink); }
+.lcos-reconstructed .vnext-workspace-menu .danger { color:#a54b57; }
+.lcos-reconstructed .vnext-workspace-menu .menu-rule { height:1px; margin:4px; background:var(--lcos-hair); }
+
+/* Dedicated workspace/dock safe areas.
+   rail/dock 自身用 zoom 缩放，因此这里必须按缩放后的几何别名让位，
+   否则缩放后的侧栏/底栏底子会盖住画布。 */
+.lcos-reconstructed .vnext-surface-host.lcos-surface-host { left:var(--lcos-ui-rail-w) !important; right:0 !important; top:0 !important; bottom:var(--lcos-ui-dock-h) !important; overflow:hidden; }
+.lcos-reconstructed .vnext-surface-host > .canvas { inset:0 !important; }
+
+.lcos-reconstructed .vnext-bottom-dock.lcos-bottom-dock {
+  position:absolute !important;
+  z-index:46 !important;
+  left:0 !important;
+  right:0 !important;
+  /* vnext 用 top 锚定旧布局；缩放后 bottom 贴底才正确。 */
+  top:auto !important;
+  bottom:0 !important;
+  width:auto !important;
+  height:var(--lcos-dock-h) !important;
+  transform:none !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  gap:8px !important;
+  padding:0 12px 0 calc(var(--lcos-rail-w) + 12px) !important;
+  border:0 !important;
+  border-top:1px solid var(--lcos-hair) !important;
+  border-radius:0 !important;
+  background:rgba(249,249,252,.72) !important;
+  backdrop-filter:blur(20px) saturate(1.08) !important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.66) !important;
+}
+.lcos-reconstructed .lcos-scope-axis,
+.lcos-reconstructed .lcos-lens-axis { display:flex; align-items:center; gap:8px; }
+.lcos-reconstructed .lcos-scope-axis { gap:8px; }
+.lcos-reconstructed .lcos-scope-axis { margin-right:auto; }
+.lcos-reconstructed .lcos-lens-axis { position:absolute; left:50%; transform:translateX(-50%); }
+.lcos-reconstructed .lcos-dock-divider { width:1px; height:22px; background:var(--lcos-hair); }
+.lcos-reconstructed .lcos-bottom-dock button {
+  position:relative;
+  height:auto;
+  min-width:48px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:3px;
+  padding:7px 6px 5px;
+  border:1px solid transparent;
+  border-radius:10px;
+  color:#777381;
+  background:transparent;
+  cursor:pointer;
+  transition:background .14s ease,color .14s ease,transform .14s ease,border-color .14s ease;
+}
+.lcos-reconstructed .lcos-bottom-dock button svg { width:19px; height:19px; }
+.lcos-reconstructed .lcos-bottom-dock button:hover { color:#3d3949; background:rgba(83,75,107,.065); transform:translateY(-1px) scale(1.04); }
+.lcos-reconstructed .lcos-bottom-dock button.active { color:#3e3853; background:rgba(89,76,132,.085); border-color:rgba(89,76,132,.08); }
+.lcos-reconstructed .lcos-bottom-dock button[data-label]::after {
+  content:attr(data-label);
+  position:static;
+  transform:none;
+  pointer-events:none;
+  opacity:1;
+  white-space:nowrap;
+  padding:0;
+  border:0;
+  border-radius:0;
+  background:none;
+  box-shadow:none;
+  color:inherit;
+  font-size:9.5px;
+  line-height:1;
+  transition:opacity .12s ease,transform .12s ease;
+}
+.lcos-reconstructed .lcos-bottom-dock button[data-label]:hover::after { opacity:1; transform:none; }
+.lcos-reconstructed .lcos-scope-breadcrumb { max-width:150px; }
+.lcos-reconstructed .lcos-scope-breadcrumb span { max-width:126px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:10px; }
+.lcos-reconstructed .lcos-projection-switch { position:relative; display:flex; align-items:center; gap:6px; margin-left:8px; padding:2px; border:1px solid var(--lcos-hair); border-radius:9px; background:rgba(255,255,255,.48); }
+.lcos-reconstructed .lcos-projection-switch button { position:relative; z-index:1; flex:0 0 auto; min-width:auto; height:27px; padding:0 10px; display:inline-flex !important; flex-direction:row !important; align-items:center !important; justify-content:center !important; gap:6px !important; white-space:nowrap; border:0 !important; border-radius:7px; font-size:9.5px; color:var(--lcos-ink-faint); background:transparent !important; box-shadow:none !important; transition:color .16s ease,background .16s ease,box-shadow .16s ease; }
+.lcos-reconstructed .lcos-projection-switch button.active { color:var(--lcos-ink); font-weight:600; background:rgba(255,255,255,.94) !important; box-shadow:0 1px 3px rgba(51,45,70,.10) !important; }
+.lcos-reconstructed .lcos-projection-pill { display:none; }
+
+/* Scope chevron + workbench badge + merge-in breathing. */
+.lcos-reconstructed .lcos-scope-chevron { color:var(--lcos-ink-faint); flex:0 0 auto; }
+.lcos-reconstructed .lcos-workbench-entry { position:relative !important; }
+.lcos-reconstructed .lcos-workbench-badge { position:absolute; top:3px; right:1px; min-width:15px; height:15px; padding:0 4px; display:inline-flex; align-items:center; justify-content:center; border-radius:999px; background:rgba(89,76,132,.11); color:#5b5480; font-size:8.5px; font-weight:640; line-height:1; }
+.lcos-reconstructed .lcos-merge-workbench { animation:lcos-merge-in .24s cubic-bezier(.2,.8,.2,1) both; color:#3d8f6a !important; background:rgba(79,146,113,.10) !important; border-color:rgba(79,146,113,.16) !important; }
+.lcos-reconstructed .lcos-merge-workbench:hover { color:#2f7a58 !important; background:rgba(79,146,113,.17) !important; box-shadow:0 0 0 3px rgba(79,146,113,.08); }
+@keyframes lcos-merge-in { from { opacity:0; transform:translateX(-8px) scale(.92); } to { opacity:1; transform:translateX(0) scale(1); } }
+.lcos-reconstructed .lcos-bottom-dock button.active[data-label]::after { font-weight:620; }
+
+/* Dock zoom controls + axis group labels. */
+.lcos-reconstructed .lcos-zoom-controls { margin-left:auto; display:flex; align-items:center; gap:2px; padding-left:10px; border-left:1px solid var(--lcos-hair); }
+.lcos-reconstructed .lcos-zoom-controls button { height:30px !important; min-width:30px !important; padding:0 5px !important; display:grid !important; place-items:center !important; gap:0 !important; border-radius:8px !important; }
+.lcos-reconstructed .lcos-zoom-controls button.lcos-zoom-value { min-width:46px !important; font-size:10px !important; color:#5a5663 !important; }
+.lcos-reconstructed .lcos-zoom-controls button svg { width:15px !important; height:15px !important; }
+.lcos-reconstructed .lcos-scope-axis::before { content:"空间"; font-size:8px; letter-spacing:.08em; color:var(--lcos-ink-faint); }
+.lcos-reconstructed .lcos-lens-axis::before { content:"能力"; font-size:8px; letter-spacing:.08em; color:var(--lcos-ink-faint); }
+
+/* ---------- Arrange object anatomy ---------- */
+.lcos-reconstructed .canvas-node {
+  background:transparent !important;
+  border:0 !important;
+  box-shadow:none !important;
+  border-radius:0 !important;
+  padding:0 !important;
+  overflow:visible !important;
+}
+.lcos-reconstructed .canvas-node.selected { box-shadow:none !important; }
+.lcos-reconstructed .lcos-object {
+  position:relative;
+  width:100%;
+  height:100%;
+  min-width:0;
+  color:var(--lcos-ink);
+  isolation:isolate;
+}
+.lcos-reconstructed .lcos-type-tag {
+  font-family:"JetBrains Mono","SFMono-Regular",Consolas,monospace;
+  font-size:8px;
+  font-weight:650;
+  letter-spacing:.105em;
+  line-height:1;
+  color:var(--lcos-ink-faint);
+}
+.lcos-reconstructed .lcos-object-caption { min-width:0; display:grid; gap:4px; }
+.lcos-reconstructed .lcos-object-caption strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11px; font-weight:590; }
+.lcos-reconstructed .lcos-object-caption small { display:-webkit-box; overflow:hidden; -webkit-line-clamp:2; -webkit-box-orient:vertical; font-size:9.5px; line-height:1.35; color:var(--lcos-ink-faint); }
+
+.lcos-reconstructed .lcos-image-object { overflow:hidden; border-radius:10px; background:#e8e6ef; box-shadow:0 8px 22px rgba(45,39,62,.08); }
+.lcos-reconstructed .lcos-image-object > img { width:100%; height:100%; display:block; object-fit:cover; }
+.lcos-reconstructed .lcos-image-fallback { width:100%; height:100%; display:grid; place-items:center; color:#a2a0aa; background:linear-gradient(145deg,#eeedf3,#e5e3ec); }
+.lcos-reconstructed .lcos-image-caption { position:absolute; left:0; right:0; bottom:0; min-height:40px; display:flex; align-items:flex-end; gap:7px; padding:15px 9px 8px; background:linear-gradient(transparent,rgba(21,19,29,.64)); color:#fff; }
+.lcos-reconstructed .lcos-image-caption .lcos-type-tag { color:rgba(255,255,255,.65); }
+.lcos-reconstructed .lcos-image-caption strong { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:10px; font-weight:550; }
+
+.lcos-reconstructed .lcos-document-object { display:grid; grid-template-rows:minmax(0,1fr) auto; gap:7px; padding:1px; }
+.lcos-reconstructed .lcos-document-sheet { position:relative; min-height:72px; overflow:hidden; border:1px solid rgba(46,44,55,.105); border-radius:5px 10px 8px 8px; background:rgba(255,255,255,.91); box-shadow:0 8px 20px rgba(46,41,62,.07), inset 0 1px 0 #fff; }
+.lcos-reconstructed .lcos-document-corner { position:absolute; top:-1px; right:-1px; width:20px; height:20px; clip-path:polygon(0 0,100% 100%,100% 0); background:linear-gradient(225deg,rgba(217,215,226,.95) 0 50%, transparent 51%); }
+.lcos-reconstructed .lcos-document-glyph { position:absolute; left:10px; top:10px; width:15px; height:15px; color:#777583; }
+.lcos-reconstructed .lcos-document-lines { position:absolute; left:10px; right:11px; top:37px; display:grid; gap:5px; }
+.lcos-reconstructed .lcos-document-lines i { height:1px; background:rgba(61,59,70,.095); }
+.lcos-reconstructed .lcos-document-lines i:nth-child(2) { width:82%; }
+.lcos-reconstructed .lcos-document-lines i:nth-child(3) { width:67%; }
+.lcos-reconstructed .lcos-document-lines i:nth-child(4) { width:91%; }
+.lcos-reconstructed .lcos-document-lines i:nth-child(5) { width:52%; }
+.lcos-reconstructed .file-markdown .lcos-document-glyph { color:#5969ad; }
+.lcos-reconstructed .file-pdf .lcos-document-glyph { color:#b25b60; }
+.lcos-reconstructed .lcos-corner-meta { position:absolute; right:7px; top:7px; z-index:3; padding:2px 4px; border-radius:5px; color:#7c7886; background:rgba(248,248,251,.86); font:600 8px/1.1 "JetBrains Mono",monospace; }
+.lcos-reconstructed .lcos-revision-stack { position:absolute; inset:0; pointer-events:none; z-index:-1; }
+.lcos-reconstructed .lcos-revision-stack i { position:absolute; inset:3px -4px -4px 4px; border:1px solid var(--lcos-hair); border-radius:8px; background:rgba(251,251,253,.62); }
+.lcos-reconstructed .lcos-revision-stack i:nth-child(2) { inset:6px -7px -7px 7px; z-index:-1; opacity:.62; }
+
+.lcos-reconstructed .lcos-link-object { min-height:64px; display:grid; grid-template-columns:30px minmax(0,1fr) 18px; align-items:center; gap:8px; padding:9px 9px 9px 10px; border:1px solid var(--lcos-hair); border-radius:11px; background:rgba(255,255,255,.58); box-shadow:0 6px 16px rgba(46,40,62,.045); }
+.lcos-reconstructed .lcos-favicon { width:28px; height:28px; display:grid; place-items:center; border-radius:8px; background:rgba(96,86,128,.08); color:#645c78; font-size:11px; font-weight:650; }
+.lcos-reconstructed .lcos-link-thumbnail { width:30px; height:30px; object-fit:cover; border-radius:8px; border:1px solid var(--lcos-hair); }
+.lcos-reconstructed .lcos-link-object > div { min-width:0; display:grid; gap:2px; }
+.lcos-reconstructed .lcos-link-object small { font-size:8.5px; color:var(--lcos-ink-faint); }
+.lcos-reconstructed .lcos-link-object strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:10.5px; font-weight:590; }
+.lcos-reconstructed .lcos-link-object span:not(.lcos-favicon):not(.lcos-object-state) { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:8.5px; color:var(--lcos-ink-faint); }
+.lcos-reconstructed .lcos-link-glyph { width:13px; color:#aaa6b2; }
+
+.lcos-reconstructed .lcos-media-object { display:grid; grid-template-rows:minmax(0,1fr) auto; gap:6px; }
+.lcos-reconstructed .lcos-media-stage { min-height:66px; display:grid; place-items:center; overflow:hidden; border:1px solid var(--lcos-hair); border-radius:10px; background:linear-gradient(145deg,rgba(242,241,247,.94),rgba(232,230,240,.8)); }
+.lcos-reconstructed .media-video .lcos-media-stage { background:#191820; }
+.lcos-reconstructed .lcos-media-stage img { width:100%; height:100%; object-fit:cover; }
+.lcos-reconstructed .lcos-media-glyph { width:22px; height:22px; color:#85818e; }
+
+.lcos-reconstructed .lcos-feedback-object { min-height:74px; display:grid; grid-template-rows:auto auto 1fr; gap:6px; padding:9px 10px 9px 13px; border:1px solid rgba(194,128,58,.13); border-radius:10px; background:rgba(255,252,246,.66); box-shadow:0 6px 17px rgba(67,51,30,.035); }
+.lcos-reconstructed .lcos-feedback-rail { position:absolute; left:0; top:9px; bottom:9px; width:2px; border-radius:2px; background:rgba(194,128,58,.58); }
+.lcos-reconstructed .lcos-feedback-object header { display:flex; align-items:center; gap:5px; color:#aa733b; }
+.lcos-reconstructed .lcos-feedback-object header svg { width:12px; height:12px; }
+.lcos-reconstructed .lcos-feedback-object > strong { font-size:10.5px; font-weight:600; }
+.lcos-reconstructed .lcos-feedback-object p { margin:0; display:flex; gap:5px; min-width:0; font-size:9px; line-height:1.35; color:#77717b; }
+.lcos-reconstructed .lcos-feedback-object p b { flex:0 0 auto; font-size:8px; text-transform:uppercase; letter-spacing:.04em; color:#ad7740; }
+
+.lcos-reconstructed .lcos-collection-object { min-height:72px; display:grid; grid-template-rows:auto 1fr auto; gap:7px; padding:9px 10px; border:1px solid rgba(116,96,177,.13); border-radius:11px; background:linear-gradient(145deg,rgba(252,251,255,.72),rgba(245,243,251,.64)); box-shadow:0 7px 19px rgba(55,47,82,.045); }
+.lcos-reconstructed .lcos-collection-object header { display:flex; align-items:center; gap:6px; min-width:0; color:#6e628e; }
+.lcos-reconstructed .lcos-collection-object header svg { width:13px; height:13px; flex:0 0 auto; }
+.lcos-reconstructed .lcos-collection-object header strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--lcos-ink); font-size:10.5px; font-weight:600; }
+.lcos-reconstructed .lcos-context-spine { display:flex; align-items:center; gap:0; padding:2px 4px; }
+.lcos-reconstructed .lcos-context-spine::before { content:""; height:1px; flex:1; background:linear-gradient(90deg,rgba(139,92,246,.18),rgba(59,130,246,.20),rgba(34,211,238,.12)); }
+.lcos-reconstructed .lcos-context-spine i { width:4px; height:4px; margin-left:-1px; border-radius:50%; background:#9585bd; box-shadow:0 0 0 2px rgba(249,247,253,.9); }
+.lcos-reconstructed .lcos-collection-object footer { display:flex; justify-content:space-between; align-items:center; font-size:8.5px; color:var(--lcos-ink-faint); }
+.lcos-reconstructed .lcos-version-beads { display:flex; gap:3px; }
+.lcos-reconstructed .lcos-version-beads i { width:4px; height:4px; border-radius:50%; background:#9d91b9; }
+
+.lcos-reconstructed .lcos-run-object { min-height:72px; display:grid; grid-template-columns:30px minmax(0,1fr) auto; align-items:center; gap:8px; padding:9px 9px; border:1px solid rgba(59,130,246,.12); border-radius:11px; background:rgba(248,251,255,.68); box-shadow:0 7px 20px rgba(42,73,118,.045); }
+.lcos-reconstructed .lcos-run-machine { width:29px; height:29px; display:grid; place-items:center; border-radius:9px; color:#527abe; background:rgba(59,130,246,.075); }
+.lcos-reconstructed .lcos-run-machine svg { width:15px; height:15px; }
+.lcos-reconstructed .lcos-run-object > div { min-width:0; display:grid; gap:3px; }
+.lcos-reconstructed .lcos-run-object strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:10.5px; font-weight:600; }
+.lcos-reconstructed .lcos-run-object small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:8.5px; color:var(--lcos-ink-faint); }
+.lcos-reconstructed .lcos-run-state { display:flex !important; align-items:center; gap:4px !important; color:#7d7a86; font-size:8.5px; white-space:nowrap; }
+.lcos-reconstructed .lcos-run-state i { width:5px; height:5px; border-radius:50%; background:#a7a4ad; }
+.lcos-reconstructed .lcos-run-object.status-running .lcos-run-state i { background:#3b82f6; box-shadow:0 0 0 3px rgba(59,130,246,.10); }
+.lcos-reconstructed .lcos-run-pulse { position:absolute; inset:-8px; z-index:-1; border-radius:16px; background:radial-gradient(circle,rgba(59,130,246,.10),transparent 70%); animation:lcos-run-breathe 2.2s ease-in-out infinite; }
+
+.lcos-reconstructed .lcos-decision-object,
+.lcos-reconstructed .lcos-note-object { min-height:58px; display:grid; grid-template-columns:25px minmax(0,1fr); align-items:center; gap:8px; padding:8px 9px; border:1px solid var(--lcos-hair); border-radius:10px; background:rgba(255,255,255,.52); }
+.lcos-reconstructed .lcos-decision-object > svg,
+.lcos-reconstructed .lcos-note-object > svg { width:17px; height:17px; color:#7b718f; }
+.lcos-reconstructed .lcos-decision-object > div,
+.lcos-reconstructed .lcos-note-object > div { min-width:0; display:grid; gap:3px; }
+.lcos-reconstructed .lcos-decision-object strong,
+.lcos-reconstructed .lcos-note-object strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:10.5px; font-weight:600; }
+.lcos-reconstructed .lcos-decision-object small,
+.lcos-reconstructed .lcos-note-object small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:8.5px; color:var(--lcos-ink-faint); }
+
+.lcos-reconstructed .lcos-object-info { position:absolute; z-index:8; right:5px; top:5px; width:22px; height:22px; display:grid; place-items:center; padding:0; border:0; border-radius:7px; color:#8d8995; background:rgba(251,251,253,.78); opacity:0; transition:opacity .12s ease,background .12s ease; }
+.lcos-reconstructed .canvas-node:hover .lcos-object-info,
+.lcos-reconstructed .canvas-node.selected .lcos-object-info { opacity:1; }
+.lcos-reconstructed .lcos-object-info:hover { color:#4f4a5a; background:rgba(255,255,255,.95); }
+.lcos-reconstructed .lcos-object-state { position:absolute; width:6px; height:6px; right:5px; bottom:5px; border-radius:50%; background:#8e8b97; box-shadow:0 0 0 2px rgba(251,251,253,.86); }
+.lcos-reconstructed .lcos-object-state.state-current { background:#5d9a77; }
+.lcos-reconstructed .lcos-object-state.state-draft { background:#6b6edf; }
+.lcos-reconstructed .lcos-object-state.state-failed { background:#c55c67; }
+.lcos-reconstructed .lcos-object-state.state-stale { background:#d19a4c; }
+.lcos-reconstructed .lcos-sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+
+/* Selected = one quiet branded state. The content itself never flashes. */
+.lcos-reconstructed .canvas-node.selected .lcos-object::after,
+.lcos-reconstructed .lcos-surface-object.selected .lcos-selected-ring,
+.lcos-reconstructed .lcos-surface-glyph.selected .lcos-selected-ring {
+  content:"";
+  position:absolute;
+  inset:-2px;
+  z-index:20;
+  padding:1.3px;
+  border-radius:inherit;
+  background:conic-gradient(from var(--lcos-ring-angle),var(--lcos-purple),var(--lcos-blue),var(--lcos-cyan),var(--lcos-blue),var(--lcos-purple));
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;
+  mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  mask-composite:exclude;
+  animation:lcos-ring-travel 5s linear infinite;
+  pointer-events:none;
+}
+.lcos-reconstructed .canvas-node.selected .lcos-object::before,
+.lcos-reconstructed .lcos-surface-object.selected .lcos-selected-bloom,
+.lcos-reconstructed .lcos-surface-glyph.selected .lcos-selected-bloom {
+  content:"";
+  position:absolute;
+  inset:-15px;
+  z-index:-1;
+  border-radius:inherit;
+  background:radial-gradient(58% 60% at 50% 50%,rgba(139,92,246,.12),rgba(59,130,246,.055) 55%,transparent 78%);
+  filter:blur(8px);
+  pointer-events:none;
+}
+
+/* Hover-proximity connection handles. */
+.lcos-reconstructed .canvas-node .anchor { opacity:0 !important; transform:scale(calc(.8 / var(--canvas-zoom))) !important; transition:opacity .12s ease,transform .12s ease !important; }
+.lcos-reconstructed .canvas-node:hover .anchor,
+.lcos-reconstructed .canvas-node.selected .anchor { opacity:.62 !important; transform:scale(calc(.92 / var(--canvas-zoom))) !important; }
+.lcos-reconstructed .canvas-node .anchor:hover { opacity:1 !important; transform:scale(calc(1.04 / var(--canvas-zoom))) !important; box-shadow:0 0 0 4px rgba(92,75,155,.07) !important; }
+
+/* Workspace frame should feel like a spatial frame, not a panel. */
+.lcos-reconstructed .workspace-frame { border-color:rgba(103,92,137,.16) !important; background:rgba(255,255,255,.025) !important; box-shadow:none !important; }
+.lcos-reconstructed .workspace-frame.active,
+.lcos-reconstructed .workspace-frame.selected { border-color:rgba(103,81,172,.25) !important; background:rgba(255,255,255,.035) !important; }
+.lcos-reconstructed .workspace-frame-header,
+.lcos-reconstructed .workspace-frame-label { color:#767180 !important; background:rgba(247,246,251,.72) !important; backdrop-filter:blur(7px); }
+
+/* ---------- Selection + near-field composer ---------- */
+.lcos-reconstructed .selection-toolbar,
+.lcos-reconstructed .selection-action-strip {
+  padding:4px !important;
+  gap:6px !important;
+  border:1px solid var(--lcos-hair-strong) !important;
+  border-radius:11px !important;
+  background:rgba(252,252,254,.90) !important;
+  backdrop-filter:blur(20px) saturate(1.08) !important;
+  box-shadow:var(--lcos-shadow-float) !important;
+}
+.lcos-reconstructed .selection-toolbar button,
+.lcos-reconstructed .selection-action-strip button {
+  display:flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  min-height:30px !important;
+  height:30px !important;
+  padding:0 10px !important;
+  border:0 !important;
+  border-radius:8px !important;
+  background:transparent !important;
+  color:#676270 !important;
+  font-size:10px !important;
+  gap:5px !important;
+  white-space:nowrap !important;
+}
+.lcos-reconstructed .selection-toolbar button svg,
+.lcos-reconstructed .selection-action-strip button svg { width:14px !important; height:14px !important; flex:0 0 auto; }
+.lcos-reconstructed .selection-toolbar button:hover,
+.lcos-reconstructed .selection-action-strip button:hover { background:rgba(82,74,107,.065) !important; color:#312e39 !important; }
+.lcos-reconstructed .selection-toolbar,
+.lcos-reconstructed .selection-action-strip { transform:scale(calc(1 / var(--canvas-zoom))) !important; transform-origin:center !important; }
+
+.lcos-reconstructed .selection-composer.lcos-nearfield-composer {
+  width:min(430px,calc(100vw - 110px)) !important;
+  min-height:0 !important;
+  display:grid !important;
+  gap:5px !important;
+  padding:6px !important;
+  border:1px solid var(--lcos-hair-strong) !important;
+  border-radius:14px !important;
+  background:rgba(253,253,254,.92) !important;
+  backdrop-filter:blur(22px) saturate(1.08) !important;
+  box-shadow:var(--lcos-shadow-float) !important;
+  overflow:visible !important;
+}
+.lcos-reconstructed .lcos-composer-input-row { display:grid; grid-template-columns:minmax(0,1fr) 30px; align-items:end; gap:5px; }
+.lcos-reconstructed .lcos-composer-input-row textarea { width:100%; min-height:34px; max-height:120px; resize:none; padding:8px 9px; border:0; outline:0; border-radius:9px; background:rgba(242,241,247,.62); color:var(--lcos-ink); font-size:11px; line-height:1.4; }
+.lcos-reconstructed .lcos-composer-input-row textarea::placeholder { color:#aaa6b0; }
+.lcos-reconstructed .lcos-composer-send { width:30px; height:30px; display:grid; place-items:center; padding:0; border:0; border-radius:9px; color:#fff; background:#34313d; cursor:pointer; }
+.lcos-reconstructed .lcos-composer-send:disabled { opacity:.22; cursor:default; }
+.lcos-reconstructed .lcos-composer-controls { display:flex; align-items:center; gap:3px; min-width:0; }
+.lcos-reconstructed .lcos-composer-controls > button,
+.lcos-reconstructed .lcos-composer-controls summary { height:25px; min-width:0; display:flex; align-items:center; gap:4px; padding:0 6px; border:0; border-radius:7px; background:transparent; color:#797582; font-size:8.8px; list-style:none; cursor:pointer; }
+.lcos-reconstructed .lcos-composer-controls > button:hover,
+.lcos-reconstructed .lcos-composer-controls summary:hover { color:#3d3944; background:rgba(79,72,104,.06); }
+.lcos-reconstructed .lcos-composer-close { margin-left:auto; }
+.lcos-reconstructed .lcos-composer-menu,
+.lcos-reconstructed .composer-menu { position:relative; }
+.lcos-reconstructed .lcos-context-peek { position:relative; }
+.lcos-reconstructed .lcos-context-peek summary::-webkit-details-marker { display:none; }
+.lcos-reconstructed .lcos-context-peek-popover { position:absolute; z-index:100; left:0; bottom:31px; width:210px; max-height:180px; overflow:auto; display:grid; gap:2px; padding:6px; border:1px solid var(--lcos-hair-strong); border-radius:10px; background:rgba(253,253,254,.97); box-shadow:var(--lcos-shadow-float); }
+.lcos-reconstructed .lcos-context-peek-popover small { padding:3px 5px; color:#9995a1; font-size:8px; text-transform:uppercase; letter-spacing:.07em; }
+.lcos-reconstructed .lcos-context-peek-popover button { min-width:0; display:flex; align-items:center; justify-content:space-between; gap:5px; padding:5px; border:0; border-radius:6px; background:transparent; color:#5f5b68; font-size:9px; }
+.lcos-reconstructed .lcos-context-peek-popover button:hover { background:rgba(80,72,104,.06); }
+.lcos-reconstructed .lcos-composer-provenance,
+.lcos-reconstructed .lcos-composer-ambiguity { min-height:22px; display:flex; align-items:center; gap:5px; padding:0 6px; color:#8c8894; font-size:8.5px; }
+.lcos-reconstructed .lcos-composer-provenance small { margin-left:auto; }
+
+/* Surface composer uses the same quiet visual grammar. */
+.lcos-reconstructed .vnext-surface-composer,
+.lcos-reconstructed .lcos-surface-composer { position:absolute !important; z-index:42 !important; left:50% !important; right:auto !important; bottom:12px !important; transform:translateX(-50%) !important; width:min(530px,calc(100% - 90px)) !important; padding:5px !important; border:1px solid var(--lcos-hair-strong) !important; border-radius:13px !important; background:rgba(253,253,254,.91) !important; backdrop-filter:blur(22px) !important; box-shadow:var(--lcos-shadow-float) !important; }
+
+/* ---------- Dedicated surfaces ---------- */
+.lcos-reconstructed .lcos-dedicated-surface {
+  position:absolute;
+  inset:0;
+  overflow:auto;
+  color:var(--lcos-ink);
+  background-image:radial-gradient(circle at center, rgba(120,116,160,.13) 1px, transparent 1.2px);
+  background-size:22px 22px;
+  background-position:center;
+  animation:lcos-surface-in .17s cubic-bezier(.2,.72,.2,1) both;
+}
+.lcos-reconstructed .lcos-surface-heading { position:sticky; z-index:10; top:0; height:48px; display:flex; align-items:center; justify-content:space-between; padding:0 22px; pointer-events:none; background:linear-gradient(var(--lcos-ground) 62%,transparent); }
+.lcos-reconstructed .lcos-surface-heading > div { display:flex; align-items:baseline; gap:7px; }
+.lcos-reconstructed .lcos-surface-heading strong { font-size:11px; font-weight:620; }
+.lcos-reconstructed .lcos-surface-heading span,
+.lcos-reconstructed .lcos-surface-heading small { color:#96929d; font-size:8.8px; }
+
+.lcos-reconstructed .lcos-surface-object { position:relative; min-width:0; height:58px; display:grid; grid-template-columns:29px minmax(0,1fr) auto; align-items:center; gap:8px; padding:7px 8px; border:1px solid var(--lcos-hair); border-radius:10px; background:rgba(255,255,255,.53); box-shadow:0 5px 15px rgba(50,44,66,.035); color:var(--lcos-ink); text-align:left; cursor:pointer; }
+.lcos-reconstructed .lcos-surface-object.compact { height:48px; }
+.lcos-reconstructed .lcos-surface-object.dim { opacity:.34; }
+.lcos-reconstructed .lcos-surface-object:hover { border-color:var(--lcos-hair-strong); background:rgba(255,255,255,.72); }
+.lcos-reconstructed .lcos-surface-object-icon { width:27px; height:27px; display:grid; place-items:center; border-radius:8px; color:#716b7e; background:rgba(96,84,126,.055); }
+.lcos-reconstructed .lcos-surface-object-icon svg { width:14px; height:14px; }
+.lcos-reconstructed .lcos-surface-object-copy { min-width:0; display:grid; gap:2px; }
+.lcos-reconstructed .lcos-surface-object-copy strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:9.8px; font-weight:590; }
+.lcos-reconstructed .lcos-surface-object-copy small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#9995a0; font-size:8px; }
+.lcos-reconstructed .lcos-surface-state { padding:2px 4px; border-radius:5px; color:#7e7986; background:rgba(75,69,90,.045); font-size:7.8px; }
+.lcos-reconstructed .lcos-surface-glyph { position:relative; width:30px; height:30px; display:grid; place-items:center; padding:0; border:0; border-radius:50%; background:rgba(255,255,255,.58); color:#756e83; box-shadow:0 3px 10px rgba(43,38,58,.06); cursor:pointer; }
+.lcos-reconstructed .lcos-surface-glyph svg { width:14px; height:14px; }
+.lcos-reconstructed .lcos-glyph-label { position:absolute; top:35px; left:50%; transform:translateX(-50%); width:max-content; max-width:130px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding:3px 5px; border-radius:5px; background:rgba(250,250,252,.9); color:#686470; box-shadow:0 5px 14px rgba(42,36,58,.08); font-size:8px; }
+
+/* Outline */
+.lcos-reconstructed .lcos-outline-sheet { width:min(900px,calc(100% - 64px)); margin:18px auto 80px; padding:14px 10px; border-top:1px solid var(--lcos-hair); }
+.lcos-reconstructed .lcos-outline-row { --depth:var(--outline-depth,0); position:relative; min-height:37px; display:grid; grid-template-columns:22px minmax(0,1fr) auto; align-items:center; padding-left:calc(var(--outline-depth) * 22px); border-bottom:1px solid rgba(28,27,34,.045); }
+.lcos-reconstructed .lcos-outline-row.selected { background:linear-gradient(90deg,rgba(139,92,246,.045),rgba(59,130,246,.025),transparent 72%); }
+.lcos-reconstructed .lcos-outline-fold { width:22px; height:28px; display:grid; place-items:center; padding:0; border:0; background:transparent; color:#aaa6b0; }
+.lcos-reconstructed .lcos-outline-fold:disabled { opacity:.22; }
+.lcos-reconstructed .lcos-outline-main { min-width:0; height:32px; display:grid; grid-template-columns:20px minmax(0,1fr) minmax(0,220px); align-items:center; gap:7px; padding:0 5px; border:0; background:transparent; color:var(--lcos-ink); text-align:left; }
+.lcos-reconstructed .lcos-outline-main svg { width:13px; height:13px; color:#7e7887; }
+.lcos-reconstructed .lcos-outline-main strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:10px; font-weight:560; }
+.lcos-reconstructed .lcos-outline-main small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#9d99a4; font-size:8.5px; }
+.lcos-reconstructed .lcos-outline-status { margin-right:6px; padding:2px 5px; border-radius:5px; font-size:7.5px; color:#77727e; background:rgba(75,69,90,.05); }
+.lcos-reconstructed .lcos-outline-status.draft { color:#6163bd; background:rgba(99,102,241,.07); }
+
+/* Context Flow */
+.lcos-reconstructed .lcos-flow-stage { width:min(1120px,calc(100% - 80px)); min-width:720px; margin:20px auto 100px; display:grid; gap:34px; }
+.lcos-reconstructed .lcos-flow-axis { position:relative; min-height:84px; display:grid; grid-template-columns:124px minmax(0,1fr); align-items:center; }
+.lcos-reconstructed .lcos-flow-axis-label { display:grid; gap:3px; padding-right:16px; }
+.lcos-reconstructed .lcos-flow-axis-label span { font-size:9px; font-weight:600; color:#625e69; }
+.lcos-reconstructed .lcos-flow-axis-label small { font:600 7.5px/1 "JetBrains Mono",monospace; letter-spacing:.07em; text-transform:uppercase; color:#aaa6b1; }
+.lcos-reconstructed .lcos-flow-baseline { position:absolute; left:124px; right:0; top:50%; height:1px; background:linear-gradient(90deg,rgba(103,94,128,.13),rgba(103,94,128,.06),transparent); }
+.lcos-reconstructed .lcos-flow-items { position:relative; z-index:2; display:flex; align-items:center; gap:22px; min-width:0; overflow-x:auto; padding:14px 8px 14px 0; }
+.lcos-reconstructed .lcos-flow-items .lcos-surface-object { flex:0 0 164px; }
+.lcos-reconstructed .axis-feedback .lcos-flow-baseline { background:linear-gradient(90deg,rgba(194,128,58,.17),rgba(194,128,58,.06),transparent); }
+.lcos-reconstructed .axis-sessions .lcos-flow-baseline { background:linear-gradient(90deg,rgba(139,92,246,.16),rgba(59,130,246,.09),transparent); }
+.lcos-reconstructed .axis-revisions .lcos-flow-baseline { background:linear-gradient(90deg,rgba(91,107,181,.15),rgba(91,107,181,.055),transparent); }
+
+/* Tree */
+.lcos-reconstructed .lcos-context-tree { min-width:780px; }
+.lcos-reconstructed .lcos-tree-edges { position:absolute; z-index:0; inset:48px 0 0; width:1200px; height:760px; pointer-events:none; overflow:visible; }
+.lcos-reconstructed .lcos-tree-edges path { fill:none; stroke:rgba(93,87,110,.16); stroke-width:1; vector-effect:non-scaling-stroke; }
+.lcos-reconstructed .lcos-tree-edges path.active { stroke:rgba(89,89,184,.35); }
+.lcos-reconstructed .lcos-tree-node { position:absolute; z-index:2; }
+
+/* Local graph */
+.lcos-reconstructed .lcos-context-graph { overflow:hidden; }
+.lcos-reconstructed .lcos-graph-stage { position:absolute; inset:50px 0 0; min-width:680px; min-height:560px; }
+.lcos-reconstructed .lcos-graph-edges { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+.lcos-reconstructed .lcos-graph-edges line { stroke:rgba(92,85,109,.14); stroke-width:1; }
+.lcos-reconstructed .lcos-graph-node { position:absolute; transform:translate(-50%,-50%); }
+
+/* Work lens — free run graph (brief 10.3) */
+.lcos-reconstructed .lcos-work-free { overflow:hidden; }
+.lcos-reconstructed .lcos-workfree-stage { position:absolute; inset:52px 18px 18px; min-width:720px; min-height:520px; }
+.lcos-reconstructed .lcos-workfree-edges { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+.lcos-reconstructed .lcos-workfree-edges line { stroke:rgba(92,85,109,.16); stroke-width:1; }
+.lcos-reconstructed .lcos-workfree-edges line.active { stroke:rgba(89,89,184,.38); }
+.lcos-reconstructed .lcos-workfree-node { position:absolute; transform:translate(-6%,-4%); }
+.lcos-reconstructed .lcos-run-badge { display:inline-flex; align-items:center; gap:3px; margin-top:3px; padding:2px 7px; border-radius:999px; font-size:8px; font-weight:620; color:#fff; background:#7a879c; }
+.lcos-reconstructed .lcos-run-badge.status-running { background:#3b82f6; }
+.lcos-reconstructed .lcos-run-badge.status-waiting_input { background:#d79a47; }
+.lcos-reconstructed .lcos-run-badge.status-review { background:#8b5cf6; }
+.lcos-reconstructed .lcos-run-badge.status-failed { background:#cc655f; }
+.lcos-reconstructed .lcos-run-badge.status-completed { background:#4f9271; }
+
+/* Work: run actor is the visual center, lanes are guides not panels. */
+.lcos-reconstructed .lcos-work-stage { width:min(1160px,calc(100% - 80px)); min-width:780px; margin:26px auto 110px; display:grid; gap:28px; }
+.lcos-reconstructed .lcos-work-group { position:relative; min-height:184px; display:grid; grid-template-columns:minmax(190px,1fr) 210px minmax(190px,1fr); align-items:center; gap:44px; padding:26px 30px; }
+.lcos-reconstructed .lcos-work-group::before { content:""; position:absolute; inset:0; border-radius:18px; background:linear-gradient(90deg,rgba(111,104,133,.025) 0 32%,transparent 32% 66%,rgba(96,113,160,.025) 66% 100%); pointer-events:none; }
+.lcos-reconstructed .lcos-work-column { position:relative; z-index:2; display:grid; gap:8px; align-content:center; }
+.lcos-reconstructed .lcos-work-column-label { display:flex; align-items:center; justify-content:space-between; margin-bottom:3px; color:#aaa6b2; font:600 7.8px/1 "JetBrains Mono",monospace; letter-spacing:.08em; text-transform:uppercase; }
+.lcos-reconstructed .lcos-run-actor { position:relative; z-index:3; min-height:116px; display:grid; place-items:center; align-content:center; gap:6px; padding:14px; border:1px solid rgba(59,130,246,.14); border-radius:15px; background:rgba(249,251,255,.70); box-shadow:0 10px 30px rgba(55,77,118,.06); text-align:center; }
+.lcos-reconstructed .lcos-run-actor svg { width:21px; height:21px; color:#5278bb; }
+.lcos-reconstructed .lcos-run-actor strong { max-width:165px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:10.5px; font-weight:620; }
+.lcos-reconstructed .lcos-run-actor small { color:#92909b; font-size:8.5px; }
+
+/* Deliver */
+.lcos-reconstructed .lcos-deliver-stage { width:min(1050px,calc(100% - 70px)); margin:34px auto 110px; display:grid; grid-template-columns:minmax(0,1.35fr) minmax(260px,.65fr); gap:42px; }
+.lcos-reconstructed .lcos-revision-zone,
+.lcos-reconstructed .lcos-package-zone { min-width:0; }
+.lcos-reconstructed .lcos-deliver-section-label { margin-bottom:15px; display:flex; align-items:center; justify-content:space-between; color:#817d89; font-size:9px; }
+.lcos-reconstructed .lcos-revision-line { position:relative; display:grid; gap:14px; padding-left:22px; }
+.lcos-reconstructed .lcos-revision-line::before { content:""; position:absolute; left:8px; top:12px; bottom:12px; width:1px; background:rgba(93,87,109,.15); }
+.lcos-reconstructed .lcos-revision-item { position:relative; }
+.lcos-reconstructed .lcos-revision-item::before { content:""; position:absolute; left:-18px; top:23px; width:6px; height:6px; border-radius:50%; background:#aaa6b2; box-shadow:0 0 0 3px var(--lcos-ground); }
+.lcos-reconstructed .lcos-revision-item.is-current::before { background:#65957a; }
+.lcos-reconstructed .lcos-revision-item.is-draft::before { background:#6d6fdd; }
+.lcos-reconstructed .lcos-package-zone { min-height:230px; padding:16px; border:1px dashed rgba(91,85,106,.15); border-radius:15px; background:rgba(255,255,255,.20); }
+.lcos-reconstructed .lcos-package-list { display:grid; gap:9px; }
+
+/* ---------- Drop ---------- */
+/* Screen-space progressive cue. No persistent dual gutter: edge scrolling stays active until dwell completes. */
+.lcos-reconstructed .drop-edge-cue { z-index:80; border:0; pointer-events:none; }
+.lcos-reconstructed .drop-edge-cue.anchor-left { background:linear-gradient(90deg,rgba(139,92,246,.065),rgba(139,92,246,.015) 62%,transparent); }
+.lcos-reconstructed .drop-edge-cue.anchor-bottom { background:linear-gradient(0deg,rgba(59,130,246,.065),rgba(59,130,246,.014) 62%,transparent); }
+.lcos-reconstructed .drop-edge-cue.phase-preview { background:transparent; }
+
+/* Drop ghost — real nodes stay put, a light stack follows the pointer. */
+.lcos-drop-ghost {
+  position:fixed;
+  z-index:120;
+  pointer-events:none;
+  display:flex;
+  align-items:center;
+  gap:7px;
+  padding:6px 10px 6px 6px;
+  border:1px solid rgba(139,92,246,.20);
+  border-radius:14px;
+  background:rgba(251,251,253,.92);
+  backdrop-filter:blur(14px) saturate(1.08);
+  box-shadow:0 14px 34px rgba(52,44,84,.18), inset 0 1px 0 rgba(255,255,255,.9);
+  transform:translate(10px,10px);
+}
+.lcos-drop-ghost-stack { position:relative; width:32px; height:24px; }
+.lcos-drop-ghost-stack i { position:absolute; width:23px; height:18px; border-radius:5px; background:#fff; border:1px solid rgba(139,92,246,.20); box-shadow:0 2px 5px rgba(52,44,84,.10); }
+.lcos-drop-ghost-stack i:nth-child(1){ left:1px; top:5px; transform:rotate(-7deg); }
+.lcos-drop-ghost-stack i:nth-child(2){ left:5px; top:2px; transform:rotate(1deg); }
+.lcos-drop-ghost-stack i:nth-child(3){ left:9px; top:0; transform:rotate(7deg); }
+.lcos-drop-ghost strong { min-width:16px; height:16px; display:grid; place-items:center; border-radius:999px; background:var(--lcos-purple); color:#fff; font-size:9px; font-weight:650; }
+.lcos-drop-ghost small { color:#6b4fb5; font-size:10px; font-weight:620; letter-spacing:.02em; }
+
+/* DropShelf — prototype Share Sheet: stacked chips, verbs, spring in. */
+.lcos-reconstructed .vnext-drop-shelf {
+  flex-direction:column;
+  align-items:stretch;
+  width:272px;
+  max-width:calc(100vw - 120px);
+  gap:8px;
+  padding:12px;
+  border-radius:18px;
+  border:1px solid rgba(28,27,34,.08);
+  background:rgba(251,251,253,.86);
+  box-shadow:0 1px 2px rgba(28,27,34,.06),0 28px 60px -32px rgba(28,27,34,.55);
+  backdrop-filter:blur(24px) saturate(1.08);
+  animation:lcos-shelf-spring .26s cubic-bezier(.2,.9,.3,1.15) both;
+}
+@keyframes lcos-shelf-spring {
+  0% { opacity:0; translate:0 12px; scale:.97; }
+  62% { opacity:1; translate:0 -2px; scale:1.005; }
+  100% { opacity:1; translate:0 0; scale:1; }
+}
+.lcos-reconstructed .vnext-drop-payload { width:auto; height:auto; display:flex; align-items:center; gap:9px; border-right:0; padding:0; }
+.lcos-reconstructed .vnext-payload-stack { width:56px; height:40px; }
+.lcos-reconstructed .vnext-payload-stack i { width:38px; height:34px; border-radius:10px; background:#fff; border:1px solid rgba(28,27,34,.08); box-shadow:0 2px 6px rgba(28,27,34,.08); }
+.lcos-reconstructed .vnext-payload-stack i:nth-child(1){ left:2px; top:6px; transform:rotate(-6deg); }
+.lcos-reconstructed .vnext-payload-stack i:nth-child(2){ left:10px; top:2px; transform:rotate(1deg); }
+.lcos-reconstructed .vnext-payload-stack i:nth-child(3){ left:18px; top:0; transform:rotate(6deg); }
+.lcos-reconstructed .vnext-drop-payload strong { position:static; min-width:18px; height:18px; padding:0 5px; border-radius:999px; background:var(--lcos-purple); color:#fff; border:0; font-size:9px; font-weight:650; }
+.lcos-reconstructed .vnext-drop-verbs { display:flex; flex-wrap:wrap; gap:5px; }
+.lcos-reconstructed .vnext-drop-verbs button { height:24px; padding:0 11px; border:0; border-radius:999px; background:rgba(28,27,34,.04); color:#8d8b99; font-size:10px; font-weight:520; transition:background .14s ease,color .14s ease,box-shadow .14s ease,transform .14s ease; }
+.lcos-reconstructed .vnext-drop-verbs button:hover { background:rgba(28,27,34,.07); color:#55535f; }
+.lcos-reconstructed .vnext-drop-verbs button.active { background:var(--lcos-purple); color:#fff; box-shadow:0 3px 10px rgba(139,92,246,.28); transform:translateY(-1px); }
+.lcos-reconstructed .vnext-drop-destinations { flex-direction:column; gap:2px; overflow:visible; }
+.lcos-reconstructed .vnext-destination { border-radius:10px; }
+.lcos-reconstructed .vnext-destination-main { height:34px; min-width:0; width:100%; padding:0 10px; color:#1c1b22; }
+.lcos-reconstructed .vnext-destination-main span { font-size:11px; font-weight:500; }
+.lcos-reconstructed .vnext-destination-follow { width:30px; border-left:1px solid rgba(28,27,34,.07) !important; }
+.lcos-reconstructed .vnext-drop-close { align-self:flex-end; width:28px; height:28px; }
+
+.lcos-reconstructed .vnext-drop-shelf {
+  z-index:95 !important;
+  border:1px solid var(--lcos-hair-strong) !important;
+  border-radius:15px !important;
+  background:rgba(252,252,254,.94) !important;
+  backdrop-filter:blur(24px) saturate(1.08) !important;
+  box-shadow:var(--lcos-shadow-float) !important;
+}
+.lcos-reconstructed .vnext-drop-shelf.anchor-left { animation:lcos-shelf-in-left .16s ease both; }
+.lcos-reconstructed .vnext-drop-shelf.anchor-bottom { animation:lcos-shelf-in-bottom .16s ease both; }
+.lcos-reconstructed .vnext-drop-shelf button { transition:background .12s ease,transform .12s ease,border-color .12s ease; }
+.lcos-reconstructed .vnext-drop-shelf button:hover { transform:translateY(-1px); }
+
+/* ---------- Minimap ---------- */
+.lcos-reconstructed .minimap,
+.lcos-reconstructed .canvas-minimap {
+  left:auto !important;
+  right:12px !important;
+  bottom:calc(var(--lcos-dock-h) + 12px) !important;
+  border:1px solid var(--lcos-hair) !important;
+  background:rgba(251,251,253,.68) !important;
+  backdrop-filter:blur(14px) !important;
+  box-shadow:0 8px 24px rgba(42,36,60,.07) !important;
+}
+
+/* ---------- Old WorkRail becomes an on-demand drawer ---------- */
+.lcos-reconstructed .work-rail.collapsed { display:none !important; }
+.lcos-reconstructed .work-rail:not(.collapsed) {
+  position:fixed !important;
+  z-index:140 !important;
+  top:calc(var(--lcos-top-h) + 8px) !important;
+  right:8px !important;
+  bottom:8px !important;
+  width:min(370px,calc(100vw - 80px)) !important;
+  max-width:none !important;
+  border:1px solid var(--lcos-hair-strong) !important;
+  border-radius:16px !important;
+  background:rgba(252,252,254,.96) !important;
+  backdrop-filter:blur(24px) saturate(1.06) !important;
+  box-shadow:0 28px 72px rgba(34,30,51,.18),inset 0 1px 0 rgba(255,255,255,.92) !important;
+}
+
+/* ---------- Quiet legacy overlays ---------- */
+.lcos-reconstructed .capability-popover,
+.lcos-reconstructed .node-info-popover,
+.lcos-reconstructed .agent-context-surface,
+.lcos-reconstructed .layout-preview-popover { border-color:var(--lcos-hair-strong) !important; background:rgba(252,252,254,.94) !important; backdrop-filter:blur(22px) !important; box-shadow:var(--lcos-shadow-float) !important; }
+
+/* Do not let old mode/tab chrome return. */
+.lcos-reconstructed .mode-tabs,
+.lcos-reconstructed .top-mode-tabs,
+.lcos-reconstructed .run-confirm-dialog-launcher,
+.lcos-reconstructed .node-context-toolbar { display:none !important; }
+
+/* ---------- Focus + accessibility ---------- */
+.lcos-reconstructed button:focus-visible,
+.lcos-reconstructed textarea:focus-visible,
+.lcos-reconstructed input:focus-visible,
+.lcos-reconstructed select:focus-visible { outline:2px solid rgba(99,102,241,.28) !important; outline-offset:2px !important; }
+
+@media (max-width:1000px) {
+  :root { --lcos-rail-w:48px; }
+  .lcos-reconstructed .lcos-lens-axis { left:auto; right:10px; transform:none; }
+  .lcos-reconstructed .lcos-projection-switch { display:none; }
+  .lcos-reconstructed .lcos-scope-breadcrumb { display:none !important; }
+  .lcos-reconstructed .lcos-flow-stage,
+  .lcos-reconstructed .lcos-work-stage { width:calc(100% - 34px); min-width:680px; }
+}
+
+@media (prefers-reduced-motion:reduce) {
+  .lcos-reconstructed *,
+  .lcos-reconstructed *::before,
+  .lcos-reconstructed *::after { scroll-behavior:auto !important; animation-duration:.001ms !important; animation-iteration-count:1 !important; transition-duration:.001ms !important; }
+}
+
+/* Actual dedicated-surface markup alignment. */
+.lcos-reconstructed .lcos-context-graph > .lcos-graph-edges { position:absolute; z-index:0; inset:48px 0 0; width:100%; height:calc(100% - 48px); pointer-events:none; }
+.lcos-reconstructed .lcos-context-graph > .lcos-graph-edges line { stroke:rgba(92,85,109,.15); stroke-width:.18; vector-effect:non-scaling-stroke; }
+.lcos-reconstructed .lcos-context-graph > .lcos-graph-edges line.active { stroke:rgba(76,92,180,.35); stroke-width:.24; }
+.lcos-reconstructed .lcos-graph-dot { position:absolute; z-index:2; transform:translate(-50%,-50%); }
+.lcos-reconstructed .lcos-graph-dot.ring-0 .lcos-surface-glyph { width:38px; height:38px; color:#574c74; background:rgba(253,252,255,.9); box-shadow:0 7px 22px rgba(49,42,67,.10); }
+.lcos-reconstructed .lcos-graph-dot.ring-2 { opacity:.58; }
+
+.lcos-reconstructed .lcos-work-column-labels { width:min(1120px,calc(100% - 80px)); min-width:760px; margin:24px auto 0; display:grid; grid-template-columns:minmax(190px,1fr) 210px minmax(190px,1fr); gap:44px; padding:0 30px; color:#a09ca7; font:600 7.7px/1 "JetBrains Mono",monospace; letter-spacing:.08em; text-transform:uppercase; }
+.lcos-reconstructed .lcos-work-column-labels span:nth-child(2) { text-align:center; }
+.lcos-reconstructed .lcos-work-column-labels span:nth-child(3) { text-align:right; }
+.lcos-reconstructed .lcos-work-lanes { position:absolute; z-index:0; inset:74px 30px 90px; display:grid; grid-template-columns:1fr 230px 1fr; gap:38px; pointer-events:none; }
+.lcos-reconstructed .lcos-work-lanes i { border-radius:20px; border:1px solid rgba(83,77,100,.035); background:linear-gradient(180deg,rgba(255,255,255,.09),rgba(255,255,255,.025)); }
+.lcos-reconstructed .lcos-work-lanes i:nth-child(2) { border-color:rgba(59,130,246,.045); background:linear-gradient(180deg,rgba(59,130,246,.025),transparent); }
+.lcos-reconstructed .lcos-run-groups { position:relative; z-index:2; width:min(1120px,calc(100% - 80px)); min-width:760px; margin:14px auto 110px; display:grid; gap:24px; }
+.lcos-reconstructed .lcos-run-group { min-height:160px; display:grid; grid-template-columns:minmax(190px,1fr) 210px minmax(190px,1fr); align-items:center; gap:44px; padding:20px 30px; border-bottom:1px solid rgba(28,27,34,.035); }
+.lcos-reconstructed .lcos-run-context-list,
+.lcos-reconstructed .lcos-run-output-list { min-width:0; display:grid; gap:7px; align-content:center; }
+.lcos-reconstructed .lcos-run-output-list { justify-items:stretch; }
+.lcos-reconstructed .lcos-run-actor { position:relative; width:210px; min-height:116px; display:grid; grid-template-columns:30px minmax(0,1fr); align-items:center; gap:8px; padding:12px; border:1px solid rgba(59,130,246,.13); border-radius:14px; background:rgba(249,251,255,.72); box-shadow:0 9px 28px rgba(44,69,111,.055),inset 0 1px 0 rgba(255,255,255,.85); color:var(--lcos-ink); text-align:left; cursor:pointer; }
+.lcos-reconstructed .lcos-run-actor:hover { border-color:rgba(59,130,246,.20); background:rgba(250,252,255,.9); }
+.lcos-reconstructed .lcos-run-actor.selected::after { content:""; position:absolute; inset:-2px; padding:1.3px; border-radius:inherit; background:conic-gradient(from var(--lcos-ring-angle),var(--lcos-purple),var(--lcos-blue),var(--lcos-cyan),var(--lcos-blue),var(--lcos-purple)); -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0); -webkit-mask-composite:xor; mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0); mask-composite:exclude; animation:lcos-ring-travel 5s linear infinite; pointer-events:none; }
+.lcos-reconstructed .lcos-run-actor-icon { width:30px; height:30px; display:grid; place-items:center; border-radius:9px; color:#4f79bd; background:rgba(59,130,246,.075); }
+.lcos-reconstructed .lcos-run-actor > div { min-width:0; display:grid; gap:2px; }
+.lcos-reconstructed .lcos-run-actor small { color:#96929d; font-size:8px; }
+.lcos-reconstructed .lcos-run-actor strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:10px; font-weight:620; }
+.lcos-reconstructed .lcos-run-actor p { margin:1px 0 0; display:-webkit-box; overflow:hidden; -webkit-line-clamp:2; -webkit-box-orient:vertical; color:#86828e; font-size:8.3px; line-height:1.35; }
+.lcos-reconstructed .lcos-run-actor-status { position:absolute; right:9px; bottom:8px; padding:2px 5px; border-radius:5px; color:#777481; background:rgba(83,75,105,.045); font-size:7.6px; }
+.lcos-reconstructed .lcos-run-actor.status-running { box-shadow:0 9px 30px rgba(52,91,148,.07),0 0 0 7px rgba(59,130,246,.025); }
+.lcos-reconstructed .lcos-run-alert { position:absolute; right:8px; top:8px; color:#bd7b3b; }
+.lcos-reconstructed .lcos-empty-slot { min-height:42px; display:flex; align-items:center; padding:0 9px; border:1px dashed rgba(87,80,105,.11); border-radius:9px; color:#aaa6b0; font-size:8.5px; }
+.lcos-reconstructed .lcos-work-empty { min-height:280px; display:grid; place-items:center; align-content:center; gap:7px; color:#97939e; }
+.lcos-reconstructed .lcos-work-empty strong { color:#66616f; font-size:11px; }
+.lcos-reconstructed .lcos-work-empty span { font-size:9px; }
+
+.lcos-reconstructed .lcos-deliver-surface { padding-bottom:90px; }
+.lcos-reconstructed .lcos-revision-stage { width:min(720px,calc(100% - 390px)); min-width:460px; margin:38px 330px 0 50px; position:relative; }
+.lcos-reconstructed .lcos-revision-label { margin-bottom:20px; color:#8d8995; font:600 8px/1 "JetBrains Mono",monospace; letter-spacing:.08em; text-transform:uppercase; }
+.lcos-reconstructed .lcos-revision-stage > .lcos-revision-line { position:absolute; left:15px; top:46px; bottom:14px; width:1px; background:rgba(90,84,105,.13); }
+.lcos-reconstructed .lcos-revision-items { display:grid; gap:14px; }
+.lcos-reconstructed .lcos-revision-item { position:relative; display:grid; grid-template-columns:30px minmax(0,1fr); align-items:center; gap:8px; }
+.lcos-reconstructed .lcos-revision-dot { position:relative; z-index:2; width:30px; height:30px; display:grid; place-items:center; border-radius:50%; border:1px solid var(--lcos-hair-strong); color:#8b8792; background:var(--lcos-ground); font:600 8px/1 "JetBrains Mono",monospace; }
+.lcos-reconstructed .lcos-revision-item.current .lcos-revision-dot { color:#56856b; border-color:rgba(86,133,107,.22); background:#f1f6f3; }
+.lcos-reconstructed .lcos-revision-item.draft .lcos-revision-dot { color:#6264c8; border-color:rgba(99,102,241,.22); background:#f4f3fc; }
+.lcos-reconstructed .lcos-delivery-package { position:absolute; right:42px; top:94px; width:270px; min-height:260px; padding:13px; border:1px dashed rgba(91,85,106,.15); border-radius:15px; background:rgba(255,255,255,.20); }
+.lcos-reconstructed .lcos-delivery-package > header { display:flex; align-items:center; gap:8px; margin-bottom:11px; color:#787381; }
+.lcos-reconstructed .lcos-delivery-package > header > div { display:grid; gap:2px; }
+.lcos-reconstructed .lcos-delivery-package > header strong { color:#5c5864; font-size:9.5px; font-weight:610; }
+.lcos-reconstructed .lcos-delivery-package > header small { color:#9c98a3; font-size:8px; }
+.lcos-reconstructed .lcos-delivery-package > div { display:grid; gap:7px; }
+.lcos-reconstructed .lcos-compare-hint { position:absolute; left:50px; bottom:82px; display:flex; align-items:center; gap:6px; color:#9995a0; font-size:8.5px; }
+
+/* Composer menus are local disclosure, never another toolbar row. */
+.lcos-reconstructed .lcos-composer-menu { position:relative; }
+.lcos-reconstructed .lcos-composer-menu > summary { height:25px; display:flex; align-items:center; gap:4px; padding:0 6px; list-style:none; border-radius:7px; color:#797582; font-size:8.8px; cursor:pointer; }
+.lcos-reconstructed .lcos-composer-menu > summary::-webkit-details-marker { display:none; }
+.lcos-reconstructed .lcos-composer-menu > summary:hover,
+.lcos-reconstructed .lcos-composer-menu[open] > summary { color:#393541; background:rgba(79,72,104,.06); }
+.lcos-reconstructed .lcos-composer-menu > summary b { font-size:8.8px; font-weight:560; }
+.lcos-reconstructed .lcos-composer-menu-popover { position:absolute; z-index:105; left:0; bottom:31px; width:192px; display:grid; gap:2px; padding:6px; border:1px solid var(--lcos-hair-strong); border-radius:11px; background:rgba(253,253,254,.98); box-shadow:var(--lcos-shadow-float); }
+.lcos-reconstructed .lcos-composer-menu-popover > small { padding:3px 5px; color:#9995a1; font:600 7.5px/1 "JetBrains Mono",monospace; letter-spacing:.07em; text-transform:uppercase; }
+.lcos-reconstructed .lcos-composer-menu-popover > button { min-height:34px; display:grid; grid-template-columns:20px minmax(0,1fr); align-items:center; gap:6px; padding:5px 6px; border:0; border-radius:7px; color:#6b6773; background:transparent; text-align:left; }
+.lcos-reconstructed .lcos-composer-menu-popover > button:hover { color:#34313b; background:rgba(80,72,104,.06); }
+.lcos-reconstructed .lcos-composer-menu-popover > button > span { display:grid; place-items:center; }
+.lcos-reconstructed .lcos-composer-menu-popover > button > div { min-width:0; display:grid; gap:2px; }
+.lcos-reconstructed .lcos-composer-menu-popover b { font-size:9px; font-weight:580; }
+.lcos-reconstructed .lcos-composer-menu-popover button small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#a09ca7; font-size:7.7px; }
+
+.lcos-reconstructed .lcos-surface-composer-main { display:grid; grid-template-columns:18px minmax(0,1fr) 30px; align-items:end; gap:5px; }
+.lcos-reconstructed .lcos-surface-composer-main > svg { align-self:center; margin-left:3px; color:#8c8794; }
+.lcos-reconstructed .lcos-surface-composer-main textarea { min-height:33px; max-height:90px; resize:none; padding:8px 7px; border:0; outline:0; background:transparent; color:var(--lcos-ink); font-size:10.5px; line-height:1.35; }
+.lcos-reconstructed .vnext-surface-send { width:30px; height:30px; display:grid; place-items:center; padding:0; border:0; border-radius:9px; color:#fff; background:#34313d; }
+.lcos-reconstructed .vnext-surface-send:disabled { opacity:.22; }
+.lcos-reconstructed .lcos-surface-composer-controls { display:flex; align-items:center; gap:3px; padding-left:20px; }
+.lcos-reconstructed .lcos-surface-composer-controls label { position:relative; height:24px; display:flex; align-items:center; gap:2px; border-radius:7px; color:#7f7b87; background:transparent; }
+.lcos-reconstructed .lcos-surface-composer-controls label:hover { background:rgba(79,72,104,.055); }
+.lcos-reconstructed .lcos-surface-composer-controls select { height:24px; appearance:none; padding:0 20px 0 7px; border:0; outline:0; color:inherit; background:transparent; font-size:8.7px; cursor:pointer; }
+.lcos-reconstructed .lcos-surface-composer-controls label > svg { position:absolute; right:6px; pointer-events:none; }
+.lcos-reconstructed .lcos-surface-context-count { margin-left:auto; min-width:18px; height:18px; display:grid; place-items:center; border-radius:50%; color:#837f8a; background:rgba(84,77,104,.055); font:600 8px/1 "JetBrains Mono",monospace; }
+
+/* Relations: weak lines recede; activity is allowed to move. */
+.lcos-reconstructed .vnext-surface-host .edges .edge { stroke:rgba(104,101,114,.22) !important; stroke-width:1.2px !important; filter:none !important; }
+.lcos-reconstructed .vnext-surface-host .edges .edge.reference { stroke:rgba(100,104,124,.20) !important; stroke-dasharray:3 6 !important; }
+.lcos-reconstructed .vnext-surface-host .edges .edge.feedback { stroke:rgba(181,137,73,.30) !important; stroke-dasharray:2 6 !important; }
+.lcos-reconstructed .vnext-surface-host .edges .edge.generate,
+.lcos-reconstructed .vnext-surface-host .edges .edge.modify { stroke:rgba(94,111,157,.30) !important; }
+.lcos-reconstructed .vnext-surface-host .edges .edge.focused { stroke:rgba(92,84,135,.42) !important; stroke-width:1.5px !important; }
+.lcos-reconstructed .vnext-surface-host .edges .edge.selected { stroke:rgba(105,83,196,.62) !important; stroke-width:1.8px !important; }
+.lcos-reconstructed .vnext-surface-host .edges .edge.active { stroke:rgba(74,111,178,.52) !important; stroke-dasharray:7 10 !important; }
+.lcos-reconstructed .edge-runner { fill:#6688ca !important; opacity:.74; }
+
+/* Project identity is typography, not another card. */
+.lcos-reconstructed .vnext-project-identity { min-width:0; display:flex; align-items:center; gap:5px; }
+.lcos-reconstructed .vnext-project-name { min-width:0; display:flex !important; align-items:baseline; gap:7px; padding:0 5px !important; }
+.lcos-reconstructed .vnext-project-name strong { max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#302e37; font-size:11.5px; font-weight:620; letter-spacing:-.012em; }
+.lcos-reconstructed .vnext-project-name span { color:#9b97a2; font-size:8.8px; }
+.lcos-reconstructed .vnext-project-state { display:flex; align-items:center; gap:4px; margin-left:2px; }
+.lcos-reconstructed .vnext-save-dot,
+.lcos-reconstructed .vnext-run-dot { width:5px; height:5px; border-radius:50%; background:#a6a2ac; }
+.lcos-reconstructed .vnext-save-dot.state-saved { background:#6d9e80; }
+.lcos-reconstructed .vnext-save-dot.state-saving { background:#cf984d; }
+.lcos-reconstructed .vnext-run-dot.status-running { background:#4e83d4; box-shadow:0 0 0 3px rgba(78,131,212,.07); }
+.lcos-reconstructed .vnext-project-actions { margin-left:auto; display:flex; align-items:center; gap:8px; padding-right:4px; }
+.lcos-reconstructed .vnext-project-actions button { width:36px !important; height:36px !important; }
+.lcos-reconstructed .vnext-project-actions button svg { width:18px !important; height:18px !important; }
+.lcos-reconstructed .vnext-pending-entry { position:relative !important; }
+.lcos-reconstructed .vnext-pending-badge { position:absolute; top:2px; right:1px; min-width:14px; height:14px; padding:0 3px; display:inline-flex; align-items:center; justify-content:center; border-radius:999px; background:var(--lcos-purple); color:#fff; font-size:8px; font-weight:650; line-height:1; }
+
+/* Correct scene height for the reconstructed 42px strip. */
+.app-shell.lcos-reconstructed > .scene { height:calc(100vh - var(--lcos-top-h)) !important; }
+.lcos-reconstructed .lcos-global-context-scope { position:relative; height:27px; display:flex; align-items:center; border-radius:8px; color:#7f7a87; background:rgba(79,72,104,.045); }
+.lcos-reconstructed .lcos-global-context-scope select { height:27px; appearance:none; padding:0 22px 0 8px; border:0; outline:0; background:transparent; color:inherit; font-size:8.5px; cursor:pointer; }
+.lcos-reconstructed .lcos-global-context-scope svg { position:absolute; right:6px; pointer-events:none; }
+
+/* Agent Browser Mode: context status rests as a small overlay until explicitly expanded. */
+.lcos-reconstructed .agent-browser-mode .agent-context-surface { position:absolute !important; z-index:88 !important; top:10px !important; right:10px !important; width:222px !important; max-height:calc(100% - 80px); overflow:auto; padding:6px !important; border:1px solid var(--lcos-hair-strong) !important; border-radius:13px !important; background:rgba(252,252,254,.91) !important; backdrop-filter:blur(20px) !important; box-shadow:0 12px 34px rgba(42,36,59,.09),inset 0 1px 0 rgba(255,255,255,.88) !important; }
+.lcos-reconstructed .agent-browser-mode .agent-context-surface[data-details="closed"] { width:205px !important; }
+.lcos-reconstructed .agent-browser-mode .agent-context-surface[data-details="closed"] > .agent-context-stats,
+.lcos-reconstructed .agent-browser-mode .agent-context-surface[data-details="closed"] > .agent-surface-section,
+.lcos-reconstructed .agent-browser-mode .agent-context-surface[data-details="closed"] > dl,
+.lcos-reconstructed .agent-browser-mode .agent-context-surface[data-details="closed"] > ul,
+.lcos-reconstructed .agent-browser-mode .agent-context-surface[data-details="closed"] > p,
+.lcos-reconstructed .agent-browser-mode .agent-context-surface[data-details="closed"] > .agent-run-lock { display:none !important; }
+.lcos-reconstructed .agent-browser-mode .agent-context-surface > header { min-height:30px; display:grid; grid-template-columns:7px minmax(0,1fr) auto 26px; align-items:center; gap:6px; }
+.lcos-reconstructed .agent-browser-mode .agent-context-surface > header strong { font-size:9.5px !important; }
+.lcos-reconstructed .agent-browser-mode .agent-context-surface > header small { font-size:7.8px !important; }
+.lcos-reconstructed .agent-browser-mode .agent-context-surface > header code { font-size:7.5px !important; }
+.lcos-reconstructed .agent-browser-mode .agent-sync-badge { min-height:22px !important; margin-top:3px !important; padding:0 5px !important; border-radius:7px !important; font-size:8px !important; }
+
+/* ========================================================================== */
+/* Completion Phase 4: history, direct relations, run/deliver, motion/perf.  */
+/* ========================================================================== */
+
+.lcos-reconstructed .lcos-surface-mount {
+  position:absolute;
+  inset:0;
+  min-width:0;
+  min-height:0;
+  animation:lcos-surface-enter 150ms cubic-bezier(.2,.72,.2,1) both;
+  transform-origin:50% 48%;
+}
+@keyframes lcos-surface-enter {
+  from { opacity:0; transform:scale(1.006) translateY(2px); }
+  to { opacity:1; transform:scale(1) translateY(0); }
+}
+
+/* Workspace aggregate relation endpoints only exist near a spatial frame. */
+.lcos-reconstructed .workspace-relation-handle {
+  position:absolute;
+  z-index:12;
+  top:50%;
+  width:16px;
+  height:28px;
+  margin-top:-14px;
+  padding:0;
+  border:0;
+  background:transparent;
+  opacity:0;
+  cursor:crosshair;
+  transition:opacity 120ms ease, transform 120ms ease;
+}
+.lcos-reconstructed .workspace-relation-in { left:-10px; }
+.lcos-reconstructed .workspace-relation-out { right:-10px; }
+.lcos-reconstructed .workspace-relation-handle::after {
+  content:"";
+  position:absolute;
+  left:50%;
+  top:50%;
+  width:6px;
+  height:6px;
+  border:1px solid rgba(95,88,119,.34);
+  border-radius:50%;
+  background:rgba(252,251,255,.96);
+  box-shadow:0 0 0 3px rgba(123,103,194,.035);
+  transform:translate(-50%,-50%);
+}
+.lcos-reconstructed .workspace-frame:hover .workspace-relation-handle,
+.lcos-reconstructed .workspace-frame.active .workspace-relation-handle,
+.lcos-reconstructed .workspace-relation-handle:focus-visible { opacity:1; }
+.lcos-reconstructed .workspace-relation-handle:hover { transform:scale(1.08); }
+
+/* Selected edge endpoints become tangible without reviving a relation mode. */
+.lcos-reconstructed .edge-controls { pointer-events:auto !important; transform:scale(calc(1 / var(--canvas-zoom))) !important; transform-box:fill-box !important; transform-origin:center !important; }
+.lcos-reconstructed .edge-control { pointer-events:auto; cursor:crosshair; }
+.lcos-reconstructed .edge-terminal {
+  fill:rgba(251,250,254,.98);
+  stroke:rgba(104,84,181,.58);
+  stroke-width:1.2px;
+  filter:drop-shadow(0 2px 5px rgba(68,55,106,.10));
+}
+.lcos-reconstructed .edge-cut-hit {
+  fill:rgba(252,251,254,.96);
+  stroke:rgba(98,92,111,.18);
+  stroke-width:1px;
+  cursor:pointer;
+}
+.lcos-reconstructed .edge-cut-mark {
+  pointer-events:none;
+  fill:none;
+  stroke:rgba(98,91,110,.7);
+  stroke-width:1.3px;
+  stroke-linecap:round;
+}
+.lcos-reconstructed .edge.temporary.reconnecting {
+  stroke:rgba(100,82,188,.48)!important;
+  stroke-dasharray:4 6!important;
+}
+
+/* Context history is a visual version rail, not a second inspector. */
+.lcos-reconstructed .lcos-context-history {
+  position:absolute;
+  z-index:30;
+  right:22px;
+  top:62px;
+  width:226px;
+  padding:9px;
+  border:1px solid rgba(79,72,96,.09);
+  border-radius:13px;
+  background:rgba(252,251,254,.76);
+  box-shadow:0 12px 32px rgba(48,39,67,.055), inset 0 1px 0 rgba(255,255,255,.8);
+  backdrop-filter:blur(18px) saturate(1.06);
+}
+.lcos-reconstructed .lcos-context-history-head {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  margin-bottom:7px;
+  color:#817c89;
+}
+.lcos-reconstructed .lcos-context-history-head strong { color:#5c5865; font-size:9px; font-weight:620; }
+.lcos-reconstructed .lcos-context-history-head small { color:#aaa6b0; font-size:7.6px; }
+.lcos-reconstructed .lcos-context-version-beads { display:flex; align-items:center; gap:5px; min-height:28px; }
+.lcos-reconstructed .lcos-context-version-beads > button {
+  min-width:27px;
+  height:22px;
+  padding:0 6px;
+  border:1px solid rgba(84,78,101,.09);
+  border-radius:7px;
+  color:#8b8792;
+  background:rgba(255,255,255,.56);
+  font:600 7.5px/1 "JetBrains Mono",monospace;
+}
+.lcos-reconstructed .lcos-context-version-beads > button:hover,
+.lcos-reconstructed .lcos-context-version-beads > button.current { color:#5f55a4; border-color:rgba(112,91,192,.19); background:rgba(114,91,193,.055); }
+.lcos-reconstructed .lcos-handoff-mini { margin-top:7px; padding-top:7px; border-top:1px solid rgba(42,39,51,.055); }
+.lcos-reconstructed .lcos-handoff-mini > small { color:#aaa6b0; font:600 7px/1 "JetBrains Mono",monospace; letter-spacing:.06em; text-transform:uppercase; }
+.lcos-reconstructed .lcos-handoff-mini > em { display:block; margin-top:3px; font-style:normal; color:#9a95a4; font:400 7px/1.4 "JetBrains Mono",monospace; }
+.lcos-reconstructed .lcos-handoff-mini-list { display:grid; gap:4px; margin-top:6px; }
+.lcos-reconstructed .lcos-handoff-mini-list > button { min-height:25px; display:grid; grid-template-columns:minmax(0,1fr) 12px minmax(0,1fr); align-items:center; gap:4px; padding:0 5px; border:0; border-radius:7px; color:#807b87; background:transparent; font-size:7.8px; text-align:left; }
+.lcos-reconstructed .lcos-handoff-mini-list > button:hover { background:rgba(79,72,104,.045); color:#55505e; }
+.lcos-reconstructed .lcos-context-history-popover {
+  position:absolute;
+  z-index:32;
+  right:0;
+  top:42px;
+  width:242px;
+  padding:10px;
+  border:1px solid rgba(73,67,91,.11);
+  border-radius:13px;
+  background:rgba(253,252,254,.985);
+  box-shadow:0 18px 46px rgba(45,37,62,.12), inset 0 1px 0 rgba(255,255,255,.92);
+}
+.lcos-reconstructed .lcos-context-history-popover > header { display:grid; grid-template-columns:minmax(0,1fr) 24px; gap:6px; }
+.lcos-reconstructed .lcos-context-history-popover > header div { min-width:0; display:grid; gap:2px; }
+.lcos-reconstructed .lcos-context-history-popover strong { color:#4f4a57; font-size:9.5px; }
+.lcos-reconstructed .lcos-context-history-popover small { color:#9b97a2; font-size:7.8px; }
+.lcos-reconstructed .lcos-context-history-popover p { margin:8px 0; color:#77727f; font-size:8.2px; line-height:1.45; }
+.lcos-reconstructed .lcos-context-history-popover footer { display:flex; flex-wrap:wrap; gap:4px; }
+.lcos-reconstructed .lcos-context-history-popover footer button,
+.lcos-reconstructed .lcos-popover-close { min-height:25px; padding:0 7px; border:0; border-radius:7px; color:#77717e; background:rgba(75,69,90,.045); font-size:7.8px; }
+.lcos-reconstructed .lcos-context-history-popover footer button.primary { color:#fff; background:#514b5e; }
+.lcos-reconstructed .lcos-popover-close { width:24px; padding:0; background:transparent; }
+
+/* Outline becomes a working structure view, not a screenshot of a list. */
+.lcos-reconstructed .lcos-outline-sheet { user-select:none; }
+.lcos-reconstructed .lcos-outline-row { grid-template-columns:18px 20px minmax(0,1fr); }
+.lcos-reconstructed .lcos-outline-grip { width:18px; height:28px; display:grid; place-items:center; border:0; background:transparent; color:#c0bcc5; cursor:grab; opacity:.15; transition:opacity 100ms ease; }
+.lcos-reconstructed .lcos-outline-row:hover .lcos-outline-grip { opacity:.75; }
+.lcos-reconstructed .lcos-outline-guides { position:absolute; left:0; top:0; bottom:0; pointer-events:none; }
+.lcos-reconstructed .lcos-outline-guides i { position:absolute; top:0; bottom:0; width:1px; background:rgba(87,81,103,.09); transition:background .16s ease; }
+.lcos-reconstructed .lcos-outline-row:hover .lcos-outline-guides i.current { background:rgba(139,92,246,.38); }
+.lcos-reconstructed .lcos-outline-row:focus-within { outline:1px solid rgba(115,94,188,.15); outline-offset:-1px; border-radius:7px; }
+
+/* Silk: node entry stagger + connection hover feedback. */
+@keyframes lcos-node-in { from { opacity:0; translate:0 4px; scale:.985; } to { opacity:1; translate:0 0; scale:1; } }
+.lcos-reconstructed .lcos-outline-row,
+.lcos-reconstructed .lcos-tree-node,
+.lcos-reconstructed .lcos-graph-dot,
+.lcos-reconstructed .lcos-workfree-node { animation:lcos-node-in .24s cubic-bezier(.2,.9,.3,1.15) both; animation-delay:calc(var(--i,0) * 16ms); }
+.lcos-reconstructed .lcos-tree-edges path { transition:stroke .16s ease,stroke-width .16s ease; }
+.lcos-reconstructed .lcos-tree-edges path:hover { stroke:rgba(104,93,160,.42); stroke-width:1.5; }
+.lcos-reconstructed .lcos-graph-edges line { transition:stroke .16s ease,stroke-width .16s ease; }
+.lcos-reconstructed .lcos-graph-edges line:hover { stroke:rgba(104,93,160,.42); stroke-width:1.5; }
+.lcos-reconstructed .lcos-workfree-edges line { transition:stroke .16s ease,stroke-width .16s ease; }
+.lcos-reconstructed .lcos-workfree-edges line:hover { stroke:rgba(104,93,160,.42); stroke-width:1.5; }
+
+/* Obsidian-like rings + quiet glyph hover. */
+.lcos-reconstructed .lcos-context-graph::before,
+.lcos-reconstructed .lcos-context-graph::after { content:""; position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); border:1px dashed rgba(120,116,160,.13); border-radius:50%; pointer-events:none; }
+.lcos-reconstructed .lcos-context-graph::before { width:min(42%,420px); aspect-ratio:1; }
+.lcos-reconstructed .lcos-context-graph::after { width:min(70%,680px); aspect-ratio:1; }
+.lcos-reconstructed .lcos-surface-glyph { transition:transform .16s ease,filter .16s ease; }
+.lcos-reconstructed .lcos-surface-glyph:hover { transform:scale(1.08); filter:drop-shadow(0 4px 10px rgba(52,44,84,.16)); }
+.lcos-reconstructed .lcos-surface-glyph.dim { opacity:.55; }
+.lcos-reconstructed .lcos-surface-glyph.dim:hover { opacity:1; }
+
+/* Context Flow: multiple axes first, decoration second. */
+.lcos-reconstructed .lcos-flow-stage { position:relative; width:min(1080px,calc(100% - 300px)); min-height:620px; margin:8px 270px 80px 30px; }
+.lcos-reconstructed .lcos-flow-axis { position:relative; min-height:132px; display:grid; grid-template-columns:94px minmax(0,1fr); align-items:stretch; border-bottom:1px solid rgba(48,44,58,.045); }
+.lcos-reconstructed .lcos-flow-axis-label { display:flex; flex-direction:column; justify-content:center; gap:3px; padding-left:4px; color:#898491; }
+.lcos-reconstructed .lcos-flow-axis-label button { width:max-content; max-width:88px; padding:3px 5px; border:0; border-radius:6px; color:#6f6a77; background:transparent; font-size:8.2px; text-align:left; }
+.lcos-reconstructed .lcos-flow-axis-label button:hover { background:rgba(79,72,104,.045); }
+.lcos-reconstructed .lcos-flow-baseline { position:absolute; left:96px; right:0; top:50%; height:1px; background:linear-gradient(90deg,rgba(91,84,109,.07),rgba(91,84,109,.18) 35%,rgba(91,84,109,.06)); }
+.lcos-reconstructed .lcos-flow-items { position:relative; min-width:0; display:flex; align-items:center; gap:30px; overflow:visible; }
+.lcos-reconstructed .lcos-handoff-ribbon { min-height:58px; display:flex; align-items:center; gap:3px; margin:12px 270px 0 124px; color:#8f8998; }
+.lcos-reconstructed .lcos-handoff-step { display:flex; align-items:center; gap:5px; }
+.lcos-reconstructed .lcos-handoff-step > span { min-width:26px; min-height:22px; display:grid; place-items:center; padding:0 6px; border:1px solid rgba(79,72,103,.08); border-radius:7px; background:rgba(255,255,255,.48); font-size:7.6px; }
+
+/* Context graph/tree controls stay local and translucent. */
+.lcos-reconstructed .lcos-graph-controls { position:absolute; z-index:20; left:26px; top:58px; display:flex; align-items:center; gap:5px; padding:4px; border:1px solid rgba(81,75,98,.08); border-radius:10px; background:rgba(253,252,254,.7); backdrop-filter:blur(14px); }
+.lcos-reconstructed .lcos-graph-controls button { height:24px; padding:0 7px; border:0; border-radius:6px; color:#817c88; background:transparent; font-size:7.8px; }
+.lcos-reconstructed .lcos-graph-controls button.active { color:#554c77; background:rgba(113,91,187,.07); }
+.lcos-reconstructed .lcos-tree-fold { position:absolute; z-index:4; width:18px; height:18px; display:grid; place-items:center; padding:0; border:1px solid rgba(78,72,94,.08); border-radius:50%; color:#928d98; background:rgba(252,251,254,.88); }
+
+/* Work: real runtime state is the focal object. */
+.lcos-reconstructed .lcos-work-lanes { position:absolute; inset:64px 26px 90px; display:grid; grid-template-columns:minmax(180px,1fr) minmax(260px,1.15fr) minmax(190px,1fr); gap:18px; }
+.lcos-reconstructed .lcos-work-lanes::before,
+.lcos-reconstructed .lcos-work-lanes::after { content:""; position:absolute; top:0; bottom:0; width:1px; background:rgba(77,71,94,.055); }
+.lcos-reconstructed .lcos-work-lanes::before { left:33.33%; }
+.lcos-reconstructed .lcos-work-lanes::after { left:66.66%; }
+.lcos-reconstructed .lcos-work-column-labels { position:absolute; z-index:4; left:26px; right:26px; top:48px; display:grid; grid-template-columns:repeat(3,1fr); color:#aaa6b0; font:600 7px/1 "JetBrains Mono",monospace; letter-spacing:.06em; text-transform:uppercase; }
+.lcos-reconstructed .lcos-run-context-list,
+.lcos-reconstructed .lcos-run-output-list { display:flex; flex-direction:column; justify-content:center; gap:9px; padding:12px 6px; }
+.lcos-reconstructed .lcos-run-center-stack { position:relative; z-index:3; display:flex; flex-direction:column; justify-content:center; gap:9px; padding:20px 8px; }
+.lcos-reconstructed .lcos-active-run-stage { position:relative; padding:15px; border:1px solid rgba(77,69,98,.09); border-radius:16px; background:rgba(254,253,255,.68); box-shadow:0 14px 38px rgba(49,41,68,.055),inset 0 1px 0 rgba(255,255,255,.88); }
+.lcos-reconstructed .lcos-run-actor-icon { width:34px; height:34px; display:grid; place-items:center; margin-bottom:8px; border-radius:11px; color:#5f5890; background:linear-gradient(145deg,rgba(120,91,208,.09),rgba(65,145,213,.065)); }
+.lcos-reconstructed .lcos-active-run-stage h3 { margin:0; color:#4a4652; font-size:10px; font-weight:620; }
+.lcos-reconstructed .lcos-active-run-stage p { margin:5px 0 0; color:#8a8590; font-size:8.2px; line-height:1.35; }
+.lcos-reconstructed .lcos-run-actor-status { display:flex; align-items:center; gap:5px; margin-top:9px; color:#817c88; font-size:7.8px; }
+.lcos-reconstructed .lcos-run-actor-status i { width:6px; height:6px; border-radius:50%; background:#8a8790; }
+.lcos-reconstructed .lcos-active-run-stage.status-running .lcos-run-actor-status i { background:#4e84d2; box-shadow:0 0 0 4px rgba(78,132,210,.07); animation:lcos-run-breathe 1.8s ease-in-out infinite; }
+@keyframes lcos-run-breathe { 50% { box-shadow:0 0 0 7px rgba(78,132,210,.025); } }
+.lcos-reconstructed .lcos-run-actions { display:flex; flex-wrap:wrap; gap:4px; margin-top:10px; }
+.lcos-reconstructed .lcos-run-actions button,
+.lcos-reconstructed .lcos-waiting-options button,
+.lcos-reconstructed .lcos-waiting-form button { min-height:25px; padding:0 7px; border:0; border-radius:7px; color:#77727f; background:rgba(78,72,96,.055); font-size:7.8px; }
+.lcos-reconstructed .lcos-run-actions button.primary,
+.lcos-reconstructed .lcos-waiting-options button.primary,
+.lcos-reconstructed .lcos-waiting-form button.primary { color:#fff; background:#514b5e; }
+.lcos-reconstructed .lcos-waiting-input { padding:11px; border:1px solid rgba(186,137,61,.12); border-radius:12px; background:rgba(248,238,217,.38); }
+.lcos-reconstructed .lcos-waiting-input strong { display:block; color:#675f53; font-size:8.8px; }
+.lcos-reconstructed .lcos-waiting-options { display:flex; flex-wrap:wrap; gap:4px; margin-top:7px; }
+.lcos-reconstructed .lcos-waiting-form { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:5px; margin-top:7px; }
+.lcos-reconstructed .lcos-waiting-form input { min-width:0; height:27px; padding:0 8px; border:1px solid rgba(82,76,96,.09); border-radius:7px; outline:0; background:rgba(255,255,255,.68); color:#595560; font-size:8px; }
+.lcos-reconstructed .lcos-run-result-summary { padding:8px; border-radius:9px; color:#77727f; background:rgba(79,72,104,.035); font-size:8px; line-height:1.4; }
+.lcos-reconstructed .lcos-run-event-strip { display:flex; flex-wrap:wrap; gap:4px; color:#aaa6b0; font-size:7.2px; }
+.lcos-reconstructed .lcos-run-alert { padding:6px 8px; border-radius:8px; color:#a1665f; background:rgba(190,90,75,.06); font-size:7.7px; }
+
+/* Deliver uses a timeline + review language, not a generic card canvas. */
+.lcos-reconstructed .lcos-revision-stage { position:absolute; left:42px; right:336px; top:74px; bottom:92px; }
+.lcos-reconstructed .lcos-revision-line { position:absolute; left:32px; top:20px; bottom:20px; width:1px; background:linear-gradient(rgba(83,76,101,.05),rgba(83,76,101,.18),rgba(83,76,101,.05)); }
+.lcos-reconstructed .lcos-revision-items { position:relative; display:grid; gap:12px; padding-left:12px; }
+.lcos-reconstructed .lcos-revision-item { position:relative; min-height:62px; display:grid; grid-template-columns:42px minmax(0,1fr); align-items:center; gap:10px; padding:7px 8px; border-radius:11px; }
+.lcos-reconstructed .lcos-revision-item:hover { background:rgba(80,73,103,.03); }
+.lcos-reconstructed .lcos-revision-item.selected { background:linear-gradient(90deg,rgba(116,91,197,.06),rgba(70,131,206,.025),transparent 80%); }
+.lcos-reconstructed .lcos-revision-dot { position:relative; z-index:2; width:30px; height:30px; display:grid; place-items:center; border:1px solid rgba(83,77,97,.10); border-radius:50%; color:#77727e; background:rgba(253,252,254,.96); }
+.lcos-reconstructed .lcos-revision-label { min-width:0; display:grid; gap:3px; }
+.lcos-reconstructed .lcos-revision-label strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#55515e; font-size:9px; }
+.lcos-reconstructed .lcos-revision-label small { color:#9995a0; font-size:7.8px; }
+.lcos-reconstructed .lcos-revision-actions { display:flex; gap:4px; margin-top:5px; }
+.lcos-reconstructed .lcos-revision-actions button { height:23px; padding:0 6px; border:0; border-radius:6px; color:#827d88; background:rgba(76,70,91,.045); font-size:7.4px; }
+.lcos-reconstructed .lcos-inline-compare { position:absolute; left:46px; right:332px; bottom:88px; display:grid; grid-template-columns:1fr 20px 1fr; align-items:center; gap:8px; padding:9px; border:1px solid rgba(78,72,96,.08); border-radius:11px; background:rgba(253,252,254,.78); backdrop-filter:blur(14px); }
+.lcos-reconstructed .lcos-inline-compare > div { min-width:0; display:grid; gap:2px; }
+.lcos-reconstructed .lcos-inline-compare strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#5c5765; font-size:8.6px; }
+.lcos-reconstructed .lcos-inline-compare small { color:#9a96a1; font-size:7.4px; }
+.lcos-reconstructed .lcos-deliver-commandbar,
+.lcos-reconstructed .lcos-deliver-reviewbar { position:absolute; z-index:18; display:flex; align-items:center; gap:4px; }
+.lcos-reconstructed .lcos-deliver-commandbar { left:42px; top:48px; }
+.lcos-reconstructed .lcos-deliver-reviewbar { right:42px; bottom:58px; }
+.lcos-reconstructed .lcos-deliver-commandbar button,
+.lcos-reconstructed .lcos-deliver-reviewbar button { height:26px; padding:0 8px; border:0; border-radius:7px; color:#77727f; background:rgba(78,72,96,.05); font-size:7.8px; }
+.lcos-reconstructed .lcos-deliver-reviewbar button.accept,
+.lcos-reconstructed .lcos-deliver-commandbar button.primary { color:#fff; background:#514b5e; }
+
+/* Context collection version beads are actionable, but visually stay quiet. */
+.lcos-reconstructed button.lcos-version-beads { display:inline-flex; align-items:center; gap:3px; padding:2px; border:0; background:transparent; cursor:pointer; }
+.lcos-reconstructed button.lcos-version-beads i { width:5px; height:5px; border-radius:50%; background:rgba(105,91,164,.30); }
+.lcos-reconstructed button.lcos-version-beads:hover i { background:rgba(105,91,164,.54); }
+
+/* Large-project render strategy: browsers should not pay for invisible heavy nodes. */
+.lcos-reconstructed .canvas.lod-simplified .canvas-node,
+.lcos-reconstructed .canvas.lod-overview .canvas-node { content-visibility:auto; contain-intrinsic-size:220px 130px; }
+.lcos-reconstructed .canvas.lod-overview .lod-badge { color:#918d98; background:rgba(252,251,254,.78); backdrop-filter:blur(10px); }
+
+@media (max-width:1000px) {
+  .lcos-reconstructed .lcos-context-history { width:196px; right:14px; }
+  .lcos-reconstructed .lcos-flow-stage { width:calc(100% - 238px); margin-right:214px; }
+  .lcos-reconstructed .lcos-handoff-ribbon { margin-right:214px; }
+  .lcos-reconstructed .lcos-work-lanes { grid-template-columns:minmax(150px,.9fr) minmax(220px,1.15fr) minmax(150px,.9fr); gap:10px; }
+  .lcos-reconstructed .lcos-delivery-package { width:232px; right:18px; }
+  .lcos-reconstructed .lcos-revision-stage { right:270px; }
+  .lcos-reconstructed .lcos-inline-compare { right:266px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lcos-reconstructed .lcos-surface-mount,
+  .lcos-reconstructed .lcos-active-run-stage.status-running .lcos-run-actor-status i,
+  .lcos-reconstructed .edge-runner,
+  .lcos-reconstructed .lcos-run-pulse,
+  .lcos-reconstructed .selected::before,
+  .lcos-reconstructed .selected::after { animation:none!important; transition:none!important; }
+  .lcos-reconstructed .lcos-surface-mount { transform:none!important; opacity:1!important; }
+}
+.lcos-reconstructed .workspace-relation-handle { pointer-events:auto; }
+
+
+/* ---------- Freedom-first capability pass — 2026-08-08 ----------
+   The shell teaches capabilities; project semantics remain user/Agent-authored. */
+.lcos-reconstructed .lcos-capability-hint {
+  margin-left:8px;
+  padding:5px 8px;
+  border-radius:999px;
+  color:var(--lcos-ink-faint);
+  background:rgba(255,255,255,.38);
+  font-size:9px;
+  white-space:nowrap;
+}
+
+/* Never let an icon+label action collapse into a vertical blob. */
+.lcos-reconstructed .conversation-toolbar button,
+.lcos-reconstructed .conversation-section-buttons button,
+.lcos-reconstructed .conversation-change-popover button,
+.lcos-reconstructed .lcos-run-list button,
+.lcos-reconstructed .work-rail button,
+.lcos-reconstructed .vnext-workspace-menu button {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:7px;
+  white-space:nowrap;
+}
+.lcos-reconstructed .simple-composer-options > label,
+.lcos-reconstructed .global-composer-options > label { flex:0 0 auto; min-width:0; }
+.lcos-reconstructed .simple-composer-options select,
+.lcos-reconstructed .global-composer-options select { width:auto; max-width:150px; }
+
+/* Context Free projection: spatial tool, not a project taxonomy. */
+.lcos-reconstructed .lcos-context-free-stage,
+.lcos-reconstructed .lcos-workflow-stage {
+  position:relative;
+  height:calc(100% - 48px);
+  min-height:0;
+  overflow:hidden;
+}
+.lcos-reconstructed .lcos-context-free-edges,
+.lcos-reconstructed .lcos-workflow-edges { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+.lcos-reconstructed .lcos-context-free-edges line,
+.lcos-reconstructed .lcos-workflow-edges line { stroke:rgba(91,86,109,.18); stroke-width:1.15; vector-effect:non-scaling-stroke; }
+.lcos-reconstructed .lcos-context-free-edges line.active,
+.lcos-reconstructed .lcos-workflow-edges line.active { stroke:rgba(92,80,176,.42); stroke-width:1.45; }
+.lcos-reconstructed .lcos-context-free-node,
+.lcos-reconstructed .lcos-workflow-node { position:absolute; z-index:2; transform:translate(-50%,-50%); min-width:112px; }
+.lcos-reconstructed .lcos-context-free-empty,
+.lcos-reconstructed .lcos-workflow-empty { position:absolute; left:50%; top:46%; transform:translate(-50%,-50%); width:min(420px,70%); display:grid; justify-items:center; gap:7px; color:var(--lcos-ink-faint); text-align:center; }
+.lcos-reconstructed .lcos-context-free-empty strong,
+.lcos-reconstructed .lcos-workflow-empty strong { color:var(--lcos-ink-soft); font-size:12px; font-weight:600; }
+.lcos-reconstructed .lcos-context-free-empty span,
+.lcos-reconstructed .lcos-workflow-empty span { font-size:10px; line-height:1.5; }
+.lcos-reconstructed .lcos-workflow-hint { position:absolute; z-index:4; left:16px; top:12px; display:inline-flex; align-items:center; gap:7px; padding:7px 9px; border:1px solid var(--lcos-hair); border-radius:10px; color:var(--lcos-ink-faint); background:rgba(252,252,254,.62); backdrop-filter:blur(10px); font-size:9px; pointer-events:none; }
+.lcos-reconstructed .lcos-workflow-empty > div { display:inline-flex; align-items:center; gap:7px; font-size:9px; }
+
+/* Run is a right-side execution list, never a bottom page. */
+.lcos-reconstructed .lcos-run-list { display:grid; gap:8px; }
+.lcos-reconstructed .lcos-run-list > header { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.lcos-reconstructed .lcos-run-list > header > div { display:flex; align-items:center; gap:7px; }
+.lcos-reconstructed .lcos-run-list > header h3 { margin:0; font-size:11px; }
+.lcos-reconstructed .lcos-run-list > header small { color:var(--lcos-ink-faint); font-size:8.5px; }
+.lcos-reconstructed .lcos-run-list-dot { width:7px; height:7px; border-radius:50%; background:linear-gradient(135deg,var(--lcos-purple),var(--lcos-blue)); box-shadow:0 0 0 3px rgba(99,102,241,.055); }
+.lcos-reconstructed .lcos-run-list-items { display:grid; gap:3px; }
+.lcos-reconstructed .lcos-run-list-items > button,
+.lcos-reconstructed .lcos-run-list-current { width:100%; min-width:0; min-height:44px; padding:6px 7px; display:grid !important; grid-template-columns:8px minmax(0,1fr); align-items:center; gap:8px !important; justify-content:stretch !important; border:1px solid transparent; border-radius:9px; color:var(--lcos-ink-soft); background:transparent; text-align:left; }
+.lcos-reconstructed .lcos-run-list-items > button:hover { background:rgba(77,71,99,.05); }
+.lcos-reconstructed .lcos-run-list-items > button.active { border-color:rgba(99,102,241,.12); background:rgba(99,102,241,.055); }
+.lcos-reconstructed .lcos-run-list-items > button.attention { background:rgba(194,128,58,.055); }
+.lcos-reconstructed .lcos-run-list-items i { width:7px; height:7px; border-radius:50%; background:#aaa6b2; }
+.lcos-reconstructed .lcos-run-list-items i.status-running { background:#6d86d8; box-shadow:0 0 0 3px rgba(86,114,204,.07); animation:lcos-run-breathe 1.8s ease-in-out infinite; }
+.lcos-reconstructed .lcos-run-list-items i.status-waiting_input,
+.lcos-reconstructed .lcos-run-list-items i.status-review { background:#c38948; }
+.lcos-reconstructed .lcos-run-list-items i.status-failed { background:#b85a67; }
+.lcos-reconstructed .lcos-run-list-items i.status-completed { background:#5b9a78; }
+.lcos-reconstructed .lcos-run-list-items span { min-width:0; display:grid; gap:2px; }
+.lcos-reconstructed .lcos-run-list-items strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:9.5px; font-weight:590; }
+.lcos-reconstructed .lcos-run-list-items small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--lcos-ink-faint); font-size:8px; }
+
+/* One imported conversation owns one visual change navigator. */
+.lcos-reconstructed .conversation-context-dialog {
+  width:min(1120px,calc(100vw - 56px));
+  height:min(780px,calc(100vh - 52px));
+  display:grid;
+  grid-template-rows:auto auto auto auto minmax(0,1fr);
+  overflow:hidden;
+  border:1px solid var(--lcos-hair-strong);
+  border-radius:18px;
+  background:rgba(252,252,254,.97);
+  backdrop-filter:blur(24px) saturate(1.06);
+  box-shadow:0 28px 80px rgba(33,29,48,.22),inset 0 1px 0 rgba(255,255,255,.9);
+}
+.lcos-reconstructed .conversation-header { min-height:58px; padding:11px 14px; display:flex; align-items:center; justify-content:space-between; gap:14px; border-bottom:1px solid var(--lcos-hair); }
+.lcos-reconstructed .conversation-header > div { min-width:0; display:flex; align-items:flex-start; gap:9px; }
+.lcos-reconstructed .conversation-header h2 { margin:0; font-size:13px; font-weight:650; }
+.lcos-reconstructed .conversation-header p { margin:3px 0 0; max-width:680px; color:var(--lcos-ink-faint); font-size:9px; line-height:1.45; }
+.lcos-reconstructed .conversation-toolbar { min-height:44px; padding:6px 10px; display:flex; align-items:center; gap:8px; overflow-x:auto; border-bottom:1px solid var(--lcos-hair); }
+.lcos-reconstructed .conversation-toolbar > button { flex:0 0 auto; min-height:30px; padding:0 9px; border:0; border-radius:8px; color:var(--lcos-ink-soft); background:rgba(255,255,255,.4); font-size:9px; }
+.lcos-reconstructed .conversation-search { margin-left:auto; flex:0 0 min(280px,28vw); min-width:180px; height:30px; display:flex; align-items:center; gap:6px; padding:0 8px; border:1px solid var(--lcos-hair); border-radius:9px; background:rgba(255,255,255,.56); }
+.lcos-reconstructed .conversation-search input[type="text"],
+.lcos-reconstructed .conversation-search input:not([type]) { min-width:0; flex:1; border:0; outline:0; background:transparent; font-size:9px; }
+.lcos-reconstructed .conversation-search label { flex:0 0 auto; display:inline-flex; align-items:center; gap:4px; font-size:8px; color:var(--lcos-ink-faint); }
+.lcos-reconstructed .conversation-progress,
+.lcos-reconstructed .conversation-diagnostics,
+.lcos-reconstructed .conversation-manual-import { margin:0; }
+.lcos-reconstructed .conversation-layout { min-height:0; display:grid; grid-template-columns:210px minmax(0,1fr); }
+.lcos-reconstructed .conversation-layout > aside { min-height:0; padding:10px 8px; overflow:auto; border-right:1px solid var(--lcos-hair); }
+.lcos-reconstructed .conversation-layout > aside h3 { margin:2px 6px 8px; color:var(--lcos-ink-faint); font-size:8px; font-weight:620; letter-spacing:.06em; }
+.lcos-reconstructed .conversation-layout > aside > button { width:100%; min-height:44px; display:flex; align-items:center; justify-content:flex-start; gap:8px; padding:6px 7px; border:0; border-radius:9px; background:transparent; color:var(--lcos-ink-soft); text-align:left; }
+.lcos-reconstructed .conversation-layout > aside > button.active { background:rgba(91,80,138,.075); color:var(--lcos-ink); }
+.lcos-reconstructed .conversation-layout > aside > button span { min-width:0; display:grid; gap:2px; }
+.lcos-reconstructed .conversation-layout > aside > button b,
+.lcos-reconstructed .conversation-layout > aside > button small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.lcos-reconstructed .conversation-layout > aside > button b { font-size:9.5px; }
+.lcos-reconstructed .conversation-layout > aside > button small { font-size:8px; color:var(--lcos-ink-faint); }
+.lcos-reconstructed .conversation-layout > main { min-width:0; min-height:0; display:grid; grid-template-rows:auto minmax(0,1fr); overflow:hidden; }
+.lcos-reconstructed .conversation-tabs { min-height:38px; display:flex; align-items:center; gap:7px; padding:5px 10px; border-bottom:1px solid var(--lcos-hair); }
+.lcos-reconstructed .conversation-tabs button { min-width:44px; height:28px; padding:0 9px; border:0; border-radius:8px; background:transparent; color:var(--lcos-ink-faint); font-size:9px; }
+.lcos-reconstructed .conversation-tabs button.active { color:var(--lcos-ink); background:rgba(88,77,132,.07); }
+.lcos-reconstructed .conversation-tabs > span { margin-left:auto; color:var(--lcos-ink-faint); font-size:8px; }
+.lcos-reconstructed .conversation-view-shell { min-height:0; display:grid; grid-template-columns:34px minmax(0,1fr); overflow:hidden; }
+.lcos-reconstructed .conversation-view-shell.without-change-rail { grid-template-columns:minmax(0,1fr); }
+.lcos-reconstructed .conversation-view-content { min-width:0; min-height:0; overflow:auto; scroll-behavior:smooth; }
+
+.lcos-reconstructed .conversation-change-rail { position:relative; z-index:6; min-height:0; padding:16px 0; display:flex; flex-direction:column; justify-content:space-around; align-items:center; gap:6px; border-right:1px solid var(--lcos-hair); background:rgba(249,249,252,.58); overflow:visible; }
+.lcos-reconstructed .conversation-change-line { position:absolute; top:18px; bottom:18px; left:50%; width:1px; transform:translateX(-50%); background:linear-gradient(180deg,transparent,rgba(92,86,109,.18) 10%,rgba(92,86,109,.18) 90%,transparent); }
+.lcos-reconstructed .conversation-change-point { position:relative; z-index:2; width:100%; display:grid; place-items:center; }
+.lcos-reconstructed .conversation-change-marker { position:relative; width:24px; height:24px; display:grid !important; place-items:center; padding:0; border:0; border-radius:50%; background:transparent; cursor:pointer; }
+.lcos-reconstructed .conversation-change-marker > span { width:6px; height:6px; border-radius:50%; background:#aaa6b2; box-shadow:0 0 0 3px rgba(255,255,255,.82); transition:transform .16s cubic-bezier(.2,.8,.2,1),background .16s ease,box-shadow .16s ease; }
+.lcos-reconstructed .conversation-change-point.importance-medium .conversation-change-marker > span { width:8px; height:8px; background:#807997; }
+.lcos-reconstructed .conversation-change-point.importance-high .conversation-change-marker > span { width:10px; height:10px; border-radius:3px; transform:rotate(45deg); background:linear-gradient(135deg,#7865c7,#5a89d7); box-shadow:0 0 0 4px rgba(105,86,190,.06); }
+.lcos-reconstructed .conversation-change-point.active .conversation-change-marker > span,
+.lcos-reconstructed .conversation-change-marker:hover > span { transform:scale(1.24); background:#685bb4; box-shadow:0 0 0 5px rgba(104,91,180,.08); }
+.lcos-reconstructed .conversation-change-point.importance-high.active .conversation-change-marker > span,
+.lcos-reconstructed .conversation-change-point.importance-high .conversation-change-marker:hover > span { transform:rotate(45deg) scale(1.18); }
+.lcos-reconstructed .conversation-change-popover { position:absolute; z-index:30; left:30px; top:50%; width:240px; padding:9px; display:grid; gap:5px; transform:translate(8px,-50%) scale(.985); transform-origin:left center; opacity:0; pointer-events:none; border:1px solid var(--lcos-hair-strong); border-radius:11px; background:rgba(253,253,254,.98); box-shadow:var(--lcos-shadow-float); transition:opacity .14s ease,transform .18s cubic-bezier(.2,.8,.2,1); }
+.lcos-reconstructed .conversation-change-point:hover .conversation-change-popover,
+.lcos-reconstructed .conversation-change-point:focus-within .conversation-change-popover { opacity:1; transform:translate(0,-50%) scale(1); pointer-events:auto; }
+.lcos-reconstructed .conversation-change-popover small { color:var(--lcos-ink-faint); font-size:7.8px; }
+.lcos-reconstructed .conversation-change-popover strong { font-size:10px; font-weight:620; }
+.lcos-reconstructed .conversation-change-popover p { margin:0; color:var(--lcos-ink-soft); font-size:8.7px; line-height:1.45; }
+.lcos-reconstructed .conversation-change-popover > div { display:flex; align-items:center; gap:7px; }
+.lcos-reconstructed .conversation-change-popover button { height:26px; padding:0 7px; border:0; border-radius:7px; background:rgba(86,78,112,.055); color:var(--lcos-ink-soft); font-size:8.5px; }
+.lcos-reconstructed .conversation-timeline { padding:12px 14px 34px; display:grid; gap:9px; }
+.lcos-reconstructed .conversation-message { position:relative; padding:10px 11px; border:1px solid var(--lcos-hair); border-radius:11px; background:rgba(255,255,255,.58); transition:border-color .18s ease,box-shadow .18s ease,background .18s ease; }
+.lcos-reconstructed .conversation-message.is-change-focus { border-color:rgba(104,91,180,.28); background:rgba(250,249,255,.95); box-shadow:0 0 0 5px rgba(104,91,180,.055); }
+.lcos-reconstructed .conversation-message header { display:flex; align-items:center; gap:8px; }
+.lcos-reconstructed .conversation-message header small { color:var(--lcos-ink-faint); font-size:8px; }
+.lcos-reconstructed .conversation-message header button,
+.lcos-reconstructed .conversation-message .decision-badge { margin-left:auto; display:inline-flex; align-items:center; gap:5px; }
+.lcos-reconstructed .conversation-message pre { margin:8px 0 0; white-space:pre-wrap; word-break:break-word; color:var(--lcos-ink-soft); font:400 10px/1.55 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+.lcos-reconstructed .conversation-outline,
+.lcos-reconstructed .conversation-graph { padding:12px 14px 34px; }
+
+@media (prefers-reduced-motion:reduce) {
+  .lcos-reconstructed .lcos-run-list-items i.status-running { animation:none !important; }
+  .lcos-reconstructed .conversation-view-content { scroll-behavior:auto; }
+}
+
+/* Phase 3 Slice 2：Relationship Home —— 保存的 Context 视图与合并提案（纯视图层）。 */
+.lcos-reconstructed .lcos-relationship-home { position:relative; z-index:6; margin:0 14px 10px; padding:10px 12px; border:1px solid rgba(79,155,150,.18); border-radius:14px; background:rgba(234,244,242,.5); }
+.lcos-reconstructed .lcos-relationship-home-heading { display:flex; align-items:center; gap:7px; color:var(--lcos-ink-soft); font-size:10px; font-weight:650; margin-bottom:8px; }
+.lcos-reconstructed .lcos-relationship-home-heading small { color:var(--lcos-ink-faint); font-weight:500; }
+.lcos-reconstructed .lcos-relationship-home-views { display:flex; flex-wrap:wrap; gap:8px; }
+.lcos-reconstructed .lcos-context-view-node { display:flex; align-items:center; gap:8px; padding:7px 11px; border:1px solid var(--lcos-hair); border-radius:11px; background:rgba(255,255,255,.85); cursor:grab; box-shadow:0 3px 10px rgba(47,44,68,.05); }
+.lcos-reconstructed .lcos-context-view-node:hover { border-color:rgba(79,155,150,.4); }
+.lcos-reconstructed .lcos-context-view-node strong { font-size:11px; font-weight:650; color:var(--lcos-ink); }
+.lcos-reconstructed .lcos-context-view-node span { font-size:9px; color:var(--lcos-ink-faint); background:rgba(79,155,150,.12); padding:2px 7px; border-radius:999px; }
+.lcos-reconstructed .lcos-merge-proposal { position:fixed; z-index:96; right:22px; bottom:74px; width:320px; padding:14px; border:1px solid rgba(79,155,150,.25); border-radius:16px; background:rgba(252,253,252,.96); box-shadow:0 18px 44px rgba(47,44,68,.16), inset 0 1px 0 #fff; backdrop-filter:blur(14px); }
+.lcos-reconstructed .lcos-merge-proposal header { display:flex; align-items:center; gap:7px; }
+.lcos-reconstructed .lcos-merge-proposal header strong { font-size:12px; color:var(--lcos-ink); }
+.lcos-reconstructed .lcos-merge-proposal header button { margin-left:auto; }
+.lcos-reconstructed .lcos-merge-proposal p { margin:10px 0 8px; font-size:11px; line-height:1.55; color:var(--lcos-ink-soft); }
+.lcos-reconstructed .lcos-merge-proposal ul { margin:0 0 10px; padding:0; list-style:none; display:flex; flex-wrap:wrap; gap:5px; }
+.lcos-reconstructed .lcos-merge-proposal li { font-size:9px; font-family:ui-monospace,Consolas,monospace; color:var(--lcos-ink-soft); background:rgba(79,155,150,.1); padding:2px 7px; border-radius:999px; }
+.lcos-reconstructed .lcos-merge-proposal footer { display:flex; justify-content:flex-end; gap:8px; }
+.lcos-reconstructed .lcos-merge-proposal footer button { padding:6px 14px; border-radius:9px; font-size:11px; font-weight:650; }
+.lcos-reconstructed .lcos-merge-proposal footer button.primary-action { background:var(--lcos-purple); color:#fff; border:0; }
+
+/* Phase 3 Slice 3：Signal Track 段控件（Presentation-only，不新增业务实体）。 */
+.lcos-reconstructed .lcos-track-segment-controls { position:absolute; left:8px; top:6px; z-index:5; display:flex; align-items:center; gap:4px; padding:3px 6px; border-radius:9px; background:rgba(255,255,255,.9); border:1px solid var(--lcos-hair); box-shadow:0 4px 12px rgba(47,44,68,.06); pointer-events:auto; }
+.lcos-reconstructed .lcos-track-segment-label { display:flex; align-items:center; gap:5px; margin-right:2px; }
+.lcos-reconstructed .lcos-track-segment-label strong { font-size:9.5px; font-weight:650; color:var(--lcos-ink); }
+.lcos-reconstructed .lcos-track-segment-label em { font-style:normal; font-size:8.5px; color:#fff; background:var(--lcos-purple); border-radius:999px; padding:1px 6px; }
+.lcos-reconstructed .lcos-track-segment-label b { font-size:8.5px; color:var(--lcos-ink-faint); font-weight:600; }
+.lcos-reconstructed .lcos-track-segment-controls button { width:20px; height:20px; display:grid; place-items:center; border:0; border-radius:6px; background:transparent; color:var(--lcos-ink-soft); cursor:pointer; }
+.lcos-reconstructed .lcos-track-segment-controls button:hover:not(:disabled) { background:rgba(79,155,150,.14); color:var(--lcos-ink); }
+.lcos-reconstructed .lcos-track-segment-controls button:disabled { opacity:.35; cursor:default; }
+.lcos-reconstructed .lcos-track-segment-controls button .expanded { transform:rotate(90deg); }
+.lcos-reconstructed .lcos-track-segment-controls button .merge { transform:rotate(180deg); }
+.lcos-reconstructed .lcos-context-strand-band.is-collapsed { opacity:.55; }
+.lcos-reconstructed .lcos-track-member-remove { position:absolute; right:-6px; top:-6px; width:18px; height:18px; display:grid; place-items:center; border:1px solid rgba(183,131,62,.28); border-radius:999px; background:#fff; color:var(--lcos-ink-soft); cursor:pointer; box-shadow:0 3px 8px rgba(47,44,68,.12); }
+.lcos-reconstructed .lcos-track-member-remove:hover { color:#fff; background:#c76d58; }
+
+/* Phase 4 Slice 1：Workflow operator / 端口 / Run 投影。 */
+.lcos-reconstructed .lcos-workflow-operator-editor { position:relative; z-index:6; display:flex; align-items:center; gap:6px; margin:0 14px 8px; padding:7px 10px; border:1px solid rgba(115,66,226,.16); border-radius:12px; background:rgba(240,235,252,.45); pointer-events:auto; }
+.lcos-reconstructed .lcos-workflow-operator-editor button,
+.lcos-reconstructed .lcos-workflow-branch-editor input,
+.lcos-reconstructed .lcos-workflow-branch-editor button { pointer-events:auto; }
+.lcos-reconstructed .lcos-workflow-header-editors { flex-basis:100%; display:flex; flex-direction:column; gap:6px; }
+.lcos-reconstructed .lcos-workflow-heading { position:relative; z-index:7; }
+.lcos-reconstructed .lcos-workflow-surface .lcos-capability-source { position:relative; z-index:7; }
+.lcos-reconstructed .lcos-workflow-header-editors .lcos-workflow-operator-editor { margin:0; }
+.lcos-reconstructed .lcos-workflow-header-editors .lcos-workflow-branch-editor { margin:0; }
+.lcos-reconstructed .lcos-workflow-operator-editor > span { font-size:10px; font-weight:650; color:var(--lcos-ink-soft); margin-right:2px; }
+.lcos-reconstructed .lcos-workflow-operator-editor button { padding:4px 10px; border-radius:8px; border:1px solid var(--lcos-hair); background:#fff; font-size:10px; font-weight:600; color:var(--lcos-ink-soft); cursor:pointer; }
+.lcos-reconstructed .lcos-workflow-operator-editor button.active { background:var(--lcos-purple); color:#fff; border-color:transparent; }
+.lcos-reconstructed .lcos-workflow-operator-editor button.quiet { background:transparent; }
+.lcos-reconstructed .lcos-workflow-branch-editor { position:relative; z-index:6; display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:0 14px 8px; padding:7px 10px; border:1px solid var(--lcos-hair); border-radius:12px; background:rgba(255,255,255,.75); }
+.lcos-reconstructed .lcos-workflow-branch-row { display:flex; align-items:center; gap:5px; }
+.lcos-reconstructed .lcos-workflow-branch-row span { font-size:9px; color:var(--lcos-ink-faint); }
+.lcos-reconstructed .lcos-workflow-branch-row input { width:120px; padding:4px 7px; border:1px solid var(--lcos-hair); border-radius:7px; font-size:10px; }
+.lcos-reconstructed .lcos-workflow-branch-row input[aria-label="判定文本"] { width:230px; }
+.lcos-reconstructed .lcos-workflow-branch-editor > button { padding:4px 9px; border:1px dashed var(--lcos-hair-strong); border-radius:8px; background:transparent; font-size:10px; cursor:pointer; }
+.lcos-reconstructed .lcos-workflow-port { position:absolute; width:11px; height:11px; padding:0; border-radius:999px; border:1.5px solid #fff; cursor:crosshair; opacity:0; transition:opacity .12s ease; }
+.lcos-reconstructed .lcos-workflow-node:hover .lcos-workflow-port,
+.lcos-reconstructed .lcos-workflow-node.selected .lcos-workflow-port { opacity:1; }
+.lcos-reconstructed .lcos-workflow-port.input { left:-6px; background:#4f83a3; box-shadow:0 0 0 2px rgba(79,131,163,.18); }
+.lcos-reconstructed .lcos-workflow-port.output { right:-6px; background:var(--lcos-purple); box-shadow:0 0 0 2px rgba(115,66,226,.18); display:grid; place-items:center; width:auto; min-width:11px; height:11px; border-radius:999px; }
+.lcos-reconstructed .lcos-workflow-port.output span { position:absolute; right:14px; top:50%; transform:translateY(-50%); white-space:nowrap; font-size:8px; color:var(--lcos-ink-soft); background:rgba(255,255,255,.9); padding:1px 5px; border-radius:999px; border:1px solid var(--lcos-hair); pointer-events:none; }
+.lcos-reconstructed .lcos-workflow-operator-badge { position:absolute; left:8px; top:-9px; font-size:8px; font-weight:700; color:var(--lcos-purple); background:#fff; border:1px solid rgba(115,66,226,.22); border-radius:999px; padding:1px 7px; }
+.lcos-reconstructed .lcos-workflow-node.run-active { outline:2px solid rgba(59,130,246,.55); outline-offset:2px; }
+.lcos-reconstructed .lcos-workflow-node.run-completed { outline:2px solid rgba(79,155,150,.4); outline-offset:2px; }
+.lcos-reconstructed .lcos-workflow-node.run-failed { outline:2px solid rgba(199,109,88,.55); outline-offset:2px; }
+
+/* Phase 4 Slice 2：工作流 workspace strip + 导出/导入。 */
+.lcos-reconstructed .lcos-workflow-workspace-strip { position:absolute; right:10px; top:90px; bottom:10px; width:190px; overflow:auto; padding:10px; border:1px solid var(--lcos-hair); border-radius:14px; background:rgba(255,255,255,.85); backdrop-filter:blur(10px); z-index:5; }
+.lcos-reconstructed .lcos-workflow-workspace-strip header span { font-size:10px; font-weight:700; color:var(--lcos-ink); }
+.lcos-reconstructed .lcos-workflow-workspace-strip header small { display:block; margin-top:2px; font-size:8.5px; color:var(--lcos-ink-faint); }
+.lcos-reconstructed .lcos-workflow-workspace-item { display:flex; align-items:center; gap:5px; padding:7px 8px; margin-top:6px; border:1px solid var(--lcos-hair); border-radius:10px; background:#fff; }
+.lcos-reconstructed .lcos-workflow-workspace-item strong { flex:1; font-size:10px; font-weight:650; color:var(--lcos-ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.lcos-reconstructed .lcos-workflow-workspace-item span { font-size:8.5px; color:var(--lcos-ink-faint); }
+.lcos-reconstructed .lcos-workflow-workspace-item button { width:20px; height:20px; display:grid; place-items:center; border:0; border-radius:6px; background:transparent; color:var(--lcos-ink-soft); cursor:pointer; }
+.lcos-reconstructed .lcos-workflow-workspace-item button:hover:not(:disabled) { background:rgba(79,155,150,.14); }
+.lcos-reconstructed .lcos-workflow-workspace-item button:disabled { opacity:.3; cursor:default; }
+
+/* Phase 5 Slice 2：Staging 面板。 */
+.lcos-reconstructed .staging-dialog { width:640px; max-width:92vw; max-height:78vh; display:flex; flex-direction:column; border:1px solid var(--lcos-hair); border-radius:18px; background:rgba(253,253,255,.97); box-shadow:0 24px 70px rgba(47,44,68,.22); }
+.lcos-reconstructed .staging-dialog > header { display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-bottom:1px solid var(--lcos-hair); }
+.lcos-reconstructed .staging-dialog > header > div { display:flex; align-items:center; gap:8px; }
+.lcos-reconstructed .staging-dialog > header span { font-size:13px; font-weight:700; color:var(--lcos-ink); }
+.lcos-reconstructed .staging-dialog > header small { font-size:9px; color:var(--lcos-ink-faint); }
+.lcos-reconstructed .staging-toolbar { display:flex; align-items:center; gap:8px; padding:10px 16px; border-bottom:1px solid var(--lcos-hair); }
+.lcos-reconstructed .staging-toolbar label { display:flex; align-items:center; gap:6px; font-size:10px; color:var(--lcos-ink-soft); }
+.lcos-reconstructed .staging-toolbar input, .lcos-reconstructed .staging-toolbar select { padding:5px 8px; border:1px solid var(--lcos-hair); border-radius:8px; font-size:11px; }
+.lcos-reconstructed .staging-toolbar .staging-assign select { max-width:150px; }
+.lcos-reconstructed .staging-toolbar button { padding:5px 10px; border-radius:8px; border:1px solid var(--lcos-hair); background:#fff; font-size:10px; cursor:pointer; }
+.lcos-reconstructed .staging-groups { flex:1; overflow:auto; padding:10px 16px; }
+.lcos-reconstructed .staging-groups h4 { margin:10px 0 6px; font-size:10px; color:var(--lcos-ink-soft); }
+.lcos-reconstructed .staging-groups ul { margin:0; padding:0; list-style:none; }
+.lcos-reconstructed .staging-groups li { display:flex; align-items:center; gap:8px; padding:7px 8px; border:1px solid var(--lcos-hair); border-radius:10px; margin-bottom:6px; background:#fff; }
+.lcos-reconstructed .staging-groups li.selected { border-color:rgba(79,155,150,.45); background:rgba(234,244,242,.5); }
+.lcos-reconstructed .staging-groups li > div { flex:1; min-width:0; }
+.lcos-reconstructed .staging-groups li strong { display:block; font-size:11px; color:var(--lcos-ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.lcos-reconstructed .staging-groups li span { font-size:9px; color:var(--lcos-ink-faint); }
+.lcos-reconstructed .staging-groups li button { padding:4px 8px; border-radius:7px; border:1px solid var(--lcos-hair); background:#fff; font-size:9px; cursor:pointer; }
+.lcos-reconstructed .staging-dialog > footer { display:flex; justify-content:flex-end; gap:8px; padding:12px 16px; border-top:1px solid var(--lcos-hair); }
+.lcos-reconstructed .staging-empty, .lcos-reconstructed .staging-error { margin:10px 16px; font-size:11px; color:var(--lcos-ink-soft); }
+.lcos-reconstructed .staging-error { color:#c76d58; }
+
+/* 微信式悬停 OCR 文字层 */
+.lcos-ocr-image { position: relative; display: inline-block; width: 100%; height: 100%; }
+.lcos-ocr-overlay { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.lcos-ocr-line { pointer-events: auto; cursor: text; transition: background 80ms ease; }
+.lcos-ocr-line:hover { background: rgba(59,130,246,.22); outline: 1px solid rgba(59,130,246,.38); }
+
+/* ------------------------------------------------------------------------- */
+/* 渐变光幕（投送 / 删除）——纯视觉提醒层，不承载交互                        */
+/* ------------------------------------------------------------------------- */
+.lcos-light-curtain { position: fixed; z-index: 92; inset: 0; pointer-events: none; }
+.lcos-light-curtain-edge { position: absolute; opacity: .55; transition: opacity .16s ease; }
+.lcos-light-curtain-edge.anchor-left { left: 0; top: 0; bottom: 0; width: 190px; background: linear-gradient(90deg, rgba(139,92,246,.105), rgba(139,92,246,.035) 48%, transparent); }
+.lcos-light-curtain-edge.anchor-bottom { left: 0; right: 0; bottom: 0; height: 36vh; background: linear-gradient(0deg, rgba(59,130,246,.105), rgba(59,130,246,.03) 55%, transparent); }
+.lcos-light-curtain-edge i { position: absolute; display: block; border-radius: 999px; }
+.lcos-light-curtain-edge.anchor-left i { left: 0; top: 0; width: 3px; height: 100%; background: linear-gradient(180deg, rgba(139,92,246,.52), rgba(59,130,246,.34)); box-shadow: 0 0 20px rgba(107,92,222,.28); }
+.lcos-light-curtain-edge.anchor-bottom i { left: 0; right: 0; bottom: 0; height: 3px; background: linear-gradient(90deg, rgba(139,92,246,.48), rgba(59,130,246,.42), rgba(34,211,238,.30)); box-shadow: 0 0 20px rgba(107,92,222,.24); }
+.lcos-light-curtain.is-hot .lcos-light-curtain-edge { opacity: 1; }
+.lcos-light-curtain-label { position: absolute; left: 20px; bottom: 24px; display: inline-flex; align-items: center; gap: 7px; max-width: min(320px, calc(100vw - 40px)); padding: 7px 12px; border: 1px solid rgba(92,75,170,.18); border-radius: 999px; background: rgba(253,253,255,.92); color: rgba(73,61,122,.85); font-size: 11px; font-weight: 620; white-space: nowrap; box-shadow: 0 10px 26px rgba(44,41,63,.12); backdrop-filter: blur(12px) saturate(1.08); }
+.lcos-light-curtain-label b { min-width: 17px; height: 17px; padding: 0 4px; display: grid; place-items: center; border-radius: 999px; background: var(--lcos-purple, #8b5cf6); color: #fff; font-size: 9px; font-weight: 650; }
+.lcos-light-curtain.tone-delete .lcos-light-curtain-edge.anchor-left { background: linear-gradient(90deg, rgba(214,69,69,.17), rgba(214,69,69,.055) 48%, transparent); }
+.lcos-light-curtain.tone-delete .lcos-light-curtain-edge.anchor-left i { background: linear-gradient(180deg, rgba(226,84,84,.78), rgba(178,52,52,.46)); box-shadow: 0 0 24px rgba(214,69,69,.38); }
+.lcos-light-curtain.tone-delete .lcos-light-curtain-label { top: 50%; bottom: auto; transform: translateY(-50%); border-color: rgba(214,69,69,.24); color: rgba(168,51,51,.92); box-shadow: 0 10px 26px rgba(125,40,40,.16); }
+.lcos-light-curtain.tone-delete .lcos-light-curtain-label b { background: #d64545; }
+
+/* ------------------------------------------------------------------------- */
+/* Rail 左键手势：排序插入线 / 双列自适应 / 内联重命名                        */
+/* ------------------------------------------------------------------------- */
+.lcos-reconstructed .vnext-workspace-stack.lcos-project-view-stack { position: relative; }
+.lcos-reconstructed .lcos-project-view-stack.is-deleting .lcos-workspace-rail-item { opacity: .38; }
+
+/* 双列：rail 变宽由 JS 同步 --lcos-rail-w，SurfaceHost/底栏自动让位。 */
+.lcos-reconstructed .vnext-workspace-rail.is-two-column .lcos-project-view-stack { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 42px; align-content: start; gap: 6px; padding-right: 1px; }
+.lcos-reconstructed .vnext-workspace-rail.is-two-column .vnext-workspace-mini { width: 42px !important; }
+.lcos-reconstructed .vnext-workspace-rail.is-two-column .vnext-workspace-preview { left: 116px !important; }
+.lcos-reconstructed .vnext-workspace-rail.is-two-column .vnext-rail-button, .lcos-reconstructed .vnext-workspace-rail.is-two-column .vnext-workspace-mini { flex: 0 0 42px; }
+
+/* 安卓桌面式拖拽：源位挖空、相邻让位、浮卡跟手。 */
+.lcos-reconstructed .lcos-project-view-stack.is-dragging .lcos-workspace-rail-item { transition: transform 130ms ease; }
+.lcos-reconstructed .lcos-workspace-rail-item.is-drag-source { opacity: .28; }
+.lcos-reconstructed .lcos-rail-drag-float {
+  position: fixed;
+  z-index: 130;
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  border: 1px solid rgba(100,74,178,.30);
+  border-radius: 12px;
+  background: rgba(253,253,255,.97);
+  box-shadow: 0 16px 38px rgba(52,44,84,.24), inset 0 1px 0 rgba(255,255,255,.92);
+  transform: translate(14px, 12px) rotate(2deg) scale(1.06);
+}
+.lcos-reconstructed .lcos-rail-drag-float .lcos-project-view-kind-glyph { position: absolute; right: -3px; bottom: -3px; display: grid; width: 15px; height: 15px; place-items: center; border: 1px solid rgba(73,66,91,.10); border-radius: 5px; color: rgba(63,56,79,.62); background: rgba(253,253,254,.96); box-shadow: 0 2px 7px rgba(39,34,52,.08); }
+.lcos-reconstructed .lcos-rail-drag-float .lcos-project-view-kind-glyph svg { width: 9px; height: 9px; }
+
+/* rail 右缘拖拽调整列数：右拉双列、左拉单列。 */
+.lcos-reconstructed .lcos-rail-resize-handle { position: absolute; z-index: 60; right: -8px; top: 0; bottom: 0; width: 10px; cursor: ew-resize; touch-action: none; }
+.lcos-reconstructed .lcos-rail-resize-handle::after { content: ""; position: absolute; right: 2px; top: 50%; transform: translateY(-50%); width: 3px; height: 34px; border-radius: 999px; background: rgba(107,92,222,.25); opacity: 0; transition: opacity .14s ease, background .14s ease; }
+.lcos-reconstructed .lcos-rail-resize-handle:hover::after, .lcos-reconstructed .vnext-workspace-rail.is-resizing .lcos-rail-resize-handle::after { opacity: 1; background: rgba(139,92,246,.55); }
+
+/* 悬浮预览卡到 rail 之间的命中桥：鼠标移过去编辑名称不会消失。 */
+.lcos-reconstructed .vnext-workspace-preview.lcos-workspace-preview::before { content: ""; position: absolute; left: -12px; top: 0; bottom: 0; width: 12px; pointer-events: auto; }
+
+.lcos-reconstructed .lcos-rail-rename-input { min-width: 0; width: 100%; height: 20px; padding: 0 6px; border: 1px solid rgba(100,74,178,.34); border-radius: 7px; background: rgba(247,244,255,.95); color: var(--lcos-ink, #1c1b22); font-family: inherit; font-size: 11.5px; font-weight: 600; line-height: 1.2; outline: none; box-shadow: 0 0 0 3px rgba(113,83,194,.10); }
+
+/* B-stage convergence: AI is summoned as a lightweight transient layer.
+   Intent/provider/output controls still exist for expert recovery, but they are
+   intentionally hidden behind one Advanced disclosure instead of forming the
+   default interaction grammar. */
+.lcos-reconstructed .lcos-composer-controls-quiet { min-height:25px; }
+.lcos-reconstructed .lcos-composer-advanced { position:relative; }
+.lcos-reconstructed .lcos-composer-advanced > summary::-webkit-details-marker { display:none; }
+.lcos-reconstructed .lcos-composer-advanced-popover {
+  position:absolute; z-index:108; left:0; bottom:31px; width:220px;
+  display:grid; gap:7px; padding:8px; border:1px solid var(--lcos-hair-strong);
+  border-radius:11px; background:rgba(253,253,254,.98); box-shadow:var(--lcos-shadow-float);
+}
+.lcos-reconstructed .lcos-composer-advanced-popover > small:first-child {
+  color:#9995a1; font:600 7.5px/1 "JetBrains Mono",monospace; letter-spacing:.05em;
+}
+.lcos-reconstructed .lcos-composer-advanced-popover label { display:grid; grid-template-columns:64px minmax(0,1fr); align-items:center; gap:6px; color:#77737f; font-size:8.5px; }
+.lcos-reconstructed .lcos-composer-advanced-popover select { min-width:0; height:27px; padding:0 22px 0 7px; border:1px solid var(--lcos-hair); border-radius:7px; background:#fff; color:#504c58; font-size:9px; }
+.lcos-reconstructed .lcos-composer-advanced-note { color:#aaa6b0 !important; font-size:7.8px !important; line-height:1.4; }
+.lcos-reconstructed .global-composer-advanced { margin:0 8px 2px; }
+.lcos-reconstructed .global-composer-advanced > summary { width:max-content; list-style:none; cursor:pointer; color:#96919d; font-size:9px; }
+.lcos-reconstructed .global-composer-advanced > summary::-webkit-details-marker { display:none; }
+.lcos-reconstructed .global-composer-advanced[open] > summary { color:#5d5866; }
+.lcos-reconstructed .global-composer-advanced .global-composer-options { margin-top:5px; }

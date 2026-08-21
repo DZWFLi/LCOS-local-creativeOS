@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "name": "LCOS 0.1 Desktop + Capture Standalone Baseline PASS8",
+  "date": "2026-08-18",
+  "sourceBaseHead": "950acba9fca90bbe03872e7bf0fed552b9de2321",
+  "mode": "standalone-source-baseline",
+  "contains": [
+    "S10 productization closeout source",
+    "PASS5 interface productization",
+    "PASS6 Electron Desktop Alpha host",
+    "PASS7 Capture Space and Capture Float convergence",
+    "PASS8 standalone bootstrap and Desktop hardening"
+  ],
+  "desktop": {
+    "mainWindow": true,
+    "captureFloatWindow": true,
+    "runtimeSupervisor": true,
+    "tray": true,
+    "nativeDirectoryPicker": true,
+    "codexManagedIntegration": true,
+    "squirrelWindowsConfig": true,
+    "installerBinaryIncluded": false
+  },
+  "capture": {
+    "systemCaptureSpace": true,
+    "persistentPresentation": true,
+    "aiOrganize": true,
+    "semanticDropToExistingProject": true,
+    "defaultBrowserCaptureTarget": "staging"
+  },
+  "dependencySnapshot": {
+    "nodeModulesIncluded": false,
+    "packageLockRequiresOneBootstrapRefresh": true,
+    "bootstrapCommand": "npm run baseline:bootstrap"
+  }
+}

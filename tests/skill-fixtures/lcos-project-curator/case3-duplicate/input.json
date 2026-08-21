@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "scenario": "已有相似节点",
+  "existingNode": { "title": "EP02 开场钩子", "content": "3 秒反差钩子，保留产品轮子卖点" },
+  "newDiscussion": "今天又聊到 EP02 开场，结论和之前一样：3 秒钩子 + 轮子卖点，另外想加一个邻居关系交代。"
+}

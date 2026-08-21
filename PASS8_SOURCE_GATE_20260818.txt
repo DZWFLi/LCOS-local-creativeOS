@@ -1,0 +1,24 @@
+LCOS PASS8 SOURCE GATE · 2026-08-18
+
+PASS electron main syntax
+PASS electron preload syntax
+PASS runtime supervisor syntax
+PASS desktop static host syntax
+PASS desktop doctor syntax
+PASS baseline bootstrap syntax
+PASS package/baseline JSON
+LCOS PASS8 Desktop doctor · linux · node v22.16.0
+✓ Desktop package · /mnt/data/LCOS_FULLSTACK_DESKTOP_CAPTURE_BASELINE_PASS8_20260818/apps/desktop/package.json
+✓ Electron main · /mnt/data/LCOS_FULLSTACK_DESKTOP_CAPTURE_BASELINE_PASS8_20260818/apps/desktop/src/main.mjs
+✓ Electron preload · /mnt/data/LCOS_FULLSTACK_DESKTOP_CAPTURE_BASELINE_PASS8_20260818/apps/desktop/src/preload.mjs
+✓ Runtime supervisor · /mnt/data/LCOS_FULLSTACK_DESKTOP_CAPTURE_BASELINE_PASS8_20260818/apps/desktop/src/runtime-supervisor.mjs
+✓ Capture Float UI · /mnt/data/LCOS_FULLSTACK_DESKTOP_CAPTURE_BASELINE_PASS8_20260818/apps/web/src/features/capture/CaptureFloatApp.tsx
+✓ Capture Space UI · /mnt/data/LCOS_FULLSTACK_DESKTOP_CAPTURE_BASELINE_PASS8_20260818/apps/web/src/features/capture/CaptureSpace.tsx
+✓ Windows icon · /mnt/data/LCOS_FULLSTACK_DESKTOP_CAPTURE_BASELINE_PASS8_20260818/apps/desktop/assets/lcos.ico
+! package-lock is pre-Desktop · expected in the source snapshot; `npm run baseline:bootstrap` refreshes it
+! node_modules not present · source packages intentionally exclude dependencies
+✓ Runtime port 43121 free
+✓ Runtime port 43122 free
+LCOS PASS8 Desktop doctor PASS
+PASS TS/TSX syntactic transpile 302/302 (separate global TypeScript gate)
+BLOCKED full dependency/type/build QA: source package intentionally has no node_modules; npm registry unavailable in this container (EAI_AGAIN).

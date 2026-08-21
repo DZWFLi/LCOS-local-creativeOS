@@ -1,0 +1,17 @@
+{
+  "contractVersion": "bridge-result-v1",
+  "taskId": "task-replace-me",
+  "lcosRunId": "run-revise-demo",
+  "providerStatus": "review",
+  "summary": "已在隔离目录生成脚本修改稿。",
+  "changedFiles": [
+    {
+      "path": "C:\\LCOS\\runs\\run-revise-demo\\outputs\\script-revised.md",
+      "action": "modified",
+      "role": "revised_script",
+      "mediaType": "text/markdown"
+    }
+  ],
+  "warnings": [],
+  "suggestedNextActions": ["与 Base Revision 对比后决定是否接纳。"]
+}

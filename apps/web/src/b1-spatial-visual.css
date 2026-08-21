@@ -1,0 +1,73 @@
+/* B1 Node Visual foundation. Keep Rail styles isolated from this file. */
+.lcos-dot-glyph {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  overflow: visible;
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--lcos-accent, #7b7dff) 32%, transparent));
+}
+.lcos-dot-glyph circle { fill: currentColor; }
+.lcos-dot-glyph .level-1 { opacity: .34; }
+.lcos-dot-glyph .level-2 { opacity: .78; }
+.lcos-dot-glyph .level-3 { opacity: 1; }
+
+.lcos-object .lcos-node-dot-identity {
+  color: var(--lcos-accent, #7478ff);
+  padding: 5px;
+  border: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, rgba(255,255,255,.34) 82%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.55);
+  backdrop-filter: blur(12px) saturate(118%);
+}
+.lcos-document-object.file-markdown .lcos-node-dot-identity { color: var(--lcos-accent, #5f67ef); }
+.lcos-document-object.file-pdf .lcos-node-dot-identity { color: var(--lcos-danger, #d85a68); }
+.lcos-collection-object .lcos-node-dot-identity { color: var(--lcos-signal, #6579e8); }
+
+/* Layout-mode background tokens. Freeform remains deliberately subtle. */
+[data-spatial-layout="freeform"] { --lcos-grid-dot-opacity: .24; }
+[data-spatial-layout="grid"] { --lcos-grid-dot-opacity: .48; }
+[data-spatial-layout="grid"] .canvas-dot-grid,
+[data-spatial-layout="grid"] .canvas-grid { opacity: var(--lcos-grid-dot-opacity); }
+
+/* Collection expands in place. Members remain normal Project Views, not clones. */
+.lcos-collection-object.is-expanded {
+  position: relative;
+  z-index: 8;
+  overflow: visible;
+}
+.lcos-collection-inline {
+  position: absolute;
+  left: 8px;
+  top: calc(100% - 8px);
+  width: max(220px, calc(100% - 16px));
+  max-height: 220px;
+  padding: 8px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  overflow: auto;
+  border: 1px solid rgba(112, 104, 145, .16);
+  border-radius: 0 0 13px 13px;
+  background: color-mix(in srgb, rgba(249,248,253,.94) 88%, transparent);
+  box-shadow: 0 16px 32px rgba(43, 38, 64, .10), inset 0 1px 0 rgba(255,255,255,.7);
+  backdrop-filter: blur(18px) saturate(118%);
+}
+.lcos-collection-member {
+  min-width: 0;
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 7px;
+  border: 1px solid rgba(105, 96, 136, .11);
+  border-radius: 9px;
+  background: rgba(255,255,255,.48);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.lcos-collection-member:hover { background: rgba(255,255,255,.78); transform: translateY(-1px); }
+.lcos-collection-member .lcos-dot-glyph { width: 18px; height: 18px; color: var(--lcos-accent, #7478ff); }
+.lcos-collection-member span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; }
+.lcos-collection-empty { padding: 8px; color: rgba(60,58,70,.5); }
