@@ -1,6 +1,6 @@
 import { useMemo, useRef } from 'react'
 import type { Camera, CanvasNode, WorkspaceFrameVM } from '../../model'
-import { Maximize2, Minus, Plus } from 'lucide-react'
+import { Grid3X3, Maximize2, Minus, Plus } from 'lucide-react'
 import { cameraSafeViewportBounds, CANVAS_ZOOM_STEP, fitBoundsForReading, getSelectionBounds, restorationFocusBounds, type SafeInsets, zoomCameraAt } from './canvasGeometry'
 
 interface Props {
@@ -12,6 +12,8 @@ interface Props {
   onCollapsedChange: (collapsed: boolean) => void
   safeInsets: SafeInsets
   onLocateContent?: () => void
+  gridSnapEnabled?: boolean
+  onGridSnapChange?: (enabled: boolean) => void
 }
 
 type MapTransform = {
@@ -53,15 +55,15 @@ function makeTransform(bounds: ReturnType<typeof projectBounds>, mapWidth: numbe
   }
 }
 
-export function CanvasMiniMap({ nodes, workspaceFrames, camera, setCamera, collapsed, onCollapsedChange, safeInsets, onLocateContent }: Props) {
+export function CanvasMiniMap({ nodes, workspaceFrames, camera, setCamera, collapsed, onCollapsedChange, safeInsets, onLocateContent, gridSnapEnabled = true, onGridSnapChange }: Props) {
   const mapRef = useRef<HTMLDivElement | null>(null)
   const drag = useRef<{ x: number; y: number; camera: Camera; scale: number } | null>(null)
   const viewport = typeof document !== 'undefined' ? document.querySelector<HTMLElement>('[data-testid="canvas"]')?.getBoundingClientRect() : undefined
   const viewportWidth = viewport?.width ?? 1400
   const viewportHeight = viewport?.height ?? 900
   const bounds = useMemo(() => projectBounds(nodes, workspaceFrames), [nodes, workspaceFrames])
-  const mapWidth = 166
-  const mapHeight = 88
+  const mapWidth = 152
+  const mapHeight = 76
   const transform = useMemo(() => makeTransform(bounds, mapWidth, mapHeight), [bounds])
   const worldToMapX = (x: number) => transform.offsetX + (x - transform.worldX) * transform.scale
   const worldToMapY = (y: number) => transform.offsetY + (y - transform.worldY) * transform.scale
@@ -120,6 +122,6 @@ export function CanvasMiniMap({ nodes, workspaceFrames, camera, setCamera, colla
       {nodes.map((node) => <i key={node.id} data-testid={`minimap-node-${node.id}`} data-minimap-node-id={node.id} data-minimap-view-id={node.id} data-minimap-artifact-id={node.artifactId ?? ''} data-minimap-scope-id={node.scopeId ?? 'scope-root'} data-minimap-visible="true" title={`${node.id} / ${node.scopeId ?? 'scope-root'}`} style={{ left: worldToMapX(node.x), top: worldToMapY(node.y), width: Math.max(3, node.width * transform.scale), height: Math.max(2, node.height * transform.scale) }} />)}
       <b data-camera-rect="true" data-testid="minimap-camera-rect" style={{ left: worldToMapX(viewWorld.x), top: worldToMapY(viewWorld.y), width: viewWorld.width * transform.scale, height: viewWorld.height * transform.scale }} />
     </div>
-    <div className="map-controls"><button aria-label="缩小画布 5%" onClick={() => stepZoom(-CANVAS_ZOOM_STEP)}><Minus size={13} /></button><button className="map-zoom-value" aria-label="恢复 100% 缩放" title="恢复 100%" onClick={resetZoom}>{Math.round(camera.zoom * 100)}%</button><button aria-label="放大画布 5%" onClick={() => stepZoom(CANVAS_ZOOM_STEP)}><Plus size={13} /></button><button className="map-fit-content" aria-label="定位内容" title="定位内容" onClick={fitContent}><Maximize2 size={12} /></button></div>
+    <div className="map-controls"><button aria-label="缩小画布 5%" onClick={() => stepZoom(-CANVAS_ZOOM_STEP)}><Minus size={13} /></button><button className="map-zoom-value" aria-label="恢复 100% 缩放" title="恢复 100%" onClick={resetZoom}>{Math.round(camera.zoom * 100)}%</button><button aria-label="放大画布 5%" onClick={() => stepZoom(CANVAS_ZOOM_STEP)}><Plus size={13} /></button>{onGridSnapChange && <button className={`map-grid-snap ${gridSnapEnabled ? 'active' : ''}`} aria-pressed={gridSnapEnabled} aria-label={gridSnapEnabled ? '关闭网格吸附' : '开启网格吸附'} title={gridSnapEnabled ? '网格吸附已开启' : '开启网格吸附'} onClick={() => onGridSnapChange(!gridSnapEnabled)}><Grid3X3 size={12} /></button>}<button className="map-fit-content" aria-label="定位内容" title="定位内容" onClick={fitContent}><Maximize2 size={12} /></button></div>
   </section>
 }

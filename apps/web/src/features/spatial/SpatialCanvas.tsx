@@ -1,4 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import { Maximize2, Minimize2 } from 'lucide-react'
 import type { CSSProperties, DragEvent, PointerEvent as ReactPointerEvent, ReactNode, WheelEvent } from 'react'
 import type { Camera } from '../../model'
 import { applySpatialWheelGesture, spatialScreenToWorld } from './spatialCamera'
@@ -360,16 +361,18 @@ export const SpatialCanvas = forwardRef<HTMLDivElement, Props>(function SpatialC
 })
 
 function SpatialMiniMap({ items, camera, setCamera, viewportSize, label }: { items: readonly SpatialCanvasItem[]; camera: Camera; setCamera: SpatialCameraSetter; viewportSize: { width: number; height: number }; label: string }) {
+  const [collapsed, setCollapsed] = useState(false)
   const bounds = spatialItemBounds(items)
-  const width = 164, height = 92, padding = 8
+  const width = 152, height = 76, padding = 7
   const scale = Math.min((width - padding * 2) / Math.max(bounds.width, 1), (height - padding * 2) / Math.max(bounds.height, 1))
   const offsetX = padding + (width - padding * 2 - bounds.width * scale) / 2
   const offsetY = padding + (height - padding * 2 - bounds.height * scale) / 2
   const worldToMapX = (x: number) => offsetX + (x - bounds.x) * scale
   const worldToMapY = (y: number) => offsetY + (y - bounds.y) * scale
   const viewWorld = { x: -camera.x / camera.zoom, y: -camera.y / camera.zoom, width: viewportSize.width / camera.zoom, height: viewportSize.height / camera.zoom }
+  if (collapsed) return <section className="lcos-spatial-minimap is-collapsed" data-testid="spatial-surface-minimap" aria-label={label}><button type="button" className="lcos-spatial-minimap-expand" aria-label={`展开${label}小地图`} title={`展开${label}小地图`} onClick={() => setCollapsed(false)}><Maximize2 size={13}/></button></section>
   return <section className="lcos-spatial-minimap" data-testid="spatial-surface-minimap" aria-label={label}>
-    <header><span>{label}</span><small>{items.length}</small></header>
+    <header><span>{label}</span><span className="lcos-spatial-minimap-meta"><small>{items.length}</small><button type="button" aria-label={`收起${label}小地图`} title="收起小地图" onClick={() => setCollapsed(true)}><Minimize2 size={12}/></button></span></header>
     <button type="button" className="lcos-spatial-minimap-map" aria-label={`在${label}中定位`} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => {
       const rect = event.currentTarget.getBoundingClientRect()
       const localX = event.clientX - rect.left, localY = event.clientY - rect.top

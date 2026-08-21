@@ -8,6 +8,7 @@ const runtime = join(root, 'apps', 'desktop', 'resources', 'runtime')
 const required = [
   ['Web build', join(runtime, 'web', 'index.html')],
   ['Local Core', join(runtime, 'local-core', 'dist', 'index.js')],
+  ['Office thumbnail script', join(runtime, 'local-core', 'scripts', 'shell-thumb.ps1')],
   ['Domain runtime', join(runtime, 'node_modules', '@local-creative-os', 'domain', 'dist', 'index.js')],
   ['PDF.js runtime', join(runtime, 'node_modules', 'pdfjs-dist', 'build', 'pdf.mjs')],
   ['NAPI canvas scope', join(runtime, 'node_modules', '@napi-rs', 'canvas', 'package.json')],

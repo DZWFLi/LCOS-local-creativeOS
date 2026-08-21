@@ -2983,3 +2983,236 @@
 .node-info-popover {
   animation: lcos-popover-ui-in 140ms cubic-bezier(.23,1,.32,1);
 }
+
+/* =======================================================================
+   0.1 Main Canvas Human-Golden hotfix · 2026-08-21
+   Local islands, fixed HUD scale, shared minimap anatomy, light grid snap.
+   ======================================================================= */
+
+/* The surface host owns the whole viewport again. Bottom controls float over a
+   small local footprint instead of reserving a full-width glass footer. */
+.lcos-reconstructed:not([data-layout-mode="sidecar"]) .vnext-surface-host.lcos-surface-host {
+  bottom: 0 !important;
+}
+.lcos-reconstructed:not([data-layout-mode="sidecar"]) .vnext-bottom-dock.lcos-bottom-dock {
+  left: var(--lcos-ui-rail-w) !important;
+  right: 0 !important;
+  bottom: 10px !important;
+  width: auto !important;
+  height: 58px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  backdrop-filter: none !important;
+  box-shadow: none !important;
+  pointer-events: none !important;
+  overflow: visible !important;
+}
+.lcos-reconstructed:not([data-layout-mode="sidecar"]) .vnext-bottom-dock .lcos-lens-axis,
+.lcos-reconstructed:not([data-layout-mode="sidecar"]) .vnext-bottom-dock .lcos-scope-axis,
+.lcos-reconstructed:not([data-layout-mode="sidecar"]) .vnext-bottom-dock .lcos-zoom-controls {
+  pointer-events: auto !important;
+  border: 1px solid rgba(65, 58, 80, .085) !important;
+  background: rgba(249,249,252,.76) !important;
+  backdrop-filter: blur(22px) saturate(1.10) !important;
+  box-shadow: 0 10px 30px rgba(39,34,55,.09), inset 0 1px 0 rgba(255,255,255,.82) !important;
+}
+.lcos-reconstructed:not([data-layout-mode="sidecar"]) .vnext-bottom-dock .lcos-lens-axis {
+  position: absolute !important;
+  left: 50% !important;
+  bottom: 0 !important;
+  transform: translateX(-50%) !important;
+  gap: 5px !important;
+  padding: 5px 6px !important;
+  border-radius: 20px !important;
+}
+.lcos-reconstructed:not([data-layout-mode="sidecar"]) .vnext-bottom-dock .lcos-scope-axis {
+  position: absolute !important;
+  right: 14px !important;
+  bottom: 0 !important;
+  margin: 0 !important;
+  gap: 4px !important;
+  padding: 4px 6px !important;
+  border-radius: 18px !important;
+}
+.lcos-reconstructed:not([data-layout-mode="sidecar"]) .vnext-bottom-dock .lcos-zoom-controls {
+  position: absolute !important;
+  right: 124px !important;
+  bottom: 0 !important;
+  margin: 0 !important;
+  gap: 1px !important;
+  padding: 3px !important;
+  border-left: 1px solid rgba(65,58,80,.085) !important;
+  border-radius: 17px !important;
+}
+.lcos-reconstructed:not([data-layout-mode="sidecar"]) .vnext-bottom-dock .lcos-dock-divider,
+.lcos-reconstructed:not([data-layout-mode="sidecar"]) .vnext-bottom-dock .lcos-lens-axis::before,
+.lcos-reconstructed:not([data-layout-mode="sidecar"]) .vnext-bottom-dock .lcos-scope-axis::before {
+  display: none !important;
+}
+.lcos-reconstructed:not([data-layout-mode="sidecar"]) .lcos-bottom-dock button {
+  min-width: 48px !important;
+  min-height: 38px !important;
+  padding: 4px 8px 3px !important;
+  border-radius: 13px !important;
+}
+.lcos-reconstructed:not([data-layout-mode="sidecar"]) .lcos-bottom-dock button:hover {
+  transform: translateY(-1px) !important;
+}
+.lcos-reconstructed:not([data-layout-mode="sidecar"]) .lcos-bottom-dock button.active {
+  background: rgba(255,255,255,.72) !important;
+  border-color: rgba(91,72,143,.10) !important;
+  box-shadow: 0 4px 14px rgba(56,46,83,.065) !important;
+}
+
+/* Selection actions are screen HUD. Canvas zoom changes where the island sits,
+   never how large the island itself becomes. UI Scale remains the only size
+   owner, matching the side-rail/dock scale preference. */
+.lcos-reconstructed:not([data-layout-mode="sidecar"]) .selection-toolbar.lcos-selection-strip {
+  transform: scale(var(--lcos-ui-scale)) !important;
+  transform-origin: top left !important;
+  max-width: min(560px, calc(100vw - var(--lcos-ui-rail-w) - 36px)) !important;
+  padding: 5px !important;
+  border-radius: 18px !important;
+  background: rgba(251,251,253,.82) !important;
+  backdrop-filter: blur(20px) saturate(1.08) !important;
+  box-shadow: 0 10px 30px rgba(40,35,56,.085), inset 0 1px 0 rgba(255,255,255,.86) !important;
+}
+
+/* The snap texture follows camera pan/zoom because its CSS lattice is derived
+   from the same 24 world-unit grid used by drag snapping. At overview zoom the
+   dots disappear instead of collapsing into visual noise. */
+.lcos-reconstructed:not([data-layout-mode="sidecar"]) .canvas.grid-snap-enabled {
+  background-image: radial-gradient(circle at 1px 1px, rgba(76,67,97,.105) .7px, transparent .8px) !important;
+  background-size: var(--lcos-main-grid-size) var(--lcos-main-grid-size) !important;
+  background-position: var(--lcos-main-grid-x) var(--lcos-main-grid-y) !important;
+}
+.lcos-reconstructed:not([data-layout-mode="sidecar"]) .canvas.grid-snap-enabled.zoom-band-20 {
+  background-image: none !important;
+}
+
+/* Main minimap and capability-surface minimaps now share one floating-island
+   language. They sit above the Current Scene island, never underneath it. */
+.lcos-reconstructed:not([data-layout-mode="sidecar"]) .minimap,
+.lcos-reconstructed:not([data-layout-mode="sidecar"]) .canvas-minimap,
+.lcos-reconstructed:not([data-layout-mode="sidecar"]) .lcos-spatial-minimap {
+  left: auto !important;
+  right: 14px !important;
+  bottom: 78px !important;
+  width: 166px !important;
+  padding: 6px !important;
+  border: 1px solid rgba(65,58,80,.085) !important;
+  border-radius: 20px !important;
+  background: rgba(250,250,252,.76) !important;
+  box-shadow: 0 10px 30px rgba(40,35,56,.085), inset 0 1px 0 rgba(255,255,255,.84) !important;
+  backdrop-filter: blur(20px) saturate(1.08) !important;
+  transform: none !important;
+  opacity: .92 !important;
+  transition: opacity 150ms ease, transform 180ms cubic-bezier(.22,1,.36,1), box-shadow 160ms ease !important;
+  pointer-events: auto !important;
+}
+.lcos-reconstructed:not([data-layout-mode="sidecar"]) .minimap:hover,
+.lcos-reconstructed:not([data-layout-mode="sidecar"]) .canvas-minimap:hover,
+.lcos-reconstructed:not([data-layout-mode="sidecar"]) .lcos-spatial-minimap:hover {
+  opacity: 1 !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 14px 36px rgba(40,35,56,.11), inset 0 1px 0 rgba(255,255,255,.90) !important;
+}
+.lcos-reconstructed:not([data-layout-mode="sidecar"]) .minimap .map,
+.lcos-reconstructed:not([data-layout-mode="sidecar"]) .canvas-minimap .map,
+.lcos-reconstructed:not([data-layout-mode="sidecar"]) .lcos-spatial-minimap-map {
+  width: 152px !important;
+  height: 76px !important;
+  border-radius: 13px !important;
+  border: 1px solid rgba(68,61,82,.07) !important;
+  background-color: rgba(246,246,249,.68) !important;
+}
+.lcos-reconstructed:not([data-layout-mode="sidecar"]) .minimap .map-label,
+.lcos-reconstructed:not([data-layout-mode="sidecar"]) .canvas-minimap .map-label,
+.lcos-reconstructed:not([data-layout-mode="sidecar"]) .lcos-spatial-minimap > header {
+  min-height: 20px !important;
+  padding: 0 4px 5px !important;
+  color: rgba(55,49,67,.48) !important;
+  font-size: 8px !important;
+}
+.lcos-reconstructed:not([data-layout-mode="sidecar"]) .map-controls {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 3px !important;
+  margin-top: 5px !important;
+  padding: 0 !important;
+}
+.lcos-reconstructed:not([data-layout-mode="sidecar"]) .map-controls button,
+.lcos-reconstructed:not([data-layout-mode="sidecar"]) .lcos-spatial-minimap > header button,
+.lcos-reconstructed:not([data-layout-mode="sidecar"]) .lcos-spatial-minimap-expand {
+  width: 25px !important;
+  height: 25px !important;
+  min-width: 25px !important;
+  display: grid !important;
+  place-items: center !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 9px !important;
+  color: rgba(57,52,68,.58) !important;
+  background: transparent !important;
+  cursor: pointer !important;
+}
+.lcos-reconstructed:not([data-layout-mode="sidecar"]) .map-controls button:hover,
+.lcos-reconstructed:not([data-layout-mode="sidecar"]) .lcos-spatial-minimap > header button:hover,
+.lcos-reconstructed:not([data-layout-mode="sidecar"]) .lcos-spatial-minimap-expand:hover {
+  color: rgba(75,57,126,.82) !important;
+  background: rgba(94,72,153,.08) !important;
+}
+.lcos-reconstructed:not([data-layout-mode="sidecar"]) .map-controls .map-zoom-value {
+  width: 42px !important;
+  min-width: 42px !important;
+  font-variant-numeric: tabular-nums;
+}
+.lcos-reconstructed:not([data-layout-mode="sidecar"]) .map-controls .map-grid-snap.active {
+  color: rgba(83,61,151,.90) !important;
+  background: rgba(101,78,168,.10) !important;
+  box-shadow: inset 0 0 0 1px rgba(101,78,168,.10) !important;
+}
+.lcos-reconstructed:not([data-layout-mode="sidecar"]) .lcos-spatial-minimap-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.lcos-reconstructed:not([data-layout-mode="sidecar"]) .lcos-spatial-minimap.is-collapsed,
+.lcos-reconstructed:not([data-layout-mode="sidecar"]) .minimap.minimap-collapsed {
+  width: 38px !important;
+  height: 38px !important;
+  padding: 5px !important;
+  border-radius: 19px !important;
+}
+.lcos-reconstructed:not([data-layout-mode="sidecar"]) .lcos-spatial-minimap.is-collapsed:hover,
+.lcos-reconstructed:not([data-layout-mode="sidecar"]) .minimap.minimap-collapsed:hover {
+  transform: translateY(-2px) scale(1.02) !important;
+}
+
+/* When the runtime rail opens, keep the minimap island beside it without
+   shrinking it into another scale system. */
+.lcos-reconstructed:not([data-layout-mode="sidecar"]):has(.work-rail:not(.collapsed)) .minimap,
+.lcos-reconstructed:not([data-layout-mode="sidecar"]):has(.work-rail:not(.collapsed)) .canvas-minimap,
+.lcos-reconstructed:not([data-layout-mode="sidecar"]):has(.work-rail:not(.collapsed)) .lcos-spatial-minimap {
+  right: calc(var(--work-rail-width) + 18px) !important;
+  transform: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lcos-reconstructed:not([data-layout-mode="sidecar"]) .vnext-bottom-dock .lcos-lens-axis,
+  .lcos-reconstructed:not([data-layout-mode="sidecar"]) .vnext-bottom-dock .lcos-scope-axis,
+  .lcos-reconstructed:not([data-layout-mode="sidecar"]) .minimap,
+  .lcos-reconstructed:not([data-layout-mode="sidecar"]) .canvas-minimap,
+  .lcos-reconstructed:not([data-layout-mode="sidecar"]) .lcos-spatial-minimap,
+  .lcos-reconstructed:not([data-layout-mode="sidecar"]) .selection-toolbar.lcos-selection-strip {
+    transition: none !important;
+  }
+}
+
+/* PERF-150: far/overview nodes are semantic proxies; expensive image/PDF/PPT faces upgrade only when near or selected. */
+.lcos-overview-node-proxy { width:100%; height:100%; box-sizing:border-box; display:grid; grid-template-rows:auto 1fr; gap:5px; padding:9px 10px; overflow:hidden; border:1px solid rgba(96,90,116,.12); border-radius:10px; background:rgba(252,251,255,.92); box-shadow:0 5px 16px rgba(48,43,66,.045); }
+.lcos-overview-node-proxy span { font-size:8px; letter-spacing:.08em; color:#9792a6; }
+.lcos-overview-node-proxy strong { align-self:end; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:10px; font-weight:600; color:#55505f; }

@@ -13,7 +13,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react'
 import type { AttentionBucketV0, WorkflowActionV0 } from '@local-creative-os/contracts'
 import type { CanvasEdge, CanvasNode } from '../../model'
-import { layoutPreview as runLayoutPreview } from '../layout/layoutService'
+import { chooseLayoutStrategy, layoutPreview as runLayoutPreview } from '../layout/layoutService'
 import { loadPresentationLayoutEngines } from '../layout/layoutEngines'
 import type { LayoutResult } from '../layout/layoutTypes'
 import { SpatialCanvas } from '../spatial/SpatialCanvas'
@@ -369,14 +369,17 @@ export function WorkflowSurface(props: Props) {
 
   const previewLayout = async () => {
     if (visibleNodes.length < 2 || layoutPreview) return
-    const engines = loadPresentationLayoutEngines()
-    const result = await runLayoutPreview({
+    const engines = await loadPresentationLayoutEngines()
+    const layoutInput = {
       nodes: items.map((item) => ({ id: item.node.id, x: item.x, y: item.y, width: item.width, height: item.height, pinned: pinnedIds.includes(item.node.id) })),
       edges: visibleEdges,
-      strategy: visibleEdges.length ? 'auto' : 'manual',
       gap: 28,
       componentGap: 96,
       preserveManualAnchors: true,
+    }
+    const result = await runLayoutPreview({
+      ...layoutInput,
+      strategy: chooseLayoutStrategy(layoutInput),
     }, engines)
     setLayoutPreview(result)
   }

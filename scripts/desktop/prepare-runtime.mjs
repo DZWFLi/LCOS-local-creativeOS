@@ -22,6 +22,7 @@ mkdirSync(target, { recursive: true })
 copy(join(root, 'dist'), join(target, 'web'))
 copy(join(root, 'apps', 'local-core', 'dist'), join(target, 'local-core', 'dist'))
 copy(join(root, 'apps', 'local-core', 'package.json'), join(target, 'local-core', 'package.json'))
+copy(join(root, 'apps', 'local-core', 'scripts', 'shell-thumb.ps1'), join(target, 'local-core', 'scripts', 'shell-thumb.ps1'))
 
 copy(join(root, 'packages', 'domain', 'dist'), join(target, 'node_modules', '@local-creative-os', 'domain', 'dist'))
 copy(join(root, 'packages', 'domain', 'package.json'), join(target, 'node_modules', '@local-creative-os', 'domain', 'package.json'))

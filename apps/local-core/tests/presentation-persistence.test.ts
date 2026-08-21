@@ -75,6 +75,39 @@ describe('Presentation persistence (Phase B)', () => {
     expect(loaded?.state.memberViewIds).toEqual([memberViewId])
   })
 
+  it('persists durable fence geometry without freezing membership', () => {
+    const { repository, snapshot } = freshDb()
+    const scopeId = String(snapshot.scopes.find((scope) => scope.kind === 'root')!.id)
+    const projectId = String(snapshot.project.id)
+    const service = new PresentationApplicationService(repository, repository)
+    const state: PresentationStateV0 = {
+      ...stateFor([]),
+      spatialRegions: [{ id: 'region-main-1', label: '参考资料', bounds: { x: 120, y: 80, width: 640, height: 420 } }],
+    }
+
+    const saved = service.save(projectId, {
+      presentationId: 'presentation:arrange:scope-root',
+      scopeId,
+      capability: 'arrange',
+      renderer: 'main-canvas',
+      state,
+      expectedVersion: 0,
+      updatedBy: 'web',
+    })
+
+    expect(saved.state.spatialRegions).toEqual(state.spatialRegions)
+    expect(saved.state.memberViewIds).toEqual([])
+    expect(() => service.save(projectId, {
+      presentationId: 'presentation:arrange:scope-invalid',
+      scopeId,
+      capability: 'arrange',
+      renderer: 'main-canvas',
+      state: { ...state, spatialRegions: [{ id: 'bad', bounds: { x: 0, y: 0, width: -1, height: 20 } }] },
+      expectedVersion: 0,
+      updatedBy: 'web',
+    })).toThrow(/bounds must be positive/)
+  })
+
   it('CAS rejects stale versions and exposes currentVersion', () => {
     const { repository, snapshot } = freshDb()
     const scopeId = String(snapshot.scopes.find((scope) => scope.kind === 'root')!.id)

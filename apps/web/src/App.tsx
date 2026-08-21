@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { Command, Play } from 'lucide-react'
-import type { Checkpoint, ContextChangeProposalV1, ContextManifestV0, ContinuityResumeSnapshotV1, ConversationSessionV1, ObsidianVaultScanV1, PresentationEntityRefV0, RunEvent, RunProposalResult, RunReview, RuntimeProviderStatus, WorkspaceMembership } from '@local-creative-os/contracts'
+import type { Checkpoint, ContextChangeProposalV1, ContextManifestV0, ContinuityResumeSnapshotV1, ConversationSessionV1, ObsidianVaultScanV1, PresentationEntityRefV0, PresentationSpatialRegionV0, RunEvent, RunProposalResult, RunReview, RuntimeProviderStatus, WorkspaceMembership } from '@local-creative-os/contracts'
 import { MAX_STRUCTURAL_CONTAINER_DEPTH, type HandoffRecord } from '@local-creative-os/domain'
 import type { ActiveRun, Camera, CanvasNode, CanvasScope, NodeDisplayMode, NodeLayer, PersistedPrototypeState, ProjectPackage, ScopeKind, TargetContextInference, WorkRailPreferences, Workspace } from './model'
 import { nodeMeta, runStatusLabel } from './model'
@@ -40,6 +40,7 @@ import { RuntimeBridge, type DataSource, type SaveStatus } from './runtime/runti
 import { selectRuntimeProject } from './runtime/runtimeProjectSelection'
 import { createWorkspaceRecord, duplicateWorkspaceRecord, moveWorkspaceRecord, removeWorkspaceRecord, toggleWorkspaceLayer, updateWorkspaceRecord } from './state/workspaceState'
 import { fitBounds, fitBoundsForReading, getSelectionBounds, MIN_CANVAS_ZOOM, nodeDimensions, placeNewNodesIncrementally, restorationFocusBounds, restoredCameraIsMeaningful, revealNode } from './features/canvas/canvasGeometry'
+import { getVisualSelectionBounds, layoutVisualGrid, nodeVisualBounds, repairVisualLayoutPositions } from './features/canvas/canvasVisualGeometry'
 import { findPendingReturnPosition } from './features/canvas/canvasLayout'
 import { layoutExpandedCollectionMembers } from './features/canvas/collectionExpandLayout'
 import { applyScopeLayout, proposeIslandRecoveryLayout, type LayoutPreviewItem } from './features/canvas/scopeLayout'
@@ -212,6 +213,8 @@ export function App() {
   const [viewportWidth, setViewportWidth] = useState(() => typeof window === 'undefined' ? 1440 : window.innerWidth)
   const [viewportHeight, setViewportHeight] = useState(() => typeof window === 'undefined' ? 900 : window.innerHeight)
   const [miniMapCollapsed, setMiniMapCollapsed] = useState(false)
+  const [gridSnapEnabled, setGridSnapEnabled] = useState(() => typeof window === 'undefined' ? true : window.localStorage.getItem('lcos.main.grid-snap') !== 'off')
+  const [spatialRegions, setSpatialRegions] = useState<SpatialRegionDraft[]>(() => (initial.spatialRegions ?? []).map((region) => ({ ...region, memberViewIds: [] })))
   const [globalComposerText, setGlobalComposerText] = useState('')
   const [globalComposerVisible, setGlobalComposerVisible] = useState(false)
   const [globalProvider, setGlobalProvider] = useState('auto')
@@ -391,6 +394,25 @@ export function App() {
   const runCounterRef = useRef(43)
   const projectStateCacheRef = useRef<Map<string, PersistedPrototypeState>>(new Map([[initialProjectId, initial]]))
   const bridgeRef = useRef(new RuntimeBridge(initialProjectId))
+  const mainCanvasPresentation = usePresentationViewBridge({
+    client: isRuntimeProjectMode(bootMode) ? bridgeRef.current.client : null,
+    projectId: activeProjectId,
+    scopeId: rootScope.id,
+    capability: 'arrange',
+    renderer: 'main-canvas',
+    seedState: () => ({
+      ...emptyPresentationState(),
+      spatialRegions: spatialRegions.map(({ memberViewIds: _memberViewIds, ...region }) => region),
+    }),
+  })
+  const persistedMainCanvasRegions = mainCanvasPresentation.state?.spatialRegions ?? null
+  useEffect(() => {
+    if (!mainCanvasPresentation.ready || persistedMainCanvasRegions === null) return
+    setSpatialRegions((current) => persistedMainCanvasRegions.map((region) => ({
+      ...region,
+      memberViewIds: current.find((item) => item.id === region.id)?.memberViewIds ?? [],
+    })))
+  }, [activeProjectId, mainCanvasPresentation.ready, persistedMainCanvasRegions])
   useEffect(() => {
     setOcrClient(isRuntimeProjectMode(bootMode) ? bridgeRef.current.client : null)
   }, [bootMode])
@@ -572,7 +594,9 @@ export function App() {
   // Workspace frames are overview affordances. Showing the active Workspace's own
   // bounding box inside its Scene creates a giant "virtual child canvas" and was
   // the source of the 0-items/17-items confusion in A closeout QA.
-  const visibleWorkspaceFrames = useMemo(() => workspaceId ? [] : workspaceFrames, [workspaceFrames, workspaceId])
+  // Round-1 human QA: Scene is a child-canvas entity, not a giant frame on its parent canvas.
+  // Parent Main renders a compact Workspace projection; Region/Fence owns visible spatial grouping.
+  const visibleWorkspaceFrames = useMemo(() => [], [])
   const workspaceMemberViewIdsById = useMemo<Record<string, string[]>>(() => {
     const result: Record<string, Set<string>> = Object.fromEntries(workspaces.map((workspace) => [workspace.id, new Set(workspace.focusedViewIds)]))
     for (const membership of workspaceMemberships) {
@@ -721,8 +745,8 @@ export function App() {
     left: layoutMode === 'sidecar' ? 18 : 76,
     right: layoutMode === 'sidecar' ? 18 : 28,
     top: layoutMode === 'sidecar' ? 46 : 24,
-    bottom: layoutMode === 'sidecar' ? 60 : miniMapCollapsed ? 72 : 164,
-  }), [layoutMode, miniMapCollapsed])
+    bottom: layoutMode === 'sidecar' ? 60 : 72,
+  }), [layoutMode])
   useEffect(() => {
     const preventBrowserZoom = (event: WheelEvent) => {
       if (!event.ctrlKey && !event.metaKey) return
@@ -734,6 +758,7 @@ export function App() {
     return () => window.removeEventListener('wheel', preventBrowserZoom, { capture: true })
   }, [])
 
+  useEffect(() => { try { window.localStorage.setItem('lcos.main.grid-snap', gridSnapEnabled ? 'on' : 'off') } catch { /* local preference only */ } }, [gridSnapEnabled])
   useEffect(() => { if (!notice) return; const timer = window.setTimeout(() => setNotice(''), 2600); return () => window.clearTimeout(timer) }, [notice])
   useEffect(() => {
     const onPresentationPersistence = (event: Event) => {
@@ -1419,7 +1444,7 @@ export function App() {
     setSaveStatus('saving')
     const timer = window.setTimeout(() => {
       const rootScopeId = scopes.find((scope) => scope.kind === 'root')?.id ?? scopes[0]?.id ?? 'scope-root'
-      const snapshot: PersistedPrototypeState = { version: 10, projectId: activeProjectId, nodes, edges, workspaces, scopes, activeWorkspaceId: null, activeScopeId: rootScopeId, workRail }
+      const snapshot: PersistedPrototypeState = { version: 10, projectId: activeProjectId, nodes, edges, workspaces, scopes, activeWorkspaceId: null, activeScopeId: rootScopeId, workRail, spatialRegions: spatialRegions.map(({ memberViewIds: _memberViewIds, ...region }) => region) }
       projectStateCacheRef.current.set(activeProjectId, snapshot)
       if (isRuntimeProjectMode(bootMode)) {
         const bridge = bridgeRef.current
@@ -1445,7 +1470,7 @@ export function App() {
       setSaveStatus('saved')
     }, 280)
     return () => window.clearTimeout(timer)
-  }, [activeProjectId, bootMode, edges, nodes, presentationCommit, projects, scopes, workRail, workspaces])
+  }, [activeProjectId, bootMode, edges, nodes, presentationCommit, projects, scopes, spatialRegions, workRail, workspaces])
 
   useEffect(() => { cameraRef.current = camera }, [camera])
   useEffect(() => { activeProjectIdRef.current = activeProjectId }, [activeProjectId])
@@ -1541,7 +1566,8 @@ export function App() {
     activeWorkspaceId: null,
     activeScopeId: scopes.find((scope) => scope.kind === 'root')?.id ?? scopes[0]?.id ?? scopeId,
     workRail,
-  }), [activeProjectId, edges, nodes, scopeId, scopes, workRail, workspaces])
+    spatialRegions: spatialRegions.map(({ memberViewIds: _memberViewIds, ...region }) => region),
+  }), [activeProjectId, edges, nodes, scopeId, scopes, spatialRegions, workRail, workspaces])
 
   const applyProjectState = useCallback((projectId: string, state: PersistedPrototypeState) => {
     resetGraph({ nodes: state.nodes, edges: state.edges })
@@ -1552,6 +1578,7 @@ export function App() {
     setScopeId(rootScope.id)
     setCamera(loadProjectNavigationState(projectId)?.camera ?? rootScope.camera)
     setWorkRail(normalizeRailPreferences(state.workRail))
+    setSpatialRegions((state.spatialRegions ?? []).map((region) => ({ ...region, memberViewIds: [] })))
     setActiveProjectId(projectId)
     setSelectedIds([])
     setSelectedEdgeId(null)
@@ -1834,8 +1861,13 @@ export function App() {
       }),
       contextPolicy: 'workspace-related',
       preferredSurface: 'arrange',
+      frameBounds: (() => {
+        const members = nodes.filter((node) => focusedViewIds.includes(node.id))
+        const bounds = members.length ? getVisualSelectionBounds(members, members.map((node) => node.id)) : null
+        return { x: bounds?.x ?? 160, y: bounds?.y ?? 140, width: 260, height: 140 }
+      })(),
     } satisfies Workspace
-  }, [camera, scopeId, visibleLayers, workspaces])
+  }, [camera, nodes, scopeId, visibleLayers, workspaces])
 
   const createEmptyWorkspaceScene = useCallback(() => {
     const scene = buildWorkspaceScene([])
@@ -1844,13 +1876,12 @@ export function App() {
     setActiveContextId(null)
     setActiveWorkflowId(null)
     setScopeId(scene.scopeId)
-    setWorkspaceId(scene.id)
+    setWorkspaceId(null)
     setLayoutPreview(null)
     setSelectedEdgeId(null)
-    setCamera(scene.camera)
     setActiveSurface('arrange')
     clearSelection()
-    setNotice(`已创建空现场「${scene.label}」`)
+    setNotice(`已创建现场实体「${scene.label}」；双击 Scene 实体进入`)
   }, [buildWorkspaceScene, clearSelection])
 
   const openCurrentScene = useCallback(() => {
@@ -2285,29 +2316,74 @@ export function App() {
       setClosingCollectionScopeIds((current) => current.filter((id) => id !== collectionScopeId))
     }, 240)
   }, [collectionMembersById, expandedCollectionScopeIds, nodes, openCollectionWithMotion, rootScope.id, scopes, setNodes])
+  const sceneWorkspaceIds = useMemo(() => new Set(workspaces
+    .filter((workspace) => normalizeSurfaceId(workspace.preferredSurface) !== 'workflow')
+    .map((workspace) => workspace.id)), [workspaces])
+  const mainSceneMemberIds = useMemo(() => {
+    const result = new Set<string>()
+    for (const workspace of workspaces) {
+      if (!sceneWorkspaceIds.has(workspace.id)) continue
+      for (const id of workspaceMemberViewIdsById[workspace.id] ?? workspace.focusedViewIds) result.add(id)
+    }
+    return result
+  }, [sceneWorkspaceIds, workspaceMemberViewIdsById, workspaces])
+  const mainWorkspaceProjectionNodes = useMemo(() => materializeProjectEntityNodes(
+    workspaces
+      .filter((workspace) => sceneWorkspaceIds.has(workspace.id))
+      .map((workspace) => ({ type: 'workspace' as const, id: workspace.id })),
+    nodes, scopes, workspaces,
+  ), [nodes, sceneWorkspaceIds, scopes, workspaces])
   const activeWorkspaceEntityRefs = activeWorkspace ? (workspaceEntityRefsById[activeWorkspace.id] ?? []) : []
   const activeWorkspaceEntityNodes = useMemo(() => activeWorkspace
     ? materializeProjectEntityNodes(activeWorkspaceEntityRefs, nodes, scopes, workspaces)
     : [], [activeWorkspace, activeWorkspaceEntityRefs, nodes, scopes, workspaces])
   const sceneCanvasNodes = useMemo(() => {
-    if (!activeWorkspace) return visibleNodes
+    if (!activeWorkspace) {
+      const byId = new Map<string, CanvasNode>()
+      visibleNodes.filter((node) => !mainSceneMemberIds.has(node.id)).forEach((node) => byId.set(node.id, node))
+      mainWorkspaceProjectionNodes.forEach((node) => byId.set(node.id, node))
+      return [...byId.values()]
+    }
     const focused = new Set(workspaceMemberViewIdsById[activeWorkspace.id] ?? activeWorkspace.focusedViewIds)
     const memberNodes = nodes.filter((node) => focused.has(node.id) && visibleLayers.includes(nodeMeta[node.kind].layer))
     const byId = new Map<string, CanvasNode>()
     ;[...memberNodes, ...activeWorkspaceEntityNodes].forEach((node) => byId.set(node.id, node))
     return [...byId.values()]
-  }, [activeWorkspace, activeWorkspaceEntityNodes, nodes, visibleLayers, visibleNodes, workspaceMemberViewIdsById])
+  }, [activeWorkspace, activeWorkspaceEntityNodes, mainSceneMemberIds, mainWorkspaceProjectionNodes, nodes, visibleLayers, visibleNodes, workspaceMemberViewIdsById])
   const sceneCanvasEdges = useMemo(() => {
     if (!activeWorkspace) return visibleEdges
     const ids = new Set(sceneCanvasNodes.map((node) => node.id))
     return edges.filter((edge) => ids.has(edge.from) && ids.has(edge.to))
   }, [activeWorkspace, edges, sceneCanvasNodes, visibleEdges])
+  const spatialRegionBoundsKey = useMemo(() => spatialRegions
+    .map((region) => `${region.id}:${region.bounds.x}:${region.bounds.y}:${region.bounds.width}:${region.bounds.height}`)
+    .join('|'), [spatialRegions])
+  useEffect(() => {
+    if (!spatialRegions.length) return
+    setSpatialRegions((current) => {
+      let changed = false
+      const next = current.map((region) => {
+        const ids = sceneCanvasNodes.flatMap((node) => {
+          const body = nodeVisualBounds(node)
+          const centerX = body.x + body.width / 2
+          const centerY = body.y + body.height / 2
+          const inside = centerX >= region.bounds.x && centerX <= region.bounds.x + region.bounds.width
+            && centerY >= region.bounds.y && centerY <= region.bounds.y + region.bounds.height
+          return inside ? [node.id] : []
+        })
+        const same = ids.length === region.memberViewIds.length && ids.every((id, index) => id === region.memberViewIds[index])
+        if (same) return region
+        changed = true
+        return { ...region, memberViewIds: ids }
+      })
+      return changed ? next : current
+    })
+  }, [sceneCanvasNodes, spatialRegionBoundsKey])
 
   // 2026-08-17 P0: the main canvas is always manual/freeform.
   // Legacy grid Presentation state is intentionally ignored here so restoring an
   // old project can never retake ownership of user positions. Deterministic
   // align/distribute actions now live on the selection overlay instead.
-  const [spatialRegionDraft, setSpatialRegionDraft] = useState<SpatialRegionDraft | null>(null)
 
   const contextGraphAutoNodeIds = useMemo(() => deriveContextGraphAutoNodeIds(projectPresentationNodes, scopes, rootScope.id), [projectPresentationNodes, rootScope.id, scopes])
   const contextGraphResolvedIds = useMemo(() => mergeContextGraphNodeIds(
@@ -3255,13 +3331,12 @@ export function App() {
     setActiveContextId(null)
     setActiveWorkflowId(null)
     setScopeId(scene.scopeId)
-    setWorkspaceId(scene.id)
+    setWorkspaceId(null)
     setLayoutPreview(null)
     setSelectedEdgeId(null)
-    setCamera(scene.camera)
     setActiveSurface('arrange')
     clearSelection()
-    setNotice(`已带 ${viewIds.length + entityRefs.length} 项创建现场「${scene.label}」`)
+    setNotice(`已把 ${viewIds.length + entityRefs.length} 项收进现场「${scene.label}」；主画布保留 Scene 实体`)
     return true
   }, [appendExactPresentationEntityRefs, bootMode, buildWorkspaceScene, clearSelection, nodes, setNodes])
 
@@ -3940,6 +4015,19 @@ export function App() {
     const selectedSet = new Set(selectedIds)
     const selected = nodes.filter((node) => selectedSet.has(node.id))
     const internalEdges = edges.filter((edge) => selectedSet.has(edge.from) && selectedSet.has(edge.to))
+    const visualBounds = getVisualSelectionBounds(selected, selected.map((node) => node.id))
+    const anchorCount = selected.filter((node) => node.positionLocked).length
+
+    // Heterogeneous material walls default to a dependable visible-body grid.
+    // No semantic relation means no reason to invent a force-directed pose.
+    if (internalEdges.length === 0) {
+      const positions = layoutVisualGrid(selected, { x: visualBounds?.x ?? 0, y: visualBounds?.y ?? 0 })
+      setLayoutPreview(positions)
+      setLayoutPreviewFocusIds(selected.map((node) => node.id))
+      setNotice(`整齐网格预览 · 按节点真实外轮廓排布${anchorCount ? ` · 保留 ${anchorCount} 个固定对象` : ''}`)
+      return
+    }
+
     const bounds = getSelectionBounds(selected, selected.map((node) => node.id))
     const requestBase = {
       nodes: selected.map((node) => ({ id: node.id, x: node.x, y: node.y, width: node.width, height: node.height, pinned: Boolean(node.positionLocked) })),
@@ -3951,12 +4039,10 @@ export function App() {
     }
     const strategy = chooseLayoutStrategy(requestBase)
     const proposal = layoutPreviewSync({ ...requestBase, strategy })
-    setLayoutPreview([...proposal.positions])
+    const positions = repairVisualLayoutPositions(selected, proposal.positions, 28)
+    setLayoutPreview(positions)
     setLayoutPreviewFocusIds(selected.map((node) => node.id))
-    const anchorCount = selected.filter((node) => node.positionLocked).length
-    setNotice(strategy === 'manual'
-      ? `布局预览 · 当前 Selection 没有明确内部关系，只做碰撞修复${anchorCount ? ` · 保留 ${anchorCount} 个固定对象` : ''}`
-      : `关系布局预览 · ${proposal.componentCount} 个关系簇${anchorCount ? ` · 保留 ${anchorCount} 个固定对象` : ''}`)
+    setNotice(`关系布局预览 · ${proposal.componentCount} 个关系簇 · 已按真实外轮廓做碰撞修复${anchorCount ? ` · 保留 ${anchorCount} 个固定对象` : ''}`)
   }, [edges, nodes, selectedIds])
   const applyLayout = useCallback(() => {
     if (!layoutPreview) return
@@ -4212,19 +4298,50 @@ export function App() {
   }, [activeProjectId, appendExactPresentationEntityRefs, bootMode, createContextFromMembersDirect, createWorkflowFromMembersDirect, edges, nodes, projectPresentationNodes, savedContextViews.length, savedWorkflowViews.length, scopeId, scopes, selectedIds, setGraph, workRail, workspaces, workspaceId])
 
 
+  const commitSpatialRegions = useCallback((next: SpatialRegionDraft[]) => {
+    setSpatialRegions(next)
+    if (!mainCanvasPresentation.ready) return
+    mainCanvasPresentation.patch((state) => ({
+      ...state,
+      spatialRegions: next.map(({ memberViewIds: _memberViewIds, ...region }) => region),
+    }))
+    mainCanvasPresentation.flushSoon()
+  }, [mainCanvasPresentation])
+
   const createRegionFromCurrentSelection = useCallback(() => {
     if (selectedIds.length < 2) { setNotice('至少选择 2 个对象后才能建立围栏'); return }
     const region = spatialRegionFromSelection(createId('region'), selectedIds, sceneCanvasNodes)
     if (!region) { setNotice('当前 Selection 无法建立围栏'); return }
-    setSpatialRegionDraft(region)
-    setNotice(`已建立临时围栏 · ${region.memberViewIds.length} 项；它还不是 Project Entity`)
-  }, [sceneCanvasNodes, selectedIds])
+    commitSpatialRegions([...spatialRegions, region])
+    setNotice(`已建立围栏 · 当前包含 ${region.memberViewIds.length} 项；拖入/拖出会自动更新成员`)
+  }, [commitSpatialRegions, sceneCanvasNodes, selectedIds, spatialRegions])
 
-  const promoteCurrentRegionToCollection = useCallback(() => {
-    if (!spatialRegionDraft) return
-    createScopeFromSelection({ label: '', kind: 'collection', memberIds: spatialRegionDraft.memberViewIds })
-    setSpatialRegionDraft(null)
-  }, [createScopeFromSelection, spatialRegionDraft])
+  const updateSpatialRegionBounds = useCallback((regionId: string, bounds: PresentationSpatialRegionV0['bounds']) => {
+    // Resize is local interaction preview. Persist once on pointer-up; otherwise
+    // a large Main canvas would enqueue Presentation writes every pointer frame.
+    setSpatialRegions((current) => current.map((region) => region.id === regionId ? { ...region, bounds } : region))
+  }, [])
+
+  const commitSpatialRegionBounds = useCallback((regionId: string, bounds: PresentationSpatialRegionV0['bounds']) => {
+    setSpatialRegions((current) => current.map((region) => region.id === regionId ? { ...region, bounds } : region))
+    if (!mainCanvasPresentation.ready) return
+    mainCanvasPresentation.patch((state) => ({
+      ...state,
+      spatialRegions: (state.spatialRegions ?? []).map((region) => region.id === regionId ? { ...region, bounds } : region),
+    }))
+    mainCanvasPresentation.flushSoon()
+  }, [mainCanvasPresentation])
+
+  const clearSpatialRegion = useCallback((regionId: string) => {
+    commitSpatialRegions(spatialRegions.filter((region) => region.id !== regionId))
+  }, [commitSpatialRegions, spatialRegions])
+
+  const promoteCurrentRegionToCollection = useCallback((regionId: string) => {
+    const region = spatialRegions.find((item) => item.id === regionId)
+    if (!region) return
+    createScopeFromSelection({ label: region.label ?? '', kind: 'collection', memberIds: region.memberViewIds })
+    clearSpatialRegion(regionId)
+  }, [clearSpatialRegion, createScopeFromSelection, spatialRegions])
 
   const togglePositionLock = useCallback((nodeId: string) => {
     setNodes((current) => current.map((node) => node.id === nodeId ? { ...node, positionLocked: !node.positionLocked } : node))
@@ -5727,6 +5844,7 @@ export function App() {
       if (event.key === 'Escape') { if (projectFocusOpen) setProjectFocusOpen(false); else if (confirmProjectDelete) setConfirmProjectDelete(null); else if (confirmWorkspaceId) setConfirmWorkspaceId(null); else if (immersiveNodeId) setImmersiveNodeId(null); else if (workbench) setWorkbench(null); else if (capabilityOpen) setCapabilityOpen(false); else if (nodeInfoId) setNodeInfoId(null); else if (layoutPreview) { setLayoutPreview(null); setLayoutPreviewFocusIds(null) } else clearSelection(); return }
       if (key === 'f' && selectedIds.length === 1) { event.preventDefault(); openProjectFocus(); return }
       if (key === 'c') { event.preventDefault(); if (layoutMode === 'sidecar') { setNotice('侧边协作模式不提供 LCOS 输入框'); return } requestComposerFocus(); return }
+      if (event.key === 'F2' && selectedIds.length === 1 && selectedNodes.length === 1) { event.preventDefault(); setRenameNodeId(selectedNodes[0]!.id); return }
       if (event.key === 'Delete' || event.key === 'Backspace') {
         if (selectedIds.length) { deleteNodes(selectedIds); return }
         if (selectedEdgeId) { setEdges((current) => current.filter((edge) => edge.id !== selectedEdgeId)); setSelectedEdgeId(null); setNotice('关系已删除') }
@@ -6051,6 +6169,7 @@ export function App() {
         workspaceMemberNodes: scopeNodes,
         activeWorkspaceId: workspaceId,
         onWorkspaceActivate: openWorkspaceScene,
+        onWorkspaceProjectionMove: (targetWorkspaceId, x, y) => setWorkspaces((current) => current.map((workspace) => workspace.id === targetWorkspaceId ? { ...workspace, frameBounds: { x, y, width: workspace.frameBounds?.width ?? 260, height: workspace.frameBounds?.height ?? 140 }, version: (workspace.version ?? 0) + 1 } : workspace)),
         onPresentationInteractionChange: handlePresentationInteractionChange,
         onPresentationCommit: handlePresentationCommit,
         onFrameBoundsChange: handleFrameBoundsChange,
@@ -6081,7 +6200,7 @@ export function App() {
         onDoubleClick: handleDoubleClick,
         onDetails: showNodeDetails,
         onFocusSelection: selectedIds.length === 1 ? () => openProjectFocus() : undefined,
-        onRenameSelection: selectedIds.length === 1 && selectedNodes[0]?.opensScopeId ? () => setRenameNodeId(selectedNodes[0]!.id) : undefined,
+        onRenameSelection: selectedIds.length === 1 && selectedNodes.length === 1 ? () => setRenameNodeId(selectedNodes[0]!.id) : undefined,
         onCreateNodeFromAnchor: createNodeFromAnchor,
         onFilesDropped: dropFiles,
         onExternalTextDrop: (text, x, y) => {
@@ -6095,6 +6214,7 @@ export function App() {
           void ingestMaterialTransfer(payload, { x, y })
         },
         onArrangeSelection: arrangeSelection,
+        gridSnapEnabled,
         onSetSelectionDisplayMode: setSelectionDisplayMode,
         onCopySelection: copySelectedViews,
         onDuplicateSelection: duplicateSelectedViews,
@@ -6116,9 +6236,11 @@ export function App() {
         closingCollectionScopeIds,
         onToggleCollection: toggleCollectionScope,
         onOpenContextLens: openContextProjectionLens,
-        spatialRegion: spatialRegionDraft,
+        spatialRegions,
         onCreateRegion: createRegionFromCurrentSelection,
-        onClearRegion: () => setSpatialRegionDraft(null),
+        onClearRegion: clearSpatialRegion,
+        onRegionBoundsChange: updateSpatialRegionBounds,
+        onRegionBoundsCommit: commitSpatialRegionBounds,
         onPromoteRegionToCollection: promoteCurrentRegionToCollection,
       },
       projection: {
@@ -6341,6 +6463,8 @@ export function App() {
         onCollapsedChange: setMiniMapCollapsed,
         safeInsets,
         onLocateContent: locateAndPreviewIslands,
+        gridSnapEnabled,
+        onGridSnapChange: setGridSnapEnabled,
       },
       emptyState: bootMode === 'runtime' && nodes.length === 0 ? {
         onImport: () => setImportPanelOpen(true),

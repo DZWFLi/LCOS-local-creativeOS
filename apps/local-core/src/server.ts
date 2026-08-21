@@ -112,8 +112,8 @@ import { ConversationImportService } from './conversation-import-service.js'
 
 const LOOPBACK_HOST = '127.0.0.1'
 const MAX_BODY_BYTES = 1 * 1024 * 1024 // 1 MiB
-const MAX_IMPORT_BODY_BYTES = 26 * 1024 * 1024 // 25 MiB file + multipart overhead
-const MAX_DOCUMENT_PREVIEW_BYTES = 50 * 1024 * 1024
+const MAX_IMPORT_BODY_BYTES = 130 * 1024 * 1024 // 128 MiB file + multipart overhead
+const MAX_DOCUMENT_PREVIEW_BYTES = 128 * 1024 * 1024
 const MAX_LCOSPROJ_BODY_BYTES = 128 * 1024 * 1024
 function isAbsolutePath(value: string): boolean {
   return isAbsolute(value)

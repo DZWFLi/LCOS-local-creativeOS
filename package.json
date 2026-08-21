@@ -87,6 +87,7 @@
     "desktop:doctor": "node scripts/desktop/doctor.mjs",
     "check:gui:0.1-final": "node scripts/validate-gui-01-final-static.mjs",
     "check:context-cache-static": "node scripts/validate-context-cache-friendly-static.mjs",
+    "check:gui:human-round1": "node scripts/validate-main-canvas-human-golden-hotfix.mjs && node scripts/validate-main-canvas-human-golden-round1.mjs && node scripts/validate-gui-human-round1-docs-fence.mjs",
     "windows:finalize:0.1": "powershell -ExecutionPolicy Bypass -File scripts/windows-finalize-lcos-01.ps1"
   },
   "dependencies": {
