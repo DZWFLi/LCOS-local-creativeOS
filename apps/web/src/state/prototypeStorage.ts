@@ -30,6 +30,7 @@ function normalize(projectId: string, parsed: Partial<PersistedPrototypeState>):
     activeWorkspaceId,
     activeScopeId,
     workRail,
+    spatialRegions: Array.isArray(parsed.spatialRegions) ? parsed.spatialRegions : [],
   }
 }
 

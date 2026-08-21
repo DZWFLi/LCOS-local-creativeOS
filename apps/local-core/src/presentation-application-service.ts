@@ -180,6 +180,15 @@ export class PresentationApplicationService {
       if (!members.has(edge.fromViewId)) throw new Error(`Presentation edge ${edge.id} references non-member ${edge.fromViewId}.`)
       if (!members.has(edge.toViewId)) throw new Error(`Presentation edge ${edge.id} references non-member ${edge.toViewId}.`)
     }
+    const spatialRegionIds = new Set<string>()
+    for (const region of state.spatialRegions ?? []) {
+      if (!region.id.trim()) throw new Error('Spatial region requires id.')
+      if (spatialRegionIds.has(region.id)) throw new Error(`Spatial region id ${region.id} is duplicated.`)
+      spatialRegionIds.add(region.id)
+      const { x, y, width, height } = region.bounds
+      if (![x, y, width, height].every(Number.isFinite)) throw new Error(`Spatial region ${region.id} bounds must be finite.`)
+      if (width <= 0 || height <= 0) throw new Error(`Spatial region ${region.id} bounds must be positive.`)
+    }
     const workflowActionIds = new Set((state.workflowActions ?? []).map((action) => action.id))
     if (workflowActionIds.size !== (state.workflowActions ?? []).length) throw new Error('Workflow action ids must be unique.')
     for (const action of state.workflowActions ?? []) {

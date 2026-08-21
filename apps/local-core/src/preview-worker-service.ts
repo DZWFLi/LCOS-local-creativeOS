@@ -1,28 +1,22 @@
 import { spawn } from 'node:child_process'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
-import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
 
 import type { ArtifactRevisionId, PreviewRecord, ProjectId } from '@local-creative-os/domain'
-import { createCanvas, loadImage, Path2D } from '@napi-rs/canvas'
-import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist'
+import { createCanvas, DOMMatrix, ImageData, loadImage, Path2D } from '@napi-rs/canvas'
+import { getDocument } from 'pdfjs-dist'
 
 import type { SqliteMetadataRepository } from './metadata-repository.js'
 import { PreviewCacheService } from './preview-cache-service.js'
 import { RendererRegistry, type RendererDescriptor } from './renderer-registry.js'
 
-// pdf.js 在 Node 环境渲染文本需要浏览器全局 Path2D；napi-canvas 提供同构实现。
-if (globalThis.Path2D === undefined) {
-  globalThis.Path2D = Path2D as unknown as typeof globalThis.Path2D
-}
-try {
-  const require = createRequire(import.meta.url)
-  GlobalWorkerOptions.workerSrc = pathToFileURL(require.resolve('pdfjs-dist/build/pdf.worker.mjs')).toString()
-} catch {
-  // workerSrc 仅用于浏览器 Worker；Node 下解析失败时 pdf.js 会回退到主线程渲染。
-}
+// pdf.js Node renderer needs browser geometry globals. Do not configure workerSrc here:
+// Node has no Web Worker and pdf.js fake-worker setup can terminate thumbnail jobs.
+if (globalThis.Path2D === undefined) globalThis.Path2D = Path2D as unknown as typeof globalThis.Path2D
+if (globalThis.DOMMatrix === undefined) globalThis.DOMMatrix = DOMMatrix as unknown as typeof globalThis.DOMMatrix
+if (globalThis.ImageData === undefined) globalThis.ImageData = ImageData as unknown as typeof globalThis.ImageData
 
 const PDF_THUMBNAIL_MAX_WIDTH = 480
 const SHELL_THUMBNAIL_SCRIPT = fileURLToPath(new URL('../scripts/shell-thumb.ps1', import.meta.url))

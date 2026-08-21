@@ -310,7 +310,7 @@ export async function handleProjectsRoute(ctx: ProjectsRouteContext): Promise<bo
       return true
     }
     if (fileRecord.size > maxDocumentPreviewBytes) {
-      sendJson(response, 413, failure('VALIDATION', 'Document preview is limited to 50 MiB.'))
+      sendJson(response, 413, failure('VALIDATION', `Document preview is limited to ${Math.floor(maxDocumentPreviewBytes / 1024 / 1024)} MiB.`))
       return true
     }
     try {

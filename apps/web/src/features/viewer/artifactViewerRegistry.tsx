@@ -522,9 +522,22 @@ function DocumentViewer({ node, projectId }: { node: CanvasNode; projectId: stri
 function PdfMaterialViewer({ node, projectId, buffer }: { node: CanvasNode; projectId: string; buffer: ArrayBuffer }) {
   const [numPages, setNumPages] = useState(0)
   const [pageNumber, setPageNumber] = useState(1)
-  const [pageWidth, setPageWidth] = useState(660)
+  const [fitWidth, setFitWidth] = useState(720)
+  const [pageScale, setPageScale] = useState(1)
+  const [pdfError, setPdfError] = useState('')
   const stageRef = useRef<HTMLElement | null>(null)
   const pdfFile = useMemo(() => ({ data: new Uint8Array(buffer) }), [buffer])
+  const pageWidth = Math.max(360, Math.min(1320, fitWidth * pageScale))
+
+  useEffect(() => {
+    const stage = stageRef.current
+    if (!stage || typeof ResizeObserver === 'undefined') return
+    const apply = () => setFitWidth(Math.max(420, Math.min(1040, stage.clientWidth - 72)))
+    apply()
+    const observer = new ResizeObserver(apply)
+    observer.observe(stage)
+    return () => observer.disconnect()
+  }, [numPages])
 
   const startPageDrag = useCallback((event: ReactDragEvent<HTMLElement>, page: number) => {
     const canvas = event.currentTarget.querySelector('canvas')
@@ -541,16 +554,17 @@ function PdfMaterialViewer({ node, projectId, buffer }: { node: CanvasNode; proj
     event.currentTarget.dataset.dragging = 'true'
   }, [node, projectId])
 
-  return <div className="viewer-body lcos-page-viewer lcos-pdf-material-viewer">
+  if (pdfError) return <div className="viewer-body viewer-error"><strong>PDF 解析失败</strong><span>{pdfError}</span></div>
+  return <div className="viewer-body lcos-pdf-material-viewer">
     <Document
       file={pdfFile}
-      className="lcos-document-pages"
+      className="lcos-page-viewer lcos-document-pages"
       loading={<div className="viewer-loading"><LoaderCircle size={20}/>正在解析 PDF…</div>}
       onLoadSuccess={({ numPages: count }) => {
         setNumPages(count)
         setPageNumber((current) => Math.min(Math.max(1, current), count))
       }}
-      onLoadError={(reason) => console.error('PDF load failed', reason)}
+      onLoadError={(reason) => setPdfError(reason instanceof Error ? reason.message : 'PDF 解析失败')}
     >
       <aside className="lcos-page-rail" aria-label="PDF 页面">
         <div className="lcos-page-rail-heading"><strong>{numPages || '…'} 页</strong><small>拖一页到画布</small></div>
@@ -571,7 +585,7 @@ function PdfMaterialViewer({ node, projectId, buffer }: { node: CanvasNode; proj
       <main ref={stageRef} className="lcos-page-stage">
         <div className="lcos-page-stage-toolbar">
           <span>第 {pageNumber} / {numPages || '…'} 页</span>
-          <div><button type="button" onClick={() => setPageWidth((value) => Math.max(420, value - 80))}>−</button><button type="button" onClick={() => setPageWidth((value) => Math.min(1100, value + 80))}>＋</button></div>
+          <div><button type="button" aria-label="缩小页面" onClick={() => setPageScale((value) => Math.max(.5, Number((value - .1).toFixed(2))))}>−</button><button type="button" className="lcos-page-zoom-readout" onClick={() => setPageScale(1)}>{Math.round(pageScale * 100)}%</button><button type="button" aria-label="放大页面" onClick={() => setPageScale((value) => Math.min(1.8, Number((value + .1).toFixed(2))))}>＋</button></div>
         </div>
         <motion.div key={pageNumber} className="lcos-page-sheet" initial={{ opacity: .65, y: 4 }} animate={{ opacity: 1, y: 0 }}>
           <Page pageNumber={pageNumber} width={pageWidth} renderTextLayer renderAnnotationLayer/>

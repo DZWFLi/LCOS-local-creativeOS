@@ -66,7 +66,9 @@ export function nodeVisualFamily(node: CanvasNode): NodeVisualFamily {
   if (node.kind === 'process') return 'process'
   if (node.kind === 'context') return 'context'
   if (node.kind === 'decision') return 'decision'
-  if (node.kind === 'note') return 'note'
+  // Managed Text/Markdown is a Project Material, not a separate icon-only Note species.
+  // Anchored/Core notes keep the note anatomy because their semantics are annotations.
+  if (node.kind === 'note') return node.managed && node.artifactId ? 'document' : 'note'
   return detectFileIdentity(node) === 'image' ? 'reference' : 'document'
 }
 

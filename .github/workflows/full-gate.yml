@@ -25,14 +25,14 @@ jobs:
       - name: Install
         run: npm ci
 
+      - name: Build internal packages
+        run: npm run build:domain
+
       - name: Build local-core
         run: npx tsc -p apps/local-core/tsconfig.json
 
-      - name: Migration Tests
-        run: npx vitest run tests/integration/migration --reporter=verbose
-
       - name: Integration Tests
-        run: npx vitest run tests/integration --reporter=verbose --exclude='**/migration/**'
+        run: npx vitest run tests/integration --reporter=verbose
 
   browser-golden-path:
     runs-on: windows-latest
@@ -47,6 +47,9 @@ jobs:
 
       - name: Install
         run: npm ci
+
+      - name: Build internal packages
+        run: npm run build:domain
 
       - name: Build local-core
         run: npx tsc -p apps/local-core/tsconfig.json

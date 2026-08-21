@@ -9,13 +9,16 @@ describe('R3.1 B3R3 Scene creation semantic contract', () => {
   const factoryBlock = app.slice(app.indexOf('const buildWorkspaceScene'), app.indexOf('const openCurrentScene'))
   const createBlock = app.slice(app.indexOf('const createEmptyWorkspaceScene'), app.indexOf('const openCurrentScene'))
 
-  it('creates and immediately activates an empty Arrange Scene from Workspace +', () => {
+  it('creates an empty Arrange Scene entity on Main without teleporting into it', () => {
     expect(app).toContain('onAdd: createEmptyWorkspaceScene')
     expect(createBlock).toContain('buildWorkspaceScene([])')
     expect(factoryBlock).toContain("preferredSurface: 'arrange'")
-    expect(createBlock).toContain('setWorkspaceId(scene.id)')
+    expect(createBlock).toContain('setWorkspaceId(null)')
+    expect(createBlock).not.toContain('setWorkspaceId(scene.id)')
+    expect(createBlock).not.toContain('setCamera(scene.camera)')
     expect(createBlock).toContain("setActiveSurface('arrange')")
-    expect(createBlock).toContain('setCamera(scene.camera)')
+    expect(createBlock).toContain('clearSelection()')
+    expect(app).toContain('双击 Scene 实体进入')
   })
 
   it('keeps Selection separate from Scene membership', () => {

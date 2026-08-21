@@ -207,6 +207,7 @@ export interface PersistedPrototypeState {
   activeWorkspaceId: string | null
   activeScopeId: string
   workRail: WorkRailPreferences
+  spatialRegions?: import('@local-creative-os/contracts').PresentationSpatialRegionV0[]
 }
 
 export interface TargetContextInference {

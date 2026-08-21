@@ -394,6 +394,20 @@
 }
 .lcos-reconstructed .lcos-spatial-region-head nav { display: flex; gap: 2px; }
 .lcos-reconstructed .lcos-spatial-region-head button { min-height: 22px; padding: 0 6px; border: 1px solid var(--lcos-ui-line); border-radius: 6px; background: rgba(253,253,255,.92); color: inherit; cursor: pointer; }
+.lcos-reconstructed .lcos-spatial-region-resize {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  width: 13px;
+  height: 13px;
+  padding: 0;
+  pointer-events: auto;
+  border: 1px solid rgba(var(--lcos-ui-signal-rgb), .26);
+  border-radius: 4px;
+  background: rgba(253,253,255,.96);
+  box-shadow: 0 3px 9px rgba(43,38,58,.08);
+  cursor: nwse-resize;
+}
 
 /* -----------------------------------------------------------------------
    Surface objects — common material primitive, not a universal visual card
@@ -1583,6 +1597,9 @@
   pointer-events: none;
   overflow: hidden;
 }
+.lcos-viewer-drawer-viewport:is(.viewer-viewport-pdf, .viewer-viewport-presentation) {
+  width: min(1180px, max(780px, 82vw));
+}
 .lcos-viewer-drawer-popup {
   position: absolute;
   inset: 8px 8px 8px 0;
@@ -1659,18 +1676,33 @@
 
 /* Page/slide material reader. A thumbnail is a tangible material handle; the
    large page remains optimized for reading and text selection. */
+.lcos-pdf-material-viewer,
 .lcos-page-viewer,
 .lcos-document-pages {
   width: 100%;
   height: 100%;
   min-height: 0;
 }
+/* Only the actual rail + stage container owns the two-column grid. The PDF
+   viewer wrapper itself must stay a single full-size body; making both layers
+   grids was the reason the large page stage collapsed into the rail column. */
 .lcos-document-pages,
-.lcos-page-viewer {
+.lcos-ppt-material-viewer {
   display: grid;
-  grid-template-columns: 142px minmax(0,1fr);
+  grid-template-columns: 164px minmax(0,1fr);
   overflow: hidden;
 }
+.lcos-pdf-material-viewer { overflow: hidden; }
+.lcos-viewer-drawer-content .lcos-pdf-material-viewer,
+.lcos-viewer-drawer-content .lcos-ppt-material-viewer {
+  padding: 0;
+  gap: 0;
+  place-content: stretch;
+  justify-items: stretch;
+  color: inherit;
+  background: transparent;
+}
+.lcos-viewer-drawer-content .lcos-pdf-material-viewer { display: block; }
 .lcos-page-rail {
   min-width: 0;
   min-height: 0;
@@ -1734,21 +1766,21 @@
   min-width: 0;
   min-height: 0;
   overflow: auto;
-  padding: 46px 24px 40px;
-  background: #efeff4;
+  padding: 14px 28px 52px;
+  background: linear-gradient(180deg, rgba(246,246,249,.98), rgba(239,239,244,.98));
 }
 .lcos-page-stage-toolbar {
   position: sticky;
-  top: -37px;
+  top: 10px;
   z-index: 8;
   min-height: 32px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin: 0 auto 10px;
+  margin: 0 auto 18px;
   padding: 4px 6px 4px 9px;
-  width: min(100%, 680px);
+  width: min(100%, 760px);
   border: 1px solid rgba(66,61,80,.10);
   border-radius: 9px;
   color: rgba(53,49,64,.66);
@@ -1769,8 +1801,10 @@
   cursor: pointer;
 }
 .lcos-page-stage-toolbar button:hover { background: rgba(72,65,95,.07); }
+.lcos-page-stage-toolbar .lcos-page-zoom-readout { width: auto; min-width: 42px; padding-inline: 6px; font-size: 9px; font-variant-numeric: tabular-nums; }
 .lcos-page-stage-toolbar small { color: rgba(60,55,72,.42); font-size: 8.7px; }
 .lcos-page-sheet {
+  position: relative;
   width: fit-content;
   max-width: 100%;
   margin: 0 auto;
@@ -1879,8 +1913,9 @@
 
 @media (max-width: 760px) {
   .lcos-viewer-drawer-viewport { width: min(92vw, 620px); }
+  .lcos-viewer-drawer-viewport:is(.viewer-viewport-pdf, .viewer-viewport-presentation) { width: calc(100vw - 8px); }
   .lcos-document-pages,
-  .lcos-page-viewer { grid-template-columns: 112px minmax(0,1fr); }
+  .lcos-ppt-material-viewer { grid-template-columns: 112px minmax(0,1fr); }
   .lcos-page-stage { padding-inline: 14px; }
   .lcos-review-drawer-popup { width: calc(100vw - 12px); }
 }

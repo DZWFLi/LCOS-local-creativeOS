@@ -107,6 +107,13 @@ export interface WorkflowActionEdgeV0 {
   label?: string
 }
 
+export interface PresentationSpatialRegionV0 {
+  id: string
+  label?: string
+  /** Presentation-space bounds. Membership is derived live from geometry. */
+  bounds: { x: number; y: number; width: number; height: number }
+}
+
 export interface PresentationStateV0 {
   memberViewIds: string[]
   /** Aggregate Project entities that do not require fake ArtifactViews (e.g. Workspace). */
@@ -121,6 +128,8 @@ export interface PresentationStateV0 {
   presentationEdges: PresentationEdgeV0[]
   pinnedViewIds: string[]
   emphasisByViewId: Record<string, PresentationEmphasisV0>
+  /** Main-canvas fences are durable Presentation geometry, never frozen member snapshots. */
+  spatialRegions?: PresentationSpatialRegionV0[]
   trackSegments?: ContextTrackSegmentV0[]
   workflowOperators?: Record<string, WorkflowOperatorV0>
   /** Workflow-only action skeleton. Materials remain memberViewIds and are attached by reference. */

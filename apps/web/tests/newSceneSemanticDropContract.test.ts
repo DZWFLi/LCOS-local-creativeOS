@@ -28,13 +28,16 @@ describe('R3.1 B3R4 Selection semantic drop to New Scene contract', () => {
     expect(commit).not.toContain('currentSceneSemantic')
   })
 
-  it('rejects empty/invalid payload and atomically activates Arrange on success', () => {
+  it('rejects empty/invalid payload and keeps Scene as a Main entity on success', () => {
     expect(commit).toContain('if (!viewIds.length && !entityRefs.length) return false')
-    expect(commit).toContain('setWorkspaceId(scene.id)')
+    expect(commit).toContain('setWorkspaceId(null)')
+    expect(commit).not.toContain('setWorkspaceId(scene.id)')
+    expect(commit).not.toContain('setCamera(scene.camera)')
     expect(commit).toContain("setActiveSurface('arrange')")
     expect(commit).toContain('clearSelection()')
     expect(directDrop).toContain('if (targetViewId === NEW_SCENE_DROP_TARGET_ID)')
     expect(directDrop).toContain('createWorkspaceSceneFromDropPayload(sourceIds)')
+    expect(commit).toContain('主画布保留 Scene 实体')
   })
 
   it('preserves Empty Scene plus, edit-only dialog, and migration-only temporary workbench', () => {

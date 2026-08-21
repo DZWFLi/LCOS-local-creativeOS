@@ -7,7 +7,7 @@ import type { Artifact, ArtifactRevision, ArtifactView, FileRecord, ProjectId, S
 import { SqliteMetadataRepository } from './metadata-repository.js'
 import { artifactKindForFile, mimeTypeForFile } from './file-format-registry.js'
 
-const MAX_IMPORT_BYTES = 25 * 1024 * 1024
+const MAX_IMPORT_BYTES = 128 * 1024 * 1024
 
 export interface ImportCopyInput {
   readonly importRequestId: string
@@ -64,7 +64,7 @@ export class ImportCopyService {
     const project = this.repository.getProject(String(projectId))
     if (project === undefined) throw new Error('Project not found.')
     if (input.bytes.byteLength === 0) throw new Error('Imported file is empty.')
-    if (input.bytes.byteLength > MAX_IMPORT_BYTES) throw new Error('Imported file exceeds the 25 MiB MVP limit.')
+    if (input.bytes.byteLength > MAX_IMPORT_BYTES) throw new RangeError('Imported file exceeds the 128 MiB desktop import limit.')
     const requestId = cleanIdPart(input.importRequestId)
     const identity = importIdentity(projectId, requestId)
     const observedHash = hashBytes(input.bytes)
@@ -166,7 +166,7 @@ export class ImportCopyService {
       referenceKind: 'primary',
       position: input.position,
       size: artifact.kind === 'image' ? { width: 220, height: 320 } : { width: 220, height: 150 },
-      displayMode: artifact.kind === 'image' ? 'thumbnail' : 'card',
+      displayMode: ['image', 'pdf', 'presentation'].includes(artifact.kind) ? 'thumbnail' : 'card',
       collapsed: false,
     }
 

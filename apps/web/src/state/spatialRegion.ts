@@ -1,14 +1,13 @@
+import type { PresentationSpatialRegionV0 } from '@local-creative-os/contracts'
 import type { CanvasNode } from '../model'
 
 /**
- * Region/Fence is temporary Presentation intent, not Project Truth and not a
- * child canvas. Persisting it as a Collection must be an explicit command.
+ * Region/Fence is durable Presentation geometry, not Project Truth and not a
+ * child canvas. Membership is derived live from geometry; promoting the current
+ * members into a semantic Collection remains an explicit command.
  */
-export interface SpatialRegionDraft {
-  readonly id: string
+export interface SpatialRegionDraft extends PresentationSpatialRegionV0 {
   readonly memberViewIds: readonly string[]
-  readonly bounds: { x: number; y: number; width: number; height: number }
-  readonly label?: string
 }
 
 export function spatialRegionFromSelection(id: string, memberViewIds: readonly string[], nodes: readonly CanvasNode[], padding = 28): SpatialRegionDraft | null {
