@@ -667,24 +667,24 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
       if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
       return
     }
-    if (dragFrame.current !== null) {
-      cancelAnimationFrame(dragFrame.current)
-      dragFrame.current = null
-      const point = dragPoint.current
-      if (draggedId && point) {
-        const group = dragCandidate.current?.group ?? []
-        const placements = new Map((group.length > 1 ? group : [{ id: draggedId, dx: 0, dy: 0 }])
-          .map((member) => [member.id, { x: point.x + member.dx, y: point.y + member.dy }]))
-        setNodes((current) => current.map((node) => {
-          const placement = placements.get(node.id)
-          return placement ? { ...node, ...placement, positionLocked: true } : node
-        }))
-        for (const [id, placement] of placements) {
-          if (id.startsWith('workspace:')) onWorkspaceProjectionMove?.(id.slice('workspace:'.length), placement.x, placement.y)
-        }
+    if (dragFrame.current !== null) cancelAnimationFrame(dragFrame.current)
+    dragFrame.current = null
+    const finalDragPoint = dragPoint.current
+    // RAF owns only the transient preview. A completed drag must always commit
+    // its final world position, even when the last preview frame already ran.
+    if (wasDragging && draggedId && finalDragPoint) {
+      const group = dragCandidate.current?.group ?? []
+      const placements = new Map((group.length > 1 ? group : [{ id: draggedId, dx: 0, dy: 0 }])
+        .map((member) => [member.id, { x: finalDragPoint.x + member.dx, y: finalDragPoint.y + member.dy }]))
+      setNodes((current) => current.map((node) => {
+        const placement = placements.get(node.id)
+        return placement ? { ...node, ...placement, positionLocked: true } : node
+      }))
+      for (const [id, placement] of placements) {
+        if (id.startsWith('workspace:')) onWorkspaceProjectionMove?.(id.slice('workspace:'.length), placement.x, placement.y)
       }
-      setDragPreviewPositions(null)
     }
+    setDragPreviewPositions(null)
     if (!wasDragging && draggedId && doublePressCandidate.current === draggedId) {
       suppressClick.current = draggedId
       doublePressCandidate.current = null
