@@ -106,38 +106,65 @@
 
 .lcos-spatial-glyph {
   position: relative;
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 22px;
   display: inline-grid;
   place-items: center;
-  flex: 0 0 18px;
+  flex: 0 0 22px;
   pointer-events: none !important;
   user-select: none;
+  --glyph-ink: 87, 69, 137;
+  --glyph-energy: .38;
 }
 .lcos-spatial-glyph-core {
-  width: 8px;
-  height: 8px;
+  position: relative;
+  width: 11px;
+  height: 11px;
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 2px;
-  border-radius: 3px;
-  background: rgba(91, 72, 143, .10);
-  box-shadow: inset 0 0 0 1px rgba(91, 72, 143, .13);
+  border: 1px solid rgba(var(--glyph-ink), calc(var(--glyph-energy) + .04));
+  border-radius: 4px;
+  background: linear-gradient(145deg, rgba(255,255,255,.96), rgba(var(--glyph-ink),.075));
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.72), 0 2px 7px rgba(58,47,88,.11);
+  transition: border-radius 180ms ease, transform 220ms cubic-bezier(.2,.8,.2,1), background 180ms ease;
 }
-.lcos-spatial-glyph-core i { width: 1px; height: 3px; border-radius: 2px; background: rgba(75, 60, 117, .62); }
-.lcos-spatial-glyph-shell { position: absolute; border-radius: 999px; background: rgba(87, 69, 137, .30); }
+.lcos-spatial-glyph-eyes { display: flex; align-items: center; justify-content: center; gap: 2px; }
+.lcos-spatial-glyph-core i { width: 1.5px; height: 4px; border-radius: 2px; background: rgba(var(--glyph-ink),.78); box-shadow: 0 0 3px rgba(var(--glyph-ink),.13); }
+.lcos-spatial-glyph-shell { position: absolute; border-radius: 999px; background: rgba(var(--glyph-ink), var(--glyph-energy)); transition: transform 220ms cubic-bezier(.2,.8,.2,1), opacity 180ms ease, background 180ms ease; }
 .lcos-spatial-glyph-shell.shell-top,
-.lcos-spatial-glyph-shell.shell-bottom { width: 6px; height: 2px; left: 6px; }
-.lcos-spatial-glyph-shell.shell-top { top: 1px; }
-.lcos-spatial-glyph-shell.shell-bottom { bottom: 1px; }
+.lcos-spatial-glyph-shell.shell-bottom { width: 8px; height: 3px; left: 7px; }
+.lcos-spatial-glyph-shell.shell-top { top: 0; }
+.lcos-spatial-glyph-shell.shell-bottom { bottom: 0; }
 .lcos-spatial-glyph-shell.shell-left,
-.lcos-spatial-glyph-shell.shell-right { width: 2px; height: 6px; top: 6px; }
-.lcos-spatial-glyph-shell.shell-left { left: 1px; }
-.lcos-spatial-glyph-shell.shell-right { right: 1px; }
-.lcos-spatial-glyph.state-focus .lcos-spatial-glyph-shell { background: rgba(92, 69, 158, .58); }
-.lcos-spatial-glyph.state-working .lcos-spatial-glyph-shell { animation: lcos-spatial-glyph-working 1.6s ease-in-out infinite; }
-@keyframes lcos-spatial-glyph-working { 50% { opacity: .35; transform: scale(.82); } }
+.lcos-spatial-glyph-shell.shell-right { width: 3px; height: 8px; top: 7px; }
+.lcos-spatial-glyph-shell.shell-left { left: 0; }
+.lcos-spatial-glyph-shell.shell-right { right: 0; }
+.lcos-spatial-glyph.state-focus { --glyph-energy: .68; }
+.lcos-spatial-glyph.state-focus .lcos-spatial-glyph-core { transform: scale(1.06); }
+.lcos-spatial-glyph.state-working { --glyph-ink: 70, 125, 164; --glyph-energy: .70; }
+.lcos-spatial-glyph.state-working .shell-top { animation: lcos-glyph-send-top 1.8s ease-in-out infinite; }
+.lcos-spatial-glyph.state-working .shell-right { animation: lcos-glyph-send-right 1.8s .18s ease-in-out infinite; }
+.lcos-spatial-glyph.state-working .shell-bottom { animation: lcos-glyph-send-bottom 1.8s .36s ease-in-out infinite; }
+.lcos-spatial-glyph.state-working .shell-left { animation: lcos-glyph-send-left 1.8s .54s ease-in-out infinite; }
+.lcos-spatial-glyph.state-waiting { --glyph-ink: 178, 126, 61; --glyph-energy: .62; }
+.lcos-spatial-glyph.state-waiting .shell-right { transform: translateX(2px); opacity: .35; }
+.lcos-spatial-glyph.state-waiting .lcos-spatial-glyph-core { border-radius: 5px 2px 5px 5px; }
+.lcos-spatial-glyph.state-blocked { --glyph-ink: 177, 78, 75; --glyph-energy: .72; }
+.lcos-spatial-glyph.state-blocked .shell-top { transform: rotate(38deg) translate(2px,1px); }
+.lcos-spatial-glyph.state-blocked .shell-bottom { transform: rotate(-38deg) translate(2px,-1px); }
+.lcos-spatial-glyph.state-blocked .shell-left, .lcos-spatial-glyph.state-blocked .shell-right { opacity: .22; }
+.lcos-spatial-glyph.state-protected { --glyph-ink: 68, 103, 117; --glyph-energy: .64; }
+.lcos-spatial-glyph.state-protected .lcos-spatial-glyph-shell { transform: scale(1.08); }
+.lcos-spatial-glyph.state-protected .lcos-spatial-glyph-core { background: rgba(var(--glyph-ink),.12); box-shadow: inset 0 0 0 1px rgba(255,255,255,.72); }
+.lcos-spatial-glyph.state-candidate { --glyph-ink: 119, 87, 169; --glyph-energy: .52; }
+.lcos-spatial-glyph.state-candidate .shell-top { transform: translateY(-2px) rotate(-8deg); }
+.lcos-spatial-glyph.state-candidate .shell-right { transform: translateX(2px) rotate(8deg); }
+.lcos-spatial-glyph.state-candidate .shell-bottom { opacity: .30; }
+@keyframes lcos-glyph-send-top { 50% { transform: translateY(-2px); opacity: .38; } }
+@keyframes lcos-glyph-send-right { 50% { transform: translateX(2px); opacity: .38; } }
+@keyframes lcos-glyph-send-bottom { 50% { transform: translateY(2px); opacity: .38; } }
+@keyframes lcos-glyph-send-left { 50% { transform: translateX(-2px); opacity: .38; } }
 
 .lcos-matrix-activity {
   position: absolute;

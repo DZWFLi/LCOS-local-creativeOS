@@ -6,6 +6,7 @@ import type { CanvasNode } from '../src/model'
 import type { SurfaceElement } from '../src/features/spatial/model/surfaceElementTypes'
 import { ContextPackComponent, RelationshipFieldComponent, StructureMapComponent } from '../src/features/spatial/components/ContextComponentRenderers'
 import { SurfaceComponentProposalLayer } from '../src/features/spatial/components/SurfaceComponentProposalLayer'
+import { LcosGlyph } from '../src/features/spatial/visual/LcosGlyph'
 import { surfaceComponentRegistry } from '../src/features/spatial/components/surfaceComponentRegistry'
 import { surfaceComponentContract, surfaceComponentsFor } from '../src/features/spatial/model/surfaceComponentCatalog'
 import { applySurfaceOp, applySurfaceOps, validateSurfaceOp, validateSurfaceOps } from '../src/features/spatial/model/surfaceOps'
@@ -62,6 +63,16 @@ describe('Spatial Component Foundation integrity', () => {
     expect(html).toContain('Agent 建议')
     expect(html).toContain('lcos-surface-component-proposal')
     expect(html).not.toContain('lcos-surface-component-chrome')
+  })
+
+  it('keeps one recognizable Glyph body while semantic states change its pose', () => {
+    for (const state of ['stable', 'focus', 'working', 'waiting', 'blocked', 'protected', 'candidate'] as const) {
+      const html = renderToStaticMarkup(createElement(LcosGlyph, { state }))
+      expect(html).toContain(`data-glyph-state="${state}"`)
+      expect(html.match(/lcos-spatial-glyph-shell/g)).toHaveLength(4)
+      expect(html).toContain('lcos-spatial-glyph-core')
+      expect(html).toContain('lcos-spatial-glyph-eyes')
+    }
   })
 
   it('remove-projection removes only the SurfaceElement and never carries a project-delete operation', () => {
