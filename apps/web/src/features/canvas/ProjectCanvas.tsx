@@ -20,7 +20,8 @@ import { advanceSpatialMarquee, beginSpatialMarquee, endSpatialPointer, spatialM
 import { IDLE_SPATIAL_POINTER, type SpatialPointerSession } from '../spatial/spatialTypes'
 import { LightCurtain } from '../drop/LightCurtain'
 import { semanticDropTriggerFromPointer, type SemanticDropTrigger } from '../spatial/semanticDrop'
-import { LcosSignalGlyph, type LcosSignalState } from '../design/DotGlyph'
+import { LcosGlyph } from '../spatial/visual/LcosGlyph'
+import { resolveSpatialSignal, type SpatialRuntimeSignal } from '../spatial/visual/spatialSignal'
 import type { SurfaceElement } from '../spatial/model/surfaceElementTypes'
 import { resolveSurfaceComponent } from '../spatial/components/surfaceComponentRegistry'
 import { SurfaceFrame } from '../spatial/components/SurfaceFrame'
@@ -1111,15 +1112,16 @@ function CanvasCard({ node, density, zoom, showDetails, performanceProxy = false
 }) {
   const visualFamily = nodeVisualFamily(node)
   const revisionStack = (node.revisionCount ?? 0) > 1
-  const signalState: LcosSignalState = node.error || node.runtimeState === 'failed'
+  const runtimeSignal: SpatialRuntimeSignal = node.error || node.runtimeState === 'failed'
     ? 'failed'
-    : reviewPending || pending || node.draft
-      ? 'pending'
-      : locatePulse
-        ? 'focus'
-        : node.runStatus === 'running' || (node.sourceRunId && runStatus === 'running')
-          ? 'working'
-          : 'stable'
+    : node.runStatus === 'running' || (node.sourceRunId && runStatus === 'running')
+      ? 'processing'
+      : 'idle'
+  const signal = resolveSpatialSignal({
+    selected: locatePulse,
+    runtime: runtimeSignal,
+    semantic: reviewPending ? 'waiting review' : pending || node.draft ? 'candidate draft' : undefined,
+  })
   return <div data-node-id={node.id} data-node-kind={node.kind} data-entity-kind={node.entityKind} data-node-visual-family={visualFamily} data-node-current={node.current || undefined} data-node-draft={node.draft || undefined} data-node-historical={node.historical || undefined} data-revision-count={node.revisionCount} data-result-group={node.resultGroupId} data-node-runtime={node.runtimeState} data-run-status={node.runStatus} data-artifact-id={node.artifactId} data-revision-id={node.revisionId} data-file-record-id={node.fileRecordId} data-current-revision={node.followsCurrentRevision || undefined} data-preview-status={node.previewStatus} data-view-of={node.viewOf} data-scope-id={node.scopeId} data-position-locked={node.positionLocked || undefined} data-context-only={node.contextOnly || undefined} data-attention-bucket={attentionBucket} data-collection-motion={collectionMotion?.phase} data-testid={`canvas-node-${node.id}`} role="button" tabIndex={0} aria-disabled={node.disabled || undefined} className={`canvas-node node-family-${node.kind} visual-family-${visualFamily} density-${density} ${node.kind} ${revisionStack ? 'revision-stack' : ''} ${selected ? 'selected' : ''} ${multiSelected ? 'multi-selected' : ''} ${pending ? 'pending' : ''} ${reviewPending ? 'review-pending' : ''} ${dragging ? 'dragging' : ''} ${resizing ? 'resizing' : ''} ${workspaceMember ? 'workspace-active-member' : ''} ${locatePulse ? 'locate-pulse' : ''} ${attentionBucket ? `attention-${attentionBucket}` : ''} ${collectionMotion ? `collection-${collectionMotion.phase}` : ''} ${node.error ? 'error' : ''} ${node.disabled ? 'disabled' : ''} ${node.positionLocked ? 'position-locked' : ''}`} style={{ left: node.x, top: node.y, width: node.width, height: node.height, '--node-ui-scale': String(1 / Math.max(.2, zoom)), '--canvas-zoom': String(zoom), '--lcos-drag-x': String(dragSignal?.x ?? 0), '--lcos-drag-y': String(dragSignal?.y ?? 0), '--lcos-collection-fold-x': `${collectionMotion?.dx ?? 0}px`, '--lcos-collection-fold-y': `${collectionMotion?.dy ?? 0}px` } as React.CSSProperties} onDragStart={(event) => event.preventDefault()} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation() }} onPointerDown={(event) => { if (!node.disabled) onPointerDown(event) }} onClick={(event) => { event.stopPropagation(); if (!node.disabled) onClick(additiveSelection(event)) }}>
     <span className="lcos-semantic-drop-handle" data-semantic-drop-handle aria-hidden="true" onClick={(event)=>event.stopPropagation()} title="Semantic Drop：拖到上下文或工作流（右键拖 / Alt+左拖）"><GripVertical size={11}/></span>
     {relationsEnabled && <><button data-testid={`anchor-in-${node.id}`} className="anchor anchor-in" aria-label={`连接到 ${node.title}`} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()} />
@@ -1128,6 +1130,6 @@ function CanvasCard({ node, density, zoom, showDetails, performanceProxy = false
     {performanceProxy
       ? <div className={`lcos-overview-node-proxy proxy-${detectFileIdentity(node)}`} aria-label={displayNodeTitle(node)}><span>{detectFileIdentity(node).toUpperCase()}</span><strong>{displayNodeTitle(node)}</strong></div>
       : <CanvasNodeVisual node={node} density={density} runId={runId} runStatus={runStatus} pending={pending} showDetails={showDetails} onDetails={() => onDetails(node.id)} onLocate={onLocate ? (target) => onLocate(target.id) : undefined} collectionExpanded={collectionExpanded} collectionMembers={collectionMembers} onCollectionMemberSelect={onCollectionMemberSelect} selected={selected} onOpenContextLens={onOpenContextLens} />}
-    <span className="lcos-node-system-signal" aria-hidden="true"><LcosSignalGlyph state={signalState}/></span>
+    <span className="lcos-node-system-signal" data-spatial-signal={signal.glyph} aria-hidden="true"><LcosGlyph state={signal.glyph}/></span>
   </div>
 }
