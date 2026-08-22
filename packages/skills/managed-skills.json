@@ -7,6 +7,7 @@
     "lcos-executor-run",
     "local-creative-os-backend-flow",
     "local-creative-os-frontend-loop",
-    "workbuddy-orchestrator"
+    "workbuddy-orchestrator",
+    "lcos-workspace-steward"
   ]
 }

@@ -2,6 +2,7 @@ import { ArrowUpRight, GitBranch, History, Layers3, Link2, Sparkles } from 'luci
 import type { ReactNode } from 'react'
 import { LcosGlyph } from '../visual/LcosGlyph'
 import type { SurfaceComponentRenderProps } from './surfaceComponentTypes'
+import { LightSegment } from '../visual/LightSegment'
 
 function ids(element: SurfaceComponentRenderProps['element']) {
   const binding = element.binding ?? {}
@@ -12,7 +13,7 @@ function Header({ icon, title, hint, selected }: { icon: ReactNode; title: strin
   return <header className="lcos-context-component-header">
     <span className="lcos-context-component-icon">{icon}</span>
     <span><strong>{title}</strong><small>{hint}</small></span>
-    <LcosGlyph state={selected ? 'focus' : 'stable'} />
+    <LightSegment axis="horizontal" length={20} active={selected}/><LcosGlyph state={selected ? 'focus' : 'stable'} />
   </header>
 }
 

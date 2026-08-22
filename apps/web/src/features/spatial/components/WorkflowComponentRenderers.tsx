@@ -2,6 +2,7 @@ import { CheckCircle2, History, Play, SquareStack } from 'lucide-react'
 import type { ReactNode } from 'react'
 import type { SurfaceComponentRenderProps } from './surfaceComponentTypes'
 import { WebWorkbench } from '../../workbench/WebWorkbench'
+import { LightSegment } from '../visual/LightSegment'
 
 function bindingLabel(element: SurfaceComponentRenderProps['element']) {
   const entry = Object.entries(element.binding ?? {}).find(([, value]) => typeof value === 'string' && value.length > 0)
@@ -9,7 +10,7 @@ function bindingLabel(element: SurfaceComponentRenderProps['element']) {
 }
 
 function Header({ icon, title, hint, selected }: { icon: ReactNode; title: string; hint: string; selected?: boolean }) {
-  return <header className="lcos-workflow-component-header"><span className="lcos-workflow-component-icon">{icon}</span><span><strong>{title}</strong><small>{hint}</small></span><i className={selected ? 'is-active' : ''}/></header>
+  return <header className="lcos-workflow-component-header"><span className="lcos-workflow-component-icon">{icon}</span><span><strong>{title}</strong><small>{hint}</small></span><LightSegment axis="horizontal" length={20} active={selected}/><i className={selected ? 'is-active' : ''}/></header>
 }
 
 export function WorkflowStepComponent({ element, selected }: SurfaceComponentRenderProps) {
