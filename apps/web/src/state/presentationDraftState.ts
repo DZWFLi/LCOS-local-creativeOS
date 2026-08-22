@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CanvasEdge } from '../model'
 import type { SpatialPoint } from '../features/spatial/spatialTypes'
-import type { PresentationStateV0 } from '@local-creative-os/contracts'
+import type { PresentationStateV0, SurfaceElementV0 } from '@local-creative-os/contracts'
 import { capabilityForRenderer, getPresentationBridge, presentationBridgeKey, subscribePresentationBridge } from './presentationViewState'
 
 const positionMemory = new Map<string, Record<string, SpatialPoint>>()
 const hiddenMemory = new Map<string, string[]>()
 const edgeMemory = new Map<string, CanvasEdge[]>()
 const pinnedMemory = new Map<string, string[]>()
+const surfaceElementMemory = new Map<string, SurfaceElementV0[]>()
 
 /**
  * HU-3B §10 正式契约：presentationEdges 只存“用户/Agent 显式建立的
@@ -156,4 +157,29 @@ export function usePresentationDraftPinnedIds(projectId: string, scopeId: string
     setPinnedState(value)
   }, [key, projectId, renderer, scopeId])
   return [pinnedIds, setPinnedIds] as const
+}
+
+
+/**
+ * Durable trusted Surface Components. They are Presentation-only geometry and
+ * identity-only bindings, mirrored through the same Core Presentation bridge.
+ */
+export function usePresentationSurfaceElements(projectId: string, scopeId: string, renderer: string) {
+  const key = useMemo(() => `${keyOf(projectId, scopeId, renderer)}:surface-elements`, [projectId, renderer, scopeId])
+  const [elements, setElementState] = useState<SurfaceElementV0[]>(() => surfaceElementMemory.get(key) ?? [])
+  usePersistedMirror(projectId, scopeId, renderer, (persisted) => {
+    const restored = persisted.surfaceElements ?? []
+    surfaceElementMemory.set(key, restored)
+    setElementState(restored)
+  })
+  useEffect(() => { setElementState(surfaceElementMemory.get(key) ?? []) }, [key])
+  const setElements = useCallback((next: SurfaceElementV0[] | ((current: SurfaceElementV0[]) => SurfaceElementV0[])) => {
+    const current = surfaceElementMemory.get(key) ?? []
+    const value = typeof next === 'function' ? next(current) : next
+    if (!mirror(projectId, scopeId, renderer, (state) => ({ ...state, surfaceElements: value }))) return false
+    surfaceElementMemory.set(key, value)
+    setElementState(value)
+    return true
+  }, [key, projectId, renderer, scopeId])
+  return [elements, setElements] as const
 }

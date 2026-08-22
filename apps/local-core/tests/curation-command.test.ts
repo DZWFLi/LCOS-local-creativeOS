@@ -120,6 +120,42 @@ describe('Curation command (Phase E)', () => {
     expect(relation.origin).toBe('agent')
   })
 
+  it('preserves trusted SurfaceElements when a curation patch edits the same Presentation', async () => {
+    const { snapshot, projectId, service } = setup()
+    const rootScope = snapshot.scopes.find((scope) => scope.kind === 'root')!.id
+    const memberViewId = String(snapshot.artifactViews[0]!.id)
+    const seeded = service['deps'].presentations.save(projectId, {
+      presentationId: 'presentation:context:scope-mvp-root-components',
+      scopeId: String(rootScope),
+      capability: 'context',
+      renderer: 'context',
+      state: {
+        memberViewIds: [memberViewId],
+        hiddenViewIds: [],
+        positions: {},
+        hierarchy: { parentByViewId: { [memberViewId]: null }, orderByParent: { '': [memberViewId] } },
+        presentationEdges: [],
+        pinnedViewIds: [],
+        emphasisByViewId: {},
+        surfaceElements: [{
+          id: 'surface:region:curation-safe', projectId, surface: 'context', type: 'region',
+          bounds: { x: 80, y: 90, w: 320, h: 210 },
+        }],
+      },
+      expectedVersion: 0,
+      updatedBy: 'web',
+    })
+    const receipt = await service.applyPatch(projectId, {
+      schemaVersion: 0, operationId: 'op-preserve-surface-elements', projectId, scopeId: String(rootScope),
+      createTexts: [], relations: [],
+      presentation: { presentationId: seeded.id, expectedVersion: seeded.version, pin: [memberViewId] },
+    })
+    expect(receipt.applied).toBe(true)
+    const loaded = service['deps'].presentations.get(projectId, seeded.id)
+    expect(loaded?.state.surfaceElements).toEqual(seeded.state.surfaceElements)
+    expect(loaded?.state.pinnedViewIds).toEqual([memberViewId])
+  })
+
   it('returns the same receipt on operation replay and fails cleanly on presentation CAS conflict', async () => {
     const { repository, snapshot, projectId, service } = setup()
     const rootScope = snapshot.scopes.find((scope) => scope.kind === 'root')!.id

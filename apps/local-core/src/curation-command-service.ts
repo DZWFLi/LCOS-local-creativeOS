@@ -277,6 +277,7 @@ export class CurationCommandService {
     const unpinned = new Set(patch?.unpin ?? [])
     pinnedViewIds = pinnedViewIds.filter((id) => !unpinned.has(id))
     return {
+      ...state,
       memberViewIds,
       hiddenViewIds,
       positions,

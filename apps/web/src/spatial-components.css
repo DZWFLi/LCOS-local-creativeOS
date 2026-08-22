@@ -1,0 +1,317 @@
+/* LCOS Spatial Component Foundation v0.4
+   Components are Presentation material. They never become a second Project Truth. */
+
+.lcos-surface-component-layer {
+  position: absolute;
+  inset: 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.lcos-surface-component-frame {
+  position: absolute;
+  box-sizing: border-box;
+  pointer-events: auto;
+  isolation: isolate;
+  border-radius: 16px;
+  outline: 0 solid transparent;
+  transition: outline-color 140ms ease, filter 140ms ease;
+}
+.lcos-surface-component-frame.is-selected {
+  outline: 1px solid rgba(103, 83, 158, .24);
+  filter: drop-shadow(0 9px 22px rgba(48, 42, 68, .07));
+}
+.lcos-surface-component-frame.is-pinned { outline-style: dashed; }
+.lcos-surface-component-frame.is-collapsed .lcos-surface-component-content { display: none; }
+.lcos-surface-component-frame.is-collapsed { height: 34px !important; min-height: 34px; }
+
+.lcos-surface-component-chrome {
+  position: absolute;
+  left: 8px;
+  top: -27px;
+  z-index: 6;
+  min-height: 23px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 4px 2px 8px;
+  border: 1px solid rgba(76, 69, 94, .09);
+  border-radius: 10px;
+  background: rgba(252, 252, 254, .88);
+  box-shadow: 0 5px 16px rgba(45, 39, 61, .055);
+  backdrop-filter: blur(14px);
+  color: rgba(57, 52, 68, .54);
+  font-size: 8.5px;
+  line-height: 1;
+  opacity: 0;
+  transform: translateY(3px);
+  transition: opacity 120ms ease, transform 140ms ease;
+  cursor: grab;
+  user-select: none;
+  white-space: nowrap;
+}
+.lcos-surface-component-frame:hover > .lcos-surface-component-chrome,
+.lcos-surface-component-frame.is-selected > .lcos-surface-component-chrome,
+.lcos-surface-component-frame.is-pinned > .lcos-surface-component-chrome,
+.lcos-surface-component-frame.is-collapsed > .lcos-surface-component-chrome { opacity: 1; transform: none; }
+.lcos-surface-component-frame.is-pinned > .lcos-surface-component-chrome { cursor: default; }
+.lcos-surface-component-chrome nav { display: flex; align-items: center; gap: 1px; }
+.lcos-surface-component-chrome button {
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: rgba(57, 52, 68, .52);
+  font: inherit;
+  cursor: pointer;
+}
+.lcos-surface-component-chrome button:hover { background: rgba(92, 71, 145, .08); color: rgba(77, 58, 127, .85); }
+
+.lcos-surface-component-content { width: 100%; height: 100%; min-width: 0; min-height: 0; }
+.lcos-surface-component-resize {
+  position: absolute;
+  z-index: 7;
+  right: -5px;
+  bottom: -5px;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: 1px solid rgba(92, 72, 143, .18);
+  border-radius: 5px;
+  background: rgba(252, 252, 254, .94);
+  box-shadow: 0 3px 9px rgba(42, 36, 58, .07);
+  cursor: nwse-resize;
+}
+
+/* Light Segment is structural punctuation, not neon decoration. */
+.lcos-light-segment {
+  display: block;
+  flex: 0 0 auto;
+  width: 2px;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(92, 74, 143, .08), rgba(92, 74, 143, .42), rgba(92, 74, 143, .08));
+  opacity: .58;
+  pointer-events: none;
+}
+.lcos-light-segment.axis-vertical { width: 2px; background: linear-gradient(180deg, rgba(92, 74, 143, .08), rgba(92, 74, 143, .42), rgba(92, 74, 143, .08)); }
+.lcos-light-segment.is-active { opacity: .94; box-shadow: 0 0 9px rgba(105, 85, 164, .18); }
+
+.lcos-spatial-glyph {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 18px;
+  pointer-events: none !important;
+  user-select: none;
+}
+.lcos-spatial-glyph-core {
+  width: 8px;
+  height: 8px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 2px;
+  border-radius: 3px;
+  background: rgba(91, 72, 143, .10);
+  box-shadow: inset 0 0 0 1px rgba(91, 72, 143, .13);
+}
+.lcos-spatial-glyph-core i { width: 1px; height: 3px; border-radius: 2px; background: rgba(75, 60, 117, .62); }
+.lcos-spatial-glyph-shell { position: absolute; border-radius: 999px; background: rgba(87, 69, 137, .30); }
+.lcos-spatial-glyph-shell.shell-top,
+.lcos-spatial-glyph-shell.shell-bottom { width: 6px; height: 2px; left: 6px; }
+.lcos-spatial-glyph-shell.shell-top { top: 1px; }
+.lcos-spatial-glyph-shell.shell-bottom { bottom: 1px; }
+.lcos-spatial-glyph-shell.shell-left,
+.lcos-spatial-glyph-shell.shell-right { width: 2px; height: 6px; top: 6px; }
+.lcos-spatial-glyph-shell.shell-left { left: 1px; }
+.lcos-spatial-glyph-shell.shell-right { right: 1px; }
+.lcos-spatial-glyph.state-focus .lcos-spatial-glyph-shell { background: rgba(92, 69, 158, .58); }
+.lcos-spatial-glyph.state-working .lcos-spatial-glyph-shell { animation: lcos-spatial-glyph-working 1.6s ease-in-out infinite; }
+@keyframes lcos-spatial-glyph-working { 50% { opacity: .35; transform: scale(.82); } }
+
+.lcos-matrix-activity {
+  position: absolute;
+  inset: auto 12px 10px auto;
+  display: grid;
+  grid-template-columns: repeat(4, 3px);
+  gap: 2px;
+  pointer-events: none;
+  opacity: .42;
+}
+.lcos-matrix-activity i {
+  width: 3px;
+  height: 3px;
+  border-radius: 1px;
+  background: rgba(101, 80, 157, .32);
+  animation: lcos-matrix-cell 1.8s ease-in-out infinite;
+  animation-delay: calc(var(--matrix-index) * 70ms);
+}
+@keyframes lcos-matrix-cell { 50% { opacity: .24; transform: scale(.72); } }
+
+.lcos-surface-fence-body,
+.lcos-surface-region-body,
+.lcos-surface-panel-body,
+.lcos-surface-portal-body { width: 100%; height: 100%; box-sizing: border-box; }
+
+.lcos-surface-fence-body {
+  position: relative;
+  border: 1px solid rgba(105, 88, 151, .18);
+  border-radius: 18px;
+  background: rgba(116, 98, 164, .018);
+}
+.lcos-surface-fence-body > .lcos-light-segment { position: absolute; left: 18px; top: 16px; }
+.lcos-surface-fence-label {
+  position: absolute;
+  left: 17px;
+  top: 27px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: rgba(63, 57, 77, .45);
+}
+.lcos-surface-fence-label span { display: grid; gap: 1px; }
+.lcos-surface-fence-label strong { font-size: 9px; font-weight: 650; }
+.lcos-surface-fence-label small { font-size: 7.5px; opacity: .72; }
+.lcos-surface-fence-corner { position: absolute; width: 15px; height: 15px; border-color: rgba(95, 75, 151, .26); pointer-events: none; }
+.lcos-surface-fence-corner.corner-tr { top: -1px; right: -1px; border-top: 2px solid; border-right: 2px solid; border-radius: 0 18px 0 0; }
+.lcos-surface-fence-corner.corner-bl { left: -1px; bottom: -1px; border-left: 2px solid; border-bottom: 2px solid; border-radius: 0 0 0 18px; }
+
+.lcos-surface-region-body {
+  position: relative;
+  overflow: hidden;
+  padding: 18px;
+  border: 1px solid rgba(84, 108, 138, .12);
+  border-radius: 20px;
+  background: linear-gradient(145deg, rgba(116, 133, 156, .045), rgba(119, 98, 163, .025));
+}
+.lcos-surface-region-head { display: flex; align-items: center; gap: 7px; color: rgba(54, 60, 70, .58); }
+.lcos-surface-region-head span { display: grid; gap: 2px; }
+.lcos-surface-region-head strong { font-size: 10px; font-weight: 650; }
+.lcos-surface-region-head small { font-size: 8px; opacity: .66; }
+.lcos-surface-region-body > .lcos-light-segment { margin: 12px 0 0 2px; }
+
+.lcos-surface-portal-body {
+  display: grid;
+  grid-template-columns: auto minmax(0,1fr) auto auto;
+  align-items: center;
+  gap: 9px;
+  padding: 14px 15px;
+  border: 1px solid rgba(88, 75, 121, .10);
+  border-radius: 16px;
+  background: rgba(252, 252, 254, .72);
+  box-shadow: 0 7px 22px rgba(46, 41, 61, .045);
+}
+.lcos-surface-portal-copy { min-width: 0; display: grid; gap: 2px; }
+.lcos-surface-portal-copy strong { font-size: 10px; font-weight: 650; color: rgba(50, 46, 59, .72); }
+.lcos-surface-portal-copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 8px; color: rgba(56, 51, 67, .42); }
+.lcos-surface-portal-body b { font-size: 12px; font-weight: 400; color: rgba(80, 64, 124, .54); }
+
+.lcos-surface-panel-body {
+  position: relative;
+  overflow: hidden;
+  padding: 16px;
+  border: 1px solid rgba(73, 68, 84, .09);
+  border-radius: 18px;
+  background: rgba(252, 252, 254, .72);
+  box-shadow: 0 10px 26px rgba(43, 39, 56, .045);
+  backdrop-filter: blur(9px);
+}
+.lcos-surface-panel-body > header { display: grid; grid-template-columns: auto minmax(0,1fr) auto; align-items: start; gap: 8px; }
+.lcos-surface-panel-body > header span { min-width: 0; display: grid; gap: 3px; }
+.lcos-surface-panel-body > header strong { font-size: 10.5px; font-weight: 650; color: rgba(47, 43, 55, .74); }
+.lcos-surface-panel-body > header small { font-size: 8px; line-height: 1.35; color: rgba(56, 52, 65, .43); }
+.lcos-surface-panel-content { margin: 15px 0 0 26px; display: grid; gap: 7px; }
+.lcos-surface-panel-content p { margin: 0; font-size: 8.5px; line-height: 1.45; color: rgba(54, 50, 63, .52); }
+.lcos-surface-panel-content > span { width: fit-content; padding: 3px 6px; border-radius: 7px; background: rgba(88, 70, 139, .055); font-size: 7.5px; color: rgba(76, 60, 117, .55); }
+.lcos-surface-panel-body.panel-review { border-color: rgba(146, 96, 78, .13); background: rgba(255, 250, 247, .74); }
+.lcos-surface-panel-body.panel-workbench { background: linear-gradient(145deg, rgba(250,250,253,.82), rgba(245,244,250,.74)); }
+.lcos-surface-panel-body.panel-structure-map,
+.lcos-surface-panel-body.panel-relationship-field { background: rgba(248, 250, 253, .72); }
+
+/* Screen-space component shelf. */
+.lcos-surface-component-shelf {
+  position: absolute;
+  right: 14px;
+  top: 72px;
+  z-index: 40;
+  pointer-events: auto;
+}
+.lcos-surface-component-shelf-toggle {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid rgba(67, 60, 82, .09);
+  border-radius: 17px;
+  background: rgba(250, 250, 252, .83);
+  box-shadow: 0 8px 24px rgba(44, 39, 58, .075);
+  backdrop-filter: blur(16px);
+  color: rgba(73, 58, 111, .66);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.lcos-surface-component-shelf-toggle:hover { background: rgba(255,255,255,.94); color: rgba(79, 59, 132, .92); }
+.lcos-surface-component-shelf-menu {
+  position: absolute;
+  top: 42px;
+  right: 0;
+  width: 248px;
+  max-height: min(520px, calc(100vh - 150px));
+  overflow: auto;
+  padding: 7px;
+  border: 1px solid rgba(67, 60, 82, .09);
+  border-radius: 16px;
+  background: rgba(250, 250, 252, .94);
+  box-shadow: 0 18px 50px rgba(42, 37, 55, .12);
+  backdrop-filter: blur(22px);
+}
+.lcos-surface-component-shelf-menu header { display: grid; gap: 2px; padding: 7px 8px 9px; }
+.lcos-surface-component-shelf-menu header strong { font-size: 10px; color: rgba(47,43,55,.72); }
+.lcos-surface-component-shelf-menu header small { font-size: 8px; color: rgba(57,52,67,.42); }
+.lcos-surface-component-shelf-menu > button {
+  width: 100%;
+  display: grid;
+  gap: 3px;
+  padding: 8px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.lcos-surface-component-shelf-menu > button:hover { background: rgba(92, 72, 143, .06); }
+.lcos-surface-component-shelf-menu > button span { font-size: 9.5px; font-weight: 620; color: rgba(50,46,59,.70); }
+.lcos-surface-component-shelf-menu > button small { font-size: 7.8px; line-height: 1.35; color: rgba(59,54,69,.43); }
+
+@media (prefers-reduced-motion: reduce) {
+  .lcos-surface-component-frame,
+  .lcos-surface-component-chrome,
+  .lcos-spatial-glyph-shell,
+  .lcos-matrix-activity i { transition: none !important; animation: none !important; }
+}
+
+.lcos-main-fence-promote {
+  position: absolute;
+  left: 18px;
+  bottom: 14px;
+  z-index: 5;
+  min-height: 23px;
+  padding: 0 7px;
+  border: 1px solid rgba(82, 68, 118, .10);
+  border-radius: 8px;
+  background: rgba(252, 252, 254, .82);
+  color: rgba(64, 55, 83, .54);
+  font-size: 8px;
+  cursor: pointer;
+}
+.lcos-main-fence-promote:hover { background: rgba(255,255,255,.96); color: rgba(76,58,125,.82); }

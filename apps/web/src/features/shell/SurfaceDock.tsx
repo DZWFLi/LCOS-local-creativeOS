@@ -86,9 +86,9 @@ export function SurfaceDock({ surface, scopePath, activeScopeId, workbenchScopeI
   const parent = scopePath.length > 1 ? scopePath.at(-2) : null
   const setCapability = (next: CapabilityId) => {
     if(next === 'main') { scopePath[0] && onScope(scopePath[0].id); onSurface('arrange') }
-    // Context button is always level 1: the project Context Graph. A concrete
-    // Context is entered only by clicking that Context object in the Graph.
-    if(next === 'context') onSurface('context-graph')
+    // Context opens the understanding worksite. Relationship Graph remains a
+    // Lens/compat renderer, not the capability homepage.
+    if(next === 'context') onSurface('context-space')
     if(next === 'workflow') onSurface('workflow')
   }
   return <nav className="vnext-bottom-dock lcos-bottom-dock" data-testid="vnext-bottom-dock" aria-label="LCOS 工作现场" onContextMenu={(event) => event.preventDefault()}>

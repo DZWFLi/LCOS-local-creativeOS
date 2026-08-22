@@ -15,9 +15,9 @@ const surfaceObject=source('features/surfaces/SurfaceObject.tsx')
 const hierarchyState=source('state/presentationHierarchyState.ts')
 
 describe('Phase D renderer isomorphism contract',()=>{
-  it('retires Outline from the dock, keeps Context Graph as project entry, and moves renderer choice into the opened Context',()=>{
+  it('retires Outline from the dock and opens Context directly into the understanding worksite with optional lenses',()=>{
     expect(dock).not.toContain("{id:'outline',label:'大纲'}")
-    expect(dock).toContain("if(next === 'context') onSurface('context-graph')")
+    expect(dock).toContain("if(next === 'context') onSurface('context-space')")
     expect(dock).not.toContain('ProjectionPills')
     expect(projection).toContain('ContextRelationshipHomeSurface')
     expect(projection).toContain("props.surface==='context-space'?<ContextSpaceSurface")

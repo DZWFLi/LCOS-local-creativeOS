@@ -14,7 +14,6 @@ const ContextFlowSurface=lazy(()=>import('./ContextFlowSurface').then((module)=>
 const ContextRelationshipHomeSurface=lazy(()=>import('./ContextRelationshipHomeSurface').then((module)=>({default:module.ContextRelationshipHomeSurface})))
 const ContextTreeSurface=lazy(()=>import('./ContextTreeSurface').then((module)=>({default:module.ContextTreeSurface})))
 const WorkflowSurface=lazy(()=>import('./WorkflowSurface').then((module)=>({default:module.WorkflowSurface})))
-const WorkflowGraphSurface=lazy(()=>import('./WorkflowGraphSurface').then((module)=>({default:module.WorkflowGraphSurface})))
 // Legacy renderers stay in the source package so older saved preferredSurface
 // values can still be opened during migration. They are not dock destinations.
 const DeliverSurface=lazy(()=>import('./DeliverSurface').then((module)=>({default:module.DeliverSurface})))
@@ -45,7 +44,7 @@ export function ProjectionSurface(props:Props){
     nodes:props.nodes.filter((node)=>graphIds.has(node.id)),
     edges:props.edges.filter((edge)=>graphIds.has(edge.from)&&graphIds.has(edge.to)),
   },[graphIds,props.edges,props.nodes])
-  const isWorkflowDetail=props.surface==='workflow'&&Boolean(props.activeWorkflowId)
+  const isWorkflowDetail=props.surface==='workflow'
   const resolved=isContextDetail?context:isWorkflowDetail?workflow:null
   // All capability surfaces project the same Project node identities. Context
   // Graph has its own exact project-level membership; concrete Context detail
@@ -61,7 +60,6 @@ export function ProjectionSurface(props:Props){
     props.surface==='context-flow'?<ContextFlowSurface {...focusable} onSurfaceChange={props.onSurfaceChange} onDirectProjectViewDrop={props.onDirectProjectViewDrop} source={{kind:context.sourceKind,label:context.sourceLabel}} runtime={contextRuntime} onStart={props.onContextStart} onImportProjectView={props.onImportProjectViewToContext} onRemoveMember={props.onRemoveProjectViewFromContext}/>:
     props.surface==='context-tree'?<ContextTreeSurface {...focusable} onSurfaceChange={props.onSurfaceChange} onDirectProjectViewDrop={props.onDirectProjectViewDrop} source={{kind:context.sourceKind,label:context.sourceLabel}} runtime={contextRuntime}/>:
     props.surface==='context-graph'?<ContextRelationshipHomeSurface {...focusable} onDirectProjectViewDrop={props.onDirectProjectViewDrop} scopeId={props.contextHomeScopeId??props.scopeId} contextViews={props.contextViews} onContextMergeAccept={props.onContextMergeAccept} onOpenContextView={props.onOpenContextView} onAddMembersToContext={props.onAddMembersToContext} onAddMembersToGraph={props.onAddMembersToContextGraph} onCreateContextFromMembers={props.onCreateContextFromMembers}/>:
-    props.surface==='workflow'&&!props.activeWorkflowId?<WorkflowGraphSurface {...focusable} onDirectProjectViewDrop={props.onDirectProjectViewDrop} workflowViews={props.workflowViews} onOpenWorkflowView={props.onOpenWorkflowView} runOverlay={props.workflowRunOverlay}/>:
     props.surface==='workflow'?<WorkflowSurface {...focusable} onDirectProjectViewDrop={props.onDirectProjectViewDrop} onCreateDomainRelation={props.onCreateDomainRelation} onUpdateDomainRelation={props.onUpdateDomainRelation} onDeleteDomainRelation={props.onDeleteDomainRelation} source={{kind:workflow.sourceKind,label:workflow.sourceLabel}} runOverlay={props.workflowRunOverlay} workspaces={props.workflowWorkspaces} onReorderWorkspace={props.onReorderWorkspace} onActivateWorkspace={props.onActivateWorkflowWorkspace} onCreateWorkspace={props.onCreateWorkflowWorkspace} onAddToWorkspace={props.onAddToWorkspace} onImportProjectView={props.onImportProjectViewToWorkflow} onCreateOperatorNode={props.onCreateWorkflowOperatorNode} onExportWorkflow={props.onExportWorkflow} onImportWorkflow={props.onImportWorkflow} onStart={props.onWorkflowStart}/>:
     props.surface==='work'?<WorkSurface {...common} runtime={props.workRuntime}/>:
     props.surface==='work-free'?<WorkFreeSurface {...common}/>:

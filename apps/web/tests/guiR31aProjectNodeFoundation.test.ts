@@ -41,8 +41,8 @@ describe('R3.1-A Project-node presentation foundation', () => {
     expect(contextHome).toContain('onAddMembersToGraph')
   })
 
-  it('keeps Context Graph as project overview while one saved Context owns a default understanding scene plus Structure/Evolution lenses', () => {
-    expect(dock).toContain("if(next === 'context') onSurface('context-graph')")
+  it('keeps Context Graph as a project-level lens while Context capability opens the understanding worksite directly', () => {
+    expect(dock).toContain("if(next === 'context') onSurface('context-space')")
     expect(dock).not.toContain('ProjectionPills')
     expect(app).toContain("setActiveSurface('context-space')")
     expect(app).toContain('setActiveContextId(contextId)')

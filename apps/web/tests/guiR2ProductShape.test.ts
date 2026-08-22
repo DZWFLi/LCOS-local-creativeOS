@@ -23,8 +23,8 @@ describe('GUI R2 product-shape regression',()=>{
     expect(rail).toContain("application/x-lcos-project-view")
   })
 
-  it('keeps project Context Graph as the project entry, then opens one Context into an understanding space with optional lenses',()=>{
-    expect(dock).toContain("if(next === 'context') onSurface('context-graph')")
+  it('opens Context directly into the understanding worksite while keeping Graph as an optional legacy lens',()=>{
+    expect(dock).toContain("if(next === 'context') onSurface('context-space')")
     expect(dock).not.toContain('ProjectionPills')
     expect(projections).toContain('ContextSpaceSurface')
     expect(projections).toContain("props.surface==='context-space'")

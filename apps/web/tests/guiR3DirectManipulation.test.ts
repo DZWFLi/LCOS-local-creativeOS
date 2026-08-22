@@ -27,7 +27,7 @@ describe('GUI R3 direct manipulation contract', () => {
   })
 
   it('opens a saved Context directly into its understanding scene without forcing a renderer choice', () => {
-    expect(dock).toContain("if(next === 'context') onSurface('context-graph')")
+    expect(dock).toContain("if(next === 'context') onSurface('context-space')")
     expect(dock).not.toContain('ProjectionPills')
     expect(app).toContain("setActiveSurface('context-space')")
     expect(app).toContain("setActiveContextId(contextId)")

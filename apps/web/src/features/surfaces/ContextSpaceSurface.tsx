@@ -13,7 +13,7 @@ import { SpatialNodeLayer } from '../spatial/SpatialNodeLayer'
 import { spatialBoundsForPlacements } from '../spatial/spatialCamera'
 import { advanceSpatialNodeDrag, beginSpatialNodeDrag, endSpatialPointer } from '../spatial/spatialInteractionMachine'
 import { IDLE_SPATIAL_POINTER, type SpatialPointerSession } from '../spatial/spatialTypes'
-import { usePresentationDraftPinnedIds, usePresentationDraftPositions } from '../../state/presentationDraftState'
+import { usePresentationDraftPinnedIds, usePresentationDraftPositions, usePresentationSurfaceElements } from '../../state/presentationDraftState'
 import { useSpatialSessionCamera } from '../../state/spatialSessionState'
 import { useSpatialFocusRequest, type SpatialFocusRequest } from '../spatial/useSpatialFocusRequest'
 import { SurfaceObject } from './SurfaceObject'
@@ -21,6 +21,9 @@ import { ContextHistoryRail } from './ContextHistoryRail'
 import { ContextLensSwitch } from './ContextLensSwitch'
 import type { ContextSurfaceRuntime } from './surfaceContracts'
 import type { SurfaceId } from '../shell/SurfaceDock'
+import { SurfaceComponentLayer } from '../spatial/components/SurfaceComponentLayer'
+import { SurfaceComponentShelf } from '../spatial/components/SurfaceComponentShelf'
+import { boundsAroundSurfaceRects, surfaceViewportOrigin } from '../spatial/model/surfaceGeometry'
 
 interface Props {
   projectId: string
@@ -68,6 +71,7 @@ export function ContextSpaceSurface(props: Props) {
   const [camera, setCamera] = useSpatialSessionCamera(props.projectId, props.scopeId, 'context-space', { x: 0, y: 0, zoom: 1 })
   const [draftPositions, setDraftPositions] = usePresentationDraftPositions(props.projectId, props.scopeId, 'context-space')
   const [pinnedIds, setPinnedIds] = usePresentationDraftPinnedIds(props.projectId, props.scopeId, 'context-space')
+  const [surfaceElements, setSurfaceElements] = usePresentationSurfaceElements(props.projectId, props.scopeId, 'context-space')
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const drag = useRef<SpatialPointerSession>(IDLE_SPATIAL_POINTER)
   const seed = useMemo(() => seedContextPlacement(props.nodes), [props.nodes])
@@ -78,6 +82,10 @@ export function ContextSpaceSurface(props: Props) {
   }), [draftPositions, props.nodes, seed])
   const byId = useMemo(() => new Map(items.map((item) => [item.node.id, item])), [items])
   const spatialItems = useMemo(() => items.map((item) => ({ id: item.node.id, x: item.x, y: item.y, width: item.width, height: item.height })), [items])
+  const selectedSurfaceBounds = useMemo(() => boundsAroundSurfaceRects(items
+    .filter((item) => props.selectedIds.includes(item.node.id))
+    .map((item) => ({ x: item.x, y: item.y, w: item.width, h: item.height })), 24), [items, props.selectedIds])
+  const componentViewportOrigin = useMemo(() => surfaceViewportOrigin(camera), [camera])
   const ids = useMemo(() => new Set(items.map((item) => item.node.id)), [items])
   const visibleEdges = useMemo(() => props.edges.filter((edge) => ids.has(edge.from) && ids.has(edge.to)), [ids, props.edges])
   const hierarchySeed = useMemo(() => buildHierarchySeed(props.nodes, visibleEdges), [props.nodes, visibleEdges])
@@ -107,7 +115,10 @@ export function ContextSpaceSurface(props: Props) {
     setDraggingId(null)
   }
 
-  const overlay = !items.length ? <div className="lcos-context-space-empty"><Layers3 size={19}/><strong>把需要一起理解的材料拖进来</strong><span>可以直接阅读、摘取、组织，放进来的材料就在这里一起被理解。</span></div> : undefined
+  const overlay = <>
+    {!items.length && <div className="lcos-context-space-empty"><Layers3 size={19}/><strong>把需要一起理解的材料拖进来</strong><span>可以直接阅读、摘取、组织，放进来的材料就在这里一起被理解。</span></div>}
+    <SurfaceComponentShelf projectId={props.projectId} surface="context" elements={surfaceElements} selectionBounds={selectedSurfaceBounds} viewportOrigin={componentViewportOrigin} onElementsChange={setSurfaceElements}/>
+  </>
 
   return <section className="lcos-dedicated-surface lcos-context-space" data-testid="surface-context-space">
     <header className="lcos-surface-heading lcos-context-space-heading">
@@ -127,6 +138,7 @@ export function ContextSpaceSurface(props: Props) {
       <div className="lcos-context-understanding-regions" aria-hidden="true">
         {understandingRegions.map((region) => <div key={region.id} className="lcos-context-understanding-region" style={{ left: region.x, top: region.y, width: region.width, height: region.height } as CSSProperties}><span>{region.label}</span><small>{region.memberIds.length} 项 · 结构区域</small></div>)}
       </div>
+      <SurfaceComponentLayer surface="context" elements={surfaceElements} zoom={camera.zoom} onElementsChange={setSurfaceElements}/>
       <SpatialEdgeLayer bounds={edgeBounds} className="lcos-context-space-edges" ariaLabel="Context 关系">
         <defs><marker id="lcos-context-arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0 0 L7 3.5 L0 7 z"/></marker></defs>
         {visibleEdges.map((edge) => {

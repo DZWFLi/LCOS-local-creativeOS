@@ -36,7 +36,7 @@ check('Context opens into an Understanding Space by default', projection.include
 check('Context Structure / Evolution remain lenses over the same saved membership', contextStructure.includes('共用同一份 Context') && contextEvolution.includes('trackSegments'))
 check('Context Space exposes semantic regions / relation hierarchy without second truth', contextSpace.includes('contextUnderstandingRegions') && contextSpace.includes('lcos-context-understanding-region'))
 check('Context Graph remains project-level and directly spatial', contextHome.includes('Context Graph') && contextHome.includes('<SpatialCanvas'))
-check('Workflow has overview + action scene', workflowGraph.includes('project action network') && projection.includes('!props.activeWorkflowId?<WorkflowGraphSurface'))
+check('Workflow action scene is the capability homepage; old Graph remains a Lens source', workflowGraph.includes('project action network') && projection.includes("props.surface==='workflow'?<WorkflowSurface") && !projection.includes('!props.activeWorkflowId?<WorkflowGraphSurface'))
 check('Workflow Step contract is Presentation-only and materials remain references', presentation.includes('WorkflowActionV0') && presentation.includes('attachedViewIds') && workflow.includes('attachSelection'))
 check('Only Workflow actions own primary flow ports', workflow.includes('data-workflow-action-input={action.id}') && workflow.includes('className="lcos-workflow-port output"') && !workflow.includes('data-workflow-input={node.id}'))
 check('Material morphology owns file/content identity', visual.includes('MaterialPaperFallback') && visual.includes('CollapsedNotePaper') && !visual.includes('SystemDotGlyph'))

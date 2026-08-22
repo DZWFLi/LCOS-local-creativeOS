@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import type { WorkflowActionEdgeV0, WorkflowActionV0, WorkflowOperatorV0 } from '@local-creative-os/contracts'
+import type { SurfaceElementV0, WorkflowActionEdgeV0, WorkflowActionV0, WorkflowOperatorV0 } from '@local-creative-os/contracts'
 import type { SqliteMetadataRepository } from './metadata-repository.js'
 import type { PresentationApplicationService } from './presentation-application-service.js'
 import { buildZip } from './zip-writer.js'
@@ -20,6 +20,7 @@ interface WorkflowFile {
   readonly operators: Record<string, WorkflowOperatorV0>
   readonly actions?: WorkflowActionV0[]
   readonly actionEdges?: WorkflowActionEdgeV0[]
+  readonly surfaceElements?: SurfaceElementV0[]
 }
 
 export class WorkflowExportService {
@@ -48,13 +49,14 @@ export class WorkflowExportService {
     const operators = view?.state.workflowOperators ?? {}
     const actions = view?.state.workflowActions ?? []
     const actionEdges = view?.state.workflowActionEdges ?? []
+    const surfaceElements = view?.state.surfaceElements ?? []
     const references = members.flatMap((id) => {
       const artifactView = this.metadata.getArtifactView(id)
       if (artifactView === undefined) return []
       const artifact = this.metadata.getArtifact(String(artifactView.artifactId))
       return [{ viewId: String(artifactView.id), artifactId: String(artifactView.artifactId), title: artifact?.title ?? '' }]
     })
-    const workflow: WorkflowFile = { members, workspaces, edges, operators, actions, actionEdges }
+    const workflow: WorkflowFile = { members, workspaces, edges, operators, actions, actionEdges, surfaceElements }
     const contentHash = createHash('sha256').update(JSON.stringify(workflow)).digest('hex')
     const manifest = {
       schemaVersion: 1,
@@ -158,6 +160,7 @@ export class WorkflowExportService {
         workflowOperators: workflow.operators ?? {},
         workflowActions: workflow.actions ?? [],
         workflowActionEdges: workflow.actionEdges ?? [],
+        surfaceElements: (workflow.surfaceElements ?? []).map((element) => ({ ...element, projectId })),
       },
       expectedVersion: existing?.version ?? 0,
       updatedBy: 'agent',

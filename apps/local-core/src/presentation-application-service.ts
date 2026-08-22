@@ -189,6 +189,20 @@ export class PresentationApplicationService {
       if (![x, y, width, height].every(Number.isFinite)) throw new Error(`Spatial region ${region.id} bounds must be finite.`)
       if (width <= 0 || height <= 0) throw new Error(`Spatial region ${region.id} bounds must be positive.`)
     }
+    const surfaceElementIds = new Set<string>()
+    for (const element of state.surfaceElements ?? []) {
+      if (!element.id.trim()) throw new Error('Surface element requires id.')
+      if (surfaceElementIds.has(element.id)) throw new Error(`Surface element id ${element.id} is duplicated.`)
+      surfaceElementIds.add(element.id)
+      if (element.projectId !== projectId) throw new Error(`Surface element ${element.id} belongs to another project.`)
+      const { x, y, w, h } = element.bounds
+      if (![x, y, w, h].every(Number.isFinite)) throw new Error(`Surface element ${element.id} bounds must be finite.`)
+      if (w <= 0 || h <= 0) throw new Error(`Surface element ${element.id} bounds must be positive.`)
+      const bindingValues = Object.values(element.binding ?? {})
+      if (bindingValues.some((value) => typeof value !== 'string' || !value.trim())) throw new Error(`Surface element ${element.id} binding ids must be non-empty strings.`)
+      const zIndex = element.presentation?.zIndex
+      if (zIndex !== undefined && !Number.isFinite(zIndex)) throw new Error(`Surface element ${element.id} zIndex must be finite.`)
+    }
     const workflowActionIds = new Set((state.workflowActions ?? []).map((action) => action.id))
     if (workflowActionIds.size !== (state.workflowActions ?? []).length) throw new Error('Workflow action ids must be unique.')
     for (const action of state.workflowActions ?? []) {

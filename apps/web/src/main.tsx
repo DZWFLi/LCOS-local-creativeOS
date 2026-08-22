@@ -10,6 +10,7 @@ import './reconstruction.css'
 import '../../../opendesign/design-systems/lcos-product/tokens/colors_and_type.css'
 import './product-interface.css'
 import './interaction-system.css'
+import './spatial-components.css'
 
 const diagnosticsRoute = import.meta.env.DEV && window.location.pathname === '/__diagnostics'
 const captureFloatRoute = new URLSearchParams(window.location.search).get('surface') === 'capture-float'

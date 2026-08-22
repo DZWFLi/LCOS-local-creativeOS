@@ -5,7 +5,7 @@ const checks = [
   ['Fence membership derives from visual geometry', ['apps/web/src/App.tsx', 'const spatialRegionBoundsKey = useMemo']],
   ['Dragging into/out of fence uses node visual center', ['apps/web/src/App.tsx', 'const centerX = body.x + body.width / 2']],
   ['Fence resize previews locally', ['apps/web/src/App.tsx', 'Resize is local interaction preview']],
-  ['Fence resize persists on pointer-up', ['apps/web/src/features/canvas/ProjectCanvas.tsx', 'onRegionBoundsCommit?.(region.id, latest)']],
+  ['Fence resize persists on pointer-up', ['apps/web/src/features/canvas/ProjectCanvas.tsx', 'onRegionBoundsCommit?.(region.id, next)']],
   ['Fence bounds validated by Core', ['apps/local-core/src/presentation-application-service.ts', 'bounds must be positive']],
   ['Web pins react-pdf worker family', ['apps/web/package.json', '"pdfjs-dist": "5.4.296"']],
   ['Node PDF thumbnail does not configure workerSrc', ['apps/local-core/src/preview-worker-service.ts', 'Do not configure workerSrc here']],

@@ -21,8 +21,12 @@ import { IDLE_SPATIAL_POINTER, type SpatialPointerSession } from '../spatial/spa
 import { LightCurtain } from '../drop/LightCurtain'
 import { semanticDropTriggerFromPointer, type SemanticDropTrigger } from '../spatial/semanticDrop'
 import { LcosSignalGlyph, type LcosSignalState } from '../design/DotGlyph'
+import type { SurfaceElement } from '../spatial/model/surfaceElementTypes'
+import { resolveSurfaceComponent } from '../spatial/components/surfaceComponentRegistry'
+import { SurfaceFrame } from '../spatial/components/SurfaceFrame'
 
 interface Props {
+  projectId?: string
   surfaceMode?: 'project' | 'capture'
   nodes: CanvasNode[]; setNodes: (nodes: CanvasNode[] | ((current: CanvasNode[]) => CanvasNode[])) => void
   edges: CanvasEdge[]; setEdges: (edges: CanvasEdge[] | ((current: CanvasEdge[]) => CanvasEdge[])) => void
@@ -93,7 +97,7 @@ function additiveSelection(event: { shiftKey: boolean; ctrlKey: boolean; metaKey
   return event.shiftKey || event.ctrlKey || event.metaKey
 }
 
-export const ProjectCanvas = memo(function ProjectCanvas({ surfaceMode = 'project', nodes, setNodes, edges, setEdges, camera, setCamera, selectedId, selectedIds, selectedEdgeId, setSelectedEdgeId, pendingId, runId, runStatus, spaceHeld, locked = false, layoutPreview, workspaceFrames = [], workspaceMemberNodes = nodes, activeWorkspaceId = null, onWorkspaceActivate, onWorkspaceProjectionMove, onPresentationInteractionChange, onPresentationCommit, onFrameBoundsChange, selectionComposer, onSelect, onClearSelection, onMarqueeSelect, onSelectEdge, onDoubleClick, onDetails, onFocusSelection, onRenameSelection, onCreateNodeFromAnchor, onFilesDropped, onExternalTextDrop, onMaterialTransferDrop, onArrangeSelection, gridSnapEnabled = true, onSetSelectionDisplayMode, onCopySelection, onDuplicateSelection, onCreateScopeFromSelection, onDeleteSelection, onReorganize, onDirectProjectViewDrop, onPointerWorldChange, onSpaceCreate, onLocateNode, locatePulseId, pendingReviewIds = [], attentionBucketsByViewId = {}, collectionMembersByNodeId = {}, expandedCollectionScopeIds = [], openingCollectionScopeIds = [], closingCollectionScopeIds = [], onToggleCollection, onOpenContextLens, spatialRegions = [], onCreateRegion, onClearRegion, onRegionBoundsChange, onRegionBoundsCommit, onPromoteRegionToCollection }: Props) {
+export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-space', surfaceMode = 'project', nodes, setNodes, edges, setEdges, camera, setCamera, selectedId, selectedIds, selectedEdgeId, setSelectedEdgeId, pendingId, runId, runStatus, spaceHeld, locked = false, layoutPreview, workspaceFrames = [], workspaceMemberNodes = nodes, activeWorkspaceId = null, onWorkspaceActivate, onWorkspaceProjectionMove, onPresentationInteractionChange, onPresentationCommit, onFrameBoundsChange, selectionComposer, onSelect, onClearSelection, onMarqueeSelect, onSelectEdge, onDoubleClick, onDetails, onFocusSelection, onRenameSelection, onCreateNodeFromAnchor, onFilesDropped, onExternalTextDrop, onMaterialTransferDrop, onArrangeSelection, gridSnapEnabled = true, onSetSelectionDisplayMode, onCopySelection, onDuplicateSelection, onCreateScopeFromSelection, onDeleteSelection, onReorganize, onDirectProjectViewDrop, onPointerWorldChange, onSpaceCreate, onLocateNode, locatePulseId, pendingReviewIds = [], attentionBucketsByViewId = {}, collectionMembersByNodeId = {}, expandedCollectionScopeIds = [], openingCollectionScopeIds = [], closingCollectionScopeIds = [], onToggleCollection, onOpenContextLens, spatialRegions = [], onCreateRegion, onClearRegion, onRegionBoundsChange, onRegionBoundsCommit, onPromoteRegionToCollection }: Props) {
   const canvasRef = useRef<HTMLDivElement | null>(null)
   const dragCandidate = useRef<DragCandidate | null>(null)
   const resizeCandidate = useRef<ResizeCandidate | null>(null)
@@ -157,6 +161,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ surfaceMode = 'projec
   const [dropLight, setDropLight] = useState<{ hot: boolean; label?: string } | null>(null)
   const marquee = useRef<SpatialPointerSession>(IDLE_SPATIAL_POINTER)
   const [marqueeRect, setMarqueeRect] = useState<{ left: number; top: number; width: number; height: number } | null>(null)
+  const [selectedRegionId, setSelectedRegionId] = useState<string | null>(null)
   const [createMenu, setCreateMenu] = useState<{ from: string; x: number; y: number; screenX: number; screenY: number } | null>(null)
   const toWorld = (clientX: number, clientY: number, rect: DOMRect) => spatialScreenToWorld(clientX, clientY, rect, camera)
   // P0 2026-08-17: there is no persistent client-owned arrange mode.
@@ -890,31 +895,37 @@ export const ProjectCanvas = memo(function ProjectCanvas({ surfaceMode = 'projec
     if ((kind === 'uri' || kind === 'text') && onExternalTextDrop) onExternalTextDrop(id, point.x, point.y)
   }} overlays={spatialOverlays}>
     <SpatialNodeLayer className="lcos-arrange-structure-layer">
-      {spatialRegions.map((region) => <div key={region.id} className="lcos-spatial-region" data-spatial-region={region.id} style={{ left: region.bounds.x, top: region.bounds.y, width: region.bounds.width, height: region.bounds.height }}>
-        <div className="lcos-spatial-region-head"><span>围栏 · {region.memberViewIds.length} 项</span><nav><button type="button" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onPromoteRegionToCollection?.(region.id) }}>转 Collection</button><button type="button" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onClearRegion?.(region.id) }}>×</button></nav></div>
-        <button type="button" className="lcos-spatial-region-resize" aria-label="调整围栏范围" title="拖动调整围栏范围" onPointerDown={(event) => {
-          event.preventDefault(); event.stopPropagation()
-          const startX = event.clientX
-          const startY = event.clientY
-          const original = region.bounds
-          let latest = original
-          const move = (pointer: PointerEvent) => {
-            const dx = (pointer.clientX - startX) / Math.max(.1, camera.zoom)
-            const dy = (pointer.clientY - startY) / Math.max(.1, camera.zoom)
-            latest = { ...original, width: Math.max(180, original.width + dx), height: Math.max(120, original.height + dy) }
-            onRegionBoundsChange?.(region.id, latest)
-          }
-          const finish = () => {
-            window.removeEventListener('pointermove', move)
-            window.removeEventListener('pointerup', finish)
-            window.removeEventListener('pointercancel', finish)
-            onRegionBoundsCommit?.(region.id, latest)
-          }
-          window.addEventListener('pointermove', move)
-          window.addEventListener('pointerup', finish, { once: true })
-          window.addEventListener('pointercancel', finish, { once: true })
-        }} />
-      </div>)}
+      {spatialRegions.map((region) => {
+        const definition = resolveSurfaceComponent('fence')
+        const Renderer = definition.renderer
+        const element: SurfaceElement = {
+          id: `main-fence:${region.id}`,
+          projectId,
+          surface: 'main',
+          type: 'fence',
+          bounds: { x: region.bounds.x, y: region.bounds.y, w: region.bounds.width, h: region.bounds.height },
+          presentation: { zIndex: 1 },
+        }
+        return <SurfaceFrame
+          key={region.id}
+          element={element}
+          definition={definition}
+          zoom={camera.zoom}
+          selected={selectedRegionId === region.id}
+          onSelect={() => setSelectedRegionId(region.id)}
+          onBoundsCommit={(bounds) => {
+            const next = { x: bounds.x, y: bounds.y, width: bounds.w, height: bounds.h }
+            onRegionBoundsChange?.(region.id, next)
+            onRegionBoundsCommit?.(region.id, next)
+          }}
+          onPresentationChange={() => undefined}
+          onRemove={() => onClearRegion?.(region.id)}
+          showPin={false}
+        >
+          <Renderer element={element} selected={selectedRegionId === region.id} meta={`${region.memberViewIds.length} 项 · Presentation-only`}/>
+          <button type="button" className="lcos-main-fence-promote" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onPromoteRegionToCollection?.(region.id) }}>转 Collection</button>
+        </SurfaceFrame>
+      })}
       {effectiveWorkspaceFrames.map((frame) => <div key={frame.workspaceId} data-testid={`workspace-frame-${frame.workspaceId}`} data-workspace-frame={frame.workspaceId} data-member-count={frame.memberViewIds.length} className={`workspace-frame ${frame.active ? 'active' : ''} ${draggingWorkspaceId === frame.workspaceId ? 'dragging' : ''}`} style={{ left: frame.bounds.x, top: frame.bounds.y, width: frame.bounds.width, height: frame.bounds.height }}>
         <button data-testid={`workspace-frame-header-${frame.workspaceId}`} className="workspace-frame-header" type="button" onClick={(event) => { event.stopPropagation(); onWorkspaceActivate?.(frame.workspaceId) }} onPointerDown={(event) => {
           if (locked || event.button !== 0) return

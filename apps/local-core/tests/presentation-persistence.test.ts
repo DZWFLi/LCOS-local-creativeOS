@@ -108,6 +108,46 @@ describe('Presentation persistence (Phase B)', () => {
     })).toThrow(/bounds must be positive/)
   })
 
+  it('persists trusted SurfaceElements and validates geometry/project identity', () => {
+    const { repository, snapshot } = freshDb()
+    const scopeId = String(snapshot.scopes.find((scope) => scope.kind === 'root')!.id)
+    const projectId = String(snapshot.project.id)
+    const service = new PresentationApplicationService(repository, repository)
+    const state: PresentationStateV0 = {
+      ...stateFor([]),
+      surfaceElements: [{
+        id: 'surface:context-pack:1',
+        projectId,
+        surface: 'context',
+        type: 'context-pack',
+        bounds: { x: 120, y: 90, w: 360, h: 220 },
+        binding: { contextId: 'context-real-1' },
+        presentation: { pinned: true, zIndex: 4 },
+      }],
+    }
+    const saved = service.save(projectId, {
+      presentationId: 'presentation:context:scope-root-components',
+      scopeId,
+      capability: 'context',
+      renderer: 'context',
+      state,
+      expectedVersion: 0,
+      updatedBy: 'web',
+    })
+    expect(saved.state.surfaceElements).toEqual(state.surfaceElements)
+    expect(service.get(projectId, saved.id)?.state.surfaceElements).toEqual(state.surfaceElements)
+    expect(() => service.save(projectId, {
+      presentationId: 'presentation:context:scope-root-components-bad',
+      scopeId, capability: 'context', renderer: 'context', expectedVersion: 0, updatedBy: 'web',
+      state: { ...state, surfaceElements: [{ ...state.surfaceElements![0]!, id: 'bad', bounds: { x: 0, y: 0, w: -1, h: 20 } }] },
+    })).toThrow(/bounds must be positive/)
+    expect(() => service.save(projectId, {
+      presentationId: 'presentation:context:scope-root-components-foreign',
+      scopeId, capability: 'context', renderer: 'context', expectedVersion: 0, updatedBy: 'web',
+      state: { ...state, surfaceElements: [{ ...state.surfaceElements![0]!, id: 'foreign', projectId: 'other-project' }] },
+    })).toThrow(/another project/)
+  })
+
   it('CAS rejects stale versions and exposes currentVersion', () => {
     const { repository, snapshot } = freshDb()
     const scopeId = String(snapshot.scopes.find((scope) => scope.kind === 'root')!.id)

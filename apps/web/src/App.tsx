@@ -1892,18 +1892,11 @@ export function App() {
     openWorkspaceScene(target.id)
   }, [createEmptyWorkspaceScene, openWorkspaceScene, scopeId, workspaceId, workspaces])
 
-  useEffect(() => {
-    const isContextDetail = activeSurface === 'context-space' || activeSurface === 'context-flow' || activeSurface === 'context-tree' || activeSurface === 'outline'
-    if (isContextDetail && !activeContextId) setActiveSurface('context-graph')
-  }, [activeContextId, activeSurface])
-
   const selectSurface = useCallback((surface: SurfaceId) => {
     let normalized = normalizeSurfaceId(surface)
-    // Context keeps a project-level Graph, then opens one saved Context into its
-    // default understanding scene. Structure / Evolution are lenses over the same
-    // exact membership; navigation Scope is unrelated.
+    // Context/Workflow buttons open their free worksite. Graph renderers remain
+    // explicit lenses/compatibility surfaces and never become a forced homepage.
     if (normalized === 'context-graph') { setActiveContextId(null); setActiveWorkflowId(null) }
-    if ((normalized === 'context-space' || normalized === 'context-flow' || normalized === 'context-tree' || normalized === 'outline') && !activeContextId) normalized = 'context-graph'
     if (normalized === 'workflow') { setActiveContextId(null); setActiveWorkflowId(null) }
     setActiveSurface(normalized)
     if (!workspaceId) return
@@ -2396,10 +2389,10 @@ export function App() {
   const currentSceneSeedIds = useMemo(() => {
     if (activeSurface === 'arrange') return sceneCanvasNodes.map((node) => node.id)
     if (activeSurface === 'context-graph') return contextGraphResolvedIds
-    if (activeSurface === 'context-space' || activeSurface === 'context-flow' || activeSurface === 'context-tree' || activeSurface === 'outline') return contextDetailResolvedIds
+    if (activeSurface === 'context-space' || activeSurface === 'context-flow' || activeSurface === 'context-tree' || activeSurface === 'outline') return activeContextId ? contextDetailResolvedIds : contextGraphResolvedIds
     if (activeSurface === 'workflow') return workflowResolvedIds
     return selectedIds
-  }, [activeSurface, contextDetailResolvedIds, contextGraphResolvedIds, sceneCanvasNodes, selectedIds, workflowResolvedIds])
+  }, [activeContextId, activeSurface, contextDetailResolvedIds, contextGraphResolvedIds, sceneCanvasNodes, selectedIds, workflowResolvedIds])
   const currentSceneSemantic = useMemo(() => semanticRefsForSourceIds(currentSceneSeedIds, projectPresentationNodes), [currentSceneSeedIds, projectPresentationNodes])
 
   const appendExactPresentationMembers = useCallback(async (
@@ -6148,6 +6141,7 @@ export function App() {
         },
       } : undefined,
       canvas: {
+        projectId: activeProjectId,
         nodes: sceneCanvasNodes,
         setNodes,
         edges: sceneCanvasEdges,
@@ -6265,7 +6259,7 @@ export function App() {
           : activeSurface === 'context-graph'
             ? contextGraphResolvedIds
             : (activeSurface === 'outline' || activeSurface === 'context-space' || activeSurface === 'context-flow' || activeSurface === 'context-tree')
-              ? contextDetailResolvedIds
+              ? (activeContextId ? contextDetailResolvedIds : contextGraphResolvedIds)
               : undefined,
         workspaceFocusIds: effectiveWorkspace.focusedViewIds,
         contextRuntime: contextSurfaceRuntime,
@@ -6297,28 +6291,40 @@ export function App() {
           createContextFromMembersDirect(semantic.viewIds, undefined, semantic.entityRefs)
         },
         onImportProjectViewToContext: (sourceIds) => {
-          if (!activeContextId) return []
           const semantic = semanticRefsForSourceIds(sourceIds, projectPresentationNodes)
           if (!semantic.viewIds.length && !semantic.entityRefs.length) return []
+          const ownerId = activeContextId ?? rootScope.id
+          const rootContext = ownerId === rootScope.id
+          const currentMembers = rootContext ? contextGraphPresentationIds : (contextMembersById[ownerId] ?? [])
+          const currentRefs = rootContext ? contextGraphEntityRefs : (contextEntityRefsById[ownerId] ?? [])
           void Promise.all([
-            appendExactPresentationMembers('context', activeContextId, semantic.viewIds, contextMembersById[activeContextId] ?? []),
-            appendExactPresentationEntityRefs('context', activeContextId, semantic.entityRefs, 'context', contextEntityRefsById[activeContextId] ?? []),
+            appendExactPresentationMembers('context', ownerId, semantic.viewIds, currentMembers),
+            appendExactPresentationEntityRefs('context', ownerId, semantic.entityRefs, rootContext ? 'context-graph' : 'context', currentRefs),
           ]).then(([members, refs]) => {
             if (members === null || refs === null) return
-            setContextMembersById((current) => ({ ...current, [activeContextId]: members }))
-            setContextEntityRefsById((current) => ({ ...current, [activeContextId]: refs }))
+            if (rootContext) {
+              setContextGraphPresentationIds(members)
+              setContextGraphEntityRefs(refs)
+              return
+            }
+            setContextMembersById((current) => ({ ...current, [ownerId]: members }))
+            setContextEntityRefsById((current) => ({ ...current, [ownerId]: refs }))
             setContextPresentationIds(members)
             setContextPresentationEntityRefs(refs)
           })
           return [...semantic.viewIds, ...semantic.entityRefs.map(projectEntityNodeId)]
         },
         onRemoveProjectViewFromContext: (memberViewId) => {
-          if (!activeContextId) return
-          void removeExactPresentationMembers('context', activeContextId, [memberViewId]).then((members) => {
+          const ownerId = activeContextId ?? rootScope.id
+          const rootContext = ownerId === rootScope.id
+          void removeExactPresentationMembers('context', ownerId, [memberViewId]).then((members) => {
             if (members === null) return
-            setContextMembersById((current) => ({ ...current, [activeContextId]: members }))
-            setContextPresentationIds(members)
-            setNotice('已从当前 Context 移出；原对象保持不变')
+            if (rootContext) setContextGraphPresentationIds(members)
+            else {
+              setContextMembersById((current) => ({ ...current, [ownerId]: members }))
+              setContextPresentationIds(members)
+            }
+            setNotice('已从当前 Context 投影移出；原对象保持不变')
           })
         },
         onImportProjectViewToWorkflow: (sourceIds) => {
