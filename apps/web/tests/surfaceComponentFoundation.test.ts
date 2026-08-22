@@ -205,4 +205,15 @@ describe('Spatial Component Foundation integrity', () => {
       projectId: 'project-a', surface: 'workflow', existing: [], viewportOrigin: { x: 0, y: 0 },
     })).toEqual([])
   })
+
+  it('uses the same intent and Catalog contract on Main without mutating selected objects', () => {
+    const ops = resolveSurfaceIntent({ kind: 'prepare-workbench', targetIds: ['view-a', 'view-b'] }, {
+      projectId: 'project-a', surface: 'main', existing: [],
+      selectionBounds: { x: 80, y: 90, w: 420, h: 220 }, viewportOrigin: { x: 0, y: 0 },
+      createId: (type) => `fixture:${type}`,
+    })
+    expect(ops).toMatchObject([{ type: 'create-component', component: {
+      id: 'fixture:workbench', surface: 'main', type: 'workbench', binding: { projectViewIds: ['view-a', 'view-b'] },
+    } }])
+  })
 })

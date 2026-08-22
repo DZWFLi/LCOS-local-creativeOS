@@ -28,6 +28,10 @@ import { SurfaceFrame } from '../spatial/components/SurfaceFrame'
 import { SurfaceComponentLayer } from '../spatial/components/SurfaceComponentLayer'
 import { SurfaceComponentShelf } from '../spatial/components/SurfaceComponentShelf'
 import { surfaceViewportOrigin } from '../spatial/model/surfaceGeometry'
+import { AgentSurfaceComposer } from '../surfaces/AgentSurfaceComposer'
+import { SurfaceComponentProposalLayer } from '../spatial/components/SurfaceComponentProposalLayer'
+import { applySurfaceOps, type SurfaceOp, validateSurfaceOps } from '../spatial/model/surfaceOps'
+import { resolveSurfaceIntent, type SurfaceIntent } from '../spatial/model/surfaceIntent'
 
 interface Props {
   projectId?: string
@@ -169,6 +173,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
   const marquee = useRef<SpatialPointerSession>(IDLE_SPATIAL_POINTER)
   const [marqueeRect, setMarqueeRect] = useState<{ left: number; top: number; width: number; height: number } | null>(null)
   const [selectedRegionId, setSelectedRegionId] = useState<string | null>(null)
+  const [componentProposalOps, setComponentProposalOps] = useState<readonly SurfaceOp[]>([])
   const [createMenu, setCreateMenu] = useState<{ from: string; x: number; y: number; screenX: number; screenY: number } | null>(null)
   const toWorld = (clientX: number, clientY: number, rect: DOMRect) => spatialScreenToWorld(clientX, clientY, rect, camera)
   // P0 2026-08-17: there is no persistent client-owned arrange mode.
@@ -220,6 +225,16 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
   const textSelectionExpanded = textSelection && selectedNodesForTools.some((node) => node.displayMode !== 'compact')
   const selectionBounds = selectedIds.length > 1 ? selectedVisualBounds : null
   const componentSelectionBounds = selectedVisualBounds ? { x: selectedVisualBounds.x, y: selectedVisualBounds.y, w: selectedVisualBounds.width, h: selectedVisualBounds.height } : null
+  const componentProposalElements = useMemo(() => componentProposalOps.flatMap((op) => op.type === 'create-component' ? [op.component] : []), [componentProposalOps])
+  const previewComponentIntent = (intent: SurfaceIntent) => {
+    const ops = resolveSurfaceIntent(intent, { projectId, surface: 'main', existing: surfaceElements, selectionBounds: componentSelectionBounds, viewportOrigin: surfaceViewportOrigin(camera) })
+    setComponentProposalOps(validateSurfaceOps(surfaceElements, ops).ok ? ops : [])
+  }
+  const keepComponentProposal = () => {
+    if (!onSurfaceElementsChange || !componentProposalOps.length) return
+    onSurfaceElementsChange(applySurfaceOps(surfaceElements, componentProposalOps))
+    setComponentProposalOps([])
+  }
   const overlayWidth = canvasRef.current?.clientWidth ?? 1440
   const overlayHeight = canvasRef.current?.clientHeight ?? 900
   const selectionToolbarAnchor = selectionBounds ? spatialWorldToScreen({ x: selectionBounds.x, y: selectionBounds.y }, camera) : null
@@ -768,6 +783,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
   const spatialOverlays = <>
       {lod !== 'full' && <div className="lod-badge">{nodes.length} 个节点 · {lod === 'overview' ? '总览' : lod === 'aggregate' ? '聚合显示' : '简化显示'}</div>}
     {surfaceMode === 'project' && onSurfaceElementsChange && <SurfaceComponentShelf projectId={projectId} surface="main" elements={surfaceElements} selectionIds={selectedIds} selectionBounds={componentSelectionBounds} viewportOrigin={surfaceViewportOrigin(camera)} onElementsChange={onSurfaceElementsChange}/>}
+    {surfaceMode === 'project' && onSurfaceElementsChange && <AgentSurfaceComposer surface="main" targetIds={selectedIds} previewing={componentProposalOps.length > 0} onPreview={previewComponentIntent} onKeep={keepComponentProposal} onRevert={() => setComponentProposalOps([])}/>}
     {dropGhost && <div className="lcos-drop-ghost" style={{ left: dropGhost.x, top: dropGhost.y }} aria-hidden="true">
       <span className="lcos-drop-ghost-stack"><i /><i /><i /></span>
       <strong>{dropGhost.count}</strong>
@@ -969,6 +985,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
     if ((kind === 'uri' || kind === 'text') && onExternalTextDrop) onExternalTextDrop(id, point.x, point.y)
   }} overlays={spatialOverlays}>
     {surfaceMode === 'project' && onSurfaceElementsChange && <SurfaceComponentLayer surface="main" elements={surfaceElements} zoom={camera.zoom} renderContext={{ nodes, edges, onSelectNode: onSelect, onOpenNode: onDoubleClick }} onElementsChange={onSurfaceElementsChange}/>}
+    {surfaceMode === 'project' && <SurfaceComponentProposalLayer surface="main" elements={componentProposalElements} renderContext={{ nodes, edges }}/>}
     <SpatialNodeLayer className="lcos-arrange-structure-layer">
       {alignmentGuide?.x !== undefined && <i className="lcos-alignment-guide axis-x" style={{ left: alignmentGuide.x }}/>} {/* x guide */}
       {alignmentGuide?.y !== undefined && <i className="lcos-alignment-guide axis-y" style={{ top: alignmentGuide.y }}/>} {/* y guide */}

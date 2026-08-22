@@ -3,7 +3,11 @@ import { useMemo, useState } from 'react'
 import type { SurfaceKind } from '../spatial/model/surfaceElementTypes'
 import type { SurfaceIntent } from '../spatial/model/surfaceIntent'
 
-const choices: Readonly<Record<'context' | 'workflow', readonly { kind: SurfaceIntent['kind']; label: string; hint: string }[]>> = {
+const choices: Readonly<Record<'main' | 'context' | 'workflow', readonly { kind: SurfaceIntent['kind']; label: string; hint: string }[]>> = {
+  main: [
+    { kind: 'organize', label: '整理成项目区域', hint: '只提出当前主画布的 Presentation 区域' },
+    { kind: 'prepare-workbench', label: '准备工作台', hint: '把当前真实对象绑定到一个可移动工作台' },
+  ],
   context: [
     { kind: 'organize', label: '整理成语境区', hint: '只生成当前 Presentation 边界' },
     { kind: 'show-structure', label: '拉出结构', hint: '读取当前材料的真实层级' },
@@ -15,7 +19,7 @@ const choices: Readonly<Record<'context' | 'workflow', readonly { kind: SurfaceI
 }
 
 export function AgentSurfaceComposer({ surface, targetIds, previewing = false, onPreview, onKeep, onRevert }: {
-  readonly surface: Extract<SurfaceKind, 'context' | 'workflow'>
+  readonly surface: Extract<SurfaceKind, 'main' | 'context' | 'workflow'>
   readonly targetIds: readonly string[]
   readonly previewing?: boolean
   readonly onPreview: (intent: SurfaceIntent) => void
