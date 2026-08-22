@@ -6,6 +6,7 @@ import type { CanvasNode } from '../src/model'
 import type { SurfaceElement } from '../src/features/spatial/model/surfaceElementTypes'
 import { ContextPackComponent, RelationshipFieldComponent, StructureMapComponent } from '../src/features/spatial/components/ContextComponentRenderers'
 import { SurfaceComponentProposalLayer } from '../src/features/spatial/components/SurfaceComponentProposalLayer'
+import { WorkbenchFrameComponent } from '../src/features/spatial/components/WorkflowComponentRenderers'
 import { LcosGlyph } from '../src/features/spatial/visual/LcosGlyph'
 import { boundRegionSemanticForView, resolveSpatialSignal } from '../src/features/spatial/visual/spatialSignal'
 import { surfaceComponentRegistry } from '../src/features/spatial/components/surfaceComponentRegistry'
@@ -32,8 +33,24 @@ describe('Spatial Component Foundation integrity', () => {
     expect(surfaceComponentContract('context-pack').requiresSelection).toBe(true)
     expect(surfaceComponentContract('review').createMode).toBe('planned')
     expect(surfaceComponentsFor('workflow', true).map((item) => item.type)).not.toContain('workflow-step')
-    expect(surfaceComponentsFor('workflow', true).map((item) => item.type)).not.toEqual(expect.arrayContaining(['review', 'checkpoint', 'workbench']))
+    expect(surfaceComponentsFor('workflow', true).map((item) => item.type)).toContain('workbench')
+    expect(surfaceComponentsFor('workflow', true).map((item) => item.type)).not.toEqual(expect.arrayContaining(['review', 'checkpoint']))
     expect(surfaceComponentsFor('context', true).map((item) => item.type)).toEqual(expect.arrayContaining(['structure-map', 'evolution', 'relationship-field', 'context-pack']))
+  })
+
+  it('renders Workbench from bound Project Views instead of hard-coded routines', () => {
+    const nodes: CanvasNode[] = [
+      { id: 'view-page', title: '客户飞书文档', subtitle: 'Linked page', kind: 'source', x: 0, y: 0, width: 180, height: 100 },
+      { id: 'view-other', title: '范围外页面', subtitle: '', kind: 'source', x: 0, y: 0, width: 180, height: 100 },
+    ]
+    const html = renderToStaticMarkup(createElement(WorkbenchFrameComponent, {
+      element: element({ type: 'workbench', surface: 'workflow', binding: { projectViewIds: ['view-page'] } }),
+      context: { nodes },
+    }))
+    expect(html).toContain('客户飞书文档')
+    expect(html).not.toContain('范围外页面')
+    expect(html).not.toContain('今日工作页')
+    expect(html).toContain('等待真实 Agent Tool Runtime')
   })
 
   it('renders Context components from bound Project objects instead of decorative placeholder copy', () => {
@@ -166,12 +183,15 @@ describe('Spatial Component Foundation integrity', () => {
     } })
   })
 
-  it('keeps Agent surface intents declarative and fail-closed', () => {
+  it('creates reviewable Workbench proposals while unsupported runtime intents stay fail-closed', () => {
     const ops = resolveSurfaceIntent({ kind: 'place-quick-note-near-page', targetIds: ['page-a'] }, {
       projectId: 'project-a', surface: 'workflow', existing: [],
       viewportOrigin: { x: 0, y: 0 }, createId: (type) => `fixture:${type}`,
     })
-    expect(ops).toEqual([])
+    expect(ops).toMatchObject([{ type: 'create-component', component: {
+      id: 'fixture:workbench', type: 'workbench', binding: { projectViewIds: ['page-a'] },
+      presentation: { variant: 'quick-note' },
+    } }])
     expect(resolveSurfaceIntent({ kind: 'restore-routine', targetIds: ['page-a'] }, {
       projectId: 'project-a', surface: 'workflow', existing: [], viewportOrigin: { x: 0, y: 0 },
     })).toEqual([])

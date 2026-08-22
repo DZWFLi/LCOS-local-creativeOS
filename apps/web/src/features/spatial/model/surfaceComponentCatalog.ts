@@ -80,7 +80,7 @@ export const SURFACE_COMPONENT_CATALOG: Readonly<Record<SurfaceComponentType, Su
   workbench: {
     type: 'workbench', label: 'Workbench', description: 'Surface 只拥有外框，内部工具继续拥有自己的 runtime/domain。',
     surfaces: ['main', 'context', 'workflow'], minSize: { w: 420, h: 260 }, movable: true, resizable: true,
-    acceptsDrop: ['project-view', 'file', 'text', 'material-transfer'], capabilities: { bind: true, collapse: true, removeProjection: true }, createMode: 'planned',
+    acceptsDrop: ['project-view', 'file', 'text', 'material-transfer'], capabilities: { bind: true, collapse: true, removeProjection: true }, createMode: 'presentation',
   },
 }
 

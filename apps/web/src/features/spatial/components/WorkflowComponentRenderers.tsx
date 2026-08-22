@@ -4,6 +4,7 @@ import type { SurfaceComponentRenderProps } from './surfaceComponentTypes'
 import { LcosGlyph } from '../visual/LcosGlyph'
 import { LightSegment } from '../visual/LightSegment'
 import { resolveSpatialSignal, type SpatialRuntimeSignal } from '../visual/spatialSignal'
+import { WebWorkbench } from '../../workbench/WebWorkbench'
 
 function bindingLabel(element: SurfaceComponentRenderProps['element']) {
   const entry = Object.entries(element.binding ?? {}).find(([, value]) => typeof value === 'string' && value.length > 0)
@@ -31,7 +32,9 @@ export function CheckpointComponent({ element, selected }: SurfaceComponentRende
   return <div className={`lcos-workflow-component workflow-checkpoint ${selected ? 'is-selected' : ''}`} data-workflow-component="checkpoint"><Header icon={<History size={14}/>} title="Checkpoint" hint="可恢复的工作现场锚点" semantic={semantic} selected={selected}/><div className="lcos-workflow-checkpoint-row"><span>{bound ? '恢复点' : '待绑定'}</span><strong>{bindingLabel(element)}</strong></div><footer>只绑定 revision / checkpoint identity</footer></div>
 }
 
-export function WorkbenchFrameComponent({ element, selected }: SurfaceComponentRenderProps) {
+export function WorkbenchFrameComponent({ element, selected, context }: SurfaceComponentRenderProps) {
   const semantic = element.presentation?.variant ?? 'candidate'
-  return <div className={`lcos-workflow-component workflow-workbench ${selected ? 'is-selected' : ''}`} data-workflow-component="workbench"><Header icon={<SquareStack size={14}/>} title="Workbench" hint="工具宿主外框；真实工具尚未接通" semantic={semantic} selected={selected}/><div className="lcos-workbench-slots"><span>Input</span><span>Tool</span><span>Output</span></div><footer>{bindingLabel(element)}</footer></div>
+  const ids = new Set([element.binding?.projectViewId, ...(element.binding?.projectViewIds ?? [])].filter((id): id is string => Boolean(id)))
+  const pages = (context?.nodes ?? []).filter((node) => ids.has(node.id))
+  return <div className={`lcos-workflow-component workflow-workbench ${selected ? 'is-selected' : ''}`} data-workflow-component="workbench"><Header icon={<SquareStack size={14}/>} title="Workbench" hint="项目页面与临时工作材料" semantic={semantic} selected={selected}/><WebWorkbench pages={pages} onOpenPage={context?.onOpenNode}/><footer>{bindingLabel(element)}</footer></div>
 }

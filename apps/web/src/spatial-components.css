@@ -343,6 +343,8 @@
 .lcos-web-workbench > header strong { font-size: 9px; }
 .lcos-web-workbench small { color: rgba(48,68,84,.46); }
 .lcos-web-workbench button { border: 0; background: transparent; color: rgba(45,86,113,.68); cursor: pointer; }
+.lcos-web-workbench button:disabled { cursor: not-allowed; opacity: .42; }
+.lcos-web-workbench-empty { padding: 11px; border: 1px dashed rgba(77,145,188,.18); border-radius: 8px; color: rgba(48,68,84,.48); line-height: 1.5; }
 .lcos-web-workbench > header button { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 7px; background: rgba(77,145,188,.1); }
 .lcos-web-workbench nav { display: flex; gap: 4px; overflow: auto; }
 .lcos-web-workbench nav button { padding: 4px 6px; border-radius: 6px; white-space: nowrap; }
