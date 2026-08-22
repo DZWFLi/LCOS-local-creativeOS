@@ -1,5 +1,16 @@
 #!/usr/bin/env node
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  copyFileSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  readlinkSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -10,12 +21,26 @@ function requirePath(path, label) {
   if (!existsSync(path)) throw new Error(`${label} missing: ${path}`)
   return path
 }
-function copy(source, destination) {
+function copy(source, destination, announce = true) {
   requirePath(source, 'desktop runtime input')
-  mkdirSync(dirname(destination), { recursive: true })
-  cpSync(source, destination, { recursive: true, force: true })
+  if (announce) console.log(`Preparing desktop runtime input: ${source}`)
+  const stat = lstatSync(source)
+  if (stat.isDirectory()) {
+    mkdirSync(destination, { recursive: true })
+    for (const entry of readdirSync(source)) {
+      copy(join(source, entry), join(destination, entry), false)
+    }
+  } else if (stat.isSymbolicLink()) {
+    mkdirSync(dirname(destination), { recursive: true })
+    symlinkSync(readlinkSync(source), destination, process.platform === 'win32' ? 'junction' : undefined)
+  } else {
+    mkdirSync(dirname(destination), { recursive: true })
+    copyFileSync(source, destination)
+  }
+  if (announce) console.log(`Prepared desktop runtime output: ${destination}`)
 }
 
+console.log(`Resetting desktop runtime target: ${target}`)
 rmSync(target, { recursive: true, force: true })
 mkdirSync(target, { recursive: true })
 
@@ -26,6 +51,14 @@ copy(join(root, 'apps', 'local-core', 'scripts', 'shell-thumb.ps1'), join(target
 
 copy(join(root, 'packages', 'domain', 'dist'), join(target, 'node_modules', '@local-creative-os', 'domain', 'dist'))
 copy(join(root, 'packages', 'domain', 'package.json'), join(target, 'node_modules', '@local-creative-os', 'domain', 'package.json'))
+
+const contractsTarget = join(target, 'node_modules', '@local-creative-os', 'contracts')
+copy(join(root, 'packages', 'contracts', 'dist'), join(contractsTarget, 'dist'))
+const contractsPackage = JSON.parse(readFileSync(join(root, 'packages', 'contracts', 'package.json'), 'utf8'))
+writeFileSync(join(contractsTarget, 'package.json'), JSON.stringify({
+  ...contractsPackage,
+  exports: { '.': './dist/index.js' },
+}, null, 2) + '\n')
 
 copy(join(root, 'node_modules', 'pdfjs-dist'), join(target, 'node_modules', 'pdfjs-dist'))
 copy(join(root, 'node_modules', '@napi-rs'), join(target, 'node_modules', '@napi-rs'))

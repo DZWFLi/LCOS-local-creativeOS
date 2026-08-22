@@ -339,9 +339,8 @@ ipcMain.handle('desktop:open-capture-space', async () => { openCaptureSpace() })
 ipcMain.handle('desktop:show-capture-float', async () => { showCaptureWindow() })
 ipcMain.handle('desktop:hide-capture-float', async () => { hideCaptureWindow() })
 
-await app.whenReady()
-
-try {
+void app.whenReady().then(async () => {
+  try {
   const userData = app.getPath('userData')
   runtime = new DesktopRuntimeSupervisor({
     runtimeBundleRoot: runtimeBundleRoot(),
@@ -379,11 +378,12 @@ try {
       catch (setupError) { dialog.showErrorBox('Codex 连接失败', setupError instanceof Error ? setupError.message : String(setupError)) }
     }
   }
-} catch (error) {
-  const message = error instanceof Error ? error.stack ?? error.message : String(error)
-  dialog.showErrorBox('LCOS 启动失败', message)
-  quitting = true
-  await runtime?.stop().catch(() => {})
-  await webHost?.close().catch(() => {})
-  app.quit()
-}
+  } catch (error) {
+    const message = error instanceof Error ? error.stack ?? error.message : String(error)
+    dialog.showErrorBox('LCOS 启动失败', message)
+    quitting = true
+    await runtime?.stop().catch(() => {})
+    await webHost?.close().catch(() => {})
+    app.quit()
+  }
+})
