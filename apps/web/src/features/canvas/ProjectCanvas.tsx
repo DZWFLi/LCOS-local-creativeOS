@@ -13,9 +13,9 @@ import type { ArtifactRevisionProvenance } from '../../runtime/projectionAdapter
 import { SpatialCanvas } from '../spatial/SpatialCanvas'
 import { SpatialEdgeLayer } from '../spatial/SpatialEdgeLayer'
 import { SpatialNodeLayer } from '../spatial/SpatialNodeLayer'
-import { edgeScrollDelta, spatialBoundsForPlacements, spatialScreenToWorld, spatialViewportWorldBounds, spatialWorldToScreen } from '../spatial/spatialCamera'
+import { edgeScrollDelta, spatialBoundsForPlacements, spatialScreenToWorld, spatialWorldToScreen } from '../spatial/spatialCamera'
 import { spatialIdsIntersectingScreenRect } from '../spatial/spatialHitTest'
-import { spatialLodForCount } from '../spatial/spatialLod'
+import { spatialLodForCount, spatialOverviewProjection } from '../spatial/spatialLod'
 import { advanceSpatialMarquee, beginSpatialMarquee, endSpatialPointer, spatialMarqueeRect } from '../spatial/spatialInteractionMachine'
 import { IDLE_SPATIAL_POINTER, type SpatialPointerSession } from '../spatial/spatialTypes'
 import { LightCurtain } from '../drop/LightCurtain'
@@ -186,20 +186,12 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
   const effectiveWorkspaceFrames = workspaceFrames
   const lod = spatialLodForCount(spatialNodes.length)
   const renderNodes = useMemo(() => {
-    if (spatialNodes.length < 48) return spatialNodes
-    const viewport = spatialViewportWorldBounds(camera, { width: canvasRef.current?.clientWidth ?? 1440, height: canvasRef.current?.clientHeight ?? 900 }, 320)
-    const left = viewport.x
-    const top = viewport.y
-    const right = viewport.x + viewport.width
-    const bottom = viewport.y + viewport.height
     const keep = new Set([...selectedIds, ...(pendingId ? [pendingId] : [])])
-    const candidates = spatialNodes.filter((node) => keep.has(node.id) || (node.x < right && node.x + node.width > left && node.y < bottom && node.y + node.height > top))
-    if (lod !== 'overview' || candidates.length <= 180) return candidates
-    const selected = candidates.filter((node) => keep.has(node.id))
-    const rest = candidates.filter((node) => !keep.has(node.id))
-    const stride = Math.max(1, Math.ceil(rest.length / Math.max(1, 180 - selected.length)))
-    return [...selected, ...rest.filter((_, index) => index % stride === 0)].slice(0, 180)
-  }, [spatialNodes, selectedIds, pendingId, camera.x, camera.y, camera.zoom, lod])
+    return spatialOverviewProjection(spatialNodes, camera, keep, {
+      width: canvasRef.current?.clientWidth ?? 1440,
+      height: canvasRef.current?.clientHeight ?? 900,
+    })
+  }, [spatialNodes, selectedIds, pendingId, camera])
   const renderIds = useMemo(() => new Set(renderNodes.map((node) => node.id)), [renderNodes])
   const zoomBandForEdges = camera.zoom < 0.35 ? 'far' as const : camera.zoom < 0.65 ? 'mid' as const : 'near' as const
   const focusEdgeIds = useMemo(() => {

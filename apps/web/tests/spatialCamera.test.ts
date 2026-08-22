@@ -46,4 +46,13 @@ describe('shared spatial camera',()=>{
     expect(projected.some((item)=>item.id==='node-499')).toBe(true)
     expect(items).toHaveLength(500)
   })
+
+  it('keeps every explicit selection at the 1000-object overview boundary',()=>{
+    const items=Array.from({length:1000},(_,index)=>({id:`node-${index}`,x:(index%40)*52,y:Math.floor(index/40)*44,width:38,height:28}))
+    const selected=new Set(items.slice(800).map((item)=>item.id))
+    const projected=spatialOverviewProjection(items,{x:0,y:0,zoom:.35},selected,{width:1440,height:900},180)
+    expect(projected).toHaveLength(200)
+    expect([...selected].every((id)=>projected.some((item)=>item.id===id))).toBe(true)
+    expect(items).toHaveLength(1000)
+  })
 })
