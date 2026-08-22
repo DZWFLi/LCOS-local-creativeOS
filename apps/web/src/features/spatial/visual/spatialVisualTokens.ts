@@ -10,7 +10,9 @@ export const spatialVisualTokens = {
     slowMs: 360,
   },
   glyph: {
-    size: 18,
+    size: 22,
+    coreSize: 11,
+    shellThickness: 3,
   },
 } as const
 

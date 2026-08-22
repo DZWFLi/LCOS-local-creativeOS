@@ -7,6 +7,7 @@ import type { SurfaceElement } from '../src/features/spatial/model/surfaceElemen
 import { ContextPackComponent, RelationshipFieldComponent, StructureMapComponent } from '../src/features/spatial/components/ContextComponentRenderers'
 import { SurfaceComponentProposalLayer } from '../src/features/spatial/components/SurfaceComponentProposalLayer'
 import { LcosGlyph } from '../src/features/spatial/visual/LcosGlyph'
+import { resolveSpatialSignal } from '../src/features/spatial/visual/spatialSignal'
 import { surfaceComponentRegistry } from '../src/features/spatial/components/surfaceComponentRegistry'
 import { surfaceComponentContract, surfaceComponentsFor } from '../src/features/spatial/model/surfaceComponentCatalog'
 import { applySurfaceOp, applySurfaceOps, validateSurfaceOp, validateSurfaceOps } from '../src/features/spatial/model/surfaceOps'
@@ -73,6 +74,14 @@ describe('Spatial Component Foundation integrity', () => {
       expect(html).toContain('lcos-spatial-glyph-core')
       expect(html).toContain('lcos-spatial-glyph-eyes')
     }
+  })
+
+  it('resolves one Presentation signal across Glyph, Segment and Matrix without inventing truth', () => {
+    expect(resolveSpatialSignal({ selected: true })).toMatchObject({ glyph: 'focus', matrixActive: false, segmentActive: true })
+    expect(resolveSpatialSignal({ semantic: '待客户确认' })).toMatchObject({ glyph: 'waiting', matrixActive: false })
+    expect(resolveSpatialSignal({ semantic: '已冻结 不要动' })).toMatchObject({ glyph: 'protected', matrixActive: false })
+    expect(resolveSpatialSignal({ runtime: 'processing' })).toMatchObject({ glyph: 'working', matrixActive: true })
+    expect(resolveSpatialSignal({ selected: true, semantic: '冲突', runtime: 'processing' })).toMatchObject({ glyph: 'blocked', matrixActive: false })
   })
 
   it('remove-projection removes only the SurfaceElement and never carries a project-delete operation', () => {

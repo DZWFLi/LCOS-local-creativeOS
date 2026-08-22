@@ -165,6 +165,14 @@
 @keyframes lcos-glyph-send-right { 50% { transform: translateX(2px); opacity: .38; } }
 @keyframes lcos-glyph-send-bottom { 50% { transform: translateY(2px); opacity: .38; } }
 @keyframes lcos-glyph-send-left { 50% { transform: translateX(-2px); opacity: .38; } }
+.lcos-reconstructed .lcos-workflow-action-signal { width: 22px; height: 22px; right: 3px; bottom: 3px; }
+.lcos-surface-fence-body.signal-protected { border-style: solid; border-color: rgba(68,103,117,.22); }
+.lcos-surface-fence-body.signal-candidate, .lcos-surface-region-body.signal-candidate { border-style: dashed; }
+.lcos-surface-fence-body.signal-waiting, .lcos-surface-region-body.signal-waiting { border-right-color: transparent; }
+.lcos-surface-fence-body.signal-blocked, .lcos-surface-region-body.signal-blocked { border-color: rgba(177,78,75,.22); }
+.lcos-surface-region-body.signal-working { border-color: rgba(70,125,164,.20); background: linear-gradient(145deg, rgba(70,125,164,.055), rgba(119,98,163,.025)); }
+.lcos-workflow-action.signal-working { border-color: rgba(70,125,164,.30); }
+.lcos-workflow-action.signal-blocked { border-color: rgba(177,78,75,.32); }
 
 .lcos-matrix-activity {
   position: absolute;

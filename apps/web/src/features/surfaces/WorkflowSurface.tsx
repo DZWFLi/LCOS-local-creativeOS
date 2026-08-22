@@ -33,7 +33,8 @@ import { useWorkflowActionState } from '../../state/presentationWorkflowActionSt
 import { useSpatialSessionCamera } from '../../state/spatialSessionState'
 import { useSpatialFocusRequest, type SpatialFocusRequest } from '../spatial/useSpatialFocusRequest'
 import { SurfaceObject } from './SurfaceObject'
-import { LcosSignalGlyph } from '../design/DotGlyph'
+import { LcosGlyph } from '../spatial/visual/LcosGlyph'
+import { resolveSpatialSignal, type SpatialRuntimeSignal } from '../spatial/visual/spatialSignal'
 import { layoutManualSpatial } from './surfaceLayouts'
 import { SurfaceComponentLayer } from '../spatial/components/SurfaceComponentLayer'
 import { SurfaceComponentProposalLayer } from '../spatial/components/SurfaceComponentProposalLayer'
@@ -538,10 +539,18 @@ export function WorkflowSurface(props: Props) {
       <SpatialNodeLayer>
         {actions.map((action, index) => {
           const attachments = action.attachedViewIds.flatMap((id) => { const node = visibleNodes.find((item) => item.id === id); return node ? [node] : [] })
+          const runtimeSignal: SpatialRuntimeSignal = props.runOverlay
+            ? action.attachedViewIds.some((id) => props.runOverlay?.failedNodeIds.includes(id)) ? 'failed'
+              : action.attachedViewIds.some((id) => props.runOverlay?.activeNodeIds.includes(id)) ? 'processing'
+                : action.attachedViewIds.length > 0 && action.attachedViewIds.every((id) => props.runOverlay?.completedNodeIds.includes(id)) ? 'complete'
+                  : 'idle'
+            : 'idle'
+          const actionSignal = resolveSpatialSignal({ selected: selectedActionId === action.id, runtime: runtimeSignal })
           return <div
             key={action.id}
             data-workflow-action-id={action.id}
-            className={`lcos-workflow-action lcos-spatial-placement ${selectedActionId === action.id ? 'selected' : ''} ${draggingActionId === action.id ? 'is-dragging' : ''} ${linkTargetId === action.id ? 'is-link-target' : ''} ${link?.from === action.id ? 'is-link-source' : ''}`}
+            className={`lcos-workflow-action lcos-spatial-placement ${actionSignal.signalClass} ${selectedActionId === action.id ? 'selected' : ''} ${draggingActionId === action.id ? 'is-dragging' : ''} ${linkTargetId === action.id ? 'is-link-target' : ''} ${link?.from === action.id ? 'is-link-source' : ''}`}
+            data-spatial-signal={actionSignal.glyph}
             style={{ left: action.x, top: action.y, width: ACTION_WIDTH, height: ACTION_HEIGHT, '--i': index } as CSSProperties}
             onPointerDown={(event) => beginActionDrag(event, action)}
             onPointerMove={moveActionDrag}
@@ -561,7 +570,7 @@ export function WorkflowSurface(props: Props) {
               <button type="button" title="删除步骤；材料不会被删除" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); removeAction(action.id) }}><Trash2 size={10}/></button>
             </div>
             <button type="button" className="lcos-workflow-port output" aria-label={`从 ${action.label} 连接下一步`} onPointerDown={(event) => beginLink(event, action.id)}><Link2 size={8}/></button>
-            <span className="lcos-workflow-action-signal" aria-hidden="true"><LcosSignalGlyph state={selectedActionId === action.id ? 'focus' : 'stable'}/></span>
+            <span className="lcos-workflow-action-signal" aria-hidden="true"><LcosGlyph state={actionSignal.glyph}/></span>
           </div>
         })}
 
