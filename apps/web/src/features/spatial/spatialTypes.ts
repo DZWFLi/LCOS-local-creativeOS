@@ -1,6 +1,6 @@
 import type { Camera } from '../../model'
 
-export type SpatialLod = 'full' | 'simplified' | 'overview'
+export type SpatialLod = 'full' | 'simplified' | 'aggregate' | 'overview'
 export type SpatialDensity = 'comfortable' | 'compact' | 'constrained'
 
 export interface SpatialPoint { x: number; y: number }

@@ -2,7 +2,7 @@ import type { SpatialDensity, SpatialLod, SpatialSize } from './spatialTypes'
 
 /** Shared semantic LOD contract. Renderers may simplify anatomy, never change Project Truth. */
 export function spatialLodForCount(count: number): SpatialLod {
-  return count >= 300 ? 'overview' : count >= 150 ? 'simplified' : 'full'
+  return count >= 300 ? 'overview' : count > 150 ? 'aggregate' : count > 80 ? 'simplified' : 'full'
 }
 
 /** Viewport density is a sidecar/overlay concern, independent from graph semantics. */

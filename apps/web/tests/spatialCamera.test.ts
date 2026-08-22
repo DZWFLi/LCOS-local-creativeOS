@@ -30,7 +30,10 @@ describe('shared spatial camera',()=>{
 
   it('shares LOD and viewport density thresholds across renderers',()=>{
     expect(spatialLodForCount(80)).toBe('full')
+    expect(spatialLodForCount(81)).toBe('simplified')
     expect(spatialLodForCount(150)).toBe('simplified')
+    expect(spatialLodForCount(151)).toBe('aggregate')
+    expect(spatialLodForCount(299)).toBe('aggregate')
     expect(spatialLodForCount(300)).toBe('overview')
     expect(spatialDensityForSize({width:500,height:700})).toBe('constrained')
     expect(spatialDensityForSize({width:700,height:700})).toBe('compact')
