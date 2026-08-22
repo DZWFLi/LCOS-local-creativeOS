@@ -26,7 +26,7 @@ const checks = [
   ['SurfaceBounds is one x/y/w/h contract', contracts.includes('export interface SurfaceBoundsV0') && contracts.includes('w: number') && contracts.includes('h: number')],
   ['SurfaceBinding stores identity locators only', contracts.includes('export interface SurfaceBindingV0') && !contracts.includes('FullCopiedProjectEntity')],
   ['Component catalog covers the first trusted capability set', ['fence','region','portal','structure-map','evolution','relationship-field','context-pack','workflow-step','review','workbench'].every((name) => catalog.includes(`${name.includes('-') ? `'${name}'` : name}:`))],
-  ['Planned capability shells cannot masquerade as Human-createable components', catalog.includes("createMode: 'planned'") && catalog.includes("readonly createMode: 'presentation' | 'adapter-only' | 'planned'")],
+  ['Non-presentation capability shells cannot masquerade as Human-createable components', catalog.includes("readonly createMode: 'presentation' | 'adapter-only' | 'planned'") && catalog.includes("entry.createMode === 'presentation'")],
   ['Registry resolves actual renderers', registry.includes('rendererByType') && registry.includes('FenceComponent') && registry.includes('resolveSurfaceComponent')],
   ['Main Fence renders through the Registry adapter', canvas.includes("resolveSurfaceComponent('fence')") && canvas.includes('main-fence:${region.id}')],
   ['Surface Frame owns move/resize physics in zoom-correct world coordinates', frame.includes("kind: 'move' | 'resize'") && frame.includes('/ Math.max(.05, zoom)')],

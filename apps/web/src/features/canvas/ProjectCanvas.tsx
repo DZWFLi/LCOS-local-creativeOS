@@ -3,7 +3,7 @@ import type { AttentionBucketV0, RuntimeProviderStatus } from '@local-creative-o
 import { Copy, CopyPlus, Crosshair, Ellipsis, Fence, FolderTree, GripVertical, LayoutGrid, Pencil, Trash2 } from 'lucide-react'
 import type { Camera, CanvasEdge, CanvasNode, NodeDisplayMode, RunStatus, WorkspaceFrameVM } from '../../model'
 import { getSelectionBounds, nodeDensity } from './canvasGeometry'
-import { getVisualSelectionBounds, MAIN_CANVAS_GRID_STEP, nodeVisualBounds, nodeVisualInsets } from './canvasVisualGeometry'
+import { getVisualSelectionBounds, MAIN_CANVAS_GRID_STEP, nodeVisualBounds, nodeVisualInsets, snapNodePositionToGrid } from './canvasVisualGeometry'
 import { getPendingZoneBounds } from './canvasLayout'
 import type { LayoutPreviewItem } from './scopeLayout'
 import type { SpatialRegionDraft } from '../../state/spatialRegion'
@@ -951,10 +951,13 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
         }
         lastDragPointer.current = { x: event.clientX, y: event.clientY }
         const point = toWorld(event.clientX, event.clientY, rect)
-        const rawPoint = { x: point.x - candidate.offsetX, y: point.y - candidate.offsetY }
         const anchorNode = nodes.find((node) => node.id === candidate.id)
-        dragPoint.current = rawPoint
-        const nextGuide = anchorNode ? alignmentGuideFor(anchorNode, rawPoint.x, rawPoint.y, candidate.group.map((item) => item.id)) : null
+        const rawPoint = { x: point.x - candidate.offsetX, y: point.y - candidate.offsetY }
+        const dragPosition = gridSnapEnabled && anchorNode
+          ? snapNodePositionToGrid(anchorNode, rawPoint.x, rawPoint.y, camera.zoom)
+          : rawPoint
+        dragPoint.current = dragPosition
+        const nextGuide = anchorNode ? alignmentGuideFor(anchorNode, dragPosition.x, dragPosition.y, candidate.group.map((item) => item.id)) : null
         setAlignmentGuide((current) => current?.x === nextGuide?.x && current?.y === nextGuide?.y ? current : nextGuide)
         scheduleDraggedNode()
       }

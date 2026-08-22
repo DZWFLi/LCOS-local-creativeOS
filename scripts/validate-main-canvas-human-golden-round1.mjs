@@ -6,7 +6,7 @@ const checks = [
  ['Scene folder drop leaves entity on Main', ['apps/web/src/App.tsx', '双击 Scene 实体进入']],
  ['F2 renames normal nodes', ['apps/web/src/App.tsx', "event.key === 'F2' && selectedIds.length === 1"]],
  ['Selection rename not scope-only', ['apps/web/src/App.tsx', 'selectedIds.length === 1 && selectedNodes.length === 1']],
- ['Culling starts before 150', ['apps/web/src/features/canvas/ProjectCanvas.tsx', 'spatialNodes.length < 48']],
+ ['Culling starts before 150', ['apps/web/src/features/spatial/spatialLod.ts', 'items.length < 48']],
  ['Drag preview local', ['apps/web/src/features/canvas/ProjectCanvas.tsx', 'dragPreviewPositions']],
  ['Drag commit once', ['apps/web/src/features/canvas/ProjectCanvas.tsx', 'setDragPreviewPositions(preview)']],
  ['Overview LOD uses cheap proxy', ['apps/web/src/features/canvas/ProjectCanvas.tsx', 'lcos-overview-node-proxy']],
