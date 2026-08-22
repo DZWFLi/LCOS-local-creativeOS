@@ -6246,6 +6246,8 @@ export function App() {
         spatialRegions,
         surfaceElements: mainSurfaceElements,
         onSurfaceElementsChange: setMainSurfaceElements,
+        portalTargets: projectRailViews.filter((view) => view.kind === 'scene' || view.kind === 'context' || view.kind === 'workflow').map((view) => ({ id: view.id, label: view.title, kind: view.kind })),
+        onOpenPortalTarget: (targetId) => { const target = projectRailViews.find((view) => view.id === targetId); if (target) activateProjectRailView(target) },
         onCreateRegion: createRegionFromCurrentSelection,
         onClearRegion: clearSpatialRegion,
         onRegionBoundsChange: updateSpatialRegionBounds,

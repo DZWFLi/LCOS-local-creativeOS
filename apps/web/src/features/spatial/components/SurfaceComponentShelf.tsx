@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import type { SurfaceBounds, SurfaceComponentType, SurfaceElement, SurfaceKind } from '../model/surfaceElementTypes'
-import { surfaceComponentsFor } from '../model/surfaceComponentCatalog'
+import { surfaceComponentContract, surfaceComponentsFor } from '../model/surfaceComponentCatalog'
 import { placeSurfaceComponent, regionBoundsForSelection } from '../model/surfaceGeometry'
 import { applySurfaceOp } from '../model/surfaceOps'
 
@@ -11,7 +11,7 @@ function createId(type: SurfaceComponentType) {
   return `surface:${type}:${Date.now().toString(36)}:${fallbackId}`
 }
 
-export function SurfaceComponentShelf({ projectId, surface, elements, selectionIds = [], selectionBounds, viewportOrigin, onElementsChange }: {
+export function SurfaceComponentShelf({ projectId, surface, elements, selectionIds = [], selectionBounds, viewportOrigin, portalTargets = [], onElementsChange }: {
   readonly projectId: string
   readonly surface: SurfaceKind
   readonly elements: readonly SurfaceElement[]
@@ -19,6 +19,7 @@ export function SurfaceComponentShelf({ projectId, surface, elements, selectionI
   readonly selectionBounds?: SurfaceBounds | null
   readonly viewportOrigin: { readonly x: number; readonly y: number }
   readonly onElementsChange: (elements: SurfaceElement[]) => void
+  readonly portalTargets?: readonly { readonly id: string; readonly label: string; readonly kind: string }[]
 }) {
   const [open, setOpen] = useState(false)
   const [dragPreview, setDragPreview] = useState<{ readonly type: SurfaceComponentType; readonly label: string; readonly x: number; readonly y: number; readonly valid: boolean } | null>(null)
@@ -44,6 +45,18 @@ export function SurfaceComponentShelf({ projectId, surface, elements, selectionI
       id: createId(type), projectId, surface, type, bounds,
       ...(definition.capabilities.bind && selectedProjectViewIds.length ? { binding: { projectViewIds: selectedProjectViewIds } } : {}),
       presentation: { zIndex: type === 'fence' || type === 'region' ? 1 : 4 },
+    }
+    onElementsChange(applySurfaceOp(elements, { type: 'create-component', component }))
+    setOpen(false)
+  }
+
+  const createPortal = (target: { readonly id: string; readonly label: string }) => {
+    const definition = surfaceComponentContract('portal')
+    const component: SurfaceElement = {
+      id: createId('portal'), projectId, surface, type: 'portal',
+      bounds: placeSurfaceComponent({ size: definition.minSize, selection: selectionBounds, viewportOrigin, existing: elements }),
+      binding: { projectViewId: target.id },
+      presentation: { variant: target.label, zIndex: 5 },
     }
     onElementsChange(applySurfaceOp(elements, { type: 'create-component', component }))
     setOpen(false)
@@ -115,6 +128,7 @@ export function SurfaceComponentShelf({ projectId, surface, elements, selectionI
         const disabled = Boolean(entry.requiresSelection && !selectionIds.length)
         return <button key={entry.type} type="button" role="menuitem" draggable={false} disabled={disabled} title={disabled ? '先选择要放入的对象' : undefined} onPointerDown={(event) => { if (!disabled) beginDrag(entry, event) }} onKeyDown={(event) => { if (!disabled && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); create(entry.type) } }}><span>{entry.label}</span><small>{disabled ? '需要当前选择' : entry.description}</small></button>
       })}
+      {portalTargets.length > 0 && <details className="lcos-surface-portal-targets"><summary>入口<small>指向已有工作现场</small></summary><div>{portalTargets.map((target) => <button key={target.id} type="button" role="menuitem" onClick={() => createPortal(target)}><span>{target.label}</span><small>{target.kind}</small></button>)}</div></details>}
     </div>}
     {dragPreview && <div className={`lcos-surface-component-drag-ghost ${dragPreview.valid ? 'is-valid' : ''}`} style={{ left: dragPreview.x, top: dragPreview.y }} aria-hidden="true"><span>＋</span><strong>{dragPreview.label}</strong><small>{dragPreview.valid ? '松开放置' : '拖到画布'}</small></div>}
   </div>

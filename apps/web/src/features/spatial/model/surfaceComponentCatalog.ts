@@ -40,7 +40,7 @@ export const SURFACE_COMPONENT_CATALOG: Readonly<Record<SurfaceComponentType, Su
   portal: {
     type: 'portal', label: '入口', description: '指向另一个稳定工作现场，不复制目标内容。',
     surfaces: ['main', 'context', 'workflow'], minSize: { w: 196, h: 92 }, movable: true, resizable: false,
-    acceptsDrop: [], capabilities: { bind: true, lens: true, removeProjection: true }, createMode: 'planned',
+    acceptsDrop: [], capabilities: { bind: true, lens: true, removeProjection: true }, createMode: 'adapter-only',
   },
   'structure-map': {
     type: 'structure-map', label: '结构', description: '当前材料的结构 Lens；内部可重算，外框属于 Surface。',

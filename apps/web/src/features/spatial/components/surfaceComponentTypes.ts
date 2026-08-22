@@ -11,6 +11,7 @@ export interface SurfaceComponentRenderContext {
   readonly reviews?: readonly { readonly runId: string; readonly label: string; readonly phase: string }[]
   readonly checkpoints?: readonly { readonly checkpointId: string; readonly label: string; readonly createdAt: string }[]
   readonly onOpenReview?: (runId: string) => void
+  readonly onOpenPortal?: (projectViewId: string) => void
   readonly onSelectNode?: (id: string, additive?: boolean) => void
   readonly onOpenNode?: (id: string) => void
   readonly onOpenHistorySource?: (entry: ContextHistoryEntry) => void

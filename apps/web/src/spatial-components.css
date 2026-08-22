@@ -245,7 +245,12 @@
   border-radius: 16px;
   background: rgba(252, 252, 254, .72);
   box-shadow: 0 7px 22px rgba(46, 41, 61, .045);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
+.lcos-surface-portal-body:disabled { cursor: default; opacity: .62; }
 .lcos-surface-portal-copy { min-width: 0; display: grid; gap: 2px; }
 .lcos-surface-portal-copy strong { font-size: 10px; font-weight: 650; color: rgba(50, 46, 59, .72); }
 .lcos-surface-portal-copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 8px; color: rgba(56, 51, 67, .42); }
@@ -436,6 +441,13 @@
 .lcos-surface-component-shelf-menu > button:disabled { opacity: .42; cursor: not-allowed; background: transparent; }
 .lcos-surface-component-shelf-menu > button span { font-size: 9.5px; font-weight: 620; color: rgba(50,46,59,.70); }
 .lcos-surface-component-shelf-menu > button small { font-size: 7.8px; line-height: 1.35; color: rgba(59,54,69,.43); }
+.lcos-surface-portal-targets { margin-top: 4px; border-top: 1px solid rgba(67,60,82,.07); }
+.lcos-surface-portal-targets summary { display: flex; justify-content: space-between; gap: 8px; padding: 9px 8px 7px; color: rgba(50,46,59,.70); font-size: 9.5px; font-weight: 620; cursor: pointer; }
+.lcos-surface-portal-targets summary small { color: rgba(59,54,69,.43); font-size: 7.8px; font-weight: 450; }
+.lcos-surface-portal-targets > div { display: grid; gap: 2px; }
+.lcos-surface-portal-targets button { display: grid; gap: 2px; padding: 7px 8px; border: 0; border-radius: 9px; color: rgba(50,46,59,.68); text-align: left; background: transparent; cursor: pointer; }
+.lcos-surface-portal-targets button:hover { background: rgba(92,72,143,.06); }
+.lcos-surface-portal-targets button small { color: rgba(59,54,69,.42); font-size: 7.5px; }
 
 .lcos-surface-component-drag-ghost {
   position: fixed;

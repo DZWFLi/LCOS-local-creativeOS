@@ -88,6 +88,8 @@ interface Props {
   spatialRegions?: readonly SpatialRegionDraft[]
   surfaceElements?: readonly SurfaceElement[]
   onSurfaceElementsChange?: (elements: SurfaceElement[]) => void
+  portalTargets?: readonly { readonly id: string; readonly label: string; readonly kind: string }[]
+  onOpenPortalTarget?: (projectViewId: string) => void
   onCreateRegion?: () => void
   onClearRegion?: (regionId: string) => void
   onRegionBoundsChange?: (regionId: string, bounds: SpatialRegionDraft['bounds']) => void
@@ -107,7 +109,7 @@ function additiveSelection(event: { shiftKey: boolean; ctrlKey: boolean; metaKey
   return event.shiftKey || event.ctrlKey || event.metaKey
 }
 
-export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-space', surfaceMode = 'project', nodes, setNodes, edges, setEdges, camera, setCamera, selectedId, selectedIds, selectedEdgeId, setSelectedEdgeId, pendingId, runId, runStatus, spaceHeld, locked = false, layoutPreview, workspaceFrames = [], workspaceMemberNodes = nodes, activeWorkspaceId = null, onWorkspaceActivate, onWorkspaceProjectionMove, onPresentationInteractionChange, onPresentationCommit, onFrameBoundsChange, selectionComposer, onSelect, onClearSelection, onMarqueeSelect, onSelectEdge, onDoubleClick, onDetails, onFocusSelection, onRenameSelection, onCreateNodeFromAnchor, onFilesDropped, onExternalTextDrop, onMaterialTransferDrop, onArrangeSelection, gridSnapEnabled = true, onSetSelectionDisplayMode, onCopySelection, onDuplicateSelection, onCreateScopeFromSelection, onDeleteSelection, onReorganize, onDirectProjectViewDrop, onPointerWorldChange, onSpaceCreate, onLocateNode, locatePulseId, pendingReviewIds = [], attentionBucketsByViewId = {}, collectionMembersByNodeId = {}, expandedCollectionScopeIds = [], openingCollectionScopeIds = [], closingCollectionScopeIds = [], onToggleCollection, onOpenContextLens, spatialRegions = [], surfaceElements = [], onSurfaceElementsChange, onCreateRegion, onClearRegion, onRegionBoundsChange, onRegionBoundsCommit, onPromoteRegionToCollection }: Props) {
+export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-space', surfaceMode = 'project', nodes, setNodes, edges, setEdges, camera, setCamera, selectedId, selectedIds, selectedEdgeId, setSelectedEdgeId, pendingId, runId, runStatus, spaceHeld, locked = false, layoutPreview, workspaceFrames = [], workspaceMemberNodes = nodes, activeWorkspaceId = null, onWorkspaceActivate, onWorkspaceProjectionMove, onPresentationInteractionChange, onPresentationCommit, onFrameBoundsChange, selectionComposer, onSelect, onClearSelection, onMarqueeSelect, onSelectEdge, onDoubleClick, onDetails, onFocusSelection, onRenameSelection, onCreateNodeFromAnchor, onFilesDropped, onExternalTextDrop, onMaterialTransferDrop, onArrangeSelection, gridSnapEnabled = true, onSetSelectionDisplayMode, onCopySelection, onDuplicateSelection, onCreateScopeFromSelection, onDeleteSelection, onReorganize, onDirectProjectViewDrop, onPointerWorldChange, onSpaceCreate, onLocateNode, locatePulseId, pendingReviewIds = [], attentionBucketsByViewId = {}, collectionMembersByNodeId = {}, expandedCollectionScopeIds = [], openingCollectionScopeIds = [], closingCollectionScopeIds = [], onToggleCollection, onOpenContextLens, spatialRegions = [], surfaceElements = [], onSurfaceElementsChange, portalTargets = [], onOpenPortalTarget, onCreateRegion, onClearRegion, onRegionBoundsChange, onRegionBoundsCommit, onPromoteRegionToCollection }: Props) {
   const canvasRef = useRef<HTMLDivElement | null>(null)
   const dragCandidate = useRef<DragCandidate | null>(null)
   const resizeCandidate = useRef<ResizeCandidate | null>(null)
@@ -782,7 +784,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
 
   const spatialOverlays = <>
       {lod !== 'full' && <div className="lod-badge">{nodes.length} 个节点 · {lod === 'overview' ? '总览' : lod === 'aggregate' ? '聚合显示' : '简化显示'}</div>}
-    {surfaceMode === 'project' && onSurfaceElementsChange && <SurfaceComponentShelf projectId={projectId} surface="main" elements={surfaceElements} selectionIds={selectedIds} selectionBounds={componentSelectionBounds} viewportOrigin={surfaceViewportOrigin(camera)} onElementsChange={onSurfaceElementsChange}/>}
+    {surfaceMode === 'project' && onSurfaceElementsChange && <SurfaceComponentShelf projectId={projectId} surface="main" elements={surfaceElements} selectionIds={selectedIds} selectionBounds={componentSelectionBounds} viewportOrigin={surfaceViewportOrigin(camera)} portalTargets={portalTargets} onElementsChange={onSurfaceElementsChange}/>}
     {surfaceMode === 'project' && onSurfaceElementsChange && <AgentSurfaceComposer surface="main" targetIds={selectedIds} previewing={componentProposalOps.length > 0} onPreview={previewComponentIntent} onKeep={keepComponentProposal} onRevert={() => setComponentProposalOps([])}/>}
     {dropGhost && <div className="lcos-drop-ghost" style={{ left: dropGhost.x, top: dropGhost.y }} aria-hidden="true">
       <span className="lcos-drop-ghost-stack"><i /><i /><i /></span>
@@ -984,7 +986,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
     }
     if ((kind === 'uri' || kind === 'text') && onExternalTextDrop) onExternalTextDrop(id, point.x, point.y)
   }} overlays={spatialOverlays}>
-    {surfaceMode === 'project' && onSurfaceElementsChange && <SurfaceComponentLayer surface="main" elements={surfaceElements} zoom={camera.zoom} renderContext={{ nodes, edges, onSelectNode: onSelect, onOpenNode: onDoubleClick }} onElementsChange={onSurfaceElementsChange}/>}
+    {surfaceMode === 'project' && onSurfaceElementsChange && <SurfaceComponentLayer surface="main" elements={surfaceElements} zoom={camera.zoom} renderContext={{ nodes, edges, onSelectNode: onSelect, onOpenNode: onDoubleClick, onOpenPortal: onOpenPortalTarget }} onElementsChange={onSurfaceElementsChange}/>}
     {surfaceMode === 'project' && <SurfaceComponentProposalLayer surface="main" elements={componentProposalElements} renderContext={{ nodes, edges }}/>}
     <SpatialNodeLayer className="lcos-arrange-structure-layer">
       {alignmentGuide?.x !== undefined && <i className="lcos-alignment-guide axis-x" style={{ left: alignmentGuide.x }}/>} {/* x guide */}

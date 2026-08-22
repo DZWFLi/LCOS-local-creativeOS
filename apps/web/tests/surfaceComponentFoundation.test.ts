@@ -6,6 +6,7 @@ import type { CanvasNode } from '../src/model'
 import type { SurfaceElement } from '../src/features/spatial/model/surfaceElementTypes'
 import { ContextPackComponent, RelationshipFieldComponent, StructureMapComponent } from '../src/features/spatial/components/ContextComponentRenderers'
 import { SurfaceComponentProposalLayer } from '../src/features/spatial/components/SurfaceComponentProposalLayer'
+import { PortalComponent } from '../src/features/spatial/components/PortalComponent'
 import { CheckpointComponent, ReviewComponent, WorkbenchFrameComponent } from '../src/features/spatial/components/WorkflowComponentRenderers'
 import { LcosGlyph } from '../src/features/spatial/visual/LcosGlyph'
 import { boundRegionSemanticForView, resolveSpatialSignal } from '../src/features/spatial/visual/spatialSignal'
@@ -34,6 +35,7 @@ describe('Spatial Component Foundation integrity', () => {
     expect(surfaceComponentContract('context-pack').requiresSelection).toBe(true)
     expect(surfaceComponentContract('review').createMode).toBe('adapter-only')
     expect(surfaceComponentContract('checkpoint').createMode).toBe('adapter-only')
+    expect(surfaceComponentContract('portal').createMode).toBe('adapter-only')
     expect(surfaceComponentsFor('workflow', true).map((item) => item.type)).not.toContain('workflow-step')
     expect(surfaceComponentsFor('workflow', true).map((item) => item.type)).toContain('workbench')
     expect(surfaceComponentsFor('workflow', true).map((item) => item.type)).not.toEqual(expect.arrayContaining(['review', 'checkpoint']))
@@ -67,6 +69,15 @@ describe('Spatial Component Foundation integrity', () => {
     }))
     expect(checkpoint).toContain('交付前冻结')
     expect(checkpoint).toContain('2026-08-23')
+  })
+
+  it('renders a Portal from one stable Project View identity without copying members', () => {
+    const html = renderToStaticMarkup(createElement(PortalComponent, {
+      element: element({ type: 'portal', surface: 'main', binding: { projectViewId: 'context-real' }, presentation: { variant: '客户反馈上下文' } }),
+    }))
+    expect(html).toContain('客户反馈上下文')
+    expect(html).toContain('context-real')
+    expect(html).not.toContain('projectViewIds')
   })
 
   it('keeps selected objects readable while allowing cross-surface semantic proxies', () => {
