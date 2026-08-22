@@ -6525,12 +6525,18 @@ export function App() {
         pendingReviews,
         detailsOpen: agentSurfaceDetailsOpen,
         runLocked: activeRun ? { id: activeRun.id, contextCount: activeRun.contextIds.length } : null,
+        receiver: [...(resumeBoundary?.providerSessions ?? [])].sort((a, b) => {
+          if (a.status === 'active' && b.status !== 'active') return -1
+          if (b.status === 'active' && a.status !== 'active') return 1
+          return b.lastSeenAt.localeCompare(a.lastSeenAt)
+        })[0],
         onAcceptProposal: (proposalId) => resolveContextProposal(proposalId, 'accept'),
         onRejectProposal: (proposalId) => resolveContextProposal(proposalId, 'reject'),
         onModifyProposal: requestContextProposalModification,
         onRefresh: () => { refreshActiveContext(); setAttentionRefreshNonce((value) => value + 1) },
         onToggleDetails: () => setAgentSurfaceDetailsOpen((current) => !current),
         onOpenReview: openRunReview,
+        onHandoff: () => { void openHandoff() },
       } : null,
     }}
     rail={{

@@ -1,4 +1,4 @@
-import { ChevronUp, CircleDot, Pin } from 'lucide-react'
+import { ChevronUp, CircleDot, PackageOpen, Pin } from 'lucide-react'
 import { useState } from 'react'
 import type { ContextChangeProposalV1, RunReview } from '@local-creative-os/contracts'
 import type { ActiveContextProjection } from '../../runtime/localCoreClient'
@@ -17,12 +17,14 @@ export function AgentContextSurface({
   pendingReviews,
   detailsOpen,
   runLocked,
+  receiver,
   onAcceptProposal,
   onRejectProposal,
   onModifyProposal,
   onRefresh,
   onToggleDetails,
   onOpenReview,
+  onHandoff,
 }: {
   readonly projectLabel: string
   readonly workspaceLabel: string
@@ -35,12 +37,14 @@ export function AgentContextSurface({
   readonly pendingReviews: readonly RunReview[]
   readonly detailsOpen: boolean
   readonly runLocked: { readonly id: string; readonly contextCount: number } | null
+  readonly receiver?: { readonly provider: 'codex' | 'workbuddy'; readonly externalSessionId: string; readonly status: 'active' | 'stale' | 'closed'; readonly lastSeenAt: string }
   readonly onAcceptProposal: (proposalId: string) => void
   readonly onRejectProposal: (proposalId: string) => void
   readonly onModifyProposal: (proposal: ContextChangeProposalV1, instruction: string) => void
   readonly onRefresh: () => void
   readonly onToggleDetails: () => void
   readonly onOpenReview: (review: RunReview) => void
+  readonly onHandoff: () => void
 }) {
   const [collapsed, setCollapsed] = useState(detailsOpen !== true)
   const [modifyingProposalId, setModifyingProposalId] = useState<string | null>(null)
@@ -79,6 +83,10 @@ export function AgentContextSurface({
       <button type="button" className="icon-only pressable" onClick={() => { setCollapsed(true); onToggleDetails() }} title="收起" aria-label="收起"><ChevronUp size={13}/></button>
     </header>
     <div className={`agent-sync-badge ${syncState}`}><span>{syncLabel}</span><button type="button" className="icon-only pressable" onClick={onRefresh} title="刷新上下文">⟳</button></div>
+    <section className="agent-receiver-chip" data-receiver-status={receiver?.status ?? 'unavailable'}>
+      <span><i/><strong>{receiver ? `${receiver.provider} · ${receiver.status === 'active' ? '当前接收端' : '最近接收端'}` : '未连接 Receiver'}</strong><small>{receiver ? receiver.externalSessionId : '当前 Runtime 没有可切换的 Provider Session'}</small></span>
+      <button type="button" className="quiet pressable" onClick={onHandoff}><PackageOpen size={12}/>一次性交接</button>
+    </section>
     {runLocked && <div className="agent-run-lock" title={runLocked.id}>当前任务已锁定 {runLocked.contextCount} 项参考；之后的选择只影响下一次任务。</div>}
     <dl className="agent-context-stats">
       <div><dt><CircleDot size={10}/>选择</dt><dd>{selectedNodes.length || '无'}</dd></div>
