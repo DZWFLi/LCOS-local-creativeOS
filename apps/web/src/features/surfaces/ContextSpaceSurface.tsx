@@ -23,6 +23,7 @@ import type { ContextSurfaceRuntime } from './surfaceContracts'
 import type { SurfaceId } from '../shell/SurfaceDock'
 import { SurfaceComponentLayer } from '../spatial/components/SurfaceComponentLayer'
 import { boundRegionSemanticForView } from '../spatial/visual/spatialSignal'
+import { spatialLodForCount } from '../spatial/spatialLod'
 import { SurfaceComponentProposalLayer } from '../spatial/components/SurfaceComponentProposalLayer'
 import { SurfaceComponentShelf } from '../spatial/components/SurfaceComponentShelf'
 import { boundsAroundSurfaceRects, surfaceViewportOrigin } from '../spatial/model/surfaceGeometry'
@@ -86,6 +87,7 @@ export function ContextSpaceSurface(props: Props) {
     const point = draftPositions[node.id] ?? fallback
     return { node, x: point.x, y: point.y, width: fallback.width, height: fallback.height }
   }), [draftPositions, props.nodes, seed])
+  const lod = spatialLodForCount(items.length)
   const byId = useMemo(() => new Map(items.map((item) => [item.node.id, item])), [items])
   const spatialItems = useMemo(() => items.map((item) => ({ id: item.node.id, x: item.x, y: item.y, width: item.width, height: item.height })), [items])
   const selectedSurfaceBounds = useMemo(() => boundsAroundSurfaceRects(items
@@ -173,7 +175,7 @@ export function ContextSpaceSurface(props: Props) {
       </SpatialEdgeLayer>
       <SpatialNodeLayer>
         {items.map((item, index) => <div key={item.node.id} className={`lcos-context-space-node lcos-spatial-placement ${props.selectedIds.includes(item.node.id) ? 'selected' : ''} ${draggingId === item.node.id ? 'is-dragging' : ''} ${pinnedIds.includes(item.node.id) ? 'is-manual-anchor' : ''}`} data-attention-bucket={props.attentionBucketsByViewId?.[item.node.id]} style={{ left: item.x, top: item.y, width: item.width, '--i': index } as CSSProperties} onPointerDown={(event) => beginDrag(event, item.node.id)} onPointerMove={moveDrag} onPointerUp={endDrag}>
-          <SurfaceObject node={item.node} selected={props.selectedIds.includes(item.node.id)} spatialSemantic={boundRegionSemanticForView(surfaceElements, item.node.id)} usageHint={item.node.anchors?.length ? '来源锚点' : undefined} attentionBucket={props.attentionBucketsByViewId?.[item.node.id] === 'pinned' ? 'pinned' : props.attentionBucketsByViewId?.[item.node.id] === 'related' ? 'related' : props.attentionBucketsByViewId?.[item.node.id] === 'retrieved' ? 'retrieved' : undefined} dropIds={props.selectedIds.includes(item.node.id) && props.selectedIds.length ? props.selectedIds : [item.node.id]} onDirectProjectViewDrop={props.onDirectProjectViewDrop} onSelect={props.onSelect} onDoubleClick={props.onDoubleClick}/>
+          <SurfaceObject node={item.node} compact={lod !== 'full'} performanceProxy={(lod === 'aggregate' || lod === 'overview') && !props.selectedIds.includes(item.node.id)} selected={props.selectedIds.includes(item.node.id)} spatialSemantic={boundRegionSemanticForView(surfaceElements, item.node.id)} usageHint={item.node.anchors?.length ? '来源锚点' : undefined} attentionBucket={props.attentionBucketsByViewId?.[item.node.id] === 'pinned' ? 'pinned' : props.attentionBucketsByViewId?.[item.node.id] === 'related' ? 'related' : props.attentionBucketsByViewId?.[item.node.id] === 'retrieved' ? 'retrieved' : undefined} dropIds={props.selectedIds.includes(item.node.id) && props.selectedIds.length ? props.selectedIds : [item.node.id]} onDirectProjectViewDrop={props.onDirectProjectViewDrop} onSelect={props.onSelect} onDoubleClick={props.onDoubleClick}/>
           {pinnedIds.includes(item.node.id) && <i className="lcos-manual-anchor-mark" title="手工位置锚点"/>}
         </div>)}
       </SpatialNodeLayer>

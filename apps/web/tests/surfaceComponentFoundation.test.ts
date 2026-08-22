@@ -14,6 +14,7 @@ import { surfaceComponentContract, surfaceComponentsFor } from '../src/features/
 import { applySurfaceOp, applySurfaceOps, validateSurfaceOp, validateSurfaceOps } from '../src/features/spatial/model/surfaceOps'
 import { placeSurfaceComponent } from '../src/features/spatial/model/surfaceGeometry'
 import { resolveSurfaceIntent } from '../src/features/spatial/model/surfaceIntent'
+import { SurfaceObject } from '../src/features/surfaces/SurfaceObject'
 
 const element = (patch: Partial<SurfaceElement> = {}): SurfaceElement => ({
   id: 'surface:region:1',
@@ -51,6 +52,14 @@ describe('Spatial Component Foundation integrity', () => {
     expect(html).not.toContain('范围外页面')
     expect(html).not.toContain('今日工作页')
     expect(html).toContain('等待真实 Agent Tool Runtime')
+  })
+
+  it('keeps selected objects readable while allowing cross-surface semantic proxies', () => {
+    const node: CanvasNode = { id: 'view-heavy', title: '大型预览', subtitle: '', kind: 'source', fileType: 'pdf', x: 0, y: 0, width: 240, height: 180 }
+    const proxy = renderToStaticMarkup(createElement(SurfaceObject, { node, selected: false, performanceProxy: true, onSelect: () => {}, onDoubleClick: () => {} }))
+    const selected = renderToStaticMarkup(createElement(SurfaceObject, { node, selected: true, performanceProxy: false, onSelect: () => {}, onDoubleClick: () => {} }))
+    expect(proxy).toContain('lcos-overview-node-proxy')
+    expect(selected).not.toContain('lcos-overview-node-proxy')
   })
 
   it('renders Context components from bound Project objects instead of decorative placeholder copy', () => {

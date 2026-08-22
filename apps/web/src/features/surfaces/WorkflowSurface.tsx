@@ -35,6 +35,7 @@ import { useSpatialFocusRequest, type SpatialFocusRequest } from '../spatial/use
 import { SurfaceObject } from './SurfaceObject'
 import { LcosGlyph } from '../spatial/visual/LcosGlyph'
 import { boundRegionSemanticForView, resolveSpatialSignal, type SpatialRuntimeSignal } from '../spatial/visual/spatialSignal'
+import { spatialLodForCount } from '../spatial/spatialLod'
 import { layoutManualSpatial } from './surfaceLayouts'
 import { SurfaceComponentLayer } from '../spatial/components/SurfaceComponentLayer'
 import { SurfaceComponentProposalLayer } from '../spatial/components/SurfaceComponentProposalLayer'
@@ -163,6 +164,7 @@ export function WorkflowSurface(props: Props) {
       y: owner.y + 100 + Math.floor(index / 2) * 72,
     }
   }), [draftPositions, firstActionForView, materialBase.items, visibleNodeIds])
+  const materialLod = spatialLodForCount(items.length)
   const byId = useMemo(() => new Map(items.map((item) => [item.node.id, item])), [items])
   const materialEdgePlacements = useMemo(() => visibleEdges.flatMap((edge) => {
     const from = byId.get(edge.from)
@@ -580,7 +582,7 @@ export function WorkflowSurface(props: Props) {
           const usageHint = owner ? (usageCount > 1 ? `用于 ${usageCount} 步 · 首先：${owner.label}` : `用于：${owner.label}`) : (node.kind === 'process' ? '运行记录 · 不是 Step' : '待挂接材料')
           const runClass = props.runOverlay ? props.runOverlay.activeNodeIds.includes(node.id) ? 'run-active' : props.runOverlay.failedNodeIds.includes(node.id) ? 'run-failed' : props.runOverlay.completedNodeIds.includes(node.id) ? 'run-completed' : '' : ''
           return <div key={node.id} data-workflow-material-id={node.id} className={`lcos-workflow-node lcos-workflow-material lcos-spatial-placement ${owner ? 'is-attached' : 'is-unassigned'} ${props.selectedIds.includes(node.id) ? 'selected' : ''} ${draggingId === node.id ? 'is-dragging' : ''} ${pinnedIds.includes(node.id) ? 'is-manual-anchor' : ''} ${props.attentionBucketsByViewId?.[node.id] ? `attention-${props.attentionBucketsByViewId[node.id]}` : ''} ${runClass}`} data-attention-bucket={props.attentionBucketsByViewId?.[node.id]} style={{ left: x, top: y, width, '--i': index } as CSSProperties} onPointerDown={(event) => beginMaterialDrag(event, node.id)} onPointerMove={moveMaterialDrag} onPointerUp={endMaterialDrag} onPointerCancel={cancelMaterialDrag}>
-            <SurfaceObject node={node} compact usageHint={usageHint} spatialSemantic={boundRegionSemanticForView(surfaceElements, node.id)} selected={props.selectedIds.includes(node.id)} dropIds={props.selectedIds.includes(node.id) && props.selectedIds.length ? props.selectedIds : [node.id]} onDirectProjectViewDrop={props.onDirectProjectViewDrop} onSelect={props.onSelect} onDoubleClick={props.onDoubleClick}/>
+            <SurfaceObject node={node} compact performanceProxy={(materialLod === 'aggregate' || materialLod === 'overview') && !props.selectedIds.includes(node.id)} usageHint={usageHint} spatialSemantic={boundRegionSemanticForView(surfaceElements, node.id)} selected={props.selectedIds.includes(node.id)} dropIds={props.selectedIds.includes(node.id) && props.selectedIds.length ? props.selectedIds : [node.id]} onDirectProjectViewDrop={props.onDirectProjectViewDrop} onSelect={props.onSelect} onDoubleClick={props.onDoubleClick}/>
             <button type="button" className="lcos-workflow-bypass" title="从当前 Workflow 移除；原材料保持不变" aria-label={`从工作流移除 ${node.title}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => removeMaterial(node.id)}><Unplug size={10}/></button>
             {pinnedIds.includes(node.id) && <i className="lcos-manual-anchor-mark" title="手工位置锚点"/>}
           </div>

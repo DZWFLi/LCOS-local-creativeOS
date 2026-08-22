@@ -32,6 +32,7 @@ interface Props {
   node: CanvasNode
   selected: boolean
   compact?: boolean
+  performanceProxy?: boolean
   /** Tiny relationship maps can still request a pure signal, but normal surfaces must reuse the material face. */
   glyph?: boolean
   dim?: boolean
@@ -50,6 +51,7 @@ export function SurfaceObject({
   node,
   selected,
   compact = false,
+  performanceProxy = false,
   glyph = false,
   dim = false,
   attentionBucket,
@@ -105,16 +107,18 @@ export function SurfaceObject({
     onDoubleClick={() => onDoubleClick(node.id)}
   >
     <span className="lcos-semantic-drop-handle" data-semantic-drop-handle aria-hidden="true" onClick={(event)=>event.stopPropagation()} title="Semantic Drop：拖到上下文或工作流（右键拖 / Alt+左拖）"><GripVertical size={11}/></span>
-    <CanvasNodeVisual
-      node={node}
-      density={density}
-      runId=""
-      runStatus={node.runStatus ?? null}
-      pending={Boolean(node.draft)}
-      onDetails={() => onDoubleClick(node.id)}
-      showDetails={false}
-      showControls={false}
-    />
+    {performanceProxy
+      ? <div className={`lcos-overview-node-proxy proxy-${detectFileIdentity(node)}`} aria-label={displayNodeTitle(node)}><span>{detectFileIdentity(node).toUpperCase()}</span><strong>{displayNodeTitle(node)}</strong></div>
+      : <CanvasNodeVisual
+          node={node}
+          density={density}
+          runId=""
+          runStatus={node.runStatus ?? null}
+          pending={Boolean(node.draft)}
+          onDetails={() => onDoubleClick(node.id)}
+          showDetails={false}
+          showControls={false}
+        />}
     {usageHint && <span className="lcos-surface-usage-hint">{usageHint}</span>}
     <span className="lcos-surface-system-signal" data-spatial-signal={signal.glyph} aria-hidden="true"><LcosGlyph state={signal.glyph}/></span>
   </button>
