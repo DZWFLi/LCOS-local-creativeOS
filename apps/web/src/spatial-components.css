@@ -333,6 +333,8 @@
 .lcos-workflow-component footer { font-size: 8px; color: rgba(48, 68, 84, .45); }
 .lcos-workflow-component-binding { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 8px 9px; border-radius: 8px; background: rgba(77,145,188,.08); font-size: 9px; font-weight: 560; }
 .lcos-workflow-review-state, .lcos-workflow-checkpoint-row { display: grid; gap: 7px; align-content: center; }
+.lcos-workflow-review-state { width: 100%; padding: 0; border: 0; color: inherit; text-align: left; background: transparent; }
+.lcos-workflow-review-state:not(:disabled) { cursor: pointer; }
 .lcos-workflow-review-state span, .lcos-workflow-checkpoint-row span { width: fit-content; padding: 3px 6px; border-radius: 5px; color: rgba(145, 89, 45, .78); background: rgba(220, 156, 79, .14); font-size: 8px; }
 .lcos-workflow-review-state b, .lcos-workflow-checkpoint-row strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 9px; font-weight: 560; }
 .lcos-workbench-slots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; align-items: center; }

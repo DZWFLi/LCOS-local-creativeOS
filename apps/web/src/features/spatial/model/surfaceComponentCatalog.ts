@@ -70,12 +70,12 @@ export const SURFACE_COMPONENT_CATALOG: Readonly<Record<SurfaceComponentType, Su
   review: {
     type: 'review', label: 'Review', description: '需要人工判断的检查点和变更现场。',
     surfaces: ['workflow'], minSize: { w: 300, h: 170 }, movable: true, resizable: true,
-    acceptsDrop: commonDrop, capabilities: { bind: true, collapse: true, removeProjection: true }, createMode: 'planned',
+    acceptsDrop: commonDrop, capabilities: { bind: true, collapse: true, removeProjection: true }, createMode: 'adapter-only',
   },
   checkpoint: {
     type: 'checkpoint', label: 'Checkpoint', description: '工作现场里的可恢复检查点投影。',
     surfaces: ['workflow'], minSize: { w: 260, h: 132 }, movable: true, resizable: true,
-    acceptsDrop: [], capabilities: { bind: true, collapse: true, removeProjection: true }, createMode: 'planned',
+    acceptsDrop: [], capabilities: { bind: true, collapse: true, removeProjection: true }, createMode: 'adapter-only',
   },
   workbench: {
     type: 'workbench', label: 'Workbench', description: 'Surface 只拥有外框，内部工具继续拥有自己的 runtime/domain。',

@@ -151,6 +151,7 @@ export interface SurfaceBindingV0 {
   /** Stable Project View identity refs used as component seeds. No copied entity payloads. */
   projectViewIds?: string[]
   checkpointId?: string
+  runId?: string
 }
 
 export interface SurfaceElementPresentationV0 {

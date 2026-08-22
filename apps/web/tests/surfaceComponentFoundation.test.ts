@@ -6,7 +6,7 @@ import type { CanvasNode } from '../src/model'
 import type { SurfaceElement } from '../src/features/spatial/model/surfaceElementTypes'
 import { ContextPackComponent, RelationshipFieldComponent, StructureMapComponent } from '../src/features/spatial/components/ContextComponentRenderers'
 import { SurfaceComponentProposalLayer } from '../src/features/spatial/components/SurfaceComponentProposalLayer'
-import { WorkbenchFrameComponent } from '../src/features/spatial/components/WorkflowComponentRenderers'
+import { CheckpointComponent, ReviewComponent, WorkbenchFrameComponent } from '../src/features/spatial/components/WorkflowComponentRenderers'
 import { LcosGlyph } from '../src/features/spatial/visual/LcosGlyph'
 import { boundRegionSemanticForView, resolveSpatialSignal } from '../src/features/spatial/visual/spatialSignal'
 import { surfaceComponentRegistry } from '../src/features/spatial/components/surfaceComponentRegistry'
@@ -32,7 +32,8 @@ describe('Spatial Component Foundation integrity', () => {
     expect(surfaceComponentContract('workflow-step').createMode).toBe('adapter-only')
     expect(surfaceComponentContract('structure-map').createMode).toBe('presentation')
     expect(surfaceComponentContract('context-pack').requiresSelection).toBe(true)
-    expect(surfaceComponentContract('review').createMode).toBe('planned')
+    expect(surfaceComponentContract('review').createMode).toBe('adapter-only')
+    expect(surfaceComponentContract('checkpoint').createMode).toBe('adapter-only')
     expect(surfaceComponentsFor('workflow', true).map((item) => item.type)).not.toContain('workflow-step')
     expect(surfaceComponentsFor('workflow', true).map((item) => item.type)).toContain('workbench')
     expect(surfaceComponentsFor('workflow', true).map((item) => item.type)).not.toEqual(expect.arrayContaining(['review', 'checkpoint']))
@@ -52,6 +53,20 @@ describe('Spatial Component Foundation integrity', () => {
     expect(html).not.toContain('范围外页面')
     expect(html).not.toContain('今日工作页')
     expect(html).toContain('等待真实 Agent Tool Runtime')
+  })
+
+  it('renders Review and Checkpoint only from real bound identities', () => {
+    const review = renderToStaticMarkup(createElement(ReviewComponent, {
+      element: element({ type: 'review', surface: 'workflow', binding: { runId: 'run-real' } }),
+      context: { reviews: [{ runId: 'run-real', label: '客户反馈修改', phase: 'review' }] },
+    }))
+    expect(review).toContain('客户反馈修改')
+    const checkpoint = renderToStaticMarkup(createElement(CheckpointComponent, {
+      element: element({ type: 'checkpoint', surface: 'workflow', binding: { checkpointId: 'checkpoint-real' } }),
+      context: { checkpoints: [{ checkpointId: 'checkpoint-real', label: '交付前冻结', createdAt: '2026-08-23T00:00:00.000Z' }] },
+    }))
+    expect(checkpoint).toContain('交付前冻结')
+    expect(checkpoint).toContain('2026-08-23')
   })
 
   it('keeps selected objects readable while allowing cross-surface semantic proxies', () => {

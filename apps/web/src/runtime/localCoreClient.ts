@@ -433,6 +433,7 @@ export interface LocalCoreClient {
     readonly label: string
     readonly createdAt: string
   }>>
+  checkpoints(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<readonly Checkpoint[]>>
   updateActiveContext(projectId: string, input: {
     readonly workspaceId?: string
     readonly scopeId: string
@@ -1614,6 +1615,12 @@ export function createLocalCoreClient(): LocalCoreClient {
           readonly label: string
           readonly createdAt: string
         }>,
+      })
+    },
+    checkpoints(projectId, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/checkpoints`, {
+        signal,
+        decode: decodeResult<readonly Checkpoint[]>,
       })
     },
     previewRecords(projectId, signal) {

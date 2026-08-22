@@ -199,6 +199,7 @@ export function App() {
   const [revisionUpgradeOpen, setRevisionUpgradeOpen] = useState(false)
   const [revisionUpgradeBusy, setRevisionUpgradeBusy] = useState(false)
   const [runReviews, setRunReviews] = useState<readonly RunReview[]>([])
+  const [workflowCheckpoints, setWorkflowCheckpoints] = useState<readonly Checkpoint[]>([])
   const [coreHandoffs, setCoreHandoffs] = useState<readonly HandoffRecord[]>([])
   const [agentSurfaceDetailsOpen, setAgentSurfaceDetailsOpen] = useState(false)
   const pendingReviews = useMemo(() => runReviews.filter((review) =>
@@ -1112,7 +1113,17 @@ export function App() {
   }, [activeProjectId, bootMode])
 
   useEffect(() => {
-    if (bootMode !== 'runtime' || workRail.collapsed || !activeProjectId || agentMode) return
+    setWorkflowCheckpoints([])
+    if (bootMode !== 'runtime' || !activeProjectId) return
+    const controller = new AbortController()
+    void bridgeRef.current.client.checkpoints(activeProjectId, controller.signal).then((call) => {
+      if (!controller.signal.aborted && call.result.ok) setWorkflowCheckpoints(call.result.value)
+    }).catch(() => { /* Checkpoint projections are optional and never block the Surface. */ })
+    return () => controller.abort()
+  }, [activeProjectId, bootMode, dataSource])
+
+  useEffect(() => {
+    if (bootMode !== 'runtime' || (workRail.collapsed && activeSurface !== 'workflow') || !activeProjectId || agentMode) return
     let cancelled = false
     let timer: number | undefined
     const pollRunList = async () => {
@@ -1123,7 +1134,7 @@ export function App() {
     void pollRunList()
     timer = window.setInterval(() => { void pollRunList() }, 4_000)
     return () => { cancelled = true; if (timer !== undefined) window.clearInterval(timer) }
-  }, [activeProjectId, agentMode, bootMode, workRail.collapsed])
+  }, [activeProjectId, activeSurface, agentMode, bootMode, workRail.collapsed])
 
   useEffect(() => {
     if (!agentMode || !activeProjectId || bootMode !== 'runtime') return
@@ -6391,6 +6402,9 @@ export function App() {
           completedNodeIds: activeRun.status === 'completed' ? activeRun.targetIds : [],
           failedNodeIds: activeRun.status === 'failed' ? activeRun.targetIds : [],
         } : undefined,
+        workflowReviews: runReviews.map((review) => ({ runId: String(review.run.id), label: review.run.instruction || String(review.run.id), phase: review.presentationPhase })),
+        workflowCheckpoints: workflowCheckpoints.filter((checkpoint) => String(checkpoint.scopeId) === workflowPresentationOwnerId || String(checkpoint.scopeId) === scopeId).map((checkpoint) => ({ checkpointId: String(checkpoint.id), label: checkpoint.label, createdAt: checkpoint.createdAt })),
+        onOpenWorkflowReview: (runId) => { const review = runReviews.find((item) => String(item.run.id) === runId); if (review) openRunReview(review) },
         workflowWorkspaces: workspaces
           .filter((workspace) => workspace.scopeId === workflowPresentationOwnerId && normalizeSurfaceId(workspace.preferredSurface) === 'workflow')
           .map((workspace, order) => ({ id: workspace.id, title: workspace.label, memberCount: workspace.focusedViewIds.length, order, active: workspace.id === workspaceId })),

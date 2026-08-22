@@ -41,10 +41,11 @@ import { SurfaceComponentLayer } from '../spatial/components/SurfaceComponentLay
 import { SurfaceComponentProposalLayer } from '../spatial/components/SurfaceComponentProposalLayer'
 import { SurfaceComponentShelf } from '../spatial/components/SurfaceComponentShelf'
 import { surfaceComponentContract } from '../spatial/model/surfaceComponentCatalog'
-import { boundsAroundSurfaceRects, surfaceViewportOrigin } from '../spatial/model/surfaceGeometry'
+import { boundsAroundSurfaceRects, placeSurfaceComponent, surfaceViewportOrigin } from '../spatial/model/surfaceGeometry'
 import { applySurfaceOps, type SurfaceOp, validateSurfaceOps } from '../spatial/model/surfaceOps'
 import { resolveSurfaceIntent, type SurfaceIntent } from '../spatial/model/surfaceIntent'
 import { AgentSurfaceComposer } from './AgentSurfaceComposer'
+import type { SurfaceBinding, SurfaceComponentType } from '../spatial/model/surfaceElementTypes'
 
 interface Props {
   projectId: string
@@ -55,6 +56,9 @@ interface Props {
   attentionBucketsByViewId?: Readonly<Record<string, AttentionBucketV0>>
   source?: { kind: string; label: string }
   runOverlay?: { activeNodeIds: string[]; completedNodeIds: string[]; failedNodeIds: string[] }
+  reviews?: readonly { readonly runId: string; readonly label: string; readonly phase: string }[]
+  checkpoints?: readonly { readonly checkpointId: string; readonly label: string; readonly createdAt: string }[]
+  onOpenReview?: (runId: string) => void
   onImportProjectView?: (memberViewIds: readonly string[]) => string[]
   onExportWorkflow?: () => void
   onImportWorkflow?: (file: File) => void
@@ -195,6 +199,10 @@ export function WorkflowSurface(props: Props) {
   ], 24), [actionSpatialItems, materialSpatialItems, props.selectedIds, selectedActionId])
   const componentViewportOrigin = useMemo(() => surfaceViewportOrigin(camera), [camera])
   const proposalElements = useMemo(() => proposalOps.flatMap((op) => op.type === 'create-component' ? [op.component] : []), [proposalOps])
+  const projectedReviewIds = useMemo(() => new Set(surfaceElements.flatMap((element) => element.binding?.runId ? [element.binding.runId] : [])), [surfaceElements])
+  const projectedCheckpointIds = useMemo(() => new Set(surfaceElements.flatMap((element) => element.binding?.checkpointId ? [element.binding.checkpointId] : [])), [surfaceElements])
+  const nextReview = props.reviews?.find((review) => !projectedReviewIds.has(review.runId))
+  const nextCheckpoint = props.checkpoints?.find((checkpoint) => !projectedCheckpointIds.has(checkpoint.checkpointId))
   const edgeBounds = spatialBoundsForPlacements([...spatialItems, ...previewPlacements], 180)
   useSpatialFocusRequest({ request: props.focusRequest, items: materialSpatialItems, testId: 'workflow-spatial', setCamera })
 
@@ -469,6 +477,19 @@ export function WorkflowSurface(props: Props) {
     setProposalOps(validateSurfaceOps(surfaceElements, ops).ok ? ops : [])
   }
   const keepProposal = () => { setSurfaceElements(applySurfaceOps(surfaceElements, proposalOps)); setProposalOps([]) }
+  const addBoundComponent = (type: Extract<SurfaceComponentType, 'review' | 'checkpoint'>, identity: string, binding: SurfaceBinding, variant: string) => {
+    const contract = surfaceComponentContract(type)
+    const component = {
+      id: `surface:${type}:${identity}`,
+      projectId: props.projectId,
+      surface: 'workflow' as const,
+      type,
+      bounds: placeSurfaceComponent({ size: contract.minSize, viewportOrigin: componentViewportOrigin, existing: surfaceElements }),
+      binding,
+      presentation: { variant, zIndex: 4 },
+    }
+    setSurfaceElements(applySurfaceOps(surfaceElements, [{ type: 'create-component', component }]))
+  }
 
   const overlay = <>
     {layoutPreview && <div className="lcos-spatial-layout-preview" data-testid="workflow-layout-preview"><span><LayoutGrid size={12}/><strong>材料布局建议</strong><small>{layoutPreview.componentCount} 个关系簇 · {pinnedIds.length} 个手工锚点</small></span><button type="button" onClick={applyLayoutPreview}>应用</button><button type="button" className="quiet" onClick={() => setLayoutPreview(null)}>取消</button></div>}
@@ -484,6 +505,8 @@ export function WorkflowSurface(props: Props) {
       <div className="lcos-layout-tools">
         <small>{actions.length} 步 · {visibleNodes.length} 份材料</small>
         <button type="button" onClick={() => setComposerOpen(true)}><Plus size={11}/>步骤</button>
+        {nextReview && <button type="button" title={nextReview.label} onClick={() => addBoundComponent('review', nextReview.runId, { runId: nextReview.runId }, nextReview.phase)}><Plus size={11}/>Review</button>}
+        {nextCheckpoint && <button type="button" title={nextCheckpoint.label} onClick={() => addBoundComponent('checkpoint', nextCheckpoint.checkpointId, { checkpointId: nextCheckpoint.checkpointId }, 'protected')}><Plus size={11}/>Checkpoint</button>}
         <button type="button" disabled={items.length < 2 || Boolean(layoutPreview)} onClick={previewLayout}><LayoutGrid size={11}/>整理材料</button>
         {pinnedIds.length > 0 && <button type="button" className="quiet" onClick={() => setPinnedIds([])}>解除 {pinnedIds.length} 个锚点</button>}
         {props.onExportWorkflow && <button type="button" onClick={props.onExportWorkflow}><Download size={11}/>导出</button>}
@@ -541,7 +564,7 @@ export function WorkflowSurface(props: Props) {
         {layoutPreview?.routes.map((route) => route.points.length > 1 ? <path key={`preview:${route.id}`} className="layout-preview-edge" d={route.points.map((point, index) => `${index ? 'L' : 'M'}${point.x} ${point.y}`).join(' ')}/> : null)}
       </SpatialEdgeLayer>
 
-      <SurfaceComponentLayer surface="workflow" elements={surfaceElements} zoom={camera.zoom} renderContext={{ nodes: visibleNodes, edges: visibleEdges, onSelectNode: props.onSelect, onOpenNode: props.onDoubleClick }} onElementsChange={setSurfaceElements}/>
+      <SurfaceComponentLayer surface="workflow" elements={surfaceElements} zoom={camera.zoom} renderContext={{ nodes: visibleNodes, edges: visibleEdges, reviews: props.reviews, checkpoints: props.checkpoints, onSelectNode: props.onSelect, onOpenNode: props.onDoubleClick, onOpenReview: props.onOpenReview }} onElementsChange={setSurfaceElements}/>
       <SurfaceComponentProposalLayer surface="workflow" elements={proposalElements} renderContext={{ nodes: visibleNodes, edges: visibleEdges }}/>
 
       <SpatialNodeLayer>
