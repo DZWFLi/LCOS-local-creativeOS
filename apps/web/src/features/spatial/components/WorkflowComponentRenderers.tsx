@@ -7,8 +7,12 @@ import { resolveSpatialSignal, type SpatialRuntimeSignal } from '../visual/spati
 import { WebWorkbench } from '../../workbench/WebWorkbench'
 
 function bindingLabel(element: SurfaceComponentRenderProps['element']) {
-  const entry = Object.entries(element.binding ?? {}).find(([, value]) => typeof value === 'string' && value.length > 0)
-  return entry ? `${entry[0].replace(/Id$/, '')} · ${entry[1]}` : '等待绑定真实 Workflow 对象'
+  const entry = Object.entries(element.binding ?? {}).find(([, value]) => typeof value === 'string' ? value.length > 0 : Array.isArray(value) && value.length > 0)
+  if (!entry) return '等待绑定真实 Workflow 对象'
+  const [kind, value] = entry
+  return Array.isArray(value)
+    ? `${kind.replace(/Ids$/, '')} · ${value.length} 个真实对象`
+    : `${kind.replace(/Id$/, '')} · ${value}`
 }
 
 function Header({ icon, title, hint, selected, semantic, runtime = 'idle' }: { icon: ReactNode; title: string; hint: string; selected?: boolean; semantic?: string; runtime?: SpatialRuntimeSignal }) {

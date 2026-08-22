@@ -32,6 +32,7 @@ import { loadProjectCatalog, loadPrototypeState, saveProjectCatalog, savePrototy
 import { clearProjectNavigationState, loadProjectNavigationState, saveProjectNavigationState } from './state/projectNavigation'
 import { isRuntimeProjectMode } from './runtime/projectMode'
 import { emptyPresentationState, usePresentationMembership, usePresentationViewBridge } from './state/presentationViewState'
+import { usePresentationSurfaceElements } from './state/presentationDraftState'
 import { spatialRegionFromSelection, type SpatialRegionDraft } from './state/spatialRegion'
 import { appendProjectPresentationEntityRefs, appendProjectPresentationMembers, loadProjectPresentationMembers, removeProjectPresentationEntityRefs, removeProjectPresentationMembers } from './state/projectPresentationMembership'
 import { loadPresentationLayoutEngines } from './features/layout/layoutEngines'
@@ -406,6 +407,7 @@ export function App() {
     }),
   })
   const persistedMainCanvasRegions = mainCanvasPresentation.state?.spatialRegions ?? null
+  const [mainSurfaceElements, setMainSurfaceElements] = usePresentationSurfaceElements(activeProjectId, rootScope.id, 'arrange')
   useEffect(() => {
     if (!mainCanvasPresentation.ready || persistedMainCanvasRegions === null) return
     setSpatialRegions((current) => persistedMainCanvasRegions.map((region) => ({
@@ -6231,6 +6233,8 @@ export function App() {
         onToggleCollection: toggleCollectionScope,
         onOpenContextLens: openContextProjectionLens,
         spatialRegions,
+        surfaceElements: mainSurfaceElements,
+        onSurfaceElementsChange: setMainSurfaceElements,
         onCreateRegion: createRegionFromCurrentSelection,
         onClearRegion: clearSpatialRegion,
         onRegionBoundsChange: updateSpatialRegionBounds,

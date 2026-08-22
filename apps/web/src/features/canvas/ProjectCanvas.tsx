@@ -25,6 +25,9 @@ import { resolveSpatialSignal, type SpatialRuntimeSignal } from '../spatial/visu
 import type { SurfaceElement } from '../spatial/model/surfaceElementTypes'
 import { resolveSurfaceComponent } from '../spatial/components/surfaceComponentRegistry'
 import { SurfaceFrame } from '../spatial/components/SurfaceFrame'
+import { SurfaceComponentLayer } from '../spatial/components/SurfaceComponentLayer'
+import { SurfaceComponentShelf } from '../spatial/components/SurfaceComponentShelf'
+import { surfaceViewportOrigin } from '../spatial/model/surfaceGeometry'
 
 interface Props {
   projectId?: string
@@ -79,6 +82,8 @@ interface Props {
   onToggleCollection?: (collectionScopeId: string) => void
   onOpenContextLens?: (node: CanvasNode, lens: 'space' | 'structure' | 'evolution') => void
   spatialRegions?: readonly SpatialRegionDraft[]
+  surfaceElements?: readonly SurfaceElement[]
+  onSurfaceElementsChange?: (elements: SurfaceElement[]) => void
   onCreateRegion?: () => void
   onClearRegion?: (regionId: string) => void
   onRegionBoundsChange?: (regionId: string, bounds: SpatialRegionDraft['bounds']) => void
@@ -98,7 +103,7 @@ function additiveSelection(event: { shiftKey: boolean; ctrlKey: boolean; metaKey
   return event.shiftKey || event.ctrlKey || event.metaKey
 }
 
-export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-space', surfaceMode = 'project', nodes, setNodes, edges, setEdges, camera, setCamera, selectedId, selectedIds, selectedEdgeId, setSelectedEdgeId, pendingId, runId, runStatus, spaceHeld, locked = false, layoutPreview, workspaceFrames = [], workspaceMemberNodes = nodes, activeWorkspaceId = null, onWorkspaceActivate, onWorkspaceProjectionMove, onPresentationInteractionChange, onPresentationCommit, onFrameBoundsChange, selectionComposer, onSelect, onClearSelection, onMarqueeSelect, onSelectEdge, onDoubleClick, onDetails, onFocusSelection, onRenameSelection, onCreateNodeFromAnchor, onFilesDropped, onExternalTextDrop, onMaterialTransferDrop, onArrangeSelection, gridSnapEnabled = true, onSetSelectionDisplayMode, onCopySelection, onDuplicateSelection, onCreateScopeFromSelection, onDeleteSelection, onReorganize, onDirectProjectViewDrop, onPointerWorldChange, onSpaceCreate, onLocateNode, locatePulseId, pendingReviewIds = [], attentionBucketsByViewId = {}, collectionMembersByNodeId = {}, expandedCollectionScopeIds = [], openingCollectionScopeIds = [], closingCollectionScopeIds = [], onToggleCollection, onOpenContextLens, spatialRegions = [], onCreateRegion, onClearRegion, onRegionBoundsChange, onRegionBoundsCommit, onPromoteRegionToCollection }: Props) {
+export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-space', surfaceMode = 'project', nodes, setNodes, edges, setEdges, camera, setCamera, selectedId, selectedIds, selectedEdgeId, setSelectedEdgeId, pendingId, runId, runStatus, spaceHeld, locked = false, layoutPreview, workspaceFrames = [], workspaceMemberNodes = nodes, activeWorkspaceId = null, onWorkspaceActivate, onWorkspaceProjectionMove, onPresentationInteractionChange, onPresentationCommit, onFrameBoundsChange, selectionComposer, onSelect, onClearSelection, onMarqueeSelect, onSelectEdge, onDoubleClick, onDetails, onFocusSelection, onRenameSelection, onCreateNodeFromAnchor, onFilesDropped, onExternalTextDrop, onMaterialTransferDrop, onArrangeSelection, gridSnapEnabled = true, onSetSelectionDisplayMode, onCopySelection, onDuplicateSelection, onCreateScopeFromSelection, onDeleteSelection, onReorganize, onDirectProjectViewDrop, onPointerWorldChange, onSpaceCreate, onLocateNode, locatePulseId, pendingReviewIds = [], attentionBucketsByViewId = {}, collectionMembersByNodeId = {}, expandedCollectionScopeIds = [], openingCollectionScopeIds = [], closingCollectionScopeIds = [], onToggleCollection, onOpenContextLens, spatialRegions = [], surfaceElements = [], onSurfaceElementsChange, onCreateRegion, onClearRegion, onRegionBoundsChange, onRegionBoundsCommit, onPromoteRegionToCollection }: Props) {
   const canvasRef = useRef<HTMLDivElement | null>(null)
   const dragCandidate = useRef<DragCandidate | null>(null)
   const resizeCandidate = useRef<ResizeCandidate | null>(null)
@@ -214,6 +219,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
   const textSelection = selectedNodesForTools.length > 0 && selectedNodesForTools.every((node) => node.kind === 'note' || detectFileIdentity(node) === 'markdown')
   const textSelectionExpanded = textSelection && selectedNodesForTools.some((node) => node.displayMode !== 'compact')
   const selectionBounds = selectedIds.length > 1 ? selectedVisualBounds : null
+  const componentSelectionBounds = selectedVisualBounds ? { x: selectedVisualBounds.x, y: selectedVisualBounds.y, w: selectedVisualBounds.width, h: selectedVisualBounds.height } : null
   const overlayWidth = canvasRef.current?.clientWidth ?? 1440
   const overlayHeight = canvasRef.current?.clientHeight ?? 900
   const selectionToolbarAnchor = selectionBounds ? spatialWorldToScreen({ x: selectionBounds.x, y: selectionBounds.y }, camera) : null
@@ -761,6 +767,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
 
   const spatialOverlays = <>
       {lod !== 'full' && <div className="lod-badge">{nodes.length} 个节点 · {lod === 'overview' ? '总览' : lod === 'aggregate' ? '聚合显示' : '简化显示'}</div>}
+    {surfaceMode === 'project' && onSurfaceElementsChange && <SurfaceComponentShelf projectId={projectId} surface="main" elements={surfaceElements} selectionIds={selectedIds} selectionBounds={componentSelectionBounds} viewportOrigin={surfaceViewportOrigin(camera)} onElementsChange={onSurfaceElementsChange}/>} 
     {dropGhost && <div className="lcos-drop-ghost" style={{ left: dropGhost.x, top: dropGhost.y }} aria-hidden="true">
       <span className="lcos-drop-ghost-stack"><i /><i /><i /></span>
       <strong>{dropGhost.count}</strong>
@@ -961,6 +968,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
     }
     if ((kind === 'uri' || kind === 'text') && onExternalTextDrop) onExternalTextDrop(id, point.x, point.y)
   }} overlays={spatialOverlays}>
+    {surfaceMode === 'project' && onSurfaceElementsChange && <SurfaceComponentLayer surface="main" elements={surfaceElements} zoom={camera.zoom} renderContext={{ nodes, edges, onSelectNode: onSelect, onOpenNode: onDoubleClick }} onElementsChange={onSurfaceElementsChange}/>} 
     <SpatialNodeLayer className="lcos-arrange-structure-layer">
       {alignmentGuide?.x !== undefined && <i className="lcos-alignment-guide axis-x" style={{ left: alignmentGuide.x }}/>} {/* x guide */}
       {alignmentGuide?.y !== undefined && <i className="lcos-alignment-guide axis-y" style={{ top: alignmentGuide.y }}/>} {/* y guide */}
