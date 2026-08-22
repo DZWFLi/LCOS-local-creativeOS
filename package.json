@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "npm run dev --workspace @local-creative-os/web",
     "dev:web": "npm run dev --workspace @local-creative-os/web",
-    "dev:local-core": "npm run build:domain && npm run dev --workspace @local-creative-os/local-core",
+    "dev:local-core": "npm run build:local-core && node apps/local-core/dist/index.js",
     "dev:stack": "node scripts/dev-stack.mjs",
     "dev:open": "node scripts/dev-launcher.mjs open",
     "dev:stop": "node scripts/dev-launcher.mjs stop",
