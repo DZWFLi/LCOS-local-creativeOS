@@ -13,6 +13,12 @@
 - Skill 只输出声明式空间意图，要求 deterministic geometry → SurfaceOps → Ghost Preview → Keep / Revert。
 - Skill 不输出像素、HTML、React、CSS，不覆盖 pinned layout，不修改 Project Truth。
 
+## Sol 复核纠正
+
+- 原 Skill 把 `place beside`、`collapse inactive`、`restore arrangement` 等非冻结词汇写进 canonical 输出集合，已移除。
+- 七个冻结 Layout Brain 意图不再被描述成全部已接通：v0.1 可执行映射只有 `preserve`、`cluster`、`sequence`、`suggest region`；其余意图缺少通用 SurfaceOp 时必须停在 Proposal / blocked。
+- 显式 User / Agent Selection 高于 workspace fallback，但二者都只是当前 Presentation 候选，不成为 Project Truth membership。
+
 ## 修改文件
 
 - `apps/web/src/features/spatial/components/ContextComponentRenderers.tsx`
