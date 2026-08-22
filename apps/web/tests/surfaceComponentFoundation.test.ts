@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 
+import type { CanvasNode } from '../src/model'
 import type { SurfaceElement } from '../src/features/spatial/model/surfaceElementTypes'
+import { ContextPackComponent, RelationshipFieldComponent, StructureMapComponent } from '../src/features/spatial/components/ContextComponentRenderers'
 import { surfaceComponentRegistry } from '../src/features/spatial/components/surfaceComponentRegistry'
 import { surfaceComponentContract, surfaceComponentsFor } from '../src/features/spatial/model/surfaceComponentCatalog'
 import { applySurfaceOp, applySurfaceOps, validateSurfaceOp, validateSurfaceOps } from '../src/features/spatial/model/surfaceOps'
@@ -16,16 +20,39 @@ const element = (patch: Partial<SurfaceElement> = {}): SurfaceElement => ({
   ...patch,
 })
 
-describe('S1 Context spatial components', () => {
-  it('exposes the four trusted Context components in the Human Shelf', () => {
+describe('Spatial Component Foundation integrity', () => {
+  it('exposes only capability components with honest render adapters', () => {
     expect(surfaceComponentRegistry.fence.renderer).toBeTypeOf('function')
     expect(surfaceComponentRegistry['structure-map'].surfaces).toEqual(['context'])
     expect(surfaceComponentContract('workflow-step').createMode).toBe('adapter-only')
     expect(surfaceComponentContract('structure-map').createMode).toBe('presentation')
-    expect(surfaceComponentContract('review').createMode).toBe('presentation')
+    expect(surfaceComponentContract('context-pack').requiresSelection).toBe(true)
+    expect(surfaceComponentContract('review').createMode).toBe('planned')
     expect(surfaceComponentsFor('workflow', true).map((item) => item.type)).not.toContain('workflow-step')
-    expect(surfaceComponentsFor('workflow', true).map((item) => item.type)).toEqual(expect.arrayContaining(['review', 'checkpoint', 'workbench']))
-    expect(surfaceComponentsFor('context', true).map((item) => item.type)).toEqual(expect.arrayContaining(['fence', 'region', 'structure-map', 'evolution', 'relationship-field', 'context-pack']))
+    expect(surfaceComponentsFor('workflow', true).map((item) => item.type)).not.toEqual(expect.arrayContaining(['review', 'checkpoint', 'workbench']))
+    expect(surfaceComponentsFor('context', true).map((item) => item.type)).toEqual(expect.arrayContaining(['structure-map', 'evolution', 'relationship-field', 'context-pack']))
+  })
+
+  it('renders Context components from bound Project objects instead of decorative placeholder copy', () => {
+    const node = (id: string, title: string): CanvasNode => ({ id, title, subtitle: `${title} 摘要`, kind: 'context', x: 0, y: 0, width: 180, height: 100 })
+    const nodes = [node('view-a', '真实 Brief'), node('view-b', '客户反馈'), node('view-c', '范围外对象')]
+    const bound = element({ type: 'structure-map', binding: { projectViewIds: ['view-a', 'view-b'] } })
+    const structure = renderToStaticMarkup(createElement(StructureMapComponent, { element: bound, context: { nodes } }))
+    expect(structure).toContain('真实 Brief')
+    expect(structure).toContain('客户反馈')
+    expect(structure).not.toContain('范围外对象')
+    expect(structure).not.toContain('主线材料')
+
+    const relationship = renderToStaticMarkup(createElement(RelationshipFieldComponent, {
+      element: { ...bound, type: 'relationship-field' },
+      context: { nodes, edges: [{ id: 'edge-a', from: 'view-a', to: 'view-b', kind: 'feedback', label: '要求修改' }] },
+    }))
+    expect(relationship).toContain('要求修改')
+    expect(relationship).toContain('真实 Brief')
+
+    const pack = renderToStaticMarkup(createElement(ContextPackComponent, { element: { ...bound, type: 'context-pack' }, context: { nodes } }))
+    expect(pack).toContain('2 个引用')
+    expect(pack).not.toContain('范围外对象')
   })
 
   it('remove-projection removes only the SurfaceElement and never carries a project-delete operation', () => {
@@ -75,7 +102,7 @@ describe('S1 Context spatial components', () => {
     expect(blocker).toEqual(before)
   })
 
-  it('resolves Context lenses and preserves target identity for legal create intents', () => {
+  it('resolves approved Context lenses and preserves legal region identity', () => {
     const structure = resolveSurfaceIntent({ kind: 'show-structure', targetIds: ['view-a'] }, {
       projectId: 'project-a',
       surface: 'context',
@@ -85,10 +112,7 @@ describe('S1 Context spatial components', () => {
       createId: (type) => `fixture:${type}`,
     })
     expect(structure).toHaveLength(1)
-    expect(structure[0]).toMatchObject({ type: 'create-component', component: {
-      id: 'fixture:structure-map', type: 'structure-map', surface: 'context',
-      binding: { projectViewIds: ['view-a'] },
-    } })
+    expect(structure[0]).toMatchObject({ type: 'create-component', component: { type: 'structure-map', binding: { projectViewIds: ['view-a'] } } })
 
     const ops = resolveSurfaceIntent({ kind: 'focus-region', targetIds: ['view-a', 'view-b', 'view-a'] }, {
       projectId: 'project-a', surface: 'context', existing: [],
@@ -108,7 +132,7 @@ describe('S1 Context spatial components', () => {
       projectId: 'project-a', surface: 'workflow', existing: [],
       viewportOrigin: { x: 0, y: 0 }, createId: (type) => `fixture:${type}`,
     })
-    expect(ops[0]).toMatchObject({ type: 'create-component', component: { type: 'workbench', binding: { projectViewIds: ['page-a'] }, presentation: { variant: 'quick-note' } } })
+    expect(ops).toEqual([])
     expect(resolveSurfaceIntent({ kind: 'restore-routine', targetIds: ['page-a'] }, {
       projectId: 'project-a', surface: 'workflow', existing: [], viewportOrigin: { x: 0, y: 0 },
     })).toEqual([])

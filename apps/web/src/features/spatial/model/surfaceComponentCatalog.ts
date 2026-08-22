@@ -8,6 +8,7 @@ export interface SurfaceComponentCapabilityContract {
   readonly minSize: { readonly w: number; readonly h: number }
   readonly movable: boolean
   readonly resizable: boolean
+  readonly requiresSelection?: boolean
   readonly acceptsDrop: readonly SurfaceDropKind[]
   readonly capabilities: {
     readonly bind?: boolean
@@ -58,7 +59,7 @@ export const SURFACE_COMPONENT_CATALOG: Readonly<Record<SurfaceComponentType, Su
   },
   'context-pack': {
     type: 'context-pack', label: 'Context Pack', description: '把当前选择准备成可读范围，不复制 Project Truth。',
-    surfaces: ['context', 'workflow'], minSize: { w: 320, h: 180 }, movable: true, resizable: true,
+    surfaces: ['context', 'workflow'], minSize: { w: 320, h: 180 }, movable: true, resizable: true, requiresSelection: true,
     acceptsDrop: commonDrop, capabilities: { bind: true, collapse: true, removeProjection: true }, createMode: 'presentation',
   },
   'workflow-step': {
@@ -69,17 +70,17 @@ export const SURFACE_COMPONENT_CATALOG: Readonly<Record<SurfaceComponentType, Su
   review: {
     type: 'review', label: 'Review', description: '需要人工判断的检查点和变更现场。',
     surfaces: ['workflow'], minSize: { w: 300, h: 170 }, movable: true, resizable: true,
-    acceptsDrop: commonDrop, capabilities: { bind: true, collapse: true, removeProjection: true }, createMode: 'presentation',
+    acceptsDrop: commonDrop, capabilities: { bind: true, collapse: true, removeProjection: true }, createMode: 'planned',
   },
   checkpoint: {
     type: 'checkpoint', label: 'Checkpoint', description: '工作现场里的可恢复检查点投影。',
     surfaces: ['workflow'], minSize: { w: 260, h: 132 }, movable: true, resizable: true,
-    acceptsDrop: [], capabilities: { bind: true, collapse: true, removeProjection: true }, createMode: 'presentation',
+    acceptsDrop: [], capabilities: { bind: true, collapse: true, removeProjection: true }, createMode: 'planned',
   },
   workbench: {
     type: 'workbench', label: 'Workbench', description: 'Surface 只拥有外框，内部工具继续拥有自己的 runtime/domain。',
     surfaces: ['main', 'context', 'workflow'], minSize: { w: 420, h: 260 }, movable: true, resizable: true,
-    acceptsDrop: ['project-view', 'file', 'text', 'material-transfer'], capabilities: { bind: true, collapse: true, removeProjection: true }, createMode: 'presentation',
+    acceptsDrop: ['project-view', 'file', 'text', 'material-transfer'], capabilities: { bind: true, collapse: true, removeProjection: true }, createMode: 'planned',
   },
 }
 

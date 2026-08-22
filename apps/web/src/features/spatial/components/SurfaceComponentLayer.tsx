@@ -3,11 +3,13 @@ import type { SurfaceBounds, SurfaceElement, SurfaceKind } from '../model/surfac
 import { applySurfaceOps, type SurfaceOp } from '../model/surfaceOps'
 import { resolveSurfaceComponent } from './surfaceComponentRegistry'
 import { SurfaceFrame } from './SurfaceFrame'
+import type { SurfaceComponentRenderContext } from './surfaceComponentTypes'
 
-export function SurfaceComponentLayer({ surface, elements, zoom, onElementsChange }: {
+export function SurfaceComponentLayer({ surface, elements, zoom, renderContext, onElementsChange }: {
   readonly surface: SurfaceKind
   readonly elements: readonly SurfaceElement[]
   readonly zoom: number
+  readonly renderContext?: SurfaceComponentRenderContext
   readonly onElementsChange: (elements: SurfaceElement[]) => void
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -61,7 +63,7 @@ export function SurfaceComponentLayer({ surface, elements, zoom, onElementsChang
         onPresentationChange={(presentation) => onElementsChange(elements.map((item) => item.id === element.id ? { ...item, presentation } : item))}
         onRemove={() => commit({ type: 'remove-projection', elementId: element.id })}
       >
-        <Renderer element={element} selected={selectedId === element.id}/>
+        <Renderer element={element} selected={selectedId === element.id} context={renderContext}/>
       </SurfaceFrame>
     })}
   </div>

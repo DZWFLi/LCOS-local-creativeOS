@@ -118,7 +118,7 @@ export function ContextSpaceSurface(props: Props) {
 
   const overlay = <>
     {!items.length && <div className="lcos-context-space-empty"><Layers3 size={19}/><strong>把需要一起理解的材料拖进来</strong><span>可以直接阅读、摘取、组织，放进来的材料就在这里一起被理解。</span></div>}
-    <SurfaceComponentShelf projectId={props.projectId} surface="context" elements={surfaceElements} selectionBounds={selectedSurfaceBounds} viewportOrigin={componentViewportOrigin} onElementsChange={setSurfaceElements}/>
+    <SurfaceComponentShelf projectId={props.projectId} surface="context" elements={surfaceElements} selectionIds={props.selectedIds} selectionBounds={selectedSurfaceBounds} viewportOrigin={componentViewportOrigin} onElementsChange={setSurfaceElements}/>
   </>
 
   return <section className="lcos-dedicated-surface lcos-context-space" data-testid="surface-context-space">
@@ -139,7 +139,7 @@ export function ContextSpaceSurface(props: Props) {
       <div className="lcos-context-understanding-regions" aria-hidden="true">
         {understandingRegions.map((region) => <div key={region.id} className="lcos-context-understanding-region" style={{ left: region.x, top: region.y, width: region.width, height: region.height } as CSSProperties}><span>{region.label}</span><small>{region.memberIds.length} 项 · 结构区域</small></div>)}
       </div>
-      <SurfaceComponentLayer surface="context" elements={surfaceElements} zoom={camera.zoom} onElementsChange={setSurfaceElements}/>
+      <SurfaceComponentLayer surface="context" elements={surfaceElements} zoom={camera.zoom} renderContext={{ nodes: props.nodes, edges: visibleEdges, hierarchy, history: props.runtime?.history, onSelectNode: props.onSelect, onOpenNode: props.onDoubleClick, onOpenHistorySource: props.runtime?.onOpenHistorySource }} onElementsChange={setSurfaceElements}/>
       <SpatialEdgeLayer bounds={edgeBounds} className="lcos-context-space-edges" ariaLabel="Context 关系">
         <defs><marker id="lcos-context-arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0 0 L7 3.5 L0 7 z"/></marker></defs>
         {visibleEdges.map((edge) => {

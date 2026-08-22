@@ -11,10 +11,11 @@ function createId(type: SurfaceComponentType) {
   return `surface:${type}:${Date.now().toString(36)}:${fallbackId}`
 }
 
-export function SurfaceComponentShelf({ projectId, surface, elements, selectionBounds, viewportOrigin, onElementsChange }: {
+export function SurfaceComponentShelf({ projectId, surface, elements, selectionIds = [], selectionBounds, viewportOrigin, onElementsChange }: {
   readonly projectId: string
   readonly surface: SurfaceKind
   readonly elements: readonly SurfaceElement[]
+  readonly selectionIds?: readonly string[]
   readonly selectionBounds?: SurfaceBounds | null
   readonly viewportOrigin: { readonly x: number; readonly y: number }
   readonly onElementsChange: (elements: SurfaceElement[]) => void
@@ -32,12 +33,18 @@ export function SurfaceComponentShelf({ projectId, surface, elements, selectionB
   const create = (type: SurfaceComponentType, dropOrigin?: { readonly x: number; readonly y: number }) => {
     const definition = options.find((item) => item.type === type)
     if (!definition) return
+    const selectedProjectViewIds = [...new Set(selectionIds.map((id) => id.trim()).filter(Boolean))]
+    if (definition.requiresSelection && !selectedProjectViewIds.length) return
     const bounds = (type === 'fence' || type === 'region') && selectionBounds
       ? regionBoundsForSelection(selectionBounds, definition.minSize)
       : dropOrigin
         ? { x: dropOrigin.x - definition.minSize.w / 2, y: dropOrigin.y - definition.minSize.h / 2, ...definition.minSize }
       : placeSurfaceComponent({ size: definition.minSize, selection: selectionBounds, viewportOrigin, existing: elements })
-    const component: SurfaceElement = { id: createId(type), projectId, surface, type, bounds, presentation: { zIndex: type === 'fence' || type === 'region' ? 1 : 4 } }
+    const component: SurfaceElement = {
+      id: createId(type), projectId, surface, type, bounds,
+      ...(definition.capabilities.bind && selectedProjectViewIds.length ? { binding: { projectViewIds: selectedProjectViewIds } } : {}),
+      presentation: { zIndex: type === 'fence' || type === 'region' ? 1 : 4 },
+    }
     onElementsChange(applySurfaceOp(elements, { type: 'create-component', component }))
     setOpen(false)
   }
@@ -104,7 +111,10 @@ export function SurfaceComponentShelf({ projectId, surface, elements, selectionB
     <button type="button" className="lcos-surface-component-shelf-toggle" aria-expanded={open} aria-label="添加现场组件" title="添加现场组件" onClick={() => setOpen((current) => !current)}>＋</button>
     {open && <div className="lcos-surface-component-shelf-menu" role="menu">
       <header><strong>现场组件</strong><small>拖到画布；键盘 Enter 在当前视野创建</small></header>
-      {options.map((entry) => <button key={entry.type} type="button" role="menuitem" draggable={false} onPointerDown={(event) => beginDrag(entry, event)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); create(entry.type) } }}><span>{entry.label}</span><small>{entry.description}</small></button>)}
+      {options.map((entry) => {
+        const disabled = Boolean(entry.requiresSelection && !selectionIds.length)
+        return <button key={entry.type} type="button" role="menuitem" draggable={false} disabled={disabled} title={disabled ? '先选择要放入的对象' : undefined} onPointerDown={(event) => { if (!disabled) beginDrag(entry, event) }} onKeyDown={(event) => { if (!disabled && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); create(entry.type) } }}><span>{entry.label}</span><small>{disabled ? '需要当前选择' : entry.description}</small></button>
+      })}
     </div>}
     {dragPreview && <div className={`lcos-surface-component-drag-ghost ${dragPreview.valid ? 'is-valid' : ''}`} style={{ left: dragPreview.x, top: dragPreview.y }} aria-hidden="true"><span>＋</span><strong>{dragPreview.label}</strong><small>{dragPreview.valid ? '松开放置' : '拖到画布'}</small></div>}
   </div>

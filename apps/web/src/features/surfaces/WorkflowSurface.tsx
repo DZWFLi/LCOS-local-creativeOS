@@ -453,7 +453,7 @@ export function WorkflowSurface(props: Props) {
     {layoutPreview && <div className="lcos-spatial-layout-preview" data-testid="workflow-layout-preview"><span><LayoutGrid size={12}/><strong>材料布局建议</strong><small>{layoutPreview.componentCount} 个关系簇 · {pinnedIds.length} 个手工锚点</small></span><button type="button" onClick={applyLayoutPreview}>应用</button><button type="button" className="quiet" onClick={() => setLayoutPreview(null)}>取消</button></div>}
     {!actions.length && items.length > 0 && <div className="lcos-workflow-step-empty"><span><strong>材料已经在这里</strong><small>建立第一步，把“做什么”和“用什么”分开。</small></span><button type="button" onClick={() => setComposerOpen(true)}><Plus size={12}/>建立第一步</button></div>}
     {!items.length && !actions.length && <div className="lcos-workflow-empty"><Network size={19}/><strong>从真实材料搭出下一步</strong><span>把材料带进来，再建立第一步。默认只搭建，不执行。</span><div className="lcos-workflow-start-actions"><button type="button" disabled={!props.selectedIds.length} onClick={() => props.onStart?.('selection')}><Network size={12}/>从 Selection</button><small>也可以从 Context 直接“做成工作流”</small></div></div>}
-    <SurfaceComponentShelf projectId={props.projectId} surface="workflow" elements={surfaceElements} selectionBounds={selectedSurfaceBounds} viewportOrigin={componentViewportOrigin} onElementsChange={setSurfaceElements}/>
+    <SurfaceComponentShelf projectId={props.projectId} surface="workflow" elements={surfaceElements} selectionIds={selectedMaterialIds} selectionBounds={selectedSurfaceBounds} viewportOrigin={componentViewportOrigin} onElementsChange={setSurfaceElements}/>
   </>
 
   return <section className="lcos-dedicated-surface lcos-workflow-surface" data-testid="surface-workflow">
@@ -519,7 +519,7 @@ export function WorkflowSurface(props: Props) {
         {layoutPreview?.routes.map((route) => route.points.length > 1 ? <path key={`preview:${route.id}`} className="layout-preview-edge" d={route.points.map((point, index) => `${index ? 'L' : 'M'}${point.x} ${point.y}`).join(' ')}/> : null)}
       </SpatialEdgeLayer>
 
-      <SurfaceComponentLayer surface="workflow" elements={surfaceElements} zoom={camera.zoom} onElementsChange={setSurfaceElements}/>
+      <SurfaceComponentLayer surface="workflow" elements={surfaceElements} zoom={camera.zoom} renderContext={{ nodes: visibleNodes, edges: visibleEdges, onSelectNode: props.onSelect, onOpenNode: props.onDoubleClick }} onElementsChange={setSurfaceElements}/>
 
       <SpatialNodeLayer>
         {actions.map((action, index) => {
