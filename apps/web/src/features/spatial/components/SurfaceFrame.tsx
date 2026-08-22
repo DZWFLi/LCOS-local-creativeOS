@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import type { SurfaceBounds, SurfaceElement } from '../model/surfaceElementTypes'
 import type { SurfaceComponentDefinition } from './surfaceComponentRegistry'
+import { useReducedSpatialMotion } from '../visual/useReducedSpatialMotion'
 
 interface Props {
   readonly element: SurfaceElement
@@ -9,6 +10,7 @@ interface Props {
   readonly selected: boolean
   readonly onSelect: () => void
   readonly onBoundsCommit: (bounds: SurfaceBounds, kind: 'move' | 'resize') => void
+  readonly onBoundsPreview?: (bounds: SurfaceBounds | null, kind: 'move' | 'resize') => void
   readonly onPresentationChange: (presentation: SurfaceElement['presentation']) => void
   readonly onRemove: () => void
   readonly showPin?: boolean
@@ -17,7 +19,8 @@ interface Props {
 
 type Interaction = { readonly kind: 'move' | 'resize'; readonly pointerId: number; readonly clientX: number; readonly clientY: number; readonly bounds: SurfaceBounds }
 
-export function SurfaceFrame({ element, definition, zoom, selected, onSelect, onBoundsCommit, onPresentationChange, onRemove, showPin = true, children }: Props) {
+export function SurfaceFrame({ element, definition, zoom, selected, onSelect, onBoundsCommit, onBoundsPreview, onPresentationChange, onRemove, showPin = true, children }: Props) {
+  const reducedMotion = useReducedSpatialMotion()
   const [previewBounds, setPreviewBounds] = useState<SurfaceBounds | null>(null)
   const latestBounds = useRef(element.bounds)
   const cleanupRef = useRef<(() => void) | null>(null)
@@ -42,6 +45,7 @@ export function SurfaceFrame({ element, definition, zoom, selected, onSelect, on
         : { ...interaction.bounds, w: Math.max(definition.minSize.w, interaction.bounds.w + dx), h: Math.max(definition.minSize.h, interaction.bounds.h + dy) }
       latestBounds.current = next
       setPreviewBounds(next)
+      onBoundsPreview?.(next, kind)
     }
     const finish = (pointer: PointerEvent) => {
       if (pointer.pointerId !== interaction.pointerId) return
@@ -49,22 +53,31 @@ export function SurfaceFrame({ element, definition, zoom, selected, onSelect, on
       cleanupRef.current = null
       const next = latestBounds.current
       setPreviewBounds(null)
+      onBoundsPreview?.(null, kind)
       if (next.x !== interaction.bounds.x || next.y !== interaction.bounds.y || next.w !== interaction.bounds.w || next.h !== interaction.bounds.h) onBoundsCommit(next, kind)
+    }
+    const cancel = (pointer: PointerEvent) => {
+      if (pointer.pointerId !== interaction.pointerId) return
+      cleanupRef.current?.()
+      cleanupRef.current = null
+      latestBounds.current = interaction.bounds
+      setPreviewBounds(null)
+      onBoundsPreview?.(null, kind)
     }
     const cleanup = () => {
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', finish)
-      window.removeEventListener('pointercancel', finish)
+      window.removeEventListener('pointercancel', cancel)
     }
     cleanupRef.current?.()
     cleanupRef.current = cleanup
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', finish)
-    window.addEventListener('pointercancel', finish)
+    window.addEventListener('pointercancel', cancel)
   }
 
   return <div
-    className={`lcos-surface-component-frame type-${element.type} ${selected ? 'is-selected' : ''} ${pinned ? 'is-pinned' : ''} ${collapsed ? 'is-collapsed' : ''}`}
+    className={`lcos-surface-component-frame type-${element.type} ${selected ? 'is-selected' : ''} ${pinned ? 'is-pinned' : ''} ${collapsed ? 'is-collapsed' : ''} ${reducedMotion ? 'is-reduced-motion' : ''}`}
     data-surface-component-id={element.id}
     data-surface-component-type={element.type}
     style={{ left: bounds.x, top: bounds.y, width: bounds.w, height: bounds.h, zIndex: element.presentation?.zIndex ?? 3 }}

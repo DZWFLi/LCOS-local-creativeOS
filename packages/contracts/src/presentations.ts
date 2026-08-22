@@ -148,6 +148,8 @@ export interface SurfaceBindingV0 {
   stepId?: string
   contextId?: string
   projectViewId?: string
+  /** Stable Project View identity refs used as component seeds. No copied entity payloads. */
+  projectViewIds?: string[]
   checkpointId?: string
 }
 

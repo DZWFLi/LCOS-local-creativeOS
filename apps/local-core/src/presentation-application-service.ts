@@ -198,8 +198,17 @@ export class PresentationApplicationService {
       const { x, y, w, h } = element.bounds
       if (![x, y, w, h].every(Number.isFinite)) throw new Error(`Surface element ${element.id} bounds must be finite.`)
       if (w <= 0 || h <= 0) throw new Error(`Surface element ${element.id} bounds must be positive.`)
-      const bindingValues = Object.values(element.binding ?? {})
-      if (bindingValues.some((value) => typeof value !== 'string' || !value.trim())) throw new Error(`Surface element ${element.id} binding ids must be non-empty strings.`)
+      for (const value of Object.values(element.binding ?? {})) {
+        if (typeof value === 'string') {
+          if (!value.trim()) throw new Error(`Surface element ${element.id} binding ids must be non-empty strings.`)
+          continue
+        }
+        if (!Array.isArray(value) || value.length === 0
+          || value.some((id) => typeof id !== 'string' || !id.trim())
+          || new Set(value).size !== value.length) {
+          throw new Error(`Surface element ${element.id} binding ids must be non-empty unique strings.`)
+        }
+      }
       const zIndex = element.presentation?.zIndex
       if (zIndex !== undefined && !Number.isFinite(zIndex)) throw new Error(`Surface element ${element.id} zIndex must be finite.`)
     }

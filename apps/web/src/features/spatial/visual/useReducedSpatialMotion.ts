@@ -1,17 +1,33 @@
-import { useEffect, useState } from 'react'
+import { useSyncExternalStore } from 'react'
 
 const QUERY = '(prefers-reduced-motion: reduce)'
+let media: MediaQueryList | null = null
+const listeners = new Set<() => void>()
 
-/** One shared reduced-motion source for Spatial Surface primitives/components. */
+function getMedia(): MediaQueryList | null {
+  if (media || typeof window === 'undefined' || !window.matchMedia) return media
+  media = window.matchMedia(QUERY)
+  return media
+}
+
+function notify() {
+  for (const listener of listeners) listener()
+}
+
+function subscribe(listener: () => void): () => void {
+  const current = getMedia()
+  listeners.add(listener)
+  if (listeners.size === 1) current?.addEventListener?.('change', notify)
+  return () => {
+    listeners.delete(listener)
+    if (listeners.size === 0) current?.removeEventListener?.('change', notify)
+  }
+}
+
+const snapshot = () => getMedia()?.matches === true
+const serverSnapshot = () => false
+
+/** Shared singleton reduced-motion store for every Spatial Surface primitive/component. */
 export function useReducedSpatialMotion(): boolean {
-  const [reduced, setReduced] = useState(() => typeof window !== 'undefined' && window.matchMedia?.(QUERY).matches === true)
-  useEffect(() => {
-    if (typeof window === 'undefined' || !window.matchMedia) return
-    const media = window.matchMedia(QUERY)
-    const apply = () => setReduced(media.matches)
-    apply()
-    media.addEventListener?.('change', apply)
-    return () => media.removeEventListener?.('change', apply)
-  }, [])
-  return reduced
+  return useSyncExternalStore(subscribe, snapshot, serverSnapshot)
 }

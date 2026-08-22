@@ -1,4 +1,4 @@
-import type { SurfaceComponentType, SurfaceElement, SurfaceKind } from './surfaceElementTypes'
+import type { SurfaceBinding, SurfaceComponentType, SurfaceElement, SurfaceKind } from './surfaceElementTypes'
 import { surfaceComponentContract, surfaceSupportsComponent } from './surfaceComponentCatalog'
 import { placeSurfaceComponent, regionBoundsForSelection } from './surfaceGeometry'
 import type { SurfaceBounds } from './surfaceElementTypes'
@@ -21,22 +21,27 @@ export interface SurfaceIntentContext {
   readonly createId?: (type: SurfaceComponentType) => string
 }
 
-const fallbackType = (surface: SurfaceKind, preferred: SurfaceComponentType, fallback: SurfaceComponentType): SurfaceComponentType =>
-  surfaceSupportsComponent(surface, preferred) ? preferred : fallback
+function componentForIntent(surface: SurfaceKind, intent: SurfaceIntent): SurfaceComponentType | null {
+  if (intent.kind === 'show-structure') return surface === 'context' ? 'structure-map' : null
+  if (intent.kind === 'show-evolution') return surface === 'context' ? 'evolution' : null
+  if (intent.kind === 'mark-review') return surface === 'workflow' ? 'review' : null
+  if (intent.kind === 'prepare-workbench') return surfaceSupportsComponent(surface, 'workbench') ? 'workbench' : null
+  if (intent.kind === 'focus-region' || intent.kind === 'organize') return 'region'
+  return null
+}
 
-function componentForIntent(surface: SurfaceKind, intent: SurfaceIntent): SurfaceComponentType {
-  if (intent.kind === 'show-structure') return fallbackType(surface, 'structure-map', 'region')
-  if (intent.kind === 'show-evolution') return fallbackType(surface, 'evolution', surface === 'workflow' ? 'checkpoint' : 'region')
-  if (intent.kind === 'mark-review') return fallbackType(surface, 'review', 'region')
-  if (intent.kind === 'prepare-workbench') return 'workbench'
-  if (intent.kind === 'focus-region') return 'region'
-  return 'region'
+function bindingForTargets(targetIds: readonly string[]): SurfaceBinding | undefined {
+  const ids = [...new Set(targetIds.map((id) => id.trim()).filter(Boolean))]
+  if (!ids.length) return undefined
+  return { projectViewIds: ids }
 }
 
 export function resolveSurfaceIntent(intent: SurfaceIntent, context: SurfaceIntentContext): SurfaceOp[] {
   const type = componentForIntent(context.surface, intent)
+  if (!type) return []
   const contract = surfaceComponentContract(type)
   if (!surfaceSupportsComponent(context.surface, type) || contract.createMode !== 'presentation') return []
+  const binding = bindingForTargets(intent.targetIds)
   const createId = context.createId ?? ((componentType) => `surface:${componentType}:${Date.now().toString(36)}`)
   const bounds = type === 'region' && context.selectionBounds
     ? regionBoundsForSelection(context.selectionBounds, contract.minSize)
@@ -55,6 +60,7 @@ export function resolveSurfaceIntent(intent: SurfaceIntent, context: SurfaceInte
       surface: context.surface,
       type,
       bounds,
+      ...(binding ? { binding } : {}),
       presentation: { ...(variant ? { variant } : {}) },
     },
   }]

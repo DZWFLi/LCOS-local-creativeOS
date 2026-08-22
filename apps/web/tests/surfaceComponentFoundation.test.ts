@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { SurfaceElement } from '../src/features/spatial/model/surfaceElementTypes'
 import { surfaceComponentRegistry } from '../src/features/spatial/components/surfaceComponentRegistry'
 import { surfaceComponentContract, surfaceComponentsFor } from '../src/features/spatial/model/surfaceComponentCatalog'
-import { applySurfaceOp, validateSurfaceOp } from '../src/features/spatial/model/surfaceOps'
+import { applySurfaceOp, applySurfaceOps, validateSurfaceOp, validateSurfaceOps } from '../src/features/spatial/model/surfaceOps'
 import { placeSurfaceComponent } from '../src/features/spatial/model/surfaceGeometry'
 import { resolveSurfaceIntent } from '../src/features/spatial/model/surfaceIntent'
 
@@ -17,12 +17,16 @@ const element = (patch: Partial<SurfaceElement> = {}): SurfaceElement => ({
 })
 
 describe('S0 Spatial Component Foundation', () => {
-  it('registers trusted component capabilities and keeps Workflow Step adapter-only', () => {
+  it('keeps planned capability shells out of the Human Shelf', () => {
     expect(surfaceComponentRegistry.fence.renderer).toBeTypeOf('function')
     expect(surfaceComponentRegistry['structure-map'].surfaces).toEqual(['context'])
     expect(surfaceComponentContract('workflow-step').createMode).toBe('adapter-only')
+    expect(surfaceComponentContract('structure-map').createMode).toBe('planned')
+    expect(surfaceComponentContract('review').createMode).toBe('planned')
     expect(surfaceComponentsFor('workflow', true).map((item) => item.type)).not.toContain('workflow-step')
-    expect(surfaceComponentsFor('workflow', true).map((item) => item.type)).toContain('review')
+    expect(surfaceComponentsFor('workflow', true).map((item) => item.type)).not.toContain('review')
+    expect(surfaceComponentsFor('context', true).map((item) => item.type)).toEqual(expect.arrayContaining(['fence', 'region']))
+    expect(surfaceComponentsFor('context', true).map((item) => item.type)).not.toContain('structure-map')
   })
 
   it('remove-projection removes only the SurfaceElement and never carries a project-delete operation', () => {
@@ -39,6 +43,26 @@ describe('S0 Spatial Component Foundation', () => {
     expect(validateSurfaceOp({ type: 'resize', elementId: pinned.id, w: 600, h: 400 }, [pinned])).toMatchObject({ ok: false })
   })
 
+  it('moves only the explicitly addressed component and leaves neighbors untouched', () => {
+    const a = element({ id: 'surface:region:a' })
+    const b = element({ id: 'surface:region:b', bounds: { x: 460, y: 100, w: 320, h: 200 } })
+    const c = element({ id: 'surface:region:c', bounds: { x: 100, y: 360, w: 320, h: 200 } })
+    const result = applySurfaceOp([a, b, c], { type: 'move', elementId: a.id, x: 170, y: 190 })
+    expect(result.find((item) => item.id === a.id)?.bounds).toMatchObject({ x: 170, y: 190 })
+    expect(result.find((item) => item.id === b.id)).toEqual(b)
+    expect(result.find((item) => item.id === c.id)).toEqual(c)
+  })
+
+  it('applies proposal batches atomically', () => {
+    const original = element()
+    const ops = [
+      { type: 'move', elementId: original.id, x: 500, y: 300 },
+      { type: 'resize', elementId: original.id, w: 1, h: 1 },
+    ] as const
+    expect(validateSurfaceOps([original], ops)).toMatchObject({ ok: false, opIndex: 1 })
+    expect(applySurfaceOps([original], ops)).toEqual([original])
+  })
+
   it('places new components deterministically without rewriting pinned blockers', () => {
     const blocker = element({ presentation: { pinned: true } })
     const before = structuredClone(blocker)
@@ -52,8 +76,8 @@ describe('S0 Spatial Component Foundation', () => {
     expect(blocker).toEqual(before)
   })
 
-  it('resolves user intent into legal component ops while leaving pixels to deterministic geometry', () => {
-    const ops = resolveSurfaceIntent({ kind: 'show-structure', targetIds: ['view-a'] }, {
+  it('keeps planned intents silent and preserves target identity for legal create intents', () => {
+    const planned = resolveSurfaceIntent({ kind: 'show-structure', targetIds: ['view-a'] }, {
       projectId: 'project-a',
       surface: 'context',
       existing: [],
@@ -61,16 +85,18 @@ describe('S0 Spatial Component Foundation', () => {
       viewportOrigin: { x: 100, y: 100 },
       createId: (type) => `fixture:${type}`,
     })
-    expect(ops).toHaveLength(1)
-    expect(ops[0]).toMatchObject({ type: 'create-component', component: { id: 'fixture:structure-map', type: 'structure-map', surface: 'context' } })
+    expect(planned).toEqual([])
 
-    const workflowOps = resolveSurfaceIntent({ kind: 'show-structure', targetIds: ['view-a'] }, {
-      projectId: 'project-a',
-      surface: 'workflow',
-      existing: [],
+    const ops = resolveSurfaceIntent({ kind: 'focus-region', targetIds: ['view-a', 'view-b', 'view-a'] }, {
+      projectId: 'project-a', surface: 'context', existing: [],
+      selectionBounds: { x: 20, y: 40, w: 280, h: 160 },
       viewportOrigin: { x: 100, y: 100 },
       createId: (type) => `fixture:${type}`,
     })
-    expect(workflowOps[0]).toMatchObject({ type: 'create-component', component: { type: 'region', surface: 'workflow' } })
+    expect(ops).toHaveLength(1)
+    expect(ops[0]).toMatchObject({ type: 'create-component', component: {
+      id: 'fixture:region', type: 'region', surface: 'context',
+      binding: { projectViewIds: ['view-a', 'view-b'] },
+    } })
   })
 })
