@@ -278,6 +278,26 @@
 .lcos-workflow-review-state b, .lcos-workflow-checkpoint-row strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 9px; font-weight: 560; }
 .lcos-workbench-slots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; align-items: center; }
 .lcos-workbench-slots span { padding: 10px 5px; border: 1px dashed rgba(51, 111, 147, .26); border-radius: 7px; text-align: center; font-size: 8px; color: rgba(48, 96, 126, .56); }
+.lcos-web-workbench { min-height: 0; display: grid; gap: 8px; align-content: start; font-size: 8px; }
+.lcos-web-workbench > header, .lcos-web-workbench-tools > header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.lcos-web-workbench > header div, .lcos-web-workbench-tools > header span { display: grid; gap: 2px; }
+.lcos-web-workbench > header strong { font-size: 9px; }
+.lcos-web-workbench small { color: rgba(48,68,84,.46); }
+.lcos-web-workbench button { border: 0; background: transparent; color: rgba(45,86,113,.68); cursor: pointer; }
+.lcos-web-workbench > header button { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 7px; background: rgba(77,145,188,.1); }
+.lcos-web-workbench nav { display: flex; gap: 4px; overflow: auto; }
+.lcos-web-workbench nav button { padding: 4px 6px; border-radius: 6px; white-space: nowrap; }
+.lcos-web-workbench nav button.active { color: rgba(37,91,124,.9); background: rgba(77,145,188,.14); }
+.lcos-web-workbench-pages { display: flex; align-items: center; justify-content: space-between; gap: 7px; padding: 7px; border-radius: 8px; background: rgba(77,145,188,.07); }
+.lcos-web-workbench-page { min-width: 0; display: grid; gap: 2px; }
+.lcos-web-workbench-page strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 8.5px; }
+.lcos-web-workbench-open { display: inline-flex; align-items: center; gap: 3px; padding: 5px 6px; border-radius: 6px; background: rgba(255,255,255,.7) !important; white-space: nowrap; }
+.lcos-web-workbench-note { display: grid; gap: 4px; }
+.lcos-web-workbench-note > span, .lcos-web-workbench-tools > header span { display: inline-flex; align-items: center; gap: 4px; color: rgba(43,83,108,.68); }
+.lcos-web-workbench-note textarea { box-sizing: border-box; width: 100%; resize: vertical; border: 1px solid rgba(77,145,188,.16); border-radius: 7px; padding: 6px; font: inherit; color: inherit; background: rgba(255,255,255,.7); }
+.lcos-web-workbench-tools { display: grid; gap: 5px; }
+.lcos-web-workbench-tools > div { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 4px; }
+.lcos-web-workbench-tools > div button { padding: 5px 4px; border-radius: 6px; background: rgba(77,145,188,.07); text-align: left; }
 
 /* Screen-space component shelf. */
 .lcos-surface-component-shelf {

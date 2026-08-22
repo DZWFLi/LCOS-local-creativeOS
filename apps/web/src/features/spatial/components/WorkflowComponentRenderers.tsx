@@ -1,6 +1,7 @@
 import { CheckCircle2, History, Play, SquareStack } from 'lucide-react'
 import type { ReactNode } from 'react'
 import type { SurfaceComponentRenderProps } from './surfaceComponentTypes'
+import { WebWorkbench } from '../../workbench/WebWorkbench'
 
 function bindingLabel(element: SurfaceComponentRenderProps['element']) {
   const entry = Object.entries(element.binding ?? {}).find(([, value]) => typeof value === 'string' && value.length > 0)
@@ -24,5 +25,5 @@ export function CheckpointComponent({ element, selected }: SurfaceComponentRende
 }
 
 export function WorkbenchFrameComponent({ element, selected }: SurfaceComponentRenderProps) {
-  return <div className={`lcos-workflow-component workflow-workbench ${selected ? 'is-selected' : ''}`} data-workflow-component="workbench"><Header icon={<SquareStack size={14}/>} title="Workbench" hint="工具宿主外框，不拥有内部 runtime" selected={selected}/><div className="lcos-workbench-slots"><span>Input</span><span>Agent</span><span>Output</span></div><footer>{bindingLabel(element)}</footer></div>
+  return <div className={`lcos-workflow-component workflow-workbench ${selected ? 'is-selected' : ''}`} data-workflow-component="workbench"><Header icon={<SquareStack size={14}/>} title="Workbench" hint="工具宿主外框，不拥有内部 runtime" selected={selected}/><WebWorkbench/><footer>{bindingLabel(element)}</footer></div>
 }
