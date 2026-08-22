@@ -243,7 +243,8 @@ export function WorkflowSurface(props: Props) {
     if (session.kind !== 'node-drag') return
     event.stopPropagation()
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
-    setPinnedIds((current) => current.includes(session.id) ? current : [...current, session.id])
+    if (event.defaultPrevented) setDraftPositions((current) => ({ ...current, [session.id]: session.origin }))
+    else setPinnedIds((current) => current.includes(session.id) ? current : [...current, session.id])
     drag.current = endSpatialPointer()
     setDraggingId(null)
   }

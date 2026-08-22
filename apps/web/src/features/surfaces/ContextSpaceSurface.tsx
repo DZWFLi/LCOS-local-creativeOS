@@ -109,7 +109,8 @@ export function ContextSpaceSurface(props: Props) {
   }
   const endDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
     const session = drag.current
-    if (session.kind === 'node-drag') setPinnedIds((current) => current.includes(session.id) ? current : [...current, session.id])
+    if (session.kind === 'node-drag' && event.defaultPrevented) setDraftPositions((current) => ({ ...current, [session.id]: session.origin }))
+    else if (session.kind === 'node-drag') setPinnedIds((current) => current.includes(session.id) ? current : [...current, session.id])
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
     drag.current = endSpatialPointer()
     setDraggingId(null)

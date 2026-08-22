@@ -7,6 +7,16 @@
 
 ## 当前活跃欠账（按优先级）
 
+### P0-SIL-v0.4｜Spatial Interaction Layer Finalization（2026-08-22，代码施工中）
+
+- **已实现**：Component Shelf hover/focus 展开；组件拖出 Ghost 并按 release world-coordinate 创建；键盘 Enter/Space 创建保留。
+- **已实现**：Main 自由移动不再吸附改写坐标；Alignment Guide 仅提示；Surface Component 同样只提示不推挤。
+- **已实现**：Main 普通左键拖动进入明确外部 Surface target 后直接投送；非 Main SurfaceObject 的普通拖动可在进入外部 target 后转为直接 Semantic Drop；成功投送时恢复源 Surface 原位置。
+- **已验证**：v0.4 静态契约 9/9、Foundation 单测 7/7、Web typecheck PASS。
+- **PENDING REAL BROWSER GATE**：官方 `dev:open` 因当前继承的未提交 Integrity / Desktop 工作树按规则拒绝启动。统一提交后必须补 Main / Context / Workflow / Component / Physics 真实鼠标与 reload 验收。
+- **PENDING PRODUCT CONTRACT**：Agent 输入框、Context Reminder、Memory、Suggestion 的 Temporary Surface Component 持久化需要先明确 binding owner 与可持久化内容边界；本轮未伪造空组件，也未把敏感 prompt 文本塞入 Presentation。
+- 交接目标：`LCOS_spatial_interaction_layer_finalization_v04_BUDDY.md`。
+
 ### P0-R31A4｜Rail 直接操纵 + 渐变光幕（2026-08-13，代码已改，真机验收 PENDING）
 
 - **已完成（第 2 轮）**：拖拽改为安卓桌面式——源项挖空浮起、浮卡跟手（`lcos-rail-drag-float`）、相邻项实时让位（transform 平移，纯视觉，松手才提交原子排序）；列数改为用户拖 rail 右缘控制（右拉双列 / 左拉单列 / 松手恢复自动），保留超容量自适应默认；删除光幕门槛调整为「左甩 ≥24px 且进入 rail 左沿 20px 带」（rail 贴屏幕左缘，原来 dx<-96 物理上够不着）；scope-backed 视图（Context/Workflow/Collection）删除已接通——`onDeleteScope` + 确认弹窗 + `removeScopeTree` 级联，与画布删除同语义；悬浮预览卡加 220ms 延迟关闭 + 命中桥，鼠标移过去编辑命名不再消失。

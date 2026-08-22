@@ -287,12 +287,57 @@
   border-radius: 10px;
   background: transparent;
   text-align: left;
-  cursor: pointer;
+  cursor: grab;
+  touch-action: none;
 }
+.lcos-surface-component-shelf-menu > button:active { cursor: grabbing; }
 .lcos-surface-component-shelf-menu > button:hover { background: rgba(92, 72, 143, .06); }
 .lcos-surface-component-shelf-menu > button span { font-size: 9.5px; font-weight: 620; color: rgba(50,46,59,.70); }
 .lcos-surface-component-shelf-menu > button small { font-size: 7.8px; line-height: 1.35; color: rgba(59,54,69,.43); }
 
+.lcos-surface-component-drag-ghost {
+  position: fixed;
+  z-index: 1000;
+  width: max-content;
+  min-width: 112px;
+  display: grid;
+  grid-template-columns: 18px auto;
+  grid-template-areas: "mark title" "mark hint";
+  column-gap: 7px;
+  padding: 8px 11px;
+  border: 1px solid rgba(74, 67, 88, .12);
+  border-radius: 13px;
+  background: rgba(250, 250, 252, .92);
+  box-shadow: 0 14px 38px rgba(42, 37, 55, .14);
+  backdrop-filter: blur(18px);
+  pointer-events: none;
+  transform: translate(12px, 12px);
+  color: rgba(53, 49, 62, .68);
+}
+.lcos-surface-component-drag-ghost > span { grid-area: mark; align-self: center; font-size: 16px; color: rgba(89, 70, 143, .50); }
+.lcos-surface-component-drag-ghost > strong { grid-area: title; font-size: 9.5px; font-weight: 650; }
+.lcos-surface-component-drag-ghost > small { grid-area: hint; font-size: 7.5px; color: rgba(59,54,69,.42); }
+.lcos-surface-component-drag-ghost.is-valid { border-color: rgba(94, 73, 150, .24); box-shadow: 0 14px 38px rgba(67, 50, 109, .15), inset 0 0 0 1px rgba(108, 86, 168, .06); }
+
+.lcos-surface-component-frame.is-reduced-motion,
+.lcos-surface-component-frame.is-reduced-motion > .lcos-surface-component-chrome,
+.lcos-light-segment.is-reduced-motion,
+.lcos-spatial-glyph.is-reduced-motion .lcos-spatial-glyph-shell,
+.lcos-matrix-activity.is-reduced-motion i {
+  transition: none !important; animation: none !important;
+}
+
+/* Alignment is feedback only. It never rewrites the user's free-position result. */
+.lcos-alignment-guide {
+  position: absolute;
+  z-index: 90;
+  display: block;
+  pointer-events: none;
+  background: rgba(103, 79, 169, .38);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, .55);
+}
+.lcos-alignment-guide.axis-x { top: -100000px; bottom: -100000px; width: 1px; }
+.lcos-alignment-guide.axis-y { left: -100000px; right: -100000px; height: 1px; }
 @media (prefers-reduced-motion: reduce) {
   .lcos-surface-component-frame,
   .lcos-surface-component-chrome,

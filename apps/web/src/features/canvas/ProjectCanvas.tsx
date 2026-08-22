@@ -3,7 +3,7 @@ import type { AttentionBucketV0, RuntimeProviderStatus } from '@local-creative-o
 import { Copy, CopyPlus, Crosshair, Ellipsis, Fence, FolderTree, GripVertical, LayoutGrid, Pencil, Trash2 } from 'lucide-react'
 import type { Camera, CanvasEdge, CanvasNode, NodeDisplayMode, RunStatus, WorkspaceFrameVM } from '../../model'
 import { getSelectionBounds, nodeDensity } from './canvasGeometry'
-import { getVisualSelectionBounds, MAIN_CANVAS_GRID_STEP, nodeVisualBounds, nodeVisualInsets, snapNodePositionToGrid } from './canvasVisualGeometry'
+import { getVisualSelectionBounds, MAIN_CANVAS_GRID_STEP, nodeVisualBounds, nodeVisualInsets } from './canvasVisualGeometry'
 import { getPendingZoneBounds } from './canvasLayout'
 import type { LayoutPreviewItem } from './scopeLayout'
 import type { SpatialRegionDraft } from '../../state/spatialRegion'
@@ -125,6 +125,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
   const edgeReconnect = useRef<EdgeReconnectCandidate | null>(null)
   const [linkPoint, setLinkPoint] = useState<{ x: number; y: number } | null>(null)
   const [draggingId, setDraggingId] = useState<string | null>(null)
+  const [alignmentGuide, setAlignmentGuide] = useState<{ readonly x?: number; readonly y?: number } | null>(null)
   const [dragSignal, setDragSignal] = useState({ x: 0, y: 0 })
   const collectionMotionByNodeId = useMemo(() => {
     const result = new Map<string, { phase: 'opening' | 'closing'; dx: number; dy: number }>()
@@ -432,6 +433,27 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
     const element = document.elementFromPoint(clientX, clientY)?.closest<HTMLElement>('[data-relation-target], [data-node-id]')
     return element?.dataset.relationTarget ?? element?.dataset.nodeId ?? null
   }
+  const alignmentGuideFor = (node: CanvasNode, x: number, y: number, excludedIds: readonly string[]) => {
+    if (!gridSnapEnabled) return null
+    const threshold = 6 / Math.max(.05, camera.zoom)
+    const excluded = new Set(excludedIds)
+    const ownX = [x, x + node.width / 2, x + node.width]
+    const ownY = [y, y + node.height / 2, y + node.height]
+    let bestX: { value: number; distance: number } | null = null
+    let bestY: { value: number; distance: number } | null = null
+    for (const other of nodes) {
+      if (excluded.has(other.id)) continue
+      for (const value of [other.x, other.x + other.width / 2, other.x + other.width]) {
+        const distance = Math.min(...ownX.map((candidate) => Math.abs(candidate - value)))
+        if (distance <= threshold && (!bestX || distance < bestX.distance)) bestX = { value, distance }
+      }
+      for (const value of [other.y, other.y + other.height / 2, other.y + other.height]) {
+        const distance = Math.min(...ownY.map((candidate) => Math.abs(candidate - value)))
+        if (distance <= threshold && (!bestY || distance < bestY.distance)) bestY = { value, distance }
+      }
+    }
+    return bestX || bestY ? { ...(bestX ? { x: bestX.value } : {}), ...(bestY ? { y: bestY.value } : {}) } : null
+  }
   const beginRelation = (from: string, event: React.PointerEvent<HTMLElement>, point: { x: number; y: number }) => {
     event.preventDefault(); event.stopPropagation()
     edgeReconnect.current = null
@@ -509,6 +531,12 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
     return { element, target: { id, label: element.dataset.projectViewDropLabel ?? '目标空间' } }
   }
 
+  const externalProjectViewTargetAt = (clientX: number, clientY: number) => {
+    const hit = projectViewTargetAt(clientX, clientY)
+    if (!hit || hit.element === canvasRef.current) return null
+    return hit
+  }
+
   const setDirectProjectViewHover = (hit: ReturnType<typeof projectViewTargetAt>) => {
     if (!hit) {
       clearDirectProjectViewTarget()
@@ -536,6 +564,31 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
       if (hit && onDirectProjectViewDrop) onDirectProjectViewDrop(hit.target.id, item.ids)
       if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
       cancelSemanticDrop()
+      return
+    }
+    const directMoveHit = !cancelled && dragging.current && dragCandidate.current && onDirectProjectViewDrop
+      ? externalProjectViewTargetAt(event.clientX, event.clientY)
+      : null
+    if (directMoveHit && dragCandidate.current && onDirectProjectViewDrop) {
+      if (dragFrame.current !== null) cancelAnimationFrame(dragFrame.current)
+      dragFrame.current = null
+      const candidate = dragCandidate.current
+      restoreDraggedOriginals(candidate)
+      setDragPreviewPositions(null)
+      onPresentationInteractionChange?.(false)
+      onDirectProjectViewDrop(directMoveHit.target.id, candidate.group.map((item) => item.id))
+      suppressClick.current = candidate.id
+      dragCandidate.current = null
+      dragPoint.current = null
+      dragging.current = false
+      stopAutoPan()
+      setDraggingId(null)
+      setDragSignal({ x: 0, y: 0 })
+      setDropGhost(null)
+      setDropLight(null)
+      setAlignmentGuide(null)
+      clearDirectProjectViewTarget()
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
       return
     }
     const wasDragging = dragging.current
@@ -583,6 +636,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
       setDraggingWorkspaceId(null)
       setDropGhost(null)
       setDropLight(null)
+      setAlignmentGuide(null)
       clearDirectProjectViewTarget()
       setMarqueeRect(null)
       setLinkPoint(null)
@@ -636,6 +690,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
     else if (resizeCandidate.current || workspaceDrag.current) onPresentationInteractionChange?.(false)
     setDropGhost(null)
     setDropLight(null)
+    setAlignmentGuide(null)
     dragCandidate.current = null
     resizeCandidate.current = null
     workspaceDrag.current = null
@@ -856,7 +911,18 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
       if (dragging.current) {
         const pointer = { x: event.clientX, y: event.clientY }
         autoPanPointer.current = pointer
-        // Ordinary primary drag remains spatial movement. Semantic Drop triggers are intercepted before this path.
+        const directHit = onDirectProjectViewDrop ? externalProjectViewTargetAt(event.clientX, event.clientY) : null
+        setDirectProjectViewHover(directHit)
+        if (directHit) {
+          stopAutoPan()
+          setDropGhost({ x: event.clientX, y: event.clientY, count: candidate.group.length, label: `加入 ${directHit.target.label}` })
+          setDropLight({ hot: true, label: `加入 ${directHit.target.label}` })
+          setAlignmentGuide(null)
+          return
+        }
+        setDropGhost(null)
+        setDropLight(null)
+        // Primary drag is free-position movement until it enters an explicit external Surface target.
         scheduleAutoPan(pointer)
         const previousPointer = lastDragPointer.current
         if (previousPointer) {
@@ -869,9 +935,9 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
         const point = toWorld(event.clientX, event.clientY, rect)
         const rawPoint = { x: point.x - candidate.offsetX, y: point.y - candidate.offsetY }
         const anchorNode = nodes.find((node) => node.id === candidate.id)
-        dragPoint.current = gridSnapEnabled && anchorNode
-          ? snapNodePositionToGrid(anchorNode, rawPoint.x, rawPoint.y, camera.zoom)
-          : rawPoint
+        dragPoint.current = rawPoint
+        const nextGuide = anchorNode ? alignmentGuideFor(anchorNode, rawPoint.x, rawPoint.y, candidate.group.map((item) => item.id)) : null
+        setAlignmentGuide((current) => current?.x === nextGuide?.x && current?.y === nextGuide?.y ? current : nextGuide)
         scheduleDraggedNode()
       }
     }
@@ -895,6 +961,8 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
     if ((kind === 'uri' || kind === 'text') && onExternalTextDrop) onExternalTextDrop(id, point.x, point.y)
   }} overlays={spatialOverlays}>
     <SpatialNodeLayer className="lcos-arrange-structure-layer">
+      {alignmentGuide?.x !== undefined && <i className="lcos-alignment-guide axis-x" style={{ left: alignmentGuide.x }}/>} {/* x guide */}
+      {alignmentGuide?.y !== undefined && <i className="lcos-alignment-guide axis-y" style={{ top: alignmentGuide.y }}/>} {/* y guide */}
       {spatialRegions.map((region) => {
         const definition = resolveSurfaceComponent('fence')
         const Renderer = definition.renderer

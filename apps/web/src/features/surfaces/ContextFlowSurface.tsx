@@ -198,8 +198,10 @@ export function ContextFlowSurface(props: Props) {
     if (next) setLocalPositions((current) => ({ ...current, [session.id]: next }))
   }
   const endChildDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (childDrag.current.kind !== 'node-drag') return
+    const session = childDrag.current
+    if (session.kind !== 'node-drag') return
     event.stopPropagation()
+    if (event.defaultPrevented) setLocalPositions((current) => ({ ...current, [session.id]: session.origin }))
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
     childDrag.current = endSpatialPointer()
   }
