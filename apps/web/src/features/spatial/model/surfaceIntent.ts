@@ -11,6 +11,14 @@ export type SurfaceIntent =
   | { readonly kind: 'mark-review'; readonly targetIds: readonly string[] }
   | { readonly kind: 'prepare-workbench'; readonly targetIds: readonly string[]; readonly workbenchKind?: string }
   | { readonly kind: 'focus-region'; readonly targetIds: readonly string[] }
+  | { readonly kind: 'restore-routine'; readonly targetIds: readonly string[] }
+  | { readonly kind: 'save-current-routine'; readonly targetIds: readonly string[] }
+  | { readonly kind: 'open-page-set'; readonly targetIds: readonly string[] }
+  | { readonly kind: 'foreground-page'; readonly targetIds: readonly string[] }
+  | { readonly kind: 'place-quick-note-near-page'; readonly targetIds: readonly string[] }
+  | { readonly kind: 'prepare-agent-tool'; readonly targetIds: readonly string[]; readonly toolKind?: string }
+  | { readonly kind: 'continue-from-current'; readonly targetIds: readonly string[] }
+  | { readonly kind: 'collapse-inactive-pages'; readonly targetIds: readonly string[] }
 
 export interface SurfaceIntentContext {
   readonly projectId: string
@@ -25,7 +33,7 @@ function componentForIntent(surface: SurfaceKind, intent: SurfaceIntent): Surfac
   if (intent.kind === 'show-structure') return surface === 'context' ? 'structure-map' : null
   if (intent.kind === 'show-evolution') return surface === 'context' ? 'evolution' : null
   if (intent.kind === 'mark-review') return surface === 'workflow' ? 'review' : null
-  if (intent.kind === 'prepare-workbench') return surfaceSupportsComponent(surface, 'workbench') ? 'workbench' : null
+  if (intent.kind === 'prepare-workbench' || intent.kind === 'place-quick-note-near-page' || intent.kind === 'prepare-agent-tool' || intent.kind === 'collapse-inactive-pages') return surfaceSupportsComponent(surface, 'workbench') ? 'workbench' : null
   if (intent.kind === 'focus-region' || intent.kind === 'organize') return 'region'
   return null
 }
@@ -51,7 +59,12 @@ export function resolveSurfaceIntent(intent: SurfaceIntent, context: SurfaceInte
         viewportOrigin: context.viewportOrigin,
         existing: context.existing,
       })
-  const variant = intent.kind === 'organize' ? intent.hint : intent.kind === 'prepare-workbench' ? intent.workbenchKind : undefined
+  const variant = intent.kind === 'organize' ? intent.hint
+    : intent.kind === 'prepare-workbench' ? intent.workbenchKind
+      : intent.kind === 'place-quick-note-near-page' ? 'quick-note'
+        : intent.kind === 'prepare-agent-tool' ? `agent-tool:${intent.toolKind ?? 'summary'}`
+          : intent.kind === 'collapse-inactive-pages' ? 'collapse-inactive'
+            : undefined
   return [{
     type: 'create-component',
     component: {

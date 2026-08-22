@@ -102,4 +102,15 @@ describe('S1 Context spatial components', () => {
       binding: { projectViewIds: ['view-a', 'view-b'] },
     } })
   })
+
+  it('keeps Agent surface intents declarative and fail-closed', () => {
+    const ops = resolveSurfaceIntent({ kind: 'place-quick-note-near-page', targetIds: ['page-a'] }, {
+      projectId: 'project-a', surface: 'workflow', existing: [],
+      viewportOrigin: { x: 0, y: 0 }, createId: (type) => `fixture:${type}`,
+    })
+    expect(ops[0]).toMatchObject({ type: 'create-component', component: { type: 'workbench', binding: { projectViewIds: ['page-a'] }, presentation: { variant: 'quick-note' } } })
+    expect(resolveSurfaceIntent({ kind: 'restore-routine', targetIds: ['page-a'] }, {
+      projectId: 'project-a', surface: 'workflow', existing: [], viewportOrigin: { x: 0, y: 0 },
+    })).toEqual([])
+  })
 })

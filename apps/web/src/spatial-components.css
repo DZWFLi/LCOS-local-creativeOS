@@ -298,6 +298,13 @@
 .lcos-web-workbench-tools { display: grid; gap: 5px; }
 .lcos-web-workbench-tools > div { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 4px; }
 .lcos-web-workbench-tools > div button { padding: 5px 4px; border-radius: 6px; background: rgba(77,145,188,.07); text-align: left; }
+.lcos-agent-surface-composer { display: grid; gap: 5px; padding-top: 5px; border-top: 1px solid rgba(77,145,188,.12); }
+.lcos-agent-surface-composer header { display: flex; justify-content: space-between; align-items: center; color: rgba(43,83,108,.7); }
+.lcos-agent-surface-composer header span { display: inline-flex; align-items: center; gap: 4px; }
+.lcos-agent-surface-composer-row { display: grid; grid-template-columns: 1fr 1fr auto auto; gap: 4px; }
+.lcos-agent-surface-composer-row select, .lcos-agent-surface-composer-row input { min-width: 0; border: 1px solid rgba(77,145,188,.15); border-radius: 6px; padding: 5px; font: inherit; background: rgba(255,255,255,.7); }
+.lcos-agent-surface-composer-row button { display: inline-flex; align-items: center; gap: 3px; padding: 4px 5px; border-radius: 6px; background: rgba(77,145,188,.08); white-space: nowrap; }
+.lcos-agent-surface-composer-row button.primary { color: white; background: rgba(53,121,162,.8); }
 
 /* Screen-space component shelf. */
 .lcos-surface-component-shelf {
