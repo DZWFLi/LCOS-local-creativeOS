@@ -36,9 +36,13 @@ import { SurfaceObject } from './SurfaceObject'
 import { LcosSignalGlyph } from '../design/DotGlyph'
 import { layoutManualSpatial } from './surfaceLayouts'
 import { SurfaceComponentLayer } from '../spatial/components/SurfaceComponentLayer'
+import { SurfaceComponentProposalLayer } from '../spatial/components/SurfaceComponentProposalLayer'
 import { SurfaceComponentShelf } from '../spatial/components/SurfaceComponentShelf'
 import { surfaceComponentContract } from '../spatial/model/surfaceComponentCatalog'
 import { boundsAroundSurfaceRects, surfaceViewportOrigin } from '../spatial/model/surfaceGeometry'
+import { applySurfaceOps, type SurfaceOp, validateSurfaceOps } from '../spatial/model/surfaceOps'
+import { resolveSurfaceIntent, type SurfaceIntent } from '../spatial/model/surfaceIntent'
+import { AgentSurfaceComposer } from './AgentSurfaceComposer'
 
 interface Props {
   projectId: string
@@ -109,6 +113,7 @@ export function WorkflowSurface(props: Props) {
   const [draftPositions, setDraftPositions] = usePresentationDraftPositions(props.projectId, props.scopeId, 'workflow')
   const [pinnedIds, setPinnedIds] = usePresentationDraftPinnedIds(props.projectId, props.scopeId, 'workflow')
   const [surfaceElements, setSurfaceElements] = usePresentationSurfaceElements(props.projectId, props.scopeId, 'workflow')
+  const [proposalOps, setProposalOps] = useState<readonly SurfaceOp[]>([])
   const [layoutPreview, setLayoutPreview] = useState<LayoutResult | null>(null)
   const [composerOpen, setComposerOpen] = useState(false)
   const [stepTitle, setStepTitle] = useState('')
@@ -180,6 +185,7 @@ export function WorkflowSurface(props: Props) {
     ...actionSpatialItems.filter((item) => item.id === selectedActionId).map((item) => ({ x: item.x, y: item.y, w: item.width, h: item.height })),
   ], 24), [actionSpatialItems, materialSpatialItems, props.selectedIds, selectedActionId])
   const componentViewportOrigin = useMemo(() => surfaceViewportOrigin(camera), [camera])
+  const proposalElements = useMemo(() => proposalOps.flatMap((op) => op.type === 'create-component' ? [op.component] : []), [proposalOps])
   const edgeBounds = spatialBoundsForPlacements([...spatialItems, ...previewPlacements], 180)
   useSpatialFocusRequest({ request: props.focusRequest, items: materialSpatialItems, testId: 'workflow-spatial', setCamera })
 
@@ -449,11 +455,18 @@ export function WorkflowSurface(props: Props) {
     } finally { setEdgeBusy(false) }
   }
 
+  const previewIntent = (intent: SurfaceIntent) => {
+    const ops = resolveSurfaceIntent(intent, { projectId: props.projectId, surface: 'workflow', existing: surfaceElements, selectionBounds: selectedSurfaceBounds, viewportOrigin: componentViewportOrigin })
+    setProposalOps(validateSurfaceOps(surfaceElements, ops).ok ? ops : [])
+  }
+  const keepProposal = () => { setSurfaceElements(applySurfaceOps(surfaceElements, proposalOps)); setProposalOps([]) }
+
   const overlay = <>
     {layoutPreview && <div className="lcos-spatial-layout-preview" data-testid="workflow-layout-preview"><span><LayoutGrid size={12}/><strong>材料布局建议</strong><small>{layoutPreview.componentCount} 个关系簇 · {pinnedIds.length} 个手工锚点</small></span><button type="button" onClick={applyLayoutPreview}>应用</button><button type="button" className="quiet" onClick={() => setLayoutPreview(null)}>取消</button></div>}
     {!actions.length && items.length > 0 && <div className="lcos-workflow-step-empty"><span><strong>材料已经在这里</strong><small>建立第一步，把“做什么”和“用什么”分开。</small></span><button type="button" onClick={() => setComposerOpen(true)}><Plus size={12}/>建立第一步</button></div>}
     {!items.length && !actions.length && <div className="lcos-workflow-empty"><Network size={19}/><strong>从真实材料搭出下一步</strong><span>把材料带进来，再建立第一步。默认只搭建，不执行。</span><div className="lcos-workflow-start-actions"><button type="button" disabled={!props.selectedIds.length} onClick={() => props.onStart?.('selection')}><Network size={12}/>从 Selection</button><small>也可以从 Context 直接“做成工作流”</small></div></div>}
     <SurfaceComponentShelf projectId={props.projectId} surface="workflow" elements={surfaceElements} selectionIds={selectedMaterialIds} selectionBounds={selectedSurfaceBounds} viewportOrigin={componentViewportOrigin} onElementsChange={setSurfaceElements}/>
+    <AgentSurfaceComposer surface="workflow" targetIds={selectedMaterialIds} previewing={proposalOps.length > 0} onPreview={previewIntent} onKeep={keepProposal} onRevert={() => setProposalOps([])}/>
   </>
 
   return <section className="lcos-dedicated-surface lcos-workflow-surface" data-testid="surface-workflow">
@@ -520,6 +533,7 @@ export function WorkflowSurface(props: Props) {
       </SpatialEdgeLayer>
 
       <SurfaceComponentLayer surface="workflow" elements={surfaceElements} zoom={camera.zoom} renderContext={{ nodes: visibleNodes, edges: visibleEdges, onSelectNode: props.onSelect, onOpenNode: props.onDoubleClick }} onElementsChange={setSurfaceElements}/>
+      <SurfaceComponentProposalLayer surface="workflow" elements={proposalElements} renderContext={{ nodes: visibleNodes, edges: visibleEdges }}/>
 
       <SpatialNodeLayer>
         {actions.map((action, index) => {

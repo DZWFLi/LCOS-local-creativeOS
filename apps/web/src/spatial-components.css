@@ -324,13 +324,23 @@
 .lcos-web-workbench-tools { display: grid; gap: 5px; }
 .lcos-web-workbench-tools > div { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 4px; }
 .lcos-web-workbench-tools > div button { padding: 5px 4px; border-radius: 6px; background: rgba(77,145,188,.07); text-align: left; }
-.lcos-agent-surface-composer { display: grid; gap: 5px; padding-top: 5px; border-top: 1px solid rgba(77,145,188,.12); }
-.lcos-agent-surface-composer header { display: flex; justify-content: space-between; align-items: center; color: rgba(43,83,108,.7); }
-.lcos-agent-surface-composer header span { display: inline-flex; align-items: center; gap: 4px; }
-.lcos-agent-surface-composer-row { display: grid; grid-template-columns: 1fr 1fr auto auto; gap: 4px; }
-.lcos-agent-surface-composer-row select, .lcos-agent-surface-composer-row input { min-width: 0; border: 1px solid rgba(77,145,188,.15); border-radius: 6px; padding: 5px; font: inherit; background: rgba(255,255,255,.7); }
-.lcos-agent-surface-composer-row button { display: inline-flex; align-items: center; gap: 3px; padding: 4px 5px; border-radius: 6px; background: rgba(77,145,188,.08); white-space: nowrap; }
-.lcos-agent-surface-composer-row button.primary { color: white; background: rgba(53,121,162,.8); }
+.lcos-agent-surface-composer-shell { position: absolute; right: 56px; top: 72px; z-index: 40; pointer-events: auto; }
+.lcos-agent-surface-composer-toggle { width: 34px; height: 34px; display: grid; place-items: center; padding: 0; border: 1px solid rgba(67,60,82,.09); border-radius: 17px; background: rgba(250,250,252,.83); box-shadow: 0 8px 24px rgba(44,39,58,.075); backdrop-filter: blur(16px); color: rgba(77,64,119,.68); cursor: pointer; }
+.lcos-agent-surface-composer-shell.is-open .lcos-agent-surface-composer-toggle { color: rgba(83,61,145,.94); background: rgba(255,255,255,.96); }
+.lcos-agent-surface-composer { position: absolute; top: 42px; right: 0; width: 260px; display: grid; gap: 9px; padding: 11px; border: 1px solid rgba(67,60,82,.10); border-radius: 15px; background: rgba(250,250,252,.95); box-shadow: 0 18px 48px rgba(42,37,55,.13); backdrop-filter: blur(22px); color: rgba(46,42,57,.72); }
+.lcos-agent-surface-composer header, .lcos-agent-surface-composer footer { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.lcos-agent-surface-composer header span { display: inline-flex; align-items: center; gap: 5px; font-size: 9px; font-weight: 650; }
+.lcos-agent-surface-composer header button { width: 22px; height: 22px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 7px; background: transparent; color: rgba(59,54,69,.48); cursor: pointer; }
+.lcos-agent-surface-composer select { min-width: 0; width: 100%; padding: 7px 8px; border: 1px solid rgba(92,78,132,.13); border-radius: 8px; background: rgba(255,255,255,.74); color: inherit; font: inherit; }
+.lcos-agent-surface-composer > small, .lcos-agent-surface-composer footer > span { font-size: 7.8px; color: rgba(59,54,69,.44); }
+.lcos-agent-surface-composer footer div { display: flex; gap: 5px; }
+.lcos-agent-surface-composer footer button { display: inline-flex; align-items: center; gap: 3px; padding: 5px 7px; border: 0; border-radius: 7px; background: rgba(92,72,143,.07); color: rgba(72,56,112,.68); font-size: 8px; cursor: pointer; }
+.lcos-agent-surface-composer footer button.primary { color: white; background: rgba(91,69,150,.82); }
+.lcos-agent-surface-composer footer button:disabled { opacity: .38; cursor: not-allowed; }
+.lcos-surface-component-proposal-layer { position: absolute; inset: 0; z-index: 18; pointer-events: none; }
+.lcos-surface-component-proposal { position: absolute; box-sizing: border-box; padding: 4px; border: 1px dashed rgba(101,77,166,.58); border-radius: 18px; background: rgba(245,241,255,.34); box-shadow: 0 0 0 4px rgba(105,80,174,.07), 0 14px 36px rgba(65,47,112,.12); opacity: .78; }
+.lcos-surface-component-proposal > :first-child { width: 100%; height: 100%; }
+.lcos-surface-component-proposal-label { position: absolute; top: -17px; left: 10px; padding: 2px 6px; border-radius: 6px; background: rgba(93,70,154,.86); color: white; font-size: 7px; letter-spacing: .02em; }
 
 /* Screen-space component shelf. */
 .lcos-surface-component-shelf {

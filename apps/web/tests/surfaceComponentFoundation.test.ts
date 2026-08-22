@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import type { CanvasNode } from '../src/model'
 import type { SurfaceElement } from '../src/features/spatial/model/surfaceElementTypes'
 import { ContextPackComponent, RelationshipFieldComponent, StructureMapComponent } from '../src/features/spatial/components/ContextComponentRenderers'
+import { SurfaceComponentProposalLayer } from '../src/features/spatial/components/SurfaceComponentProposalLayer'
 import { surfaceComponentRegistry } from '../src/features/spatial/components/surfaceComponentRegistry'
 import { surfaceComponentContract, surfaceComponentsFor } from '../src/features/spatial/model/surfaceComponentCatalog'
 import { applySurfaceOp, applySurfaceOps, validateSurfaceOp, validateSurfaceOps } from '../src/features/spatial/model/surfaceOps'
@@ -53,6 +54,14 @@ describe('Spatial Component Foundation integrity', () => {
     const pack = renderToStaticMarkup(createElement(ContextPackComponent, { element: { ...bound, type: 'context-pack' }, context: { nodes } }))
     expect(pack).toContain('2 个引用')
     expect(pack).not.toContain('范围外对象')
+  })
+
+  it('renders Agent proposals as non-durable ghost components before Keep', () => {
+    const proposed = element({ id: 'proposal:region:1', type: 'region', binding: { projectViewIds: ['view-a'] } })
+    const html = renderToStaticMarkup(createElement(SurfaceComponentProposalLayer, { surface: 'context', elements: [proposed] }))
+    expect(html).toContain('Agent 建议')
+    expect(html).toContain('lcos-surface-component-proposal')
+    expect(html).not.toContain('lcos-surface-component-chrome')
   })
 
   it('remove-projection removes only the SurfaceElement and never carries a project-delete operation', () => {
