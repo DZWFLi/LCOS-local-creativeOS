@@ -35,7 +35,7 @@ import { useSpatialFocusRequest, type SpatialFocusRequest } from '../spatial/use
 import { SurfaceObject } from './SurfaceObject'
 import { LcosGlyph } from '../spatial/visual/LcosGlyph'
 import { boundRegionSemanticForView, resolveSpatialSignal, type SpatialRuntimeSignal } from '../spatial/visual/spatialSignal'
-import { spatialLodForCount } from '../spatial/spatialLod'
+import { spatialLodForCount, spatialOverviewProjection } from '../spatial/spatialLod'
 import { layoutManualSpatial } from './surfaceLayouts'
 import { SurfaceComponentLayer } from '../spatial/components/SurfaceComponentLayer'
 import { SurfaceComponentProposalLayer } from '../spatial/components/SurfaceComponentProposalLayer'
@@ -165,12 +165,18 @@ export function WorkflowSurface(props: Props) {
     }
   }), [draftPositions, firstActionForView, materialBase.items, visibleNodeIds])
   const materialLod = spatialLodForCount(items.length)
+  const renderItems = useMemo(() => {
+    const placements = spatialOverviewProjection(items.map((item) => ({ ...item, id: item.node.id })), camera, new Set(props.selectedIds))
+    return placements.map(({ id: _id, ...item }) => item)
+  }, [camera, items, props.selectedIds])
+  const renderIds = useMemo(() => new Set(renderItems.map((item) => item.node.id)), [renderItems])
   const byId = useMemo(() => new Map(items.map((item) => [item.node.id, item])), [items])
   const materialEdgePlacements = useMemo(() => visibleEdges.flatMap((edge) => {
+    if (!renderIds.has(edge.from) || !renderIds.has(edge.to)) return []
     const from = byId.get(edge.from)
     const to = byId.get(edge.to)
     return from && to ? [{ edge, x1: from.x + from.width, y1: from.y + from.height / 2, x2: to.x, y2: to.y + to.height / 2 }] : []
-  }), [byId, visibleEdges])
+  }), [byId, renderIds, visibleEdges])
   const actionEdgePlacements = useMemo(() => actionEdges.flatMap((edge) => {
     const from = actionById.get(edge.fromActionId)
     const to = actionById.get(edge.toActionId)
@@ -576,7 +582,7 @@ export function WorkflowSurface(props: Props) {
           </div>
         })}
 
-        {items.map(({ node, x, y, width }, index) => {
+        {renderItems.map(({ node, x, y, width }, index) => {
           const owner = firstActionForView.get(node.id)
           const usageCount = usageCountByView.get(node.id) ?? 0
           const usageHint = owner ? (usageCount > 1 ? `用于 ${usageCount} 步 · 首先：${owner.label}` : `用于：${owner.label}`) : (node.kind === 'process' ? '运行记录 · 不是 Step' : '待挂接材料')

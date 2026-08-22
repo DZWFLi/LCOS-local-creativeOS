@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { applySpatialWheelGesture, edgeScrollDelta, fitSpatialBounds, spatialScreenToWorld, spatialWorldToScreen } from '../src/features/spatial/spatialCamera'
-import { spatialDensityForSize, spatialLodForCount } from '../src/features/spatial/spatialLod'
+import { spatialDensityForSize, spatialLodForCount, spatialOverviewProjection } from '../src/features/spatial/spatialLod'
 
 const camera={x:120,y:80,zoom:.8}
 
@@ -37,5 +37,13 @@ describe('shared spatial camera',()=>{
     expect(spatialLodForCount(300)).toBe('overview')
     expect(spatialDensityForSize({width:500,height:700})).toBe('constrained')
     expect(spatialDensityForSize({width:700,height:700})).toBe('compact')
+  })
+
+  it('caps overview DOM projection without losing selected identities or full navigation membership',()=>{
+    const items=Array.from({length:500},(_,index)=>({id:`node-${index}`,x:(index%25)*60,y:Math.floor(index/25)*50,width:40,height:30}))
+    const projected=spatialOverviewProjection(items,{x:0,y:0,zoom:.4},new Set(['node-499']),{width:1440,height:900},180)
+    expect(projected.length).toBeLessThanOrEqual(180)
+    expect(projected.some((item)=>item.id==='node-499')).toBe(true)
+    expect(items).toHaveLength(500)
   })
 })
