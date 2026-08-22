@@ -22,9 +22,9 @@ describe('S1 Context spatial components', () => {
     expect(surfaceComponentRegistry['structure-map'].surfaces).toEqual(['context'])
     expect(surfaceComponentContract('workflow-step').createMode).toBe('adapter-only')
     expect(surfaceComponentContract('structure-map').createMode).toBe('presentation')
-    expect(surfaceComponentContract('review').createMode).toBe('planned')
+    expect(surfaceComponentContract('review').createMode).toBe('presentation')
     expect(surfaceComponentsFor('workflow', true).map((item) => item.type)).not.toContain('workflow-step')
-    expect(surfaceComponentsFor('workflow', true).map((item) => item.type)).not.toContain('review')
+    expect(surfaceComponentsFor('workflow', true).map((item) => item.type)).toEqual(expect.arrayContaining(['review', 'checkpoint', 'workbench']))
     expect(surfaceComponentsFor('context', true).map((item) => item.type)).toEqual(expect.arrayContaining(['fence', 'region', 'structure-map', 'evolution', 'relationship-field', 'context-pack']))
   })
 

@@ -7,6 +7,7 @@ import { RegionComponent } from './RegionComponent'
 import { PortalComponent } from './PortalComponent'
 import { SurfacePanelComponent } from './SurfacePanelComponent'
 import { ContextPackComponent, EvolutionComponent, RelationshipFieldComponent, StructureMapComponent } from './ContextComponentRenderers'
+import { CheckpointComponent, ReviewComponent, WorkflowStepComponent, WorkbenchFrameComponent } from './WorkflowComponentRenderers'
 
 export interface SurfaceComponentDefinition extends SurfaceComponentCapabilityContract {
   readonly renderer: ComponentType<SurfaceComponentRenderProps>
@@ -20,10 +21,10 @@ const rendererByType: Readonly<Record<SurfaceComponentType, ComponentType<Surfac
   evolution: EvolutionComponent,
   'relationship-field': RelationshipFieldComponent,
   'context-pack': ContextPackComponent,
-  'workflow-step': SurfacePanelComponent,
-  review: SurfacePanelComponent,
-  checkpoint: SurfacePanelComponent,
-  workbench: SurfacePanelComponent,
+  'workflow-step': WorkflowStepComponent,
+  review: ReviewComponent,
+  checkpoint: CheckpointComponent,
+  workbench: WorkbenchFrameComponent,
 }
 
 export const surfaceComponentRegistry: Readonly<Record<SurfaceComponentType, SurfaceComponentDefinition>> = Object.fromEntries(
