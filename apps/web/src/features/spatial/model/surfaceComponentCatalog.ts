@@ -44,22 +44,22 @@ export const SURFACE_COMPONENT_CATALOG: Readonly<Record<SurfaceComponentType, Su
   'structure-map': {
     type: 'structure-map', label: '结构', description: '当前材料的结构 Lens；内部可重算，外框属于 Surface。',
     surfaces: ['context'], minSize: { w: 360, h: 240 }, movable: true, resizable: true,
-    acceptsDrop: commonDrop, capabilities: { bind: true, lens: true, collapse: true, removeProjection: true }, createMode: 'planned',
+    acceptsDrop: commonDrop, capabilities: { bind: true, lens: true, collapse: true, removeProjection: true }, createMode: 'presentation',
   },
   evolution: {
     type: 'evolution', label: '演进', description: '理解顺序与变化的 Lens，不等于项目时间线。',
     surfaces: ['context'], minSize: { w: 380, h: 190 }, movable: true, resizable: true,
-    acceptsDrop: commonDrop, capabilities: { bind: true, lens: true, collapse: true, removeProjection: true }, createMode: 'planned',
+    acceptsDrop: commonDrop, capabilities: { bind: true, lens: true, collapse: true, removeProjection: true }, createMode: 'presentation',
   },
   'relationship-field': {
     type: 'relationship-field', label: '关系场', description: '局部关系观察 Lens，不把 Graph 升格为 Context 本体。',
     surfaces: ['context'], minSize: { w: 380, h: 250 }, movable: true, resizable: true,
-    acceptsDrop: commonDrop, capabilities: { bind: true, lens: true, collapse: true, removeProjection: true }, createMode: 'planned',
+    acceptsDrop: commonDrop, capabilities: { bind: true, lens: true, collapse: true, removeProjection: true }, createMode: 'presentation',
   },
   'context-pack': {
     type: 'context-pack', label: 'Context Pack', description: '把当前选择准备成可读范围，不复制 Project Truth。',
     surfaces: ['context', 'workflow'], minSize: { w: 320, h: 180 }, movable: true, resizable: true,
-    acceptsDrop: commonDrop, capabilities: { bind: true, collapse: true, removeProjection: true }, createMode: 'planned',
+    acceptsDrop: commonDrop, capabilities: { bind: true, collapse: true, removeProjection: true }, createMode: 'presentation',
   },
   'workflow-step': {
     type: 'workflow-step', label: '步骤', description: '现有 WorkflowAction 的空间适配；执行语义仍属于真实 Workflow。',

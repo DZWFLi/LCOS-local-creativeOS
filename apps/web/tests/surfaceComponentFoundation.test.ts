@@ -16,17 +16,16 @@ const element = (patch: Partial<SurfaceElement> = {}): SurfaceElement => ({
   ...patch,
 })
 
-describe('S0 Spatial Component Foundation', () => {
-  it('keeps planned capability shells out of the Human Shelf', () => {
+describe('S1 Context spatial components', () => {
+  it('exposes the four trusted Context components in the Human Shelf', () => {
     expect(surfaceComponentRegistry.fence.renderer).toBeTypeOf('function')
     expect(surfaceComponentRegistry['structure-map'].surfaces).toEqual(['context'])
     expect(surfaceComponentContract('workflow-step').createMode).toBe('adapter-only')
-    expect(surfaceComponentContract('structure-map').createMode).toBe('planned')
+    expect(surfaceComponentContract('structure-map').createMode).toBe('presentation')
     expect(surfaceComponentContract('review').createMode).toBe('planned')
     expect(surfaceComponentsFor('workflow', true).map((item) => item.type)).not.toContain('workflow-step')
     expect(surfaceComponentsFor('workflow', true).map((item) => item.type)).not.toContain('review')
-    expect(surfaceComponentsFor('context', true).map((item) => item.type)).toEqual(expect.arrayContaining(['fence', 'region']))
-    expect(surfaceComponentsFor('context', true).map((item) => item.type)).not.toContain('structure-map')
+    expect(surfaceComponentsFor('context', true).map((item) => item.type)).toEqual(expect.arrayContaining(['fence', 'region', 'structure-map', 'evolution', 'relationship-field', 'context-pack']))
   })
 
   it('remove-projection removes only the SurfaceElement and never carries a project-delete operation', () => {
@@ -76,8 +75,8 @@ describe('S0 Spatial Component Foundation', () => {
     expect(blocker).toEqual(before)
   })
 
-  it('keeps planned intents silent and preserves target identity for legal create intents', () => {
-    const planned = resolveSurfaceIntent({ kind: 'show-structure', targetIds: ['view-a'] }, {
+  it('resolves Context lenses and preserves target identity for legal create intents', () => {
+    const structure = resolveSurfaceIntent({ kind: 'show-structure', targetIds: ['view-a'] }, {
       projectId: 'project-a',
       surface: 'context',
       existing: [],
@@ -85,7 +84,11 @@ describe('S0 Spatial Component Foundation', () => {
       viewportOrigin: { x: 100, y: 100 },
       createId: (type) => `fixture:${type}`,
     })
-    expect(planned).toEqual([])
+    expect(structure).toHaveLength(1)
+    expect(structure[0]).toMatchObject({ type: 'create-component', component: {
+      id: 'fixture:structure-map', type: 'structure-map', surface: 'context',
+      binding: { projectViewIds: ['view-a'] },
+    } })
 
     const ops = resolveSurfaceIntent({ kind: 'focus-region', targetIds: ['view-a', 'view-b', 'view-a'] }, {
       projectId: 'project-a', surface: 'context', existing: [],

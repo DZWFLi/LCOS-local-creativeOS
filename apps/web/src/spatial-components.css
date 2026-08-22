@@ -238,6 +238,31 @@
 .lcos-surface-panel-body.panel-structure-map,
 .lcos-surface-panel-body.panel-relationship-field { background: rgba(248, 250, 253, .72); }
 
+.lcos-context-component { box-sizing: border-box; width: 100%; height: 100%; min-width: 0; min-height: 0; padding: 14px 15px 12px; display: grid; grid-template-rows: auto 1fr auto; gap: 12px; border: 1px solid rgba(92, 78, 132, .16); border-radius: 16px; background: rgba(250, 249, 253, .86); color: rgba(46, 42, 57, .72); box-shadow: 0 12px 28px rgba(47, 38, 72, .08); transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease; }
+.lcos-context-component.is-selected { border-color: rgba(102, 77, 177, .48); box-shadow: 0 14px 34px rgba(83, 58, 142, .16); }
+.lcos-context-component-header { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 9px; align-items: center; }
+.lcos-context-component-header > span:nth-child(2) { min-width: 0; display: grid; gap: 3px; }
+.lcos-context-component-header strong { font-size: 12px; font-weight: 650; letter-spacing: .01em; }
+.lcos-context-component-header small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 9px; color: rgba(62, 56, 77, .48); }
+.lcos-context-component-icon { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 9px; color: rgba(89, 67, 145, .78); background: rgba(111, 87, 177, .1); }
+.lcos-context-component-header > svg { width: 14px; height: 14px; opacity: .7; }
+.lcos-context-component footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 8.5px; color: rgba(62, 56, 77, .46); }
+.lcos-context-component footer svg { color: rgba(89, 67, 145, .68); }
+.lcos-context-structure-tree, .lcos-context-evolution-track, .lcos-context-relationship-field { min-height: 0; display: flex; align-items: center; justify-content: center; gap: 8px; color: rgba(66, 58, 82, .58); font-size: 9px; }
+.lcos-context-structure-tree { flex-direction: column; align-items: stretch; padding: 7px 14px; border-left: 1px solid rgba(102, 77, 177, .24); }
+.lcos-context-structure-tree i { width: 1px; height: 13px; margin-left: 5px; background: rgba(102, 77, 177, .24); }
+.lcos-context-structure-tree b { padding: 6px 9px; border-radius: 7px; font-weight: 550; background: rgba(111, 87, 177, .08); }
+.lcos-context-evolution-track { justify-content: stretch; }
+.lcos-context-evolution-track span { white-space: nowrap; padding: 7px 8px; border-radius: 8px; background: rgba(111, 87, 177, .08); }
+.lcos-context-evolution-track span.active { color: rgba(77, 56, 133, .82); background: rgba(111, 87, 177, .16); }
+.lcos-context-evolution-track i, .lcos-context-relationship-field i { flex: 1; height: 1px; min-width: 10px; background: rgba(111, 87, 177, .24); }
+.lcos-context-relationship-field span, .lcos-context-relationship-field b { padding: 8px 9px; border-radius: 9px; white-space: nowrap; }
+.lcos-context-relationship-field span { background: rgba(111, 87, 177, .07); }
+.lcos-context-relationship-field b { color: rgba(77, 56, 133, .82); background: rgba(111, 87, 177, .15); font-weight: 600; }
+.lcos-context-pack-list { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; align-items: center; }
+.lcos-context-pack-list span { height: 34px; border-radius: 8px; border: 1px solid rgba(111, 87, 177, .14); background: linear-gradient(135deg, rgba(111,87,177,.13) 0 34%, rgba(255,255,255,.62) 34%); }
+.lcos-context-pack-list small { grid-column: 1 / -1; font-size: 8.5px; color: rgba(62,56,77,.48); }
+
 /* Screen-space component shelf. */
 .lcos-surface-component-shelf {
   position: absolute;
