@@ -1,4 +1,5 @@
 import type { LcosGlyphState } from './LcosGlyph'
+import type { SurfaceElement } from '../model/surfaceElementTypes'
 
 export type SpatialRuntimeSignal = 'idle' | 'active' | 'processing' | 'waiting' | 'blocked' | 'failed' | 'complete'
 
@@ -39,4 +40,20 @@ export function resolveSpatialSignal(input: SpatialSignalInput): SpatialSignalPr
     segmentActive: Boolean(input.selected || glyph === 'working' || glyph === 'waiting' || glyph === 'blocked'),
     signalClass: `signal-${glyph}`,
   }
+}
+
+/**
+ * Returns only explicit Region presentation semantics for one Project View.
+ * Geometry overlap is deliberately ignored: moving across a Region must not
+ * silently invent membership or mutate the object's meaning.
+ */
+export function boundRegionSemanticForView(elements: readonly SurfaceElement[], projectViewId: string): string | undefined {
+  const variants = elements.flatMap((element) => {
+    if (element.type !== 'region') return []
+    const ids = [element.binding?.projectViewId, ...(element.binding?.projectViewIds ?? [])]
+    if (!ids.includes(projectViewId)) return []
+    const variant = element.presentation?.variant?.trim()
+    return variant ? [variant] : []
+  })
+  return variants.length ? [...new Set(variants)].join(' · ') : undefined
 }

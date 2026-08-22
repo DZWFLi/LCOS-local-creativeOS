@@ -3,8 +3,9 @@ import { GripVertical } from 'lucide-react'
 import type { CanvasNode, NodeDisplayMode } from '../../model'
 import { CanvasNodeVisual, detectFileIdentity, displayNodeTitle } from '../canvas/CanvasNodeVisual'
 import { beginSemanticDrop } from '../spatial/semanticDrop'
-import { LcosSignalGlyph, type LcosSignalState } from '../design/DotGlyph'
 import { ArchiveGlyph, AudioGlyph, BenchGlyph, CollectionGlyph, ContextGlyph, DocumentGlyph, ImageGlyph, LinkGlyph, NoteGlyph, RunGlyph, SessionGlyph, VideoGlyph, WorkflowGlyph, WorkGlyph } from '../design/LcosGlyphs'
+import { LcosGlyph } from '../spatial/visual/LcosGlyph'
+import { resolveSpatialSignal, type SpatialRuntimeSignal } from '../spatial/visual/spatialSignal'
 import { nodeRole } from './surfaceModel'
 import type { SurfaceAttentionBucket } from './surfaceContracts'
 
@@ -37,6 +38,8 @@ interface Props {
   attentionBucket?: SurfaceAttentionBucket
   /** Surface-specific usage line. Identity/title/material stay canonical. */
   usageHint?: string
+  /** Presentation-only Region hint. It never changes the underlying Entity. */
+  spatialSemantic?: string
   onSelect: (id: string, additive?: boolean) => void
   onDoubleClick: (id: string) => void
   dropIds?: readonly string[]
@@ -51,21 +54,23 @@ export function SurfaceObject({
   dim = false,
   attentionBucket,
   usageHint,
+  spatialSemantic,
   onSelect,
   onDoubleClick,
   dropIds,
   onDirectProjectViewDrop,
 }: Props) {
   const role = nodeRole(node)
-  const signalState: LcosSignalState = node.error || node.runtimeState === 'failed'
+  const runtimeSignal: SpatialRuntimeSignal = node.error || node.runtimeState === 'failed' || node.runStatus === 'failed'
     ? 'failed'
-    : node.draft
-      ? 'pending'
-      : node.runStatus === 'running'
-        ? 'working'
-        : selected
-          ? 'focus'
-          : 'stable'
+    : node.runStatus === 'running'
+      ? 'processing'
+      : 'idle'
+  const signal = resolveSpatialSignal({
+    selected,
+    runtime: runtimeSignal,
+    semantic: [spatialSemantic, node.draft ? 'draft' : ''].filter(Boolean).join(' · '),
+  })
   const semanticDropIds = dropIds?.length ? dropIds : [node.id]
   const onPointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
     beginSemanticDrop(event, semanticDropIds, onDirectProjectViewDrop)
@@ -111,6 +116,6 @@ export function SurfaceObject({
       showControls={false}
     />
     {usageHint && <span className="lcos-surface-usage-hint">{usageHint}</span>}
-    <span className="lcos-surface-system-signal" aria-hidden="true"><LcosSignalGlyph state={signalState}/></span>
+    <span className="lcos-surface-system-signal" data-spatial-signal={signal.glyph} aria-hidden="true"><LcosGlyph state={signal.glyph}/></span>
   </button>
 }

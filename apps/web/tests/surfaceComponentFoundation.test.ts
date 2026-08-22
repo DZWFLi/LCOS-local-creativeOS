@@ -7,7 +7,7 @@ import type { SurfaceElement } from '../src/features/spatial/model/surfaceElemen
 import { ContextPackComponent, RelationshipFieldComponent, StructureMapComponent } from '../src/features/spatial/components/ContextComponentRenderers'
 import { SurfaceComponentProposalLayer } from '../src/features/spatial/components/SurfaceComponentProposalLayer'
 import { LcosGlyph } from '../src/features/spatial/visual/LcosGlyph'
-import { resolveSpatialSignal } from '../src/features/spatial/visual/spatialSignal'
+import { boundRegionSemanticForView, resolveSpatialSignal } from '../src/features/spatial/visual/spatialSignal'
 import { surfaceComponentRegistry } from '../src/features/spatial/components/surfaceComponentRegistry'
 import { surfaceComponentContract, surfaceComponentsFor } from '../src/features/spatial/model/surfaceComponentCatalog'
 import { applySurfaceOp, applySurfaceOps, validateSurfaceOp, validateSurfaceOps } from '../src/features/spatial/model/surfaceOps'
@@ -82,6 +82,16 @@ describe('Spatial Component Foundation integrity', () => {
     expect(resolveSpatialSignal({ semantic: '已冻结 不要动' })).toMatchObject({ glyph: 'protected', matrixActive: false })
     expect(resolveSpatialSignal({ runtime: 'processing' })).toMatchObject({ glyph: 'working', matrixActive: true })
     expect(resolveSpatialSignal({ selected: true, semantic: '冲突', runtime: 'processing' })).toMatchObject({ glyph: 'blocked', matrixActive: false })
+  })
+
+  it('inherits Region semantics only through explicit Project View bindings', () => {
+    const elements = [
+      element({ id: 'region:protected', type: 'region', binding: { projectViewIds: ['view:a'] }, presentation: { variant: 'protected' } }),
+      element({ id: 'region:working', type: 'region', binding: { projectViewId: 'view:a' }, presentation: { variant: 'working' } }),
+      element({ id: 'region:nearby', type: 'region', bounds: { x: 0, y: 0, w: 999, h: 999 }, presentation: { variant: 'blocked' } }),
+    ]
+    expect(boundRegionSemanticForView(elements, 'view:a')).toBe('protected · working')
+    expect(boundRegionSemanticForView(elements, 'view:b')).toBeUndefined()
   })
 
   it('remove-projection removes only the SurfaceElement and never carries a project-delete operation', () => {
