@@ -5,7 +5,6 @@ import type { SurfaceComponentRenderProps } from './surfaceComponentTypes'
 import { FenceComponent } from './FenceComponent'
 import { RegionComponent } from './RegionComponent'
 import { PortalComponent } from './PortalComponent'
-import { SurfacePanelComponent } from './SurfacePanelComponent'
 import { ContextPackComponent, EvolutionComponent, RelationshipFieldComponent, StructureMapComponent } from './ContextComponentRenderers'
 import { CheckpointComponent, ReviewComponent, WorkflowStepComponent, WorkbenchFrameComponent } from './WorkflowComponentRenderers'
 
