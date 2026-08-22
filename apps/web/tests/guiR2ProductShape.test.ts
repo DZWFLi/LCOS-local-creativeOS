@@ -36,7 +36,7 @@ describe('GUI R2 product-shape regression',()=>{
 
   it('renders Context as one vertical Signal Track rather than old parallel Strand bands',()=>{
     expect(signal).toContain('lcos-signal-spine')
-    expect(signal).toContain('纵向顺序就是本次 Context 的理解顺序')
+    expect(signal).toContain('材料会沿理解顺序展开')
     expect(signal).toContain('lcos-signal-wave')
     expect(signal).toContain('lcos-signal-insert-gap')
     expect(signal).toContain('application/x-lcos-project-view')

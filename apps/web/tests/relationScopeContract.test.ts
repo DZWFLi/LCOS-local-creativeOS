@@ -15,7 +15,7 @@ describe('relation three-layer projection contract', () => {
   it('marks presentation-only links as presentation edges', () => {
     // R2：Signal Track 不再有临时边（trackSegments 取代）；presentation-only links
     // 语义载体保留在 Workflow 的 presentation edges。
-    expect(workflow).toContain("scope:'presentation' as const")
+    expect(workflow).toContain("scope: 'presentation' as const")
     expect(workflow).toContain('usePresentationDraftEdges')
   })
 

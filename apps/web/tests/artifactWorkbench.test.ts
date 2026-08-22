@@ -21,10 +21,11 @@ describe('Slice E: Artifact Workbench + Viewer Registry', () => {
     expect(registrySrc).toContain('readOnly: false')
   })
 
-  it('opens the Workbench on double-click of file/artifact nodes', () => {
+  it('opens the immersive reader on double-click and keeps Workbench for metadata and revisions', () => {
     const appSrc = readFileSync(join(webRoot, 'App.tsx'), 'utf8')
     const dialogs = readFileSync(join(webRoot, 'features', 'shell', 'DialogsHost.tsx'), 'utf8')
-    expect(appSrc).toContain('setWorkbench({ nodeId: id, focus: \'preview\' })')
+    expect(appSrc).toContain('setImmersiveNodeId(id)')
+    expect(appSrc).toContain('Workbench remains a')
     expect(appSrc).toContain('if (node.opensScopeId)')
     expect(appSrc).not.toContain('DocumentPreviewDialog')
     expect(dialogs).toContain('<ArtifactWorkbench')

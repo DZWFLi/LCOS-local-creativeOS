@@ -56,7 +56,7 @@ describe('Phase D renderer isomorphism contract',()=>{
     expect(surfaceObject).not.toContain('lcos-glyph-hover-card')
     expect(surfaceObject).toContain('data-surface-role={role}')
     expect(surfaceObject).toContain('SurfaceIdentityGlyph')
-    expect(surfaceObject).toContain('LcosSignalGlyph')
+    expect(surfaceObject).toContain('<LcosGlyph state={signal.glyph}/>')
     expect(surfaceObject).toContain('onDoubleClick={() => onDoubleClick(node.id)}')
     expect(mind).toContain('lcos-mind-hover-card')
     expect(mind).toContain('onDoubleClick={() => props.onDoubleClick(item.node.id)}')
@@ -64,7 +64,7 @@ describe('Phase D renderer isomorphism contract',()=>{
 
   it('keeps Workflow manual-first with explicit arranged preview',()=>{
     expect(workflow).toContain('layoutManualSpatial')
-    expect(workflow).toContain("strategy:'layered'")
+    expect(workflow).toContain('strategy: chooseLayoutStrategy(layoutInput)')
     expect(workflow).toContain('lcos-layout-ghost-workflow')
   })
 })
