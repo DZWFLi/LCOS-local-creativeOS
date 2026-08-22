@@ -159,6 +159,8 @@ Hard Cap ≤ 5K tokens
 这是 v2 新增的硬边界：
 
 ```text
+Saved Context ≠ ActiveContext
+
 Saved Context / Workflow / Presentation
 = 项目长期可见工作现场，由 Curator 组织
 

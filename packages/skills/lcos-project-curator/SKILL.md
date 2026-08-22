@@ -29,7 +29,7 @@ lcos skill resolve lcos-project-curator --intent <intent> [--condition <name>...
 | 整理这些对话 / 沉淀讨论 | `ingest_conversation` |
 | 整理刚才收的 / Capture 批次 | `ingest_capture_batch` |
 | 整理这张画布 / 归组重排 | `reorganize` |
-| 根据当前这些继续 / 为任务找材料 | `retrieve_for_task` |
+| 根据当前 Selection 继续 / 为任务找材料 | `retrieve_for_task` |
 | 把文档/文件补进现有项目 | `update_existing_project` |
 | 把这些做成上下文 / 整理当前 Context | `context_build` / `context_edit` |
 | 把这个 Context 做成工作流 / 调整流程 | `workflow_build` / `workflow_edit` |
@@ -53,14 +53,14 @@ preflight
 
 1. **Core 是事实与安全 owner。** 工具存在性按 `Contract → Core route → CLI/MCP → Skill → test` 判断；缺写能力就停在 Proposal/blocked，绝不编造命令。
 2. **绝不创建 Managed Run。** Curator 只整理项目；要执行任务交给 `lcos-project-context`。
-3. **Search before create。** 没搜过就建重复节点属于违规；对话不逐条消息爆节点。
+3. **Search before create：没搜过就建节点 = 违规。** 同内容优先更新/reuse；对话不逐条消息爆节点。
 4. **同一 Entity 不因换 Surface 复制身份。** Saved Context / Workflow / Presentation 只组织同一批真实 Project Entity 与来源片段。
 5. **Saved Context ≠ ActiveContext。** Curator 管长期项目现场；ActiveContext 是当前 Agent Task 的冻结上下文，不能用 Curator 偷改。
 6. **广泛语义/空间修改要可审查。** reorganize 保留 pins；Presentation 移除 ≠ Artifact 删除；Artifact 删除必须单独确认。
 7. **用户确认过的内容优先。** 不覆盖 manual/locked 标题，不把 Agent 推断冒充用户事实。
 8. **文件整理不得直接 shell move/rename。** 没有 Local Core 正式文件整理能力时只能分析和出计划。
 9. **每次都验证。** 未读回、未确认 provenance/identity/rollback 或对应 verifier 不通过，不宣布完成。
-10. **控制系统税。** Route 只加载当前需要模块；LCOS-owned 非业务上下文 Hard Cap 5K tokens，真实业务证据另算。
+10. **控制系统税。** Route 只加载当前需要模块；LCOS-owned 非业务上下文 Hard Cap 5K tokens，真实业务证据另算；超预算必须说明为什么。
 
 ## 结束
 
