@@ -547,6 +547,8 @@
   animation:lcos-surface-in .17s cubic-bezier(.2,.72,.2,1) both;
 }
 .lcos-reconstructed .lcos-surface-heading { position:sticky; z-index:10; top:0; height:48px; display:flex; align-items:center; justify-content:space-between; padding:0 22px; pointer-events:none; background:linear-gradient(var(--lcos-ground) 62%,transparent); }
+.lcos-reconstructed .lcos-surface-heading button,
+.lcos-reconstructed .lcos-surface-heading [role="button"] { pointer-events:auto; }
 .lcos-reconstructed .lcos-surface-heading > div { display:flex; align-items:baseline; gap:7px; }
 .lcos-reconstructed .lcos-surface-heading strong { font-size:11px; font-weight:620; }
 .lcos-reconstructed .lcos-surface-heading span,

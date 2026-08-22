@@ -15,7 +15,7 @@ async function openContext(page: import('@playwright/test').Page) {
   await page.goto(SEED_PROJECT_URL)
   await expect(page.getByTestId('canvas')).toBeVisible()
   await page.getByTestId('vnext-bottom-dock').getByRole('button', { name: '上下文', exact: false }).click()
-  await expect(page.locator('[data-surface-mount="context-graph"]')).toBeVisible()
+  await expect(page.getByTestId('surface-context-space')).toBeVisible()
 }
 
 test('no empty handoff shell when the project has no handoffs', async ({ page }) => {
@@ -59,12 +59,8 @@ test('a Core handoff shows in Context History and survives reload', async ({ pag
   await page.goto(SEED_PROJECT_URL)
   await expect(page.getByTestId('canvas')).toBeVisible()
   await page.getByTestId('vnext-bottom-dock').getByRole('button', { name: '上下文', exact: false }).click()
-  await expect(page.locator('[data-surface-mount="context-graph"]')).toBeVisible()
-  const dot = page.locator('[data-context-view]').first()
-  await expect(dot).toBeVisible()
-  await dot.dblclick()
-  await expect(page.locator('[data-surface-mount="context-flow"]')).toBeVisible()
-  await page.getByTestId('vnext-bottom-dock').getByRole('button', { name: '思维导图', exact: false }).click()
+  await expect(page.getByTestId('surface-context-space')).toBeVisible()
+  await page.getByRole('button', { name: '结构', exact: true }).click()
   await expect(page.locator('[data-testid="surface-context-tree"]')).toBeVisible()
   const mini = page.locator('.lcos-handoff-mini-list')
   await expect(mini).toBeVisible()
@@ -75,11 +71,8 @@ test('a Core handoff shows in Context History and survives reload', async ({ pag
 
   await page.reload({ waitUntil: 'domcontentloaded' })
   await page.getByTestId('vnext-bottom-dock').getByRole('button', { name: '上下文', exact: false }).click()
-  await expect(page.locator('[data-surface-mount="context-graph"]')).toBeVisible()
-  const dot2 = page.locator('[data-context-view]').first()
-  await dot2.dblclick()
-  await expect(page.locator('[data-surface-mount="context-flow"]')).toBeVisible()
-  await page.getByTestId('vnext-bottom-dock').getByRole('button', { name: '思维导图', exact: false }).click()
+  await expect(page.getByTestId('surface-context-space')).toBeVisible()
+  await page.getByRole('button', { name: '结构', exact: true }).click()
   await expect(page.locator('[data-testid="surface-context-tree"]')).toBeVisible()
   await expect(page.locator('.lcos-handoff-mini-list')).toContainText('S2 真机验证交接')
 })

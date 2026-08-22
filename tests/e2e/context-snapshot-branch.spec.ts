@@ -44,10 +44,8 @@ test('Context History branch uses Core branch and survives reload without touchi
   await page.goto(SEED_PROJECT_URL)
   await expect(page.getByTestId('canvas')).toBeVisible()
   await page.getByTestId('vnext-bottom-dock').getByRole('button', { name: '上下文', exact: false }).click()
-  await expect(page.locator('[data-surface-mount="context-graph"]')).toBeVisible()
-  await page.locator('[data-context-view]').first().dblclick()
-  await expect(page.locator('[data-surface-mount="context-flow"]')).toBeVisible()
-  await page.getByTestId('vnext-bottom-dock').getByRole('button', { name: '思维导图', exact: false }).click()
+  await expect(page.getByTestId('surface-context-space')).toBeVisible()
+  await page.getByRole('button', { name: '结构', exact: true }).click()
   await expect(page.locator('[data-testid="surface-context-tree"]')).toBeVisible()
 
   await page.getByRole('button', { name: '打开 S3 快照' }).click()
