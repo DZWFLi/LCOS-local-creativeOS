@@ -767,7 +767,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
 
   const spatialOverlays = <>
       {lod !== 'full' && <div className="lod-badge">{nodes.length} 个节点 · {lod === 'overview' ? '总览' : lod === 'aggregate' ? '聚合显示' : '简化显示'}</div>}
-    {surfaceMode === 'project' && onSurfaceElementsChange && <SurfaceComponentShelf projectId={projectId} surface="main" elements={surfaceElements} selectionIds={selectedIds} selectionBounds={componentSelectionBounds} viewportOrigin={surfaceViewportOrigin(camera)} onElementsChange={onSurfaceElementsChange}/>} 
+    {surfaceMode === 'project' && onSurfaceElementsChange && <SurfaceComponentShelf projectId={projectId} surface="main" elements={surfaceElements} selectionIds={selectedIds} selectionBounds={componentSelectionBounds} viewportOrigin={surfaceViewportOrigin(camera)} onElementsChange={onSurfaceElementsChange}/>}
     {dropGhost && <div className="lcos-drop-ghost" style={{ left: dropGhost.x, top: dropGhost.y }} aria-hidden="true">
       <span className="lcos-drop-ghost-stack"><i /><i /><i /></span>
       <strong>{dropGhost.count}</strong>
@@ -968,7 +968,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
     }
     if ((kind === 'uri' || kind === 'text') && onExternalTextDrop) onExternalTextDrop(id, point.x, point.y)
   }} overlays={spatialOverlays}>
-    {surfaceMode === 'project' && onSurfaceElementsChange && <SurfaceComponentLayer surface="main" elements={surfaceElements} zoom={camera.zoom} renderContext={{ nodes, edges, onSelectNode: onSelect, onOpenNode: onDoubleClick }} onElementsChange={onSurfaceElementsChange}/>} 
+    {surfaceMode === 'project' && onSurfaceElementsChange && <SurfaceComponentLayer surface="main" elements={surfaceElements} zoom={camera.zoom} renderContext={{ nodes, edges, onSelectNode: onSelect, onOpenNode: onDoubleClick }} onElementsChange={onSurfaceElementsChange}/>}
     <SpatialNodeLayer className="lcos-arrange-structure-layer">
       {alignmentGuide?.x !== undefined && <i className="lcos-alignment-guide axis-x" style={{ left: alignmentGuide.x }}/>} {/* x guide */}
       {alignmentGuide?.y !== undefined && <i className="lcos-alignment-guide axis-y" style={{ top: alignmentGuide.y }}/>} {/* y guide */}
