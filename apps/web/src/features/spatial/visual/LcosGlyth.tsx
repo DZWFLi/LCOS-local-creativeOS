@@ -9,7 +9,7 @@ interface GlythElements {
   readonly body: SVGPathElement | null
   readonly clip: SVGPathElement | null
   readonly eyes: readonly SVGRectElement[]
-  readonly segments: readonly SVGRectElement[]
+  readonly segments: readonly SVGPathElement[]
   readonly dots: readonly SVGCircleElement[]
 }
 
@@ -26,9 +26,8 @@ function renderFrame(elements: GlythElements, frame: GlythFrame) {
   frame.segments.forEach((segment, index) => {
     const node = elements.segments[index]
     if (!node) return
-    node.setAttribute('x', String(segment.x)); node.setAttribute('y', String(segment.y)); node.setAttribute('width', String(segment.w)); node.setAttribute('height', String(segment.h))
-    node.setAttribute('transform', `rotate(${segment.rot} ${segment.x + segment.w / 2} ${segment.y + segment.h / 2})`)
-    node.style.opacity = String(.35 + segment.lit * .6)
+    node.setAttribute('d', segment.path)
+    node.style.opacity = String(.3 + segment.lit * .7)
   })
   frame.dots.forEach((dot, index) => {
     const node = elements.dots[index]
@@ -97,7 +96,7 @@ export function LcosGlyth({ state = 'stable', variant = 'cursor', size = 24, cla
       body: svg.querySelector<SVGPathElement>('[data-glyth-body]'),
       clip: svg.querySelector<SVGPathElement>('[data-glyth-clip]'),
       eyes: [...svg.querySelectorAll<SVGRectElement>('[data-glyth-eye]')],
-      segments: [...svg.querySelectorAll<SVGRectElement>('[data-glyth-segment]')],
+      segments: [...svg.querySelectorAll<SVGPathElement>('[data-glyth-segment]')],
       dots: [...svg.querySelectorAll<SVGCircleElement>('[data-glyth-dot]')],
     }
   }, [])
@@ -167,7 +166,7 @@ export function LcosGlyth({ state = 'stable', variant = 'cursor', size = 24, cla
       {Array.from({ length: MAX_DOTS }, (_, index) => <circle key={index} data-glyth-dot={index} r="0"/>)}
     </g>
     <g className="lcos-glyth-shells">
-      {Array.from({ length: 4 }, (_, index) => <rect key={index} data-glyth-segment={index} rx="1.4"/>)}
+      {Array.from({ length: 4 }, (_, index) => <path key={index} data-glyth-segment={index}/>)}
     </g>
     <path data-glyth-body="body" className="lcos-glyth-core" fill="currentColor"/>
     <g className="lcos-glyth-eyes" fill="currentColor" clipPath={`url(#${clipId})`}><rect data-glyth-eye="left" rx="2.2"/><rect data-glyth-eye="right" rx="2.2"/></g>

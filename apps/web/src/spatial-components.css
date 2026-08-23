@@ -181,7 +181,7 @@
 }
 .lcos-light-segment.mode-checkpoint i.is-lit { opacity: 1; box-shadow: 0 0 8px var(--lcos-segment-glow); }
 
-/* Glyth — one living liquid capsule: body + segment shell + shed matrix dots. */
+/* Glyth — one living liquid capsule: body + corner-arc shell + shed matrix dots. */
 .lcos-glyth {
   display: inline-block;
   flex: 0 0 auto;
@@ -190,9 +190,12 @@
   pointer-events: none !important;
   user-select: none;
 }
-.lcos-glyth-shells rect {
-  fill: var(--lcos-segment-on);
-  transition: opacity 160ms ease;
+.lcos-glyth-shells path {
+  fill: none;
+  stroke: var(--lcos-segment-on);
+  stroke-width: 7;
+  stroke-linecap: round;
+  transition: opacity 160ms ease, stroke 200ms ease;
 }
 .lcos-glyth-dots circle { fill: var(--lcos-matrix-dot); }
 .lcos-glyth-core { opacity: .9; }
@@ -203,16 +206,19 @@
 .lcos-glyth.state-output .lcos-glyth-dots circle,
 .lcos-glyth.state-absorb .lcos-glyth-dots circle,
 .lcos-glyth.state-error .lcos-glyth-dots circle { fill: currentColor; }
-.lcos-glyth.state-working .lcos-glyth-shells rect,
-.lcos-glyth.state-output .lcos-glyth-shells rect,
-.lcos-glyth.state-error .lcos-glyth-shells rect { fill: currentColor; }
+.lcos-glyth.state-working .lcos-glyth-shells path,
+.lcos-glyth.state-output .lcos-glyth-shells path,
+.lcos-glyth.state-error .lcos-glyth-shells path,
+.lcos-glyth.state-waiting .lcos-glyth-shells path,
+.lcos-glyth.state-absorb .lcos-glyth-shells path { stroke: currentColor; }
 .lcos-glyth.state-waiting { color: var(--lcos-glyth-waiting); }
 .lcos-glyth.state-error { color: var(--lcos-glyth-error); }
 .lcos-glyth.state-confirm { color: var(--lcos-glyth-confirm); }
 .lcos-glyth.state-absorb { color: var(--lcos-glyth-absorb); }
 .lcos-glyth.state-output { color: var(--lcos-glyth-output); }
 
-/* Canvas sprite — the one resident liquid-capsule presence per surface (screen space). */
+/* Canvas sprite — the one resident liquid-capsule presence per surface (screen space),
+   draggable; parks anywhere and remembers its position per surface. */
 .lcos-canvas-sprite {
   position: absolute;
   right: 58px;
@@ -220,33 +226,67 @@
   z-index: 60;
   display: grid;
   place-items: center;
+  width: 72px;
+  height: 72px;
+  pointer-events: auto;
+  cursor: grab;
+  touch-action: none;
+}
+.lcos-canvas-sprite.is-dragging, .lcos-canvas-sprite:active { cursor: grabbing; }
+.lcos-canvas-sprite-plate {
   width: 64px;
   height: 64px;
-  pointer-events: auto;
-  cursor: default;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .88);
+  box-shadow: 0 10px 30px rgba(42, 36, 58, .12), 0 0 0 1px rgba(76, 69, 94, .06);
+  display: grid;
+  place-items: center;
+  backdrop-filter: blur(8px);
+  transition: transform 180ms cubic-bezier(.2, .9, .3, 1.2);
 }
+.lcos-canvas-sprite:hover .lcos-canvas-sprite-plate { transform: scale(1.04); }
 .lcos-canvas-sprite .lcos-glyth { filter: none; }
 .lcos-canvas-sprite-hint {
   position: absolute;
-  top: calc(100% - 6px);
-  padding: 2px 8px;
+  top: calc(100% - 4px);
+  padding: 3px 9px;
   border-radius: 999px;
-  background: var(--lcos-surface-glass, rgba(252, 252, 254, .92));
-  box-shadow: 0 4px 14px rgba(42, 37, 55, .1);
+  background: rgba(255, 255, 255, .95);
+  box-shadow: 0 4px 14px rgba(42, 37, 55, .12);
   color: rgba(57, 52, 68, .68);
-  font-size: 9px;
+  font-size: 10px;
   white-space: nowrap;
   opacity: 0;
-  transform: translateY(-2px);
+  transform: translateY(-3px);
   transition: opacity 140ms ease, transform 140ms ease;
   pointer-events: none;
 }
 .lcos-canvas-sprite.is-hovered .lcos-canvas-sprite-hint { opacity: 1; transform: none; }
-.lcos-canvas-sprite.mood-alert .lcos-glyth { animation: lcos-sprite-alert 1.1s ease-in-out infinite; }
-@keyframes lcos-sprite-alert { 50% { transform: scale(1.06); } }
+.lcos-canvas-sprite.mood-alert .lcos-canvas-sprite-plate { animation: lcos-sprite-alert 1.1s ease-in-out infinite; }
+@keyframes lcos-sprite-alert { 25% { transform: translateX(-1.5px) rotate(-1.2deg); } 75% { transform: translateX(1.5px) rotate(1.2deg); } }
 
-/* Glyth avatar — a small capsule dispatched onto the object being touched. */
-.lcos-glyth-avatar { display: inline-grid; place-items: center; }
+/* Glyth avatar — a small capsule riding ON the corner of the touched object,
+   plate underneath, straddling the corner line (reference-demo placement). */
+.lcos-glyth-avatar {
+  position: absolute;
+  z-index: 8;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+.lcos-glyth-avatar.corner-tr { right: -10px; top: -11px; }
+.lcos-glyth-avatar.corner-tl { left: -10px; top: -11px; }
+.lcos-glyth-avatar-plate {
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .93);
+  box-shadow: 0 3px 10px rgba(42, 36, 58, .16), 0 0 0 1px rgba(76, 69, 94, .05);
+  display: grid;
+  place-items: center;
+}
 .lcos-reconstructed .lcos-node-system-signal,
 .lcos-reconstructed .lcos-surface-system-signal,
 .lcos-reconstructed .lcos-workflow-action-signal {

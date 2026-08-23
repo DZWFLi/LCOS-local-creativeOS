@@ -24,13 +24,26 @@ describe('LCOS Glyth liquid-capsule engine', () => {
     expect(frame.eyes[0].x).toBeLessThan(frame.eyes[1].x)
   })
 
-  it('wears four discrete light segments in the digital-bar language, fused with the body', () => {
+  it('wears four asymmetric corner arcs (TL/TR/BL/BR brackets), not symmetric cross bars', () => {
     for (const state of GLYTH_STATES) {
       const frame = sampleGlyth(glythPose(state), 'cursor', .8)
       expect(frame.segments).toHaveLength(4)
-      expect(frame.segments.every((segment) => segment.w > segment.h)).toBe(true)
+      expect(frame.segments.every((segment) => segment.path.startsWith('M') && segment.path.includes('Q'))).toBe(true)
       expect(frame.segments.every((segment) => segment.lit >= 0 && segment.lit <= 1)).toBe(true)
     }
+    // Asymmetry proof: TL and TR arcs differ, BL and BR differ.
+    const frame = sampleGlyth(glythPose('working'), 'cursor', .5)
+    expect(frame.segments[0].path).not.toEqual(frame.segments[1].path)
+    expect(frame.segments[2].path).not.toEqual(frame.segments[3].path)
+  })
+
+  it('opens its front corner when waiting and tears the diagonal when erroring', () => {
+    const waiting = sampleGlyth(glythPose('waiting'), 'cursor', .5)
+    expect(waiting.segments[1].lit).toBe(0)
+    const erroring = sampleGlyth(glythPose('error'), 'cursor', .5)
+    expect(erroring.segments[0].lit).toBeLessThan(.2)
+    expect(erroring.segments[3].lit).toBeLessThan(.2)
+    expect(erroring.segments[1].lit).toBeGreaterThan(.3)
   })
 
   it('sheds matrix dots from the edge only in energetic poses', () => {

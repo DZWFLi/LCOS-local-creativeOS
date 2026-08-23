@@ -46,11 +46,8 @@ export interface GlythChannels {
 }
 
 export interface GlythSegment {
-  readonly x: number
-  readonly y: number
-  readonly w: number
-  readonly h: number
-  readonly rot: number
+  /** Corner-arc path (M…Q…), one per corner: TL / TR / BL / BR. */
+  readonly path: string
   readonly lit: number
 }
 
@@ -189,27 +186,39 @@ function closedSplinePath(points: readonly BodyPoint[]): string {
 const n2 = (value: number) => Number(value.toFixed(2))
 
 /**
- * Segment shell: four discrete bars at N/E/S/W in the digital-bar language.
- * `spread` 0 → hug the capsule; 1 → fully open ring. `lit` carries the energy
- * pulse so the segments breathe with the body instead of decorating it.
+ * Segment shell: four asymmetric CORNER ARCS (TL/TR/BL/BR corner brackets),
+ * matching the frozen three-view reference geometry. `spread` pushes them off
+ * the body; waiting hides the front (TR) arc = open mouth; error tears the
+ * diagonal arcs. `lit` carries the energy pulse so they breathe with the body.
  */
 function segmentShell(pose: GlythPose, variant: LcosGlythVariant, timeSeconds: number, bounds: { minX: number; minY: number; maxX: number; maxY: number }): GlythSegment[] {
   const skin = VARIANTS[variant]
-  const len = skin.shellLen * (.7 + pose.segmentSpread * .6)
-  const thick = 3.2 + skin.softness * 1.1
-  const cx = (bounds.minX + bounds.maxX) / 2
-  const cy = (bounds.minY + bounds.maxY) / 2
-  const spread = 4 + pose.open * 10 + pose.segmentSpread * 5
+  const sp = 2.5 + pose.segmentSpread * 9 + pose.open * 3
+  const len = skin.shellLen * (1 + pose.segmentSpread * .25)
   const tilt = pose.shellTilt
   const breath = .5 + .5 * Math.sin(timeSeconds * Math.PI * pose.speed)
   const lit = clamp(.45 + pose.energy * .4 + breath * .15)
-  const positions: Array<{ x: number; y: number; rot: number }> = [
-    { x: cx, y: bounds.minY - spread + tilt * .08, rot: 0 + tilt * .4 },
-    { x: bounds.maxX + spread - tilt * .08, y: cy, rot: 90 + tilt * .4 },
-    { x: cx, y: bounds.maxY + spread - tilt * .08, rot: 0 - tilt * .4 },
-    { x: bounds.minX - spread + tilt * .08, y: cy, rot: 90 - tilt * .4 },
+  const minX = bounds.minX, maxX = bounds.maxX, minY = bounds.minY, maxY = bounds.maxY
+  // Corner brackets hugging each corner; asymmetric: top arcs shorter, tilt twists TR/BR.
+  const arcs = [
+    // TL: from left edge going up to top
+    `M${n2(minX - sp)} ${n2(minY + len)} Q${n2(minX - sp)} ${n2(minY - sp)} ${n2(minX + len * .7)} ${n2(minY - sp)}`,
+    // TR: from top going right — hidden in waiting (front gap)
+    `M${n2(maxX - len * .7)} ${n2(minY - sp - tilt * .08)} Q${n2(maxX + sp)} ${n2(minY - sp + tilt * .12)} ${n2(maxX + sp)} ${n2(minY + len - tilt * .08)}`,
+    // BL: from bottom going left
+    `M${n2(minX - sp)} ${n2(maxY - len)} Q${n2(minX - sp)} ${n2(maxY + sp)} ${n2(minX + len * .7)} ${n2(maxY + sp)}`,
+    // BR: from right edge going down
+    `M${n2(maxX + sp)} ${n2(maxY - len + tilt * .08)} Q${n2(maxX + sp)} ${n2(maxY + sp - tilt * .12)} ${n2(maxX - len * .7)} ${n2(maxY + sp)}`,
   ]
-  return positions.map((position) => ({ x: n2(position.x - len / 2), y: n2(position.y - thick / 2), w: n2(len), h: n2(thick), rot: n2(position.rot), lit: n2(lit) }))
+  return arcs.map((path, index) => ({
+    path,
+    // waiting: hide TR (front) = clear opening. error: dim the TL+BR diagonal.
+    lit: n2(pose.gapDepth > 0 && pose.gapWidth > 1 && index === 1
+      ? 0
+      : pose.gapDepth > .6 && (index === 0 || index === 3)
+        ? lit * .18
+        : lit),
+  }))
 }
 
 /** Matrix dots shed from the capsule edge when the pose carries energy. */

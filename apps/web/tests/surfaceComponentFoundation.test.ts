@@ -9,6 +9,7 @@ import { SurfaceComponentProposalLayer } from '../src/features/spatial/component
 import { PortalComponent } from '../src/features/spatial/components/PortalComponent'
 import { CheckpointComponent, ReviewComponent, WorkbenchFrameComponent } from '../src/features/spatial/components/WorkflowComponentRenderers'
 import { LcosGlyth } from '../src/features/spatial/visual/LcosGlyth'
+import { GlythAvatar } from '../src/features/spatial/visual/CanvasSprite'
 import { SourceChainComponent } from '../src/features/spatial/components/SourceChainComponent'
 import { boundRegionSemanticForView, resolveSpatialSignal, shouldShowGlyth } from '../src/features/spatial/visual/spatialSignal'
 import { surfaceComponentRegistry } from '../src/features/spatial/components/surfaceComponentRegistry'
@@ -157,6 +158,15 @@ describe('Spatial Component Foundation integrity', () => {
       expect(html).toContain('data-glyth-body')
       expect(html).toContain('lcos-glyth-dots')
     }
+  })
+
+  it('renders corner-arc avatar plates that straddle the touched object corner', () => {
+    const html = renderToStaticMarkup(createElement(GlythAvatar, { state: 'absorb', reason: 'selection' }))
+    expect(html).toContain('lcos-glyth-avatar corner-tr')
+    expect(html).toContain('lcos-glyth-avatar-plate')
+    expect(html).toContain('reason-selection')
+    const tl = renderToStaticMarkup(createElement(GlythAvatar, { state: 'waiting', reason: 'review', corner: 'tl' }))
+    expect(tl).toContain('corner-tl')
   })
 
   it('resolves one Presentation signal across Glyph, Segment and Matrix without inventing truth', () => {
