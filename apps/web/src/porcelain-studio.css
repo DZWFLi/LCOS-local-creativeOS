@@ -118,7 +118,7 @@
   background: rgba(250,250,248,.86);
   border: 1px solid var(--ps-border-soft);
   box-shadow: var(--ps-shadow-1);
-  font-size: 9px;
+  font-size: 12.5px;
   backdrop-filter: none;
 }
 
@@ -219,7 +219,7 @@
   background: rgba(251,251,249,.92);
   border: 1px solid rgba(var(--workspace-glow-rgb), .15);
   box-shadow: var(--ps-shadow-1);
-  font-size: 9px;
+  font-size: 12.5px;
   font-weight: 600;
 }
 
@@ -247,7 +247,7 @@
 .app-shell.porcelain-studio-v2 .capability-popover > header small,
 .app-shell.porcelain-studio-v2 .capability-body h3 {
   color: var(--ps-text-faint);
-  font-size: 9px;
+  font-size: 12.5px;
   font-weight: 600;
   letter-spacing: .055em;
   text-transform: uppercase;
@@ -366,7 +366,7 @@
 .app-shell.porcelain-studio-v2 .capability-row small,
 .app-shell.porcelain-studio-v2 .capability-asset small {
   color: var(--ps-text-faint);
-  font-size: 9.5px;
+  font-size: 12.5px;
   font-weight: 400;
 }
 
@@ -529,7 +529,7 @@
 .app-shell.porcelain-studio-v2 .artifact-kind,
 .app-shell.porcelain-studio-v2 .artifact-format {
   color: var(--ps-text-faint);
-  font-size: 8.5px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: .025em;
 }
@@ -562,7 +562,7 @@
 .app-shell.porcelain-studio-v2 .preview-art.document span,
 .app-shell.porcelain-studio-v2 .ppt-kicker {
   color: var(--ps-text-faint);
-  font-size: 7.5px;
+  font-size: 10px;
   font-weight: 600;
   letter-spacing: .045em;
 }
@@ -570,7 +570,7 @@
 .app-shell.porcelain-studio-v2 .preview-art.document b,
 .app-shell.porcelain-studio-v2 .ppt-title {
   color: var(--ps-text);
-  font-size: 9px;
+  font-size: 12.5px;
   font-weight: 600;
 }
 
@@ -590,7 +590,7 @@
 
 .app-shell.porcelain-studio-v2 .artifact-copy > span {
   color: var(--ps-text-muted);
-  font-size: 9.5px;
+  font-size: 12.5px;
   font-weight: 400;
   line-height: 1.35;
 }
@@ -599,12 +599,12 @@
   margin-top: 5px;
   gap: 6px 10px;
   color: var(--ps-text-faint);
-  font-size: 8.5px;
+  font-size: 12px;
 }
 
 .app-shell.porcelain-studio-v2 .artifact-provenance {
   color: var(--ps-text-faint);
-  font-size: 8.5px;
+  font-size: 12px;
   font-weight: 500;
 }
 
@@ -618,7 +618,7 @@
   padding: 0 6px;
   border: 1px solid transparent;
   border-radius: 999px;
-  font-size: 8px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: .015em;
   box-shadow: none;
@@ -673,7 +673,7 @@
 
 .app-shell.porcelain-studio-v2 .context-visual header > span {
   color: var(--ps-context);
-  font-size: 8.5px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: .045em;
   text-transform: none;
@@ -694,7 +694,7 @@
 .app-shell.porcelain-studio-v2 .context-visual footer,
 .app-shell.porcelain-studio-v2 .context-summary {
   color: var(--ps-text-faint);
-  font-size: 9px;
+  font-size: 12.5px;
 }
 
 .app-shell.porcelain-studio-v2 .process-visual,
@@ -727,7 +727,7 @@
 .app-shell.porcelain-studio-v2 .decision-visual small,
 .app-shell.porcelain-studio-v2 .note-visual small {
   color: var(--ps-text-faint);
-  font-size: 8px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: .035em;
   text-transform: none;
@@ -746,14 +746,14 @@
 .app-shell.porcelain-studio-v2 .decision-visual span:not(.decision-icon):not(.status-chip):not(.decision-material-glint),
 .app-shell.porcelain-studio-v2 .note-visual span {
   color: var(--ps-text-muted);
-  font-size: 9.5px;
+  font-size: 12.5px;
 }
 
 .app-shell.porcelain-studio-v2 .process-visual em,
 .app-shell.porcelain-studio-v2 .decision-visual em,
 .app-shell.porcelain-studio-v2 .note-visual em {
   color: var(--ps-text-faint);
-  font-size: 8.5px;
+  font-size: 12px;
   font-style: normal;
 }
 
@@ -795,7 +795,7 @@
   padding: 0 7px;
   border-radius: 7px;
   color: var(--ps-text-muted);
-  font-size: 9.5px;
+  font-size: 12.5px;
   font-weight: 500;
 }
 
@@ -935,7 +935,7 @@
 .app-shell.porcelain-studio-v2 .selection-toolbar > span {
   padding: 0 7px;
   color: var(--ps-text-muted);
-  font-size: 9.5px;
+  font-size: 12.5px;
   font-weight: 500;
 }
 
@@ -944,7 +944,7 @@
   padding: 0 7px;
   border-radius: 7px;
   color: var(--ps-text-muted);
-  font-size: 9.5px;
+  font-size: 12.5px;
   font-weight: 500;
 }
 
@@ -970,7 +970,7 @@
   background: rgba(252,252,250,.92);
   border: 1px solid rgba(var(--ps-generated-rgb), .13);
   border-radius: 8px;
-  font-size: 9px;
+  font-size: 12.5px;
   font-weight: 600;
 }
 
@@ -998,7 +998,7 @@
 
 .node-info-popover header small {
   color: rgba(24,36,49,.40);
-  font-size: 8.5px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: .045em;
 }
@@ -1023,7 +1023,7 @@
 
 .node-info-popover dt {
   color: rgba(24,36,49,.46);
-  font-size: 9px;
+  font-size: 12.5px;
   font-weight: 500;
 }
 
@@ -1045,7 +1045,7 @@
   background: #fff;
   border: 1px solid rgba(24,36,49,.09);
   box-shadow: 0 1px 2px rgba(19,29,39,.025);
-  font-size: 9.5px;
+  font-size: 12.5px;
   font-weight: 500;
 }
 
@@ -1057,7 +1057,7 @@
 
 .node-info-popover footer {
   color: rgba(24,36,49,.40);
-  font-size: 8.5px;
+  font-size: 12px;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1076,7 +1076,7 @@
 
 .app-shell.porcelain-studio-v2 .map-label {
   color: var(--ps-text-muted);
-  font-size: 9px;
+  font-size: 12.5px;
   font-weight: 600;
 }
 
@@ -1131,7 +1131,7 @@
   width: auto;
   min-width: 40px;
   color: var(--ps-text);
-  font-size: 9.5px;
+  font-size: 12.5px;
   font-weight: 600;
 }
 
@@ -1205,7 +1205,7 @@
 
 .app-shell.porcelain-studio-v2 .work-rail-header span {
   color: var(--ps-text-faint);
-  font-size: 8.5px;
+  font-size: 12px;
   font-weight: 500;
   letter-spacing: .035em;
 }
@@ -1249,7 +1249,7 @@
 
 .app-shell.porcelain-studio-v2 .rail-section h4 {
   color: var(--ps-text-muted);
-  font-size: 9px;
+  font-size: 12.5px;
   font-weight: 600;
   letter-spacing: .035em;
   text-transform: none;
@@ -1274,7 +1274,7 @@
   background: var(--ps-surface-3);
   border: 1px solid var(--ps-border-soft);
   box-shadow: inset 0 1px 0 rgba(255,255,255,.84);
-  font-size: 8px;
+  font-size: 11px;
 }
 
 .app-shell.porcelain-studio-v2 .run-hero,
@@ -1389,7 +1389,7 @@
 .app-shell.porcelain-studio-v2 .composer-context-line {
   gap: 7px;
   color: var(--ps-text-faint);
-  font-size: 8.5px;
+  font-size: 12px;
   font-weight: 500;
 }
 
@@ -1440,7 +1440,7 @@
 
 .app-shell.porcelain-studio-v2 .composer-footer {
   color: var(--ps-text-faint);
-  font-size: 8.5px;
+  font-size: 12px;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1602,7 +1602,7 @@
 .project-drive-hero > span,
 .drive-section-title span {
   color: rgba(24,36,49,.42);
-  font-size: 9.5px;
+  font-size: 12.5px;
   font-weight: 600;
   letter-spacing: .055em;
 }
@@ -1661,7 +1661,7 @@
 .project-folder small,
 .project-folder footer {
   color: rgba(24,36,49,.47);
-  font-size: 9.5px;
+  font-size: 12.5px;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1748,7 +1748,7 @@
   min-height: 28px;
   padding: 0 4px 0 6px;
   color: var(--ps-text-faint);
-  font-size: 9px;
+  font-size: 12.5px;
   font-weight: 600;
   letter-spacing: .04em;
 }
@@ -1804,7 +1804,7 @@
 
 .app-shell.porcelain-studio-v2 .workspace small {
   color: var(--ps-text-faint);
-  font-size: 8.5px;
+  font-size: 12px;
   font-weight: 500;
 }
 
@@ -1825,7 +1825,7 @@
   padding: 0 8px;
   border-radius: 7px;
   color: var(--ps-text-muted);
-  font-size: 9.5px;
+  font-size: 12.5px;
   font-weight: 500;
 }
 
@@ -1872,7 +1872,7 @@
   border-radius: 999px;
   color: #fff;
   background: var(--ps-accent);
-  font-size: 9px;
+  font-size: 12.5px;
   font-style: normal;
 }
 .app-shell.porcelain-studio-v2 .agent-context-surface {
@@ -2071,7 +2071,7 @@
   background: rgba(248,248,245,.97);
   border: 1px solid rgba(24,36,49,.075);
   box-shadow: 0 2px 8px rgba(19,29,39,.045), inset 0 1px 0 rgba(255,255,255,.95);
-  font-size: 9px;
+  font-size: 12.5px;
   font-weight: 600;
   letter-spacing: .02em;
 }
@@ -2101,7 +2101,7 @@
   color: rgba(var(--ps-generated-rgb), .72);
   background: rgba(248,248,245,.93);
   border: 1px solid rgba(var(--ps-generated-rgb), .10);
-  font-size: 8px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: .02em;
 }
@@ -2196,7 +2196,7 @@
   background: rgba(252,252,250,.96);
   border: 1px solid rgba(24,36,49,.09);
   box-shadow: 0 3px 9px rgba(19,29,39,.07), inset 0 1px 0 #fff;
-  font-size: 8.5px;
+  font-size: 12px;
   font-weight: 600;
 }
 
@@ -2208,7 +2208,7 @@
   border-radius: 5px;
   color: var(--ps-text);
   background: rgba(24,36,49,.055);
-  font-size: 8px;
+  font-size: 11px;
 }
 
 .app-shell.porcelain-studio-v2 .revision-stack-trigger:hover {
@@ -2269,7 +2269,7 @@
 }
 
 .app-shell.porcelain-studio-v2 .artifact-family-reference .artifact-copy strong { font-size: 10.5px; }
-.app-shell.porcelain-studio-v2 .artifact-family-reference .artifact-copy > span { font-size: 8.8px; }
+.app-shell.porcelain-studio-v2 .artifact-family-reference .artifact-copy > span { font-size: 12px; }
 .app-shell.porcelain-studio-v2 .artifact-family-reference .artifact-statuses { top: auto; bottom: 8px; right: 8px; }
 
 .app-shell.porcelain-studio-v2 .reference-image {
@@ -2324,7 +2324,7 @@
   width: 88%;
   margin: 1px 0 2px;
   color: var(--ps-text-muted);
-  font-size: 8px;
+  font-size: 11px;
   line-height: 1.45;
 }
 
@@ -2368,14 +2368,14 @@
   align-items: center;
   gap: 5px;
   color: var(--ps-note);
-  font-size: 8.5px;
+  font-size: 12px;
   font-weight: 600;
 }
 
 .app-shell.porcelain-studio-v2 .feedback-visual header small,
 .app-shell.porcelain-studio-v2 .feedback-visual footer {
   color: var(--ps-text-faint);
-  font-size: 7.8px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: .035em;
 }
@@ -2403,7 +2403,7 @@
 
 .app-shell.porcelain-studio-v2 .feedback-points b {
   color: var(--ps-text-faint);
-  font-size: 7.8px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: .035em;
   text-transform: uppercase;
@@ -2412,7 +2412,7 @@
 .app-shell.porcelain-studio-v2 .feedback-points span {
   overflow: hidden;
   color: var(--ps-text-muted);
-  font-size: 8.8px;
+  font-size: 12px;
   line-height: 1.35;
   text-overflow: ellipsis;
 }
@@ -2454,7 +2454,7 @@
   align-items: center;
   gap: 4px;
   color: rgba(var(--ps-generated-rgb), .64);
-  font-size: 7.8px;
+  font-size: 11px;
   font-weight: 600;
 }
 
@@ -2535,7 +2535,7 @@
   align-items: center;
   gap: 5px;
   color: rgba(24,36,49,.58);
-  font-size: 8.5px;
+  font-size: 12px;
   font-weight: 600;
 }
 
@@ -2548,7 +2548,7 @@
   color: rgba(24,36,49,.62);
   background: #fff;
   border: 1px solid rgba(24,36,49,.075);
-  font-size: 8px;
+  font-size: 11px;
 }
 
 .node-info-popover .revision-history ol {
@@ -2573,10 +2573,10 @@
 .node-info-popover .revision-history li > i { width: 5px; height: 5px; border-radius: 50%; background: rgba(24,36,49,.20); }
 .node-info-popover .revision-history li.active > i { background: #7055c7; box-shadow: 0 0 0 3px rgba(112,85,199,.10); }
 .node-info-popover .revision-history li div { min-width: 0; display: grid; gap: 1px; }
-.node-info-popover .revision-history li strong { color: #182431; font-size: 9px; font-weight: 600; }
-.node-info-popover .revision-history li span { color: rgba(24,36,49,.44); font-size: 8px; }
-.node-info-popover .revision-history li em { color: rgba(24,36,49,.28); font-size: 6.8px; font-style: normal; font-weight: 700; letter-spacing: .04em; }
-.node-info-popover .revision-history > p { margin: 6px 2px 0; color: rgba(24,36,49,.38); font-size: 7.8px; line-height: 1.4; }
+.node-info-popover .revision-history li strong { color: #182431; font-size: 12.5px; font-weight: 600; }
+.node-info-popover .revision-history li span { color: rgba(24,36,49,.44); font-size: 11px; }
+.node-info-popover .revision-history li em { color: rgba(24,36,49,.28); font-size: 9px; font-style: normal; font-weight: 700; letter-spacing: .04em; }
+.node-info-popover .revision-history > p { margin: 6px 2px 0; color: rgba(24,36,49,.38); font-size: 11px; line-height: 1.4; }
 
 @media (prefers-reduced-motion: reduce) {
   .app-shell.porcelain-studio-v2 .edge-runner { display: none; }
@@ -2817,7 +2817,7 @@
   gap: 6px;
   margin: 0 12px 8px;
   color: rgba(54, 61, 72, .58);
-  font-size: 9px;
+  font-size: 12.5px;
   line-height: 1.4;
 }
 
@@ -2894,7 +2894,7 @@
   align-items: center;
   gap: 3px;
   color: var(--ps-text-faint);
-  font-size: 8px;
+  font-size: 11px;
   font-weight: 650;
 }
 
@@ -2980,7 +2980,7 @@
   border-radius: 7px;
   background: rgba(34, 43, 55, .025);
   color: rgba(34, 43, 55, .55);
-  font-size: 9px;
+  font-size: 12.5px;
   font-weight: 600;
 }
 
@@ -3022,7 +3022,7 @@
   border-radius: 9px;
   background: rgba(34, 43, 55, .025);
   color: var(--ps-text-faint);
-  font-size: 9px;
+  font-size: 12.5px;
   font-weight: 600;
 }
 .app-shell.porcelain-studio-v2 .workspace-move-action select {
@@ -3078,7 +3078,7 @@
 .app-shell.porcelain-studio-v2 .workbench-revisions > header small {
   max-width: 160px;
   color: var(--ps-text-faint);
-  font-size: 9px;
+  font-size: 12.5px;
   line-height: 1.45;
   text-align: right;
 }
@@ -3184,7 +3184,7 @@
 
 .app-shell.porcelain-studio-v2 .workbench-revisions article > header span {
   color: var(--ps-text-faint);
-  font-size: 8px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: .06em;
   text-transform: uppercase;
@@ -3218,7 +3218,7 @@
   min-width: 0;
   margin: 0;
   overflow: hidden;
-  font-size: 9px;
+  font-size: 12.5px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -3240,7 +3240,7 @@
   border-radius: 8px;
   background: #fff;
   color: var(--ps-text);
-  font-size: 9px;
+  font-size: 12.5px;
   font-weight: 600;
 }
 
@@ -3291,7 +3291,7 @@
 
 .app-shell.porcelain-studio-v2 .workspace-states-dialog > header small {
   color: var(--ps-text-faint);
-  font-size: 8px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: .14em;
 }
@@ -3323,7 +3323,7 @@
   border-radius: 9px;
   background: #fff;
   color: var(--ps-text);
-  font-size: 9px;
+  font-size: 12.5px;
   font-weight: 650;
 }
 
@@ -3396,14 +3396,14 @@
   align-items: center;
   gap: 4px;
   color: var(--ps-text-faint);
-  font-size: 8px;
+  font-size: 11px;
   white-space: nowrap;
 }
 
 .app-shell.porcelain-studio-v2 .workspace-states-dialog main article p {
   margin: 4px 0 0;
   color: var(--ps-text-muted);
-  font-size: 9px;
+  font-size: 12.5px;
 }
 
 .app-shell.porcelain-studio-v2 .workspace-states-empty {
@@ -3424,7 +3424,7 @@
   padding: 10px 19px 13px;
   border-top: 1px solid var(--ps-border-soft);
   color: var(--ps-text-faint);
-  font-size: 8.5px;
+  font-size: 12px;
 }
 
 .app-shell.porcelain-studio-v2 .spin { animation: handoff-spin .9s linear infinite; }
@@ -3486,7 +3486,7 @@
 
 .app-shell.porcelain-studio-v2 .source-file-copy small {
   color: var(--ps-text-faint);
-  font-size: 7.5px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: .06em;
 }
@@ -3505,7 +3505,7 @@
   margin: 0;
   overflow: hidden;
   color: var(--ps-text-muted);
-  font-size: 8.5px;
+  font-size: 12px;
   line-height: 1.45;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -3527,7 +3527,7 @@
   gap: 4px;
   overflow: hidden;
   color: var(--ps-text-faint);
-  font-size: 8px;
+  font-size: 11px;
   line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3559,7 +3559,7 @@
   border-radius: 6px;
   background: rgba(35,44,55,.03);
   color: var(--ps-text-faint) !important;
-  font-size: 7.5px !important;
+  font-size: 10px !important;
   font-weight: 650;
 }
 
@@ -3784,14 +3784,14 @@
 
 .app-shell.porcelain-studio-v2 .run-activity li span {
   color: var(--ps-text-faint);
-  font-size: 8px;
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
 
 .app-shell.porcelain-studio-v2 .run-activity li b {
   overflow: hidden;
   color: var(--ps-text-muted);
-  font-size: 9.5px;
+  font-size: 12.5px;
   font-weight: 550;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3829,7 +3829,7 @@
 .app-shell.porcelain-studio-v2 .project-tools-dialog > header small,
 .app-shell.porcelain-studio-v2 .project-tools-dialog h3 {
   color: var(--ps-text-faint);
-  font-size: 9px;
+  font-size: 12.5px;
   font-weight: 650;
   letter-spacing: .045em;
 }
@@ -3932,7 +3932,7 @@
 .app-shell.porcelain-studio-v2 .project-tools-note,
 .app-shell.porcelain-studio-v2 .project-tools-empty {
   color: var(--ps-text-muted);
-  font-size: 9px;
+  font-size: 12.5px;
   line-height: 1.45;
 }
 
@@ -3967,7 +3967,7 @@
 
 .app-shell.porcelain-studio-v2 .project-tools-error p {
   margin: 0;
-  font-size: 9.5px;
+  font-size: 12.5px;
 }
 
 @media (max-width: 760px) {
@@ -3983,7 +3983,7 @@
 
 .app-shell.porcelain-studio-v2 .workspace-state-name span {
   color: var(--ps-text-faint);
-  font-size: 8px;
+  font-size: 11px;
   font-weight: 650;
 }
 
@@ -4009,7 +4009,7 @@
 }
 .app-shell.porcelain-studio-v2 .agent-section-heading h4 { margin:0 !important; }
 .app-shell.porcelain-studio-v2 .agent-intent-goal {
-  display:block; margin:6px 0; font-size:11px !important; line-height:1.45;
+  display:block; margin:6px 0; font-size: 11px !important; line-height:1.45;
 }
 .app-shell.porcelain-studio-v2 .agent-intent-editor {
   display:grid; grid-template-columns:1fr auto; gap:5px;
@@ -4017,21 +4017,21 @@
 .app-shell.porcelain-studio-v2 .agent-intent-editor select,
 .app-shell.porcelain-studio-v2 .agent-intent-editor input {
   min-width:0; border:1px solid var(--ps-border); border-radius:8px; background:var(--ps-surface-inset);
-  color:var(--ps-text-strong); font:inherit; font-size:9.5px; padding:5px 7px;
+  color:var(--ps-text-strong); font:inherit; font-size: 12.5px; padding:5px 7px;
 }
 .app-shell.porcelain-studio-v2 .agent-intent-editor input { grid-column:1 / -1; }
-.app-shell.porcelain-studio-v2 .agent-intent-editor button { justify-self:end; padding:3px 9px; font-size:9px; }
+.app-shell.porcelain-studio-v2 .agent-intent-editor button { justify-self:end; padding:3px 9px; font-size: 12.5px; }
 .app-shell.porcelain-studio-v2 .agent-attention-buckets {
   display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:4px; margin-top:7px;
 }
 .app-shell.porcelain-studio-v2 .agent-attention-buckets span {
   display:flex; align-items:center; gap:4px; min-width:0; padding:5px 6px; border-radius:8px;
-  background:var(--ps-surface-inset); color:var(--ps-text-faint); font-size:8.8px;
+  background:var(--ps-surface-inset); color:var(--ps-text-faint); font-size: 12px;
 }
 .app-shell.porcelain-studio-v2 .agent-attention-buckets b { margin-left:auto; color:var(--ps-text-strong); }
 .app-shell.porcelain-studio-v2 .agent-context-budget,
 .app-shell.porcelain-studio-v2 .agent-skill-route {
-  display:flex; align-items:center; justify-content:space-between; gap:6px; margin-top:6px; color:var(--ps-text-faint); font-size:8.8px;
+  display:flex; align-items:center; justify-content:space-between; gap:6px; margin-top:6px; color:var(--ps-text-faint); font-size: 12px;
 }
 .app-shell.porcelain-studio-v2 .agent-skill-route { justify-content:flex-start; }
 .app-shell.porcelain-studio-v2 .agent-skill-route small { margin-left:auto; }
@@ -4042,8 +4042,8 @@
 .app-shell.porcelain-studio-v2 .agent-continuity-chip strong,
 .app-shell.porcelain-studio-v2 .agent-continuity-chip small { display:block; }
 .app-shell.porcelain-studio-v2 .agent-continuity-chip strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.app-shell.porcelain-studio-v2 .agent-continuity-chip button { flex:0 0 auto; font-size:8.5px; padding:2px 6px; }
-.app-shell.porcelain-studio-v2 .agent-provider-status p { margin:4px 0 0; font-size:9px; }
+.app-shell.porcelain-studio-v2 .agent-continuity-chip button { flex:0 0 auto; font-size: 12px; padding:2px 6px; }
+.app-shell.porcelain-studio-v2 .agent-provider-status p { margin:4px 0 0; font-size: 12.5px; }
 
 @media (max-width: 520px) {
   .app-shell.porcelain-studio-v2 .agent-context-surface { width:min(232px, calc(100vw - 18px)); }
