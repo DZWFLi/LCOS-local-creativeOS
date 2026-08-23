@@ -1,6 +1,65 @@
 /* LCOS Spatial Component Foundation v0.4
    Components are Presentation material. They never become a second Project Truth. */
 
+/* ---------------------------------------------------------------------------
+   Glaze visual material tokens — dual light/dark theme.
+   Single base colour per layer; semantic red is reserved for errors.
+   `[data-lcos-theme]` overrides the OS preference; absence falls back to it.
+--------------------------------------------------------------------------- */
+:root {
+  --lcos-ink: rgba(52, 46, 66, .82);
+  --lcos-signal: rgb(92, 74, 143);
+  --lcos-signal-error: rgb(180, 76, 73);
+  --lcos-matrix-dot: rgba(101, 80, 157, .34);
+  --lcos-segment-off: rgba(92, 74, 143, .16);
+  --lcos-segment-on: rgba(103, 82, 158, .8);
+  --lcos-segment-glow: rgba(105, 85, 164, .2);
+  --lcos-glyth-stable: rgb(87, 69, 137);
+  --lcos-glyth-working: rgb(65, 126, 166);
+  --lcos-glyth-waiting: rgb(181, 126, 56);
+  --lcos-glyth-error: rgb(180, 76, 73);
+  --lcos-glyth-confirm: rgb(84, 125, 104);
+  --lcos-glyth-absorb: rgb(70, 125, 150);
+  --lcos-glyth-output: rgb(122, 86, 175);
+  --lcos-glyth-eye: rgba(255, 255, 255, .96);
+}
+[data-lcos-theme='dark'] {
+  --lcos-ink: rgba(222, 216, 238, .86);
+  --lcos-signal: rgb(158, 141, 208);
+  --lcos-signal-error: rgb(228, 116, 110);
+  --lcos-matrix-dot: rgba(176, 156, 226, .4);
+  --lcos-segment-off: rgba(158, 141, 208, .2);
+  --lcos-segment-on: rgba(186, 166, 234, .88);
+  --lcos-segment-glow: rgba(170, 148, 226, .26);
+  --lcos-glyth-stable: rgb(186, 171, 232);
+  --lcos-glyth-working: rgb(128, 180, 216);
+  --lcos-glyth-waiting: rgb(224, 178, 112);
+  --lcos-glyth-error: rgb(228, 116, 110);
+  --lcos-glyth-confirm: rgb(142, 192, 168);
+  --lcos-glyth-absorb: rgb(128, 184, 206);
+  --lcos-glyth-output: rgb(186, 154, 238);
+  --lcos-glyth-eye: rgba(24, 22, 32, .92);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-lcos-theme='light']) {
+    --lcos-ink: rgba(222, 216, 238, .86);
+    --lcos-signal: rgb(158, 141, 208);
+    --lcos-signal-error: rgb(228, 116, 110);
+    --lcos-matrix-dot: rgba(176, 156, 226, .4);
+    --lcos-segment-off: rgba(158, 141, 208, .2);
+    --lcos-segment-on: rgba(186, 166, 234, .88);
+    --lcos-segment-glow: rgba(170, 148, 226, .26);
+    --lcos-glyth-stable: rgb(186, 171, 232);
+    --lcos-glyth-working: rgb(128, 180, 216);
+    --lcos-glyth-waiting: rgb(224, 178, 112);
+    --lcos-glyth-error: rgb(228, 116, 110);
+    --lcos-glyth-confirm: rgb(142, 192, 168);
+    --lcos-glyth-absorb: rgb(128, 184, 206);
+    --lcos-glyth-output: rgb(186, 154, 238);
+    --lcos-glyth-eye: rgba(24, 22, 32, .92);
+  }
+}
+
 .lcos-surface-component-layer {
   position: absolute;
   inset: 0;
@@ -10,6 +69,7 @@
   z-index: 2;
 }
 
+/* Handleless frame: the body itself is the drag handle, edges resize. */
 .lcos-surface-component-frame {
   position: absolute;
   box-sizing: border-box;
@@ -18,47 +78,62 @@
   border-radius: 16px;
   outline: 0 solid transparent;
   transition: outline-color 140ms ease, filter 140ms ease;
+  cursor: grab;
+  touch-action: none;
 }
+.lcos-surface-component-frame:active { cursor: grabbing; }
+.lcos-surface-component-frame button,
+.lcos-surface-component-frame a,
+.lcos-surface-component-frame input,
+.lcos-surface-component-frame textarea,
+.lcos-surface-component-frame select,
+.lcos-surface-component-frame [data-surface-no-drag] { cursor: auto; }
 .lcos-surface-component-frame.is-selected {
   outline: 1px solid rgba(103, 83, 158, .24);
   filter: drop-shadow(0 9px 22px rgba(48, 42, 68, .07));
 }
-.lcos-surface-component-frame.is-pinned { outline-style: dashed; }
+.lcos-surface-component-frame.is-pinned { outline-style: dashed; cursor: default; }
 .lcos-surface-component-frame.is-collapsed .lcos-surface-component-content { display: none; }
 .lcos-surface-component-frame.is-collapsed { height: 34px !important; min-height: 34px; }
 
-.lcos-surface-component-chrome {
+.lcos-surface-component-content { width: 100%; height: 100%; min-width: 0; min-height: 0; }
+
+/* Edge resize hot zones — hover shows the direction cursor, drag resizes that side. */
+.lcos-surface-component-edge {
   position: absolute;
-  left: 8px;
-  top: -27px;
-  z-index: 6;
-  min-height: 23px;
+  z-index: 8;
+  display: block;
+}
+.lcos-surface-component-edge.edge-n { top: -4px; left: 12px; right: 12px; height: 9px; cursor: ns-resize; }
+.lcos-surface-component-edge.edge-s { bottom: -4px; left: 12px; right: 12px; height: 9px; cursor: ns-resize; }
+.lcos-surface-component-edge.edge-e { right: -4px; top: 12px; bottom: 12px; width: 9px; cursor: ew-resize; }
+.lcos-surface-component-edge.edge-w { left: -4px; top: 12px; bottom: 12px; width: 9px; cursor: ew-resize; }
+
+/* Controls float in only on hover/selection — no permanent title bar. */
+.lcos-surface-component-controls {
+  position: absolute;
+  right: 7px;
+  top: 7px;
+  z-index: 9;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 2px 4px 2px 8px;
-  border: 1px solid rgba(76, 69, 94, .09);
-  border-radius: 10px;
-  background: rgba(252, 252, 254, .88);
-  box-shadow: 0 5px 16px rgba(45, 39, 61, .055);
+  gap: 1px;
+  padding: 2px;
+  border-radius: 9px;
+  background: rgba(252, 252, 254, .9);
+  box-shadow: 0 5px 16px rgba(45, 39, 61, .08);
   backdrop-filter: blur(14px);
-  color: rgba(57, 52, 68, .54);
-  font-size: 8.5px;
-  line-height: 1;
   opacity: 0;
-  transform: translateY(3px);
+  transform: translateY(2px);
   transition: opacity 120ms ease, transform 140ms ease;
-  cursor: grab;
-  user-select: none;
-  white-space: nowrap;
+  pointer-events: none;
 }
-.lcos-surface-component-frame:hover > .lcos-surface-component-chrome,
-.lcos-surface-component-frame.is-selected > .lcos-surface-component-chrome,
-.lcos-surface-component-frame.is-pinned > .lcos-surface-component-chrome,
-.lcos-surface-component-frame.is-collapsed > .lcos-surface-component-chrome { opacity: 1; transform: none; }
-.lcos-surface-component-frame.is-pinned > .lcos-surface-component-chrome { cursor: default; }
-.lcos-surface-component-chrome nav { display: flex; align-items: center; gap: 1px; }
-.lcos-surface-component-chrome button {
+[data-lcos-theme='dark'] .lcos-surface-component-controls { background: rgba(34, 32, 46, .88); }
+.lcos-surface-component-frame:hover > .lcos-surface-component-controls,
+.lcos-surface-component-frame.is-selected > .lcos-surface-component-controls,
+.lcos-surface-component-frame.is-pinned > .lcos-surface-component-controls,
+.lcos-surface-component-frame.is-collapsed > .lcos-surface-component-controls { opacity: 1; transform: none; pointer-events: auto; }
+.lcos-surface-component-controls button {
   width: 20px;
   height: 20px;
   min-width: 20px;
@@ -72,44 +147,46 @@
   font: inherit;
   cursor: pointer;
 }
-.lcos-surface-component-chrome button:hover { background: rgba(92, 71, 145, .08); color: rgba(77, 58, 127, .85); }
+[data-lcos-theme='dark'] .lcos-surface-component-controls button { color: rgba(214, 208, 232, .6); }
+.lcos-surface-component-controls button:hover { background: rgba(92, 71, 145, .08); color: rgba(77, 58, 127, .85); }
 
-.lcos-surface-component-content { width: 100%; height: 100%; min-width: 0; min-height: 0; }
-.lcos-surface-component-resize {
-  position: absolute;
-  z-index: 7;
-  right: -5px;
-  bottom: -5px;
-  width: 14px;
-  height: 14px;
-  padding: 0;
-  border: 1px solid rgba(92, 72, 143, .18);
-  border-radius: 5px;
-  background: rgba(252, 252, 254, .94);
-  box-shadow: 0 3px 9px rgba(42, 36, 58, .07);
-  cursor: nwse-resize;
-}
-
-/* Light Segment is structural punctuation, not neon decoration. */
+/* Light Segment — discrete digital bars (seven-segment rhythm, Nothing semantics). */
 .lcos-light-segment {
-  display: block;
+  display: flex;
   flex: 0 0 auto;
-  width: 2px;
-  height: 2px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, rgba(92, 74, 143, .08), rgba(92, 74, 143, .42), rgba(92, 74, 143, .08));
-  opacity: .58;
+  align-items: center;
+  gap: 2px;
+  height: 4px;
   pointer-events: none;
+  opacity: .58;
 }
-.lcos-light-segment.axis-vertical { width: 2px; background: linear-gradient(180deg, rgba(92, 74, 143, .08), rgba(92, 74, 143, .42), rgba(92, 74, 143, .08)); }
-.lcos-light-segment.is-active { opacity: .94; box-shadow: 0 0 9px rgba(105, 85, 164, .18); }
+.lcos-light-segment.axis-vertical { flex-direction: column; width: 4px; height: auto; }
+.lcos-light-segment i {
+  flex: 1 1 0;
+  min-width: 2px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--lcos-segment-off);
+  transition: background 180ms ease, box-shadow 180ms ease;
+}
+.lcos-light-segment.axis-vertical i { width: 4px; height: auto; min-height: 2px; flex: 1 1 auto; }
+.lcos-light-segment i.is-lit { background: var(--lcos-segment-on); }
+.lcos-light-segment.is-active { opacity: .94; }
+.lcos-light-segment.is-active i.is-lit { box-shadow: 0 0 8px var(--lcos-segment-glow); }
+.lcos-light-segment.is-semantic-error i.is-lit { background: var(--lcos-signal-error); box-shadow: 0 0 8px rgba(180, 76, 73, .24); }
+.lcos-light-segment.mode-flow i.is-lit { animation: lcos-segment-flow 1.4s ease-in-out infinite; animation-delay: calc(var(--segment-index) * 90ms); }
+@keyframes lcos-segment-flow {
+  0%, 100% { opacity: .68; }
+  50% { opacity: 1; }
+}
+.lcos-light-segment.mode-checkpoint i.is-lit { opacity: 1; box-shadow: 0 0 8px var(--lcos-segment-glow); }
 
+/* Glyth — one living body, radial profile morph. Colour is per-state, never decoration. */
 .lcos-glyth {
   display: inline-block;
   flex: 0 0 auto;
   overflow: visible;
-  color: rgb(87, 69, 137);
-  filter: drop-shadow(0 2px 5px rgba(52, 42, 82, .12));
+  color: var(--lcos-glyth-stable);
   pointer-events: none !important;
   user-select: none;
 }
@@ -118,21 +195,22 @@
   opacity: var(--glyth-shell-opacity, .56);
 }
 .lcos-glyth-core { opacity: .9; }
-.lcos-glyth-eyes { color: rgba(255, 255, 255, .96); }
-.lcos-glyth.state-focus { color: rgb(105, 77, 170); }
-.lcos-glyth.state-working { color: rgb(65, 126, 166); }
-.lcos-glyth.state-waiting { color: rgb(181, 126, 56); }
-.lcos-glyth.state-blocked { color: rgb(180, 76, 73); }
-.lcos-glyth.state-protected { color: rgb(64, 103, 116); }
-.lcos-glyth.state-candidate { color: rgb(122, 86, 175); }
+.lcos-glyth-eyes { color: var(--lcos-glyth-eye); }
+.lcos-glyth.state-stable { color: var(--lcos-glyth-stable); }
+.lcos-glyth.state-working { color: var(--lcos-glyth-working); }
+.lcos-glyth.state-waiting { color: var(--lcos-glyth-waiting); }
+.lcos-glyth.state-error { color: var(--lcos-glyth-error); }
+.lcos-glyth.state-confirm { color: var(--lcos-glyth-confirm); }
+.lcos-glyth.state-absorb { color: var(--lcos-glyth-absorb); }
+.lcos-glyth.state-output { color: var(--lcos-glyth-output); }
 .lcos-reconstructed .lcos-workflow-action-signal { width: 22px; height: 22px; right: 3px; bottom: 3px; }
-.lcos-surface-fence-body.signal-protected { border-style: solid; border-color: rgba(68,103,117,.22); }
-.lcos-surface-fence-body.signal-candidate, .lcos-surface-region-body.signal-candidate { border-style: dashed; }
 .lcos-surface-fence-body.signal-waiting, .lcos-surface-region-body.signal-waiting { border-right-color: transparent; }
-.lcos-surface-fence-body.signal-blocked, .lcos-surface-region-body.signal-blocked { border-color: rgba(177,78,75,.22); }
-.lcos-surface-region-body.signal-working { border-color: rgba(70,125,164,.20); background: linear-gradient(145deg, rgba(70,125,164,.055), rgba(119,98,163,.025)); }
-.lcos-workflow-action.signal-working { border-color: rgba(70,125,164,.30); }
-.lcos-workflow-action.signal-blocked { border-color: rgba(177,78,75,.32); }
+.lcos-surface-fence-body.signal-error, .lcos-surface-region-body.signal-error { border-color: rgba(177, 78, 75, .24); }
+.lcos-surface-region-body.signal-working { border-color: rgba(70, 125, 164, .20); background: linear-gradient(145deg, rgba(70, 125, 164, .055), rgba(119, 98, 163, .025)); }
+.lcos-surface-region-body.signal-absorb { border-color: rgba(70, 125, 150, .2); }
+.lcos-surface-region-body.signal-output { border-color: rgba(122, 86, 175, .22); }
+.lcos-workflow-action.signal-working { border-color: rgba(70, 125, 164, .30); }
+.lcos-workflow-action.signal-error { border-color: rgba(177, 78, 75, .32); }
 
 /* Source is a movable Context object. It is never a fixed, click-through strip. */
 .lcos-source-chain {
@@ -169,7 +247,7 @@
   height: 100%;
   flex: 1;
   display: grid;
-  align-content: center;
+  grid-content: center;
   gap: 3px;
   padding: 9px 11px;
   border: 1px solid rgba(96,76,146,.12);
@@ -192,6 +270,7 @@
 .lcos-source-chain-segment:has(> button[draggable="true"]:active) > button { opacity: .58; }
 .lcos-source-chain-empty { display: grid; place-items: center; padding: 16px; color: rgba(58,52,70,.48); font-size: 10px; }
 
+/* Matrix Activity — eight verbs, one base colour, semantic red for errors. */
 .lcos-matrix-activity {
   position: absolute;
   inset: auto 12px 10px auto;
@@ -199,17 +278,44 @@
   grid-template-columns: repeat(4, 3px);
   gap: 2px;
   pointer-events: none;
-  opacity: .42;
+  opacity: .46;
 }
+.lcos-matrix-activity.verb-flow,
+.lcos-matrix-activity.verb-emit,
+.lcos-matrix-activity.verb-absorb { rotate: var(--matrix-direction, 0deg); }
 .lcos-matrix-activity i {
   width: 3px;
   height: 3px;
   border-radius: 1px;
-  background: rgba(101, 80, 157, .32);
-  animation: lcos-matrix-cell 1.8s ease-in-out infinite;
-  animation-delay: calc(var(--matrix-index) * 70ms);
+  background: var(--lcos-matrix-dot);
 }
-@keyframes lcos-matrix-cell { 50% { opacity: .24; transform: scale(.72); } }
+.lcos-matrix-activity.is-semantic-error i { background: var(--lcos-signal-error); }
+.lcos-matrix-activity.verb-gather i { animation: lcos-mx-gather 1.6s ease-in-out infinite; animation-delay: calc(var(--matrix-index) * 60ms); }
+.lcos-matrix-activity.verb-spread i { animation: lcos-mx-spread 1.6s ease-in-out infinite; animation-delay: calc(var(--matrix-index) * 60ms); }
+.lcos-matrix-activity.verb-gap i { animation: lcos-mx-cell 1.8s ease-in-out infinite; animation-delay: calc(var(--matrix-index) * 70ms); }
+.lcos-matrix-activity.verb-gap i:nth-child(n+4):nth-child(-n+6) { animation-name: lcos-mx-gap; }
+.lcos-matrix-activity.verb-flow i { animation: lcos-mx-flow 1.4s linear infinite; animation-delay: calc(var(--matrix-index) * 110ms); }
+.lcos-matrix-activity.verb-pull i:nth-child(4n+1),
+.lcos-matrix-activity.verb-pull i:nth-child(4n+2) { animation: lcos-mx-pull-left 1.2s ease-in-out infinite; }
+.lcos-matrix-activity.verb-pull i:nth-child(4n+3),
+.lcos-matrix-activity.verb-pull i:nth-child(4n) { animation: lcos-mx-pull-right 1.2s ease-in-out infinite; }
+.lcos-matrix-activity.verb-break i:nth-child(4n+1),
+.lcos-matrix-activity.verb-break i:nth-child(4n+2) { animation: lcos-mx-break-left 1s ease-in-out infinite; }
+.lcos-matrix-activity.verb-break i:nth-child(4n+3),
+.lcos-matrix-activity.verb-break i:nth-child(4n) { animation: lcos-mx-break-right 1s ease-in-out infinite; }
+.lcos-matrix-activity.verb-absorb i { animation: lcos-mx-absorb 1.6s ease-in-out infinite; animation-delay: calc(var(--matrix-index) * 80ms); }
+.lcos-matrix-activity.verb-emit i { animation: lcos-mx-emit 1.6s ease-in-out infinite; animation-delay: calc(var(--matrix-index) * 80ms); }
+@keyframes lcos-mx-cell { 50% { opacity: .24; transform: scale(.72); } }
+@keyframes lcos-mx-gather { 0%, 100% { transform: scale(1); opacity: .5; } 50% { transform: scale(.5); opacity: 1; } }
+@keyframes lcos-mx-spread { 0%, 100% { transform: scale(.5); opacity: 1; } 50% { transform: scale(1.15); opacity: .4; } }
+@keyframes lcos-mx-gap { 0%, 100% { opacity: .3; } 50% { opacity: 0; } }
+@keyframes lcos-mx-flow { 0% { opacity: .2; transform: translateX(-1px); } 50% { opacity: 1; transform: translateX(1px); } 100% { opacity: .2; transform: translateX(-1px); } }
+@keyframes lcos-mx-pull-left { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(-2px); } }
+@keyframes lcos-mx-pull-right { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(2px); } }
+@keyframes lcos-mx-break-left { 0%, 100% { transform: translateX(0); opacity: .6; } 50% { transform: translateX(-3px); opacity: .1; } }
+@keyframes lcos-mx-break-right { 0%, 100% { transform: translateX(0); opacity: .6; } 50% { transform: translateX(3px); opacity: .1; } }
+@keyframes lcos-mx-absorb { 0%, 100% { transform: scale(1); opacity: .4; } 50% { transform: scale(.4); opacity: 1; } }
+@keyframes lcos-mx-emit { 0%, 100% { transform: scale(.4); opacity: 1; } 50% { transform: scale(1.3); opacity: .25; } }
 
 .lcos-surface-fence-body,
 .lcos-surface-region-body,
@@ -508,8 +614,10 @@
 .lcos-surface-component-drag-ghost.is-valid { border-color: rgba(94, 73, 150, .24); box-shadow: 0 14px 38px rgba(67, 50, 109, .15), inset 0 0 0 1px rgba(108, 86, 168, .06); }
 
 .lcos-surface-component-frame.is-reduced-motion,
-.lcos-surface-component-frame.is-reduced-motion > .lcos-surface-component-chrome,
+.lcos-surface-component-frame.is-reduced-motion > .lcos-surface-component-controls,
+.lcos-surface-component-edge.is-reduced-motion,
 .lcos-light-segment.is-reduced-motion,
+.lcos-light-segment.is-reduced-motion i,
 .lcos-glyth.is-reduced-motion,
 .lcos-matrix-activity.is-reduced-motion i {
   transition: none !important; animation: none !important;
@@ -528,7 +636,8 @@
 .lcos-alignment-guide.axis-y { left: -100000px; right: -100000px; height: 1px; }
 @media (prefers-reduced-motion: reduce) {
   .lcos-surface-component-frame,
-  .lcos-surface-component-chrome,
+  .lcos-surface-component-controls,
+  .lcos-light-segment i,
   .lcos-glyth,
   .lcos-matrix-activity i { transition: none !important; animation: none !important; }
 }
