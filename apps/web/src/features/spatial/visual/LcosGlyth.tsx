@@ -9,7 +9,8 @@ interface GlythElements {
   readonly body: SVGPathElement | null
   readonly clip: SVGPathElement | null
   readonly eyes: readonly SVGRectElement[]
-  readonly shells: readonly SVGPathElement[]
+  readonly segments: readonly SVGRectElement[]
+  readonly dots: readonly SVGCircleElement[]
 }
 
 function renderFrame(elements: GlythElements, frame: GlythFrame) {
@@ -22,9 +23,20 @@ function renderFrame(elements: GlythElements, frame: GlythFrame) {
     if (!node) return
     node.setAttribute('x', String(eye.x)); node.setAttribute('y', String(eye.y)); node.setAttribute('width', String(eye.w)); node.setAttribute('height', String(eye.h))
   })
-  frame.shells.forEach((path, index) => elements.shells[index]?.setAttribute('d', path))
+  frame.segments.forEach((segment, index) => {
+    const node = elements.segments[index]
+    if (!node) return
+    node.setAttribute('x', String(segment.x)); node.setAttribute('y', String(segment.y)); node.setAttribute('width', String(segment.w)); node.setAttribute('height', String(segment.h))
+    node.setAttribute('transform', `rotate(${segment.rot} ${segment.x + segment.w / 2} ${segment.y + segment.h / 2})`)
+    node.style.opacity = String(.35 + segment.lit * .6)
+  })
+  frame.dots.forEach((dot, index) => {
+    const node = elements.dots[index]
+    if (!node) return
+    node.setAttribute('cx', String(dot.x)); node.setAttribute('cy', String(dot.y)); node.setAttribute('r', String(dot.r))
+    node.style.opacity = String(dot.alpha)
+  })
   elements.svg.style.setProperty('--glyth-energy', String(frame.energy))
-  elements.svg.style.setProperty('--glyth-shell-opacity', String(.28 + frame.energy * .56))
 }
 
 const clampRange = (value: number, min = -1, max = 1) => Math.min(max, Math.max(min, value))
@@ -46,6 +58,8 @@ function computeGazeTarget(svg: SVGSVGElement, rectCache: { current: { x: number
   const scale = length > reach ? reach / length : 1
   return { x: clampRange((dx * scale) / reach), y: clampRange((dy * scale) / reach) }
 }
+
+const MAX_DOTS = 8
 
 export function LcosGlyth({ state = 'stable', variant = 'cursor', size = 24, className = '', label, animated = true }: {
   readonly state?: LcosGlythState
@@ -83,7 +97,8 @@ export function LcosGlyth({ state = 'stable', variant = 'cursor', size = 24, cla
       body: svg.querySelector<SVGPathElement>('[data-glyth-body]'),
       clip: svg.querySelector<SVGPathElement>('[data-glyth-clip]'),
       eyes: [...svg.querySelectorAll<SVGRectElement>('[data-glyth-eye]')],
-      shells: [...svg.querySelectorAll<SVGPathElement>('[data-glyth-shell]')],
+      segments: [...svg.querySelectorAll<SVGRectElement>('[data-glyth-segment]')],
+      dots: [...svg.querySelectorAll<SVGCircleElement>('[data-glyth-dot]')],
     }
   }, [])
 
@@ -113,7 +128,7 @@ export function LcosGlyth({ state = 'stable', variant = 'cursor', size = 24, cla
     if (!svg) return
     const paint = (seconds: number) => {
       const elements = elementsRef.current
-      if (!visibleRef.current || !elements || !elements.body || !elements.clip || elements.eyes.length !== 2 || elements.shells.length !== 4) return
+      if (!visibleRef.current || !elements || !elements.body || !elements.clip || elements.eyes.length !== 2 || elements.segments.length !== 4) return
       const dt = Math.min(.2, Math.max(0, seconds - (lastSecondsRef.current || seconds)))
       lastSecondsRef.current = seconds
       const still = reducedMotion || !animated
@@ -148,8 +163,11 @@ export function LcosGlyth({ state = 'stable', variant = 'cursor', size = 24, cla
 
   return <svg ref={svgRef} className={`lcos-glyth state-${displayState} variant-${variant} ${reducedMotion ? 'is-reduced-motion' : ''} ${className}`.trim()} data-glyth-state={displayState} viewBox="0 0 100 100" width={size} height={size} role={label ? 'img' : undefined} aria-label={label} aria-hidden={label ? undefined : 'true'}>
     <defs><clipPath id={clipId}><path data-glyth-clip="clip"/></clipPath></defs>
-    <g className="lcos-glyth-shells" fill="none" stroke="currentColor" strokeLinecap="round">
-      <path data-glyth-shell="top"/><path data-glyth-shell="right"/><path data-glyth-shell="bottom"/><path data-glyth-shell="left"/>
+    <g className="lcos-glyth-dots">
+      {Array.from({ length: MAX_DOTS }, (_, index) => <circle key={index} data-glyth-dot={index} r="0"/>)}
+    </g>
+    <g className="lcos-glyth-shells">
+      {Array.from({ length: 4 }, (_, index) => <rect key={index} data-glyth-segment={index} rx="1.4"/>)}
     </g>
     <path data-glyth-body="body" className="lcos-glyth-core" fill="currentColor"/>
     <g className="lcos-glyth-eyes" fill="currentColor" clipPath={`url(#${clipId})`}><rect data-glyth-eye="left" rx="2.2"/><rect data-glyth-eye="right" rx="2.2"/></g>

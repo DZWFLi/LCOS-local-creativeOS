@@ -1,13 +1,14 @@
 /**
- * LCOS Glyth motion engine — Bloub-style radial profile morph.
+ * LCOS Glyth motion engine — liquid capsule with light-segment shell.
  *
- * Design contract (frozen 2026-08-23):
- * - Seven semantic states only: stable / working / waiting / error / confirm / absorb / output.
- * - The body outline is a fixed-angle radial profile (superellipse base + organic wobble + notch),
- *   so every state change is a continuous contour morph, never a rectangle resize.
- * - Per-state morph durations replace the old fixed 0.42s.
- * - Gaze and blink are independent input channels, not poses.
- * - `sampleGlyth` is a clock-free pure function: freeze `t` and you get a golden frame.
+ * Design contract (frozen 2026-08-23 evening round):
+ * - Body: liquid capsule (radial profile morph, Bloub-style) — soft, directional.
+ * - Shell: four discrete light SEGMENTS in the same digital-bar language as
+ *   LightSegment (Nothing-style), replacing the old curve strokes.
+ * - Energy: when energy is high the body edge sheds a few matrix dots
+ *   (ROG-style), so capsule + segment + matrix read as one fused material.
+ * - Seven semantic states; per-state durations; gaze/blink are channels.
+ * - `sampleGlyth` stays clock-free: freeze t → golden frame.
  */
 
 export type LcosGlythState = 'stable' | 'working' | 'waiting' | 'error' | 'confirm' | 'absorb' | 'output'
@@ -31,6 +32,10 @@ export interface GlythPose {
   readonly gapDepth: number
   readonly lean: number
   readonly duration: number
+  /** Segment shell: 0 = tight capsule-hugging, 1 = fully open digital ring. */
+  readonly segmentSpread: number
+  /** Matrix dots shed from the edge when energy is high. */
+  readonly dotCount: number
 }
 
 export interface GlythChannels {
@@ -40,28 +45,45 @@ export interface GlythChannels {
   readonly blink?: number
 }
 
+export interface GlythSegment {
+  readonly x: number
+  readonly y: number
+  readonly w: number
+  readonly h: number
+  readonly rot: number
+  readonly lit: number
+}
+
+export interface GlythDot {
+  readonly x: number
+  readonly y: number
+  readonly r: number
+  readonly alpha: number
+}
+
 export interface GlythFrame {
   readonly body: string
-  readonly shells: readonly [string, string, string, string]
+  readonly segments: readonly GlythSegment[]
+  readonly dots: readonly GlythDot[]
   readonly eyes: readonly [{ readonly x: number; readonly y: number; readonly w: number; readonly h: number }, { readonly x: number; readonly y: number; readonly w: number; readonly h: number }]
   readonly bounds: { readonly minX: number; readonly minY: number; readonly maxX: number; readonly maxY: number }
   readonly energy: number
 }
 
 const POSES: Record<LcosGlythState, GlythPose> = {
-  stable:  { scale: 1,    stretchX: 1.02, stretchY: 1,    open: .22, shellTilt: 0,  eyeScale: 1,    eyeGap: 7.2, energy: .42, speed: .6,  wobble: .015, gapAngle: 0, gapWidth: 0,    gapDepth: 0,   lean: 0,   duration: .5 },
-  working: { scale: .98,  stretchX: 1.06, stretchY: 1.02, open: .48, shellTilt: 4,  eyeScale: 1.04, eyeGap: 7.2, energy: .85, speed: 1.7, wobble: .055, gapAngle: 0, gapWidth: 0,    gapDepth: 0,   lean: 1.5, duration: .45 },
-  waiting: { scale: .95,  stretchX: 1.01, stretchY: 1,    open: .66, shellTilt: -1, eyeScale: .74,  eyeGap: 7.6, energy: .55, speed: .4,  wobble: .012, gapAngle: 0, gapWidth: 1.15, gapDepth: .5,  lean: 1,   duration: .5 },
-  error:   { scale: .94,  stretchX: 1.18, stretchY: .9,   open: .78, shellTilt: 12, eyeScale: .6,   eyeGap: 8.2, energy: .9,  speed: 2.4, wobble: .07,  gapAngle: 0, gapWidth: .42,  gapDepth: .78, lean: -1,  duration: .28 },
-  confirm: { scale: .9,   stretchX: .97,  stretchY: .97,  open: .12, shellTilt: 0,  eyeScale: .88,  eyeGap: 7,   energy: .3,  speed: .8,  wobble: .008, gapAngle: 0, gapWidth: 0,    gapDepth: 0,   lean: 0,   duration: .36 },
-  absorb:  { scale: .93,  stretchX: .96,  stretchY: .97,  open: .4,  shellTilt: -3, eyeScale: 1.06, eyeGap: 7,   energy: .72, speed: .95, wobble: .03,  gapAngle: 0, gapWidth: .8,   gapDepth: .4,  lean: 2,   duration: .42 },
-  output:  { scale: 1,    stretchX: 1.24, stretchY: .9,   open: .5,  shellTilt: 2,  eyeScale: 1.02, eyeGap: 7.2, energy: .85, speed: 1.3, wobble: .02,  gapAngle: 0, gapWidth: 0,    gapDepth: 0,   lean: 3.5, duration: .4 },
+  stable:  { scale: 1,    stretchX: 1.18, stretchY: 1,    open: .22, shellTilt: 0,  eyeScale: 1,    eyeGap: 7.2, energy: .42, speed: .6,  wobble: .016, gapAngle: 0, gapWidth: 0,    gapDepth: 0,   lean: 0,   duration: .5,  segmentSpread: .3,  dotCount: 0 },
+  working: { scale: .98,  stretchX: 1.22, stretchY: 1.02, open: .48, shellTilt: 4,  eyeScale: 1.04, eyeGap: 7.2, energy: .85, speed: 1.7, wobble: .055, gapAngle: 0, gapWidth: 0,    gapDepth: 0,   lean: 1.5, duration: .45, segmentSpread: .62, dotCount: 6 },
+  waiting: { scale: .95,  stretchX: 1.16, stretchY: 1,    open: .66, shellTilt: -1, eyeScale: .74,  eyeGap: 7.6, energy: .55, speed: .4,  wobble: .012, gapAngle: 0, gapWidth: 1.15, gapDepth: .5,  lean: 1,   duration: .5,  segmentSpread: .82, dotCount: 0 },
+  error:   { scale: .94,  stretchX: 1.34, stretchY: .9,   open: .78, shellTilt: 12, eyeScale: .6,   eyeGap: 8.2, energy: .9,  speed: 2.4, wobble: .07,  gapAngle: 0, gapWidth: .42,  gapDepth: .78, lean: -1,  duration: .28, segmentSpread: .95, dotCount: 8 },
+  confirm: { scale: .9,   stretchX: 1.12, stretchY: .97,  open: .12, shellTilt: 0,  eyeScale: .88,  eyeGap: 7,   energy: .3,  speed: .8,  wobble: .008, gapAngle: 0, gapWidth: 0,    gapDepth: 0,   lean: 0,   duration: .36, segmentSpread: .1,  dotCount: 0 },
+  absorb:  { scale: .93,  stretchX: 1.12, stretchY: .97,  open: .4,  shellTilt: -3, eyeScale: 1.06, eyeGap: 7,   energy: .72, speed: .95, wobble: .03,  gapAngle: 0, gapWidth: .8,   gapDepth: .4,  lean: 2,   duration: .42, segmentSpread: .5,  dotCount: 5 },
+  output:  { scale: 1,    stretchX: 1.44, stretchY: .9,   open: .5,  shellTilt: 2,  eyeScale: 1.02, eyeGap: 7.2, energy: .85, speed: 1.3, wobble: .02,  gapAngle: 0, gapWidth: 0,    gapDepth: 0,   lean: 3.5, duration: .4,  segmentSpread: .7,  dotCount: 7 },
 }
 
-const VARIANTS: Record<LcosGlythVariant, { readonly baseW: number; readonly baseH: number; readonly shellLength: number; readonly softness: number }> = {
-  balanced: { baseW: 22, baseH: 18.5, shellLength: 20, softness: .5 },
-  cursor: { baseW: 23, baseH: 18.5, shellLength: 18, softness: .42 },
-  soft: { baseW: 22, baseH: 19, shellLength: 22, softness: .78 },
+const VARIANTS: Record<LcosGlythVariant, { readonly baseW: number; readonly baseH: number; readonly softness: number; readonly shellLen: number }> = {
+  balanced: { baseW: 22, baseH: 17.5, softness: .5, shellLen: 13 },
+  cursor: { baseW: 24, baseH: 17, softness: .42, shellLen: 12 },
+  soft: { baseW: 22, baseH: 18, softness: .8, shellLen: 14 },
 }
 
 const RADIAL_COUNT = 24
@@ -94,6 +116,7 @@ export function blendGlythPose(from: GlythPose, to: GlythPose, amount: number): 
     wobble: mix(from.wobble, to.wobble, t),
     gapAngle, gapWidth: mix(from.gapWidth, to.gapWidth, t), gapDepth: mix(from.gapDepth, to.gapDepth, t),
     lean: mix(from.lean, to.lean, t), duration: mix(from.duration, to.duration, t),
+    segmentSpread: mix(from.segmentSpread, to.segmentSpread, t), dotCount: Math.round(mix(from.dotCount, to.dotCount, t)),
   }
 }
 
@@ -126,7 +149,7 @@ interface BodyPoint { readonly x: number; readonly y: number }
 
 function bodyOutline(pose: GlythPose, variant: LcosGlythVariant, timeSeconds: number, gazeX: number): BodyPoint[] {
   const skin = VARIANTS[variant]
-  const n = 3.4 + skin.softness * 1.6
+  const n = 2.6 + skin.softness * 2.2
   const gazeLean = gazeX * 1.6
   const points: BodyPoint[] = []
   for (let index = 0; index < RADIAL_COUNT; index += 1) {
@@ -144,7 +167,7 @@ function bodyOutline(pose: GlythPose, variant: LcosGlythVariant, timeSeconds: nu
   return points
 }
 
-/** Closed Catmull-Rom spline through the radial samples → one organic contour path. */
+/** Closed Catmull-Rom spline through the radial samples → one liquid contour path. */
 function closedSplinePath(points: readonly BodyPoint[]): string {
   const count = points.length
   const at = (index: number) => points[(index + count) % count]
@@ -165,8 +188,46 @@ function closedSplinePath(points: readonly BodyPoint[]): string {
 
 const n2 = (value: number) => Number(value.toFixed(2))
 
-export function sampleGlyth(pose: GlythPose, variant: LcosGlythVariant, timeSeconds: number, channels: GlythChannels = {}): GlythFrame {
+/**
+ * Segment shell: four discrete bars at N/E/S/W in the digital-bar language.
+ * `spread` 0 → hug the capsule; 1 → fully open ring. `lit` carries the energy
+ * pulse so the segments breathe with the body instead of decorating it.
+ */
+function segmentShell(pose: GlythPose, variant: LcosGlythVariant, timeSeconds: number, bounds: { minX: number; minY: number; maxX: number; maxY: number }): GlythSegment[] {
   const skin = VARIANTS[variant]
+  const len = skin.shellLen * (.7 + pose.segmentSpread * .6)
+  const thick = 3.2 + skin.softness * 1.1
+  const cx = (bounds.minX + bounds.maxX) / 2
+  const cy = (bounds.minY + bounds.maxY) / 2
+  const spread = 4 + pose.open * 10 + pose.segmentSpread * 5
+  const tilt = pose.shellTilt
+  const breath = .5 + .5 * Math.sin(timeSeconds * Math.PI * pose.speed)
+  const lit = clamp(.45 + pose.energy * .4 + breath * .15)
+  const positions: Array<{ x: number; y: number; rot: number }> = [
+    { x: cx, y: bounds.minY - spread + tilt * .08, rot: 0 + tilt * .4 },
+    { x: bounds.maxX + spread - tilt * .08, y: cy, rot: 90 + tilt * .4 },
+    { x: cx, y: bounds.maxY + spread - tilt * .08, rot: 0 - tilt * .4 },
+    { x: bounds.minX - spread + tilt * .08, y: cy, rot: 90 - tilt * .4 },
+  ]
+  return positions.map((position) => ({ x: n2(position.x - len / 2), y: n2(position.y - thick / 2), w: n2(len), h: n2(thick), rot: n2(position.rot), lit: n2(lit) }))
+}
+
+/** Matrix dots shed from the capsule edge when the pose carries energy. */
+function shedDots(pose: GlythPose, timeSeconds: number, outline: readonly BodyPoint[]): GlythDot[] {
+  if (pose.dotCount <= 0) return []
+  const dots: GlythDot[] = []
+  const step = Math.max(1, Math.floor(RADIAL_COUNT / pose.dotCount))
+  for (let index = 0; index < pose.dotCount; index += 1) {
+    const anchor = outline[(index * step + 3) % RADIAL_COUNT]
+    const phase = (timeSeconds * pose.speed * 1.4 + index * .37) % 1
+    const travel = 2.5 + phase * 5.5
+    const alpha = clamp(1 - phase) * .8
+    dots.push({ x: n2(anchor.x + (anchor.x - 50) * .08 * travel), y: n2(anchor.y + (anchor.y - 50) * .08 * travel), r: n2(1.1 + phase * .7), alpha: n2(alpha) })
+  }
+  return dots
+}
+
+export function sampleGlyth(pose: GlythPose, variant: LcosGlythVariant, timeSeconds: number, channels: GlythChannels = {}): GlythFrame {
   const gaze = channels.gaze ?? { x: 0, y: 0 }
   const blink = clamp(channels.blink ?? 0)
   const outline = bodyOutline(pose, variant, timeSeconds, clamp(gaze.x, -1, 1))
@@ -178,6 +239,7 @@ export function sampleGlyth(pose: GlythPose, variant: LcosGlythVariant, timeSeco
   const maxX = Math.max(...xs)
   const minY = Math.min(...ys)
   const maxY = Math.max(...ys)
+  const bounds = { minX: n2(minX), minY: n2(minY), maxX: n2(maxX), maxY: n2(maxY) }
 
   const gazeOffsetX = clamp(gaze.x, -1, 1) * 4.2
   const gazeOffsetY = clamp(gaze.y, -1, 1) * 3.2
@@ -190,25 +252,14 @@ export function sampleGlyth(pose: GlythPose, variant: LcosGlythVariant, timeSeco
     { x: n2(eyeCenterX + pose.eyeGap - eyeWidth / 2), y: n2(eyeCenterY - eyeHeight / 2), w: n2(eyeWidth), h: n2(eyeHeight) },
   ] as const
 
-  const breath = pose.energy * .035 * Math.sin(timeSeconds * Math.PI * pose.speed)
-  const spread = 4.5 + pose.open * 11 + breath * .12
-  const half = skin.shellLength / 2
-  const curve = 2.2 + skin.softness * 3.2
-  const tilt = pose.shellTilt
-  const centerX = (minX + maxX) / 2
-  const centerY = (minY + maxY) / 2
-  const topY = minY - spread
-  const bottomY = maxY + spread
-  const leftX = minX - spread
-  const rightX = maxX + spread
-  const shells = [
-    `M${n2(centerX - half - tilt * .12)} ${n2(topY + tilt * .08)} Q${n2(centerX)} ${n2(topY - curve)} ${n2(centerX + half + tilt * .12)} ${n2(topY - tilt * .08)}`,
-    `M${n2(rightX - tilt * .08)} ${n2(centerY - half - tilt * .12)} Q${n2(rightX + curve)} ${n2(centerY)} ${n2(rightX + tilt * .08)} ${n2(centerY + half + tilt * .12)}`,
-    `M${n2(centerX + half + tilt * .12)} ${n2(bottomY - tilt * .08)} Q${n2(centerX)} ${n2(bottomY + curve)} ${n2(centerX - half - tilt * .12)} ${n2(bottomY + tilt * .08)}`,
-    `M${n2(leftX + tilt * .08)} ${n2(centerY + half + tilt * .12)} Q${n2(leftX - curve)} ${n2(centerY)} ${n2(leftX - tilt * .08)} ${n2(centerY - half - tilt * .12)}`,
-  ] as const
-
-  return { body, shells, eyes, bounds: { minX: n2(minX), minY: n2(minY), maxX: n2(maxX), maxY: n2(maxY) }, energy: clamp(pose.energy + breath * .4, .2, 1) }
+  return {
+    body,
+    segments: segmentShell(pose, variant, timeSeconds, { minX, minY, maxX, maxY }),
+    dots: shedDots(pose, timeSeconds, outline),
+    eyes,
+    bounds,
+    energy: clamp(pose.energy, .2, 1),
+  }
 }
 
 type ClockSubscriber = (seconds: number) => void
