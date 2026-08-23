@@ -271,6 +271,7 @@ export function App() {
   const [confirmProjectDelete, setConfirmProjectDelete] = useState<ProjectPackage | null>(null)
   const [workspaceEditor, setWorkspaceEditor] = useState<{ id: string } | null>(null)
   const [renameNodeId, setRenameNodeId] = useState<string | null>(null)
+  const [noteEditorId, setNoteEditorId] = useState<string | null>(null)
   const [layoutPreview, setLayoutPreview] = useState<LayoutPreviewItem[] | null>(null)
   const [reorganizeOpen, setReorganizeOpen] = useState(false)
   const [reorganizePendingIds, setReorganizePendingIds] = useState<string[]>([])
@@ -3702,6 +3703,42 @@ export function App() {
     setPresentationCommit((current) => current + 1)
   }, [])
 
+  const saveNoteBody = useCallback((id: string, input: { title: string; body: string }) => {
+    const { title, body } = input
+    if (!title.trim()) { setNotice('标题不能为空'); return }
+    setNodes((current) => current.map((node) => node.id === id ? {
+      ...node,
+      title: title.trim(),
+      subtitle: body.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).slice(1).join(' ').trim().slice(0, 24),
+      noteBody: body,
+      // Keep the outline in sync when the node is in mindmap mode.
+      ...(node.noteLayout === 'mindmap' ? { noteOutline: body } : {}),
+    } : node))
+    setNoteEditorId(null)
+    // Runtime artifact title sync (body updates are presentation-local until
+    // a Core text-revision API lands; recorded as known debt, not blocking).
+    const node = nodes.find((item) => item.id === id)
+    if (bootMode === 'runtime' && node?.artifactId && node.title !== title.trim()) {
+      void bridgeRef.current.client.updateEntityTitle('artifact', node.artifactId, { title: title.trim(), mode: 'manual', generatedBy: 'user' }).catch(() => undefined)
+    }
+    setNotice('文本已保存')
+  }, [bootMode, nodes, setNodes])
+
+  const toggleNoteLayout = useCallback((id: string, layout: 'text' | 'mindmap') => {
+    setNodes((current) => current.map((node) => {
+      if (node.id !== id || node.kind !== 'note') return node
+      const body = node.noteBody ?? ''
+      return {
+        ...node,
+        noteLayout: layout,
+        // Switching to mindmap seeds the outline from the current body text.
+        ...(layout === 'mindmap' ? { noteOutline: node.noteOutline ?? body } : {}),
+        displayMode: layout === 'mindmap' ? 'expanded' : node.displayMode,
+      }
+    }))
+    setNotice(layout === 'mindmap' ? '已转为大纲导图（双击可编辑大纲文本）' : '已切回文本块')
+  }, [setNodes])
+
   const renameNodeTitle = useCallback((id: string, title: string) => {
     const nextTitle = title.trim()
     if (!nextTitle) { setNotice('名称不能为空'); return }
@@ -5754,6 +5791,13 @@ export function App() {
     const node = nodes.find((item) => item.id === id)
     if (!node) return
     selectNode(id)
+    // Text nodes open the inline editor (mubu-style canvas writing), not the Reader.
+    if (node.kind === 'note') {
+      setNodeInfoId(null)
+      setImmersiveNodeId(null)
+      setNoteEditorId(id)
+      return
+    }
     if (node.opensScopeId) {
       const targetScope = scopes.find((scope) => scope.id === node.opensScopeId)
       if (targetScope?.kind === 'context') openSavedContextView(targetScope.id)
@@ -6053,6 +6097,7 @@ export function App() {
 
   const editorWorkspace = workspaceEditor?.id ? workspaces.find((workspace) => workspace.id === workspaceEditor.id) : undefined
   const nodeToRename = renameNodeId ? nodes.find((node) => node.id === renameNodeId) : undefined
+  const noteToEdit = noteEditorId ? nodes.find((node) => node.id === noteEditorId) : undefined
   const scopePath = buildScopePath(scopes, activeScope)
   return <AppShellView
     layoutDensity={layoutDensity}
@@ -6208,6 +6253,7 @@ export function App() {
         onDetails: showNodeDetails,
         onFocusSelection: selectedIds.length === 1 ? () => openProjectFocus() : undefined,
         onRenameSelection: selectedIds.length === 1 && selectedNodes.length === 1 ? () => setRenameNodeId(selectedNodes[0]!.id) : undefined,
+        onToggleNoteLayout: toggleNoteLayout,
         onCreateNodeFromAnchor: createNodeFromAnchor,
         onFilesDropped: dropFiles,
         onExternalTextDrop: (text, x, y) => {
@@ -6669,6 +6715,12 @@ export function App() {
         camera,
         onCancel: () => setRenameNodeId(null),
         onSave: (value) => renameNodeTitle(nodeToRename.id, value),
+      } : null,
+      noteEdit: noteToEdit ? {
+        node: noteToEdit,
+        camera,
+        onCancel: () => setNoteEditorId(null),
+        onSave: (input) => saveNoteBody(noteToEdit.id, input),
       } : null,
       confirmWorkspaceDelete: confirmWorkspaceId ? {
         title: '删除这个工作空间？',

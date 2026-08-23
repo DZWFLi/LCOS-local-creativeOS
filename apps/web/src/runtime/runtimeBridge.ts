@@ -456,8 +456,8 @@ export function mapGraphToState(
       ?? (anchor.type === 'scope' ? normalizeScopeId(anchor.scopeId) : undefined)
       ?? normalizeScopeId(undefined)
     const lines = note.body.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
-    const title = (lines[0] ?? '备注').slice(0, 60)
-    const bodyTail = lines.slice(1).join(' ').trim().slice(0, 120)
+    const title = (lines[0] ?? '文本').slice(0, 60)
+    const bodyTail = lines.slice(1).join(' ').trim().slice(0, 24)
     const belowTarget = anchorTarget === undefined ? undefined : { x: anchorTarget.x + 24, y: anchorTarget.y + anchorTarget.height + 24 }
     const position = belowTarget !== undefined && !rectCollides(belowTarget.x, belowTarget.y, 232, NOTE_NODE_HEIGHT)
       ? belowTarget
@@ -476,7 +476,8 @@ export function mapGraphToState(
       id: String(note.id),
       kind: 'note' as const,
       title,
-      subtitle: anchorTarget !== undefined ? (bodyTail || '锚定备注') : (bodyTail || '项目备注'),
+      // Unified text nodes: subtitle is the first body line, same as any other note.
+      subtitle: bodyTail,
       x: position.x, y: position.y,
       width: 232, height: NOTE_NODE_HEIGHT,
       displayMode: 'standard' as const,

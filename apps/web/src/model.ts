@@ -86,6 +86,12 @@ export interface CanvasNode {
   noteBody?: string
   /** GUI-6：Core Note 锚点，点击「定位」时用于相机定位 + 高亮。 */
   anchors?: readonly CanvasNoteAnchor[]
+  /** 大纲式思维导图：缩进文本即层级树（markmap 范式）；正文本身仍是 noteBody。 */
+  noteOutline?: string
+  /** 文本节点呈现模式：text=普通文本块 / mindmap=大纲导图渲染。 */
+  noteLayout?: 'text' | 'mindmap'
+  /** 用户标签（分类；导图模式下决定分支色相）。 */
+  noteTags?: readonly string[]
 }
 
 export interface CanvasEdge {

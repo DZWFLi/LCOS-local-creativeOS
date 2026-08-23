@@ -3218,6 +3218,31 @@ body,
   user-select: none;
 }
 .app-shell.v061 .workspace-frame-header:active { cursor: grabbing; }
+
+/* Inline note editor — mubu-style canvas writing (reuses the rename card shell). */
+.app-shell.v056 .inline-note-editor { width: 340px; }
+.app-shell.v056 .inline-note-editor > label { display: flex; justify-content: space-between; align-items: baseline; }
+.app-shell.v056 .inline-note-editor > label small { font-weight: 500; opacity: .7; }
+.app-shell.v056 .inline-note-editor textarea {
+  min-width: 0;
+  width: 100%;
+  min-height: 148px;
+  resize: vertical;
+  padding: 10px;
+  border: 1px solid rgba(35, 53, 72, .12);
+  border-radius: 10px;
+  outline: none;
+  color: #1d2c3a;
+  background: #f7f8f9;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.app-shell.v056 .inline-note-editor textarea:focus {
+  border-color: rgba(112, 71, 216, .34);
+  box-shadow: 0 0 0 3px rgba(112, 71, 216, .08);
+}
+.app-shell.v056 .inline-note-editor > div { grid-template-columns: 1fr 30px 30px; }
 .app-shell.v061 .workspace-frame-header b {
   color: rgba(29,45,60,.38);
   font-size: 8px;

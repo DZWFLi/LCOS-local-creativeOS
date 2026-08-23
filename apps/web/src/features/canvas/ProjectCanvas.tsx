@@ -73,6 +73,8 @@ interface Props {
   onCreateNodeFromAnchor: (kind: 'note' | 'context', x: number, y: number, from: string) => void; onFilesDropped: (files: File[], x: number, y: number) => void; onExternalTextDrop?: (text: string, x: number, y: number) => void; onMaterialTransferDrop?: (raw: string, x: number, y: number) => void
   onArrangeSelection: () => void; gridSnapEnabled?: boolean; onSetSelectionDisplayMode?: (mode: NodeDisplayMode) => void; onCopySelection: () => void; onDuplicateSelection: () => void; onCreateScopeFromSelection: () => void; onDeleteSelection: () => void; onPointerWorldChange: (point: { x: number; y: number }) => void; onSpaceCreate: (point: { x: number; y: number }) => void
   onReorganize?: () => void
+  /** 文本节点：切换 文本块 ⇄ 大纲思维导图 呈现（仅 Presentation）。 */
+  onToggleNoteLayout?: (id: string, layout: 'text' | 'mindmap') => void
   onDirectProjectViewDrop?: (targetViewId: string, ids: readonly string[]) => void
   /** GUI-6：锚定备注定位（宿主把相机移到锚点目标并脉冲高亮）。 */
   onLocateNode?: (id: string) => void
@@ -109,7 +111,7 @@ function additiveSelection(event: { shiftKey: boolean; ctrlKey: boolean; metaKey
   return event.shiftKey || event.ctrlKey || event.metaKey
 }
 
-export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-space', surfaceMode = 'project', nodes, setNodes, edges, setEdges, camera, setCamera, selectedId, selectedIds, selectedEdgeId, setSelectedEdgeId, pendingId, runId, runStatus, spaceHeld, locked = false, layoutPreview, workspaceFrames = [], workspaceMemberNodes = nodes, activeWorkspaceId = null, onWorkspaceActivate, onWorkspaceProjectionMove, onPresentationInteractionChange, onPresentationCommit, onFrameBoundsChange, selectionComposer, onSelect, onClearSelection, onMarqueeSelect, onSelectEdge, onDoubleClick, onDetails, onFocusSelection, onRenameSelection, onCreateNodeFromAnchor, onFilesDropped, onExternalTextDrop, onMaterialTransferDrop, onArrangeSelection, gridSnapEnabled = true, onSetSelectionDisplayMode, onCopySelection, onDuplicateSelection, onCreateScopeFromSelection, onDeleteSelection, onReorganize, onDirectProjectViewDrop, onPointerWorldChange, onSpaceCreate, onLocateNode, locatePulseId, pendingReviewIds = [], attentionBucketsByViewId = {}, collectionMembersByNodeId = {}, expandedCollectionScopeIds = [], openingCollectionScopeIds = [], closingCollectionScopeIds = [], onToggleCollection, onOpenContextLens, spatialRegions = [], surfaceElements = [], onSurfaceElementsChange, portalTargets = [], onOpenPortalTarget, onCreateRegion, onClearRegion, onRegionBoundsChange, onRegionBoundsCommit, onPromoteRegionToCollection }: Props) {
+export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-space', surfaceMode = 'project', nodes, setNodes, edges, setEdges, camera, setCamera, selectedId, selectedIds, selectedEdgeId, setSelectedEdgeId, pendingId, runId, runStatus, spaceHeld, locked = false, layoutPreview, workspaceFrames = [], workspaceMemberNodes = nodes, activeWorkspaceId = null, onWorkspaceActivate, onWorkspaceProjectionMove, onPresentationInteractionChange, onPresentationCommit, onFrameBoundsChange, selectionComposer, onSelect, onClearSelection, onMarqueeSelect, onSelectEdge, onDoubleClick, onDetails, onFocusSelection, onRenameSelection, onCreateNodeFromAnchor, onFilesDropped, onExternalTextDrop, onMaterialTransferDrop, onArrangeSelection, gridSnapEnabled = true, onSetSelectionDisplayMode, onCopySelection, onDuplicateSelection, onCreateScopeFromSelection, onDeleteSelection, onReorganize, onToggleNoteLayout, onDirectProjectViewDrop, onPointerWorldChange, onSpaceCreate, onLocateNode, locatePulseId, pendingReviewIds = [], attentionBucketsByViewId = {}, collectionMembersByNodeId = {}, expandedCollectionScopeIds = [], openingCollectionScopeIds = [], closingCollectionScopeIds = [], onToggleCollection, onOpenContextLens, spatialRegions = [], surfaceElements = [], onSurfaceElementsChange, portalTargets = [], onOpenPortalTarget, onCreateRegion, onClearRegion, onRegionBoundsChange, onRegionBoundsCommit, onPromoteRegionToCollection }: Props) {
   const canvasRef = useRef<HTMLDivElement | null>(null)
   const dragCandidate = useRef<DragCandidate | null>(null)
   const resizeCandidate = useRef<ResizeCandidate | null>(null)
@@ -219,6 +221,8 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
   const selectedNodesForTools = useMemo(() => selectedIds.map((id) => byId.get(id)).filter((node): node is CanvasNode => Boolean(node)), [byId, selectedIds])
   const textSelection = selectedNodesForTools.length > 0 && selectedNodesForTools.every((node) => node.kind === 'note' || detectFileIdentity(node) === 'markdown')
   const textSelectionExpanded = textSelection && selectedNodesForTools.some((node) => node.displayMode !== 'compact')
+  const noteSelection = selectedNodesForTools.length === 1 && selectedNodesForTools[0].kind === 'note' ? selectedNodesForTools[0] : null
+  const noteSelectionLayout = noteSelection?.noteLayout ?? 'text'
   const selectionBounds = selectedIds.length > 1 ? selectedVisualBounds : null
   const componentSelectionBounds = selectedVisualBounds ? { x: selectedVisualBounds.x, y: selectedVisualBounds.y, w: selectedVisualBounds.width, h: selectedVisualBounds.height } : null
   const componentProposalElements = useMemo(() => componentProposalOps.flatMap((op) => op.type === 'create-component' ? [op.component] : []), [componentProposalOps])
@@ -806,6 +810,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
         </div>
       </details>}
       {textSelection && onSetSelectionDisplayMode && <button type="button" className="selection-primary" aria-label={textSelectionExpanded ? '收起文字材料' : '直接阅读文字材料'} title="同一个文字对象只改变呈现，不创建新对象" onClick={(event) => { event.stopPropagation(); onSetSelectionDisplayMode(textSelectionExpanded ? 'compact' : 'standard') }}><span>{textSelectionExpanded ? '收起' : '直接阅读'}</span></button>}
+      {noteSelection && onToggleNoteLayout && <button type="button" className="selection-primary" aria-label={noteSelectionLayout === 'mindmap' ? '切回文本块' : '转为大纲导图'} title="同一份大纲文本，只切换呈现：文本块 ⇄ 思维导图" onClick={(event) => { event.stopPropagation(); onToggleNoteLayout(noteSelection.id, noteSelectionLayout === 'mindmap' ? 'text' : 'mindmap') }}><span>{noteSelectionLayout === 'mindmap' ? '切回文本' : '转为导图'}</span></button>}
       <button type="button" className="selection-primary lcos-agent-arrange-entry" aria-label="让智能体整理这些" title="按内容关系整理；智能体变化需要审查" onClick={(event) => { event.stopPropagation(); if (onReorganize) onReorganize(); else onArrangeSelection() }}><LayoutGrid size={15} /><span>整理这些</span></button>
       {surfaceMode === 'project' && <details className="lcos-selection-more" onPointerDown={(event) => event.stopPropagation()}>
         <summary aria-label="更多操作" title="更多操作"><Ellipsis size={15}/></summary>
