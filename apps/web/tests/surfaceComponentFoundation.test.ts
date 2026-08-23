@@ -8,6 +8,7 @@ import { ContextPackComponent, RelationshipFieldComponent, StructureMapComponent
 import { SurfaceComponentProposalLayer } from '../src/features/spatial/components/SurfaceComponentProposalLayer'
 import { PortalComponent } from '../src/features/spatial/components/PortalComponent'
 import { CheckpointComponent, ReviewComponent, WorkbenchFrameComponent } from '../src/features/spatial/components/WorkflowComponentRenderers'
+import { ActivePathComponent, CompareComponent, StackComponent } from '../src/features/spatial/components/MainComponentRenderers'
 import { LcosGlyth } from '../src/features/spatial/visual/LcosGlyth'
 import { GlythAvatar } from '../src/features/spatial/visual/CanvasSprite'
 import { SourceChainComponent } from '../src/features/spatial/components/SourceChainComponent'
@@ -39,14 +40,22 @@ describe('Spatial Component Foundation integrity', () => {
     expect(surfaceComponentContract('review').createMode).toBe('adapter-only')
     expect(surfaceComponentContract('checkpoint').createMode).toBe('adapter-only')
     expect(surfaceComponentContract('portal').createMode).toBe('adapter-only')
-    expect(surfaceComponentContract('fence').showInShelf).toBe(false)
+    // Fence rejoined the shelf (2026-08-24 catalog widening): Main can build it again.
+    expect(surfaceComponentContract('fence').showInShelf).not.toBe(false)
+    expect(surfaceComponentContract('stack').createMode).toBe('presentation')
+    expect(surfaceComponentContract('stack').surfaces).toEqual(['main', 'context'])
+    expect(surfaceComponentContract('compare').createMode).toBe('presentation')
+    expect(surfaceComponentContract('active-path').createMode).toBe('presentation')
+    expect(surfaceComponentsFor('main', true).map((item) => item.type)).toContain('stack')
+    expect(surfaceComponentsFor('main', true).map((item) => item.type)).toContain('compare')
+    expect(surfaceComponentsFor('main', true).map((item) => item.type)).toContain('fence')
+    expect(surfaceComponentsFor('workflow', true).map((item) => item.type)).toContain('active-path')
     expect(surfaceComponentContract('context-pack').surfaces).toEqual(['context'])
     expect(surfaceComponentsFor('workflow', true).map((item) => item.type)).not.toContain('workflow-step')
     expect(surfaceComponentsFor('workflow', true).map((item) => item.type)).not.toContain('context-pack')
-    expect(surfaceComponentsFor('main', true).map((item) => item.type)).not.toContain('fence')
     expect(surfaceComponentsFor('workflow', true).map((item) => item.type)).toContain('workbench')
     expect(surfaceComponentsFor('workflow', true).map((item) => item.type)).not.toEqual(expect.arrayContaining(['review', 'checkpoint']))
-    expect(surfaceComponentsFor('context', true).map((item) => item.type)).toEqual(expect.arrayContaining(['structure-map', 'evolution', 'relationship-field', 'context-pack']))
+    expect(surfaceComponentsFor('context', true).map((item) => item.type)).toEqual(expect.arrayContaining(['structure-map', 'evolution', 'relationship-field', 'context-pack', 'stack', 'compare']))
   })
 
   it('renders movable source chains from stable Project View identities', () => {
@@ -84,7 +93,36 @@ describe('Spatial Component Foundation integrity', () => {
     expect(html).toContain('客户飞书文档')
     expect(html).not.toContain('范围外页面')
     expect(html).not.toContain('今日工作页')
-    expect(html).toContain('等待真实 Agent Tool Runtime')
+    // Real tool slots replaced the dead "等待真实 Agent Tool Runtime" placeholder (2026-08-24).
+    expect(html).toContain('页面总结')
+    expect(html).not.toContain('等待真实 Agent Tool Runtime')
+  })
+
+  it('renders Stack, Compare and Active Path from bound Project View identities', () => {
+    const nodes: CanvasNode[] = [
+      { id: 'view-a', title: '方案 A', subtitle: '初稿', kind: 'note', x: 0, y: 0, width: 180, height: 100 },
+      { id: 'view-b', title: '方案 B', subtitle: '终稿', kind: 'note', x: 200, y: 0, width: 180, height: 100 },
+    ]
+    const stack = renderToStaticMarkup(createElement(StackComponent, {
+      element: element({ type: 'stack', surface: 'main', binding: { projectViewIds: ['view-a', 'view-b'] } }),
+      context: { nodes },
+    }))
+    expect(stack).toContain('方案 A')
+    expect(stack).toContain('方案 B')
+    expect(stack).toContain('mode-progress')
+    const compare = renderToStaticMarkup(createElement(CompareComponent, {
+      element: element({ type: 'compare', surface: 'main', binding: { projectViewIds: ['view-a', 'view-b'] } }),
+      context: { nodes },
+    }))
+    expect(compare).toContain('方案 A')
+    expect(compare).toContain('方案 B')
+    expect(compare).toContain('lcos-compare-divider')
+    const path = renderToStaticMarkup(createElement(ActivePathComponent, {
+      element: element({ type: 'active-path', surface: 'workflow', binding: { projectViewIds: ['view-a', 'view-b'] } }),
+      context: { nodes },
+    }))
+    expect(path).toContain('方案 A')
+    expect(path).toContain('mode-flow')
   })
 
   it('renders Review and Checkpoint only from real bound identities', () => {

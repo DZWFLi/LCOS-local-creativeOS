@@ -7,15 +7,20 @@ import { LcosGlyth } from '../spatial/visual/LcosGlyth'
 const choices: Readonly<Record<'main' | 'context' | 'workflow', readonly { kind: SurfaceIntent['kind']; label: string; hint: string }[]>> = {
   main: [
     { kind: 'organize', label: '整理成项目区域', hint: '只提出当前主画布的 Presentation 区域' },
+    { kind: 'stack-selection', label: '堆叠所选', hint: '把所选对象收成一摞堆叠，只保存真实引用' },
+    { kind: 'compare-selection', label: '对比所选', hint: '把所选对象并排对比，中间灯条分界' },
     { kind: 'prepare-workbench', label: '准备工作台', hint: '把当前真实对象绑定到一个可移动工作台' },
   ],
   context: [
     { kind: 'organize', label: '整理成主题区域', hint: '只生成当前 Presentation 边界' },
     { kind: 'show-structure', label: '拉出结构', hint: '读取当前材料的真实层级' },
     { kind: 'show-evolution', label: '拉出演进', hint: '只显示可追溯的变化记录' },
+    { kind: 'stack-selection', label: '堆叠所选', hint: '把所选对象收成一摞堆叠' },
+    { kind: 'compare-selection', label: '对比所选', hint: '把所选对象并排对比' },
   ],
   workflow: [
     { kind: 'organize', label: '整理当前工况', hint: '建立轻量区域，不把材料改成 Step' },
+    { kind: 'trace-active-path', label: '连成活动路径', hint: '把所选对象按顺序连成灯条流动的行动路径' },
   ],
 }
 

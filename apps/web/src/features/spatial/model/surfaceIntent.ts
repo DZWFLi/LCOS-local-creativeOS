@@ -11,6 +11,9 @@ export type SurfaceIntent =
   | { readonly kind: 'mark-review'; readonly targetIds: readonly string[] }
   | { readonly kind: 'prepare-workbench'; readonly targetIds: readonly string[]; readonly workbenchKind?: string }
   | { readonly kind: 'focus-region'; readonly targetIds: readonly string[] }
+  | { readonly kind: 'stack-selection'; readonly targetIds: readonly string[] }
+  | { readonly kind: 'compare-selection'; readonly targetIds: readonly string[] }
+  | { readonly kind: 'trace-active-path'; readonly targetIds: readonly string[] }
   | { readonly kind: 'restore-routine'; readonly targetIds: readonly string[] }
   | { readonly kind: 'save-current-routine'; readonly targetIds: readonly string[] }
   | { readonly kind: 'open-page-set'; readonly targetIds: readonly string[] }
@@ -33,6 +36,9 @@ function componentForIntent(surface: SurfaceKind, intent: SurfaceIntent): Surfac
   if (intent.kind === 'show-structure') return surface === 'context' ? 'structure-map' : null
   if (intent.kind === 'show-evolution') return surface === 'context' ? 'evolution' : null
   if (intent.kind === 'mark-review') return surface === 'workflow' ? 'review' : null
+  if (intent.kind === 'stack-selection') return surfaceSupportsComponent(surface, 'stack') ? 'stack' : null
+  if (intent.kind === 'compare-selection') return surfaceSupportsComponent(surface, 'compare') ? 'compare' : null
+  if (intent.kind === 'trace-active-path') return surfaceSupportsComponent(surface, 'active-path') ? 'active-path' : null
   if (intent.kind === 'prepare-workbench' || intent.kind === 'place-quick-note-near-page' || intent.kind === 'prepare-agent-tool' || intent.kind === 'collapse-inactive-pages') return surfaceSupportsComponent(surface, 'workbench') ? 'workbench' : null
   if (intent.kind === 'focus-region' || intent.kind === 'organize') return 'region'
   return null

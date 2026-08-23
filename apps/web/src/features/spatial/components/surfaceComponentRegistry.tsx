@@ -7,6 +7,7 @@ import { RegionComponent } from './RegionComponent'
 import { PortalComponent } from './PortalComponent'
 import { ContextPackComponent, EvolutionComponent, RelationshipFieldComponent, StructureMapComponent } from './ContextComponentRenderers'
 import { CheckpointComponent, ReviewComponent, WorkflowStepComponent, WorkbenchFrameComponent } from './WorkflowComponentRenderers'
+import { ActivePathComponent, CompareComponent, StackComponent } from './MainComponentRenderers'
 import { SourceChainComponent } from './SourceChainComponent'
 
 export interface SurfaceComponentDefinition extends SurfaceComponentCapabilityContract {
@@ -22,9 +23,12 @@ const rendererByType: Readonly<Record<SurfaceComponentType, ComponentType<Surfac
   evolution: EvolutionComponent,
   'relationship-field': RelationshipFieldComponent,
   'context-pack': ContextPackComponent,
+  stack: StackComponent,
+  compare: CompareComponent,
   'workflow-step': WorkflowStepComponent,
   review: ReviewComponent,
   checkpoint: CheckpointComponent,
+  'active-path': ActivePathComponent,
   workbench: WorkbenchFrameComponent,
 }
 

@@ -739,6 +739,140 @@
 }
 .lcos-alignment-guide.axis-x { top: -100000px; bottom: -100000px; width: 1px; }
 .lcos-alignment-guide.axis-y { left: -100000px; right: -100000px; height: 1px; }
+
+/* ------------------------------------------------------------------
+   Stack / Compare / Active Path — card-free component material
+   (2026-08-24 catalog widening). Same visual language as the workflow
+   components: soft panel, discrete segments, glyth presence, no borders.
+*/
+.lcos-stack-component, .lcos-compare-component, .lcos-active-path-component {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  padding: 13px 14px 11px;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 10px;
+  border: 0;
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(240, 246, 250, .52), rgba(243, 247, 250, .3) 78px, rgba(243, 247, 250, .14));
+  color: rgba(40, 53, 65, .74);
+  transition: background 160ms ease;
+  position: relative;
+  overflow: hidden;
+}
+.lcos-stack-component::before, .lcos-compare-component::before, .lcos-active-path-component::before {
+  content: '';
+  position: absolute;
+  left: 14px; right: 14px; top: 0;
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--lcos-segment-on) 0 42%, var(--lcos-segment-off) 42% 100%);
+  opacity: .5;
+}
+.lcos-stack-component.is-selected, .lcos-compare-component.is-selected, .lcos-active-path-component.is-selected {
+  background: linear-gradient(180deg, rgba(238, 245, 250, .8), rgba(242, 246, 250, .5) 78px, rgba(242, 246, 250, .3));
+}
+.lcos-stack-component.is-selected::before, .lcos-compare-component.is-selected::before, .lcos-active-path-component.is-selected::before { opacity: 1; box-shadow: 0 0 10px var(--lcos-segment-glow); }
+.lcos-stack-component > header, .lcos-compare-component > header, .lcos-active-path-component > header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.lcos-stack-component > header strong, .lcos-compare-component > header strong, .lcos-active-path-component > header strong { font-size: 11px; font-weight: 660; }
+.lcos-stack-component > header small, .lcos-compare-component > header small, .lcos-active-path-component > header small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: rgba(48, 68, 84, .46); }
+.lcos-stack-component > header .lcos-glyth, .lcos-compare-component > header .lcos-glyth, .lcos-active-path-component > header .lcos-glyth { margin-left: auto; }
+.lcos-stack-empty, .lcos-active-path-empty { align-self: center; justify-self: center; padding: 10px 12px; border-radius: 8px; font-size: 12px; color: rgba(48, 68, 84, .48); text-align: center; }
+
+/* Stack: offset layers read as a physical pile; lit count = pile size. */
+.lcos-stack-layers { margin: 0; padding: 0; list-style: none; display: grid; gap: 5px; align-content: start; }
+.lcos-stack-layers li {
+  display: grid;
+  gap: 2px;
+  padding: 6px 9px;
+  border-radius: 9px;
+  background: rgba(77, 145, 188, .08);
+  transform: translateX(calc(var(--layer-index, 0) * 5px));
+  cursor: pointer;
+}
+.lcos-stack-layers li:hover { background: rgba(77, 145, 188, .14); }
+.lcos-stack-layers li b { font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lcos-stack-layers li small { font-size: 10.5px; color: rgba(48, 68, 84, .44); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lcos-stack-layers li.lcos-stack-more { background: transparent; font-size: 10.5px; color: rgba(48, 68, 84, .42); text-align: right; cursor: default; }
+.lcos-stack-collapsed { align-self: center; padding: 9px 11px; border-radius: 9px; background: rgba(77, 145, 188, .08); font-size: 12px; font-weight: 580; }
+.lcos-stack-component footer { display: flex; align-items: center; gap: 8px; }
+
+/* Compare: two honest sides split by a vertical discrete divider. */
+.lcos-compare-panels { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: stretch; min-height: 0; }
+.lcos-compare-panels > section {
+  display: grid;
+  gap: 4px;
+  align-content: start;
+  padding: 9px 10px;
+  border-radius: 10px;
+  background: rgba(77, 145, 188, .07);
+  min-width: 0;
+  cursor: pointer;
+}
+.lcos-compare-panels > section:hover { background: rgba(77, 145, 188, .13); }
+.lcos-compare-panels b { font-size: 12px; font-weight: 620; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lcos-compare-panels small { font-size: 10.5px; color: rgba(48, 68, 84, .46); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lcos-compare-hint { font-size: 11px; color: rgba(48, 68, 84, .4); }
+.lcos-compare-divider { align-self: center; }
+
+/* Active path: steps read left to right, joined by flowing segments. */
+.lcos-active-path-steps { margin: 0; padding: 0; list-style: none; display: flex; align-items: center; gap: 9px; overflow-x: auto; min-height: 0; }
+.lcos-active-path-steps li { display: grid; gap: 5px; justify-items: start; padding: 7px 9px; border-radius: 9px; background: rgba(77, 145, 188, .07); cursor: pointer; min-width: 0; }
+.lcos-active-path-steps li:hover { background: rgba(77, 145, 188, .13); }
+.lcos-active-path-steps span { font-size: 11.5px; font-weight: 580; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Web workbench: real tool slots + session todos. */
+.lcos-web-workbench-tool-grid { display: flex; flex-wrap: wrap; gap: 5px; }
+.lcos-web-workbench-tool-grid button {
+  padding: 5px 9px;
+  border-radius: 8px;
+  background: rgba(77, 145, 188, .1);
+  color: rgba(45, 86, 113, .8);
+  font-size: 11px;
+  font-weight: 580;
+}
+.lcos-web-workbench-tool-grid button:not(:disabled):hover { background: rgba(77, 145, 188, .18); }
+.lcos-web-workbench-tool-result { display: grid; gap: 5px; padding: 8px 9px; border-radius: 8px; background: rgba(77, 145, 188, .06); }
+.lcos-web-workbench-tool-result span { display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; color: rgba(48, 68, 84, .5); }
+.lcos-web-workbench-tool-result pre { margin: 0; font: 500 11px/1.5 var(--lcos-font-mono, monospace); white-space: pre-wrap; color: rgba(40, 53, 65, .78); }
+.lcos-web-workbench-todos { display: grid; gap: 6px; }
+.lcos-web-workbench-todo-input { display: flex; align-items: center; gap: 6px; }
+.lcos-web-workbench-todo-input svg { flex: 0 0 auto; color: rgba(45, 86, 113, .6); }
+.lcos-web-workbench-todo-input input { flex: 1; min-width: 0; padding: 5px 8px; border-radius: 7px; border: 1px solid rgba(77, 145, 188, .18); background: transparent; font-size: 11px; color: inherit; }
+.lcos-web-workbench-todo-input input:focus { outline: none; border-color: rgba(77, 145, 188, .4); }
+.lcos-web-workbench-todo-input button { padding: 5px 9px; border-radius: 7px; background: rgba(77, 145, 188, .12); font-size: 11px; font-weight: 580; }
+.lcos-web-workbench-todos ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+.lcos-web-workbench-todos li { display: flex; align-items: center; gap: 7px; padding: 4px 6px; border-radius: 7px; background: rgba(77, 145, 188, .05); }
+.lcos-web-workbench-todos li span { flex: 1; min-width: 0; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lcos-web-workbench-todos li.is-done span { text-decoration: line-through; color: rgba(48, 68, 84, .38); }
+.lcos-web-workbench-todos li button { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 6px; color: rgba(45, 86, 113, .7); }
+.lcos-web-workbench-todos li button:hover { background: rgba(77, 145, 188, .12); }
+.lcos-web-workbench-todos li button.is-remove { color: rgba(140, 84, 84, .6); font-size: 13px; line-height: 1; }
+
+[data-lcos-theme='dark'] .lcos-stack-component,
+[data-lcos-theme='dark'] .lcos-compare-component,
+[data-lcos-theme='dark'] .lcos-active-path-component {
+  background: linear-gradient(180deg, rgba(38, 42, 58, .72), rgba(34, 37, 52, .5) 78px, rgba(34, 37, 52, .28));
+  color: rgba(206, 214, 232, .8);
+}
+[data-lcos-theme='dark'] .lcos-stack-component > header small,
+[data-lcos-theme='dark'] .lcos-compare-component > header small,
+[data-lcos-theme='dark'] .lcos-active-path-component > header small { color: rgba(206, 214, 232, .48); }
+[data-lcos-theme='dark'] .lcos-stack-layers li,
+[data-lcos-theme='dark'] .lcos-compare-panels > section,
+[data-lcos-theme='dark'] .lcos-active-path-steps li { background: rgba(128, 180, 216, .1); }
+[data-lcos-theme='dark'] .lcos-stack-layers li:hover,
+[data-lcos-theme='dark'] .lcos-compare-panels > section:hover,
+[data-lcos-theme='dark'] .lcos-active-path-steps li:hover { background: rgba(128, 180, 216, .17); }
+[data-lcos-theme='dark'] .lcos-stack-empty,
+[data-lcos-theme='dark'] .lcos-active-path-empty,
+[data-lcos-theme='dark'] .lcos-compare-hint { color: rgba(206, 214, 232, .44); }
 @media (prefers-reduced-motion: reduce) {
   .lcos-surface-component-frame,
   .lcos-surface-component-controls,

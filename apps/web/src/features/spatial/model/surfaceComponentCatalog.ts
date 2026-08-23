@@ -32,7 +32,7 @@ export const SURFACE_COMPONENT_CATALOG: Readonly<Record<SurfaceComponentType, Su
   fence: {
     type: 'fence', label: '围栏', description: '人工组织边界，不拥有内部对象。',
     surfaces: ['main', 'context', 'workflow'], minSize: { w: 220, h: 140 }, movable: true, resizable: true,
-    acceptsDrop: commonDrop, capabilities: { removeProjection: true }, createMode: 'presentation', showInShelf: false,
+    acceptsDrop: commonDrop, capabilities: { removeProjection: true }, createMode: 'presentation',
   },
   region: {
     type: 'region', label: '区域', description: '标出一片共同主题或状态；不改变内部对象。',
@@ -69,6 +69,16 @@ export const SURFACE_COMPONENT_CATALOG: Readonly<Record<SurfaceComponentType, Su
     surfaces: ['context'], minSize: { w: 320, h: 180 }, movable: true, resizable: true, requiresSelection: true,
     acceptsDrop: commonDrop, capabilities: { bind: true, collapse: true, removeProjection: true }, createMode: 'presentation',
   },
+  stack: {
+    type: 'stack', label: '堆叠', description: '一组对象的堆叠视图；只保存真实引用，不复制内容。',
+    surfaces: ['main', 'context'], minSize: { w: 216, h: 150 }, movable: true, resizable: true,
+    acceptsDrop: commonDrop, capabilities: { bind: true, collapse: true, removeProjection: true }, createMode: 'presentation',
+  },
+  compare: {
+    type: 'compare', label: '对比', description: '两个对象的并排对比视图；中间灯条是结构分隔。',
+    surfaces: ['main', 'context'], minSize: { w: 340, h: 190 }, movable: true, resizable: true,
+    acceptsDrop: commonDrop, capabilities: { bind: true, removeProjection: true }, createMode: 'presentation',
+  },
   'workflow-step': {
     type: 'workflow-step', label: '步骤', description: '现有 WorkflowAction 的空间适配；执行语义仍属于真实 Workflow。',
     surfaces: ['workflow'], minSize: { w: 224, h: 76 }, movable: true, resizable: false,
@@ -83,6 +93,11 @@ export const SURFACE_COMPONENT_CATALOG: Readonly<Record<SurfaceComponentType, Su
     type: 'checkpoint', label: 'Checkpoint', description: '工作现场里的可恢复检查点投影。',
     surfaces: ['workflow'], minSize: { w: 260, h: 132 }, movable: true, resizable: true,
     acceptsDrop: [], capabilities: { bind: true, collapse: true, removeProjection: true }, createMode: 'adapter-only',
+  },
+  'active-path': {
+    type: 'active-path', label: '活动路径', description: '当前行动骨架的路径投影；灯条流向即执行顺序。',
+    surfaces: ['workflow'], minSize: { w: 320, h: 120 }, movable: true, resizable: true,
+    acceptsDrop: commonDrop, capabilities: { bind: true, collapse: true, removeProjection: true }, createMode: 'presentation',
   },
   workbench: {
     type: 'workbench', label: 'Workbench', description: 'Surface 只拥有外框，内部工具继续拥有自己的 runtime/domain。',

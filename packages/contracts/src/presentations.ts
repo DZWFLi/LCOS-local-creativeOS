@@ -130,9 +130,12 @@ export type SurfaceComponentTypeV0 =
   | 'evolution'
   | 'relationship-field'
   | 'context-pack'
+  | 'stack'
+  | 'compare'
   | 'workflow-step'
   | 'review'
   | 'checkpoint'
+  | 'active-path'
   | 'workbench'
 
 export interface SurfaceBoundsV0 {
