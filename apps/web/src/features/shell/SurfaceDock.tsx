@@ -1,7 +1,8 @@
-import { CheckCircle2, ChevronRight, ChevronUp, ZoomIn, ZoomOut } from 'lucide-react'
-import { useState } from 'react'
+import { CheckCircle2, ChevronRight, ChevronUp, Monitor, Moon, Sun, ZoomIn, ZoomOut } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import type { CanvasScope } from '../../model'
 import { BenchGlyph, ContextGlyph, RootGlyph, WorkflowGlyph } from '../design/LcosGlyphs'
+import { cycleThemePreference, readThemePreference, THEME_CHANGE_EVENT, writeThemePreference, type LcosThemePreference } from '../../state/themePreference'
 
 /**
  * `SurfaceId` deliberately keeps the old work / deliver ids for persisted-project
@@ -80,6 +81,16 @@ const SURFACE_ENTRIES = [
 
 export function SurfaceDock({ surface, scopePath, activeScopeId, workbenchScopeId, onSurface, onScope, onWorkbench, onMergeWorkbench, workbenchCount, zoom, onZoomBy, onZoomReset, onProjectViewDrop }: Props) {
   const [dropCapability, setDropCapability] = useState<Extract<CapabilityId, 'context' | 'workflow'> | null>(null)
+  const [theme, setTheme] = useState<LcosThemePreference>(() => readThemePreference())
+  useEffect(() => {
+    const sync = () => setTheme(readThemePreference())
+    window.addEventListener(THEME_CHANGE_EVENT, sync)
+    window.addEventListener('storage', sync)
+    return () => {
+      window.removeEventListener(THEME_CHANGE_EVENT, sync)
+      window.removeEventListener('storage', sync)
+    }
+  }, [])
   const normalizedSurface = normalizeSurfaceId(surface)
   const capability = capabilityForSurface(normalizedSurface)
   const currentScope = scopePath.at(-1)
@@ -127,5 +138,10 @@ export function SurfaceDock({ surface, scopePath, activeScopeId, workbenchScopeI
       <button type="button" className="lcos-zoom-value" aria-label="重置缩放" title="重置为 100%" onClick={onZoomReset}>{Math.round((zoom ?? 1) * 100)}%</button>
       <button type="button" aria-label="放大" title="放大画布" onClick={() => onZoomBy(1.25)}><ZoomIn size={15}/></button>
     </div>}
+    <div className="lcos-theme-toggle" aria-label="主题">
+      <button type="button" className={`mode-${theme}`} aria-label={`主题：${theme === 'auto' ? '跟随系统' : theme === 'dark' ? '深色' : '浅色'}，点击切换`} title={`主题：${theme === 'auto' ? '跟随系统' : theme === 'dark' ? '深色' : '浅色'}（点击切换 浅色 → 深色 → 跟随系统）`} onClick={() => writeThemePreference(cycleThemePreference(theme))}>
+        {theme === 'dark' ? <Moon size={15}/> : theme === 'light' ? <Sun size={15}/> : <Monitor size={15}/>}
+      </button>
+    </div>
   </nav>
 }

@@ -2528,6 +2528,41 @@
   .capture-float::before { transition: none; }
 }
 
+/* Theme toggle — compact pill at the bottom dock's right edge, always available
+   (light / dark / follow-OS cycle). Mirrors the zoom pill material. */
+.lcos-reconstructed .lcos-theme-toggle {
+  position: absolute;
+  right: 12px;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  padding: 3px;
+  border: 1px solid rgba(65,58,80,.085);
+  border-radius: 17px;
+  background: rgba(249,249,252,.76);
+  backdrop-filter: blur(22px) saturate(1.10);
+  box-shadow: 0 10px 30px rgba(39,34,55,.09), inset 0 1px 0 rgba(255,255,255,.82);
+  z-index: 2;
+}
+.lcos-reconstructed .lcos-theme-toggle button {
+  height: 26px !important;
+  min-width: 26px !important;
+  display: grid !important;
+  place-items: center !important;
+  border: 0;
+  border-radius: 13px;
+  background: transparent;
+  color: #5a5663;
+  cursor: pointer;
+}
+.lcos-reconstructed .lcos-theme-toggle button:hover { background: rgba(var(--lcos-ui-signal-rgb), .1); color: var(--lcos-ui-signal); }
+[data-lcos-theme='dark'] .lcos-reconstructed .lcos-theme-toggle {
+  border-color: rgba(214,208,232,.14);
+  background: rgba(34,32,46,.82);
+  box-shadow: 0 10px 30px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.04);
+}
+[data-lcos-theme='dark'] .lcos-reconstructed .lcos-theme-toggle button { color: rgba(214,208,232,.8); }
+
 /* -----------------------------------------------------------------------
    0.1 Collection morphology — Spatial-inspired folder/stack, LCOS-native.
    A Collection is a persistent grouping object, not a rectangular Region and
