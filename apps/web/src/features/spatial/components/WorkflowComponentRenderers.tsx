@@ -1,9 +1,9 @@
 import { CheckCircle2, History, Play, SquareStack } from 'lucide-react'
 import type { ReactNode } from 'react'
 import type { SurfaceComponentRenderProps } from './surfaceComponentTypes'
-import { LcosGlyph } from '../visual/LcosGlyph'
+import { LcosGlyth } from '../visual/LcosGlyth'
 import { LightSegment } from '../visual/LightSegment'
-import { resolveSpatialSignal, type SpatialRuntimeSignal } from '../visual/spatialSignal'
+import { resolveSpatialSignal, shouldShowGlyth, type SpatialRuntimeSignal } from '../visual/spatialSignal'
 import { WebWorkbench } from '../../workbench/WebWorkbench'
 
 function bindingLabel(element: SurfaceComponentRenderProps['element']) {
@@ -17,7 +17,7 @@ function bindingLabel(element: SurfaceComponentRenderProps['element']) {
 
 function Header({ icon, title, hint, selected, semantic, runtime = 'idle' }: { icon: ReactNode; title: string; hint: string; selected?: boolean; semantic?: string; runtime?: SpatialRuntimeSignal }) {
   const signal = resolveSpatialSignal({ selected, semantic, runtime })
-  return <header className="lcos-workflow-component-header" data-spatial-signal={signal.glyph}><span className="lcos-workflow-component-icon">{icon}</span><span><strong>{title}</strong><small>{hint}</small></span><LightSegment axis="horizontal" length={20} active={signal.segmentActive}/><LcosGlyph state={signal.glyph}/></header>
+  return <header className="lcos-workflow-component-header" data-spatial-signal={signal.glyph}><span className="lcos-workflow-component-icon">{icon}</span><span><strong>{title}</strong><small>{hint}</small></span><LightSegment axis="horizontal" length={20} active={signal.segmentActive}/>{shouldShowGlyth(signal) && <LcosGlyth state={signal.glyph}/>}</header>
 }
 
 export function WorkflowStepComponent({ element, selected }: SurfaceComponentRenderProps) {

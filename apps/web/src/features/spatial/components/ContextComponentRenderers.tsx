@@ -1,7 +1,7 @@
 import { ArrowUpRight, GitBranch, History, Layers3, Link2, Sparkles } from 'lucide-react'
 import type { CSSProperties, ReactNode } from 'react'
 import { visibleHierarchyRows } from '../../presentation/presentationHierarchy'
-import { LcosGlyph } from '../visual/LcosGlyph'
+import { LcosGlyth } from '../visual/LcosGlyth'
 import { LightSegment } from '../visual/LightSegment'
 import type { SurfaceComponentRenderProps } from './surfaceComponentTypes'
 
@@ -18,7 +18,7 @@ function Header({ icon, title, hint, selected }: { icon: ReactNode; title: strin
   return <header className="lcos-context-component-header">
     <span className="lcos-context-component-icon">{icon}</span>
     <span><strong>{title}</strong><small>{hint}</small></span>
-    <LightSegment axis="horizontal" length={20} active={selected}/><LcosGlyph state={selected ? 'focus' : 'stable'} />
+    <LightSegment axis="horizontal" length={20} active={selected}/>{selected && <LcosGlyth state="focus" />}
   </header>
 }
 

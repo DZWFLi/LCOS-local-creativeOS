@@ -125,6 +125,7 @@ export type SurfaceComponentTypeV0 =
   | 'fence'
   | 'region'
   | 'portal'
+  | 'source-chain'
   | 'structure-map'
   | 'evolution'
   | 'relationship-field'
@@ -189,6 +190,8 @@ export interface PresentationStateV0 {
   spatialRegions?: PresentationSpatialRegionV0[]
   /** Trusted spatial components. They store Presentation geometry + identity-only binding. */
   surfaceElements?: SurfaceElementV0[]
+  /** Marks that the replaceable first-use Surface composition has already run. */
+  surfaceBootstrapVersion?: number
   trackSegments?: ContextTrackSegmentV0[]
   workflowOperators?: Record<string, WorkflowOperatorV0>
   /** Workflow-only action skeleton. Materials remain memberViewIds and are attached by reference. */

@@ -8,7 +8,8 @@ import { ContextPackComponent, RelationshipFieldComponent, StructureMapComponent
 import { SurfaceComponentProposalLayer } from '../src/features/spatial/components/SurfaceComponentProposalLayer'
 import { PortalComponent } from '../src/features/spatial/components/PortalComponent'
 import { CheckpointComponent, ReviewComponent, WorkbenchFrameComponent } from '../src/features/spatial/components/WorkflowComponentRenderers'
-import { LcosGlyph } from '../src/features/spatial/visual/LcosGlyph'
+import { LcosGlyth } from '../src/features/spatial/visual/LcosGlyth'
+import { SourceChainComponent } from '../src/features/spatial/components/SourceChainComponent'
 import { boundRegionSemanticForView, resolveSpatialSignal } from '../src/features/spatial/visual/spatialSignal'
 import { surfaceComponentRegistry } from '../src/features/spatial/components/surfaceComponentRegistry'
 import { surfaceComponentContract, surfaceComponentsFor } from '../src/features/spatial/model/surfaceComponentCatalog'
@@ -36,10 +37,24 @@ describe('Spatial Component Foundation integrity', () => {
     expect(surfaceComponentContract('review').createMode).toBe('adapter-only')
     expect(surfaceComponentContract('checkpoint').createMode).toBe('adapter-only')
     expect(surfaceComponentContract('portal').createMode).toBe('adapter-only')
+    expect(surfaceComponentContract('fence').showInShelf).toBe(false)
+    expect(surfaceComponentContract('context-pack').surfaces).toEqual(['context'])
     expect(surfaceComponentsFor('workflow', true).map((item) => item.type)).not.toContain('workflow-step')
+    expect(surfaceComponentsFor('workflow', true).map((item) => item.type)).not.toContain('context-pack')
+    expect(surfaceComponentsFor('main', true).map((item) => item.type)).not.toContain('fence')
     expect(surfaceComponentsFor('workflow', true).map((item) => item.type)).toContain('workbench')
     expect(surfaceComponentsFor('workflow', true).map((item) => item.type)).not.toEqual(expect.arrayContaining(['review', 'checkpoint']))
     expect(surfaceComponentsFor('context', true).map((item) => item.type)).toEqual(expect.arrayContaining(['structure-map', 'evolution', 'relationship-field', 'context-pack']))
+  })
+
+  it('renders movable source chains from stable Project View identities', () => {
+    const nodes: CanvasNode[] = [{ id: 'source-a', title: '客户飞书 Brief', subtitle: '已引用 8 处', kind: 'source', x: 0, y: 0, width: 180, height: 100 }]
+    const html = renderToStaticMarkup(createElement(SourceChainComponent, {
+      element: element({ type: 'source-chain', binding: { projectViewIds: ['source-a'] } }), context: { nodes },
+    }))
+    expect(html).toContain('客户飞书 Brief')
+    expect(html).toContain('双击阅读')
+    expect(html).not.toContain('pointer-events: none')
   })
 
   it('renders Workbench from bound Project Views instead of hard-coded routines', () => {
@@ -118,13 +133,13 @@ describe('Spatial Component Foundation integrity', () => {
     expect(html).not.toContain('lcos-surface-component-chrome')
   })
 
-  it('keeps one recognizable Glyph body while semantic states change its pose', () => {
+  it('keeps one recognizable Glyth body while semantic states change its pose', () => {
     for (const state of ['stable', 'focus', 'working', 'waiting', 'blocked', 'protected', 'candidate'] as const) {
-      const html = renderToStaticMarkup(createElement(LcosGlyph, { state }))
-      expect(html).toContain(`data-glyph-state="${state}"`)
-      expect(html.match(/lcos-spatial-glyph-shell/g)).toHaveLength(4)
-      expect(html).toContain('lcos-spatial-glyph-core')
-      expect(html).toContain('lcos-spatial-glyph-eyes')
+      const html = renderToStaticMarkup(createElement(LcosGlyth, { state }))
+      expect(html).toContain(`data-glyth-state="${state}"`)
+      expect(html.match(/data-glyth-shell=/g)).toHaveLength(4)
+      expect(html).toContain('lcos-glyth-core')
+      expect(html).toContain('lcos-glyth-eyes')
     }
   })
 

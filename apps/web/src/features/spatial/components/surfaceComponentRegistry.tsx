@@ -7,6 +7,7 @@ import { RegionComponent } from './RegionComponent'
 import { PortalComponent } from './PortalComponent'
 import { ContextPackComponent, EvolutionComponent, RelationshipFieldComponent, StructureMapComponent } from './ContextComponentRenderers'
 import { CheckpointComponent, ReviewComponent, WorkflowStepComponent, WorkbenchFrameComponent } from './WorkflowComponentRenderers'
+import { SourceChainComponent } from './SourceChainComponent'
 
 export interface SurfaceComponentDefinition extends SurfaceComponentCapabilityContract {
   readonly renderer: ComponentType<SurfaceComponentRenderProps>
@@ -16,6 +17,7 @@ const rendererByType: Readonly<Record<SurfaceComponentType, ComponentType<Surfac
   fence: FenceComponent,
   region: RegionComponent,
   portal: PortalComponent,
+  'source-chain': SourceChainComponent,
   'structure-map': StructureMapComponent,
   evolution: EvolutionComponent,
   'relationship-field': RelationshipFieldComponent,

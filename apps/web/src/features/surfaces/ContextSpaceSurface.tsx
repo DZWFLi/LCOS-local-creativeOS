@@ -1,5 +1,5 @@
 import { Layers3 } from 'lucide-react'
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react'
 import type { AttentionBucketV0 } from '@local-creative-os/contracts'
 import type { CanvasEdge, CanvasNode } from '../../model'
@@ -30,6 +30,7 @@ import { boundsAroundSurfaceRects, surfaceViewportOrigin } from '../spatial/mode
 import { applySurfaceOps, type SurfaceOp, validateSurfaceOps } from '../spatial/model/surfaceOps'
 import { resolveSurfaceIntent, type SurfaceIntent } from '../spatial/model/surfaceIntent'
 import { AgentSurfaceComposer } from './AgentSurfaceComposer'
+import type { SurfaceElement } from '../spatial/model/surfaceElementTypes'
 
 interface Props {
   projectId: string
@@ -66,6 +67,34 @@ function seedContextPlacement(nodes: readonly CanvasNode[]) {
   }))
 }
 
+function seedContextComponents(projectId: string, nodes: readonly CanvasNode[], edgeCount: number, historyCount: number, sourceLabel?: string): SurfaceElement[] {
+  if (!nodes.length) return []
+  const sourceIds = [...nodes]
+    .sort((a, b) => Number(Boolean(b.anchors?.length)) - Number(Boolean(a.anchors?.length)))
+    .slice(0, Math.min(4, nodes.length))
+    .map((node) => node.id)
+  const elements: SurfaceElement[] = [{
+    id: 'context-bootstrap:source-chain', projectId, surface: 'context', type: 'source-chain',
+    bounds: { x: 96, y: 72, w: 680, h: 142 },
+    binding: { projectViewIds: sourceIds }, presentation: { variant: sourceLabel || '本轮来源', zIndex: 4 },
+  }, {
+    id: 'context-bootstrap:structure', projectId, surface: 'context', type: 'structure-map',
+    bounds: { x: 96, y: 266, w: 440, h: 320 },
+    binding: { projectViewIds: nodes.slice(0, 12).map((node) => node.id) }, presentation: { zIndex: 3 },
+  }]
+  if (historyCount > 0) elements.push({
+    id: 'context-bootstrap:evolution', projectId, surface: 'context', type: 'evolution',
+    bounds: { x: 594, y: 266, w: 440, h: 254 },
+    binding: { projectViewIds: nodes.slice(0, 8).map((node) => node.id) }, presentation: { zIndex: 3 },
+  })
+  if (edgeCount > 0) elements.push({
+    id: 'context-bootstrap:relationship', projectId, surface: 'context', type: 'relationship-field',
+    bounds: { x: 594, y: historyCount > 0 ? 568 : 266, w: 520, h: 300 },
+    binding: { projectViewIds: nodes.slice(0, 14).map((node) => node.id) }, presentation: { zIndex: 3 },
+  })
+  return elements
+}
+
 /**
  * Default saved-Context work scene.
  *
@@ -77,7 +106,7 @@ export function ContextSpaceSurface(props: Props) {
   const [camera, setCamera] = useSpatialSessionCamera(props.projectId, props.scopeId, 'context-space', { x: 0, y: 0, zoom: 1 })
   const [draftPositions, setDraftPositions] = usePresentationDraftPositions(props.projectId, props.scopeId, 'context-space')
   const [pinnedIds, setPinnedIds] = usePresentationDraftPinnedIds(props.projectId, props.scopeId, 'context-space')
-  const [surfaceElements, setSurfaceElements] = usePresentationSurfaceElements(props.projectId, props.scopeId, 'context-space')
+  const [surfaceElements, setSurfaceElements, surfaceBootstrapped] = usePresentationSurfaceElements(props.projectId, props.scopeId, 'context-space')
   const [proposalOps, setProposalOps] = useState<readonly SurfaceOp[]>([])
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const drag = useRef<SpatialPointerSession>(IDLE_SPATIAL_POINTER)
@@ -107,6 +136,11 @@ export function ContextSpaceSurface(props: Props) {
   const understandingRegions = useMemo(() => contextUnderstandingRegions(hierarchy, items), [hierarchy, items])
   const edgeBounds = useMemo(() => spatialBoundsForPlacements(spatialItems, 160), [spatialItems])
   useSpatialFocusRequest({ request: props.focusRequest, items: spatialItems, testId: 'context-space-spatial', setCamera })
+
+  useEffect(() => {
+    if (surfaceBootstrapped || surfaceElements.length || !props.nodes.length) return
+    setSurfaceElements(seedContextComponents(props.projectId, props.nodes, visibleEdges.length, props.runtime?.history.length ?? 0, props.source?.label))
+  }, [props.nodes, props.projectId, props.runtime?.history.length, props.source?.label, setSurfaceElements, surfaceBootstrapped, surfaceElements.length, visibleEdges.length])
 
   const beginDrag = (event: ReactPointerEvent<HTMLDivElement>, id: string) => {
     if (event.button !== 0) return
@@ -147,7 +181,6 @@ export function ContextSpaceSurface(props: Props) {
       <div><strong>上下文</strong><span>理解现场</span></div>
       <div className="lcos-context-heading-actions"><small>{items.length} 项 · 同一份 Context</small><ContextLensSwitch active="context-space" onSelect={props.onSurfaceChange}/></div>
     </header>
-    {props.source && <div className={`lcos-context-origin-chip source-${props.source.kind}`} title="这只是来源记录，不是操作入口"><i/><span>{props.source.label}</span><small>来源</small></div>}
     <SpatialCanvas camera={camera} setCamera={setCamera} marqueeItems={spatialItems} minimapItems={spatialItems} minimapLabel="Context" onMarqueeSelect={props.onMarqueeSelect} className="lcos-context-space-stage lcos-presentation-spatial" worldClassName="lcos-presentation-world lcos-context-space-world" testId="context-space-spatial" overlays={overlay} onPointerCancel={() => { drag.current = endSpatialPointer(); setDraggingId(null) }} onExternalDrop={(kind, raw, _screen, point) => {
       if (kind !== 'project-view' || !props.onImportProjectView) return
       try {

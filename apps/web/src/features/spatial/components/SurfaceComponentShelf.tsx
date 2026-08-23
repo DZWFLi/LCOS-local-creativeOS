@@ -25,7 +25,8 @@ export function SurfaceComponentShelf({ projectId, surface, elements, selectionI
   const [dragPreview, setDragPreview] = useState<{ readonly type: SurfaceComponentType; readonly label: string; readonly x: number; readonly y: number; readonly valid: boolean } | null>(null)
   const closeTimer = useRef<number | null>(null)
   const cleanupDrag = useRef<(() => void) | null>(null)
-  const options = surfaceComponentsFor(surface, true)
+  const suppressClick = useRef(false)
+  const options = surfaceComponentsFor(surface, true).filter((entry) => !entry.requiresSelection || selectionIds.length > 0)
   useEffect(() => () => {
     if (closeTimer.current !== null) window.clearTimeout(closeTimer.current)
     cleanupDrag.current?.()
@@ -75,6 +76,7 @@ export function SurfaceComponentShelf({ projectId, surface, elements, selectionI
   const beginDrag = (entry: (typeof options)[number], event: ReactPointerEvent<HTMLButtonElement>) => {
     if (event.button !== 0) return
     event.preventDefault(); event.stopPropagation()
+    suppressClick.current = false
     cleanupDrag.current?.()
     const pointerId = event.pointerId
     const start = { x: event.clientX, y: event.clientY }
@@ -98,7 +100,7 @@ export function SurfaceComponentShelf({ projectId, surface, elements, selectionI
       if (pointer.pointerId !== pointerId) return
       const point = moved ? worldPointAt(pointer.clientX, pointer.clientY) : null
       cleanup()
-      if (point) create(entry.type, point)
+      if (point) { suppressClick.current = true; create(entry.type, point) }
     }
     const cancel = (pointer: PointerEvent) => { if (pointer.pointerId === pointerId) cleanup() }
     const escape = (keyboard: KeyboardEvent) => { if (keyboard.key === 'Escape') cleanup() }
@@ -123,13 +125,15 @@ export function SurfaceComponentShelf({ projectId, surface, elements, selectionI
   return <div className={`lcos-surface-component-shelf ${open ? 'is-open' : ''}`} data-surface-component-shelf={surface} onPointerEnter={keepOpen} onPointerLeave={scheduleClose} onFocusCapture={keepOpen} onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) scheduleClose() }}>
     <button type="button" className="lcos-surface-component-shelf-toggle" aria-expanded={open} aria-label="添加现场组件" title="添加现场组件" onClick={() => setOpen((current) => !current)}>＋</button>
     {open && <div className="lcos-surface-component-shelf-menu" role="menu">
-      <header><strong>现场组件</strong><small>拖到画布；键盘 Enter 在当前视野创建</small></header>
+      <header><strong>添加到当前现场</strong><small>拖到画布；按 Enter 放在当前视野</small></header>
       {options.map((entry) => {
-        const disabled = Boolean(entry.requiresSelection && !selectionIds.length)
-        return <button key={entry.type} type="button" role="menuitem" draggable={false} disabled={disabled} title={disabled ? '先选择要放入的对象' : undefined} onPointerDown={(event) => { if (!disabled) beginDrag(entry, event) }} onKeyDown={(event) => { if (!disabled && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); create(entry.type) } }}><span>{entry.label}</span><small>{disabled ? '需要当前选择' : entry.description}</small></button>
+        return <button key={entry.type} type="button" role="menuitem" draggable={false} onPointerDown={(event) => beginDrag(entry, event)} onClick={() => { if (suppressClick.current) { suppressClick.current = false; return }; create(entry.type) }} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); create(entry.type) } }}>
+          <i className={`lcos-component-preview type-${entry.type}`} aria-hidden="true"><b/><b/><b/></i>
+          <span>{entry.label}</span><small>{entry.description}</small>
+        </button>
       })}
       {portalTargets.length > 0 && <details className="lcos-surface-portal-targets"><summary>入口<small>指向已有工作现场</small></summary><div>{portalTargets.map((target) => <button key={target.id} type="button" role="menuitem" onClick={() => createPortal(target)}><span>{target.label}</span><small>{target.kind}</small></button>)}</div></details>}
     </div>}
-    {dragPreview && <div className={`lcos-surface-component-drag-ghost ${dragPreview.valid ? 'is-valid' : ''}`} style={{ left: dragPreview.x, top: dragPreview.y }} aria-hidden="true"><span>＋</span><strong>{dragPreview.label}</strong><small>{dragPreview.valid ? '松开放置' : '拖到画布'}</small></div>}
+    {dragPreview && <div className={`lcos-surface-component-drag-ghost ${dragPreview.valid ? 'is-valid' : ''}`} style={{ left: dragPreview.x, top: dragPreview.y }} aria-hidden="true"><i className={`lcos-component-preview type-${dragPreview.type}`}><b/><b/><b/></i><strong>{dragPreview.label}</strong><small>{dragPreview.valid ? '松开放置' : '拖到画布'}</small></div>}
   </div>
 }

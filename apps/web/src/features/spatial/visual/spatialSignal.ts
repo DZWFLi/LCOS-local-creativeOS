@@ -1,4 +1,4 @@
-import type { LcosGlyphState } from './LcosGlyph'
+import type { LcosGlythState } from './LcosGlyth'
 import type { SurfaceElement } from '../model/surfaceElementTypes'
 
 export type SpatialRuntimeSignal = 'idle' | 'active' | 'processing' | 'waiting' | 'blocked' | 'failed' | 'complete'
@@ -10,7 +10,7 @@ export interface SpatialSignalInput {
 }
 
 export interface SpatialSignalPresentation {
-  readonly glyph: LcosGlyphState
+  readonly glyph: LcosGlythState
   readonly matrixActive: boolean
   readonly segmentActive: boolean
   readonly signalClass: string
@@ -25,7 +25,7 @@ const matches = (value: string, pattern: RegExp) => pattern.test(value)
 export function resolveSpatialSignal(input: SpatialSignalInput): SpatialSignalPresentation {
   const semantic = input.semantic?.trim().toLowerCase() ?? ''
   const runtime = input.runtime ?? 'idle'
-  let glyph: LcosGlyphState = input.selected ? 'focus' : 'stable'
+  let glyph: LcosGlythState = input.selected ? 'focus' : 'stable'
 
   if (matches(semantic, /candidate|explore|draft|idea|候选|探索|草稿|灵感/)) glyph = 'candidate'
   if (matches(semantic, /protect|frozen|locked|confirmed|保护|冻结|已确认|不要动/)) glyph = 'protected'
@@ -40,6 +40,11 @@ export function resolveSpatialSignal(input: SpatialSignalInput): SpatialSignalPr
     segmentActive: Boolean(input.selected || glyph === 'working' || glyph === 'waiting' || glyph === 'blocked'),
     signalClass: `signal-${glyph}`,
   }
+}
+
+/** Glyth is semantic punctuation: omit it when there is nothing meaningful to say. */
+export function shouldShowGlyth(signal: SpatialSignalPresentation): boolean {
+  return signal.glyph !== 'stable'
 }
 
 /**

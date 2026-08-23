@@ -10,7 +10,7 @@ const registry = read('apps/web/src/features/spatial/components/surfaceComponent
 const frame = read('apps/web/src/features/spatial/components/SurfaceFrame.tsx')
 const visual = read('apps/web/src/spatial-components.css')
 const light = read('apps/web/src/features/spatial/visual/LightSegment.tsx')
-const glyph = read('apps/web/src/features/spatial/visual/LcosGlyph.tsx')
+const glyth = read('apps/web/src/features/spatial/visual/LcosGlyth.tsx')
 const matrix = read('apps/web/src/features/spatial/visual/MatrixActivity.tsx')
 const reduced = read('apps/web/src/features/spatial/visual/useReducedSpatialMotion.ts')
 const draft = read('apps/web/src/state/presentationDraftState.ts')
@@ -34,8 +34,8 @@ const checks = [
   ['remove-projection has no Project delete path', ops.includes("type: 'remove-projection'") && ops.includes('elements.filter((element) => element.id !== op.elementId)') && !ops.includes('deleteProject')],
   ['Light Segment is static-readable structural material', visual.includes('.lcos-light-segment') && visual.includes('background: linear-gradient')],
   ['Matrix Activity can be completely off', matrix.includes('if (!active) return null')],
-  ['LCOS Glyph cannot intercept pointer/drop', visual.includes('.lcos-spatial-glyph') && visual.includes('pointer-events: none !important')],
-  ['Reduced Motion is a shared store consumed by actual primitives', reduced.includes('useSyncExternalStore') && frame.includes('useReducedSpatialMotion') && light.includes('useReducedSpatialMotion') && glyph.includes('useReducedSpatialMotion') && matrix.includes('useReducedSpatialMotion')],
+  ['LCOS Glyth cannot intercept pointer/drop', visual.includes('.lcos-glyth') && visual.includes('pointer-events: none !important')],
+  ['Reduced Motion is a shared store consumed by actual primitives', reduced.includes('useSyncExternalStore') && frame.includes('useReducedSpatialMotion') && light.includes('useReducedSpatialMotion') && glyth.includes('useReducedSpatialMotion') && matrix.includes('useReducedSpatialMotion')],
   ['SurfaceOps validates geometry/capability', ops.includes('validateSurfaceOp') && ops.includes('surfaceSupportsComponent') && ops.includes('minimum size')],
   ['SurfaceOps proposal batches are fail-closed', ops.includes('validateSurfaceOps') && ops.includes('one invalid op means zero durable changes') && ops.includes('if (!validation.ok) return [...elements]')],
   ['Pointer cancel rolls preview back instead of committing', frame.includes('const cancel = (pointer: PointerEvent)') && frame.includes("window.addEventListener('pointercancel', cancel)")],

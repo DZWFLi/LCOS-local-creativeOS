@@ -9,6 +9,8 @@ export interface SurfaceComponentCapabilityContract {
   readonly movable: boolean
   readonly resizable: boolean
   readonly requiresSelection?: boolean
+  /** Human shelf visibility. Agent and semantic operations may still use hidden contracts. */
+  readonly showInShelf?: boolean
   readonly acceptsDrop: readonly SurfaceDropKind[]
   readonly capabilities: {
     readonly bind?: boolean
@@ -30,10 +32,10 @@ export const SURFACE_COMPONENT_CATALOG: Readonly<Record<SurfaceComponentType, Su
   fence: {
     type: 'fence', label: '围栏', description: '人工组织边界，不拥有内部对象。',
     surfaces: ['main', 'context', 'workflow'], minSize: { w: 220, h: 140 }, movable: true, resizable: true,
-    acceptsDrop: commonDrop, capabilities: { removeProjection: true }, createMode: 'presentation',
+    acceptsDrop: commonDrop, capabilities: { removeProjection: true }, createMode: 'presentation', showInShelf: false,
   },
   region: {
-    type: 'region', label: '语境区', description: '表达共同语境或状态场，不是透明围栏换皮。',
+    type: 'region', label: '区域', description: '标出一片共同主题或状态；不改变内部对象。',
     surfaces: ['main', 'context', 'workflow'], minSize: { w: 260, h: 170 }, movable: true, resizable: true,
     acceptsDrop: commonDrop, capabilities: { bind: true, collapse: true, removeProjection: true }, createMode: 'presentation',
   },
@@ -41,6 +43,11 @@ export const SURFACE_COMPONENT_CATALOG: Readonly<Record<SurfaceComponentType, Su
     type: 'portal', label: '入口', description: '指向另一个稳定工作现场，不复制目标内容。',
     surfaces: ['main', 'context', 'workflow'], minSize: { w: 196, h: 92 }, movable: true, resizable: false,
     acceptsDrop: [], capabilities: { bind: true, lens: true, removeProjection: true }, createMode: 'adapter-only',
+  },
+  'source-chain': {
+    type: 'source-chain', label: '来源链', description: '可移动、可展开的来源脉络；引用真实对象，不复制内容。',
+    surfaces: ['context'], minSize: { w: 520, h: 126 }, movable: true, resizable: true,
+    acceptsDrop: commonDrop, capabilities: { bind: true, collapse: true, removeProjection: true }, createMode: 'adapter-only',
   },
   'structure-map': {
     type: 'structure-map', label: '结构', description: '当前材料的结构 Lens；内部可重算，外框属于 Surface。',
@@ -59,7 +66,7 @@ export const SURFACE_COMPONENT_CATALOG: Readonly<Record<SurfaceComponentType, Su
   },
   'context-pack': {
     type: 'context-pack', label: 'Context Pack', description: '把当前选择准备成可读范围，不复制 Project Truth。',
-    surfaces: ['context', 'workflow'], minSize: { w: 320, h: 180 }, movable: true, resizable: true, requiresSelection: true,
+    surfaces: ['context'], minSize: { w: 320, h: 180 }, movable: true, resizable: true, requiresSelection: true,
     acceptsDrop: commonDrop, capabilities: { bind: true, collapse: true, removeProjection: true }, createMode: 'presentation',
   },
   'workflow-step': {
@@ -90,7 +97,7 @@ export function surfaceComponentContract(type: SurfaceComponentType): SurfaceCom
 
 export function surfaceComponentsFor(surface: SurfaceKind, createableOnly = false): SurfaceComponentCapabilityContract[] {
   return Object.values(SURFACE_COMPONENT_CATALOG)
-    .filter((entry) => entry.surfaces.includes(surface) && (!createableOnly || entry.createMode === 'presentation'))
+    .filter((entry) => entry.surfaces.includes(surface) && (!createableOnly || (entry.createMode === 'presentation' && entry.showInShelf !== false)))
 }
 
 export function surfaceSupportsComponent(surface: SurfaceKind, type: SurfaceComponentType): boolean {
