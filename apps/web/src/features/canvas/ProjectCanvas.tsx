@@ -1100,10 +1100,17 @@ function EdgePath({ edge, from, to, selected, focused, dimmed, onSelect, onCut, 
   const x1 = from.x + from.width, y1 = from.y + from.height / 2, x2 = to.x, y2 = to.y + to.height / 2
   const d = `M ${x1} ${y1} C ${x1 + 80} ${y1}, ${x2 - 80} ${y2}, ${x2} ${y2}`
   const mx = (x1 + x2) / 2, my = (y1 + y2) / 2
-  const select = (event: React.PointerEvent<SVGPathElement>) => { event.stopPropagation(); onSelect(edge.id) }
+  const select = (event: React.PointerEvent<SVGElement>) => { event.stopPropagation(); onSelect(edge.id) }
+  const relationLabel = edge.label?.trim()
+  const visibleLabel = relationLabel && relationLabel.length > 18 ? `${relationLabel.slice(0, 18)}…` : relationLabel
+  const labelWidth = visibleLabel ? Math.max(36, Math.min(128, visibleLabel.length * 7 + 18)) : 0
   return <>
     <path className="edge-hit" data-edge-id={edge.id} d={d} onPointerDown={select} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation() }} />
     <path className={`edge ${edge.kind} ${edge.active ? 'active' : ''} ${edge.scope ? `edge-scope-${edge.scope}` : ''} ${focused ? 'focused' : ''} ${selected ? 'selected' : ''} ${dimmed ? 'dimmed' : ''}`} data-edge-id={edge.id} data-edge-from={edge.from} data-edge-to={edge.to} d={d} onPointerDown={select} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation() }} />
+    {visibleLabel && !dimmed && <g className={`lcos-edge-label ${selected ? 'is-selected' : ''}`} transform={`translate(${mx} ${my})`} onPointerDown={select}>
+      <rect x={-labelWidth / 2} y={-10} width={labelWidth} height={20} rx={8}/>
+      <text textAnchor="middle" dominantBaseline="central">{visibleLabel}</text>
+    </g>}
     {edge.active && <circle className="edge-runner" r="2.4"><animateMotion dur="2.4s" repeatCount="indefinite" path={d} /></circle>}
     {selected && <g className="edge-controls" data-testid={`edge-controls-${edge.id}`}>
       <circle className="edge-control edge-terminal" data-testid={`edge-reconnect-from-${edge.id}`} cx={x1} cy={y1} r="7" onPointerDown={(event) => onReconnectStart('from', event)} />

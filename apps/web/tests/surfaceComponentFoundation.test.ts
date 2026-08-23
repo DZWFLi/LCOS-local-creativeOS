@@ -17,6 +17,7 @@ import { applySurfaceOp, applySurfaceOps, validateSurfaceOp, validateSurfaceOps 
 import { placeSurfaceComponent } from '../src/features/spatial/model/surfaceGeometry'
 import { resolveSurfaceIntent } from '../src/features/spatial/model/surfaceIntent'
 import { SurfaceObject } from '../src/features/surfaces/SurfaceObject'
+import { applySourceChainEdit } from '../src/features/spatial/model/sourceChainOps'
 
 const element = (patch: Partial<SurfaceElement> = {}): SurfaceElement => ({
   id: 'surface:region:1',
@@ -55,6 +56,19 @@ describe('Spatial Component Foundation integrity', () => {
     expect(html).toContain('客户飞书 Brief')
     expect(html).toContain('双击阅读')
     expect(html).not.toContain('pointer-events: none')
+  })
+
+  it('cuts, branches and splices source chains without touching Project Truth', () => {
+    const a = element({ id: 'chain-a', type: 'source-chain', binding: { projectViewIds: ['view-a', 'view-b'] } })
+    const b = element({ id: 'chain-b', type: 'source-chain', binding: { projectViewIds: ['view-c'] } })
+    const moved = applySourceChainEdit([a, b], 'chain-b', { kind: 'move', sourceElementId: 'chain-a', viewId: 'view-b', targetIndex: 0 })
+    expect(moved.find((item) => item.id === 'chain-a')?.binding?.projectViewIds).toEqual(['view-a'])
+    expect(moved.find((item) => item.id === 'chain-b')?.binding?.projectViewIds).toEqual(['view-b', 'view-c'])
+    const split = applySourceChainEdit(moved, 'chain-b', { kind: 'split', viewId: 'view-c' }, () => 'chain-c')
+    expect(split.find((item) => item.id === 'chain-c')).toMatchObject({ type: 'source-chain', binding: { projectViewIds: ['view-c'] } })
+    const removed = applySourceChainEdit(split, 'chain-c', { kind: 'remove', viewId: 'view-c' })
+    expect(removed.find((item) => item.id === 'chain-c')?.binding).toEqual({})
+    expect(JSON.stringify(removed)).not.toContain('deleteProject')
   })
 
   it('renders Workbench from bound Project Views instead of hard-coded routines', () => {

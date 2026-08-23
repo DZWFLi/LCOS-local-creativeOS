@@ -2,6 +2,7 @@ import type { SurfaceElement } from '../model/surfaceElementTypes'
 import type { CanvasEdge, CanvasNode } from '../../../model'
 import type { PresentationHierarchyState } from '../../presentation/presentationHierarchy'
 import type { ContextHistoryEntry } from '../../surfaces/surfaceContracts'
+import type { SourceChainEdit } from '../model/sourceChainOps'
 
 export interface SurfaceComponentRenderContext {
   readonly nodes?: readonly CanvasNode[]
@@ -22,4 +23,5 @@ export interface SurfaceComponentRenderProps {
   readonly selected?: boolean
   readonly meta?: string
   readonly context?: SurfaceComponentRenderContext
+  readonly onSourceChainEdit?: (edit: SourceChainEdit) => void
 }

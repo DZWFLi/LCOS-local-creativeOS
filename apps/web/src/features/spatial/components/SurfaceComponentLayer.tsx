@@ -3,7 +3,8 @@ import type { SurfaceBounds, SurfaceElement, SurfaceKind } from '../model/surfac
 import { applySurfaceOps, type SurfaceOp } from '../model/surfaceOps'
 import { resolveSurfaceComponent } from './surfaceComponentRegistry'
 import { SurfaceFrame } from './SurfaceFrame'
-import type { SurfaceComponentRenderContext } from './surfaceComponentTypes'
+import type { SurfaceComponentRenderContext, SurfaceComponentRenderProps } from './surfaceComponentTypes'
+import { applySourceChainEdit } from '../model/sourceChainOps'
 
 export function SurfaceComponentLayer({ surface, elements, zoom, renderContext, onElementsChange }: {
   readonly surface: SurfaceKind
@@ -51,6 +52,9 @@ export function SurfaceComponentLayer({ surface, elements, zoom, renderContext, 
     {visible.map((element) => {
       const definition = resolveSurfaceComponent(element.type)
       const Renderer = definition.renderer
+      const editSourceChain = (edit: Parameters<NonNullable<SurfaceComponentRenderProps['onSourceChainEdit']>>[0]) => {
+        onElementsChange(applySourceChainEdit(elements, element.id, edit))
+      }
       return <SurfaceFrame
         key={element.id}
         element={element}
@@ -63,7 +67,7 @@ export function SurfaceComponentLayer({ surface, elements, zoom, renderContext, 
         onPresentationChange={(presentation) => onElementsChange(elements.map((item) => item.id === element.id ? { ...item, presentation } : item))}
         onRemove={() => commit({ type: 'remove-projection', elementId: element.id })}
       >
-        <Renderer element={element} selected={selectedId === element.id} context={renderContext}/>
+        <Renderer element={element} selected={selectedId === element.id} context={renderContext} onSourceChainEdit={editSourceChain}/>
       </SurfaceFrame>
     })}
   </div>

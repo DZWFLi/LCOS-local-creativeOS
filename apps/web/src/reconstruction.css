@@ -881,6 +881,10 @@
 .lcos-reconstructed .vnext-surface-host .edges .edge.selected { stroke:rgba(105,83,196,.62) !important; stroke-width:1.8px !important; }
 .lcos-reconstructed .vnext-surface-host .edges .edge.active { stroke:rgba(74,111,178,.52) !important; stroke-dasharray:7 10 !important; }
 .lcos-reconstructed .edge-runner { fill:#6688ca !important; opacity:.74; }
+.lcos-reconstructed .lcos-edge-label { pointer-events: auto; cursor: pointer; }
+.lcos-reconstructed .lcos-edge-label rect { fill: rgba(250,249,252,.90); stroke: rgba(93,82,127,.18); stroke-width: 1px; filter: drop-shadow(0 3px 7px rgba(45,39,62,.10)); }
+.lcos-reconstructed .lcos-edge-label text { fill: rgba(56,50,69,.72); font-size: 9px; font-weight: 620; letter-spacing: .01em; user-select: none; }
+.lcos-reconstructed .lcos-edge-label.is-selected rect { fill: rgba(247,243,255,.96); stroke: rgba(105,83,196,.48); }
 
 /* Project identity is typography, not another card. */
 .lcos-reconstructed .vnext-project-identity { min-width:0; display:flex; align-items:center; gap:5px; }
