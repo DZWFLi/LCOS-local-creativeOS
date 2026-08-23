@@ -2374,81 +2374,102 @@
 .capture-space-shell .workspace-frame-header b { opacity: .52; }
 .capture-space-shell .lcos-agent-arrange-entry { color: var(--lcos-ui-signal); }
 
-/* The float is a transport affordance, not a miniature project UI. */
+/* Capture float — LCOS visual language: the living Glyth is the icon, a
+   discrete segment gauge reads pending count, dot matrix carries verbs. */
 .capture-float {
   box-sizing: border-box;
+  position: relative;
   width: 100vw;
   height: 100vh;
   margin: 0;
-  padding: 10px;
+  padding: 10px 12px;
   display: grid;
-  grid-template-rows: 28px 1fr 28px;
-  gap: 5px;
+  grid-template-rows: 24px 1fr 27px;
+  gap: 6px;
   overflow: hidden;
   border: 1px solid rgba(47,43,57,.12);
   border-radius: 14px;
-  background: rgba(252,252,253,.955);
+  background:
+    radial-gradient(130% 80% at 50% 0%, rgba(var(--lcos-ui-signal-rgb), .055), transparent 58%),
+    rgba(252,252,253,.965);
   box-shadow: 0 14px 38px rgba(33,29,43,.14), 0 2px 7px rgba(33,29,43,.06);
   color: var(--lcos-ui-ink);
   font-family: var(--lcos-font-ui, Inter, "Noto Sans SC", "Segoe UI", sans-serif);
   user-select: none;
   transition: border-color var(--lcos-ui-medium) ease, background var(--lcos-ui-medium) ease, box-shadow var(--lcos-ui-medium) ease;
 }
+/* Digital-bar corner brackets: structure appears only while receiving. */
 .capture-float::before {
   content: '';
   position: absolute;
   inset: 5px;
   border-radius: 10px;
   border: 1px solid transparent;
+  background:
+    linear-gradient(var(--lcos-segment-on), var(--lcos-segment-on)) left 0 top 0 / 14px 3px no-repeat,
+    linear-gradient(var(--lcos-segment-on), var(--lcos-segment-on)) left 0 top 0 / 3px 14px no-repeat,
+    linear-gradient(var(--lcos-segment-on), var(--lcos-segment-on)) right 0 bottom 0 / 14px 3px no-repeat,
+    linear-gradient(var(--lcos-segment-on), var(--lcos-segment-on)) right 0 bottom 0 / 3px 14px no-repeat;
+  opacity: 0;
   pointer-events: none;
-  transition: border-color var(--lcos-ui-medium) ease, transform var(--lcos-ui-medium) var(--lcos-ui-ease-out);
+  transition: opacity var(--lcos-ui-medium) ease, transform var(--lcos-ui-medium) var(--lcos-ui-ease-out);
 }
 .capture-float.is-receiving {
   border-color: rgba(var(--lcos-ui-signal-rgb), .4);
-  background: rgba(252,251,255,.98);
+  background:
+    radial-gradient(130% 80% at 50% 0%, rgba(var(--lcos-ui-signal-rgb), .1), transparent 58%),
+    rgba(252,251,255,.98);
   box-shadow: 0 16px 42px rgba(54,43,101,.16), 0 0 0 4px rgba(var(--lcos-ui-signal-rgb), .055);
 }
-.capture-float.is-receiving::before { border-color: rgba(var(--lcos-ui-signal-rgb), .2); transform: scale(.985); }
+.capture-float.is-receiving::before { opacity: .85; transform: scale(.985); }
 .capture-float header {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   min-width: 0;
   -webkit-app-region: drag;
 }
-.capture-float header svg { color: var(--lcos-ui-signal); opacity: .92; }
-.capture-float header strong { font: 640 11px/1 var(--lcos-font-ui, sans-serif); letter-spacing: -.015em; }
-.capture-float header span {
-  margin-left: auto;
+.capture-float header strong { font: 640 11px/1 var(--lcos-font-ui, sans-serif); letter-spacing: .01em; }
+.capture-float-count {
   min-width: 18px;
   height: 18px;
   display: grid;
   place-items: center;
   border-radius: 6px;
-  background: rgba(var(--lcos-ui-signal-rgb), .07);
+  background: rgba(var(--lcos-ui-signal-rgb), .08);
   color: var(--lcos-ui-signal);
-  font: 700 8px/1 var(--lcos-font-mono, monospace);
+  font: 700 9.5px/1 var(--lcos-font-mono, monospace);
 }
+.capture-float-count[data-empty] { opacity: .45; }
+/* Pending gauge stretches along the drag region header. */
+.capture-float .capture-float-gauge { flex: 1; width: auto !important; }
 .capture-float section {
+  position: relative;
   display: grid;
   align-content: center;
+  justify-items: center;
+  gap: 6px;
   min-width: 0;
-  padding: 0 5px;
+  padding: 0 6px;
+  text-align: center;
 }
+.capture-float-glyth { display: block; }
 .capture-float section b {
   font: 610 12px/1.2 var(--lcos-font-ui, sans-serif);
   letter-spacing: -.012em;
 }
 .capture-float section small {
   display: block;
+  max-width: 100%;
   min-width: 0;
-  margin-top: 4px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--lcos-ui-ink-faint);
-  font: 500 9px/1.2 var(--lcos-font-ui, sans-serif);
+  font: 500 10px/1.2 var(--lcos-font-ui, sans-serif);
 }
+/* Dot matrix parks bottom-right of the stage (default absolute anchor). */
+.capture-float .capture-float-matrix { inset: auto 8px 6px auto; }
 .capture-float > button {
   justify-self: start;
   display: inline-flex;
@@ -2460,11 +2481,46 @@
   border-radius: 7px;
   background: rgba(42,39,51,.045);
   color: var(--lcos-ui-ink-soft);
-  font: 560 9px/1 var(--lcos-font-ui, sans-serif);
+  font: 560 10px/1 var(--lcos-font-ui, sans-serif);
   cursor: pointer;
   -webkit-app-region: no-drag;
 }
 .capture-float > button:hover { background: rgba(var(--lcos-ui-signal-rgb), .08); color: var(--lcos-ui-signal); }
+/* Dark theme: follows the explicit attribute or the OS preference. */
+[data-lcos-theme='dark'] .capture-float {
+  border-color: rgba(214,208,232,.14);
+  background:
+    radial-gradient(130% 80% at 50% 0%, rgba(170,148,226,.09), transparent 58%),
+    rgba(26,24,34,.97);
+  box-shadow: 0 16px 42px rgba(0,0,0,.4), 0 0 0 1px rgba(214,208,232,.05);
+  color: #d6d0e8;
+}
+[data-lcos-theme='dark'] .capture-float.is-receiving {
+  border-color: rgba(186,166,234,.45);
+  background:
+    radial-gradient(130% 80% at 50% 0%, rgba(186,166,234,.14), transparent 58%),
+    rgba(26,24,34,.98);
+}
+[data-lcos-theme='dark'] .capture-float > button { background: rgba(214,208,232,.08); color: rgba(214,208,232,.78); }
+[data-lcos-theme='dark'] .capture-float > button:hover { background: rgba(186,166,234,.14); color: #d6d0e8; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-lcos-theme='light']) .capture-float {
+    border-color: rgba(214,208,232,.14);
+    background:
+      radial-gradient(130% 80% at 50% 0%, rgba(170,148,226,.09), transparent 58%),
+      rgba(26,24,34,.97);
+    box-shadow: 0 16px 42px rgba(0,0,0,.4), 0 0 0 1px rgba(214,208,232,.05);
+    color: #d6d0e8;
+  }
+  :root:not([data-lcos-theme='light']) .capture-float.is-receiving {
+    border-color: rgba(186,166,234,.45);
+    background:
+      radial-gradient(130% 80% at 50% 0%, rgba(186,166,234,.14), transparent 58%),
+      rgba(26,24,34,.98);
+  }
+  :root:not([data-lcos-theme='light']) .capture-float > button { background: rgba(214,208,232,.08); color: rgba(214,208,232,.78); }
+  :root:not([data-lcos-theme='light']) .capture-float > button:hover { background: rgba(186,166,234,.14); color: #d6d0e8; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .capture-project-targets button,
