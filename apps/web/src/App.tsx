@@ -3711,8 +3711,8 @@ export function App() {
       title: title.trim(),
       subtitle: body.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).slice(1).join(' ').trim().slice(0, 24),
       noteBody: body,
-      // Keep the outline in sync when the node is in mindmap mode.
-      ...(node.noteLayout === 'mindmap' ? { noteOutline: body } : {}),
+      // Keep the outline in sync when the node is in mindmap mode (title = root).
+      ...(node.noteLayout === 'mindmap' ? { noteOutline: `${title.trim()}\n${body}` } : {}),
     } : node))
     setNoteEditorId(null)
     // Runtime artifact title sync (body updates are presentation-local until
@@ -3727,12 +3727,12 @@ export function App() {
   const toggleNoteLayout = useCallback((id: string, layout: 'text' | 'mindmap') => {
     setNodes((current) => current.map((node) => {
       if (node.id !== id || node.kind !== 'note') return node
-      const body = node.noteBody ?? ''
+      // The outline includes the title line as the root branch.
+      const fullText = `${node.title}\n${node.noteBody ?? ''}`
       return {
         ...node,
         noteLayout: layout,
-        // Switching to mindmap seeds the outline from the current body text.
-        ...(layout === 'mindmap' ? { noteOutline: node.noteOutline ?? body } : {}),
+        ...(layout === 'mindmap' ? { noteOutline: node.noteOutline ?? fullText } : {}),
         displayMode: layout === 'mindmap' ? 'expanded' : node.displayMode,
       }
     }))

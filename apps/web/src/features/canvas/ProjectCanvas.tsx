@@ -223,7 +223,8 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
   const textSelectionExpanded = textSelection && selectedNodesForTools.some((node) => node.displayMode !== 'compact')
   const noteSelection = selectedNodesForTools.length === 1 && selectedNodesForTools[0].kind === 'note' ? selectedNodesForTools[0] : null
   const noteSelectionLayout = noteSelection?.noteLayout ?? 'text'
-  const selectionBounds = selectedIds.length > 1 ? selectedVisualBounds : null
+  // Single note selection also needs the toolbar (text ⇄ mindmap toggle).
+  const selectionBounds = (selectedIds.length > 1 || noteSelection) ? selectedVisualBounds : null
   const componentSelectionBounds = selectedVisualBounds ? { x: selectedVisualBounds.x, y: selectedVisualBounds.y, w: selectedVisualBounds.width, h: selectedVisualBounds.height } : null
   const componentProposalElements = useMemo(() => componentProposalOps.flatMap((op) => op.type === 'create-component' ? [op.component] : []), [componentProposalOps])
   const previewComponentIntent = (intent: SurfaceIntent) => {
