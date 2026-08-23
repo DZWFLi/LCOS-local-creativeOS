@@ -33,7 +33,7 @@ import { useWorkflowActionState } from '../../state/presentationWorkflowActionSt
 import { useSpatialSessionCamera } from '../../state/spatialSessionState'
 import { useSpatialFocusRequest, type SpatialFocusRequest } from '../spatial/useSpatialFocusRequest'
 import { SurfaceObject } from './SurfaceObject'
-import { LcosGlyph } from '../spatial/visual/LcosGlyph'
+import { GlythAvatar } from '../spatial/visual/CanvasSprite'
 import { boundRegionSemanticForView, resolveSpatialSignal, type SpatialRuntimeSignal } from '../spatial/visual/spatialSignal'
 import { spatialLodForCount, spatialOverviewProjection } from '../spatial/spatialLod'
 import { layoutManualSpatial } from './surfaceLayouts'
@@ -601,7 +601,7 @@ export function WorkflowSurface(props: Props) {
               <button type="button" title="删除步骤；材料不会被删除" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); removeAction(action.id) }}><Trash2 size={10}/></button>
             </div>
             <button type="button" className="lcos-workflow-port output" aria-label={`从 ${action.label} 连接下一步`} onPointerDown={(event) => beginLink(event, action.id)}><Link2 size={8}/></button>
-            <span className="lcos-workflow-action-signal" aria-hidden="true"><LcosGlyph state={actionSignal.glyph}/></span>
+            {(selectedActionId === action.id || runtimeSignal !== 'idle') && <span className="lcos-workflow-action-signal" data-spatial-signal={actionSignal.glyph} aria-hidden="true"><GlythAvatar state={actionSignal.glyph} reason={selectedActionId === action.id ? 'selection' : 'running'}/></span>}
           </div>
         })}
 

@@ -4,8 +4,8 @@ import type { CanvasNode, NodeDisplayMode } from '../../model'
 import { CanvasNodeVisual, detectFileIdentity, displayNodeTitle } from '../canvas/CanvasNodeVisual'
 import { beginSemanticDrop } from '../spatial/semanticDrop'
 import { ArchiveGlyph, AudioGlyph, BenchGlyph, CollectionGlyph, ContextGlyph, DocumentGlyph, ImageGlyph, LinkGlyph, NoteGlyph, RunGlyph, SessionGlyph, VideoGlyph, WorkflowGlyph, WorkGlyph } from '../design/LcosGlyphs'
-import { LcosGlyth } from '../spatial/visual/LcosGlyth'
-import { resolveSpatialSignal, shouldShowGlyth, type SpatialRuntimeSignal } from '../spatial/visual/spatialSignal'
+import { GlythAvatar } from '../spatial/visual/CanvasSprite'
+import { resolveSpatialSignal, type SpatialRuntimeSignal } from '../spatial/visual/spatialSignal'
 import { nodeRole } from './surfaceModel'
 import type { SurfaceAttentionBucket } from './surfaceContracts'
 
@@ -120,6 +120,6 @@ export function SurfaceObject({
           showControls={false}
         />}
     {usageHint && <span className="lcos-surface-usage-hint">{usageHint}</span>}
-    {shouldShowGlyth(signal) && <span className="lcos-surface-system-signal" data-spatial-signal={signal.glyph} aria-hidden="true"><LcosGlyth state={signal.glyph}/></span>}
+    {(selected || signal.glyph !== 'stable') && <span className="lcos-surface-system-signal" data-spatial-signal={signal.glyph} aria-hidden="true"><GlythAvatar state={selected && signal.glyph === 'stable' ? 'absorb' : signal.glyph} reason={selected ? 'selection' : runtimeSignal === 'processing' ? 'running' : 'review'}/></span>}
   </button>
 }

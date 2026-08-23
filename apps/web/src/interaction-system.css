@@ -3719,22 +3719,20 @@
   transform-origin: center;
   transition: transform 180ms var(--lcos-ui-ease-out), opacity 180ms ease, filter 180ms ease;
 }
+/* System signal slots now host Glyth avatars that are only rendered when the
+   object is actually touched (selection / run / review). Old always-on styling
+   is retired; sizing lives in spatial-components.css. */
 .lcos-reconstructed .lcos-node-system-signal,
 .lcos-reconstructed .lcos-surface-system-signal,
 .lcos-reconstructed .lcos-workflow-action-signal {
   position: absolute;
   z-index: 7;
-  width: 16px;
-  height: 16px;
   display: grid;
   place-items: center;
-  opacity: .46;
+  opacity: 1;
   transition: opacity 140ms ease, transform 180ms var(--lcos-ui-ease-out);
+  pointer-events: none;
 }
-.lcos-reconstructed .lcos-node-system-signal { top: 5px; right: 5px; }
-.lcos-reconstructed .lcos-surface-system-signal { top: 4px; right: 4px; }
-.lcos-reconstructed .lcos-workflow-action-signal { right: 5px; bottom: 5px; }
-.lcos-reconstructed :is(.canvas-node:hover,.canvas-node.selected,.lcos-surface-object:hover,.lcos-surface-object.selected,.lcos-workflow-action:hover,.lcos-workflow-action.selected) :is(.lcos-node-system-signal,.lcos-surface-system-signal,.lcos-workflow-action-signal) { opacity: .82; }
 
 /* Stable = closed, quiet presence. */
 .lcos-reconstructed .lcos-signal-glyph[data-signal-state="stable"] [data-signal-role^="core"] { opacity: .78; }

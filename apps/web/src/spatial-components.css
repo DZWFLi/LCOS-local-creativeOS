@@ -181,7 +181,7 @@
 }
 .lcos-light-segment.mode-checkpoint i.is-lit { opacity: 1; box-shadow: 0 0 8px var(--lcos-segment-glow); }
 
-/* Glyth — one living body, radial profile morph. Colour is per-state, never decoration. */
+/* Glyth — one living liquid capsule: body + segment shell + shed matrix dots. */
 .lcos-glyth {
   display: inline-block;
   flex: 0 0 auto;
@@ -190,19 +190,76 @@
   pointer-events: none !important;
   user-select: none;
 }
-.lcos-glyth-shells {
-  stroke-width: 7;
-  opacity: var(--glyth-shell-opacity, .56);
+.lcos-glyth-shells rect {
+  fill: var(--lcos-segment-on);
+  transition: opacity 160ms ease;
 }
+.lcos-glyth-dots circle { fill: var(--lcos-matrix-dot); }
 .lcos-glyth-core { opacity: .9; }
 .lcos-glyth-eyes { color: var(--lcos-glyth-eye); }
 .lcos-glyth.state-stable { color: var(--lcos-glyth-stable); }
 .lcos-glyth.state-working { color: var(--lcos-glyth-working); }
+.lcos-glyth.state-working .lcos-glyth-dots circle,
+.lcos-glyth.state-output .lcos-glyth-dots circle,
+.lcos-glyth.state-absorb .lcos-glyth-dots circle,
+.lcos-glyth.state-error .lcos-glyth-dots circle { fill: currentColor; }
+.lcos-glyth.state-working .lcos-glyth-shells rect,
+.lcos-glyth.state-output .lcos-glyth-shells rect,
+.lcos-glyth.state-error .lcos-glyth-shells rect { fill: currentColor; }
 .lcos-glyth.state-waiting { color: var(--lcos-glyth-waiting); }
 .lcos-glyth.state-error { color: var(--lcos-glyth-error); }
 .lcos-glyth.state-confirm { color: var(--lcos-glyth-confirm); }
 .lcos-glyth.state-absorb { color: var(--lcos-glyth-absorb); }
 .lcos-glyth.state-output { color: var(--lcos-glyth-output); }
+
+/* Canvas sprite — the one resident liquid-capsule presence per surface (screen space). */
+.lcos-canvas-sprite {
+  position: absolute;
+  right: 58px;
+  top: 14px;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  pointer-events: auto;
+  cursor: default;
+}
+.lcos-canvas-sprite .lcos-glyth { filter: none; }
+.lcos-canvas-sprite-hint {
+  position: absolute;
+  top: calc(100% - 6px);
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--lcos-surface-glass, rgba(252, 252, 254, .92));
+  box-shadow: 0 4px 14px rgba(42, 37, 55, .1);
+  color: rgba(57, 52, 68, .68);
+  font-size: 9px;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateY(-2px);
+  transition: opacity 140ms ease, transform 140ms ease;
+  pointer-events: none;
+}
+.lcos-canvas-sprite.is-hovered .lcos-canvas-sprite-hint { opacity: 1; transform: none; }
+.lcos-canvas-sprite.mood-alert .lcos-glyth { animation: lcos-sprite-alert 1.1s ease-in-out infinite; }
+@keyframes lcos-sprite-alert { 50% { transform: scale(1.06); } }
+
+/* Glyth avatar — a small capsule dispatched onto the object being touched. */
+.lcos-glyth-avatar { display: inline-grid; place-items: center; }
+.lcos-reconstructed .lcos-node-system-signal,
+.lcos-reconstructed .lcos-surface-system-signal,
+.lcos-reconstructed .lcos-workflow-action-signal {
+  position: absolute;
+  z-index: 7;
+  display: grid;
+  place-items: center;
+  opacity: .92;
+  transition: opacity 140ms ease, transform 180ms var(--lcos-ui-ease-out);
+  pointer-events: none;
+}
+.lcos-reconstructed .lcos-node-system-signal { top: 5px; right: 5px; }
+.lcos-reconstructed .lcos-surface-system-signal { top: 4px; right: 4px; }
 .lcos-reconstructed .lcos-workflow-action-signal { width: 22px; height: 22px; right: 3px; bottom: 3px; }
 .lcos-surface-fence-body.signal-waiting, .lcos-surface-region-body.signal-waiting { border-right-color: transparent; }
 .lcos-surface-fence-body.signal-error, .lcos-surface-region-body.signal-error { border-color: rgba(177, 78, 75, .24); }
@@ -402,8 +459,13 @@
 .lcos-surface-panel-body.panel-structure-map,
 .lcos-surface-panel-body.panel-relationship-field { background: rgba(248, 250, 253, .72); }
 
-.lcos-context-component { box-sizing: border-box; width: 100%; height: 100%; min-width: 0; min-height: 0; padding: 14px 15px 12px; display: grid; grid-template-rows: auto 1fr auto; gap: 12px; border: 1px solid rgba(92, 78, 132, .16); border-radius: 16px; background: rgba(250, 249, 253, .86); color: rgba(46, 42, 57, .72); box-shadow: 0 12px 28px rgba(47, 38, 72, .08); transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease; }
-.lcos-context-component.is-selected { border-color: rgba(102, 77, 177, .48); box-shadow: 0 14px 34px rgba(83, 58, 142, .16); }
+/* Context components are NOT cards. They are transparent structures built from
+   the Glaze materials: capsule head + light-segment skeleton + matrix energy.
+   The body stays glass; identity comes from the segment strip, not a border. */
+.lcos-context-component { box-sizing: border-box; width: 100%; height: 100%; min-width: 0; min-height: 0; padding: 14px 15px 12px; display: grid; grid-template-rows: auto 1fr auto; gap: 12px; border: 0; border-radius: 18px; background: linear-gradient(180deg, rgba(245, 242, 251, .5), rgba(247, 246, 251, .32) 88px, rgba(247, 246, 251, .16)); color: rgba(46, 42, 57, .72); box-shadow: none; transition: background 160ms ease; position: relative; }
+.lcos-context-component::before { content: ''; position: absolute; left: 15px; right: 15px; top: 0; height: 3px; border-radius: 999px; background: linear-gradient(90deg, var(--lcos-segment-on) 0 26%, var(--lcos-segment-off) 26% 34%, var(--lcos-segment-on) 34% 58%, var(--lcos-segment-off) 58% 100%); opacity: .5; }
+.lcos-context-component.is-selected { background: linear-gradient(180deg, rgba(243, 240, 252, .78), rgba(246, 244, 251, .5) 88px, rgba(246, 244, 251, .3)); }
+.lcos-context-component.is-selected::before { opacity: 1; box-shadow: 0 0 10px var(--lcos-segment-glow); }
 .lcos-context-component-header { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto auto; gap: 9px; align-items: center; }
 .lcos-context-component-header > span:nth-child(2) { min-width: 0; display: grid; gap: 3px; }
 .lcos-context-component-header strong { font-size: 12px; font-weight: 650; letter-spacing: .01em; }
@@ -452,8 +514,11 @@
 .lcos-context-pack-items span, .lcos-context-pack-items small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lcos-context-pack-items span { font-size: 9px; font-weight: 600; }
 .lcos-context-pack-items small { font-size: 7.5px; color: rgba(62,56,77,.42); }
-.lcos-workflow-component { box-sizing: border-box; width: 100%; height: 100%; padding: 13px 14px 11px; display: grid; grid-template-rows: auto 1fr auto; gap: 11px; border: 1px solid rgba(61, 91, 122, .17); border-radius: 14px; background: rgba(248, 251, 253, .9); color: rgba(40, 53, 65, .74); box-shadow: 0 11px 25px rgba(44, 65, 83, .08); }
-.lcos-workflow-component.is-selected { border-color: rgba(54, 117, 161, .52); box-shadow: 0 14px 30px rgba(45, 101, 140, .15); }
+/* Workflow components: same material language, bluer tint, direction accent. */
+.lcos-workflow-component { box-sizing: border-box; width: 100%; height: 100%; padding: 13px 14px 11px; display: grid; grid-template-rows: auto 1fr auto; gap: 11px; border: 0; border-radius: 16px; background: linear-gradient(180deg, rgba(240, 246, 250, .52), rgba(243, 247, 250, .3) 78px, rgba(243, 247, 250, .14)); color: rgba(40, 53, 65, .74); box-shadow: none; transition: background 160ms ease; position: relative; }
+.lcos-workflow-component::before { content: ''; position: absolute; left: 14px; right: 14px; top: 0; height: 3px; border-radius: 999px; background: linear-gradient(90deg, var(--lcos-segment-on) 0 42%, var(--lcos-segment-off) 42% 100%); opacity: .5; }
+.lcos-workflow-component.is-selected { background: linear-gradient(180deg, rgba(238, 245, 250, .8), rgba(242, 246, 250, .5) 78px, rgba(242, 246, 250, .3)); }
+.lcos-workflow-component.is-selected::before { opacity: 1; box-shadow: 0 0 10px var(--lcos-segment-glow); }
 .lcos-workflow-component-header { display: grid; grid-template-columns: 27px minmax(0, 1fr) auto 22px; gap: 9px; align-items: center; }
 .lcos-workflow-component-header > span:nth-child(2) { min-width: 0; display: grid; gap: 3px; }
 .lcos-workflow-component-header strong { font-size: 11px; font-weight: 660; }

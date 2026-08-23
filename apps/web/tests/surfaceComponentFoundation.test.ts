@@ -147,14 +147,15 @@ describe('Spatial Component Foundation integrity', () => {
     expect(html).not.toContain('lcos-surface-component-chrome')
   })
 
-  it('keeps one recognizable Glyth body while semantic states change its pose', () => {
+  it('keeps one recognizable Glyth liquid capsule while semantic states change its pose', () => {
     for (const state of ['stable', 'working', 'waiting', 'error', 'confirm', 'absorb', 'output'] as const) {
       const html = renderToStaticMarkup(createElement(LcosGlyth, { state }))
       expect(html).toContain(`data-glyth-state="${state}"`)
-      expect(html.match(/data-glyth-shell=/g)).toHaveLength(4)
+      expect(html.match(/data-glyth-segment=/g)).toHaveLength(4)
       expect(html).toContain('lcos-glyth-core')
       expect(html).toContain('lcos-glyth-eyes')
       expect(html).toContain('data-glyth-body')
+      expect(html).toContain('lcos-glyth-dots')
     }
   })
 

@@ -30,7 +30,12 @@ interface PointerSession {
 
 const INTERACTIVE_SELECTOR = 'button, a, input, textarea, select, [contenteditable="true"], [data-surface-no-drag]'
 
-/** Direct manipulation: the component body is its own handle, edges resize. No title bar. */
+/**
+ * Direct manipulation: the component body is its own handle, edges resize.
+ * No title bar, no card shell — the component's visual material is drawn by
+ * its renderer (capsule head + segments + matrix), never by this frame.
+ * Middle button stays reserved for camera panning on the SpatialCanvas.
+ */
 export function SurfaceFrame({ element, definition, zoom, selected, onSelect, onBoundsCommit, onBoundsPreview, onPresentationChange, onRemove, showPin = true, children }: Props) {
   const reducedMotion = useReducedSpatialMotion()
   const [previewBounds, setPreviewBounds] = useState<SurfaceBounds | null>(null)
@@ -65,9 +70,8 @@ export function SurfaceFrame({ element, definition, zoom, selected, onSelect, on
   }
 
   const begin = (interaction: Interaction, event: ReactPointerEvent<HTMLElement>) => {
-    const primary = event.button === 0
-    const middle = event.button === 1
-    if ((!primary && !middle) || pinned) return
+    // Primary button only. Middle button belongs to camera panning (SpatialCanvas).
+    if (event.button !== 0 || pinned) return
     if (interaction.kind === 'move' && !definition.movable) return
     if (interaction.kind === 'resize' && !definition.resizable) return
     event.preventDefault(); event.stopPropagation(); onSelect()
@@ -111,7 +115,7 @@ export function SurfaceFrame({ element, definition, zoom, selected, onSelect, on
   const onBodyPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     event.stopPropagation()
     onSelect()
-    if (event.button !== 0 && event.button !== 1) return
+    if (event.button !== 0) return
     const target = event.target as HTMLElement | null
     if (target?.closest(INTERACTIVE_SELECTOR)) return
     begin({ kind: 'move' }, event)

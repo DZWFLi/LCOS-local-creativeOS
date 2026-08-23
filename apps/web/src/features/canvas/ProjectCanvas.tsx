@@ -20,7 +20,7 @@ import { advanceSpatialMarquee, beginSpatialMarquee, endSpatialPointer, spatialM
 import { IDLE_SPATIAL_POINTER, type SpatialPointerSession } from '../spatial/spatialTypes'
 import { LightCurtain } from '../drop/LightCurtain'
 import { semanticDropTriggerFromPointer, type SemanticDropTrigger } from '../spatial/semanticDrop'
-import { LcosGlyph } from '../spatial/visual/LcosGlyph'
+import { CanvasSprite, GlythAvatar, useCameraActivity } from '../spatial/visual/CanvasSprite'
 import { resolveSpatialSignal, type SpatialRuntimeSignal } from '../spatial/visual/spatialSignal'
 import type { SurfaceElement } from '../spatial/model/surfaceElementTypes'
 import { resolveSurfaceComponent } from '../spatial/components/surfaceComponentRegistry'
@@ -176,6 +176,8 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
   const [marqueeRect, setMarqueeRect] = useState<{ left: number; top: number; width: number; height: number } | null>(null)
   const [selectedRegionId, setSelectedRegionId] = useState<string | null>(null)
   const [componentProposalOps, setComponentProposalOps] = useState<readonly SurfaceOp[]>([])
+  const cameraActive = useCameraActivity(camera)
+  const surfaceAlert = useMemo(() => nodes.some((node) => node.error), [nodes])
   const [createMenu, setCreateMenu] = useState<{ from: string; x: number; y: number; screenX: number; screenY: number } | null>(null)
   const toWorld = (clientX: number, clientY: number, rect: DOMRect) => spatialScreenToWorld(clientX, clientY, rect, camera)
   // P0 2026-08-17: there is no persistent client-owned arrange mode.
@@ -775,6 +777,13 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
   ], 520), [linkPoint, spatialNodes, effectiveWorkspaceFrames])
 
   const spatialOverlays = <>
+      <CanvasSprite
+        surfaceLabel="main"
+        cameraActive={cameraActive}
+        interacting={Boolean(draggingId || draggingWorkspaceId || marqueeRect)}
+        running={runStatus === 'running'}
+        alert={surfaceAlert}
+      />
       {lod !== 'full' && <div className="lod-badge">{nodes.length} 个节点 · {lod === 'overview' ? '总览' : lod === 'aggregate' ? '聚合显示' : '简化显示'}</div>}
     {surfaceMode === 'project' && onSurfaceElementsChange && <SurfaceComponentShelf projectId={projectId} surface="main" elements={surfaceElements} selectionIds={selectedIds} selectionBounds={componentSelectionBounds} viewportOrigin={surfaceViewportOrigin(camera)} portalTargets={portalTargets} onElementsChange={onSurfaceElementsChange}/>}
     {surfaceMode === 'project' && onSurfaceElementsChange && <AgentSurfaceComposer surface="main" targetIds={selectedIds} previewing={componentProposalOps.length > 0} onPreview={previewComponentIntent} onKeep={keepComponentProposal} onRevert={() => setComponentProposalOps([])}/>}
@@ -1159,6 +1168,6 @@ function CanvasCard({ node, density, zoom, showDetails, performanceProxy = false
     {performanceProxy
       ? <div className={`lcos-overview-node-proxy proxy-${detectFileIdentity(node)}`} aria-label={displayNodeTitle(node)}><span>{detectFileIdentity(node).toUpperCase()}</span><strong>{displayNodeTitle(node)}</strong></div>
       : <CanvasNodeVisual node={node} density={density} runId={runId} runStatus={runStatus} pending={pending} showDetails={showDetails} onDetails={() => onDetails(node.id)} onLocate={onLocate ? (target) => onLocate(target.id) : undefined} collectionExpanded={collectionExpanded} collectionMembers={collectionMembers} onCollectionMemberSelect={onCollectionMemberSelect} selected={selected} onOpenContextLens={onOpenContextLens} />}
-    <span className="lcos-node-system-signal" data-spatial-signal={signal.glyph} aria-hidden="true"><LcosGlyph state={signal.glyph}/></span>
+    {(selected || signal.glyph !== 'stable') && <span className="lcos-node-system-signal" data-spatial-signal={signal.glyph} aria-hidden="true"><GlythAvatar state={selected && signal.glyph === 'stable' ? 'absorb' : signal.glyph} reason={selected ? 'selection' : runtimeSignal === 'processing' ? 'running' : 'review'}/></span>}
   </div>
 }
