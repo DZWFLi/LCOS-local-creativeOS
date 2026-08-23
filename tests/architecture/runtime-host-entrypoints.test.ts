@@ -51,4 +51,13 @@ describe('Runtime Host entrypoints', () => {
     expect(executableLines).toMatch(/ConvertFrom-Json '\{.*\\u6253.*\}'/)
     expect(executableLines).not.toMatch(/[^\x00-\x7F]/)
   })
+
+  it('never forces packaged Electron utility children into Node CLI mode', () => {
+    const source = readFileSync(join(repositoryRoot, 'apps/desktop/src/runtime-supervisor.mjs'), 'utf8')
+
+    expect(source).toContain('export function utilityEnvironment')
+    expect(source).toContain('delete env.ELECTRON_RUN_AS_NODE')
+    expect(source).not.toContain("ELECTRON_RUN_AS_NODE: '1'")
+    expect(source.match(/env: utilityEnvironment\(/g)?.length).toBe(3)
+  })
 })

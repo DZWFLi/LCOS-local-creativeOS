@@ -12,6 +12,17 @@ const MAX_RESTARTS = 3
 
 function sleep(ms) { return new Promise((resolvePromise) => setTimeout(resolvePromise, ms)) }
 
+/**
+ * Electron utilityProcess.fork already boots a Node-capable Utility Process.
+ * ELECTRON_RUN_AS_NODE makes the packaged executable parse Chromium's
+ * --type=utility arguments as Node CLI options before the child can start.
+ */
+export function utilityEnvironment(overrides = {}) {
+  const env = { ...process.env, ...overrides }
+  delete env.ELECTRON_RUN_AS_NODE
+  return env
+}
+
 async function portFree(port) {
   return new Promise((resolvePromise) => {
     const socket = createConnection({ host: '127.0.0.1', port })
@@ -179,8 +190,7 @@ export class DesktopRuntimeSupervisor {
       serviceName: 'LCOS Local Core',
       stdio: 'pipe',
       cwd: this.runtimeBundleRoot,
-      env: {
-        ...process.env,
+      env: utilityEnvironment({
         LOCAL_CORE_API_TOKEN: this.token,
         LOCAL_CORE_DB_PATH: join(dataRoot, 'metadata.sqlite'),
         LOCAL_CORE_MVP_SAMPLE_ROOT: join(dataRoot, 'mvp-sample-project'),
@@ -188,7 +198,7 @@ export class DesktopRuntimeSupervisor {
         LCOS_CORE_TOKEN_FILE: this.tokenFile,
         LCOS_REPO_ROOT: this.runtimeBundleRoot,
         LCOS_OCR_RUNTIME_DIR: join(this.userDataRoot, 'ocr'),
-      },
+      }),
     })
     this.attachUtility('core', child, this.startCore)
   }
@@ -211,16 +221,14 @@ export class DesktopRuntimeSupervisor {
       serviceName: 'LCOS Codex Orchestrator',
       stdio: 'pipe',
       cwd: this.runtimeBundleRoot,
-      env: {
-        ...process.env,
-        ELECTRON_RUN_AS_NODE: '1',
+      env: utilityEnvironment({
         LCOS_ORCHESTRATOR_REPO: this.runtimeBundleRoot,
         LCOS_CORE_URL: `http://127.0.0.1:${CORE_PORT}`,
         LCOS_BRIDGE_URL: `http://127.0.0.1:${BRIDGE_PORT}`,
         LCOS_CORE_TOKEN_FILE: this.tokenFile,
         LCOS_ORCHESTRATOR_STATE_DIR: stateRoot,
         LCOS_ORCHESTRATOR_LOCK: join(stateRoot, 'watch.lock'),
-      },
+      }),
     })
     this.attachUtility('orchestrator', child, this.startOrchestrator)
   }
@@ -260,15 +268,13 @@ export class DesktopRuntimeSupervisor {
         serviceName: `LCOS ${name}`,
         stdio: 'pipe',
         cwd: this.runtimeBundleRoot,
-        env: {
-          ...process.env,
-          ELECTRON_RUN_AS_NODE: '1',
+        env: utilityEnvironment({
           LCOS_REPO_ROOT: this.runtimeBundleRoot,
           LCOS_CORE_URL: `http://127.0.0.1:${CORE_PORT}`,
           LCOS_BRIDGE_URL: `http://127.0.0.1:${BRIDGE_PORT}`,
           LCOS_CORE_TOKEN_FILE: this.tokenFile,
           ...extraEnv,
-        },
+        }),
       })
       let output = ''
       child.stdout?.on('data', (chunk) => {
