@@ -175,3 +175,4 @@ for (const server of servers) {
   console.log(verified.stdout.trim())
 }
 console.log('普通 Codex 会话只启用 local-creative-os；LCOS Runner 会临时启用 lcos-executor 并关闭普通工具面。')
+process.parentPort?.postMessage({ type: 'lcos:utility-complete', name: 'Codex MCP setup' })

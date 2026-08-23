@@ -60,4 +60,16 @@ describe('Runtime Host entrypoints', () => {
     expect(source).not.toContain("ELECTRON_RUN_AS_NODE: '1'")
     expect(source.match(/env: utilityEnvironment\(/g)?.length).toBe(3)
   })
+
+  it('requires an explicit completion message before accepting a non-zero one-shot utility exit', () => {
+    const supervisor = readFileSync(join(repositoryRoot, 'apps/desktop/src/runtime-supervisor.mjs'), 'utf8')
+    const skillInstaller = readFileSync(join(repositoryRoot, 'scripts/install-lcos-codex-skill.mjs'), 'utf8')
+    const mcpInstaller = readFileSync(join(repositoryRoot, 'scripts/install-lcos-codex-mcp.mjs'), 'utf8')
+
+    expect(supervisor).toContain("message?.type === 'lcos:utility-complete'")
+    expect(supervisor).toContain('if (code === 0 || reportedCompletion)')
+    expect(supervisor).toContain('resolvePromise(output)\n          child.kill()')
+    expect(skillInstaller).toContain("name: 'Codex skill setup'")
+    expect(mcpInstaller).toContain("name: 'Codex MCP setup'")
+  })
 })

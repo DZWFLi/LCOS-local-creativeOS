@@ -277,6 +277,16 @@ export class DesktopRuntimeSupervisor {
         }),
       })
       let output = ''
+      let reportedCompletion = false
+      let settled = false
+      child.on('message', (message) => {
+        if (message?.type === 'lcos:utility-complete' && message?.name === name) {
+          reportedCompletion = true
+          settled = true
+          resolvePromise(output)
+          child.kill()
+        }
+      })
       child.stdout?.on('data', (chunk) => {
         const text = chunk.toString('utf8')
         output = `${output}${text}`.slice(-1_000_000)
@@ -288,7 +298,13 @@ export class DesktopRuntimeSupervisor {
         this.log('codex-setup', text.trimEnd())
       })
       child.once('exit', (code) => {
-        if (code === 0) resolvePromise(output)
+        if (settled) return
+        settled = true
+        // Electron 43 on Windows may report code 1 after an ESM utility script
+        // has naturally completed. Only an explicit, script-owned completion
+        // message may override that unreliable exit code; real failures still
+        // reject because they never emit the message.
+        if (code === 0 || reportedCompletion) resolvePromise(output)
         else reject(new Error(`${name} failed with code ${String(code)}.
 ${output.slice(-4000)}`))
       })

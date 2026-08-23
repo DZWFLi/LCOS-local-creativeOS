@@ -8,6 +8,8 @@
 
 Desktop Runtime 通过 Electron `utilityProcess.fork()` 启动 Local Core、Codex Orchestrator 和一次性 Skill/MCP 安装器，但子进程环境显式设置或继承了 `ELECTRON_RUN_AS_NODE=1`。Electron 已经会以 Node Utility Process 方式启动这些脚本；该环境变量反而让打包后的 `LCOS.exe` 把 Electron 注入的 Chromium Utility 参数当作 Node CLI 参数解析，最终以 code 9 退出。
 
+环境污染修复后又暴露出第二层：Electron 43.2.0 的 Windows Utility Process 会在 ESM 一次性脚本已经完成后回报非零退出码。Skill 安装日志虽已完整输出，Desktop 仍把退出码当成失败。为避免直接忽略 `code 1` 并掩盖真实错误，两个受信安装器现在会在全部操作完成后发送带任务名的显式完成消息；Desktop 只接受匹配的完成消息，并主动回收该一次性 Utility Process。
+
 ## 变更流程
 
 ```text
@@ -28,6 +30,7 @@ utilityProcess.fork
 ## 实际范围
 
 - 对全部三个 `utilityProcess.fork()` 入口统一净化环境。
+- Skill/MCP 一次性安装器增加显式完成回执；未发回执的非零退出仍然失败关闭。
 - 增加架构回归测试，禁止重新显式注入该变量，并确保所有 fork 入口使用统一 helper。
 - 不改 Project Truth、Workspace/Canvas、Bridge contract、数据库或用户交互。
 
@@ -40,10 +43,12 @@ utilityProcess.fork
 ## 验证结果
 
 - 定向架构测试：6/6 PASS。
+- 完整架构回归：119/119 PASS。
 - Desktop doctor：PASS。
 - `desktop:package`：PASS，Electron Forge 生成 Windows x64 正式目录。
 - 真实打包版启动：PASS。
 - Codex Skill 刷新分支：8 个 LCOS Skills 安装完成，未产生新的 `bad option`。
+- Codex MCP 刷新分支：两个 MCP 配置完成；正式包 marker 已更新为 `out/LCOS-win32-x64/resources/runtime`，不再停留在开发 runtime。
 - Local Core `127.0.0.1:43121/health`：HTTP 200。
 - Bridge `127.0.0.1:43122/health`：HTTP 200。
 
