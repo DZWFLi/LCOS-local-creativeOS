@@ -72,4 +72,19 @@ describe('Runtime Host entrypoints', () => {
     expect(skillInstaller).toContain("name: 'Codex skill setup'")
     expect(mcpInstaller).toContain("name: 'Codex MCP setup'")
   })
+
+  it('keeps packaged startup progress and failures inside the Glyth boot surface', () => {
+    const main = readFileSync(join(repositoryRoot, 'apps/desktop/src/main.mjs'), 'utf8')
+    const supervisor = readFileSync(join(repositoryRoot, 'apps/desktop/src/runtime-supervisor.mjs'), 'utf8')
+    const splash = readFileSync(join(repositoryRoot, 'apps/desktop/src/splash.html'), 'utf8')
+
+    expect(main).toContain('createSplashWindow')
+    expect(main).toContain("state: 'error'")
+    expect(main).not.toContain("dialog.showErrorBox('LCOS 启动失败'")
+    expect(supervisor).toContain("emitProgress('bridge'")
+    expect(supervisor).toContain("emitProgress('core'")
+    expect(supervisor).toContain("emitProgress('skills'")
+    expect(splash).toContain('仍在等待当前步骤')
+    expect(splash).toContain('@media (prefers-reduced-motion: reduce)')
+  })
 })

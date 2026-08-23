@@ -70,11 +70,12 @@ function formatBytes(value) {
 }
 
 export class DesktopRuntimeSupervisor {
-  constructor({ runtimeBundleRoot, userDataRoot, logRoot, onStatus }) {
+  constructor({ runtimeBundleRoot, userDataRoot, logRoot, onStatus, onProgress }) {
     this.runtimeBundleRoot = resolve(runtimeBundleRoot)
     this.userDataRoot = resolve(userDataRoot)
     this.logRoot = resolve(logRoot)
     this.onStatus = onStatus ?? (() => {})
+    this.onProgress = onProgress ?? (() => {})
     this.children = new Map()
     this.restartHistory = new Map()
     this.stopping = false
@@ -100,6 +101,8 @@ export class DesktopRuntimeSupervisor {
   }
 
   emitStatus() { this.onStatus(this.status()) }
+
+  emitProgress(stage, label, progress) { this.onProgress({ stage, label, progress }) }
 
   log(name, message) {
     appendFileSync(join(this.logRoot, `${name}.log`), `[${new Date().toISOString()}] ${message}\n`, 'utf8')
@@ -312,11 +315,13 @@ ${output.slice(-4000)}`))
   }
 
   async installCodexIntegration() {
+    this.emitProgress('skills', '正在同步 LCOS Skills', 62)
     this.refreshCodexIntegrationFiles()
     const skillInstaller = join(this.runtimeBundleRoot, 'scripts', 'install-lcos-codex-skill.mjs')
     const mcpInstaller = join(this.runtimeBundleRoot, 'scripts', 'install-lcos-codex-mcp.mjs')
     const integrationEnv = { LCOS_REPO_ROOT: this.codexIntegrationRoot }
     await this.runUtilityOnce('Codex skill setup', skillInstaller, integrationEnv)
+    this.emitProgress('codex', '正在连接 Codex', 76)
     await this.runUtilityOnce('Codex MCP setup', mcpInstaller, integrationEnv)
     writeFileSync(this.codexIntegrationMarker, `${JSON.stringify({
       schemaVersion: 1,
@@ -331,16 +336,20 @@ ${output.slice(-4000)}`))
 
   async start() {
     this.stopping = false
+    this.emitProgress('environment', '正在检查本地环境', 10)
     this.assertStorageAvailable()
     await this.assertPortsAvailable()
+    this.emitProgress('bridge', '正在启动执行桥', 24)
     await this.startBridge()
     if (!await waitFor(`http://127.0.0.1:${BRIDGE_PORT}/health`, 20_000)) throw new Error('LCOS Light Bridge 启动超时。')
+    this.emitProgress('core', '正在启动本地核心', 42)
     await this.startCore()
     if (!await waitFor(`http://127.0.0.1:${CORE_PORT}/health`, 25_000)) throw new Error('LCOS Local Core 启动超时。')
     if (existsSync(this.codexIntegrationMarker)) {
       if (this.codexIntegrationNeedsRefresh()) await this.installCodexIntegration()
       else this.refreshCodexIntegrationFiles()
     }
+    this.emitProgress('orchestrator', '正在唤醒本地 Agent', 86)
     await this.startOrchestrator()
     this.emitStatus()
     return this.status()

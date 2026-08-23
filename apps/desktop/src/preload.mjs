@@ -77,3 +77,15 @@ const api = Object.freeze({
 })
 
 contextBridge.exposeInMainWorld('lcosDesktop', api)
+
+if (globalThis.location?.protocol === 'file:' && globalThis.location?.pathname?.endsWith('/splash.html')) {
+  contextBridge.exposeInMainWorld('lcosBoot', Object.freeze({
+    onStatus: (listener) => {
+      const handler = (_event, value) => listener(value)
+      ipcRenderer.on('desktop:boot-status', handler)
+      return () => ipcRenderer.removeListener('desktop:boot-status', handler)
+    },
+    openLogs: () => ipcRenderer.invoke('desktop:boot-open-logs'),
+    quit: () => ipcRenderer.invoke('desktop:boot-quit'),
+  }))
+}
