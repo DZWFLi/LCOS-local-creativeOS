@@ -34,7 +34,7 @@ export function AgentSurfaceComposer({ surface, targetIds, previewing = false, o
   const disabled = targetIds.length === 0
 
   return <div className={`lcos-agent-surface-composer-shell ${open ? 'is-open' : ''}`}>
-    <button type="button" className="lcos-agent-surface-composer-toggle" aria-expanded={open} aria-label="Agent 组织当前现场" title="Agent 组织当前现场" onClick={() => setOpen((current) => !current)}><LcosGlyth state={previewing ? 'working' : open ? 'focus' : 'candidate'} size={24}/></button>
+    <button type="button" className="lcos-agent-surface-composer-toggle" aria-expanded={open} aria-label="Agent 组织当前现场" title="Agent 组织当前现场" onClick={() => setOpen((current) => !current)}><LcosGlyth state={previewing ? 'working' : open ? 'absorb' : 'stable'} size={24}/></button>
     {open && <section className="lcos-agent-surface-composer" data-testid="agent-surface-composer">
       <header><span><Sparkles size={13}/>Agent 组织</span><button type="button" aria-label="关闭" onClick={() => setOpen(false)}><X size={13}/></button></header>
       <select value={kind} onChange={(event) => { setKind(event.target.value as SurfaceIntent['kind']); if (previewing) onRevert() }}>{available.map((choice) => <option key={choice.kind} value={choice.kind}>{choice.label}</option>)}</select>

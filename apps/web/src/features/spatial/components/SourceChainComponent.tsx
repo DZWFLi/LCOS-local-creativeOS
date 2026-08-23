@@ -21,7 +21,7 @@ export function SourceChainComponent({ element, selected, context, onSourceChain
     <header>
       <span><Link2 size={14}/><strong>{element.presentation?.variant || '来源脉络'}</strong></span>
       <small>{sources.length} 个真实来源</small>
-      {selected && <LcosGlyth state="focus" size={22}/>}
+      {selected && <LcosGlyth state="absorb" size={22}/>}
     </header>
     {sources.length ? <div className="lcos-source-chain-flow">
       {sources.map((node, index) => <div className="lcos-source-chain-segment" key={node.id} onDragOver={(event) => { if (event.dataTransfer.types.includes(SOURCE_CHAIN_MIME)) event.preventDefault() }} onDrop={(event) => {

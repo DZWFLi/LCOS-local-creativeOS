@@ -88,12 +88,14 @@ export function SurfaceAgentNode({ x, y, contextLabel, seedPrompt, surface, onSu
               ? 'Agent 工作中'
               : '局部会话'
   const glyphState: LcosGlyphState = runState?.status === 'failed'
-    ? 'blocked'
-    : runState?.status === 'waiting_input' || runState?.status === 'review'
-      ? 'waiting'
-      : runState && !['completed', 'cancelled'].includes(runState.status)
-        ? 'working'
-        : 'stable'
+    ? 'error'
+    : runState?.status === 'completed'
+      ? 'confirm'
+      : runState?.status === 'waiting_input' || runState?.status === 'review'
+        ? 'waiting'
+        : runState && !['completed', 'cancelled'].includes(runState.status)
+          ? 'working'
+          : 'stable'
 
   return <aside className={`lcos-surface-agent-node ${runState ? `is-${runState.status}` : ''}`} style={{ left: position.x, top: position.y }} data-native-context-menu="true" aria-label="局部 Agent">
     <header

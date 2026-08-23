@@ -18,7 +18,7 @@ function Header({ icon, title, hint, selected }: { icon: ReactNode; title: strin
   return <header className="lcos-context-component-header">
     <span className="lcos-context-component-icon">{icon}</span>
     <span><strong>{title}</strong><small>{hint}</small></span>
-    <LightSegment axis="horizontal" length={20} active={selected}/>{selected && <LcosGlyth state="focus" />}
+    <LightSegment axis="horizontal" length={20} active={selected}/>{selected && <LcosGlyth state="absorb" />}
   </header>
 }
 

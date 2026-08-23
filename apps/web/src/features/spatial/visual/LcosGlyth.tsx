@@ -1,19 +1,50 @@
-import { useEffect, useRef } from 'react'
-import { blendGlythPose, glythPose, sampleGlyth, subscribeGlythClock, type GlythFrame, type LcosGlythState, type LcosGlythVariant } from './glythMotion'
+import { useEffect, useId, useRef, useState } from 'react'
+import { blendGlythPose, coerceGlythState, getPointerPosition, glythPose, glythStateDuration, sampleGlyth, subscribeGlythClock, type GlythFrame, type LcosGlythState, type LcosGlythVariant } from './glythMotion'
 import { useReducedSpatialMotion } from './useReducedSpatialMotion'
 
 export type { LcosGlythState, LcosGlythVariant } from './glythMotion'
 
-function renderFrame(svg: SVGSVGElement, frame: GlythFrame) {
-  const core = svg.querySelector<SVGRectElement>('[data-glyth-core]')
-  const eyes = svg.querySelectorAll<SVGRectElement>('[data-glyth-eye]')
-  const shells = svg.querySelectorAll<SVGPathElement>('[data-glyth-shell]')
-  if (!core || eyes.length !== 2 || shells.length !== 4) return
-  core.setAttribute('x', String(frame.core.x)); core.setAttribute('y', String(frame.core.y)); core.setAttribute('width', String(frame.core.width)); core.setAttribute('height', String(frame.core.height)); core.setAttribute('rx', String(frame.core.radius))
-  frame.eyes.forEach((eye, index) => { const node = eyes[index]; node?.setAttribute('x', String(eye.x)); node?.setAttribute('y', String(eye.y)); node?.setAttribute('width', String(eye.width)); node?.setAttribute('height', String(eye.height)) })
-  frame.shells.forEach((path, index) => shells[index]?.setAttribute('d', path))
-  svg.style.setProperty('--glyth-energy', String(frame.energy))
-  svg.style.setProperty('--glyth-shell-opacity', String(.28 + frame.energy * .56))
+interface GlythElements {
+  readonly svg: SVGSVGElement
+  readonly body: SVGPathElement | null
+  readonly clip: SVGPathElement | null
+  readonly eyes: readonly SVGRectElement[]
+  readonly shells: readonly SVGPathElement[]
+}
+
+function renderFrame(elements: GlythElements, frame: GlythFrame) {
+  const { body, clip } = elements
+  if (!body || !clip) return
+  body.setAttribute('d', frame.body)
+  clip.setAttribute('d', frame.body)
+  frame.eyes.forEach((eye, index) => {
+    const node = elements.eyes[index]
+    if (!node) return
+    node.setAttribute('x', String(eye.x)); node.setAttribute('y', String(eye.y)); node.setAttribute('width', String(eye.w)); node.setAttribute('height', String(eye.h))
+  })
+  frame.shells.forEach((path, index) => elements.shells[index]?.setAttribute('d', path))
+  elements.svg.style.setProperty('--glyth-energy', String(frame.energy))
+  elements.svg.style.setProperty('--glyth-shell-opacity', String(.28 + frame.energy * .56))
+}
+
+const clampRange = (value: number, min = -1, max = 1) => Math.min(max, Math.max(min, value))
+
+/** Gaze target from the shared pointer position; the rect is cached, not measured per frame. */
+function computeGazeTarget(svg: SVGSVGElement, rectCache: { current: { x: number; y: number; w: number; at: number } | null }, seconds: number): { x: number; y: number } {
+  const pointer = getPointerPosition()
+  if (!pointer) return { x: 0, y: 0 }
+  let rect = rectCache.current
+  if (!rect || seconds - rect.at > .75) {
+    const box = svg.getBoundingClientRect()
+    rect = { x: box.left + box.width / 2, y: box.top + box.height / 2, w: box.width, at: seconds }
+    rectCache.current = rect
+  }
+  const dx = pointer.x - rect.x
+  const dy = pointer.y - rect.y
+  const reach = Math.max(60, rect.w * 3)
+  const length = Math.hypot(dx, dy)
+  const scale = length > reach ? reach / length : 1
+  return { x: clampRange((dx * scale) / reach), y: clampRange((dy * scale) / reach) }
 }
 
 export function LcosGlyth({ state = 'stable', variant = 'cursor', size = 24, className = '', label, animated = true }: {
@@ -25,50 +56,102 @@ export function LcosGlyth({ state = 'stable', variant = 'cursor', size = 24, cla
   readonly animated?: boolean
 }) {
   const svgRef = useRef<SVGSVGElement>(null)
-  const transition = useRef({ from: glythPose(state), to: glythPose(state), startedAt: 0, state })
-  const visible = useRef(true)
+  const elementsRef = useRef<GlythElements | null>(null)
+  const transitionRef = useRef({ from: glythPose(coerceGlythState(state)), to: glythPose(coerceGlythState(state)), startedAt: 0, state: coerceGlythState(state) })
+  const gazeRef = useRef({ x: 0, y: 0 })
+  const rectCacheRef = useRef<{ x: number; y: number; w: number; at: number } | null>(null)
+  const blinkRef = useRef({ nextAt: 2.5, start: -1 })
+  const lastSecondsRef = useRef(0)
+  const visibleRef = useRef(true)
   const reducedMotion = useReducedSpatialMotion()
+  const clipId = useId()
+  const [displayState, setDisplayState] = useState<LcosGlythState>(() => coerceGlythState(state))
 
   useEffect(() => {
     const node = svgRef.current
     if (!node || typeof IntersectionObserver === 'undefined') return
-    const observer = new IntersectionObserver(([entry]) => { visible.current = Boolean(entry?.isIntersecting) }, { rootMargin: '80px' })
+    const observer = new IntersectionObserver(([entry]) => { visibleRef.current = Boolean(entry?.isIntersecting) }, { rootMargin: '80px' })
     observer.observe(node)
     return () => observer.disconnect()
   }, [])
 
   useEffect(() => {
-    const current = transition.current
-    if (current.state === state) return
-    const now = performance.now() / 1000
-    const progress = Math.min(1, Math.max(0, (now - current.startedAt) / .42))
-    current.from = blendGlythPose(current.from, current.to, progress)
-    current.to = glythPose(state)
-    current.startedAt = now
-    current.state = state
+    const svg = svgRef.current
+    if (!svg) return
+    elementsRef.current = {
+      svg,
+      body: svg.querySelector<SVGPathElement>('[data-glyth-body]'),
+      clip: svg.querySelector<SVGPathElement>('[data-glyth-clip]'),
+      eyes: [...svg.querySelectorAll<SVGRectElement>('[data-glyth-eye]')],
+      shells: [...svg.querySelectorAll<SVGPathElement>('[data-glyth-shell]')],
+    }
+  }, [])
+
+  /** `confirm` is transient by contract: it plays once, then settles back to a persistent stable body. */
+  useEffect(() => {
+    const next = coerceGlythState(state)
+    setDisplayState(next)
+    if (next !== 'confirm') return
+    const holdMs = (glythStateDuration('confirm') + .45) * 1000
+    const timer = window.setTimeout(() => setDisplayState('stable'), holdMs)
+    return () => window.clearTimeout(timer)
   }, [state])
+
+  useEffect(() => {
+    const current = transitionRef.current
+    if (current.state === displayState) return
+    const now = performance.now() / 1000
+    const progress = Math.min(1, Math.max(0, (now - current.startedAt) / Math.max(.01, current.to.duration)))
+    current.from = blendGlythPose(current.from, current.to, progress)
+    current.to = glythPose(displayState)
+    current.startedAt = now
+    current.state = displayState
+  }, [displayState])
 
   useEffect(() => {
     const svg = svgRef.current
     if (!svg) return
     const paint = (seconds: number) => {
-      if (!visible.current) return
-      const current = transition.current
-      const pose = reducedMotion || !animated
-        ? current.to
-        : blendGlythPose(current.from, current.to, (seconds - current.startedAt) / .42)
-      renderFrame(svg, sampleGlyth(pose, variant, reducedMotion || !animated ? 0 : seconds))
+      const elements = elementsRef.current
+      if (!visibleRef.current || !elements || !elements.body || !elements.clip || elements.eyes.length !== 2 || elements.shells.length !== 4) return
+      const dt = Math.min(.2, Math.max(0, seconds - (lastSecondsRef.current || seconds)))
+      lastSecondsRef.current = seconds
+      const still = reducedMotion || !animated
+      const current = transitionRef.current
+      const pose = still ? current.to : blendGlythPose(current.from, current.to, (seconds - current.startedAt) / Math.max(.01, current.to.duration))
+
+      const target = computeGazeTarget(svg, rectCacheRef, seconds)
+      const gazeEase = still ? 1 : Math.min(1, dt * 9)
+      gazeRef.current.x += (target.x - gazeRef.current.x) * gazeEase
+      gazeRef.current.y += (target.y - gazeRef.current.y) * gazeEase
+
+      let blink = 0
+      if (!still) {
+        const timeline = blinkRef.current
+        if (timeline.start < 0 && seconds >= timeline.nextAt) {
+          timeline.start = seconds
+          timeline.nextAt = seconds + 3 + Math.random() * 4
+        }
+        if (timeline.start >= 0) {
+          const phase = (seconds - timeline.start) / .14
+          if (phase >= 1) timeline.start = -1
+          else blink = Math.sin(Math.PI * phase)
+        }
+      }
+
+      renderFrame(elements, sampleGlyth(pose, variant, still ? 0 : seconds, { gaze: gazeRef.current, blink }))
     }
     paint(performance.now() / 1000)
     if (reducedMotion || !animated) return
     return subscribeGlythClock(paint)
   }, [animated, reducedMotion, variant])
 
-  return <svg ref={svgRef} className={`lcos-glyth state-${state} variant-${variant} ${reducedMotion ? 'is-reduced-motion' : ''} ${className}`.trim()} data-glyth-state={state} viewBox="0 0 100 100" width={size} height={size} role={label ? 'img' : undefined} aria-label={label} aria-hidden={label ? undefined : 'true'}>
+  return <svg ref={svgRef} className={`lcos-glyth state-${displayState} variant-${variant} ${reducedMotion ? 'is-reduced-motion' : ''} ${className}`.trim()} data-glyth-state={displayState} viewBox="0 0 100 100" width={size} height={size} role={label ? 'img' : undefined} aria-label={label} aria-hidden={label ? undefined : 'true'}>
+    <defs><clipPath id={clipId}><path data-glyth-clip="clip"/></clipPath></defs>
     <g className="lcos-glyth-shells" fill="none" stroke="currentColor" strokeLinecap="round">
       <path data-glyth-shell="top"/><path data-glyth-shell="right"/><path data-glyth-shell="bottom"/><path data-glyth-shell="left"/>
     </g>
-    <rect data-glyth-core className="lcos-glyth-core" fill="currentColor"/>
-    <g className="lcos-glyth-eyes" fill="currentColor"><rect data-glyth-eye="left" rx="2.2"/><rect data-glyth-eye="right" rx="2.2"/></g>
+    <path data-glyth-body="body" className="lcos-glyth-core" fill="currentColor"/>
+    <g className="lcos-glyth-eyes" fill="currentColor" clipPath={`url(#${clipId})`}><rect data-glyth-eye="left" rx="2.2"/><rect data-glyth-eye="right" rx="2.2"/></g>
   </svg>
 }

@@ -10,7 +10,7 @@ function bindingLabel(element: SurfaceComponentRenderProps['element']) {
 export function PortalComponent({ element, selected = false, context }: SurfaceComponentRenderProps) {
   const targetId = element.binding?.projectViewId
   return <button type="button" className={`lcos-surface-portal-body ${selected ? 'is-selected' : ''}`} data-surface-portal={element.id} disabled={!targetId} onDoubleClick={() => targetId && context?.onOpenPortal?.(targetId)}>
-    <LcosGlyph state={selected ? 'focus' : 'stable'}/>
+    <LcosGlyph state={selected ? 'absorb' : 'stable'}/>
     <span className="lcos-surface-portal-copy"><strong>{element.presentation?.variant || '入口'}</strong><small>{bindingLabel(element)}</small></span>
     <LightSegment axis="horizontal" length={36} active={selected}/><b aria-hidden="true">↗</b>
   </button>

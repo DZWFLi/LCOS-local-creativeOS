@@ -21,23 +21,32 @@ const matches = (value: string, pattern: RegExp) => pattern.test(value)
 /**
  * Presentation-only signal resolver. It interprets an already known semantic /
  * runtime state; it never infers or persists Project Truth.
+ *
+ * Selection is a transient input: it lights the segment skeleton but never
+ * becomes a persistent Glyth pose (rarity rule: stable bodies stay quiet).
+ * Weaker signals are applied first, stronger ones override them.
  */
 export function resolveSpatialSignal(input: SpatialSignalInput): SpatialSignalPresentation {
   const semantic = input.semantic?.trim().toLowerCase() ?? ''
   const runtime = input.runtime ?? 'idle'
-  let glyph: LcosGlythState = input.selected ? 'focus' : 'stable'
+  let glyph: LcosGlythState = 'stable'
 
-  if (matches(semantic, /candidate|explore|draft|idea|候选|探索|草稿|灵感/)) glyph = 'candidate'
-  if (matches(semantic, /protect|frozen|locked|confirmed|保护|冻结|已确认|不要动/)) glyph = 'protected'
-  if (runtime === 'waiting' || matches(semantic, /waiting|pending|review|待.*确认|等待|待补/)) glyph = 'waiting'
-  if (runtime === 'active' || runtime === 'processing' || matches(semantic, /working|active|processing|正在|处理中/)) glyph = 'working'
-  if (runtime === 'blocked' || runtime === 'failed' || matches(semantic, /blocked|failed|conflict|阻塞|失败|冲突/)) glyph = 'blocked'
+  if (matches(semantic, /waiting|pending|review|待.*确认|等待|待补/)) glyph = 'waiting'
+  if (matches(semantic, /candidate|explore|draft|idea|候选|探索|草稿|灵感/)) glyph = 'working'
+  if (runtime === 'waiting') glyph = 'waiting'
+  if (matches(semantic, /working|active|processing|正在|处理中/)) glyph = 'working'
+  if (runtime === 'active' || runtime === 'processing') glyph = 'working'
+  if (matches(semantic, /absorb|reading|receive|import|接收|读取|导入|吸收/)) glyph = 'absorb'
+  if (matches(semantic, /output|send|emit|输出|发送|生成完毕/)) glyph = 'output'
+  if (matches(semantic, /confirmed|done|complete|已确认|已完成/) || runtime === 'complete') glyph = 'confirm'
+  if (matches(semantic, /blocked|failed|conflict|error|阻塞|失败|冲突|出错/)) glyph = 'error'
+  if (runtime === 'blocked' || runtime === 'failed') glyph = 'error'
 
-  const matrixActive = glyph === 'working'
+  const matrixActive = glyph === 'working' || glyph === 'absorb' || glyph === 'output'
   return {
     glyph,
     matrixActive,
-    segmentActive: Boolean(input.selected || glyph === 'working' || glyph === 'waiting' || glyph === 'blocked'),
+    segmentActive: Boolean(input.selected || glyph !== 'stable'),
     signalClass: `signal-${glyph}`,
   }
 }

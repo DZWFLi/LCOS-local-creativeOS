@@ -10,7 +10,7 @@ import { PortalComponent } from '../src/features/spatial/components/PortalCompon
 import { CheckpointComponent, ReviewComponent, WorkbenchFrameComponent } from '../src/features/spatial/components/WorkflowComponentRenderers'
 import { LcosGlyth } from '../src/features/spatial/visual/LcosGlyth'
 import { SourceChainComponent } from '../src/features/spatial/components/SourceChainComponent'
-import { boundRegionSemanticForView, resolveSpatialSignal } from '../src/features/spatial/visual/spatialSignal'
+import { boundRegionSemanticForView, resolveSpatialSignal, shouldShowGlyth } from '../src/features/spatial/visual/spatialSignal'
 import { surfaceComponentRegistry } from '../src/features/spatial/components/surfaceComponentRegistry'
 import { surfaceComponentContract, surfaceComponentsFor } from '../src/features/spatial/model/surfaceComponentCatalog'
 import { applySurfaceOp, applySurfaceOps, validateSurfaceOp, validateSurfaceOps } from '../src/features/spatial/model/surfaceOps'
@@ -148,21 +148,28 @@ describe('Spatial Component Foundation integrity', () => {
   })
 
   it('keeps one recognizable Glyth body while semantic states change its pose', () => {
-    for (const state of ['stable', 'focus', 'working', 'waiting', 'blocked', 'protected', 'candidate'] as const) {
+    for (const state of ['stable', 'working', 'waiting', 'error', 'confirm', 'absorb', 'output'] as const) {
       const html = renderToStaticMarkup(createElement(LcosGlyth, { state }))
       expect(html).toContain(`data-glyth-state="${state}"`)
       expect(html.match(/data-glyth-shell=/g)).toHaveLength(4)
       expect(html).toContain('lcos-glyth-core')
       expect(html).toContain('lcos-glyth-eyes')
+      expect(html).toContain('data-glyth-body')
     }
   })
 
   it('resolves one Presentation signal across Glyph, Segment and Matrix without inventing truth', () => {
-    expect(resolveSpatialSignal({ selected: true })).toMatchObject({ glyph: 'focus', matrixActive: false, segmentActive: true })
+    // Selection is a transient input: it lights the skeleton, never a persistent pose.
+    expect(resolveSpatialSignal({ selected: true })).toMatchObject({ glyph: 'stable', matrixActive: false, segmentActive: true })
     expect(resolveSpatialSignal({ semantic: '待客户确认' })).toMatchObject({ glyph: 'waiting', matrixActive: false })
-    expect(resolveSpatialSignal({ semantic: '已冻结 不要动' })).toMatchObject({ glyph: 'protected', matrixActive: false })
+    expect(resolveSpatialSignal({ semantic: '已冻结 不要动' })).toMatchObject({ glyph: 'stable', matrixActive: false })
     expect(resolveSpatialSignal({ runtime: 'processing' })).toMatchObject({ glyph: 'working', matrixActive: true })
-    expect(resolveSpatialSignal({ selected: true, semantic: '冲突', runtime: 'processing' })).toMatchObject({ glyph: 'blocked', matrixActive: false })
+    expect(resolveSpatialSignal({ selected: true, semantic: '冲突', runtime: 'processing' })).toMatchObject({ glyph: 'error', matrixActive: false })
+    expect(resolveSpatialSignal({ semantic: '正在接收材料' })).toMatchObject({ glyph: 'absorb', matrixActive: true })
+    expect(resolveSpatialSignal({ semantic: '输出结果' })).toMatchObject({ glyph: 'output', matrixActive: true })
+    expect(resolveSpatialSignal({ runtime: 'complete' })).toMatchObject({ glyph: 'confirm', matrixActive: false })
+    expect(shouldShowGlyth(resolveSpatialSignal({ selected: true }))).toBe(false)
+    expect(shouldShowGlyth(resolveSpatialSignal({ semantic: '冲突' }))).toBe(true)
   })
 
   it('inherits Region semantics only through explicit Project View bindings', () => {
