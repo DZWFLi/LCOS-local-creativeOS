@@ -1,4 +1,5 @@
 import type { ContextManifestV0, GraphVersion, PreviewRecord, ProjectGraphSnapshot, Scope, WorkspaceContextPolicy, MutationBatch } from '@local-creative-os/contracts'
+import { recallNotePresentation } from '../state/notePresentationMemory'
 import type {
   CanvasEdge,
   CanvasNode,
@@ -472,19 +473,25 @@ export function mapGraphToState(
         origin: 'system',
       })
     }
+    const viewId = String(note.id)
+    const presentation = recallNotePresentation(viewId)
     return {
-      id: String(note.id),
+      id: viewId,
       kind: 'note' as const,
       title,
       // Unified text nodes: subtitle is the first body line, same as any other note.
       subtitle: bodyTail,
       x: position.x, y: position.y,
       width: 232, height: NOTE_NODE_HEIGHT,
-      displayMode: 'standard' as const,
+      displayMode: presentation.noteLayout === 'mindmap' ? 'expanded' as const : 'standard' as const,
       scopeId,
       noteBody: note.body,
       anchors: [anchor],
       createdAt: note.createdAt,
+      ...(presentation.noteLayout ? { noteLayout: presentation.noteLayout } : {}),
+      ...(presentation.noteOutline ? { noteOutline: presentation.noteOutline } : {}),
+      ...(presentation.noteTags ? { noteTags: presentation.noteTags } : {}),
+      ...(presentation.noteAutoSync ? { noteAutoSync: true } : {}),
     }
   })
 

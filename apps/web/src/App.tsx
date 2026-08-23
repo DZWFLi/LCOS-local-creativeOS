@@ -33,6 +33,7 @@ import { clearProjectNavigationState, loadProjectNavigationState, saveProjectNav
 import { isRuntimeProjectMode } from './runtime/projectMode'
 import { emptyPresentationState, usePresentationMembership, usePresentationViewBridge } from './state/presentationViewState'
 import { usePresentationSurfaceElements } from './state/presentationDraftState'
+import { rememberNotePresentation } from './state/notePresentationMemory'
 import { spatialRegionFromSelection, type SpatialRegionDraft } from './state/spatialRegion'
 import { appendProjectPresentationEntityRefs, appendProjectPresentationMembers, loadProjectPresentationMembers, removeProjectPresentationEntityRefs, removeProjectPresentationMembers } from './state/projectPresentationMembership'
 import { loadPresentationLayoutEngines } from './features/layout/layoutEngines'
@@ -41,6 +42,7 @@ import { RuntimeBridge, type DataSource, type SaveStatus } from './runtime/runti
 import { selectRuntimeProject } from './runtime/runtimeProjectSelection'
 import { createWorkspaceRecord, duplicateWorkspaceRecord, moveWorkspaceRecord, removeWorkspaceRecord, toggleWorkspaceLayer, updateWorkspaceRecord } from './state/workspaceState'
 import { fitBounds, fitBoundsForReading, getSelectionBounds, MIN_CANVAS_ZOOM, nodeDimensions, placeNewNodesIncrementally, restorationFocusBounds, restoredCameraIsMeaningful, revealNode } from './features/canvas/canvasGeometry'
+import { displayNodeTitle } from './features/canvas/CanvasNodeVisual'
 import { getVisualSelectionBounds, layoutVisualGrid, nodeVisualBounds, repairVisualLayoutPositions } from './features/canvas/canvasVisualGeometry'
 import { findPendingReturnPosition } from './features/canvas/canvasLayout'
 import { layoutExpandedCollectionMembers } from './features/canvas/collectionExpandLayout'
@@ -3714,6 +3716,8 @@ export function App() {
       // Keep the outline in sync when the node is in mindmap mode (title = root).
       ...(node.noteLayout === 'mindmap' ? { noteOutline: `${title.trim()}\n${body}` } : {}),
     } : node))
+    const edited = nodes.find((item) => item.id === id)
+    if (edited?.noteLayout === 'mindmap') rememberNotePresentation(id, { noteOutline: `${title.trim()}\n${body}` })
     setNoteEditorId(null)
     // Runtime artifact title sync (body updates are presentation-local until
     // a Core text-revision API lands; recorded as known debt, not blocking).
@@ -3729,6 +3733,8 @@ export function App() {
       if (node.id !== id || node.kind !== 'note') return node
       // The outline includes the title line as the root branch.
       const fullText = `${node.title}\n${node.noteBody ?? ''}`
+      const outline = layout === 'mindmap' ? (node.noteOutline ?? fullText) : node.noteOutline
+      rememberNotePresentation(id, { noteLayout: layout, ...(outline ? { noteOutline: outline } : {}) })
       return {
         ...node,
         noteLayout: layout,
@@ -3759,6 +3765,133 @@ export function App() {
       setNotice('名称已更新')
     }
   }, [bootMode, nodes, setNodes])
+
+  /**
+   * Deterministic local outline for the current scope (材料/文本/上下文/成果/关系
+   * branches). Shared by the manual「摘要成导图」action and the mind-map
+   * auto-sync effect. TODO(0.1+/agent-summary): route the same prompt through
+   * proposeRun when a provider is reachable and parse via parseOutlineLoose.
+   */
+  const buildScopeOutline = useCallback((excludeIds?: ReadonlySet<string>) => {
+    const relevantNodes = nodes.filter((node) => !node.id.startsWith('workspace:') && !node.id.startsWith('runtime-run-view-') && !(excludeIds?.has(node.id)))
+    if (!relevantNodes.length) return null
+    const scopeLabel = activeScope.label || '当前现场'
+    const byKind = new Map<string, string[]>()
+    relevantNodes.forEach((node) => {
+      const family = node.kind === 'note' ? '文本' : node.kind === 'source' ? '材料' : node.kind === 'context' ? '上下文' : node.kind === 'generated' ? '成果' : '其他'
+      byKind.set(family, [...(byKind.get(family) ?? []), displayNodeTitle(node)])
+    })
+    const relationKinds = [...new Set(edges.map((edge) => edge.kind))]
+    const branches = [
+      ...(byKind.get('材料')?.length ? [`  - 材料 #材料`, ...byKind.get('材料')!.slice(0, 6).map((title) => `    ${title}`)] : []),
+      ...(byKind.get('文本')?.length ? [`  - 文本 #文本`, ...byKind.get('文本')!.slice(0, 5).map((title) => `    ${title}`)] : []),
+      ...(byKind.get('上下文')?.length ? [`  - 上下文 #上下文`, ...byKind.get('上下文')!.slice(0, 4).map((title) => `    ${title}`)] : []),
+      ...(byKind.get('成果')?.length ? [`  - 成果 #成果`, ...byKind.get('成果')!.slice(0, 4).map((title) => `    ${title}`)] : []),
+      ...(relationKinds.length ? [`  - 关系 #关系`, ...relationKinds.slice(0, 5).map((kind) => `    ${kind}`)] : []),
+    ]
+    return { rootTitle: `${scopeLabel} · 项目摘要`, branches: branches.join('\n') }
+  }, [activeScope.label, edges, nodes])
+
+  /**
+   * Summarize the current scope into an outline mind-map text node.
+   */
+  const summarizeProjectToMindmap = useCallback(async () => {
+    const built = buildScopeOutline()
+    if (!built) { setNotice('当前现场没有可总结的对象'); return }
+    const outline = `${built.rootTitle}\n${built.branches}`
+    const viewport = document.querySelector<HTMLElement>('[data-testid="canvas"]')?.getBoundingClientRect()
+    const place = { x: ((viewport?.width ?? 1000) / 2 - camera.x) / camera.zoom + 80, y: ((viewport?.height ?? 760) / 2 - camera.y) / camera.zoom + 60 }
+    if (bootMode === 'runtime' && activeProjectId) {
+      const call = await bridgeRef.current.client.createTextArtifact(activeProjectId, {
+        title: built.rootTitle,
+        body: outline,
+        scopeId,
+        x: place.x,
+        y: place.y,
+      })
+      if (call.result.ok) {
+        const value = call.result.value
+        rememberNotePresentation(value.viewId, { noteLayout: 'mindmap', noteOutline: outline, noteTags: ['AI摘要'] })
+        setNodes((current) => [...current, {
+          id: value.viewId,
+          kind: 'note' as const,
+          title: value.title,
+          subtitle: '本地摘要 · 大纲导图',
+          x: place.x, y: place.y,
+          ...nodeDimensions('note', 'standard'),
+          displayMode: 'expanded' as const,
+          scopeId,
+          noteBody: outline,
+          noteOutline: outline,
+          noteLayout: 'mindmap' as const,
+          noteTags: ['AI摘要'],
+          artifactId: value.artifactId,
+          revisionId: value.revisionId,
+          managed: true,
+        }])
+        setSelectedIds([value.viewId])
+        setNotice('已生成本地摘要导图（真实 Agent 摘要接入见 TODO）')
+        return
+      }
+      setNotice(`摘要创建失败：${call.result.error.message}`)
+      return
+    }
+    const localId = createId('note')
+    setNodes((current) => [...current, {
+      id: localId,
+      kind: 'note' as const,
+      title: built.rootTitle,
+      subtitle: '本地摘要 · 大纲导图',
+      x: place.x, y: place.y,
+      ...nodeDimensions('note', 'standard'),
+      displayMode: 'expanded' as const,
+      scopeId,
+      noteBody: outline,
+      noteOutline: outline,
+      noteLayout: 'mindmap' as const,
+      noteTags: ['AI摘要'],
+    }])
+    setSelectedIds([localId])
+    setNotice('已生成本地摘要导图')
+  }, [activeProjectId, bootMode, buildScopeOutline, camera, scopeId, setNodes])
+
+  const toggleNoteAutoSync = useCallback((id: string, enabled: boolean) => {
+    setNodes((current) => current.map((node) => node.id === id && node.kind === 'note' ? { ...node, noteAutoSync: enabled } : node))
+    rememberNotePresentation(id, { noteAutoSync: enabled })
+    setNotice(enabled ? '导图已开启自动更新：现场结构变化后 Agent 自动重算大纲' : '导图已停止自动更新')
+  }, [setNodes])
+
+  /**
+   * Mind-map auto-sync (agent behaviour, no user prompt needed): while any
+   * note node runs in mindmap layout with noteAutoSync, structural changes to
+   * the scene (node titles/ids or edges) trigger a debounced outline refresh.
+   * The refresh keeps the node title as the root and only rewrites branches,
+   * so enabling auto-sync never hijacks the user's own outline header.
+   */
+  const autoSyncedSignatureRef = useRef('')
+  const structureSignature = useMemo(() => [
+    nodes.filter((node) => !node.id.startsWith('runtime-run-view-')).map((node) => `${node.id}:${node.title}`).join('|'),
+    edges.map((edge) => `${edge.from}>${edge.to}:${edge.kind}`).join('|'),
+  ].join('::'), [edges, nodes])
+  const hasAutoSyncMindmap = nodes.some((node) => node.kind === 'note' && node.noteLayout === 'mindmap' && node.noteAutoSync)
+  useEffect(() => {
+    if (!hasAutoSyncMindmap) { autoSyncedSignatureRef.current = ''; return }
+    if (autoSyncedSignatureRef.current === structureSignature) return
+    autoSyncedSignatureRef.current = structureSignature
+    const timer = window.setTimeout(() => {
+      const autoIds = new Set(nodes.filter((node) => node.kind === 'note' && node.noteLayout === 'mindmap' && node.noteAutoSync).map((node) => node.id))
+      if (!autoIds.size) return
+      const built = buildScopeOutline(autoIds)
+      if (!built) return
+      setNodes((current) => current.map((node) => {
+        if (!(node.kind === 'note' && node.noteLayout === 'mindmap' && node.noteAutoSync)) return node
+        const outline = `${node.title}\n${built.branches}`
+        rememberNotePresentation(node.id, { noteOutline: outline })
+        return { ...node, noteBody: outline, noteOutline: outline, subtitle: '自动摘要 · 大纲导图' }
+      }))
+    }, 6_000)
+    return () => window.clearTimeout(timer)
+  }, [buildScopeOutline, hasAutoSyncMindmap, nodes, setNodes, structureSignature])
 
   const getPasteTarget = useCallback(() => {
     if (lastCanvasPointRef.current) return lastCanvasPointRef.current
@@ -6254,6 +6387,8 @@ export function App() {
         onFocusSelection: selectedIds.length === 1 ? () => openProjectFocus() : undefined,
         onRenameSelection: selectedIds.length === 1 && selectedNodes.length === 1 ? () => setRenameNodeId(selectedNodes[0]!.id) : undefined,
         onToggleNoteLayout: toggleNoteLayout,
+        onToggleNoteAutoSync: toggleNoteAutoSync,
+        onSummarizeToMindmap: () => { void summarizeProjectToMindmap() },
         onCreateNodeFromAnchor: createNodeFromAnchor,
         onFilesDropped: dropFiles,
         onExternalTextDrop: (text, x, y) => {
