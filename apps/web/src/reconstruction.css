@@ -307,11 +307,7 @@
 @keyframes lcos-merge-in { from { opacity:0; transform:translateX(-8px) scale(.92); } to { opacity:1; transform:translateX(0) scale(1); } }
 .lcos-reconstructed .lcos-bottom-dock button.active[data-label]::after { font-weight:620; }
 
-/* Dock zoom controls + axis group labels. */
-.lcos-reconstructed .lcos-zoom-controls { margin-left:auto; display:flex; align-items:center; gap:2px; padding-left:10px; border-left:1px solid var(--lcos-hair); }
-.lcos-reconstructed .lcos-zoom-controls button { height:30px !important; min-width:30px !important; padding:0 5px !important; display:grid !important; place-items:center !important; gap:0 !important; border-radius:8px !important; }
-.lcos-reconstructed .lcos-zoom-controls button.lcos-zoom-value { min-width:46px !important; font-size: 10px !important; color:#5a5663 !important; }
-.lcos-reconstructed .lcos-zoom-controls button svg { width:15px !important; height:15px !important; }
+/* Axis group labels.（dock 缩放控件已按「完成或删除」裁定移除，F-7 死 CSS 同步清理。） */
 .lcos-reconstructed .lcos-scope-axis::before { content:"空间"; font-size: 11px; letter-spacing:.08em; color:var(--lcos-ink-faint); }
 .lcos-reconstructed .lcos-lens-axis::before { content:"能力"; font-size: 11px; letter-spacing:.08em; color:var(--lcos-ink-faint); }
 

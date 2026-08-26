@@ -1,10 +1,10 @@
 import { Fragment, useEffect, useId, useRef, useState } from 'react'
 import { NOTIF_BLUE, type DotRender } from './bloub/decor'
 import { createGlythEngine, GLYTH_TO_BLOUB, glythStateDuration, pointerToLook, type BotEngine, type BotFrame, type Look } from './glythBloub'
-import { coerceGlythState, getPointerPosition, subscribeGlythClock, type LcosGlythState, type LcosGlythVariant } from './glythMotion'
+import { coerceGlythState, getPointerPosition, subscribeGlythClock, type LcosGlythState } from './glythMotion'
 import { useReducedSpatialMotion } from './useReducedSpatialMotion'
 
-export type { LcosGlythState, LcosGlythVariant } from './glythMotion'
+export type { LcosGlythState } from './glythMotion'
 
 /** 引擎比例：viewBox 100×100、原点平移到 (50,50)；彗尾/环最大 1.4×30=42 < 50。 */
 const GLYTH_SCALE = 30
@@ -157,10 +157,8 @@ function computeLook(svg: SVGSVGElement, rectCache: { current: { x: number; y: n
   return pointerToLook(pointer, rect, Math.max(60, rect.w * 3))
 }
 
-export function LcosGlyth({ state = 'stable', variant = 'cursor', size = 24, className = '', label, animated = true }: {
+export function LcosGlyth({ state = 'stable', size = 24, className = '', label, animated = true }: {
   readonly state?: LcosGlythState
-  /** 仅向后兼容保留：bloub 形态下不再影响几何。 */
-  readonly variant?: LcosGlythVariant
   readonly size?: number
   readonly className?: string
   readonly label?: string

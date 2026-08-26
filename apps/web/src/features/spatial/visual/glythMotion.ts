@@ -10,7 +10,6 @@
  */
 
 export type LcosGlythState = 'stable' | 'working' | 'waiting' | 'error' | 'confirm' | 'absorb' | 'output'
-export type LcosGlythVariant = 'balanced' | 'cursor' | 'soft'
 
 export const GLYTH_STATES: readonly LcosGlythState[] = ['stable', 'working', 'waiting', 'error', 'confirm', 'absorb', 'output']
 

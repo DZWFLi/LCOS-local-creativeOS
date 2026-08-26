@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite'
+import { configDefaults, defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import { execSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
@@ -17,6 +17,11 @@ function gitValue(command: string): string {
 
 export default defineConfig({
   plugins: [react()],
+  // A-6（20260826 钉配置）：vite root 指向仓库根导致 vitest 默认扫到根 tests/e2e 的 legacy
+  // playwright specs（此前靠命令行 --exclude 口头约定）。这里在配置层排除，裸 vitest run 即安全。
+  test: {
+    exclude: [...configDefaults.exclude, '**/tests/e2e/**'],
+  },
   root: '../..',
   define: {
     'import.meta.env.VITE_LCOS_VERSION': JSON.stringify(rootPackage.version ?? 'unknown'),

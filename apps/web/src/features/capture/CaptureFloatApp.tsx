@@ -92,7 +92,7 @@ export function CaptureFloatApp() {
       />
     </header>
     <section>
-      <LcosGlyth className="capture-float-glyth" state={glythState} size={112} variant="soft" label={`bloub：${moodText}`}/>
+      <LcosGlyth className="capture-float-glyth" state={glythState} size={112} label={`bloub：${moodText}`}/>
       <b className="capture-float-mood" data-mood={mood}>{moodText}</b>
       <small>{receiving ? '松手收进暂存区' : failed ? 'Capture 失败' : lastTitle}</small>
       <MatrixActivity

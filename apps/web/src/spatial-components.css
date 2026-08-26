@@ -1503,6 +1503,8 @@ button.lcos-context-expand:hover { background: rgba(111,87,177,.07); }
 }
 .lcos-command-palette-row:hover,
 .lcos-command-palette-row.is-selected { background: rgba(92, 74, 143, .07); }
+/* D-1（20260826）：Emil 按压纪律——命令面板行补即时 :active 缩压（与 strip/dock 按钮同款）。 */
+.lcos-command-palette-row:active { background: rgba(92, 74, 143, .13); transform: scale(.985); }
 .lcos-command-palette-row.is-selected .lcos-command-palette-row-title { color: var(--lcos-signal); }
 .lcos-command-palette-row-title {
   min-width: 0;
@@ -1728,7 +1730,7 @@ button.lcos-context-expand:hover { background: rgba(111,87,177,.07); }
 .lcos-reconstructed .lcos-rail-member-empty b { position: static; left: auto; top: auto; right: auto; bottom: auto; height: auto; background: transparent; transform: none; font-size: 10px; font-weight: 700; color: rgba(73, 66, 91, .8); }
 .lcos-reconstructed .lcos-rail-member-empty em { font-style: normal; font-size: 11px; color: rgba(73, 66, 91, .66); }
 
-/* 债2：图片三态。loading = 等宽闪烁骨架占位；error = ImageOff + 文案 + 重试。 */
+/* 图片三态（已实现，状态机在 CanvasNodeVisual.nextImageLoadPhase）：loading = 等宽闪烁骨架占位；error = ImageOff + 文案 + 重试。 */
 .lcos-reconstructed .lcos-image-skeleton { position: absolute; inset: 0; z-index: var(--lcos-z-content-inlay); /* z-tier: canvas-content（原 z1，图片骨架占位即节点内嵌入内容，值保序） */ display: grid; place-content: center; gap: 4px; background: linear-gradient(145deg, #eeedf3, #e5e3ec); }
 .lcos-reconstructed .lcos-image-skeleton i { width: 46px; height: 5px; border-radius: 999px; background: rgba(129, 124, 145, .2); animation: lcos-image-skeleton-pulse 1.1s ease-in-out infinite; }
 .lcos-reconstructed .lcos-image-skeleton i:nth-child(2) { animation-delay: .18s; }

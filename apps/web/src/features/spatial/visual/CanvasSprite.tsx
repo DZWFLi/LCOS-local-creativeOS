@@ -170,7 +170,7 @@ export function CanvasSprite(props: CanvasSpriteProps) {
     onPointerCancel={onPointerEnd}
   >
     <div className="lcos-canvas-sprite-plate">
-      <LcosGlyth state={MOOD_STATE[mood]} size={56} variant="soft" label={`画布精灵 ${hint}`}/>
+      <LcosGlyth state={MOOD_STATE[mood]} size={56} label={`画布精灵 ${hint}`}/>
     </div>
     {hovered && <span className="lcos-canvas-sprite-hint">{hint}</span>}
   </div>
@@ -180,15 +180,17 @@ export function CanvasSprite(props: CanvasSpriteProps) {
  * Avatar — a small glyth bound to one object (node / fence / action / proposal),
  * riding ON its corner like the reference demo (negative offset, plate under it).
  * The object renders this only when something is actually happening to it.
+ * 位置契约（A-9，20260826）：由宿主容器 CSS 拥有——.lcos-node-system-signal /
+ * .lcos-surface-system-signal 钉左上角、.lcos-workflow-action-signal 钉右下角；
+ * 组件本身不再接受 corner 参数（旧参数生成的类在 CSS 中无任何规则，纯误导）。
  */
-export function GlythAvatar({ state, reason, corner = 'tr', size = 26 }: {
+export function GlythAvatar({ state, reason, size = 26 }: {
   readonly state: string
   readonly reason?: 'selection' | 'proposal' | 'running' | 'review'
-  readonly corner?: 'tr' | 'tl'
   readonly size?: number
 }) {
   const coerced = coerceGlythState(state)
-  return <span className={`lcos-glyth-avatar corner-${corner} ${reason ? `reason-${reason}` : ''}`} data-glyth-reason={reason ?? 'state'} aria-hidden="true">
+  return <span className={`lcos-glyth-avatar ${reason ? `reason-${reason}` : ''}`} data-glyth-reason={reason ?? 'state'} aria-hidden="true">
     <span className="lcos-glyth-avatar-plate">
       <LcosGlyth state={coerced} size={size}/>
     </span>

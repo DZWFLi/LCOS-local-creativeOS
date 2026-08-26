@@ -199,13 +199,15 @@ describe('Spatial Component Foundation integrity', () => {
     }
   })
 
-  it('renders corner-arc avatar plates that straddle the touched object corner', () => {
+  it('renders avatar plates whose placement is owned by host container CSS, not a corner prop', () => {
+    // A-9（20260826 做实）：corner 参数已删——它生成的类在 CSS 中无任何规则，
+    // 真实位置由宿主容器拥有（node/surface 左上、workflow-action 右下）。
     const html = renderToStaticMarkup(createElement(GlythAvatar, { state: 'absorb', reason: 'selection' }))
-    expect(html).toContain('lcos-glyth-avatar corner-tr')
+    expect(html).toContain('lcos-glyth-avatar')
     expect(html).toContain('lcos-glyth-avatar-plate')
     expect(html).toContain('reason-selection')
-    const tl = renderToStaticMarkup(createElement(GlythAvatar, { state: 'waiting', reason: 'review', corner: 'tl' }))
-    expect(tl).toContain('corner-tl')
+    expect(html).toContain('data-glyth-reason="selection"')
+    expect(html).not.toContain('corner-')
   })
 
   it('resolves one Presentation signal across Glyph, Segment and Matrix without inventing truth', () => {

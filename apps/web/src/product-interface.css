@@ -817,7 +817,6 @@
   font-size: clamp(8.5px, 2vw, 10px);
 }
 
-.lcos-reconstructed[data-layout-mode="sidecar"] .lcos-zoom-controls,
 .lcos-reconstructed[data-layout-mode="sidecar"] .lcos-dock-divider,
 .lcos-reconstructed[data-layout-mode="sidecar"] .lcos-capability-hint {
   display: none !important;
@@ -869,10 +868,6 @@
 .lcos-reconstructed .vnext-bottom-dock.lcos-bottom-dock summary,
 .lcos-reconstructed .vnext-bottom-dock.lcos-bottom-dock details {
   pointer-events: auto;
-}
-
-.lcos-reconstructed .lcos-zoom-controls {
-  display: none !important;
 }
 
 .lcos-reconstructed .vnext-surface-host.lcos-surface-host {
@@ -2905,7 +2900,6 @@
 }
 .lcos-reconstructed[data-layout-mode="sidecar"] .lcos-scope-axis,
 .lcos-reconstructed[data-layout-mode="sidecar"] .lcos-dock-divider,
-.lcos-reconstructed[data-layout-mode="sidecar"] .lcos-zoom-controls,
 .lcos-reconstructed[data-layout-mode="sidecar"] .lcos-capability-hint,
 .lcos-reconstructed[data-layout-mode="sidecar"] .lcos-dock-group-title { display:none !important; }
 .lcos-reconstructed[data-layout-mode="sidecar"] .lcos-lens-axis { width:100% !important; min-width:0 !important; display:flex !important; justify-content:center !important; gap:clamp(4px,2vw,12px) !important; }
@@ -3031,8 +3025,7 @@
   overflow: visible !important;
 }
 .lcos-reconstructed:not([data-layout-mode="sidecar"]) .vnext-bottom-dock .lcos-lens-axis,
-.lcos-reconstructed:not([data-layout-mode="sidecar"]) .vnext-bottom-dock .lcos-scope-axis,
-.lcos-reconstructed:not([data-layout-mode="sidecar"]) .vnext-bottom-dock .lcos-zoom-controls {
+.lcos-reconstructed:not([data-layout-mode="sidecar"]) .vnext-bottom-dock .lcos-scope-axis {
   pointer-events: auto !important;
   border: 1px solid rgba(65, 58, 80, .085) !important;
   background: rgba(249,249,252,.76) !important;
@@ -3065,16 +3058,6 @@
 }
 /* 漏洞1：scope-axis 内真实按钮单独恢复命中，容器穿透后点击落到相邻主题按钮上。 */
 .lcos-reconstructed:not([data-layout-mode="sidecar"]) .vnext-bottom-dock .lcos-scope-axis button { pointer-events: auto !important; }
-.lcos-reconstructed:not([data-layout-mode="sidecar"]) .vnext-bottom-dock .lcos-zoom-controls {
-  position: absolute !important;
-  right: 124px !important;
-  bottom: 0 !important;
-  margin: 0 !important;
-  gap: 1px !important;
-  padding: 3px !important;
-  border-left: 1px solid rgba(65,58,80,.085) !important;
-  border-radius: 17px !important;
-}
 .lcos-reconstructed:not([data-layout-mode="sidecar"]) .vnext-bottom-dock .lcos-dock-divider,
 .lcos-reconstructed:not([data-layout-mode="sidecar"]) .vnext-bottom-dock .lcos-lens-axis::before,
 .lcos-reconstructed:not([data-layout-mode="sidecar"]) .vnext-bottom-dock .lcos-scope-axis::before {

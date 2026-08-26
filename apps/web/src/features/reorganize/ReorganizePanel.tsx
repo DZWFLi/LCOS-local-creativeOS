@@ -5,7 +5,7 @@ import type { ReorganizePreviewV0, ReorganizeProposalV0 } from '@local-creative-
 import type { LocalCoreClient } from '../../runtime/localCoreClient'
 import type { CanvasNode } from '../../model'
 import type { LayoutPosition } from '../layout/layoutTypes'
-import { LcosGlyph } from '../spatial/visual/LcosGlyph'
+import { LcosGlyth } from '../spatial/visual/LcosGlyth'
 
 interface Props {
   readonly projectId: string
@@ -201,13 +201,13 @@ export function ReorganizePanel({ projectId, scopeId, nodes, selectedIds, client
     </div>}
 
     {stage === 'running' && <div className="lcos-reorganize-running" aria-live="polite">
-      <span className="lcos-reorganize-running-signal" aria-label="智能体正在整理"><LcosGlyph state="working"/></span>
+      <span className="lcos-reorganize-running-signal" aria-label="智能体正在整理"><LcosGlyth state="working"/></span>
       <strong>正在整理当前画布</strong>
       <small>真实位置写入 ChangeSet · 变化会直接在画布上播放</small>
     </div>}
 
     {stage === 'review' && <div className="lcos-reorganize-pending" data-review-state="pending">
-      <div className="lcos-reorganize-review-title"><div><strong>整理完成</strong><small>{changeCount || '本轮'} 项变化待确认</small></div><span className="lcos-review-pending-signal"><LcosGlyph state="waiting"/>待确认</span></div>
+      <div className="lcos-reorganize-review-title"><div><strong>整理完成</strong><small>{changeCount || '本轮'} 项变化待确认</small></div><span className="lcos-review-pending-signal"><LcosGlyth state="waiting"/>待确认</span></div>
       {summary.length ? <ul className="lcos-reorganize-change-summary">{summary.map((item) => <li key={item.label} className={item.tone ?? ''}><span>{item.label}</span><strong>{item.count}</strong></li>)}</ul> : <p className="reorganize-empty">本轮主要是位置整理，没有其它结构性变化。</p>}
       <div className="lcos-reorganize-core-gap" data-core-gap="item-review">
         <strong>逐项审查等待 Core 能力</strong>

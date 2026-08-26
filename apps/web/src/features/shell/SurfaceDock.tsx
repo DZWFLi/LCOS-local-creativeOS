@@ -1,4 +1,4 @@
-import { CheckCircle2, ChevronRight, ChevronUp, Monitor, Moon, Sun, ZoomIn, ZoomOut } from 'lucide-react'
+import { CheckCircle2, ChevronRight, ChevronUp, Monitor, Moon, Sun } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { CanvasScope } from '../../model'
 import { BenchGlyph, ContextGlyph, RootGlyph, WorkflowGlyph } from '../design/LcosGlyphs'
@@ -36,9 +36,6 @@ interface Props {
   onWorkbench?: () => void
   onMergeWorkbench?: () => void
   workbenchCount?: number
-  zoom?: number
-  onZoomBy?: (factor: number) => void
-  onZoomReset?: () => void
   /** HTML5 rail/entity Drop into a capability. Pointer Semantic Drop uses the same App target ids. */
   onProjectViewDrop?: (capability: Extract<CapabilityId, 'context' | 'workflow'>, memberViewIds: readonly string[]) => void
 }
@@ -80,7 +77,7 @@ const SURFACE_ENTRIES = [
   { id:'workflow' as const, label:'工作流', hint:'行动骨架', Icon: WorkflowGlyph },
 ]
 
-export function SurfaceDock({ surface, scopePath, activeScopeId, workbenchScopeId, onSurface, onScope, onWorkbench, onMergeWorkbench, workbenchCount, zoom, onZoomBy, onZoomReset, onProjectViewDrop }: Props) {
+export function SurfaceDock({ surface, scopePath, activeScopeId, workbenchScopeId, onSurface, onScope, onWorkbench, onMergeWorkbench, workbenchCount, onProjectViewDrop }: Props) {
   const [dropCapability, setDropCapability] = useState<Extract<CapabilityId, 'context' | 'workflow'> | null>(null)
   // 并回是破坏性操作（清空当前现场），先经 ConfirmDialog 确认再执行。
   const [confirmMergeOpen, setConfirmMergeOpen] = useState(false)
@@ -137,11 +134,8 @@ export function SurfaceDock({ surface, scopePath, activeScopeId, workbenchScopeI
       {currentScope && scopePath.length>1 && workbenchScopeId!==activeScopeId && <button type="button" className="lcos-scope-breadcrumb" title={currentScope.label} onClick={()=>onScope(currentScope.id)}><span>{currentScope.label}</span></button>}
       {onMergeWorkbench && workbenchScopeId===activeScopeId && <button type="button" className="vnext-merge-workbench lcos-merge-workbench" data-label="并回" aria-label="并回主画布并清空现场" onClick={() => setConfirmMergeOpen(true)}><CheckCircle2 size={14}/></button>}
     </div></>}
-    {onZoomBy && onZoomReset && <div className="lcos-zoom-controls" aria-label="画布缩放">
-      <button type="button" aria-label="缩小" title="缩小画布" onClick={() => onZoomBy(1 / 1.25)}><ZoomOut size={15}/></button>
-      <button type="button" className="lcos-zoom-value" aria-label="重置缩放" title="重置为 100%" onClick={onZoomReset}>{Math.round((zoom ?? 1) * 100)}%</button>
-      <button type="button" aria-label="放大" title="放大画布" onClick={() => onZoomBy(1.25)}><ZoomIn size={15}/></button>
-    </div>}
+    {/* 画布缩放控件已按「完成或删除」裁定移除（dock 内 display:none 死 DOM，20260826 F-7）：
+        缩放走画布滚轮/触控板手势，dock 空间让给三视图与现场 pill。 */}
     <div className="lcos-theme-toggle" aria-label="主题">
       <button type="button" className={`mode-${theme}`} aria-label={`主题：${theme === 'auto' ? '跟随系统' : theme === 'dark' ? '深色' : '浅色'}，点击切换`} title={`主题：${theme === 'auto' ? '跟随系统' : theme === 'dark' ? '深色' : '浅色'}（点击切换 浅色 → 深色 → 跟随系统）`} onClick={() => writeThemePreference(cycleThemePreference(theme))}>
         {theme === 'dark' ? <Moon size={15}/> : theme === 'light' ? <Sun size={15}/> : <Monitor size={15}/>}
