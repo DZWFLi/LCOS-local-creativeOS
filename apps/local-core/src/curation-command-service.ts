@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 
 import type {
   CurationPatchReceiptV0,
@@ -16,6 +16,7 @@ import type { ProjectId, Relation, RelationId } from '@local-creative-os/domain'
 import { PresentationApplicationService } from './presentation-application-service.js'
 import type { SqliteMetadataRepository } from './metadata-repository.js'
 import type { SessionReadSet } from './session-read-set.js'
+import type { MutationSafetyService } from './mutation-safety-service.js'
 import { buildTextArtifactDraft, createTextArtifact, reviseManagedTextArtifact } from './text-artifact-service.js'
 import { dirname } from 'node:path'
 import { mkdir, rename, rm } from 'node:fs/promises'
@@ -24,7 +25,8 @@ export interface CurationCommandServiceDeps {
   readonly repository: SqliteMetadataRepository
   readonly presentations: PresentationApplicationService
   /** HU-2b（任务三第二刀）：agent 写 guard 的 lease 源；缺省则 updateText 不设防（向后兼容）。 */
-  readonly sessionReadSet?: SessionReadSet
+  readonly sessionReadSet?: SessionReadSet  /** 任务四 P1：change-review 记账（agent 文本写产生 ChangeSet）；缺省不记账。 */
+  readonly mutationSafety?: MutationSafetyService
 }
 
 /**
@@ -36,8 +38,31 @@ export class CurationCommandService {
 
   constructor(private readonly deps: CurationCommandServiceDeps) {}
 
-  async createText(projectId: string, input: { readonly scopeId: string; readonly title?: string; readonly body: string; readonly x?: number; readonly y?: number }) {
-    return createTextArtifact(this.deps.repository, projectId as ProjectId, input)
+  async createText(projectId: string, input: { readonly scopeId: string; readonly title?: string; readonly body: string; readonly x?: number; readonly y?: number; readonly sessionId?: string }) {
+    const result = await createTextArtifact(this.deps.repository, projectId as ProjectId, input)
+    // 任务四 P1：agent 创建也进 change-review（撤销 = 删 artifact；正文被人改过则阻断）。GUI 直建不记账。
+    if (typeof input.sessionId === 'string' && input.sessionId !== '' && this.deps.mutationSafety !== undefined) {
+      try {
+        this.deps.mutationSafety.record({
+          projectId,
+          operationId: `curation-text-${randomUUID()}`,
+          actorKind: 'agent',
+          actorId: input.sessionId,
+          changes: [{
+            type: 'artifact_text_create',
+            artifactId: result.artifactId,
+            viewId: result.viewId,
+            revisionId: result.revisionId,
+            createdContentHash: createHash('sha256').update(input.body, 'utf8').digest('hex'),
+            inverse: { type: 'delete_artifact', artifactId: result.artifactId },
+            appliedFingerprint: `artifact:${result.artifactId}:created`,
+          }],
+        })
+      } catch (error: unknown) {
+        console.warn(`[curation] change-set record failed for text create: ${error instanceof Error ? error.message : String(error)}`)
+      }
+    }
+    return result
   }
 
   /**
@@ -82,7 +107,38 @@ export class CurationCommandService {
         }
       }
     }
+    // 任务四 P1：记账前先冻结 before 指针（revise 之后 current 即前进）。
+    const targetArtifactId = target.artifactId
+      ?? (target.viewId === undefined ? undefined : this.deps.repository.getArtifactView(target.viewId)?.artifactId)
+    const beforeRevisionId = targetArtifactId === undefined
+      ? undefined
+      : this.deps.repository.getArtifact(String(targetArtifactId))?.currentRevisionId
     const result = await reviseManagedTextArtifact(this.deps.repository, projectId as ProjectId, target, body)
+    // 任务四 P1 change-review：agent 修订产生可撤销 ChangeSet（inverse = current 指回 before）。
+    // 记账与修订是两个事务：记账失败只丢审计卡不丢写（warn 吞掉）；revert 侧另有指针陈旧校验兜底。
+    if (typeof options.sessionId === 'string' && options.sessionId !== '' && this.deps.mutationSafety !== undefined
+      && targetArtifactId !== undefined && beforeRevisionId !== undefined) {
+      try {
+        this.deps.mutationSafety.record({
+          projectId,
+          operationId: `curation-text-${randomUUID()}`,
+          actorKind: 'agent',
+          actorId: options.sessionId,
+          changes: [{
+            type: 'artifact_text_update',
+            artifactId: String(targetArtifactId),
+            ...(result.viewId === '' ? {} : { viewId: result.viewId }),
+            beforeRevisionId: String(beforeRevisionId),
+            afterRevisionId: result.revisionId,
+            inverse: { type: 'restore_artifact_text', artifactId: String(targetArtifactId), targetRevisionId: String(beforeRevisionId) },
+            forward: { type: 'restore_artifact_text', artifactId: String(targetArtifactId), targetRevisionId: result.revisionId },
+            appliedFingerprint: `artifact:${String(targetArtifactId)}:${createHash('sha256').update(body, 'utf8').digest('hex')}`,
+          }],
+        })
+      } catch (error: unknown) {
+        console.warn(`[curation] change-set record failed for text update: ${error instanceof Error ? error.message : String(error)}`)
+      }
+    }
     return { outcome: 'applied', ...result }
   }
 
@@ -185,6 +241,19 @@ export class CurationCommandService {
       }
       relationUpserts.push(value)
       changes.push({ type: 'relation_upsert', relationId: value.id, inverse: { type: 'delete_relation', relationId: value.id }, appliedFingerprint: `relation:${value.id}:applied` })
+    }
+
+    // 任务四 P1：batch 内的 text 创建同样进 change-review（与 relation/presentation 同一复合事务，原子）。
+    for (const draft of drafts) {
+      changes.push({
+        type: 'artifact_text_create',
+        artifactId: String(draft.artifact.id),
+        viewId: draft.viewId,
+        revisionId: String(draft.revision.id),
+        createdContentHash: String(draft.revision.contentHash),
+        inverse: { type: 'delete_artifact', artifactId: String(draft.artifact.id) },
+        appliedFingerprint: `artifact:${String(draft.artifact.id)}:created`,
+      })
     }
 
     // 3. presentation（CAS 在复合事务内）

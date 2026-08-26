@@ -2190,6 +2190,38 @@ export class SqliteMetadataRepository {
     }
   }
 
+  /** 任务四 P1 change-review：restore_artifact_text 的执行体——current 指针回拨到 target（CAS：current 必须仍是 expected）。 */
+  restoreArtifactCurrentRevision(input: {
+    readonly artifactId: string
+    readonly targetRevisionId: string
+    readonly expectedCurrentRevisionId: string
+  }): void {
+    const artifact = this.getArtifact(input.artifactId)
+    if (artifact === undefined) throw new Error('Artifact not found.')
+    const current = artifact.currentRevisionId
+    if (current === undefined || String(current) !== input.expectedCurrentRevisionId) {
+      throw new Error('Artifact current revision moved; refusing to restore over newer work.')
+    }
+    const target = this.getArtifactRevision(input.targetRevisionId)
+    if (target === undefined || String(target.artifactId) !== input.artifactId) {
+      throw new Error('Target revision does not belong to the artifact.')
+    }
+    const now = new Date().toISOString()
+    this.#database.exec('BEGIN IMMEDIATE;')
+    try {
+      this.#database.prepare('UPDATE artifact_revisions SET status = ? WHERE id = ?').run('superseded', input.expectedCurrentRevisionId as SQLInputValue)
+      this.#database.prepare('UPDATE artifact_revisions SET status = ? WHERE id = ?').run('current', input.targetRevisionId as SQLInputValue)
+      this.#database.prepare('UPDATE artifacts SET current_revision_id = ?, updated_at = ? WHERE id = ?')
+        .run(input.targetRevisionId as SQLInputValue, now, input.artifactId as SQLInputValue)
+      this.#database.prepare('UPDATE artifact_views SET revision_id = ? WHERE artifact_id = ?')
+        .run(input.targetRevisionId as SQLInputValue, input.artifactId as SQLInputValue)
+      this.#database.exec('COMMIT;')
+    } catch (error: unknown) {
+      this.#database.exec('ROLLBACK;')
+      throw error
+    }
+  }
+
   getArtifactViews(artifactId: string): ArtifactView[] {
     return (this.#database.prepare('SELECT * FROM artifact_views WHERE artifact_id = ?').all(artifactId as SQLInputValue) as Row[]).map((r) => this.#artifactView(r))
   }

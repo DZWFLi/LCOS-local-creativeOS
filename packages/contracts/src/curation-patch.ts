@@ -133,6 +133,30 @@ export type MutationChangeItemV1 =
       readonly appliedFingerprint: string
     }
 
+  | {
+      /** 任务四 P1 change-review：agent 经 CAS 通道修订受管 text（updateText）。撤销 = current 指回 before 修订。 */
+      readonly type: 'artifact_text_update'
+      readonly artifactId: string
+      readonly viewId?: string
+      readonly beforeRevisionId: string
+      readonly afterRevisionId: string
+      readonly inverse: { readonly type: 'restore_artifact_text'; readonly artifactId: string; readonly targetRevisionId: string }
+      readonly forward: { readonly type: 'restore_artifact_text'; readonly artifactId: string; readonly targetRevisionId: string }
+      /** 新正文 contentHash（hex）。撤销陈旧校验以 currentRevisionId 指针为准，此指纹供审计展示。 */
+      readonly appliedFingerprint: string
+    }
+  | {
+      /** 任务四 P1 change-review：agent 创建受管 text。撤销 = 删除该 artifact；正文被后人改过则阻断（防误删用户后续编辑）。 */
+      readonly type: 'artifact_text_create'
+      readonly artifactId: string
+      readonly viewId: string
+      readonly revisionId: string
+      /** 创建时正文 contentHash（hex）；撤销前与当前 current revision 的 hash 比对。 */
+      readonly createdContentHash: string
+      readonly inverse: { readonly type: 'delete_artifact'; readonly artifactId: string }
+      /** undo-only：重做需全量复合重建，V0 不承诺（对齐旧 presentation ChangeSet 的诚实降级）。 */
+      readonly appliedFingerprint: string
+    }
 export interface MutationChangeSetV1 {
   readonly schemaVersion: 1
   readonly id: string

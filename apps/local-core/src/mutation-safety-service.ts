@@ -187,6 +187,22 @@ export class MutationSafetyService {
         if (this.#metadata.getRelation(change.relationId) !== undefined) {
           return { revertable: false, reason: 'TOUCHED_STATE_CHANGED_AFTER_APPLY', changeSetId }
         }
+      } else if (change.type === 'artifact_text_update') {
+        // 撤销修订：current 必须仍指向 agent 写入的 after 修订（之后有人写过则阻断，绝不覆盖新工作）。
+        const current = this.#metadata.getArtifact(change.artifactId)
+        if (current === undefined || current.currentRevisionId === undefined || String(current.currentRevisionId) !== change.afterRevisionId) {
+          return { revertable: false, reason: 'TOUCHED_STATE_CHANGED_AFTER_APPLY', changeSetId }
+        }
+      } else if (change.type === 'artifact_text_create') {
+        // 撤销创建：节点还在 AND 正文仍是创建时那版（被人编辑过则阻断——防误删用户后续工作）。
+        const current = this.#metadata.getArtifact(change.artifactId)
+        if (current === undefined || current.currentRevisionId === undefined) {
+          return { revertable: false, reason: 'TOUCHED_STATE_CHANGED_AFTER_APPLY', changeSetId }
+        }
+        const revision = this.#metadata.getArtifactRevision(String(current.currentRevisionId))
+        if (revision === undefined || String(revision.contentHash) !== change.createdContentHash) {
+          return { revertable: false, reason: 'TOUCHED_STATE_CHANGED_AFTER_APPLY', changeSetId }
+        }
       }
     }
 
@@ -211,6 +227,16 @@ export class MutationSafetyService {
       } else if (change.type === 'relation_update' || change.type === 'relation_delete') {
         this.#restoreRelation(changeSet.projectId, change.relationId, change.inverse.relation)
         this.#publishRelation(changeSet.projectId, change.relationId, 'restored', origin)
+      } else if (change.type === 'artifact_text_update') {
+        this.#metadata.restoreArtifactCurrentRevision({
+          artifactId: change.artifactId,
+          targetRevisionId: change.inverse.targetRevisionId,
+          expectedCurrentRevisionId: change.afterRevisionId,
+        })
+        this.#publishArtifact(changeSet.projectId, change.artifactId, 'restored', origin)
+      } else if (change.type === 'artifact_text_create') {
+        this.#metadata.deleteArtifact(change.artifactId)
+        this.#publishArtifact(changeSet.projectId, change.artifactId, 'deleted', origin)
       }
     }
 
@@ -246,6 +272,15 @@ export class MutationSafetyService {
         if (current === undefined || relationFingerprint(relationSnapshot(current)) !== relationFingerprint(change.inverse.relation)) {
           return { revertable: false, reason: 'TOUCHED_STATE_CHANGED_AFTER_APPLY', changeSetId }
         }
+      } else if (change.type === 'artifact_text_update') {
+        // 重做修订：current 必须仍停在撤销后的 before 修订（期间有人写过则阻断）。
+        const current = this.#metadata.getArtifact(change.artifactId)
+        if (current === undefined || current.currentRevisionId === undefined || String(current.currentRevisionId) !== change.beforeRevisionId) {
+          return { revertable: false, reason: 'TOUCHED_STATE_CHANGED_AFTER_APPLY', changeSetId }
+        }
+      } else if (change.type === 'artifact_text_create') {
+        // undo-only：创建的重做需全量复合重建，V0 不承诺。
+        return { revertable: false, reason: 'FORWARD_STATE_UNAVAILABLE', changeSetId }
       }
     }
 
@@ -270,6 +305,13 @@ export class MutationSafetyService {
       } else if (change.type === 'relation_delete') {
         this.#metadata.deleteRelation(change.relationId)
         this.#publishRelation(changeSet.projectId, change.relationId, 'deleted', origin)
+      } else if (change.type === 'artifact_text_update') {
+        this.#metadata.restoreArtifactCurrentRevision({
+          artifactId: change.artifactId,
+          targetRevisionId: change.forward.targetRevisionId,
+          expectedCurrentRevisionId: change.beforeRevisionId,
+        })
+        this.#publishArtifact(changeSet.projectId, change.artifactId, 'restored', origin)
       }
     }
 
@@ -335,6 +377,15 @@ export class MutationSafetyService {
       ...(origin === undefined ? {} : { origin }),
       entityRefs: [`relation:${relationId}`],
       payload: { relationId, action },
+    })
+  }
+  #publishArtifact(projectId: string, artifactId: string, action: 'restored' | 'deleted', origin?: ProjectEventOrigin): void {
+    this.#events?.publish(projectId, {
+      channel: 'artifact',
+      type: 'artifact.changed',
+      ...(origin === undefined ? {} : { origin }),
+      entityRefs: [`artifact:${artifactId}`],
+      payload: { artifactId, action },
     })
   }
 }

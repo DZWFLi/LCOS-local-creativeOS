@@ -161,7 +161,7 @@ export async function handleCurationRoute(ctx: CurationRouteContext): Promise<bo
     }
     try {
       if (method === 'POST') {
-        const value = await curationCommand.createText(projectId, { scopeId: body.scopeId ?? '', ...(body.title === undefined ? {} : { title: body.title }), body: body.body })
+        const value = await curationCommand.createText(projectId, { scopeId: body.scopeId ?? '', ...(body.title === undefined ? {} : { title: body.title }), body: body.body, ...(typeof body.sessionId === 'string' && body.sessionId !== '' ? { sessionId: body.sessionId } : {}) })
         sendJson(response, 200, { ok: true, value })
         return true
       }

@@ -202,6 +202,8 @@ export function composeLocalCoreServices(options: LocalCoreServerOptions = {}): 
       presentations: presentation!,
       // HU-2b（任务三第二刀）：mutation 层 CAS guard 接 sessionReadSet（与 routes /curation/read 同一实例）
       sessionReadSet,
+      // 任务四 P1：agent 文本写进 change-review 记账
+      ...(mutationSafety === undefined ? {} : { mutationSafety }),
     }),
     runtimeRegistry,
     intelligence,
