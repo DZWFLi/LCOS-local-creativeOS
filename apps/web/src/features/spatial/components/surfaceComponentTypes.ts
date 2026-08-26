@@ -9,6 +9,7 @@ export interface SurfaceComponentRenderContext {
   readonly edges?: readonly CanvasEdge[]
   readonly hierarchy?: PresentationHierarchyState
   readonly history?: readonly ContextHistoryEntry[]
+  readonly projectId?: string
   readonly reviews?: readonly { readonly runId: string; readonly label: string; readonly phase: string }[]
   readonly checkpoints?: readonly { readonly checkpointId: string; readonly label: string; readonly createdAt: string }[]
   readonly onOpenReview?: (runId: string) => void

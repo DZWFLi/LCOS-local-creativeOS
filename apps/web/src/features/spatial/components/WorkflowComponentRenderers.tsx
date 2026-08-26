@@ -43,5 +43,5 @@ export function WorkbenchFrameComponent({ element, selected, context }: SurfaceC
   const semantic = element.presentation?.variant ?? 'candidate'
   const ids = new Set([element.binding?.projectViewId, ...(element.binding?.projectViewIds ?? [])].filter((id): id is string => Boolean(id)))
   const pages = (context?.nodes ?? []).filter((node) => ids.has(node.id))
-  return <div className={`lcos-workflow-component workflow-workbench ${selected ? 'is-selected' : ''}`} data-workflow-component="workbench"><Header icon={<SquareStack size={14}/>} title="Workbench" hint="项目页面与临时工作材料" semantic={semantic} selected={selected}/><WebWorkbench pages={pages} onOpenPage={context?.onOpenNode}/><footer>{bindingLabel(element)}</footer></div>
+  return <div className={`lcos-workflow-component workflow-workbench ${selected ? 'is-selected' : ''}`} data-workflow-component="workbench"><Header icon={<SquareStack size={14}/>} title="Workbench" hint="项目页面与临时工作材料" semantic={semantic} selected={selected}/><WebWorkbench pages={pages} onOpenPage={context?.onOpenNode} projectId={context?.projectId}/><footer>{bindingLabel(element)}</footer></div>
 }

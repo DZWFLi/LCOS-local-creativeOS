@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Clock3, Crosshair, FileText, GitBranch, History, RefreshCw, RotateCcw, ScanSearch, Sparkles, X } from 'lucide-react'
+import { Crosshair, FileText, GitBranch, History, RefreshCw, ScanSearch, X } from 'lucide-react'
 
 import type { CanvasNode } from '../../model'
 import type { LocalCoreClient } from '../../runtime/localCoreClient'
-import { parseArtifactRevisions, summarizeRevisionCompare, type ArtifactRevisionProvenance } from '../../runtime/projectionAdapters'
-import { buildChangeTrace } from '../trace/changeTrace'
+import type { ArtifactRevisionProvenance } from '../../runtime/projectionAdapters'
+import { ArtifactRevisionCompare } from './ArtifactRevisionCompare'
 import { ArtifactViewerHost, artifactViewerRegistry, resolveArtifactViewerKind } from '../viewer/artifactViewerRegistry'
 
 export type WorkbenchFocus = 'preview' | 'overview' | 'revisions'
@@ -37,52 +36,6 @@ function formatTime(value?: string): string {
 export function ArtifactWorkbench(props: Props) {
   const { node, focus } = props
   const descriptor = artifactViewerRegistry[resolveArtifactViewerKind(node)]
-  const [revisions, setRevisions] = useState<ArtifactRevisionProvenance[]>([])
-  const [loadingRevisions, setLoadingRevisions] = useState(false)
-  const [revisionError, setRevisionError] = useState<string | null>(null)
-  const [compareSummary, setCompareSummary] = useState<string | null>(null)
-  const [comparingId, setComparingId] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (!node.artifactId || focus !== 'revisions') return
-    const controller = new AbortController()
-    setLoadingRevisions(true)
-    setRevisionError(null)
-    void Promise.all([
-      props.client.artifactDetail(node.artifactId, controller.signal),
-      props.client.revisionList(node.artifactId, controller.signal),
-    ]).then(([detailCall, listCall]) => {
-      if (!detailCall.result.ok && !listCall.result.ok) {
-        setRevisionError(detailCall.result.error.message || listCall.result.error.message)
-        return
-      }
-      const next = parseArtifactRevisions(
-        detailCall.result.ok ? detailCall.result.value : undefined,
-        listCall.result.ok ? listCall.result.value : undefined,
-        node.revisionId,
-      )
-      setRevisions(next)
-    }).finally(() => setLoadingRevisions(false))
-    return () => controller.abort()
-  }, [focus, node.artifactId, node.revisionId, props.client])
-
-  const currentRevision = useMemo(() => revisions.find((revision) => revision.current)
-    ?? revisions.find((revision) => revision.id === node.revisionId)
-    ?? revisions[0], [node.revisionId, revisions])
-
-  const compareWithCurrent = (revision: ArtifactRevisionProvenance) => {
-    if (!currentRevision || revision.id === currentRevision.id) return
-    setComparingId(revision.id)
-    setCompareSummary(null)
-    void props.client.revisionCompare(props.projectId, revision.id, currentRevision.id).then((call) => {
-      if (!call.result.ok) {
-        setCompareSummary(`对比失败：${call.result.error.message}`)
-        return
-      }
-      setCompareSummary(`${revision.label} → ${currentRevision.label}：${summarizeRevisionCompare(call.result.value)}`)
-    }).finally(() => setComparingId(null))
-  }
-  const changeTrace = useMemo(() => buildChangeTrace(revisions), [revisions])
 
   return (
     <aside className="artifact-workbench" data-testid="artifact-workbench" data-kind={node.kind} data-focus={focus} role="complementary" aria-label={`${node.title} 对象工作台`}>
@@ -102,44 +55,7 @@ export function ArtifactWorkbench(props: Props) {
         {focus === 'preview'
           ? <ArtifactViewerHost node={node} projectId={props.projectId} />
           : focus === 'revisions'
-            ? <section className="workbench-revisions" aria-label="版本与来源">
-                <header>
-                  <div><History size={14} /><span>同一内容的不可变版本</span></div>
-                  <small>继续修改只会创建新 Draft</small>
-                </header>
-                {loadingRevisions && <div className="workbench-loading"><Sparkles size={14} />正在读取版本来源…</div>}
-                {revisionError && <div className="workbench-error">版本读取失败：{revisionError}</div>}
-                {!loadingRevisions && !revisionError && <ol>
-                  {revisions.map((revision) => <li key={revision.id} className={revision.current ? 'current' : revision.id === node.revisionId ? 'viewing' : ''}>
-                    <div className="revision-rail-dot" />
-                    <article>
-                      <header><strong>{revision.label}</strong><span>{revision.current ? '当前版本' : revision.draft ? '待确认版本' : '历史版本'}</span></header>
-                      <p>{revision.prompt ?? '该版本没有可显示的原始提示词。'}</p>
-                      <dl>
-                        <div><dt>处理者</dt><dd>{revision.provider ?? '未记录'}</dd></div>
-                        <div><dt>Agent 任务</dt><dd>{revision.runId ? '已关联，可在诊断中查看' : '未关联'}</dd></div>
-                        <div><dt><Clock3 size={11} />创建</dt><dd>{formatTime(revision.createdAt)}</dd></div>
-                      </dl>
-                      <footer>
-                        {!revision.current && <button type="button" className="pressable" onClick={() => props.onUseRevision(revision)}><RotateCcw size={12} />基于此版本继续</button>}
-                        {!revision.current && currentRevision && <button type="button" className="pressable" disabled={comparingId === revision.id} onClick={() => compareWithCurrent(revision)}><GitBranch size={12} />与 Current 对比</button>}
-                      </footer>
-                    </article>
-                  </li>)}
-                </ol>}
-                {changeTrace.length > 0 && <section className="workbench-change-trace" aria-label="变更轨迹">
-                  <header><div><GitBranch size={14} /><span>变更轨迹 · 内容 / 来源 / 历史</span></div></header>
-                  <ol>
-                    {changeTrace.map((entry) => <li key={entry.revisionId}>
-                      <strong>{entry.action}</strong>
-                      <span>{entry.actor === 'agent' ? 'Agent' : entry.actor === 'system' ? '系统' : '用户'}</span>
-                      <em>{formatTime(entry.at)}</em>
-                      {entry.reasonSummary && <p>{entry.reasonSummary}</p>}
-                    </li>)}
-                  </ol>
-                </section>}
-                {compareSummary && <div className="revision-compare-summary">{compareSummary}</div>}
-              </section>
+            ? <ArtifactRevisionCompare node={node} projectId={props.projectId} client={props.client} onUseRevision={props.onUseRevision} />
             : <div className="workbench-overview">
                 <dl className="workbench-meta">
                   <div><dt>内容类型</dt><dd>{node.fileType ?? node.kind}</dd></div>

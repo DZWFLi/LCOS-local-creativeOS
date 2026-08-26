@@ -759,7 +759,7 @@ export function WorkflowSurface(props: Props) {
         {layoutPreview?.routes.map((route) => route.points.length > 1 ? <path key={`preview:${route.id}`} className="layout-preview-edge" d={route.points.map((point, index) => `${index ? 'L' : 'M'}${point.x} ${point.y}`).join(' ')}/> : null)}
       </SpatialEdgeLayer>
 
-      <SurfaceComponentLayer surface="workflow" elements={surfaceElements} zoom={camera.zoom} selectionIds={selectedComponentIds} onSelectElement={handleComponentSelect} renderContext={{ nodes: visibleNodes, edges: visibleEdges, reviews: props.reviews, checkpoints: props.checkpoints, onSelectNode: props.onSelect, onOpenNode: props.onDoubleClick, onOpenReview: props.onOpenReview }} onElementsChange={setSurfaceElements}/>
+      <SurfaceComponentLayer surface="workflow" elements={surfaceElements} zoom={camera.zoom} selectionIds={selectedComponentIds} onSelectElement={handleComponentSelect} renderContext={{ nodes: visibleNodes, edges: visibleEdges, projectId: props.projectId, reviews: props.reviews, checkpoints: props.checkpoints, onSelectNode: props.onSelect, onOpenNode: props.onDoubleClick, onOpenReview: props.onOpenReview }} onElementsChange={setSurfaceElements}/>
       <SurfaceComponentProposalLayer surface="workflow" elements={proposalElements} renderContext={{ nodes: visibleNodes, edges: visibleEdges }}/>
 
       <SpatialNodeLayer>

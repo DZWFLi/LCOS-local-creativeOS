@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 const popover = readFileSync(new URL('../src/features/canvas/NodeInfoPopover.tsx', import.meta.url), 'utf8')
 const workbench = readFileSync(new URL('../src/features/workbench/ArtifactWorkbench.tsx', import.meta.url), 'utf8')
+const revisionCompare = readFileSync(new URL('../src/features/workbench/ArtifactRevisionCompare.tsx', import.meta.url), 'utf8')
 const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8')
 
 describe('Phase 2 — Source actions + Change Trace contract', () => {
@@ -24,9 +25,11 @@ describe('Phase 2 — Source actions + Change Trace contract', () => {
   })
 
   it('renders Change Trace as 内容 / 来源 / 历史 in the revisions view', () => {
-    expect(workbench).toContain('变更轨迹 · 内容 / 来源 / 历史')
-    expect(workbench).toContain('buildChangeTrace(revisions)')
-    expect(workbench).toContain('entry.actor')
-    expect(workbench).toContain('entry.reasonSummary')
+    // 2026-08-26 起版本对比（含变更轨迹）抽为共享组件，Workbench 与 WebWorkbench 共用。
+    expect(workbench).toContain('<ArtifactRevisionCompare')
+    expect(revisionCompare).toContain('变更轨迹 · 内容 / 来源 / 历史')
+    expect(revisionCompare).toContain('buildChangeTrace(revisions)')
+    expect(revisionCompare).toContain('entry.actor')
+    expect(revisionCompare).toContain('entry.reasonSummary')
   })
 })

@@ -916,6 +916,9 @@ button.lcos-context-expand:hover { background: rgba(111,87,177,.07); }
 .lcos-web-workbench-tool-result { display: grid; gap: 5px; padding: 8px 9px; border-radius: 8px; background: rgba(77, 145, 188, .06); }
 .lcos-web-workbench-tool-result span { display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; color: rgba(48, 68, 84, .5); }
 .lcos-web-workbench-tool-result pre { margin: 0; font: 500 11px/1.5 var(--lcos-font-mono, monospace); white-space: pre-wrap; color: rgba(40, 53, 65, .78); }
+.lcos-web-workbench-two-page-targets { display: flex; flex-wrap: wrap; gap: 5px; }
+.lcos-web-workbench-two-page-targets button { padding: 5px 9px; border-radius: 8px; background: rgba(77, 145, 188, .1); color: rgba(45, 86, 113, .8); font-size: 11px; font-weight: 580; }
+.lcos-web-workbench-two-page-targets button:not(:disabled):hover { background: rgba(77, 145, 188, .18); }
 .lcos-web-workbench-todos { display: grid; gap: 6px; }
 .lcos-web-workbench-todo-input { display: flex; align-items: center; gap: 6px; }
 .lcos-web-workbench-todo-input svg { flex: 0 0 auto; color: rgba(45, 86, 113, .6); }

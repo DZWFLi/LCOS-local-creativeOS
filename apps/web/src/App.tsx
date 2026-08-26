@@ -64,6 +64,7 @@ import { humanizeRuntimeMessage, isReceiverSessionError } from './runtime/messag
 import { AgentContextSurface } from './features/shell/AgentContextSurface'
 import { buildScopePath, createId, decodeTextBuffer, fileNameFromPath, inferFileType, isTextPreviewFile, runtimePresentationStatus } from './features/shell/appShell'
 import { AppShellView } from './features/shell/AppShellView'
+import { LocalCoreClientProvider } from './runtime/LocalCoreClientContext'
 import type { SurfaceContextMenuAction, SurfaceContextMenuItem } from './features/shell/SurfaceContextMenu'
 import type { SurfaceAgentRunState, SurfaceAgentSubmission, SurfaceAgentSubmissionResult } from './features/shell/SurfaceAgentNode'
 import type { DepositHintItem } from './features/shell/BoundaryHints'
@@ -6684,7 +6685,7 @@ export function App() {
   const nodeToRename = renameNodeId ? nodes.find((node) => node.id === renameNodeId) : undefined
   const noteToEdit = noteEditorId ? nodes.find((node) => node.id === noteEditorId) : undefined
   const scopePath = buildScopePath(scopes, activeScope)
-  return <>
+  return <LocalCoreClientProvider value={bridgeRef.current.client}>
     <AppShellView
     layoutDensity={layoutDensity}
     layoutMode={layoutMode}
@@ -7461,5 +7462,5 @@ export function App() {
       providers={paletteAssembly.providers}
       actions={paletteAssembly.actions}
     />
-  </>
-}
+    </LocalCoreClientProvider>
+  }

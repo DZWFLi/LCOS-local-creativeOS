@@ -50,6 +50,8 @@ export function ArtifactRevisionCompare(props: Props) {
         node.revisionId,
       )
       setRevisions(next)
+    }).catch((error) => {
+      setRevisionError(error instanceof Error ? error.message : String(error))
     }).finally(() => setLoadingRevisions(false))
     return () => controller.abort()
   }, [node.artifactId, node.revisionId, client])
