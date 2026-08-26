@@ -1,19 +1,34 @@
 /**
- * CommandPalette MVP（第一梯队 ⑤）：⌘K / Ctrl+K 全局命令面板。
- * 纯键盘驱动：输入过滤（provider 查询）→ ↑↓ 循环移动高亮 → Enter 执行 → Esc 关闭。
+ * CommandPalette（Wave A-4：grok-bot A3 架构内化——provider 化数据流 + AsyncSnapshot 六态）。
+ * ⌘K / Ctrl+K 全局命令面板：输入过滤（provider 查询）→ ↑↓ 循环移动高亮 → Enter 执行 →
+ * Esc 关闭（keyboard-first；键位语义纯函数见 readPaletteKey / movePaletteHighlight）。
+ * 数据流：query → 全 providers 并发 search → 合并各 snapshot（loading / ready / empty /
+ * failed / unavailable / cancelled 六态渲染，契约见 features/ui/asyncState.ts）。
+ * 执行动作全部来自 App 注入的 actions 表（action injection；面板只查表调用）。
  * 结构参考 grok-bot CommandPalette（单输入 + listbox + 高亮行），不抄其 8 Tab /
- * 嵌套步骤 / 行号快捷键；执行动作全部来自 App 注入的 actions 表（provider 纯查询）。
+ * 嵌套步骤 / 行号快捷键。
  */
 
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { createPortal } from 'react-dom'
-import { groupPaletteSections, mergePaletteItems, type PaletteProvider } from './commandPaletteProviders'
+import { isUsable, makeLoading, type AsyncSnapshot } from '../ui/asyncState'
+import {
+  groupPaletteEntries,
+  mergePaletteEntries,
+  normalizePaletteProviderInput,
+  PALETTE_GROUP_ORDER,
+  type PaletteEntry,
+  type PaletteProvider,
+  type PaletteProviderInput,
+  type PaletteSearchOutcome,
+} from './paletteProvider'
 import { PALETTE_KEYS } from './keymap'
 
 export interface CommandPaletteProps {
   readonly open: boolean
   readonly onClose: () => void
-  readonly providers: readonly PaletteProvider[]
+  /** 数据源：新异步 provider（id/label/search，六态快照）或旧同步 provider（group/query）——输入侧就地归一。 */
+  readonly providers: readonly PaletteProviderInput[]
   /** item.id → 执行回调；面板只查表调用，动作本体全部在 App.tsx。 */
   readonly actions: Readonly<Record<string, () => void>>
 }
@@ -39,22 +54,133 @@ export function movePaletteHighlight(current: number, rowCount: number, delta: -
   return (bounded + delta + rowCount) % rowCount
 }
 
+/* ---------------- provider 化数据流的中间形状 ---------------- */
+
+/** 单 provider 一次 search 的发起记录（outcome = 同步快照或 Promise）。 */
+interface PaletteSearchEntry {
+  readonly provider: PaletteProvider
+  readonly outcome: PaletteSearchOutcome
+}
+
+/** 异步源已解析的快照：只认挂靠在「当前 searches」上的结果（stale 不回写）。 */
+interface ResolvedSnapshots {
+  readonly searches: readonly PaletteSearchEntry[]
+  readonly snapshots: Readonly<Record<string, AsyncSnapshot<readonly PaletteEntry[]>>>
+}
+
+/** 需要渲染状态行的 provider 快照（loading / failed / unavailable；empty / cancelled 不渲染）。 */
+interface ProviderStateRow {
+  readonly provider: PaletteProvider
+  readonly status: 'loading' | 'failed' | 'unavailable'
+  readonly error?: string
+}
+
+/** 渲染分节：五组 IA 的 ready 条目 + 该组 provider 的状态行（骨架 / 浅错）同节共存。 */
+interface RenderSection {
+  readonly group: string
+  readonly items: readonly PaletteEntry[]
+  readonly states: readonly ProviderStateRow[]
+}
+
 export function CommandPalette({ open, onClose, providers, actions }: CommandPaletteProps) {
   const [query, setQuery] = useState('')
   const [highlight, setHighlight] = useState(0)
   const inputRef = useRef<HTMLInputElement | null>(null)
 
-  const items = useMemo(() => mergePaletteItems(providers, query), [providers, query])
-  const sections = useMemo(() => groupPaletteSections(items), [items])
-  // 分节首行的平铺偏移：行 key 与 aria-selected 用平铺索引，与高亮状态同一坐标。
+  // —— provider 化数据流（A3）：query → 全 providers 并发 search → 合并各 snapshot ——
+  // 兼容面：旧同步 provider（group + query）就地归一成新 provider；混合实例直走 search。
+  const paletteProviders = useMemo(() => providers.map(normalizePaletteProviderInput), [providers])
+
+  // render 期并发发起查询：内存态源同步落快照（ready/empty，renderToStaticMarkup 可断言），
+  // 异步源落 Promise（先按 loading 渲染）。search 承诺零副作用（见 paletteProvider.ts），
+  // render 期调用安全；useMemo 保证同 (providers, query) 不重复发起。
+  const searches = useMemo(
+    () => paletteProviders.map((provider): PaletteSearchEntry => ({ provider, outcome: provider.search(query) })),
+    [paletteProviders, query],
+  )
+
+  // 异步源的已解析快照。只认「挂靠在当前 searches 上」的解析结果：query 一变，旧 searches
+  // 失配即整体作废（stale response must not clobber fresh state，见 asyncState.ts 契约）。
+  const [resolved, setResolved] = useState<ResolvedSnapshots | null>(null)
+
+  // 异步源并发解析（Promise.all）：provider 层持序号把过期结果折叠为 makeCancelled（丢弃），
+  // 组件层再以 searches 身份比对兜底——双重防护旧结果不回写 UI。
+  useEffect(() => {
+    const pending = searches.filter(
+      (search): search is PaletteSearchEntry & { readonly outcome: Promise<AsyncSnapshot<readonly PaletteEntry[]>> } =>
+        search.outcome instanceof Promise,
+    )
+    if (pending.length === 0) return
+    let live = true
+    void Promise.all(
+      pending.map(async (search): Promise<readonly [string, AsyncSnapshot<readonly PaletteEntry[]>]> => [
+        search.provider.id,
+        await search.outcome,
+      ]),
+    )
+      .then((pairs) => {
+        if (live) setResolved({ searches, snapshots: Object.fromEntries(pairs) })
+      })
+      .catch(() => { /* provider 层已把失败折叠为 failed 快照；此处兜底：保持 loading 不回写 */ })
+    return () => { live = false }
+  }, [searches])
+
+  // 有效快照：同步结果直取；异步结果未回（或已随 query 作废）→ loading。
+  const outcomes = useMemo(
+    () =>
+      searches.map(({ provider, outcome }) => {
+        if (!(outcome instanceof Promise)) return { provider, snapshot: outcome }
+        const snapshot =
+          resolved !== null && resolved.searches === searches ? resolved.snapshots[provider.id] : undefined
+        return { provider, snapshot: snapshot ?? makeLoading() }
+      }),
+    [searches, resolved],
+  )
+
+  // 合并：仅 ready 态供数据（isUsable）→ 跨 provider 按 id 去重（首见优先）→ 五组 IA 分节。
+  const items = useMemo(
+    () => mergePaletteEntries(outcomes.flatMap((outcome) => (isUsable(outcome.snapshot) ? [outcome.snapshot.data] : []))),
+    [outcomes],
+  )
+  const sections = useMemo(() => groupPaletteEntries(items), [items])
+
+  // 六态渲染分流：loading / failed / unavailable → 状态行；empty → 组不显示（现行为）；cancelled → 丢弃。
+  const providerStates = useMemo(
+    () =>
+      outcomes.flatMap((outcome): ProviderStateRow[] => {
+        const status = outcome.snapshot.status
+        if (status !== 'loading' && status !== 'failed' && status !== 'unavailable') return []
+        return [{ provider: outcome.provider, status, error: outcome.snapshot.error }]
+      }),
+    [outcomes],
+  )
+
+  // 渲染分节：五组 IA 顺序内，ready 条目与该组 provider 的状态行同节共存；
+  // label 不在五组内的 provider（未来扩展源）状态节追加在末尾。
+  const renderSections = useMemo(() => {
+    const ordered: RenderSection[] = PALETTE_GROUP_ORDER.map((group) => ({
+      group,
+      items: sections.find((section) => section.group === group)?.items ?? [],
+      states: providerStates.filter((state) => state.provider.label === group),
+    }))
+    const groupNames: readonly string[] = PALETTE_GROUP_ORDER
+    const custom = providerStates.filter((state) => !groupNames.includes(state.provider.label))
+    return [
+      ...ordered.filter((section) => section.items.length > 0 || section.states.length > 0),
+      ...custom.map((state) => ({ group: state.provider.label, items: [], states: [state] })),
+    ]
+  }, [sections, providerStates])
+
+  // 分节首行的平铺偏移：行 key 与 aria-selected 用平铺索引，与高亮状态同一坐标
+  //（状态行非 option，不占导航坐标——↑↓/Enter 只在真实条目上移动/执行）。
   const sectionRows = useMemo(() => {
     let offset = 0
-    return sections.map((section) => {
+    return renderSections.map((section) => {
       const start = offset
       offset += section.items.length
       return { section, start }
     })
-  }, [sections])
+  }, [renderSections])
   const selected = items.length === 0 ? 0 : Math.min(Math.max(highlight, 0), items.length - 1)
 
   // 每次打开：重置输入与高亮，异步聚焦输入框（纯键盘驱动的入口）。
@@ -108,7 +234,7 @@ export function CommandPalette({ open, onClose, providers, actions }: CommandPal
           type="text"
           value={query}
         />
-        {items.length === 0 ? (
+        {renderSections.length === 0 ? (
           <p className="lcos-command-palette-empty">{query.trim().length > 0 ? '没有匹配的结果' : '没有可用的条目'}</p>
         ) : (
           <div aria-label="结果" className="lcos-command-palette-list" role="listbox">
@@ -131,6 +257,25 @@ export function CommandPalette({ open, onClose, providers, actions }: CommandPal
                       <span className="lcos-command-palette-row-title">{item.title}</span>
                       {item.hint === undefined ? null : <span className="lcos-command-palette-row-hint">{item.hint}</span>}
                     </button>
+                  )
+                })}
+                {section.states.map((state) => {
+                  if (state.status === 'loading') {
+                    return (
+                      <Fragment key={`${state.provider.id}:loading`}>
+                        <div aria-hidden="true" className="lcos-command-palette-row">
+                          <span className="lcos-command-palette-row-title">搜索中…</span>
+                        </div>
+                        <div aria-hidden="true" className="lcos-command-palette-row" />
+                      </Fragment>
+                    )
+                  }
+                  const stateTitle = state.status === 'failed' ? `${state.provider.label} 源读取失败` : `${state.provider.label} 源不可用`
+                  return (
+                    <div className="lcos-command-palette-row" key={`${state.provider.id}:${state.status}`}>
+                      <span className="lcos-command-palette-row-title">{stateTitle}</span>
+                      {state.error === undefined ? null : <span className="lcos-command-palette-row-hint">{state.error}</span>}
+                    </div>
                   )
                 })}
               </div>

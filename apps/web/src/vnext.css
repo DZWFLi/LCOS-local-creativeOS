@@ -1,22 +1,24 @@
 /* LCOS vNext — Post-Make production shell
    Persistent project truth, switchable surfaces, quiet graphic chrome. */
 
+/* A-1c 双轨合并（C3 病灶收口）：vnext 独立皮肤变量值归档 foundation 主轨，
+   token 名全保留作别名（零破坏，同 A-1a 手法），文件内 var(--vnext-*) 引用不动。 */
 :root {
-  --vnext-ground: #f2f1f8;
-  --vnext-ground-2: #ecebf4;
-  --vnext-strip: rgba(252, 252, 254, .94);
-  --vnext-surface: rgba(255, 255, 255, .78);
-  --vnext-surface-strong: rgba(255, 255, 255, .94);
-  --vnext-ink: #201f27;
-  --vnext-ink-66: rgba(32, 31, 39, .66);
-  --vnext-ink-44: rgba(32, 31, 39, .44);
-  --vnext-ink-26: rgba(32, 31, 39, .26);
-  --vnext-hair: rgba(39, 37, 49, .09);
-  --vnext-hair-strong: rgba(39, 37, 49, .15);
-  --vnext-purple: var(--lcos-signal, #8b5cf6); /* Glaze 单色收敛：紫 accent 唯一源 --lcos-signal */
-  --vnext-blue: #3b82f6;
-  --vnext-cyan: #22d3ee;
-  --vnext-shadow: 0 14px 38px rgba(47, 44, 68, .09), 0 2px 8px rgba(47, 44, 68, .045), inset 0 1px 0 rgba(255,255,255,.88);
+  --vnext-ground: #f2f1f8; /* A-1c 保留原值：背景基色，十色主轨无背景基位，待 A-1 终批统一 */
+  --vnext-ground-2: #ecebf4; /* A-1c 保留原值：背景基色（次层），待 A-1 终批统一 */
+  --vnext-strip: rgba(252, 252, 254, .94); /* A-1c 保留原值：表面基色（chrome 域），材质 token 接线归 A-2b/A-2c 批次 */
+  --vnext-surface: rgba(255, 255, 255, .78); /* A-1c 保留原值：表面基色，材质 token 接线归 A-2b/A-2c 批次 */
+  --vnext-surface-strong: rgba(255, 255, 255, .94); /* A-1c 保留原值：表面基色（实），材质 token 接线归 A-2b/A-2c 批次 */
+  --vnext-ink: var(--lcos-label-primary); /* A-1c 双轨合并：#201f27 → label 基色 */
+  --vnext-ink-66: var(--lcos-label-secondary); /* A-1c 双轨合并：rgba(32,31,39,.66) → .60（对齐 A-1a --ink-72/.58→secondary） */
+  --vnext-ink-44: var(--lcos-label-tertiary); /* A-1c 双轨合并：rgba(32,31,39,.44) → .30（对齐 A-1a --ink-42→tertiary） */
+  --vnext-ink-26: var(--lcos-label-quaternary); /* A-1c 双轨合并：rgba(32,31,39,.26) → .18（对齐 A-1a --ink-22→quaternary） */
+  --vnext-hair: var(--lcos-sep-hairline); /* A-1c 双轨合并：rgba(39,37,49,.09) → 黑基 hairline .12 */
+  --vnext-hair-strong: var(--lcos-sep-opaque); /* A-1c 双轨合并：rgba(39,37,49,.15) → 实色分隔，保 hair→strong 加深序 */
+  --vnext-purple: var(--lcos-signal, #8b5cf6); /* Glaze 单色收敛：紫 accent 唯一源 --lcos-signal（前批次已归档） */
+  --vnext-blue: var(--lcos-ui-active); /* A-1c 双轨合并：#3b82f6 → active/system signal（Grammar §6） */
+  --vnext-cyan: var(--lcos-domain-context); /* A-1c 双轨合并：#22d3ee → Context 域青（Grammar §6） */
+  --vnext-shadow: 0 14px 38px rgba(47, 44, 68, .09), 0 2px 8px rgba(47, 44, 68, .045), inset 0 1px 0 rgba(255,255,255,.88); /* A-1c 保留原值：待 shadow 分级批次（材质 token 不含投影分量，本刀不硬造） */
 }
 
 /* A-2a 合并：双轨消除 — vnext-edge-travel / vnext-surface-in 与 reconstruction.css 的
@@ -54,8 +56,8 @@
   border-bottom: 1px solid var(--vnext-hair);
   background: var(--vnext-strip);
   box-shadow: 0 1px 0 rgba(255,255,255,.9), 0 5px 18px rgba(40,38,55,.025);
-  backdrop-filter: blur(18px) saturate(1.08);
-  -webkit-backdrop-filter: blur(18px) saturate(1.08);
+  backdrop-filter: var(--lcos-mat-chrome-blur); /* A-2c 收编chrome */
+  -webkit-backdrop-filter: var(--lcos-mat-chrome-blur);
 }
 .vnext-project-identity { min-width: 0; display: flex; align-items: center; gap: 7px; }
 .vnext-brand-dot,
@@ -111,7 +113,7 @@
   border-radius: 15px;
   background: rgba(253,253,255,.92);
   box-shadow: 0 16px 44px rgba(48,44,69,.10), inset 0 1px 0 rgba(255,255,255,.9);
-  backdrop-filter: blur(18px) saturate(1.04);
+  backdrop-filter: var(--lcos-mat-popover-blur); /* A-2c 收编popover */
   color: var(--vnext-ink);
 }
 .reorganize-panel header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
@@ -157,9 +159,14 @@
   border-radius: 17px;
   background: rgba(253,253,255,.78);
   box-shadow: 0 12px 32px rgba(48,44,69,.07), inset 0 1px 0 rgba(255,255,255,.9);
-  backdrop-filter: blur(18px) saturate(1.04);
-  -webkit-backdrop-filter: blur(18px) saturate(1.04);
+  backdrop-filter: var(--lcos-mat-thin-blur); /* A-2c 收编thin */
+  -webkit-backdrop-filter: var(--lcos-mat-thin-blur);
 }
+/* A-3 Apple sidebar 规格（ios26 sidebars）：行三态=内缩胶囊——选中=fill-quaternary 底+图标 accent；
+   hover=fill-tertiary（不缩放）；pressed=fill-secondary+scale .98（100ms 反馈）。
+   底色/图标色 200ms（--lcos-dur-fast）+appleDefault；字重等语义突变不加动画。
+   注：运行时 .lcos-reconstructed 覆盖层（reconstruction/product-interface，含 !important）在生效，
+   实际生效三态以 interaction-system.css 的 A-3 段为准；本段保留基础语法层。 */
 .vnext-rail-button,
 .vnext-workspace-mini {
   position: relative;
@@ -173,16 +180,16 @@
   border-radius: 10px;
   background: transparent;
   color: var(--vnext-ink-44);
-  transition: transform var(--lcos-dur-micro) ease, background var(--lcos-dur-micro) ease, color var(--lcos-dur-micro) ease, border-color var(--lcos-dur-micro) ease;
+  transition: background-color var(--lcos-dur-fast) var(--lcos-ease-apple), color var(--lcos-dur-fast) var(--lcos-ease-apple), transform var(--lcos-dur-press) var(--lcos-ease-apple);
 }
-.vnext-rail-button:hover,.vnext-workspace-mini:hover { transform: scale(1.045); color: var(--vnext-ink); background: rgba(72,67,99,.055); }
-.vnext-rail-button.active,.vnext-workspace-mini.active { color: var(--vnext-ink); background: rgba(255,255,255,.94); border-color: rgba(97,86,136,.12); box-shadow: 0 4px 12px rgba(55,51,75,.065); }
-.vnext-rail-button.active::before,.vnext-workspace-mini.active::before { content:""; position:absolute; left:-6px; top:8px; bottom:8px; width:2px; border-radius:999px; background:linear-gradient(180deg,var(--vnext-purple),var(--vnext-blue),var(--vnext-cyan)); }
+.vnext-rail-button:hover,.vnext-workspace-mini:hover { color: var(--vnext-ink); background: var(--lcos-fill-tertiary); }
+.vnext-rail-button.active,.vnext-workspace-mini.active { color: var(--lcos-ui-active); background: var(--lcos-fill-quaternary); }
+.vnext-rail-button:active,.vnext-workspace-mini:active { background: var(--lcos-fill-secondary); transform: scale(.98); }
 .vnext-rail-divider { width: 20px; height: 1px; background: var(--vnext-hair); }
-.vnext-workspace-stack { min-height: 0; display: flex; flex-direction: column; gap: 4px; overflow-y: auto; overflow-x: visible; padding: 1px; }
+.vnext-workspace-stack { min-height: 0; display: flex; flex-direction: column; gap: 4px; overflow-y: auto; overflow-x: visible; padding: 1px; -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 24px); mask-image: linear-gradient(180deg, transparent 0, #000 24px); }
 .vnext-mini-map { position: relative; width: 26px; height: 26px; border-radius: 8px; background: linear-gradient(145deg, rgba(247,246,252,.9), rgba(235,234,244,.82)); border: 1px solid rgba(60,56,77,.06); overflow: hidden; }
 .vnext-mini-map i { position: absolute; display:block; border-radius: 2px; background: rgba(66,63,82,.25); }
-.vnext-workspace-mini.active .vnext-mini-map i { background: rgba(91,83,128,.42); }
+.vnext-workspace-mini.active .vnext-mini-map i { background: color-mix(in srgb, var(--lcos-ui-active) 45%, transparent); }
 .vnext-workspace-attention { position:absolute; right:1px; top:1px; width:6px; height:6px; border-radius:50%; background:#d79a47; box-shadow:0 0 0 2px rgba(255,255,255,.9); }
 .vnext-workspace-attention.status-failed { background:#cc655f; }
 .vnext-rail-add { margin-top: 1px; }
@@ -299,8 +306,8 @@
   border-radius:16px;
   background:rgba(253,253,255,.86);
   box-shadow:0 14px 34px rgba(45,42,64,.085), inset 0 1px 0 rgba(255,255,255,.94);
-  backdrop-filter:blur(18px) saturate(1.04);
-  -webkit-backdrop-filter:blur(18px) saturate(1.04);
+  backdrop-filter:var(--lcos-mat-chrome-blur); /* A-2c 收编chrome */
+  -webkit-backdrop-filter:var(--lcos-mat-chrome-blur);
 }
 .vnext-scope-axis,.vnext-lens-axis { display:flex; align-items:center; gap:2px; }
 .vnext-scope-axis { padding-right:8px; border-right:1px solid var(--vnext-hair); }
@@ -327,7 +334,7 @@
 .drop-edge-cue.phase-dwell.anchor-left i { animation:lcos-drop-dwell-y 520ms linear forwards; }
 .drop-edge-cue.phase-dwell.anchor-bottom i { animation:lcos-drop-dwell-x 520ms linear forwards; }
 .drop-edge-cue.phase-preview i { transform:none; background:linear-gradient(180deg,rgba(139,92,246,.66),rgba(59,130,246,.54)); }
-.drop-edge-cue span { position:absolute; padding:5px 9px; border:1px solid rgba(92,75,170,.12); border-radius:999px; background:rgba(253,253,255,.82); color:rgba(73,61,122,.7); font-size: 12.5px; font-weight:600; white-space:nowrap; box-shadow:0 6px 18px rgba(44,41,63,.08); backdrop-filter:blur(10px); opacity:0; }
+.drop-edge-cue span { position:absolute; padding:5px 9px; border:1px solid rgba(92,75,170,.12); border-radius:999px; background:rgba(253,253,255,.82); color:rgba(73,61,122,.7); font-size: 12.5px; font-weight:600; white-space:nowrap; box-shadow:0 6px 18px rgba(44,41,63,.08); backdrop-filter:var(--lcos-mat-popover-blur); /* A-2c 收编popover */ opacity:0; }
 .drop-edge-cue.anchor-left span { left:9px; top:50%; transform:translateY(-50%); }
 .drop-edge-cue.anchor-bottom span { left:50%; bottom:9px; transform:translateX(-50%); }
 .drop-edge-cue.phase-dwell span { animation:lcos-drop-label-in 1ms linear 312ms forwards; }
@@ -347,7 +354,7 @@
   border-radius:17px;
   background:rgba(253,253,255,.96);
   box-shadow:0 22px 58px rgba(44,41,63,.13),0 3px 12px rgba(44,41,63,.05),inset 0 1px 0 #fff;
-  backdrop-filter:blur(20px) saturate(1.04);
+  backdrop-filter:var(--lcos-mat-popover-blur); /* A-2c 收编popover */
   animation:lcos-surface-in var(--lcos-dur-fast) ease both; /* A-2a 合并：双轨消除 */
 }
 .vnext-drop-shelf.anchor-left { left:64px; top:50%; transform:translateY(-50%); }
@@ -413,7 +420,7 @@
   border-radius:17px;
   background:rgba(253,253,255,.96);
   box-shadow:0 20px 48px rgba(44,41,63,.12),inset 0 1px 0 #fff;
-  backdrop-filter:blur(18px);
+  backdrop-filter:var(--lcos-mat-popover-blur); /* A-2c 收编popover */
 }
 .vnext-surface-composer-context { display:flex; align-items:center; gap:6px; padding:2px 4px 6px; color:var(--vnext-ink-44); font-size: 12.5px; }
 .vnext-surface-composer textarea { width:100%; min-height:54px; resize:none; border:0; outline:0; background:transparent; color:var(--vnext-ink); font:inherit; font-size: 11px; line-height:1.45; }
@@ -481,7 +488,7 @@
   place-items: stretch;
   padding: 10px;
   background: color-mix(in srgb, #171723 54%, transparent);
-  backdrop-filter: blur(12px) saturate(.92);
+  backdrop-filter: var(--lcos-mat-thick-blur); /* A-2c 收编thick */
 }
 .vnext-immersive-viewer {
   min-width: 0;
@@ -503,7 +510,7 @@
   padding: 0 10px;
   border-bottom: 1px solid rgba(72, 70, 91, .08);
   background: rgba(251, 251, 253, .82);
-  backdrop-filter: blur(18px);
+  backdrop-filter: var(--lcos-mat-chrome-blur); /* A-2c 收编chrome */
 }
 .vnext-immersive-header > div { min-width: 0; display: grid; gap: 1px; }
 .vnext-immersive-header strong { max-width: min(620px, 55vw); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 620; color: #2b2937; }

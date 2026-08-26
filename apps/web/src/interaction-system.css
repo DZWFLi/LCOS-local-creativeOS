@@ -346,7 +346,7 @@
   border-radius: 11px !important;
   background: rgba(253,253,255,.965) !important;
   box-shadow: 0 8px 22px rgba(39,34,52,.11), 0 1px 2px rgba(39,34,52,.05) !important;
-  backdrop-filter: blur(10px) saturate(108%) !important;
+  backdrop-filter: var(--lcos-mat-popover-blur) !important; /* A-2c 收编popover */
 }
 .lcos-reconstructed .selection-toolbar.lcos-selection-strip > button.selection-primary {
   min-width: 0 !important;
@@ -379,7 +379,7 @@
   border-radius: 9px;
   background: rgba(250,250,252,.88);
   box-shadow: 0 4px 12px rgba(40,36,52,.05);
-  backdrop-filter: blur(8px);
+  backdrop-filter: var(--lcos-mat-popover-blur); /* A-2c 收编popover */
 }
 .lcos-reconstructed .lcos-spatial-mode-switch button {
   min-height: 25px;
@@ -774,7 +774,7 @@
   border-radius: 11px;
   background: rgba(253,253,255,.97);
   box-shadow: var(--lcos-ui-shadow-2);
-  backdrop-filter: blur(10px);
+  backdrop-filter: var(--lcos-mat-popover-blur); /* A-2c 收编popover */
 }
 .lcos-reconstructed .lcos-workflow-edge-inspector header { display: flex; justify-content: space-between; align-items: center; }
 .lcos-reconstructed .lcos-workflow-edge-inspector header strong { font-size: 11px; }
@@ -795,7 +795,7 @@
   border-radius: 11px;
   background: rgba(253,253,255,.975);
   box-shadow: var(--lcos-ui-shadow-2);
-  backdrop-filter: blur(10px);
+  backdrop-filter: var(--lcos-mat-popover-blur); /* A-2c 收编popover */
 }
 .lcos-reconstructed .lcos-surface-agent-node > header { min-height: 25px; }
 .lcos-reconstructed .lcos-surface-agent-node > header span { gap: 5px; font-size: 10.5px; }
@@ -810,7 +810,7 @@
   border-radius: 11px;
   background: rgba(253,253,255,.965);
   box-shadow: var(--lcos-ui-shadow-2);
-  backdrop-filter: blur(9px);
+  backdrop-filter: var(--lcos-mat-popover-blur); /* A-2c 收编popover */
 }
 .lcos-reconstructed .lcos-boundary-hint > header { margin-bottom: 6px; }
 .lcos-reconstructed .lcos-boundary-hint > header span { font-size: 9px; }
@@ -899,7 +899,7 @@
   border-radius: 7px;
   border-color: rgba(var(--lcos-ui-context-rgb), .09);
   background: rgba(253,253,255,.76);
-  backdrop-filter: blur(7px);
+  backdrop-filter: var(--lcos-mat-popover-blur); /* A-2c 收编popover */
 }
 .lcos-reconstructed .lcos-context-origin-chip > i { width: 6px; height: 6px; border-radius: 2px; background: rgba(var(--lcos-ui-context-rgb), .62); }
 .lcos-reconstructed .lcos-context-origin-chip > span { font-size: 9.5px; }
@@ -1004,7 +1004,7 @@
   border-radius: 10px;
   background: rgba(253,253,255,.98);
   box-shadow: var(--lcos-ui-shadow-2);
-  backdrop-filter: blur(10px);
+  backdrop-filter: var(--lcos-mat-popover-blur); /* A-2c 收编popover */
 }
 .lcos-reconstructed .selection-toolbar.lcos-selection-strip .lcos-selection-align button {
   min-height: 29px;
@@ -1319,7 +1319,7 @@
   background: rgba(250, 250, 252, .94);
   border: 1px solid rgba(103, 82, 158, .38);
   box-shadow: 0 10px 30px rgba(40, 35, 56, .16), inset 0 1px 0 rgba(255, 255, 255, .84);
-  backdrop-filter: blur(12px) saturate(1.06);
+  backdrop-filter: var(--lcos-mat-popover-blur); /* A-2c 收编popover */
 }
 .lcos-mindmap-branch-ghost span {
   font-size: 12px; font-weight: 650; color: #2c2a36;
@@ -1429,7 +1429,7 @@
   border-radius: 12px;
   background: rgba(253,253,255,.975);
   box-shadow: 0 16px 42px rgba(35,31,48,.14), 0 2px 6px rgba(35,31,48,.05);
-  backdrop-filter: blur(12px) saturate(108%);
+  backdrop-filter: var(--lcos-mat-popover-blur); /* A-2c 收编popover */
 }
 .lcos-reconstructed .reorganize-panel.lcos-reorganize-review > header {
   min-height: 30px;
@@ -1679,7 +1679,7 @@
   color: rgba(37, 34, 44, .92) !important;
   background: rgba(253, 253, 255, .965) !important;
   box-shadow: 0 12px 34px rgba(36, 31, 50, .13), inset 0 1px 0 rgba(255,255,255,.85) !important;
-  backdrop-filter: blur(14px) saturate(110%);
+  backdrop-filter: var(--lcos-mat-popover-blur); /* A-2c 收编popover */
   font-size: 11px !important;
 }
 [data-sonner-toast] [data-icon] { color: #6857bd; }
@@ -1885,7 +1885,7 @@
   color: rgba(53,49,64,.66);
   background: rgba(253,253,255,.92);
   box-shadow: 0 5px 14px rgba(35,31,49,.06);
-  backdrop-filter: blur(12px);
+  backdrop-filter: var(--lcos-mat-popover-blur); /* A-2c 收编popover */
   font-size: 9.5px;
 }
 .lcos-page-stage-toolbar > div { display: flex; gap: 2px; }
@@ -2300,7 +2300,7 @@
   padding: 0 12px 0 10px;
   border-bottom: 1px solid rgba(45, 42, 54, .075);
   background: rgba(252, 252, 253, .88);
-  backdrop-filter: blur(18px) saturate(1.08);
+  backdrop-filter: var(--lcos-mat-chrome-blur); /* A-2c 收编chrome */
 }
 
 .capture-space-back,
@@ -2371,7 +2371,7 @@
   padding: 11px 7px 12px;
   border-right: 1px solid rgba(45, 42, 54, .07);
   background: rgba(250, 250, 252, .72);
-  backdrop-filter: blur(14px);
+  backdrop-filter: var(--lcos-mat-popover-blur); /* A-2c 收编popover */
   overflow-y: auto;
   scrollbar-width: none;
 }
@@ -2633,7 +2633,7 @@
   border: 1px solid rgba(65,58,80,.085);
   border-radius: 17px;
   background: rgba(249,249,252,.76);
-  backdrop-filter: blur(22px) saturate(1.10);
+  backdrop-filter: var(--lcos-mat-popover-blur); /* A-2c 收编popover */
   box-shadow: 0 10px 30px rgba(39,34,55,.09), inset 0 1px 0 rgba(255,255,255,.82);
   z-index: var(--lcos-z-content-detail); /* z-tier: canvas-content */
   /* 漏洞1：dock 容器在非 sidecar 下 pointer-events:none（继承属性），
@@ -2888,7 +2888,7 @@
   border-radius: 9px;
   background: rgba(251,252,253,.90);
   box-shadow: 0 7px 18px rgba(35,42,54,.055);
-  backdrop-filter: blur(12px);
+  backdrop-filter: none; /* A-2c 禁止域执行 */
 }
 .lcos-reconstructed .lcos-collection-object.is-collection .lcos-collection-member {
   min-height: 26px;
@@ -3291,7 +3291,7 @@
   border-radius: 11px;
   background: rgba(253,253,255,.96);
   box-shadow: 0 8px 20px rgba(39,35,51,.095), inset 0 1px 0 rgba(255,255,255,.94);
-  backdrop-filter: blur(10px) saturate(108%);
+  backdrop-filter: var(--lcos-mat-popover-blur); /* A-2c 收编popover */
 }
 .lcos-reconstructed .lcos-context-lens-launcher button {
   position: relative;
@@ -3631,7 +3631,7 @@
   border-radius: 12px;
   background: rgba(253,253,254,.97);
   box-shadow: 0 13px 32px rgba(37,34,46,.11), inset 0 1px 0 rgba(255,255,255,.96);
-  backdrop-filter: blur(12px) saturate(110%);
+  backdrop-filter: var(--lcos-mat-popover-blur); /* A-2c 收编popover */
 }
 .lcos-reconstructed .lcos-workflow-step-composer > span { min-width: 0; display: grid; gap: 2px; }
 .lcos-reconstructed .lcos-workflow-step-composer > span strong { color: rgba(35,38,47,.84); font-size: 10.5px; }
@@ -3666,7 +3666,7 @@
   border-radius: 12px;
   background: rgba(253,253,254,.97);
   box-shadow: 0 13px 32px rgba(37,34,46,.11), inset 0 1px 0 rgba(255,255,255,.96);
-  backdrop-filter: blur(12px) saturate(110%);
+  backdrop-filter: var(--lcos-mat-popover-blur); /* A-2c 收编popover */
 }
 .lcos-reconstructed .lcos-workflow-skill-panel > header { display: flex; align-items: center; gap: 7px; }
 .lcos-reconstructed .lcos-workflow-skill-panel > header strong { color: rgba(35,38,47,.84); font-size: 10.5px; }
@@ -4082,3 +4082,80 @@
 .lcos-reconstructed .lcos-agent-node-signal { gap:3px; }
 .lcos-reconstructed .lcos-agent-node-signal > svg:not(.lcos-signal-glyph) { width:13px; height:13px; opacity:.58; }
 .lcos-reconstructed .lcos-agent-node-signal .lcos-signal-glyph { width:14px; height:14px; }
+
+/* =======================================================================
+   A-3 — Sidebar / WorkRail 行三态：Apple sidebar 内缩胶囊规格（Wave A-3）
+   冻结值：选中=margin 2px 8px + radius 10px + fill-quaternary + 图标 accent；
+   hover=fill-tertiary；pressed=fill-secondary + scale .98（100ms 反馈）；
+   未选中=透明底 secondary 图标。选中靠「内缩底+字重」证明层级，不靠描边/边缘条。
+   本文件加载顺序在 reconstruction.css / product-interface.css 之后：
+   同特异性规则后到生效；!important 仅用于压制旧层遗留的 !important。
+   ======================================================================= */
+
+/* —— WorkspaceRail（左侧项目视图 rail）—— */
+/* 基础：胶囊半径压回冻结值 10px（product-interface.css 为 12px !important）；
+   过渡收敛 token：底色/图标色 200ms（--lcos-dur-fast）+ appleDefault，按压缩放 100ms（--lcos-dur-press）。 */
+.lcos-reconstructed .vnext-rail-button,
+.lcos-reconstructed .vnext-workspace-mini {
+  border-radius: 10px !important;
+  transition: background-color var(--lcos-dur-fast) var(--lcos-ease-apple), color var(--lcos-dur-fast) var(--lcos-ease-apple), transform var(--lcos-dur-press) var(--lcos-ease-apple);
+}
+/* hover=fill-tertiary：去旧层缩放放大（Grammar：hover 不做位移/缩放）。 */
+.lcos-reconstructed .vnext-rail-button:hover,
+.lcos-reconstructed .vnext-workspace-mini:hover {
+  color: var(--vnext-ink) !important;
+  background: var(--lcos-fill-tertiary) !important;
+  transform: none;
+}
+/* 选中=内缩胶囊：fill-quaternary 底 + 图标/继承色变 accent（lucide 走 currentColor 受色）；
+   去旧层描边与紫底（Grammar §7：选中不靠描边框证明层级）。 */
+.lcos-reconstructed .vnext-rail-button.active,
+.lcos-reconstructed .vnext-workspace-mini.active {
+  color: var(--lcos-ui-active) !important;
+  background: var(--lcos-fill-quaternary) !important;
+  border-color: transparent !important;
+}
+/* pressed=fill-secondary + scale .98（100ms 反馈）；置于选中规则之后，按压时覆盖选中底。 */
+.lcos-reconstructed .vnext-rail-button:active,
+.lcos-reconstructed .vnext-workspace-mini:active {
+  background: var(--lcos-fill-secondary) !important;
+  transform: scale(.98);
+}
+/* 旧选中态渐变边缘指示条退役（product-interface.css 默认竖条 / sidecar 底条）：
+   选中语义由内缩胶囊底承载。 */
+.lcos-reconstructed .vnext-workspace-mini.active::before,
+.lcos-reconstructed .vnext-rail-button.active::before,
+.lcos-reconstructed[data-layout-mode="sidecar"] .vnext-workspace-mini.active::before,
+.lcos-reconstructed[data-layout-mode="sidecar"] .vnext-rail-button.active::before { display: none; }
+/* sidecar 横向布局下 vnext.css 的竖向 24px 渐隐 mask 轴向不符（会半隐横向行），
+   先中和为无 mask；横向 scroll edge 留待后续批次。 */
+.lcos-reconstructed[data-layout-mode="sidecar"] .vnext-workspace-stack {
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+/* —— WorkRail（右侧执行列表）行：旧 hover/紫底描边（reconstruction.css）→ token 胶囊 —— */
+/* 行几何：内缩 margin 2px 8px（未选中亦保持，防选中抖动）+ radius 10px。
+   行高现状 44px（min-height，合规格）；状态点 7px 为语义色不动（同图标同义）。 */
+.lcos-reconstructed .lcos-run-list-items > button,
+.lcos-reconstructed .lcos-run-list-current {
+  margin: 2px 8px;
+  width: calc(100% - 16px);
+  border-radius: 10px;
+  transition: background-color var(--lcos-dur-fast) var(--lcos-ease-apple), transform var(--lcos-dur-press) var(--lcos-ease-apple);
+}
+/* hover=fill-tertiary。 */
+.lcos-reconstructed .lcos-run-list-items > button:hover { background: var(--lcos-fill-tertiary); }
+/* 选中=内缩胶囊：去描边紫底改 fill-quaternary；标题字重 590→600（字重突变即语义，不加动画）。 */
+.lcos-reconstructed .lcos-run-list-items > button.active {
+  border-color: transparent;
+  background: var(--lcos-fill-quaternary);
+}
+.lcos-reconstructed .lcos-run-list-items > button.active strong { font-weight: 600; }
+/* pressed=fill-secondary + scale .98（100ms 反馈）。 */
+.lcos-reconstructed .lcos-run-list-items > button:active {
+  background: var(--lcos-fill-secondary);
+  transform: scale(.98);
+}
+/* 注：attention（等待输入/待确认/失败）底色为状态语义，保留 reconstruction.css 原值；
+   行选中与 attention 并存时胶囊优先，警示语义由行内状态点承载。 */

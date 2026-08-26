@@ -1,35 +1,44 @@
 /**
- * CommandPalette MVP（第一梯队 ⑤）：⌘K 全局命令面板的 provider 层（纯查询，零副作用）。
- * 结构参考 grok-bot CommandPalette：每源一个 provider、可插拔；执行动作全部由
- * App.tsx 装配注入（actions 表按 item.id 寻址），本文件只做数据 → 条目的投影与过滤。
+ * CommandPalette provider 装配（Wave A-4 改造：grok-bot A3 架构内化）。
+ * 五组数据源（命令/节点/文件/会话/技能）各包成一个 provider 实例：数据获取逻辑保持
+ * 原样（内存态投影 → 同步 fetch → ready/empty 快照），只包一层 async + snapshot 返回
+ * （工厂见 paletteProvider.ts）。执行动作仍全部由 App.tsx 装配注入（A3「action
+ * injection」：actions 表按 entry.id 寻址）；本文件只做数据 → 条目的投影与过滤。
+ * 零副作用承诺（A3「query 零副作用」）：fetch / query / search 均不得 mutate 任何
+ * 外部状态、不得触发动作回调。
+ *
+ * 兼容面（既有测试与 App 依赖，签名冻结）：保留同步 PaletteProvider（group + query）
+ * 导出与 mergePaletteItems / groupPaletteSections / scorePaletteItem 等既有 API。
+ * 五个 provider 实例为「混合实例」：同时实现旧同步面（group + query）与新异步面
+ * （id + label + search），旧调用方零迁移；CommandPalette 走新异步面渲染六态。
  * 与 grok-bot 的差异（按 LCOS 收口要求）：不抄 8 Tab（合并为单列表按 group 分节）、
  * 无嵌套步骤、无行号快捷键。
  */
 
-/** 面板条目的分组（分节显示顺序见 PALETTE_GROUP_ORDER）。 */
-export type PaletteGroupId = '命令' | '节点' | '文件' | '会话' | '技能'
+import {
+  createPaletteProvider,
+  mergePaletteEntries,
+  rankPaletteEntries,
+  type PaletteEntry,
+  type PaletteGroupId,
+  type PaletteProvider as AsyncPaletteProvider,
+  type SyncPaletteProvider,
+} from './paletteProvider'
 
-export interface PaletteItem {
-  readonly id: string
-  readonly title: string
-  readonly hint?: string
-  readonly group: PaletteGroupId
-  /** 额外检索词（中英文别名）；标题始终参与匹配。 */
-  readonly keywords?: string
-}
+/* ---------------- 兼容 re-export（既有公共名 → 架构文件 canonical 实现） ---------------- */
 
-/** 每源一个 provider：query 只做过滤与排序，不产生任何副作用。 */
-export interface PaletteProvider {
-  /** provider 的主分组（条目自身的 group 决定落节；receiver/技能条目由命令源附带）。 */
-  readonly group: PaletteGroupId
-  query(term: string): readonly PaletteItem[]
-}
+export { PALETTE_GROUP_ORDER } from './paletteProvider'
+export type { PaletteGroupId, PaletteSection } from './paletteProvider'
+export { groupPaletteEntries as groupPaletteSections, scorePaletteEntry as scorePaletteItem } from './paletteProvider'
 
-/** 分节显示顺序：命令 → 节点 → 文件 → 会话 → 技能。 */
-export const PALETTE_GROUP_ORDER: readonly PaletteGroupId[] = ['命令', '节点', '文件', '会话', '技能']
+/** 面板条目（= A3 架构的 PaletteEntry；保留旧名作兼容导出）。 */
+export type PaletteItem = PaletteEntry
 
-/** 单 provider 单次查询的条目上限：简单列表（无虚拟窗口）下的保护性封顶。 */
-const MAX_PROVIDER_ITEMS = 50
+/** 旧同步 provider 面（group + query）：既有测试 / 旧装配代码的冻结口径。 */
+export type PaletteProvider = SyncPaletteProvider
+
+/** 混合实例：同时实现旧同步面（group + query）与新异步面（id + label + search）。 */
+export type HybridPaletteProvider = PaletteProvider & AsyncPaletteProvider
 
 /* ---------------- App 注入的数据源（中性条目，provider 层不依赖 App 类型） ---------------- */
 
@@ -75,63 +84,30 @@ export interface PaletteNavigationActions {
   readonly openFile: (nodeId: string) => void
 }
 
-/** 面板装配结果：providers 喂给组件查询，actions 按 item.id 执行。 */
+/** 面板装配结果：providers 喂给组件查询（六态快照），actions 按 item.id 执行。 */
 export interface CommandPaletteAssembly {
-  readonly providers: readonly PaletteProvider[]
+  readonly providers: readonly HybridPaletteProvider[]
   readonly actions: Readonly<Record<string, () => void>>
 }
 
-/* ---------------- 匹配与排序（纯函数） ---------------- */
+/* ---------------- 同步合并（兼容面，纯函数） ---------------- */
 
-/** 相关度评分：标题前缀 3 > 标题包含 2 > 关键词包含 1；不匹配返回 null。空词返回 0（全量）。 */
-export function scorePaletteItem(item: PaletteItem, term: string): number | null {
-  const needle = term.trim().toLowerCase()
-  if (!needle) return 0
-  const title = item.title.toLowerCase()
-  if (title.startsWith(needle)) return 3
-  if (title.includes(needle)) return 2
-  if (item.keywords !== undefined && item.keywords.toLowerCase().includes(needle)) return 1
-  return null
-}
-
-/** 按评分降序（同分保持原序，稳定）并封顶。 */
-function queryScored(items: readonly PaletteItem[], term: string): readonly PaletteItem[] {
-  const scored = items
-    .map((item, index) => ({ item, index, score: scorePaletteItem(item, term) }))
-    .filter((entry): entry is { item: PaletteItem; index: number; score: number } => entry.score !== null)
-  scored.sort((left, right) => right.score - left.score || left.index - right.index)
-  return scored.slice(0, MAX_PROVIDER_ITEMS).map((entry) => entry.item)
-}
-
-/** 多 provider 合并：跨 provider 按 id 去重（首见优先），按 PALETTE_GROUP_ORDER 分桶平铺。 */
+/** 多 provider 合并（同步兼容面）：query 透传 → 按 id 去重（首见优先）→ 按五组 IA 平铺。 */
 export function mergePaletteItems(providers: readonly PaletteProvider[], term: string): readonly PaletteItem[] {
-  const seen = new Set<string>()
-  const buckets = new Map<PaletteGroupId, PaletteItem[]>()
-  for (const provider of providers) {
-    for (const item of provider.query(term)) {
-      if (seen.has(item.id)) continue
-      seen.add(item.id)
-      const bucket = buckets.get(item.group)
-      if (bucket === undefined) buckets.set(item.group, [item])
-      else bucket.push(item)
-    }
-  }
-  return PALETTE_GROUP_ORDER.flatMap((group) => buckets.get(group) ?? [])
+  return mergePaletteEntries(providers.map((provider) => provider.query(term)))
 }
 
-export interface PaletteSection {
-  readonly group: PaletteGroupId
-  readonly items: readonly PaletteItem[]
-}
+/* ---------------- 五个 provider 的装配工厂 ---------------- */
 
-/** 平铺条目 → 非空分节（渲染用；保持 PALETTE_GROUP_ORDER 顺序）。 */
-export function groupPaletteSections(items: readonly PaletteItem[]): readonly PaletteSection[] {
-  return PALETTE_GROUP_ORDER
-    .map((group) => ({ group, items: items.filter((item) => item.group === group) }))
-    .filter((section) => section.items.length > 0)
+/** 混合实例工厂：同一份纯查询 fetch 同时落新旧两套接口（数据获取逻辑保持原样）。 */
+function hybridProvider(input: {
+  readonly id: string
+  readonly label: PaletteGroupId
+  readonly fetch: (term: string) => readonly PaletteItem[]
+}): HybridPaletteProvider {
+  const provider = createPaletteProvider({ id: input.id, label: input.label, fetch: input.fetch })
+  return { ...provider, group: input.label, query: input.fetch }
 }
-
-/* ---------------- 三个 provider 的装配工厂 ---------------- */
 
 /** 静态命令条目（group=命令）；导图动作缺位时整条不列出。 */
 function staticCommandItems(commands: PaletteCommandActions): readonly PaletteItem[] {
@@ -152,9 +128,10 @@ function staticCommandItems(commands: PaletteCommandActions): readonly PaletteIt
 }
 
 /**
- * 装配三个 provider（actions 命令源 / nodes 节点源 / files 文件源）与执行表。
- * receiver 会话与技能条目由命令源附带（group 分别为 会话/技能），因为它们的
- * 执行语义（setActiveReceiver / 一键重放）与命令同构：选中即执行。
+ * 装配五个 provider（actions 命令源 / nodes 节点源 / files 文件源 / sessions 会话源 /
+ * skills 技能源）与执行表。命令源仍附带会话/技能条目（执行语义与命令同构：选中即执行；
+ * 既有行为与测试口径冻结），sessions/skills 两个独立 provider 的条目在合并层按 id
+ * 去重，不重复渲染。
  */
 export function createCommandPaletteProviders(input: {
   readonly commands: PaletteCommandActions
@@ -179,11 +156,6 @@ export function createCommandPaletteProviders(input: {
     keywords: `${skill.name} ${skill.description} skill 技能 重放 replay`,
   }))
 
-  const actionsProvider: PaletteProvider = {
-    group: '命令',
-    query: (term) => queryScored([...commandItems, ...conversationItems, ...skillItems], term),
-  }
-
   // 节点源：画布节点标题模糊匹配；执行 = 定位到节点（App 注入 locateNode）。
   const nodeItems: readonly PaletteItem[] = input.nodes.map((node) => ({
     id: `node:${node.id}`,
@@ -192,10 +164,6 @@ export function createCommandPaletteProviders(input: {
     group: '节点',
     keywords: `${node.title}${node.fileType === undefined ? '' : ` ${node.fileType}`} node 节点`,
   }))
-  const nodesProvider: PaletteProvider = {
-    group: '节点',
-    query: (term) => queryScored(nodeItems, term),
-  }
 
   // 文件源：同 nodes 数据源，按 fileType 过滤；执行 = 选中 + 打开预览（App 注入 openFile）。
   const fileItems: readonly PaletteItem[] = input.nodes
@@ -207,10 +175,17 @@ export function createCommandPaletteProviders(input: {
       group: '文件',
       keywords: `${node.title} ${node.fileType} file 文件 预览`,
     }))
-  const filesProvider: PaletteProvider = {
-    group: '文件',
-    query: (term) => queryScored(fileItems, term),
-  }
+
+  // 五组数据源 → 五个 provider 实例（A3：fetch 原样，包一层 async + snapshot 返回）。
+  const actionsProvider = hybridProvider({
+    id: 'actions',
+    label: '命令',
+    fetch: (term) => rankPaletteEntries([...commandItems, ...conversationItems, ...skillItems], term),
+  })
+  const nodesProvider = hybridProvider({ id: 'nodes', label: '节点', fetch: (term) => rankPaletteEntries(nodeItems, term) })
+  const filesProvider = hybridProvider({ id: 'files', label: '文件', fetch: (term) => rankPaletteEntries(fileItems, term) })
+  const sessionsProvider = hybridProvider({ id: 'sessions', label: '会话', fetch: (term) => rankPaletteEntries(conversationItems, term) })
+  const skillsProvider = hybridProvider({ id: 'skills', label: '技能', fetch: (term) => rankPaletteEntries(skillItems, term) })
 
   // 执行表：item.id → 回调。面板组件只查表调用；provider 侧零副作用。
   const actions: Record<string, () => void> = {
@@ -232,5 +207,5 @@ export function createCommandPaletteProviders(input: {
     if (node.fileType !== undefined) actions[`file:${node.id}`] = () => input.navigation.openFile(node.id)
   }
 
-  return { providers: [actionsProvider, nodesProvider, filesProvider], actions }
+  return { providers: [actionsProvider, nodesProvider, filesProvider, sessionsProvider, skillsProvider], actions }
 }
