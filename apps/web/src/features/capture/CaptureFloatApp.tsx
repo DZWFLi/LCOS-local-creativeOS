@@ -1,19 +1,49 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Boxes, ExternalLink } from 'lucide-react'
+import { ExternalLink } from 'lucide-react'
 import { createLocalCoreClient } from '../../runtime/localCoreClient'
 import { getDesktopPort } from '../../runtime/desktopPort'
+import { LcosGlyth } from '../spatial/visual/LcosGlyth'
+import { LightSegment } from '../spatial/visual/LightSegment'
+import { MatrixActivity } from '../spatial/visual/MatrixActivity'
+import { MOOD_STATE, MOOD_TEXT, type SpriteMood } from '../spatial/visual/CanvasSprite'
 
+/** Pending gauge: each lit discrete segment stands for one captured item (Nothing-Glyph style). */
+const GAUGE_SEGMENTS = 12
+
+/**
+ * Capture float — the bloub itself, as a living resident window.
+ * It inherits the canvas-sprite mood state machine (MOOD_STATE / MOOD_TEXT):
+ * idle → stable, observing (watching the incoming drop) → absorb,
+ * working (material sitting in staging) → working, satisfied (a landing) →
+ * confirm, alert (a capture failure) → error. The discrete light-segment
+ * gauge reads the pending count, and the dot-matrix texture carries the
+ * receiving/flow verbs. The in-canvas CanvasSprite is hidden while the bloub
+ * lives here.
+ */
 export function CaptureFloatApp() {
   const client = useState(() => createLocalCoreClient())[0]
   const [pending, setPending] = useState(0)
   const [lastTitle, setLastTitle] = useState('拖入文件、文字或链接')
   const [receiving, setReceiving] = useState(false)
+  const [failed, setFailed] = useState(false)
+  const [confirmed, setConfirmed] = useState(false)
   const dragDepth = useRef(0)
+  const pendingRef = useRef(0)
+  const confirmTimer = useRef(0)
 
   const refresh = useCallback(async () => {
     const call = await client.captureSpace().catch(() => null)
     if (!call?.result.ok) return
-    setPending(call.result.value.pendingCount)
+    setFailed(false)
+    const next = call.result.value.pendingCount
+    if (next > pendingRef.current) {
+      // New material landed: play the confirm pose once; LcosGlyth settles itself.
+      setConfirmed(true)
+      window.clearTimeout(confirmTimer.current)
+      confirmTimer.current = window.setTimeout(() => setConfirmed(false), 1_400)
+    }
+    pendingRef.current = next
+    setPending(next)
     const latest = call.result.value.items[0]
     if (latest) setLastTitle(String((latest.source as { title?: string }).title ?? latest.payloadRef.split(/[\\/]/).at(-1) ?? latest.kind))
   }, [client])
@@ -23,6 +53,7 @@ export function CaptureFloatApp() {
     const desktop = getDesktopPort()
     const unsubscribe = desktop?.onCaptureReceived?.(() => void refresh())
     const unsubscribeError = desktop?.onCaptureError?.((value) => {
+      setFailed(true)
       setReceiving(false)
       setLastTitle(value.message?.trim() || 'Capture 失败，请确认 LCOS Runtime 已就绪')
     })
@@ -31,18 +62,47 @@ export function CaptureFloatApp() {
       unsubscribe?.()
       unsubscribeError?.()
       window.clearInterval(interval)
+      window.clearTimeout(confirmTimer.current)
     }
   }, [refresh])
 
+  // bloub mood inherits the canvas-sprite machine: alert > working > observing > satisfied > idle.
+  const mood: SpriteMood = failed ? 'alert' : receiving ? 'observing' : confirmed ? 'satisfied' : pending > 0 ? 'working' : 'idle'
+  const glythState = MOOD_STATE[mood]
+  const moodText = MOOD_TEXT[mood]
+  const gaugeRatio = pending > 0 ? Math.min(1, pending / GAUGE_SEGMENTS) : 0
+
   return <main
-    className={`capture-float lcos-reconstructed ${receiving ? 'is-receiving' : ''}`}
+    className={`capture-float lcos-reconstructed mood-${mood} ${receiving ? 'is-receiving' : ''}`}
     onDragEnter={(event) => { event.preventDefault(); dragDepth.current += 1; setReceiving(true) }}
     onDragOver={(event) => event.preventDefault()}
     onDragLeave={(event) => { event.preventDefault(); dragDepth.current = Math.max(0, dragDepth.current - 1); if (dragDepth.current === 0) setReceiving(false) }}
     onDrop={() => { dragDepth.current = 0; setReceiving(false); window.setTimeout(() => void refresh(), 250) }}
   >
-    <header><Boxes size={15}/><strong>LCOS Capture</strong><span>{pending}</span></header>
-    <section><b>{receiving ? '松手收进 Capture Space' : 'Drop anything'}</b><small>{lastTitle}</small></section>
+    <header>
+      <strong>LCOS Capture</strong>
+      <span className="capture-float-count" data-empty={pending === 0 || undefined}>{pending}</span>
+      <LightSegment
+        className="capture-float-gauge"
+        axis="horizontal"
+        segments={GAUGE_SEGMENTS}
+        mode={pending > 0 ? 'progress' : 'static'}
+        progress={pending > 0 ? gaugeRatio : undefined}
+        semantic={failed ? 'error' : 'default'}
+      />
+    </header>
+    <section>
+      <LcosGlyth className="capture-float-glyth" state={glythState} size={112} variant="soft" label={`bloub：${moodText}`}/>
+      <b className="capture-float-mood" data-mood={mood}>{moodText}</b>
+      <small>{receiving ? '松手收进暂存区' : failed ? 'Capture 失败' : lastTitle}</small>
+      <MatrixActivity
+        className="capture-float-matrix"
+        active={receiving || pending > 0}
+        verb={receiving ? 'absorb' : 'flow'}
+        density={16}
+        direction={90}
+      />
+    </section>
     <button type="button" onClick={() => void getDesktopPort()?.openCaptureSpace?.()}><ExternalLink size={12}/>打开暂存画布</button>
   </main>
 }

@@ -40,19 +40,21 @@ test('Workspace + creates and persists an empty Current Scene without seeding Se
 
   await expect(page.getByRole('dialog', { name: /保存一个工作现场|Workspace/i })).toHaveCount(0)
   await expect(railItems).toHaveCount(before + 1)
-  const activeScene = page.getByTestId('workspace-dock').locator('button[role="listitem"].active')
-  await expect(activeScene).toBeVisible()
-  await expect(activeScene).toHaveClass(/active/)
-  const sceneLabel = (await activeScene.getAttribute('aria-label'))?.replace(/^当前[^：]+：/, '')
+  // Scene creation leaves the user on the root canvas with a real Scene entity;
+  // entering the Scene is an explicit second action.
+  const createdScene = railItems.last()
+  await expect(createdScene).toBeVisible()
+  const sceneLabel = (await createdScene.getAttribute('aria-label'))?.replace(/^进入[^：]+：/, '')
   expect(sceneLabel).toBeTruthy()
   await expect(page.locator('[data-surface-mount="arrange"]')).toBeVisible()
-  await expect(page.locator('[data-node-id]')).toHaveCount(0)
+  await expect(page.locator('[data-node-id]')).toHaveCount(overviewCount + 1)
   await expect(canvas).toHaveAttribute('data-camera-x', overviewCamera.x ?? '')
   await expect(canvas).toHaveAttribute('data-camera-y', overviewCamera.y ?? '')
   await expect(canvas).toHaveAttribute('data-camera-zoom', overviewCamera.zoom ?? '')
 
-  await page.getByTestId('workspace-dock').getByRole('button', { name: '主画布' }).click()
-  await expect(page.locator('[data-node-id]')).toHaveCount(overviewCount)
+  await createdScene.click()
+  await expect(page.getByTestId('workspace-dock').locator('button[role="listitem"].active')).toBeVisible()
+  await expect(page.locator('[data-node-id]')).toHaveCount(0)
 
   // 等待 debounce 保存真正落到 Local Core，再 reload；避免把保存时序误判成数据丢失
   await expect.poll(async () => {

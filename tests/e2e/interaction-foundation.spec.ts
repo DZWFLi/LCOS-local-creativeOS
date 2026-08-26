@@ -16,6 +16,7 @@ test.beforeEach(async ({ request }) => {
   projectCounter += 1
   projectId = `interaction-e2e-${Date.now()}-${projectCounter}`
   const seed = createMvpSampleSnapshot(sampleRoot)
+  seed.workspaces[0] = { ...seed.workspaces[0]!, focusedViewIds: seed.artifactViews.map((view) => view.id) }
   const identityValues = [
     ...seed.scopes, ...seed.workspaces, ...seed.artifacts, ...seed.artifactViews,
     ...seed.relations, ...seed.notes, ...seed.artifactRevisions, ...seed.fileRecords, ...seed.checkpoints,
@@ -36,9 +37,15 @@ async function openCanvas(page: Page, fitContent = true) {
   await page.goto(`/?project=${projectId}`)
   const canvas = page.getByTestId('canvas')
   await expect(canvas).toBeVisible()
+  const testWorkspace = page.getByTestId('workspace-dock').getByRole('listitem', { name: /Brief \/ Script/ })
+  await expect(testWorkspace).toBeVisible()
+  await testWorkspace.click()
+  await expect(testWorkspace).toHaveClass(/active/)
   await page.waitForFunction(() => {
     const target = document.querySelector('[data-testid="canvas"]')
-    return Boolean(target && !target.hasAttribute('data-locked') && document.querySelectorAll('[data-node-id]').length >= 3)
+    const contentViews = [...document.querySelectorAll<HTMLElement>('[data-node-id]')]
+      .filter((node) => node.dataset.nodeId?.includes('--view-'))
+    return Boolean(target && !target.hasAttribute('data-locked') && contentViews.length >= 3)
   }, undefined, { timeout: 15_000 })
   await page.waitForTimeout(600)
   if (fitContent) {
@@ -90,48 +97,56 @@ async function blankCanvasPoint(page: Page) {
 }
 
 async function visibleNodes(page: Page) {
+  // Interaction foundation targets durable content Views. Scene/Collection
+  // entities share the canvas but have different open/delete semantics.
   return page.locator('[data-node-id]').evaluateAll((elements) => elements
     .map((element) => {
       const rect = element.getBoundingClientRect()
       return { id: element.getAttribute('data-node-id') ?? '', x: rect.x, y: rect.y, width: rect.width, height: rect.height }
     })
-    .filter((item) => item.id && item.width > 40 && item.height > 24 && item.x >= 52 && item.y >= 42 && item.x + item.width <= 1280 && item.y + item.height <= 654))
+    .filter((item) => item.id && !item.id.startsWith('workspace:') && !item.id.startsWith('scope:') && item.width > 40 && item.height > 24 && item.x + item.width > 52 && item.y + item.height > 42 && item.x < 1280 && item.y < 654))
 }
+
+const artifactViews = (items: Awaited<ReturnType<typeof visibleNodes>>) => items.filter((item) => item.id.includes('--view-'))
 
 test.describe('LCOS Interaction Foundation', () => {
   test('selection, drag threshold, trailing click, double click and middle pan stay isolated', async ({ page }) => {
     const canvas = await openCanvas(page)
     const items = await visibleNodes(page)
-    expect(items.length).toBeGreaterThanOrEqual(2)
-    const first = page.getByTestId(`canvas-node-${items[0].id}`)
-    const second = page.getByTestId(`canvas-node-${items[1].id}`)
+    const views = artifactViews(items)
+    expect(views.length).toBeGreaterThanOrEqual(2)
+    const first = page.getByTestId(`canvas-node-${views[0].id}`)
+    const second = page.getByTestId(`canvas-node-${views[1].id}`)
 
     for (let index = 0; index < 10; index += 1) {
       await first.click()
       await second.click()
     }
-    await expect(page.getByTestId('artifact-workbench')).toHaveCount(0)
+    await expect(page.getByRole('button', { name: '返回画布' })).toHaveCount(0)
 
     const before = await first.evaluate((element) => ({ left: Number.parseFloat((element as HTMLElement).style.left), top: Number.parseFloat((element as HTMLElement).style.top) }))
-    let point = await nodeGesturePoint(page, items[0].id)
+    let point = await nodeGesturePoint(page, views[0].id)
     await page.mouse.move(point.x, point.y)
     await page.mouse.down()
     await page.mouse.move(point.x + 3, point.y + 2)
     await page.mouse.up()
     await expect.poll(() => first.evaluate((element) => Number.parseFloat((element as HTMLElement).style.left))).toBe(before.left)
 
-    point = await nodeGesturePoint(page, items[0].id)
+    point = await nodeGesturePoint(page, views[0].id)
     await page.mouse.move(point.x, point.y)
     await page.mouse.down()
     await page.mouse.move(point.x + 24, point.y + 16, { steps: 4 })
     await page.mouse.up()
     await expect.poll(() => first.evaluate((element) => Number.parseFloat((element as HTMLElement).style.left))).toBeGreaterThan(before.left + 10)
     await first.click()
-    await expect(page.getByTestId('artifact-workbench')).toHaveCount(0)
+    await expect(page.getByRole('button', { name: '返回画布' })).toHaveCount(0)
 
+    // Let the intentional trailing-click suppression window close before a
+    // separate user gesture begins.
+    await page.waitForTimeout(450)
     await first.dblclick()
-    await expect(page.getByTestId('artifact-workbench')).toBeVisible()
-    await page.getByRole('button', { name: '关闭工作台' }).click()
+    await expect(page.getByRole('button', { name: '返回画布' })).toBeVisible()
+    await page.getByRole('button', { name: '返回画布' }).click()
 
     const cameraBefore = Number(await canvas.getAttribute('data-camera-x'))
     const canvasPoint = await blankCanvasPoint(page)
@@ -151,8 +166,9 @@ test.describe('LCOS Interaction Foundation', () => {
   test('marquee selection supports group drag and reversible delete', async ({ page }) => {
     await openCanvas(page)
     const items = await visibleNodes(page)
-    expect(items.length).toBeGreaterThanOrEqual(2)
-    const pair = items.slice(0, 2)
+    const views = artifactViews(items)
+    expect(views.length).toBeGreaterThanOrEqual(2)
+    const pair = views.slice(0, 2)
     const left = Math.min(...pair.map((item) => item.x)) - 12
     const top = Math.min(...pair.map((item) => item.y)) - 12
     const right = Math.max(...pair.map((item) => item.x + item.width)) + 12
@@ -264,9 +280,13 @@ test.describe('LCOS Interaction Foundation', () => {
   test('node presentation persists through Local Core while camera restores as navigation preference', async ({ page, request }) => {
     const canvas = await openCanvas(page)
     const items = await visibleNodes(page)
-    const target = items[0]
+    const target = artifactViews(items)[0]
+    expect(target).toBeTruthy()
     const node = page.getByTestId(`canvas-node-${target.id}`)
     const worldBefore = Number.parseFloat(await node.evaluate((element) => (element as HTMLElement).style.left))
+    const graphBefore = await (await request.get(`/api/local-core/v1/projects/${projectId}/graph`)).json() as { value?: { artifactViews?: Array<{ id: string; position: { x: number } }> } }
+    const persistedBefore = graphBefore.value?.artifactViews?.find((view) => view.id === target.id)?.position.x
+    expect(persistedBefore).toBeDefined()
     const dragPoint = await nodeGesturePoint(page, target.id)
     await page.mouse.move(dragPoint.x, dragPoint.y)
     await page.mouse.down()
@@ -275,11 +295,12 @@ test.describe('LCOS Interaction Foundation', () => {
     const worldAfter = Number.parseFloat(await node.evaluate((element) => (element as HTMLElement).style.left))
     expect(worldAfter).toBeGreaterThan(worldBefore + 10)
 
+    const visualDelta = worldAfter - worldBefore
     await expect.poll(async () => {
       const response = await request.get(`/api/local-core/v1/projects/${projectId}/graph`)
       const body = await response.json() as { value?: { artifactViews?: Array<{ id: string; position: { x: number } }> } }
       return body.value?.artifactViews?.find((view) => view.id === target.id)?.position.x
-    }, { timeout: 8_000 }).toBeCloseTo(worldAfter, 2)
+    }, { timeout: 8_000 }).toBeCloseTo((persistedBefore ?? 0) + visualDelta, 2)
 
     const blank = await blankCanvasPoint(page)
     await page.mouse.move(blank.x, blank.y)
@@ -297,6 +318,7 @@ test.describe('LCOS Interaction Foundation', () => {
       const targetCanvas = document.querySelector('[data-testid="canvas"]')
       return Boolean(targetCanvas && !targetCanvas.hasAttribute('data-locked'))
     }, undefined, { timeout: 15_000 })
+    await page.getByTestId('workspace-dock').getByRole('listitem', { name: /Brief \/ Script/ }).click()
     await expect.poll(() => page.getByTestId(`canvas-node-${target.id}`).evaluate((element) => Number.parseFloat((element as HTMLElement).style.left))).toBeCloseTo(worldAfter, 2)
     await expect.poll(async () => Number(await page.getByTestId('canvas').getAttribute('data-camera-x'))).toBeCloseTo(cameraBeforeReload.x, 1)
     await expect.poll(async () => Number(await page.getByTestId('canvas').getAttribute('data-camera-y'))).toBeCloseTo(cameraBeforeReload.y, 1)

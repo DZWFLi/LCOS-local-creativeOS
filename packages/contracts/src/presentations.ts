@@ -107,6 +107,74 @@ export interface WorkflowActionEdgeV0 {
   label?: string
 }
 
+export interface PresentationSpatialRegionV0 {
+  id: string
+  label?: string
+  /** Presentation-space bounds. Membership is derived live from geometry. */
+  bounds: { x: number; y: number; width: number; height: number }
+}
+
+/**
+ * Spatial Surface component contract. Components are Presentation-only
+ * projections over Project Truth. Bindings keep identity/locators only; they
+ * never embed a copied Project entity.
+ */
+export type SurfaceKindV0 = 'main' | 'context' | 'workflow'
+
+export type SurfaceComponentTypeV0 =
+  | 'fence'
+  | 'region'
+  | 'portal'
+  | 'source-chain'
+  | 'structure-map'
+  | 'evolution'
+  | 'relationship-field'
+  | 'context-pack'
+  | 'stack'
+  | 'compare'
+  | 'workflow-step'
+  | 'review'
+  | 'checkpoint'
+  | 'active-path'
+  | 'workbench'
+
+export interface SurfaceBoundsV0 {
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+export interface SurfaceBindingV0 {
+  entityId?: string
+  artifactId?: string
+  workflowId?: string
+  stepId?: string
+  contextId?: string
+  projectViewId?: string
+  /** Stable Project View identity refs used as component seeds. No copied entity payloads. */
+  projectViewIds?: string[]
+  checkpointId?: string
+  runId?: string
+}
+
+export interface SurfaceElementPresentationV0 {
+  pinned?: boolean
+  collapsed?: boolean
+  zIndex?: number
+  variant?: string
+}
+
+export interface SurfaceElementV0 {
+  id: string
+  projectId: string
+  surface: SurfaceKindV0
+  type: SurfaceComponentTypeV0
+  bounds: SurfaceBoundsV0
+  binding?: SurfaceBindingV0
+  presentation?: SurfaceElementPresentationV0
+}
+
 export interface PresentationStateV0 {
   memberViewIds: string[]
   /** Aggregate Project entities that do not require fake ArtifactViews (e.g. Workspace). */
@@ -121,6 +189,12 @@ export interface PresentationStateV0 {
   presentationEdges: PresentationEdgeV0[]
   pinnedViewIds: string[]
   emphasisByViewId: Record<string, PresentationEmphasisV0>
+  /** Main-canvas fences are durable Presentation geometry, never frozen member snapshots. */
+  spatialRegions?: PresentationSpatialRegionV0[]
+  /** Trusted spatial components. They store Presentation geometry + identity-only binding. */
+  surfaceElements?: SurfaceElementV0[]
+  /** Marks that the replaceable first-use Surface composition has already run. */
+  surfaceBootstrapVersion?: number
   trackSegments?: ContextTrackSegmentV0[]
   workflowOperators?: Record<string, WorkflowOperatorV0>
   /** Workflow-only action skeleton. Materials remain memberViewIds and are attached by reference. */

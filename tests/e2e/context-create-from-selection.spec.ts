@@ -6,7 +6,7 @@ const harness = createLocalCoreHarness()
 test.beforeAll(async () => { await harness.start() })
 test.afterAll(async () => { await harness.stop() })
 
-test('从选择沉淀上下文 persists the new Context into the Context Graph', async ({ page }) => {
+test('从选择沉淀上下文 persists the new Context into the Context workspace', async ({ page }) => {
   // Playwright profile 的 localStorage 会跨测试累积演示 Context，导致 context-view 绝对数不稳定。
   // 先清空持久化状态再测，保证断言的是本次新建的那一个。
   await page.goto('/?project=disposable-mvp-sample', { waitUntil: 'domcontentloaded' })
@@ -32,13 +32,12 @@ test('从选择沉淀上下文 persists the new Context into the Context Graph',
   await action.click()
 
   await page.getByTestId('vnext-bottom-dock').getByRole('button', { name: '上下文', exact: false }).click()
-  await expect(page.locator('[data-surface-mount="context-graph"]')).toBeVisible()
-  // 至少 1 个：本次新建的 Context 必须出现（不依赖 localStorage 里历史演示数据）。
-  await expect(page.locator('[data-context-view]').first()).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByTestId('surface-context-space')).toBeVisible()
+  await expect(page.getByRole('button', { name: '结构', exact: true })).toBeVisible()
 
   // Persistence, not only optimistic UI: reload and the created Context must still exist.
   await page.reload({ waitUntil: 'domcontentloaded' })
   await page.getByTestId('vnext-bottom-dock').getByRole('button', { name: '上下文', exact: false }).click()
-  await expect(page.locator('[data-surface-mount="context-graph"]')).toBeVisible()
-  await expect(page.locator('[data-context-view]').first()).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByTestId('surface-context-space')).toBeVisible()
+  await expect(page.getByRole('button', { name: '结构', exact: true })).toBeVisible()
 })

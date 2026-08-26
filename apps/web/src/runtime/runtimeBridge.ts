@@ -1,4 +1,5 @@
 import type { ContextManifestV0, GraphVersion, PreviewRecord, ProjectGraphSnapshot, Scope, WorkspaceContextPolicy, MutationBatch } from '@local-creative-os/contracts'
+import { recallNotePresentation } from '../state/notePresentationMemory'
 import type {
   CanvasEdge,
   CanvasNode,
@@ -415,6 +416,16 @@ export function mapGraphToState(
       previewMimeType: preview?.mimeType,
       previewDataUrl: previewContent === undefined ? undefined : `data:${previewContent.mimeType};base64,${previewContent.data}`,
       previewText: previewContent === undefined || !previewContent.mimeType.startsWith('text/') ? undefined : decodeBase64Text(previewContent.data),
+      // 统一文本编辑：text artifact 也走 note 编辑体系（noteBody / 导图布局随会话记忆恢复）。
+      ...(() => {
+        const presentation = recallNotePresentation(String(view.id))
+        return {
+          ...(presentation.noteBody !== undefined ? { noteBody: presentation.noteBody } : {}),
+          ...(presentation.noteLayout ? { noteLayout: presentation.noteLayout } : {}),
+          ...(presentation.noteOutline ? { noteOutline: presentation.noteOutline } : {}),
+          ...(presentation.noteTags ? { noteTags: presentation.noteTags } : {}),
+        }
+      })(),
       scopeId: normalizeScopeId(view.scopeId),
       opensScopeId: childScopeByContainerViewId.get(String(view.id)),
       entityKind: (() => {
@@ -456,8 +467,8 @@ export function mapGraphToState(
       ?? (anchor.type === 'scope' ? normalizeScopeId(anchor.scopeId) : undefined)
       ?? normalizeScopeId(undefined)
     const lines = note.body.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
-    const title = (lines[0] ?? '备注').slice(0, 60)
-    const bodyTail = lines.slice(1).join(' ').trim().slice(0, 120)
+    const title = (lines[0] ?? '文本').slice(0, 60)
+    const bodyTail = lines.slice(1).join(' ').trim().slice(0, 24)
     const belowTarget = anchorTarget === undefined ? undefined : { x: anchorTarget.x + 24, y: anchorTarget.y + anchorTarget.height + 24 }
     const position = belowTarget !== undefined && !rectCollides(belowTarget.x, belowTarget.y, 232, NOTE_NODE_HEIGHT)
       ? belowTarget
@@ -472,18 +483,24 @@ export function mapGraphToState(
         origin: 'system',
       })
     }
+    const viewId = String(note.id)
+    const presentation = recallNotePresentation(viewId)
     return {
-      id: String(note.id),
+      id: viewId,
       kind: 'note' as const,
       title,
-      subtitle: anchorTarget !== undefined ? (bodyTail || '锚定备注') : (bodyTail || '项目备注'),
+      // Unified text nodes: subtitle is the first body line, same as any other note.
+      subtitle: bodyTail,
       x: position.x, y: position.y,
       width: 232, height: NOTE_NODE_HEIGHT,
-      displayMode: 'standard' as const,
+      displayMode: presentation.noteLayout === 'mindmap' ? 'expanded' as const : 'standard' as const,
       scopeId,
       noteBody: note.body,
       anchors: [anchor],
       createdAt: note.createdAt,
+      ...(presentation.noteLayout ? { noteLayout: presentation.noteLayout } : {}),
+      ...(presentation.noteOutline ? { noteOutline: presentation.noteOutline } : {}),
+      ...(presentation.noteTags ? { noteTags: presentation.noteTags } : {}),
     }
   })
 

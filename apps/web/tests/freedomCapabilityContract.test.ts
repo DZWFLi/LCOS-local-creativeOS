@@ -7,7 +7,6 @@ const canvas = source('features/canvas/ProjectCanvas.tsx')
 const spatialCamera = source('features/spatial/spatialCamera.ts')
 const dialog = source('features/conversations/ConversationContextDialog.tsx')
 const workflow = source('features/surfaces/WorkflowSurface.tsx')
-const graph = source('features/surfaces/ContextGraphSurface.tsx')
 const workspaceDialog = source('features/workspace/WorkspaceDialog.tsx')
 const rail = source('features/workrail/WorkRail.tsx')
 const app = source('App.tsx')
@@ -49,11 +48,6 @@ describe('VNext.3 capability frame / project semantics contract', () => {
     // Checkpoint 时间线（B5）：Context 表面历史栏 = Core 项目快照（「对比当前 / 从这里建现场」复用既有回调）
     expect(app).toContain('history: coreContextSnapshots.map')
     expect(app).toContain('Context 历史 = Core 项目快照')
-  })
-
-  it('derives graph filters from actual project relations rather than a fixed taxonomy', () => {
-    expect(graph).toContain('new Set(props.edges.map((edge) => edge.kind))')
-    expect(graph).not.toContain("const RELATION_KINDS=['reference','generate','modify','feedback']")
   })
 
   it('keeps Run as a right-side execution list', () => {

@@ -51,4 +51,40 @@ describe('Runtime Host entrypoints', () => {
     expect(executableLines).toMatch(/ConvertFrom-Json '\{.*\\u6253.*\}'/)
     expect(executableLines).not.toMatch(/[^\x00-\x7F]/)
   })
+
+  it('never forces packaged Electron utility children into Node CLI mode', () => {
+    const source = readFileSync(join(repositoryRoot, 'apps/desktop/src/runtime-supervisor.mjs'), 'utf8')
+
+    expect(source).toContain('export function utilityEnvironment')
+    expect(source).toContain('delete env.ELECTRON_RUN_AS_NODE')
+    expect(source).not.toContain("ELECTRON_RUN_AS_NODE: '1'")
+    expect(source.match(/env: utilityEnvironment\(/g)?.length).toBe(3)
+  })
+
+  it('requires an explicit completion message before accepting a non-zero one-shot utility exit', () => {
+    const supervisor = readFileSync(join(repositoryRoot, 'apps/desktop/src/runtime-supervisor.mjs'), 'utf8')
+    const skillInstaller = readFileSync(join(repositoryRoot, 'scripts/install-lcos-codex-skill.mjs'), 'utf8')
+    const mcpInstaller = readFileSync(join(repositoryRoot, 'scripts/install-lcos-codex-mcp.mjs'), 'utf8')
+
+    expect(supervisor).toContain("message?.type === 'lcos:utility-complete'")
+    expect(supervisor).toContain('if (code === 0 || reportedCompletion)')
+    expect(supervisor).toContain('resolvePromise(output)\n          child.kill()')
+    expect(skillInstaller).toContain("name: 'Codex skill setup'")
+    expect(mcpInstaller).toContain("name: 'Codex MCP setup'")
+  })
+
+  it('keeps packaged startup progress and failures inside the Glyth boot surface', () => {
+    const main = readFileSync(join(repositoryRoot, 'apps/desktop/src/main.mjs'), 'utf8')
+    const supervisor = readFileSync(join(repositoryRoot, 'apps/desktop/src/runtime-supervisor.mjs'), 'utf8')
+    const splash = readFileSync(join(repositoryRoot, 'apps/desktop/src/splash.html'), 'utf8')
+
+    expect(main).toContain('createSplashWindow')
+    expect(main).toContain("state: 'error'")
+    expect(main).not.toContain("dialog.showErrorBox('LCOS 启动失败'")
+    expect(supervisor).toContain("emitProgress('bridge'")
+    expect(supervisor).toContain("emitProgress('core'")
+    expect(supervisor).toContain("emitProgress('skills'")
+    expect(splash).toContain('仍在等待当前步骤')
+    expect(splash).toContain('@media (prefers-reduced-motion: reduce)')
+  })
 })

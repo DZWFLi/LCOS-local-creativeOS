@@ -1,8 +1,0 @@
-{
-  "schemaVersion": 1,
-  "preparedAt": "2026-08-20T13:23:25.905Z",
-  "web": "web/index.html",
-  "localCore": "local-core/dist/index.js",
-  "bridge": "bundled",
-  "orchestrator": "tools/codex-orchestrator/watch.mjs"
-}

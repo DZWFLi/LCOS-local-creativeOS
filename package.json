@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "npm run dev --workspace @local-creative-os/web",
     "dev:web": "npm run dev --workspace @local-creative-os/web",
-    "dev:local-core": "npm run build:domain && npm run dev --workspace @local-creative-os/local-core",
+    "dev:local-core": "npm run build:local-core && node apps/local-core/dist/index.js",
     "dev:stack": "node scripts/dev-stack.mjs",
     "dev:open": "node scripts/dev-launcher.mjs open",
     "dev:stop": "node scripts/dev-launcher.mjs stop",
@@ -46,7 +46,8 @@
     "check:gatef-capabilities": "node scripts/validate-gatef-capabilities.mjs",
     "smoke:gatef-core": "npm run build --workspace @local-creative-os/local-core && node scripts/gatef-core-smoke.mjs",
     "build:domain": "npm run build --workspace @local-creative-os/domain",
-    "build:local-core": "npm run build:domain && npm run build --workspace @local-creative-os/local-core",
+    "build:contracts": "esbuild packages/contracts/src/index.ts --bundle --platform=node --format=esm --packages=external --outfile=packages/contracts/dist/index.js",
+    "build:local-core": "npm run build:domain && npm run build:contracts && npm run build --workspace @local-creative-os/local-core",
     "check:gatef-closeout": "node scripts/validate-gatef-closeout.mjs",
     "smoke:obsidian": "npm run build:local-core && node scripts/obsidian-connector-smoke.mjs",
     "smoke:gatef-closeout": "npm run build:local-core && node scripts/gatef-core-smoke.mjs && node scripts/obsidian-connector-smoke.mjs && node scripts/validate-gatef-closeout.mjs",
@@ -87,7 +88,9 @@
     "desktop:doctor": "node scripts/desktop/doctor.mjs",
     "check:gui:0.1-final": "node scripts/validate-gui-01-final-static.mjs",
     "check:context-cache-static": "node scripts/validate-context-cache-friendly-static.mjs",
-    "windows:finalize:0.1": "powershell -ExecutionPolicy Bypass -File scripts/windows-finalize-lcos-01.ps1"
+    "check:gui:human-round1": "node scripts/validate-main-canvas-human-golden-hotfix.mjs && node scripts/validate-main-canvas-human-golden-round1.mjs && node scripts/validate-gui-human-round1-docs-fence.mjs",
+    "windows:finalize:0.1": "powershell -ExecutionPolicy Bypass -File scripts/windows-finalize-lcos-01.ps1",
+    "check:spatial-components": "node scripts/validate-spatial-component-foundation.mjs"
   },
   "dependencies": {
     "lucide-react": "^1.24.0",

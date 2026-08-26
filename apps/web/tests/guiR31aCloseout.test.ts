@@ -53,25 +53,24 @@ describe('R3.1-A semantic foundation closeout', () => {
     expect(app).not.toContain('createChildScopeFromSelection(')
   })
 
-  it('keeps Context strictly two-level and renders level 1 as an associative constellation', () => {
+  it('keeps the associative Context Graph as a compatibility Lens, not the forced Context homepage', () => {
     expect(projection).toContain("props.surface==='context-graph'?<ContextRelationshipHomeSurface")
     expect(contextGraph).toContain('Obsidian-like associative constellation')
     expect(contextGraph).toContain('lcos-context-dot-core')
     expect(contextGraph).toContain('contextDimensions')
     expect(closeoutCss).toContain('.lcos-context-dot-core')
     expect(app).toContain("if (normalized === 'context-graph') { setActiveContextId(null)")
-    expect(app).toContain('setActiveContextId(contextId)')
+    expect(source('features/shell/SurfaceDock.tsx')).toContain("if(next === 'context') onSurface('context-space')")
   })
 
-  it('adds a first-level directional Workflow Graph before Workflow detail', () => {
-    expect(projection).toContain("props.surface==='workflow'&&!props.activeWorkflowId?<WorkflowGraphSurface")
+  it('keeps the old Workflow Graph source as a Lens while Workflow opens the action scene directly', () => {
+    expect(projection).not.toContain("!props.activeWorkflowId?<WorkflowGraphSurface")
+    expect(projection).toContain("props.surface==='workflow'?<WorkflowSurface")
     expect(workflowGraph).toContain('project action network')
     expect(workflowGraph).toContain('markerEnd="url(#lcos-workflow-arrow)"')
     expect(workflowGraph).toContain('memberEntityNodeIds')
-    expect(workflowGraph).toContain('data-project-view-drop-kind="workflow"')
     expect(app).toContain('setActiveWorkflowId(null)')
     expect(app).toContain('setActiveWorkflowId(workflowId)')
-    expect(closeoutCss).toContain('.lcos-workflow-graph-workflow')
   })
 
   it('uses one right-button semantic Drop language in non-main project surfaces', () => {

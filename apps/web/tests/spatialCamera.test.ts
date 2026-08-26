@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { applySpatialWheelGesture, edgeScrollDelta, fitSpatialBounds, spatialScreenToWorld, spatialWorldToScreen } from '../src/features/spatial/spatialCamera'
-import { spatialDensityForSize, spatialLodForCount } from '../src/features/spatial/spatialLod'
+import { spatialDensityForSize, spatialLodForCount, spatialOverviewProjection } from '../src/features/spatial/spatialLod'
 
 const camera={x:120,y:80,zoom:.8}
 
@@ -30,9 +30,29 @@ describe('shared spatial camera',()=>{
 
   it('shares LOD and viewport density thresholds across renderers',()=>{
     expect(spatialLodForCount(80)).toBe('full')
+    expect(spatialLodForCount(81)).toBe('simplified')
     expect(spatialLodForCount(150)).toBe('simplified')
+    expect(spatialLodForCount(151)).toBe('aggregate')
+    expect(spatialLodForCount(299)).toBe('aggregate')
     expect(spatialLodForCount(300)).toBe('overview')
     expect(spatialDensityForSize({width:500,height:700})).toBe('constrained')
     expect(spatialDensityForSize({width:700,height:700})).toBe('compact')
+  })
+
+  it('caps overview DOM projection without losing selected identities or full navigation membership',()=>{
+    const items=Array.from({length:500},(_,index)=>({id:`node-${index}`,x:(index%25)*60,y:Math.floor(index/25)*50,width:40,height:30}))
+    const projected=spatialOverviewProjection(items,{x:0,y:0,zoom:.4},new Set(['node-499']),{width:1440,height:900},180)
+    expect(projected.length).toBeLessThanOrEqual(180)
+    expect(projected.some((item)=>item.id==='node-499')).toBe(true)
+    expect(items).toHaveLength(500)
+  })
+
+  it('keeps every explicit selection at the 1000-object overview boundary',()=>{
+    const items=Array.from({length:1000},(_,index)=>({id:`node-${index}`,x:(index%40)*52,y:Math.floor(index/40)*44,width:38,height:28}))
+    const selected=new Set(items.slice(800).map((item)=>item.id))
+    const projected=spatialOverviewProjection(items,{x:0,y:0,zoom:.35},selected,{width:1440,height:900},180)
+    expect(projected).toHaveLength(200)
+    expect([...selected].every((id)=>projected.some((item)=>item.id===id))).toBe(true)
+    expect(items).toHaveLength(1000)
   })
 })

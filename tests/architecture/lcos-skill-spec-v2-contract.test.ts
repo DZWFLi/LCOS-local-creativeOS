@@ -11,14 +11,14 @@ const spec = readFileSync(join(skillRoot, 'SKILL_SPEC.md'), 'utf8')
 const installer = readFileSync(join(root, 'scripts/install-lcos-codex-skill.mjs'), 'utf8')
 
 function frontmatter(text: string): string {
-  const match = text.match(/^---\n([\s\S]*?)\n---/)
+  const match = text.match(/^---\r?\n([\s\S]*?)\r?\n---/)
   return match?.[1] ?? ''
 }
 
 describe('LCOS SKILL_SPEC v2 managed contract', () => {
-  it('has one managed manifest for the seven canonical runtime skills', () => {
+  it('has one managed manifest for the eight canonical runtime skills', () => {
     expect(manifest.schemaVersion).toBe(1)
-    expect(manifest.skills).toHaveLength(7)
+    expect(manifest.skills).toHaveLength(8)
     expect(new Set(manifest.skills).size).toBe(manifest.skills.length)
     expect(installer).toContain('managed-skills.json')
     expect(installer).toContain('managedSkillsData.skills')

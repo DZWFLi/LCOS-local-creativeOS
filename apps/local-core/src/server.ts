@@ -95,6 +95,7 @@ import { handleChangeSetsRoute } from './routes/change-sets.js'
 import { handleRelationsRoute } from './routes/relations.js'
 import { handleRevisionWorkflowsRoute } from './routes/revision-workflows.js'
 import { handleContinuityRoute } from './routes/continuity.js'
+import { handleReceiverRoute } from './routes/receiver.js'
 import { handleWorkspaceStatesRoute } from './routes/workspace-states.js'
 import { FORBIDDEN_BROWSER_PATH_FIELDS, isRecord, isStringArray, routeRequireMetadata, routeRequireProject } from './routes/route-context.js'
 import { ContextProposalStore } from './context-proposal-store.js'
@@ -112,8 +113,8 @@ import { ConversationImportService } from './conversation-import-service.js'
 
 const LOOPBACK_HOST = '127.0.0.1'
 const MAX_BODY_BYTES = 1 * 1024 * 1024 // 1 MiB
-const MAX_IMPORT_BODY_BYTES = 26 * 1024 * 1024 // 25 MiB file + multipart overhead
-const MAX_DOCUMENT_PREVIEW_BYTES = 50 * 1024 * 1024
+const MAX_IMPORT_BODY_BYTES = 130 * 1024 * 1024 // 128 MiB file + multipart overhead
+const MAX_DOCUMENT_PREVIEW_BYTES = 128 * 1024 * 1024
 const MAX_LCOSPROJ_BODY_BYTES = 128 * 1024 * 1024
 function isAbsolutePath(value: string): boolean {
   return isAbsolute(value)
@@ -335,7 +336,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
     resourceReader, matcher, contextManifest, runtimeReview, runtimeApplication, activeContext,
     contextProposals, runEventListeners, obsidian, obsidianSessions, connectorRegistry,
     ownsConversationService, conversations, previewWorker, presentation, curation, search, curationCommand,
-    runtimeRegistry, intelligence, captureStaging, resolveProjectAffinity, captureApplication, captureWatch, captureSpace, reorganize, sessionReadSet, spatialRetrieval, attentionRuntime, boundaryEvaluator, projectEvents, projectMutations, mutationSafety, feedbackRevision, continuityRuntime,
+    runtimeRegistry, intelligence, captureStaging, resolveProjectAffinity, captureApplication, captureWatch, captureSpace, reorganize, sessionReadSet, spatialRetrieval, attentionRuntime, boundaryEvaluator, projectEvents, projectMutations, mutationSafety, feedbackRevision, continuityRuntime, receiverRuntime,
   } = services
   metadata?.setRunEventSink?.((event) => {
     const payloadProjectId = (event.payload as { projectId?: string } | null)?.projectId
@@ -1353,6 +1354,11 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
       })) return
       if (await handleContinuityRoute({
         method, pathname, url, request, response, signal: controller.signal, metadata, continuityRuntime,
+        helpers: routeHelpers,
+      })) return
+      // ==================== RECEIVER-0 会话承接路由 ====================
+      if (await handleReceiverRoute({
+        method, pathname, url, request, response, signal: controller.signal, metadata, receiverRuntime,
         helpers: routeHelpers,
       })) return
 

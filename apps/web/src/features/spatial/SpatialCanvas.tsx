@@ -1,9 +1,11 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import { Maximize2, Minimize2 } from 'lucide-react'
 import type { CSSProperties, DragEvent, PointerEvent as ReactPointerEvent, ReactNode, WheelEvent } from 'react'
 import type { Camera } from '../../model'
 import { applySpatialWheelGesture, spatialScreenToWorld } from './spatialCamera'
 import { spatialDensityForSize } from './spatialLod'
 import { advanceSpatialPan, beginSpatialPan, endSpatialPointer } from './spatialInteractionMachine'
+import { CanvasEdgePinLayer, type CanvasEdgePinItem } from './CanvasEdgePinLayer'
 import { SpatialOverlayLayer } from './SpatialOverlayLayer'
 import { SpatialViewport } from './SpatialViewport'
 import { IDLE_SPATIAL_POINTER, type SpatialCameraSetter, type SpatialPoint, type SpatialPointerSession } from './spatialTypes'
@@ -63,6 +65,10 @@ interface Props {
   minimapLabel?: string
   onPanningChange?: (active: boolean) => void
   semanticDropTarget?: { readonly id: string; readonly label: string }
+  /** §4.13 边缘气泡标点:只传「被标点」对象(pinned/选中/被圈,调用方过滤);不传则不出气泡层 */
+  edgePinItems?: readonly CanvasEdgePinItem[]
+  /** 边缘气泡点击回调:复用调用方既有 focus 链把相机滑过去(本组件不新写跳转) */
+  onEdgePinLocate?: (id: string) => void
 }
 
 /**
@@ -99,6 +105,8 @@ export const SpatialCanvas = forwardRef<HTMLDivElement, Props>(function SpatialC
   minimapLabel = '视图地图',
   onPanningChange,
   semanticDropTarget,
+  edgePinItems,
+  onEdgePinLocate,
 }, forwardedRef) {
   const rootRef = useRef<HTMLDivElement | null>(null)
   const wheelHandlerRef = useRef<(event: globalThis.WheelEvent) => void>(() => {})
@@ -351,25 +359,29 @@ export const SpatialCanvas = forwardRef<HTMLDivElement, Props>(function SpatialC
     onDrop={handleDrop}
   >
     <SpatialViewport camera={camera} className={worldClassName} testId={worldTestId} style={worldStyle}>{children}</SpatialViewport>
-    {(overlays !== undefined || marqueeRect || (minimapItems && minimapItems.length > 0)) && <SpatialOverlayLayer>
+    {(overlays !== undefined || marqueeRect || (minimapItems && minimapItems.length > 0) || (edgePinItems && edgePinItems.length > 0 && onEdgePinLocate)) && <SpatialOverlayLayer>
       {overlays}
       {marqueeRect && <div className="lcos-spatial-marquee" style={{ left: marqueeRect.left, top: marqueeRect.top, width: marqueeRect.width, height: marqueeRect.height }} />}
       {minimapItems && minimapItems.length > 0 && <SpatialMiniMap items={minimapItems} camera={camera} setCamera={setCamera} viewportSize={size} label={minimapLabel}/>}
+      {/* §4.13 边缘气泡标点:不跟随相机 transform 的固定屏幕层(minimap 同层),viewportSize 复用容器 ResizeObserver 实测值 */}
+      {edgePinItems && edgePinItems.length > 0 && onEdgePinLocate && <CanvasEdgePinLayer camera={camera} viewportSize={size} items={edgePinItems} onLocate={onEdgePinLocate}/>}
     </SpatialOverlayLayer>}
   </div>
 })
 
 function SpatialMiniMap({ items, camera, setCamera, viewportSize, label }: { items: readonly SpatialCanvasItem[]; camera: Camera; setCamera: SpatialCameraSetter; viewportSize: { width: number; height: number }; label: string }) {
+  const [collapsed, setCollapsed] = useState(false)
   const bounds = spatialItemBounds(items)
-  const width = 164, height = 92, padding = 8
+  const width = 152, height = 76, padding = 7
   const scale = Math.min((width - padding * 2) / Math.max(bounds.width, 1), (height - padding * 2) / Math.max(bounds.height, 1))
   const offsetX = padding + (width - padding * 2 - bounds.width * scale) / 2
   const offsetY = padding + (height - padding * 2 - bounds.height * scale) / 2
   const worldToMapX = (x: number) => offsetX + (x - bounds.x) * scale
   const worldToMapY = (y: number) => offsetY + (y - bounds.y) * scale
   const viewWorld = { x: -camera.x / camera.zoom, y: -camera.y / camera.zoom, width: viewportSize.width / camera.zoom, height: viewportSize.height / camera.zoom }
+  if (collapsed) return <section className="lcos-spatial-minimap is-collapsed" data-testid="spatial-surface-minimap" aria-label={label}><button type="button" className="lcos-spatial-minimap-expand" aria-label={`展开${label}小地图`} title={`展开${label}小地图`} onClick={() => setCollapsed(false)}><Maximize2 size={13}/></button></section>
   return <section className="lcos-spatial-minimap" data-testid="spatial-surface-minimap" aria-label={label}>
-    <header><span>{label}</span><small>{items.length}</small></header>
+    <header><span>{label}</span><span className="lcos-spatial-minimap-meta"><small>{items.length}</small><button type="button" aria-label={`收起${label}小地图`} title="收起小地图" onClick={() => setCollapsed(true)}><Minimize2 size={12}/></button></span></header>
     <button type="button" className="lcos-spatial-minimap-map" aria-label={`在${label}中定位`} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => {
       const rect = event.currentTarget.getBoundingClientRect()
       const localX = event.clientX - rect.left, localY = event.clientY - rect.top

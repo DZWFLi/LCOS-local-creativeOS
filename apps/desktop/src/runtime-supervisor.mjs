@@ -12,6 +12,17 @@ const MAX_RESTARTS = 3
 
 function sleep(ms) { return new Promise((resolvePromise) => setTimeout(resolvePromise, ms)) }
 
+/**
+ * Electron utilityProcess.fork already boots a Node-capable Utility Process.
+ * ELECTRON_RUN_AS_NODE makes the packaged executable parse Chromium's
+ * --type=utility arguments as Node CLI options before the child can start.
+ */
+export function utilityEnvironment(overrides = {}) {
+  const env = { ...process.env, ...overrides }
+  delete env.ELECTRON_RUN_AS_NODE
+  return env
+}
+
 async function portFree(port) {
   return new Promise((resolvePromise) => {
     const socket = createConnection({ host: '127.0.0.1', port })
@@ -59,11 +70,12 @@ function formatBytes(value) {
 }
 
 export class DesktopRuntimeSupervisor {
-  constructor({ runtimeBundleRoot, userDataRoot, logRoot, onStatus }) {
+  constructor({ runtimeBundleRoot, userDataRoot, logRoot, onStatus, onProgress }) {
     this.runtimeBundleRoot = resolve(runtimeBundleRoot)
     this.userDataRoot = resolve(userDataRoot)
     this.logRoot = resolve(logRoot)
     this.onStatus = onStatus ?? (() => {})
+    this.onProgress = onProgress ?? (() => {})
     this.children = new Map()
     this.restartHistory = new Map()
     this.stopping = false
@@ -89,6 +101,8 @@ export class DesktopRuntimeSupervisor {
   }
 
   emitStatus() { this.onStatus(this.status()) }
+
+  emitProgress(stage, label, progress) { this.onProgress({ stage, label, progress }) }
 
   log(name, message) {
     appendFileSync(join(this.logRoot, `${name}.log`), `[${new Date().toISOString()}] ${message}\n`, 'utf8')
@@ -179,8 +193,7 @@ export class DesktopRuntimeSupervisor {
       serviceName: 'LCOS Local Core',
       stdio: 'pipe',
       cwd: this.runtimeBundleRoot,
-      env: {
-        ...process.env,
+      env: utilityEnvironment({
         LOCAL_CORE_API_TOKEN: this.token,
         LOCAL_CORE_DB_PATH: join(dataRoot, 'metadata.sqlite'),
         LOCAL_CORE_MVP_SAMPLE_ROOT: join(dataRoot, 'mvp-sample-project'),
@@ -188,7 +201,7 @@ export class DesktopRuntimeSupervisor {
         LCOS_CORE_TOKEN_FILE: this.tokenFile,
         LCOS_REPO_ROOT: this.runtimeBundleRoot,
         LCOS_OCR_RUNTIME_DIR: join(this.userDataRoot, 'ocr'),
-      },
+      }),
     })
     this.attachUtility('core', child, this.startCore)
   }
@@ -211,16 +224,14 @@ export class DesktopRuntimeSupervisor {
       serviceName: 'LCOS Codex Orchestrator',
       stdio: 'pipe',
       cwd: this.runtimeBundleRoot,
-      env: {
-        ...process.env,
-        ELECTRON_RUN_AS_NODE: '1',
+      env: utilityEnvironment({
         LCOS_ORCHESTRATOR_REPO: this.runtimeBundleRoot,
         LCOS_CORE_URL: `http://127.0.0.1:${CORE_PORT}`,
         LCOS_BRIDGE_URL: `http://127.0.0.1:${BRIDGE_PORT}`,
         LCOS_CORE_TOKEN_FILE: this.tokenFile,
         LCOS_ORCHESTRATOR_STATE_DIR: stateRoot,
         LCOS_ORCHESTRATOR_LOCK: join(stateRoot, 'watch.lock'),
-      },
+      }),
     })
     this.attachUtility('orchestrator', child, this.startOrchestrator)
   }
@@ -260,17 +271,25 @@ export class DesktopRuntimeSupervisor {
         serviceName: `LCOS ${name}`,
         stdio: 'pipe',
         cwd: this.runtimeBundleRoot,
-        env: {
-          ...process.env,
-          ELECTRON_RUN_AS_NODE: '1',
+        env: utilityEnvironment({
           LCOS_REPO_ROOT: this.runtimeBundleRoot,
           LCOS_CORE_URL: `http://127.0.0.1:${CORE_PORT}`,
           LCOS_BRIDGE_URL: `http://127.0.0.1:${BRIDGE_PORT}`,
           LCOS_CORE_TOKEN_FILE: this.tokenFile,
           ...extraEnv,
-        },
+        }),
       })
       let output = ''
+      let reportedCompletion = false
+      let settled = false
+      child.on('message', (message) => {
+        if (message?.type === 'lcos:utility-complete' && message?.name === name) {
+          reportedCompletion = true
+          settled = true
+          resolvePromise(output)
+          child.kill()
+        }
+      })
       child.stdout?.on('data', (chunk) => {
         const text = chunk.toString('utf8')
         output = `${output}${text}`.slice(-1_000_000)
@@ -282,7 +301,13 @@ export class DesktopRuntimeSupervisor {
         this.log('codex-setup', text.trimEnd())
       })
       child.once('exit', (code) => {
-        if (code === 0) resolvePromise(output)
+        if (settled) return
+        settled = true
+        // Electron 43 on Windows may report code 1 after an ESM utility script
+        // has naturally completed. Only an explicit, script-owned completion
+        // message may override that unreliable exit code; real failures still
+        // reject because they never emit the message.
+        if (code === 0 || reportedCompletion) resolvePromise(output)
         else reject(new Error(`${name} failed with code ${String(code)}.
 ${output.slice(-4000)}`))
       })
@@ -290,11 +315,13 @@ ${output.slice(-4000)}`))
   }
 
   async installCodexIntegration() {
+    this.emitProgress('skills', '正在同步 LCOS Skills', 62)
     this.refreshCodexIntegrationFiles()
     const skillInstaller = join(this.runtimeBundleRoot, 'scripts', 'install-lcos-codex-skill.mjs')
     const mcpInstaller = join(this.runtimeBundleRoot, 'scripts', 'install-lcos-codex-mcp.mjs')
     const integrationEnv = { LCOS_REPO_ROOT: this.codexIntegrationRoot }
     await this.runUtilityOnce('Codex skill setup', skillInstaller, integrationEnv)
+    this.emitProgress('codex', '正在连接 Codex', 76)
     await this.runUtilityOnce('Codex MCP setup', mcpInstaller, integrationEnv)
     writeFileSync(this.codexIntegrationMarker, `${JSON.stringify({
       schemaVersion: 1,
@@ -309,16 +336,20 @@ ${output.slice(-4000)}`))
 
   async start() {
     this.stopping = false
+    this.emitProgress('environment', '正在检查本地环境', 10)
     this.assertStorageAvailable()
     await this.assertPortsAvailable()
+    this.emitProgress('bridge', '正在启动执行桥', 24)
     await this.startBridge()
     if (!await waitFor(`http://127.0.0.1:${BRIDGE_PORT}/health`, 20_000)) throw new Error('LCOS Light Bridge 启动超时。')
+    this.emitProgress('core', '正在启动本地核心', 42)
     await this.startCore()
     if (!await waitFor(`http://127.0.0.1:${CORE_PORT}/health`, 25_000)) throw new Error('LCOS Local Core 启动超时。')
     if (existsSync(this.codexIntegrationMarker)) {
       if (this.codexIntegrationNeedsRefresh()) await this.installCodexIntegration()
       else this.refreshCodexIntegrationFiles()
     }
+    this.emitProgress('orchestrator', '正在唤醒本地 Agent', 86)
     await this.startOrchestrator()
     this.emitStatus()
     return this.status()

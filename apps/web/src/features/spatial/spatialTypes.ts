@@ -1,6 +1,6 @@
 import type { Camera } from '../../model'
 
-export type SpatialLod = 'full' | 'simplified' | 'overview'
+export type SpatialLod = 'full' | 'simplified' | 'aggregate' | 'overview'
 export type SpatialDensity = 'comfortable' | 'compact' | 'constrained'
 
 export interface SpatialPoint { x: number; y: number }
@@ -15,6 +15,6 @@ export type SpatialPointerSession =
   | { kind: 'idle' }
   | { kind: 'pan'; pointerId: number; start: SpatialPoint; originCamera: Camera }
   | { kind: 'marquee'; pointerId: number; start: SpatialPoint; current: SpatialPoint; moved: boolean }
-  | { kind: 'node-drag'; pointerId: number; id: string; start: SpatialPoint; origin: SpatialPoint }
+  | { kind: 'node-drag'; pointerId: number; id: string; start: SpatialPoint; origin: SpatialPoint; startZoom: number }
 
 export const IDLE_SPATIAL_POINTER: SpatialPointerSession = { kind: 'idle' }

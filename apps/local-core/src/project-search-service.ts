@@ -37,6 +37,9 @@ async function readTextPrefix(observedPath: string | undefined, maxChars: number
  * conversation FTS > resource title > descriptor summary.
  */
 export class ProjectSearchService {
+  /** 懒索引幂等缓存:本进程内每个项目只 ensure 一次(内容增量靠 indexEntity 自身 hash 跳过)。 */
+  readonly #ensuredProjects = new Set<string>()
+
   constructor(
     private readonly repository: SqliteMetadataRepository,
     private readonly conversations: ConversationImportService | undefined,
@@ -65,6 +68,10 @@ export class ProjectSearchService {
 
     const exactPhrase = (text: string): boolean => text.toLocaleLowerCase('en-US').includes(needle)
 
+    // 核心能力 B 接线:RAG chunking 懒索引——存量/导入的 artifact 首次被搜索时触发
+    // indexEntity(分块计划先行落库;Ollama 缺席时 FTS-only,不阻塞搜索)。
+    if (types.has('artifact')) await this.#ensureProjectIndexed(projectId)
+
     // Artifact title + text content
     if (types.has('artifact')) {
       for (const artifact of this.repository.getArtifacts(projectId)) {
@@ -82,7 +89,7 @@ export class ProjectSearchService {
           if (fileRecord?.mimeType === 'text/markdown' || fileRecord?.mimeType === 'text/plain') {
             const content = await readTextPrefix(fileRecord.observedPath, 8_000)
             if (exactPhrase(content)) {
-              push({ entityType: 'artifact', entityId: artifact.id, ...(viewId === undefined ? {} : { viewId }), title: artifact.title, snippet: snippetFrom(content, query), source: 'artifact-text', score: 50 })
+          push({ entityType: 'artifact', entityId: artifact.id, ...(viewId === undefined ? {} : { viewId }), title: artifact.title, snippet: snippetFrom(content, query), source: 'artifact-text', score: 50, ...(this.semantic?.chunkHitFor(String(artifact.id), needle) ?? {}) })
             }
           }
         }
@@ -121,14 +128,35 @@ export class ProjectSearchService {
     // Derived search_documents FTS (Phase G): artifacts/notes/resources indexed by SemanticIndexService.
     const docHits = this.repository.searchDocumentsFts(projectId, query, 20)
     for (const doc of docHits) {
-      push({ entityType: 'artifact', entityId: doc.entityId, title: doc.title, snippet: snippetFrom(doc.body, query), source: 'search-document-fts', score: 35 })
+      // 核心能力 B:FTS 命中块级化——正文块含查询词时带 chunkAnchor(块级命中),
+      // 标题命中保持文档级(无 anchor);无 Ollama 环境同样可区分两级。
+      const chunk = this.semantic?.chunkHitFor(doc.entityId, needle)
+      push({
+        entityType: 'artifact',
+        entityId: doc.entityId,
+        title: doc.title,
+        snippet: snippetFrom(doc.body, query),
+        source: 'search-document-fts',
+        score: 35,
+        ...(chunk ?? {}),
+      })
     }
 
     // Vector candidates (available only when Ollama + embeddings exist).
     if (this.semantic !== undefined) {
       const vectorHits = await this.semantic.searchVectors(query, undefined, 10)
       for (const hit of vectorHits) {
-        push({ entityType: 'artifact', entityId: hit.entityId, title: hit.entityId, snippet: `vector distance ${hit.distance.toFixed(3)}`, source: 'vector', score: 45 })
+        push({
+          entityType: 'artifact',
+          entityId: hit.entityId,
+          title: hit.documentTitle ?? hit.entityId,
+          snippet: hit.chunkText !== undefined ? snippetFrom(hit.chunkText, query) : `vector distance ${hit.distance.toFixed(3)}`,
+          source: 'vector',
+          score: 45,
+          // 核心能力 B：正文块命中 = 块级（带 chunkAnchor，语义同 sourceAnchor）；
+          // 标题块命中 = 文档级（无 chunkAnchor），两者可区分。
+          ...(hit.chunkAnchor === undefined ? {} : { chunkAnchor: hit.chunkAnchor, chunkIndex: hit.chunkIndex, chunkCount: hit.chunkCount }),
+        })
       }
     }
 
@@ -162,6 +190,38 @@ export class ProjectSearchService {
       hits: deduped,
       truncated: hits.length > limit,
       generatedAt: new Date().toISOString(),
+    }
+  }
+
+  /** 读取 artifact 当前正文(markdown/plain 直读全文用于索引;其余类型返回空串,只保留标题块)。 */
+  async #artifactBody(artifact: ReturnType<SqliteMetadataRepository['getArtifacts']>[number]): Promise<string> {
+    const revisionId = artifact.currentRevisionId
+    const revision = revisionId === undefined ? undefined : this.repository.getArtifactRevision(revisionId)
+    const fileRecord = revision?.fileRecordId === undefined ? undefined : this.repository.getFileRecord(String(revision.fileRecordId))
+    if (fileRecord?.mimeType !== 'text/markdown' && fileRecord?.mimeType !== 'text/plain') return ''
+    return readTextPrefix(fileRecord.observedPath, 200_000)
+  }
+
+  /**
+   * 核心能力 B 接线:项目 artifact 的 RAG 分块索引懒接线——首次搜索时补建索引,
+   * indexEntity 自带幂等(contentHash 未变即跳过);进程级缓存避免每次搜索重复扫全项目。
+   */
+  async #ensureProjectIndexed(projectId: string): Promise<void> {
+    if (this.#ensuredProjects.has(projectId) || this.semantic === undefined) return
+    this.#ensuredProjects.add(projectId)
+    for (const artifact of this.repository.getArtifacts(projectId)) {
+      try {
+        const body = await this.#artifactBody(artifact)
+        await this.semantic.indexEntity({
+          projectId,
+          entityType: 'artifact',
+          entityId: String(artifact.id),
+          title: artifact.title,
+          body,
+        })
+      } catch {
+        // 单个 artifact 索引失败不阻塞搜索(FTS 标题/artifact-text 路径仍可用)。
+      }
     }
   }
 }

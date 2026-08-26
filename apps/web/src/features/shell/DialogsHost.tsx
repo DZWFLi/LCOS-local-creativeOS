@@ -6,6 +6,7 @@ import { ScopeCreateDialog } from '../create/ScopeCreateDialog'
 import { CreateContentDialog } from '../create/CreateContentDialog'
 import { WorkspaceDialog } from '../workspace/WorkspaceDialog'
 import { InlineNodeRename } from '../ui/InlineNodeRename'
+import { InlineNoteEditor } from '../ui/InlineNoteEditor'
 import { ConfirmDialog } from '../ui/ConfirmDialog'
 import { HandoffDialog } from '../handoff/HandoffDialog'
 import { LinkReferenceDialog } from '../create/LinkReferenceDialog'
@@ -22,9 +23,12 @@ export interface DialogsHostProps {
   readonly createContent: ComponentProps<typeof CreateContentDialog> | null
   readonly workspaceEditor: ComponentProps<typeof WorkspaceDialog> | null
   readonly nodeRename: ComponentProps<typeof InlineNodeRename> | null
+  readonly noteEdit: ComponentProps<typeof InlineNoteEditor> | null
   readonly confirmWorkspaceDelete: ComponentProps<typeof ConfirmDialog> | null
   readonly confirmScopeDelete: ComponentProps<typeof ConfirmDialog> | null
   readonly confirmProjectDelete: ComponentProps<typeof ConfirmDialog> | null
+  /** 投影/本体冲突：复制引用副本的确认（非破坏性，主按钮）。 */
+  readonly confirmForkProjection: ComponentProps<typeof ConfirmDialog> | null
   readonly handoff: ComponentProps<typeof HandoffDialog> | null
   readonly linkReference: ComponentProps<typeof LinkReferenceDialog> | null
   readonly universalImport: ComponentProps<typeof UniversalImportPanel> | null
@@ -45,9 +49,11 @@ export function DialogsHost(props: DialogsHostProps) {
     props.createContent && <CreateContentDialog key="create-content" {...props.createContent} />,
     props.workspaceEditor && <WorkspaceDialog key="workspace-editor" {...props.workspaceEditor} />,
     props.nodeRename && <InlineNodeRename key="node-rename" {...props.nodeRename} />,
+    props.noteEdit && <InlineNoteEditor key="note-edit" {...props.noteEdit} />,
     props.confirmWorkspaceDelete && <ConfirmDialog key="confirm-workspace-delete" {...props.confirmWorkspaceDelete} />,
     props.confirmScopeDelete && <ConfirmDialog key="confirm-scope-delete" {...props.confirmScopeDelete} />,
     props.confirmProjectDelete && <ConfirmDialog key="confirm-project-delete" {...props.confirmProjectDelete} />,
+    props.confirmForkProjection && <ConfirmDialog key="confirm-fork-projection" {...props.confirmForkProjection} />,
     props.handoff && <HandoffDialog key="handoff" {...props.handoff} />,
     props.linkReference && <LinkReferenceDialog key="link-reference" {...props.linkReference} />,
     props.universalImport && <UniversalImportPanel key="universal-import" {...props.universalImport} />,

@@ -1,10 +1,11 @@
 /**
- * E2E preflight：手测栈占用 43121/5173 时，reuseExistingServer 会静默复用
- * 错误 token/DB 的 Core/Vite → 401 全崩。这里先探测，占用即 FAIL FAST。
+ * E2E preflight：spec 会自行启动 Local Core，因此 43121 必须空闲。
+ * Vite 5173 由 Playwright webServer 在 globalSetup 之前启动，并通过
+ * reuseExistingServer:false 自己保证独占；这里再次探测会误报测试自己的 Vite。
  */
 export default async function globalSetup(): Promise<void> {
   const busy: number[] = []
-  for (const port of [43121, 5173]) {
+  for (const port of [43121]) {
     try {
       const response = await fetch(`http://127.0.0.1:${port}/`, { signal: AbortSignal.timeout(400) })
       if (response) busy.push(port)
@@ -13,6 +14,6 @@ export default async function globalSetup(): Promise<void> {
     }
   }
   if (busy.length > 0) {
-    throw new Error(`E2E 需要独占 43121/5173；检测到手测栈占用 ${busy.join('/')}。请先停栈（npm run dev:stop）再跑 test:e2e。`)
+    throw new Error(`E2E 需要独占 43121；检测到手测栈占用 ${busy.join('/')}。请先停栈（npm run dev:stop）再跑 test:e2e。`)
   }
 }

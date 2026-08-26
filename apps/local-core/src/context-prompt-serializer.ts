@@ -9,7 +9,8 @@ import type {
 import { CONTEXT_PROMPT_SERIALIZER_V1 } from '@local-creative-os/contracts'
 
 export interface ContextPromptManifestSourceV1 {
-  readonly project: ContextManifestV0['project']
+  /** Schema v0 manifests persisted before project labels were added only contain id. */
+  readonly project: Pick<ContextManifestV0['project'], 'id'> & Partial<Pick<ContextManifestV0['project'], 'name'>>
   readonly target?: ContextManifestV0['target']
   readonly orderedItems?: ContextManifestV0['orderedItems']
   readonly lockedElements?: ContextManifestV0['lockedElements']
@@ -99,7 +100,7 @@ export function compileContextPromptV1(input: CompileContextPromptV1Input): Comp
     '',
     '## Project Baseline',
     `project-id: ${scalar(manifest.project.id)}`,
-    `project-name: ${scalar(manifest.project.name)}`,
+    `project-name: ${scalar(manifest.project.name ?? manifest.project.id)}`,
     '',
     '## Saved Context Snapshot',
     `saved-context-id: ${scalar(plan?.savedContextId ?? 'none')}`,

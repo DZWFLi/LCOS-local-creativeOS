@@ -20,6 +20,8 @@ app.setName('LCOS')
 if (process.platform === 'win32') app.setAppUserModelId('com.squirrel.LCOS.LCOS')
 
 let windowRef
+let splashWindowRef
+let splashShownAt = 0
 let captureWindowRef
 let trayRef
 let runtime
@@ -27,6 +29,40 @@ let webHost
 let quitting = false
 let trayUpdate = () => {}
 let captureBoundsSaveTimer
+
+function updateSplash(value) {
+  if (!splashWindowRef || splashWindowRef.isDestroyed()) return
+  splashWindowRef.webContents.send('desktop:boot-status', value)
+}
+
+async function createSplashWindow() {
+  const win = new BrowserWindow({
+    title: 'LCOS',
+    width: 440,
+    height: 310,
+    show: false,
+    frame: false,
+    resizable: false,
+    transparent: true,
+    alwaysOnTop: true,
+    backgroundColor: '#00000000',
+    ...(iconPath() ? { icon: iconPath() } : {}),
+    webPreferences: {
+      preload: join(__dirname, 'preload.mjs'),
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
+      webSecurity: true,
+    },
+  })
+  splashWindowRef = win
+  win.once('ready-to-show', () => {
+    splashShownAt = Date.now()
+    win.show()
+  })
+  win.on('closed', () => { if (splashWindowRef === win) splashWindowRef = undefined })
+  await win.loadFile(join(__dirname, 'splash.html'))
+}
 
 function runtimeBundleRoot() {
   if (app.isPackaged) return join(process.resourcesPath, 'runtime')
@@ -338,10 +374,18 @@ ipcMain.on('desktop:capture-drop-error', (_event, message) => broadcastCaptureEr
 ipcMain.handle('desktop:open-capture-space', async () => { openCaptureSpace() })
 ipcMain.handle('desktop:show-capture-float', async () => { showCaptureWindow() })
 ipcMain.handle('desktop:hide-capture-float', async () => { hideCaptureWindow() })
+ipcMain.handle('desktop:boot-open-logs', async () => shell.openPath(join(app.getPath('userData'), 'logs')))
+ipcMain.handle('desktop:boot-quit', async () => {
+  quitting = true
+  await runtime?.stop().catch(() => {})
+  await webHost?.close().catch(() => {})
+  app.quit()
+})
 
-await app.whenReady()
-
-try {
+void app.whenReady().then(async () => {
+  try {
+  await createSplashWindow()
+  updateSplash({ state: 'working', stage: 'environment', label: '正在检查本地环境', progress: 6 })
   const userData = app.getPath('userData')
   runtime = new DesktopRuntimeSupervisor({
     runtimeBundleRoot: runtimeBundleRoot(),
@@ -351,8 +395,10 @@ try {
       broadcastRuntimeStatus(value)
       trayUpdate()
     },
+    onProgress: (value) => updateSplash({ state: 'working', ...value }),
   })
   await runtime.start()
+  updateSplash({ state: 'working', stage: 'workspace', label: '正在恢复工作台', progress: 94 })
   webHost = await startDesktopWebHost({
     webRoot: join(runtimeBundleRoot(), 'web'),
     corePort: 43121,
@@ -361,6 +407,11 @@ try {
   await createMainWindow(webHost.url)
   await createCaptureWindow(webHost.url)
   trayUpdate = createTray()
+  updateSplash({ state: 'ready', stage: 'ready', label: '准备好了', progress: 100 })
+  setTimeout(() => {
+    splashWindowRef?.close()
+    splashWindowRef = undefined
+  }, Math.max(420, 1_350 - (Date.now() - splashShownAt)))
   const setupPromptMarker = join(userData, 'codex-setup-prompted-v1')
   if (runtime.status().codexIntegration !== 'configured' && !existsSync(setupPromptMarker)) {
     const response = await dialog.showMessageBox(windowRef, {
@@ -379,11 +430,10 @@ try {
       catch (setupError) { dialog.showErrorBox('Codex 连接失败', setupError instanceof Error ? setupError.message : String(setupError)) }
     }
   }
-} catch (error) {
-  const message = error instanceof Error ? error.stack ?? error.message : String(error)
-  dialog.showErrorBox('LCOS 启动失败', message)
-  quitting = true
-  await runtime?.stop().catch(() => {})
-  await webHost?.close().catch(() => {})
-  app.quit()
-}
+  } catch (error) {
+    const message = error instanceof Error ? error.stack ?? error.message : String(error)
+    updateSplash({ state: 'error', stage: 'error', label: '启动未完成', progress: 100, detail: message })
+    await runtime?.stop().catch(() => {})
+    await webHost?.close().catch(() => {})
+  }
+})

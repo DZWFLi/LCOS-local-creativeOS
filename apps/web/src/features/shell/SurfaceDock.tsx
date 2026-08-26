@@ -1,7 +1,9 @@
-import { CheckCircle2, ChevronRight, ChevronUp, ZoomIn, ZoomOut } from 'lucide-react'
-import { useState } from 'react'
+import { CheckCircle2, ChevronRight, ChevronUp, Monitor, Moon, Sun, ZoomIn, ZoomOut } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import type { CanvasScope } from '../../model'
 import { BenchGlyph, ContextGlyph, RootGlyph, WorkflowGlyph } from '../design/LcosGlyphs'
+import { ConfirmDialog } from '../ui/ConfirmDialog'
+import { cycleThemePreference, readThemePreference, THEME_CHANGE_EVENT, writeThemePreference, type LcosThemePreference } from '../../state/themePreference'
 
 /**
  * `SurfaceId` deliberately keeps the old work / deliver ids for persisted-project
@@ -80,18 +82,31 @@ const SURFACE_ENTRIES = [
 
 export function SurfaceDock({ surface, scopePath, activeScopeId, workbenchScopeId, onSurface, onScope, onWorkbench, onMergeWorkbench, workbenchCount, zoom, onZoomBy, onZoomReset, onProjectViewDrop }: Props) {
   const [dropCapability, setDropCapability] = useState<Extract<CapabilityId, 'context' | 'workflow'> | null>(null)
+  // 并回是破坏性操作（清空当前现场），先经 ConfirmDialog 确认再执行。
+  const [confirmMergeOpen, setConfirmMergeOpen] = useState(false)
+  const [theme, setTheme] = useState<LcosThemePreference>(() => readThemePreference())
+  useEffect(() => {
+    const sync = () => setTheme(readThemePreference())
+    window.addEventListener(THEME_CHANGE_EVENT, sync)
+    window.addEventListener('storage', sync)
+    return () => {
+      window.removeEventListener(THEME_CHANGE_EVENT, sync)
+      window.removeEventListener('storage', sync)
+    }
+  }, [])
   const normalizedSurface = normalizeSurfaceId(surface)
   const capability = capabilityForSurface(normalizedSurface)
   const currentScope = scopePath.at(-1)
   const parent = scopePath.length > 1 ? scopePath.at(-2) : null
   const setCapability = (next: CapabilityId) => {
     if(next === 'main') { scopePath[0] && onScope(scopePath[0].id); onSurface('arrange') }
-    // Context button is always level 1: the project Context Graph. A concrete
-    // Context is entered only by clicking that Context object in the Graph.
-    if(next === 'context') onSurface('context-graph')
+    // Context opens the understanding worksite. Relationship Graph remains a
+    // Lens/compat renderer, not the capability homepage.
+    if(next === 'context') onSurface('context-space')
     if(next === 'workflow') onSurface('workflow')
   }
-  return <nav className="vnext-bottom-dock lcos-bottom-dock" data-testid="vnext-bottom-dock" aria-label="LCOS 工作现场" onContextMenu={(event) => event.preventDefault()}>
+  return <>
+  <nav className="vnext-bottom-dock lcos-bottom-dock" data-testid="vnext-bottom-dock" aria-label="LCOS 工作现场" onContextMenu={(event) => event.preventDefault()}>
     <div className="vnext-lens-axis lcos-lens-axis lcos-primary-surface-axis" aria-label="工作现场">
       {SURFACE_ENTRIES.map(({id,label,hint,Icon}) => {
         const semanticTarget = id === 'context' || id === 'workflow'
@@ -120,12 +135,25 @@ export function SurfaceDock({ surface, scopePath, activeScopeId, workbenchScopeI
       {onWorkbench && <button type="button" className={`${workbenchScopeId===activeScopeId?'active':''} lcos-workbench-entry`} aria-label="当前现场" onClick={onWorkbench}><BenchGlyph/><span className="lcos-dock-label">当前现场</span>{workbenchCount !== undefined && workbenchCount > 0 && <span className="lcos-workbench-badge">{workbenchCount}</span>}</button>}
       {parent && <button type="button" data-label={`返回 ${parent.label}`} aria-label={`返回 ${parent.label}`} onClick={()=>onScope(parent.id)}><ChevronUp size={14}/></button>}
       {currentScope && scopePath.length>1 && workbenchScopeId!==activeScopeId && <button type="button" className="lcos-scope-breadcrumb" title={currentScope.label} onClick={()=>onScope(currentScope.id)}><span>{currentScope.label}</span></button>}
-      {onMergeWorkbench && workbenchScopeId===activeScopeId && <button type="button" className="vnext-merge-workbench lcos-merge-workbench" data-label="并回" aria-label="并回主画布并清空现场" onClick={onMergeWorkbench}><CheckCircle2 size={14}/></button>}
+      {onMergeWorkbench && workbenchScopeId===activeScopeId && <button type="button" className="vnext-merge-workbench lcos-merge-workbench" data-label="并回" aria-label="并回主画布并清空现场" onClick={() => setConfirmMergeOpen(true)}><CheckCircle2 size={14}/></button>}
     </div></>}
     {onZoomBy && onZoomReset && <div className="lcos-zoom-controls" aria-label="画布缩放">
       <button type="button" aria-label="缩小" title="缩小画布" onClick={() => onZoomBy(1 / 1.25)}><ZoomOut size={15}/></button>
       <button type="button" className="lcos-zoom-value" aria-label="重置缩放" title="重置为 100%" onClick={onZoomReset}>{Math.round((zoom ?? 1) * 100)}%</button>
       <button type="button" aria-label="放大" title="放大画布" onClick={() => onZoomBy(1.25)}><ZoomIn size={15}/></button>
     </div>}
+    <div className="lcos-theme-toggle" aria-label="主题">
+      <button type="button" className={`mode-${theme}`} aria-label={`主题：${theme === 'auto' ? '跟随系统' : theme === 'dark' ? '深色' : '浅色'}，点击切换`} title={`主题：${theme === 'auto' ? '跟随系统' : theme === 'dark' ? '深色' : '浅色'}（点击切换 浅色 → 深色 → 跟随系统）`} onClick={() => writeThemePreference(cycleThemePreference(theme))}>
+        {theme === 'dark' ? <Moon size={15}/> : theme === 'light' ? <Sun size={15}/> : <Monitor size={15}/>}
+      </button>
+    </div>
   </nav>
+  {confirmMergeOpen && <ConfirmDialog
+    title="并回主画布"
+    description="并回主画布并清空当前现场？现场对象会并回主画布，当前现场将被清空。"
+    confirmLabel="并回并清空"
+    onCancel={() => setConfirmMergeOpen(false)}
+    onConfirm={() => { setConfirmMergeOpen(false); onMergeWorkbench?.() }}
+  />}
+  </>
 }

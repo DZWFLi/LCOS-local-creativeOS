@@ -122,3 +122,4 @@ function installSkill(name) {
 
 for (const name of managedSkills) installSkill(name)
 console.log(`Installed ${managedSkills.length} LCOS skills: ${managedSkills.join(', ')}`)
+process.parentPort?.postMessage({ type: 'lcos:utility-complete', name: 'Codex skill setup' })

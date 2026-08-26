@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readdirSync, renameSync, rmSync } from 'node:fs'
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { dirname, join, resolve } from 'node:path'
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite'
 
@@ -53,6 +53,7 @@ import type {
   MutationChangeSetV1,
   ReorganizeProposalV0,
   CommandDraftV1,
+  ConnectedConversationV1,
   ContextChangeProposalV1,
   DerivedWriteGuardV0,
   DerivedWriteStatusV0,
@@ -63,6 +64,8 @@ import type {
   PersistedContextManifestV0,
   PresentationViewV0,
   ProjectGraphSnapshot,
+  ProjectHandoffPackV1,
+  ProjectReceiverBindingV1,
   ProjectViewRailOrderV0,
   ProjectViewRailRefV0,
   RejectArtifactReturnResult,
@@ -249,7 +252,10 @@ export class SqliteMetadataRepository {
     if (current === 34) { this.#migrate_035_from_v34(); current = 35 }
     if (current === 35) { this.#migrate_036_from_v35(); current = 36 }
     if (current === 36) { this.#migrate_037_from_v36(); current = 37 }
-    if (current !== 37) throw new Error(`Unsupported metadata schema version ${current}.`)
+    if (current === 37) { this.#migrate_038_from_v37(); current = 38 }
+    if (current === 38) { this.#migrate_039_from_v38(); current = 39 }
+    if (current === 39) { this.#migrate_040_from_v39(); current = 40 }
+    if (current !== 40) throw new Error(`Unsupported metadata schema version ${current}.`)
   }
 
   #migrate_037_from_v36(): void {
@@ -262,6 +268,93 @@ export class SqliteMetadataRepository {
         updated_at TEXT NOT NULL
       );
       PRAGMA user_version = 37;
+    `)
+  }
+
+  #migrate_038_from_v37(): void {
+    // RECEIVER-0 会话承接关系层：ConnectedConversation 承接关系 + ProjectReceiverBinding。
+    // 与 provider_session_bindings（lease 运行时层）并存；connectedConversationIds 由
+    // connected_conversations 投影得出，binding 表只存 activeReceiverId 与 revision 原料。
+    this.#database.exec(`
+      BEGIN;
+      CREATE TABLE IF NOT EXISTS connected_conversations (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        provider TEXT NOT NULL CHECK(provider IN ('codex','workbuddy')),
+        executor_id TEXT NOT NULL,
+        conversation_ref TEXT NOT NULL,
+        label TEXT NOT NULL,
+        is_running INTEGER NOT NULL DEFAULT 0 CHECK(is_running IN (0,1)),
+        waiting_reason TEXT,
+        last_active_at TEXT NOT NULL,
+        workspace_ref TEXT,
+        branch_ref TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(project_id, conversation_ref)
+      );
+      CREATE INDEX IF NOT EXISTS idx_connected_conversations_project
+        ON connected_conversations(project_id, last_active_at DESC);
+      CREATE TABLE IF NOT EXISTS project_receiver_bindings (
+        project_id TEXT PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,
+        active_receiver_id TEXT REFERENCES connected_conversations(id) ON DELETE SET NULL,
+        revision INTEGER NOT NULL DEFAULT 0 CHECK(revision >= 0),
+        updated_at TEXT NOT NULL
+      );
+      PRAGMA user_version = 38;
+      COMMIT;
+    `)
+  }
+
+  #migrate_039_from_v38(): void {
+    // 第一梯队核心能力 B：语义索引 chunk 维度 —— 块级锚点（chunkAnchor）让检索能引用到
+    // 'pdf:p3-p5' / 'section:风险' 粒度而不是整份文档。与 search_document_embeddings
+    // （整文档向量）并存：新索引写入 chunk 表；旧整文档向量行成为历史数据，
+    // 由 deleteSearchDocument 随实体删除一并清理。
+    this.#database.exec(`
+      BEGIN;
+      CREATE TABLE IF NOT EXISTS search_document_chunks (
+        entity_id TEXT NOT NULL,
+        model TEXT NOT NULL,
+        chunk_index INTEGER NOT NULL,
+        chunk_count INTEGER NOT NULL,
+        chunk_anchor TEXT NOT NULL,
+        chunk_kind TEXT NOT NULL CHECK(chunk_kind IN ('title','body')),
+        chunk_text TEXT NOT NULL,
+        content_hash TEXT NOT NULL,
+        dimensions INTEGER,
+        embedding_blob BLOB,
+        indexed_at TEXT NOT NULL,
+        PRIMARY KEY(entity_id, model, chunk_index)
+      );
+      CREATE INDEX IF NOT EXISTS idx_search_document_chunks_model
+        ON search_document_chunks(model);
+      PRAGMA user_version = 39;
+      COMMIT;
+    `)
+  }
+
+  #migrate_040_from_v39(): void {
+    // RECEIVER-3 Handoff 快照：切换 Active Receiver 时冻结的承接现场
+    // （surface + selection + from/to）。同一 to_conversation 只保留最新
+    // 未消费行（service 层 prepare 时清理旧行）；consumed_at 非空表示已注入。
+    this.#database.exec(`
+      BEGIN;
+      CREATE TABLE IF NOT EXISTS project_handoff_packs (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        from_conversation_id TEXT,
+        to_conversation_id TEXT NOT NULL,
+        surface_kind TEXT NOT NULL CHECK(surface_kind IN ('main','context','workflow')),
+        surface_id TEXT NOT NULL,
+        selection_entity_ids_json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        consumed_at TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_project_handoff_packs_pending
+        ON project_handoff_packs(project_id, to_conversation_id, created_at DESC);
+      PRAGMA user_version = 40;
+      COMMIT;
     `)
   }
 
@@ -2283,6 +2376,16 @@ export class SqliteMetadataRepository {
       }
     }
     this.#database.prepare('DELETE FROM search_document_embeddings WHERE entity_id = ?').run(entityId)
+    // chunk 维度（schema v39）：元数据行与 vec0 chunk 向量行同步清理。
+    const chunkModelRows = this.#database.prepare('SELECT DISTINCT model, dimensions FROM search_document_chunks WHERE entity_id = ? AND dimensions IS NOT NULL')
+      .all(entityId as SQLInputValue) as Row[]
+    for (const row of chunkModelRows) {
+      const table = this.#ensureSearchChunkVecTable(String(row.model), Number(row.dimensions))
+      if (table !== undefined) {
+        try { this.#database.prepare(`DELETE FROM ${table} WHERE entity_id = ?`).run(entityId) } catch { /* best effort */ }
+      }
+    }
+    this.#database.prepare('DELETE FROM search_document_chunks WHERE entity_id = ?').run(entityId as SQLInputValue)
   }
 
   upsertSearchDocumentEmbedding(embedding: { readonly entityId: string; readonly model: string; readonly dimensions: number; readonly contentHash: string; readonly embeddingBlob: Buffer; readonly indexedAt: string }): void {
@@ -2304,13 +2407,260 @@ export class SqliteMetadataRepository {
     }
   }
 
+  // ==================== Search Document Chunks（schema v39，块级语义索引） ====================
+
+  #chunkKey(entityId: string, chunkIndex: number): string {
+    return `${entityId}#c${chunkIndex}`
+  }
+
+  getSearchDocumentChunks(entityId: string, model: string): Array<{ readonly chunkIndex: number; readonly contentHash: string }> {
+    const rows = this.#database.prepare('SELECT chunk_index, content_hash FROM search_document_chunks WHERE entity_id = ? AND model = ? ORDER BY chunk_index')
+      .all(entityId as SQLInputValue, model as SQLInputValue) as Row[]
+    return rows.map((row) => ({ chunkIndex: Number(row.chunk_index), contentHash: String(row.content_hash) }))
+  }
+
+  /** FTS 块级化查询(核心能力 B):读文档完整分块计划(anchor/kind/text),供 FTS 命中映射到块级锚点。 */
+  getSearchDocumentChunkPlan(entityId: string): Array<{
+    readonly chunkKind: 'title' | 'body'
+    readonly chunkAnchor: string
+    readonly chunkIndex: number
+    readonly chunkCount: number
+    readonly chunkText: string
+  }> {
+    const rows = this.#database.prepare(`
+      SELECT chunk_kind, chunk_anchor, chunk_index, chunk_count, chunk_text
+      FROM search_document_chunks WHERE entity_id = ? ORDER BY model, chunk_index
+    `).all(entityId as SQLInputValue) as Row[]
+    return rows.map((row) => ({
+      chunkKind: String(row.chunk_kind) === 'title' ? 'title' : 'body',
+      chunkAnchor: String(row.chunk_anchor ?? ''),
+      chunkIndex: Number(row.chunk_index),
+      chunkCount: Number(row.chunk_count),
+      chunkText: String(row.chunk_text ?? ''),
+    }))
+  }
+
+  /**
+   * 块元数据（分块计划）落库：不触碰已有 embedding_blob（差分块向量由
+   * commitSearchDocumentChunkEmbeddings 单独补写），并删除超出新 chunkCount 的旧块
+   * （同步清理其 vec0 向量行，best effort）。
+   */
+  upsertSearchDocumentChunkPlan(entityId: string, model: string, chunks: ReadonlyArray<{
+    readonly chunkIndex: number
+    readonly chunkCount: number
+    readonly chunkAnchor: string
+    readonly chunkKind: 'title' | 'body'
+    readonly chunkText: string
+    readonly contentHash: string
+  }>): void {
+    const chunkCount = chunks[0]?.chunkCount ?? 0
+    this.#database.exec('BEGIN IMMEDIATE;')
+    try {
+      const staleRows = this.#database.prepare('SELECT chunk_index FROM search_document_chunks WHERE entity_id = ? AND model = ? AND chunk_index >= ?')
+        .all(entityId as SQLInputValue, model as SQLInputValue, chunkCount as SQLInputValue) as Row[]
+      const insert = this.#database.prepare(`
+        INSERT INTO search_document_chunks (entity_id, model, chunk_index, chunk_count, chunk_anchor, chunk_kind, chunk_text, content_hash, dimensions, embedding_blob, indexed_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?)
+        ON CONFLICT(entity_id, model, chunk_index) DO UPDATE SET
+          chunk_count=excluded.chunk_count, chunk_anchor=excluded.chunk_anchor, chunk_kind=excluded.chunk_kind,
+          chunk_text=excluded.chunk_text, content_hash=excluded.content_hash, indexed_at=excluded.indexed_at
+      `)
+      const now = new Date().toISOString()
+      for (const chunk of chunks) {
+        insert.run(entityId, model, chunk.chunkIndex, chunk.chunkCount, chunk.chunkAnchor, chunk.chunkKind, chunk.chunkText, chunk.contentHash, now)
+      }
+      this.#database.prepare('DELETE FROM search_document_chunks WHERE entity_id = ? AND model = ? AND chunk_index >= ?')
+        .run(entityId as SQLInputValue, model as SQLInputValue, chunkCount as SQLInputValue)
+      this.#database.exec('COMMIT;')
+      // vec0 旧块行清理（事务外 best effort，与既有 vec0 写入失败静默策略一致）
+      if (staleRows.length > 0) {
+        const table = this.#chunkVecTableFor(entityId, model)
+        if (table !== undefined) {
+          for (const row of staleRows) {
+            try { this.#database.prepare(`DELETE FROM ${table} WHERE chunk_key = ?`).run(this.#chunkKey(entityId, Number(row.chunk_index))) } catch { /* best effort */ }
+          }
+        }
+      }
+    } catch (error: unknown) {
+      this.#database.exec('ROLLBACK;')
+      throw error
+    }
+  }
+
+  /** HU-5 §10：chunk embedding 提交守卫 —— 文档已删/内容已变则丢弃派生向量；通过后补写 blob 与 vec0。 */
+  commitSearchDocumentChunkEmbeddings(input: {
+    readonly projectId: string
+    readonly entityType: string
+    readonly entityId: string
+    readonly model: string
+    readonly documentHash: string
+    readonly chunks: ReadonlyArray<{
+      readonly chunkIndex: number
+      readonly dimensions: number
+      readonly contentHash: string
+      readonly embeddingBlob: Buffer
+      readonly indexedAt: string
+    }>
+  }): DerivedWriteStatusV0 {
+    const document = this.getSearchDocument(input.projectId, input.entityType, input.entityId)
+    if (document === undefined) return 'skipped_deleted'
+    if (String(document.contentHash) !== input.documentHash) return 'skipped_stale'
+    const dimensions = input.chunks[0]?.dimensions ?? 0
+    const table = this.#ensureSearchChunkVecTable(input.model, dimensions)
+    this.#database.exec('BEGIN IMMEDIATE;')
+    try {
+      const update = this.#database.prepare(`
+        UPDATE search_document_chunks
+        SET dimensions = ?, embedding_blob = ?, indexed_at = ?
+        WHERE entity_id = ? AND model = ? AND chunk_index = ? AND content_hash = ?
+      `)
+      for (const chunk of input.chunks) {
+        update.run(chunk.dimensions, chunk.embeddingBlob, chunk.indexedAt, input.entityId, input.model, chunk.chunkIndex, chunk.contentHash)
+      }
+      this.#database.exec('COMMIT;')
+    } catch (error: unknown) {
+      this.#database.exec('ROLLBACK;')
+      throw error
+    }
+    if (table !== undefined) {
+      const projectId = this.#projectIdForSearchDocument(input.entityId)
+      const anchorStatement = this.#database.prepare('SELECT chunk_anchor FROM search_document_chunks WHERE entity_id = ? AND model = ? AND chunk_index = ?')
+      for (const chunk of input.chunks) {
+        const anchorRow = anchorStatement.get(input.entityId as SQLInputValue, input.model as SQLInputValue, chunk.chunkIndex as SQLInputValue) as Row | undefined
+        if (anchorRow === undefined) continue
+        try {
+          const floats = new Float32Array(chunk.embeddingBlob.buffer, chunk.embeddingBlob.byteOffset, chunk.embeddingBlob.byteLength / 4)
+          const vector = [...floats]
+          this.#database.prepare(`DELETE FROM ${table} WHERE chunk_key = ?`).run(this.#chunkKey(input.entityId, chunk.chunkIndex))
+          this.#database.prepare(`INSERT INTO ${table}(chunk_key, entity_id, project_id, chunk_anchor, embedding) VALUES (?, ?, ?, ?, ?)`)
+            .run(this.#chunkKey(input.entityId, chunk.chunkIndex), input.entityId, projectId, String(anchorRow.chunk_anchor), JSON.stringify(vector))
+        } catch { /* vec0 写入失败不影响 blob 主索引 */ }
+      }
+    }
+    return 'applied'
+  }
+
+  #ensureSearchChunkVecTable(model: string, dimensions: number): string | undefined {
+    if (!this.#vectorLoaded || !Number.isInteger(dimensions) || dimensions <= 0 || dimensions > 4096) return undefined
+    const key = createHash('sha256').update(`${model}:${dimensions}`).digest('hex').slice(0, 16)
+    const table = `search_chunk_vec_${key}`
+    try {
+      this.#database.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS ${table} USING vec0(chunk_key TEXT, entity_id TEXT, project_id TEXT, chunk_anchor TEXT, embedding float[${dimensions}])`)
+      return table
+    } catch {
+      this.#vectorLoadError = 'Failed to create search_chunk_vec table.'
+      return undefined
+    }
+  }
+
+  /** 查找实体在某 model 下已写入向量的 chunk vec0 表（用于旧块向量清理）。 */
+  #chunkVecTableFor(entityId: string, model: string): string | undefined {
+    const row = this.#database.prepare('SELECT dimensions FROM search_document_chunks WHERE entity_id = ? AND model = ? AND dimensions IS NOT NULL LIMIT 1')
+      .get(entityId as SQLInputValue, model as SQLInputValue) as Row | undefined
+    if (row === undefined) return undefined
+    return this.#ensureSearchChunkVecTable(model, Number(row.dimensions))
+  }
+
+  /**
+   * chunk 向量检索（核心能力 B）：标题块命中 = 文档级（无 chunkAnchor），
+   * 正文块命中 = 块级（带 chunkAnchor，语义同 contracts 的 sourceAnchor）。
+   * vec0 可用走 KNN；不可用/失败走 embedding_blob 线性扫描（与整文档 fallback 同模式）。
+   */
+  querySearchChunkVectors(model: string, vector: readonly number[], limit: number): Array<{
+    readonly entityId: string
+    readonly distance: number
+    readonly documentTitle?: string
+    readonly chunkKind: 'title' | 'body'
+    readonly chunkAnchor?: string
+    readonly chunkIndex?: number
+    readonly chunkCount?: number
+    readonly chunkText: string
+  }> {
+    let candidates: Array<{ entityId: string; chunkIndex: number; distance: number }> = []
+    const table = this.#ensureSearchChunkVecTable(model, vector.length)
+    if (table !== undefined) {
+      try {
+        const rows = this.#database.prepare(`
+          SELECT chunk_key, distance FROM ${table}
+          WHERE embedding MATCH ? AND k = ?
+          ORDER BY distance
+        `).all(JSON.stringify(vector), Math.max(limit, 1)) as Row[]
+        candidates = rows.flatMap((row) => {
+          const chunkKey = String(row.chunk_key)
+          const separator = chunkKey.lastIndexOf('#c')
+          if (separator <= 0) return []
+          const entityId = chunkKey.slice(0, separator)
+          const chunkIndex = Number(chunkKey.slice(separator + 2))
+          if (entityId === '' || !Number.isInteger(chunkIndex)) return []
+          return [{ entityId, chunkIndex, distance: Number(row.distance) }]
+        })
+      } catch {
+        // vec0 查询失败 → fallback 线性扫描
+        candidates = []
+      }
+    }
+    if (candidates.length === 0) {
+      try {
+        const rows = this.#database.prepare(`
+          SELECT c.entity_id, c.chunk_index, c.embedding_blob FROM search_document_chunks c
+          WHERE c.model = ? AND c.embedding_blob IS NOT NULL
+        `).all(model as SQLInputValue) as Row[]
+        const scores = rows.map((row) => {
+          const raw = Buffer.isBuffer(row.embedding_blob) ? row.embedding_blob : Buffer.from(String(row.embedding_blob ?? ''), 'base64')
+          const otherF = new Float32Array(raw.buffer, raw.byteOffset, raw.byteLength / 4)
+          let dot = 0
+          const length = Math.min(otherF.length, vector.length)
+          for (let index = 0; index < length; index += 1) dot += otherF[index]! * vector[index]!
+          return { entityId: String(row.entity_id), chunkIndex: Number(row.chunk_index), distance: -dot }
+        })
+        candidates = scores.sort((left, right) => left.distance - right.distance).slice(0, limit)
+      } catch {
+        return []
+      }
+    }
+    const hydrate = this.#database.prepare(`
+      SELECT c.chunk_count, c.chunk_anchor, c.chunk_kind, c.chunk_text, d.title AS document_title
+      FROM search_document_chunks c LEFT JOIN search_documents d ON d.entity_id = c.entity_id
+      WHERE c.entity_id = ? AND c.model = ? AND c.chunk_index = ?
+    `)
+    const hits: Array<{
+      entityId: string
+      distance: number
+      documentTitle?: string
+      chunkKind: 'title' | 'body'
+      chunkAnchor?: string
+      chunkIndex?: number
+      chunkCount?: number
+      chunkText: string
+    }> = []
+    for (const candidate of candidates) {
+      const row = hydrate.get(candidate.entityId as SQLInputValue, model as SQLInputValue, candidate.chunkIndex as SQLInputValue) as Row | undefined
+      if (row === undefined) continue // vec0 残留行（块已删除）静默过滤
+      const chunkKind: 'title' | 'body' = String(row.chunk_kind) === 'title' ? 'title' : 'body'
+      hits.push({
+        entityId: candidate.entityId,
+        distance: candidate.distance,
+        ...(row.document_title === undefined || row.document_title === null ? {} : { documentTitle: String(row.document_title) }),
+        chunkKind,
+        ...(chunkKind === 'body' ? {
+          chunkAnchor: String(row.chunk_anchor),
+          chunkIndex: candidate.chunkIndex,
+          chunkCount: Number(row.chunk_count),
+        } : {}),
+        chunkText: String(row.chunk_text),
+      })
+    }
+    return hits
+  }
+
   #projectIdForSearchDocument(entityId: string): string {
     const row = this.#database.prepare('SELECT project_id FROM search_documents WHERE entity_id = ?').get(entityId as SQLInputValue) as { project_id?: string } | undefined
     return row?.project_id !== undefined ? String(row.project_id) : ''
   }
 
   searchDocumentsFts(projectId: string, query: string, limit: number): Array<{ readonly entityId: string; readonly title: string; readonly body: string }> {
-    const sanitized = query.replace(/["*^~():|&!-]/g, ' ').trim()
+    // FTS5 特殊语法字符全部剥离(含列过滤器的中括号):SKILL 指令等 markdown 文本含 [ ] 会触发 fts5 syntax error(2R 教工作流 E2E 实测修)
+    const sanitized = query.replace(/["*^~():|&!-\\[\\]]/g, ' ').trim()
     if (sanitized === '') return []
     const rows = this.#database.prepare(`
       SELECT f.entity_id, f.title, f.body FROM search_documents_fts f
@@ -4926,6 +5276,105 @@ export class SqliteMetadataRepository {
   deleteProviderSessionBinding(projectId: string, provider: 'codex' | 'workbuddy'): void {
     this.#database.prepare(`DELETE FROM provider_session_bindings WHERE project_id = ? AND provider = ?`).run(projectId, provider)
   }
+
+  // ==================== RECEIVER-0：会话承接关系层（与 provider_session_bindings 并存） ====================
+
+  listConnectedConversations(projectId: string): readonly ConnectedConversationV1[] {
+    const rows = this.#database.prepare(`SELECT * FROM connected_conversations WHERE project_id = ? ORDER BY last_active_at DESC`).all(projectId) as Row[]
+    return rows.map((row) => connectedConversationFromRow(row))
+  }
+
+  getConnectedConversation(projectId: string, id: string): ConnectedConversationV1 | undefined {
+    const row = this.#database.prepare(`SELECT * FROM connected_conversations WHERE project_id = ? AND id = ?`).get(projectId, id) as Row | undefined
+    return row === undefined ? undefined : connectedConversationFromRow(row)
+  }
+
+  getConnectedConversationByRef(projectId: string, conversationRef: string): ConnectedConversationV1 | undefined {
+    const row = this.#database.prepare(`SELECT * FROM connected_conversations WHERE project_id = ? AND conversation_ref = ?`).get(projectId, conversationRef) as Row | undefined
+    return row === undefined ? undefined : connectedConversationFromRow(row)
+  }
+
+  /** Upsert by (project_id, conversation_ref)：同 ref 重复 connect 保持稳定 id 与 created_at。 */
+  upsertConnectedConversation(value: ConnectedConversationV1): ConnectedConversationV1 {
+    this.#database.prepare(`
+      INSERT INTO connected_conversations(id, project_id, provider, executor_id, conversation_ref, label, is_running, waiting_reason, last_active_at, workspace_ref, branch_ref, created_at, updated_at)
+      VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(project_id, conversation_ref) DO UPDATE SET
+        executor_id = excluded.executor_id,
+        label = excluded.label,
+        is_running = excluded.is_running,
+        waiting_reason = excluded.waiting_reason,
+        last_active_at = excluded.last_active_at,
+        workspace_ref = excluded.workspace_ref,
+        branch_ref = excluded.branch_ref,
+        updated_at = excluded.updated_at
+    `).run(value.id, value.projectId, value.provider, value.executorId, value.conversationRef, value.label, value.isRunning ? 1 : 0, value.waitingReason, value.lastActiveAt, value.workspaceRef, value.branchRef, value.createdAt, value.updatedAt)
+    const persisted = this.getConnectedConversationByRef(value.projectId, value.conversationRef)
+    if (persisted === undefined) throw new Error('Connected conversation upsert failed.')
+    return persisted
+  }
+
+  deleteConnectedConversation(projectId: string, id: string): boolean {
+    const result = this.#database.prepare(`DELETE FROM connected_conversations WHERE project_id = ? AND id = ?`).run(projectId, id)
+    return Number(result.changes) > 0
+  }
+
+  /** 投影：connectedConversationIds 由 connected_conversations 实时投影；无行时返回空 binding（revision 0）。 */
+  getProjectReceiverBinding(projectId: string): ProjectReceiverBindingV1 {
+    const ids = this.#database.prepare(`SELECT id FROM connected_conversations WHERE project_id = ? ORDER BY last_active_at DESC`).all(projectId) as Row[]
+    const row = this.#database.prepare(`SELECT * FROM project_receiver_bindings WHERE project_id = ?`).get(projectId) as Row | undefined
+    return {
+      schemaVersion: 1,
+      projectId,
+      connectedConversationIds: ids.map((item) => String(item.id)),
+      activeReceiverId: row === undefined || row.active_receiver_id === null || row.active_receiver_id === undefined ? null : String(row.active_receiver_id),
+      revision: row === undefined ? 0 : Number(row.revision),
+    }
+  }
+
+  saveProjectReceiverBinding(input: { readonly projectId: string; readonly activeReceiverId: string | null; readonly revision: number; readonly updatedAt: string }): void {
+    this.#database.prepare(`
+      INSERT INTO project_receiver_bindings(project_id, active_receiver_id, revision, updated_at)
+      VALUES(?, ?, ?, ?)
+      ON CONFLICT(project_id) DO UPDATE SET
+        active_receiver_id = excluded.active_receiver_id,
+        revision = excluded.revision,
+        updated_at = excluded.updated_at
+    `).run(input.projectId, input.activeReceiverId, input.revision, input.updatedAt)
+  }
+
+  // ==================== RECEIVER-3：Handoff 快照（切换承接的现场冻结） ====================
+
+  /** 存 pending handoff：同一 (project, to_conversation) 只保留最新一行（旧未消费行删除）。 */
+  savePendingProjectHandoffPack(value: ProjectHandoffPackV1): void {
+    this.#database.prepare('DELETE FROM project_handoff_packs WHERE project_id = ? AND to_conversation_id = ? AND consumed_at IS NULL')
+      .run(value.projectId, value.toConversationId)
+    this.#database.prepare(`
+      INSERT INTO project_handoff_packs(id, project_id, from_conversation_id, to_conversation_id, surface_kind, surface_id, selection_entity_ids_json, created_at, consumed_at)
+      VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(`handoff-${randomUUID()}`,
+      value.projectId, value.fromConversationId, value.toConversationId, value.surface.kind, value.surface.surfaceId,
+      JSON.stringify(value.selectionEntityIds), value.createdAt, value.consumedAt)
+  }
+
+  /** 读 pending（最新未消费行）；无 pending 返回 null。 */
+  getPendingProjectHandoffPack(projectId: string, toConversationId: string): ProjectHandoffPackV1 | null {
+    const row = this.#database.prepare(`
+      SELECT * FROM project_handoff_packs
+      WHERE project_id = ? AND to_conversation_id = ? AND consumed_at IS NULL
+      ORDER BY created_at DESC, rowid DESC LIMIT 1
+    `).get(projectId, toConversationId) as Row | undefined
+    return row === undefined ? null : projectHandoffPackFromRow(row)
+  }
+
+  /** 标记消费（幂等：无 pending 返回 null，不报错）。 */
+  markProjectHandoffPackConsumed(projectId: string, toConversationId: string, consumedAt: string): ProjectHandoffPackV1 | null {
+    const pending = this.getPendingProjectHandoffPack(projectId, toConversationId)
+    if (pending === null) return null
+    this.#database.prepare('UPDATE project_handoff_packs SET consumed_at = ? WHERE id = (SELECT id FROM project_handoff_packs WHERE project_id = ? AND to_conversation_id = ? AND consumed_at IS NULL ORDER BY created_at DESC, rowid DESC LIMIT 1)')
+      .run(consumedAt, projectId, toConversationId)
+    return { ...pending, consumedAt }
+  }
 }
 
 // ==================== Module helpers ====================
@@ -4933,6 +5382,48 @@ export class SqliteMetadataRepository {
 
 function metadataWorkspaceKey(workspaceId: string | null | undefined): string {
   return workspaceId ?? '__project_overview__'
+}
+
+
+/** RECEIVER-0：connected_conversations 行 → 契约投影（原料字段原样，status 不落库）。 */
+function connectedConversationFromRow(row: Row): ConnectedConversationV1 {
+  return {
+    schemaVersion: 1,
+    id: String(row.id),
+    projectId: String(row.project_id),
+    provider: String(row.provider) as ConnectedConversationV1['provider'],
+    executorId: String(row.executor_id),
+    conversationRef: String(row.conversation_ref),
+    label: String(row.label),
+    isRunning: Number(row.is_running) === 1,
+    waitingReason: row.waiting_reason === null || row.waiting_reason === undefined ? null : String(row.waiting_reason),
+    lastActiveAt: String(row.last_active_at),
+    workspaceRef: row.workspace_ref === null || row.workspace_ref === undefined ? null : String(row.workspace_ref),
+    branchRef: row.branch_ref === null || row.branch_ref === undefined ? null : String(row.branch_ref),
+    createdAt: String(row.created_at),
+    updatedAt: String(row.updated_at),
+  }
+}
+
+
+/** RECEIVER-3：project_handoff_packs 行 → 契约投影（selectionEntityIds 存 JSON 数组）。 */
+function projectHandoffPackFromRow(row: Row): ProjectHandoffPackV1 {
+  const selectionRaw = row.selection_entity_ids_json === null || row.selection_entity_ids_json === undefined ? '[]' : String(row.selection_entity_ids_json)
+  let selectionEntityIds: readonly string[] = []
+  try {
+    const parsed: unknown = JSON.parse(selectionRaw)
+    if (Array.isArray(parsed)) selectionEntityIds = parsed.map((item) => String(item))
+  } catch { /* 损坏行按空选中处理，不让投影层抛错 */ }
+  return {
+    schemaVersion: 1,
+    projectId: String(row.project_id),
+    fromConversationId: row.from_conversation_id === null || row.from_conversation_id === undefined ? null : String(row.from_conversation_id),
+    toConversationId: String(row.to_conversation_id),
+    surface: { kind: String(row.surface_kind) as ProjectHandoffPackV1['surface']['kind'], surfaceId: String(row.surface_id) },
+    selectionEntityIds,
+    createdAt: String(row.created_at),
+    consumedAt: row.consumed_at === null || row.consumed_at === undefined ? null : String(row.consumed_at),
+  }
 }
 
 
@@ -4957,6 +5448,9 @@ const PROJECT_TRUTH_TABLES: readonly { readonly table: string; readonly where: s
   { table: 'import_batches', where: 'project_id = ?' },
   { table: 'command_drafts', where: 'project_id = ?' },
   { table: 'provider_session_bindings', where: 'project_id = ?' },
+  { table: 'connected_conversations', where: 'project_id = ?' },
+  { table: 'project_receiver_bindings', where: 'project_id = ?' },
+  { table: 'project_handoff_packs', where: 'project_id = ?' },
   { table: 'scopes', where: 'project_id = ?' },
   { table: 'workspaces', where: 'project_id = ?' },
   { table: 'artifacts', where: 'project_id = ?' },
@@ -5021,6 +5515,9 @@ const PROJECT_TRUTH_DELETE_SQL: readonly string[] = [
   'DELETE FROM artifacts WHERE project_id = ?',
   'DELETE FROM workspaces WHERE project_id = ?',
   'DELETE FROM scopes WHERE project_id = ?',
+  'DELETE FROM project_receiver_bindings WHERE project_id = ?',
+  'DELETE FROM project_handoff_packs WHERE project_id = ?',
+  'DELETE FROM connected_conversations WHERE project_id = ?',
   'DELETE FROM provider_session_bindings WHERE project_id = ?',
   'DELETE FROM command_drafts WHERE project_id = ?',
   'DELETE FROM context_proposals WHERE project_id = ?',

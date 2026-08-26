@@ -61,6 +61,7 @@ function setup() {
   repository.save(snapshot)
   const bridge = new FakeBridge()
   const review = new RuntimeReviewService(repository, () => now, () => 'retry-one')
+  let idSequence = 0
   const service = new RuntimeApplicationService(
     repository,
     new ContextManifestService(repository),
@@ -68,7 +69,7 @@ function setup() {
     new RuntimeResultIngestionService(repository, bridge, () => now),
     review,
     () => now,
-    () => 'one',
+    () => idSequence++ === 0 ? 'one' : `one-${idSequence}`,
   )
   return { bridge, projectRoot, repository, service, snapshot }
 }

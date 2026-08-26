@@ -27,11 +27,11 @@ describe('GUI R3 direct manipulation contract', () => {
   })
 
   it('opens a saved Context directly into its understanding scene without forcing a renderer choice', () => {
-    expect(dock).toContain("if(next === 'context') onSurface('context-graph')")
+    expect(dock).toContain("if(next === 'context') onSurface('context-space')")
     expect(dock).not.toContain('ProjectionPills')
     expect(app).toContain("setActiveSurface('context-space')")
     expect(app).toContain("setActiveContextId(contextId)")
-    expect(contextSpace).toContain('Drop 就是在这里使用')
+    expect(contextSpace).toContain('放进来的材料就在这里一起被理解')
   })
 
   it('lets visible Context cards accept material directly and opens them with one click', () => {
@@ -55,7 +55,7 @@ describe('GUI R3 direct manipulation contract', () => {
     expect(app).toContain('savedWorkflowViews')
     expect(app).toContain('workflowMembersById')
     expect(app).toContain("appendExactPresentationMembers('workflow', result.scope.id")
-    expect(workflow).toContain('not render Workflow Pages or fake operator nodes')
+    expect(workflow).toContain('rendered as Workflow Pages or fake business Step entities')
     expect(workflow).not.toContain('workflowPageTargetAt')
     expect(app).toContain('createWorkflowPageDirect')
   })

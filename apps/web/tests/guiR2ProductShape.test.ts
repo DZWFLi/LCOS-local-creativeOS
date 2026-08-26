@@ -23,8 +23,8 @@ describe('GUI R2 product-shape regression',()=>{
     expect(rail).toContain("application/x-lcos-project-view")
   })
 
-  it('keeps project Context Graph as the project entry, then opens one Context into an understanding space with optional lenses',()=>{
-    expect(dock).toContain("if(next === 'context') onSurface('context-graph')")
+  it('opens Context directly into the understanding worksite while keeping Graph as an optional legacy lens',()=>{
+    expect(dock).toContain("if(next === 'context') onSurface('context-space')")
     expect(dock).not.toContain('ProjectionPills')
     expect(projections).toContain('ContextSpaceSurface')
     expect(projections).toContain("props.surface==='context-space'")
@@ -36,7 +36,7 @@ describe('GUI R2 product-shape regression',()=>{
 
   it('renders Context as one vertical Signal Track rather than old parallel Strand bands',()=>{
     expect(signal).toContain('lcos-signal-spine')
-    expect(signal).toContain('纵向顺序就是本次 Context 的理解顺序')
+    expect(signal).toContain('材料会沿理解顺序展开')
     expect(signal).toContain('lcos-signal-wave')
     expect(signal).toContain('lcos-signal-insert-gap')
     expect(signal).toContain('application/x-lcos-project-view')

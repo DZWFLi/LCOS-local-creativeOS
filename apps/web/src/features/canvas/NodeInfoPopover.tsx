@@ -41,10 +41,17 @@ export function NodeInfoPopover({ node, camera, relationCount, onClose, onRelati
   const rect = canvas?.getBoundingClientRect()
   const anchorX = (rect?.left ?? 0) + camera.x + (node.x + node.width) * camera.zoom
   const anchorY = (rect?.top ?? 44) + camera.y + 8 * camera.zoom + node.y * camera.zoom
+  // B-1：视口边界翻转——右侧放不下翻左侧、底部放不下（含底部 Dock 占位）翻节点上方；
+  // Popover 与节点之间统一留 8px 间距。
   const width = 294
-  const preferLeft = anchorX + width + 12 > window.innerWidth - 56
-  const left = preferLeft ? Math.max(12, anchorX - width - 10) : Math.min(window.innerWidth - width - 12, anchorX + 10)
-  const top = Math.max(54, Math.min(window.innerHeight - 510, anchorY))
+  const height = 510
+  const gap = 8
+  const preferLeft = anchorX + width + gap > window.innerWidth - 56
+  const left = preferLeft ? Math.max(12, anchorX - width - gap) : Math.min(window.innerWidth - width - 12, anchorX + gap)
+  const preferAbove = window.innerHeight - anchorY < height + gap
+  const top = preferAbove
+    ? Math.max(54, anchorY - height - gap)
+    : Math.max(54, Math.min(window.innerHeight - height - gap, anchorY))
   const url = node.previewText?.match(/^url:\s*(https?:\/\/\S+)/mi)?.[1]
   const identity = detectFileIdentity(node)
   const linkUrl = url
@@ -66,7 +73,7 @@ export function NodeInfoPopover({ node, camera, relationCount, onClose, onRelati
   const hasRevision = revisionCount > 0
   const hasPreview = node.previewStatus !== undefined && node.previewStatus !== 'not-generated'
 
-  return createPortal(<aside ref={popoverRef} className={`node-info-popover ${preferLeft ? 'place-left' : 'place-right'}`} style={{ left, top }} data-testid="node-info-popover" role="dialog" aria-label={`${node.title} 信息`} onContextMenu={(event) => event.preventDefault()}>
+  return createPortal(<aside ref={popoverRef} className={`node-info-popover ${preferLeft ? 'place-left' : 'place-right'}`} style={{ position: 'fixed', left, top, zIndex: 'var(--lcos-z-overlay-ui)' /* z-tier: overlay-ui（B-1 归层；portal 到 body 须自带定位与层级） */ }} data-testid="node-info-popover" role="dialog" aria-label={`${node.title} 信息`} onContextMenu={(event) => event.preventDefault()}>
     <header><div><small>{nodeMeta[node.kind].label}</small><h3>{node.title}</h3></div><button className="icon-button pressable" aria-label="关闭节点信息" onClick={onClose}><X size={14} /></button></header>
     <dl>
       {hasRevision && <div><dt><FileText size={12} />版本</dt><dd>{revisionState}</dd></div>}

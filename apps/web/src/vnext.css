@@ -13,7 +13,7 @@
   --vnext-ink-26: rgba(32, 31, 39, .26);
   --vnext-hair: rgba(39, 37, 49, .09);
   --vnext-hair-strong: rgba(39, 37, 49, .15);
-  --vnext-purple: #8b5cf6;
+  --vnext-purple: var(--lcos-signal, #8b5cf6); /* Glaze 单色收敛：紫 accent 唯一源 --lcos-signal */
   --vnext-blue: #3b82f6;
   --vnext-cyan: #22d3ee;
   --vnext-shadow: 0 14px 38px rgba(47, 44, 68, .09), 0 2px 8px rgba(47, 44, 68, .045), inset 0 1px 0 rgba(255,255,255,.88);
@@ -50,7 +50,7 @@
 /* -------------------------------------------------------------------------- */
 .vnext-project-strip {
   position: relative;
-  z-index: 60;
+  z-index: var(--lcos-z-shell-chrome); /* z-tier: shell-chrome */
   height: 44px;
   display: flex;
   align-items: center;
@@ -105,7 +105,7 @@
 /* GUI-5：Reorganize 提案面板（浮层，不占用主画布） */
 .reorganize-panel {
   position: absolute;
-  z-index: 90;
+  z-index: var(--lcos-z-dialog-preview); /* z-tier: dialog */
   right: 14px;
   top: 58px;
   width: 300px;
@@ -122,7 +122,7 @@
 .reorganize-panel header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
 .reorganize-panel header > div { display: grid; gap: 1px; min-width: 0; }
 .reorganize-panel header strong { font-size: 12.5px; }
-.reorganize-panel header small { font-size: 9px; color: var(--vnext-ink-44); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reorganize-panel header small { font-size: 12.5px; color: var(--vnext-ink-44); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .reorganize-panel h4 { font-size: 10.5px; color: var(--vnext-ink-44); margin: 0 0 6px; }
 .reorganize-panel p { font-size: 11px; color: var(--vnext-ink-64); margin: 0 0 10px; }
 .reorganize-summary { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 5px; }
@@ -147,7 +147,7 @@
 /* -------------------------------------------------------------------------- */
 .vnext-workspace-rail {
   position: absolute;
-  z-index: 46;
+  z-index: var(--lcos-z-shell-chrome); /* z-tier: shell-chrome */
   left: 10px;
   top: 50%;
   transform: translateY(-50%);
@@ -193,7 +193,7 @@
 .vnext-rail-add { margin-top: 1px; }
 .vnext-workspace-preview {
   position: absolute;
-  z-index: 3;
+  z-index: var(--lcos-z-content-bounds); /* z-tier: canvas-content */
   left: 50px;
   top: 50%;
   transform: translateY(-50%);
@@ -213,12 +213,12 @@
 .vnext-workspace-preview-map { position:relative; height:46px; border-radius:10px; background:var(--vnext-ground); overflow:hidden; border:1px solid rgba(60,56,77,.06); }
 .vnext-workspace-preview-map i { position:absolute; border-radius:3px; background:rgba(74,69,96,.28); }
 .vnext-workspace-preview div:nth-child(2) { min-width:0; display:grid; gap:3px; }
-.vnext-workspace-preview strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11.5px; }
-.vnext-workspace-preview span { color:var(--vnext-ink-44); font-size:9.5px; }
+.vnext-workspace-preview strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size: 11.5px; }
+.vnext-workspace-preview span { color:var(--vnext-ink-44); font-size: 12.5px; }
 .vnext-workspace-preview button { width:27px; height:27px; display:grid; place-items:center; border:0; border-radius:9px; background:transparent; color:var(--vnext-ink-44); }
 .vnext-workspace-preview button:hover { background:rgba(60,56,77,.05); color:var(--vnext-ink); }
-.vnext-workspace-menu { position:absolute; z-index:5; right:8px; bottom:-4px; transform:translateY(100%); display:grid; min-width:180px; padding:6px; border:1px solid rgba(39,37,49,.1); border-radius:13px; background:rgba(255,255,255,.98); box-shadow:0 16px 40px rgba(47,44,68,.14), inset 0 1px 0 #fff; }
-.vnext-workspace-menu button { display:flex; align-items:center; gap:8px; width:100%; min-height:31px; padding:6px 8px; border:0; border-radius:9px; background:transparent; color:var(--vnext-ink-66); font-size:10.5px; text-align:left; cursor:pointer; }
+.vnext-workspace-menu { position:absolute; z-index: var(--lcos-z-content-chip); /* z-tier: canvas-content */ right:8px; bottom:-4px; transform:translateY(100%); display:grid; min-width:180px; padding:6px; border:1px solid rgba(39,37,49,.1); border-radius:13px; background:rgba(255,255,255,.98); box-shadow:0 16px 40px rgba(47,44,68,.14), inset 0 1px 0 #fff; }
+.vnext-workspace-menu button { display:flex; align-items:center; gap:8px; width:100%; min-height:31px; padding:6px 8px; border:0; border-radius:9px; background:transparent; color:var(--vnext-ink-66); font-size: 10.5px; text-align:left; cursor:pointer; }
 .vnext-workspace-menu button:hover { background:rgba(71,66,94,.055); color:var(--vnext-ink); }
 .vnext-workspace-menu button:disabled { opacity:.35; cursor:default; }
 .vnext-workspace-menu button.danger { color:#a24f46; }
@@ -228,7 +228,7 @@
 /* -------------------------------------------------------------------------- */
 /* Persistent shell / independent surfaces                                    */
 /* -------------------------------------------------------------------------- */
-.vnext-surface-host { position:absolute; inset:0; z-index:2; overflow:hidden; }
+.vnext-surface-host { position:absolute; inset:0; z-index:var(--lcos-z-canvas-content); overflow:hidden; } /* z-tier: canvas-content */
 .vnext-surface-host > .canvas { inset:0; }
 .vnext-projection-surface {
   position:absolute;
@@ -240,12 +240,12 @@
   background-size:auto,23px 23px;
   animation:vnext-surface-in 160ms cubic-bezier(.2,.75,.25,1) both;
 }
-.vnext-projection-title { position:absolute; left:84px; top:22px; z-index:4; display:flex; align-items:baseline; gap:9px; pointer-events:none; }
-.vnext-projection-title span { font-size:12px; font-weight:650; letter-spacing:-.01em; }
-.vnext-projection-title small { color:var(--vnext-ink-44); font-size:9px; letter-spacing:.04em; }
+.vnext-projection-title { position:absolute; left:84px; top:22px; z-index: var(--lcos-z-content-handle); /* z-tier: canvas-content */ display:flex; align-items:baseline; gap:9px; pointer-events:none; }
+.vnext-projection-title span { font-size: 12px; font-weight:650; letter-spacing:-.01em; }
+.vnext-projection-title small { color:var(--vnext-ink-44); font-size: 12.5px; letter-spacing:.04em; }
 .vnext-projection-node {
   position:absolute;
-  z-index:5;
+  z-index: var(--lcos-z-content-chip); /* z-tier: canvas-content */
   display:flex;
   align-items:center;
   gap:9px;
@@ -264,16 +264,16 @@
 .vnext-projection-node:hover { border-color:rgba(69,64,92,.17); background:rgba(255,255,255,.9); transform:translateY(-1px); }
 .vnext-projection-node.selected { border-color:transparent; }
 .vnext-edge-light { position:absolute; inset:-1.5px; border-radius:inherit; padding:1.5px; background:conic-gradient(from var(--vnext-edge-angle),var(--vnext-purple),var(--vnext-blue),var(--vnext-cyan),var(--vnext-blue),var(--vnext-purple)); -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0); -webkit-mask-composite:xor; mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0); mask-composite:exclude; animation:vnext-edge-travel 5.5s linear infinite; pointer-events:none; }
-.vnext-edge-bloom { position:absolute; inset:-13px; border-radius:inherit; background:radial-gradient(60% 60% at 50% 50%,rgba(139,92,246,.14),rgba(59,130,246,.07) 56%,transparent 80%); filter:blur(8px); pointer-events:none; z-index:-1; }
+.vnext-edge-bloom { position:absolute; inset:-13px; border-radius:inherit; background:radial-gradient(60% 60% at 50% 50%,rgba(139,92,246,.14),rgba(59,130,246,.07) 56%,transparent 80%); filter:blur(8px); pointer-events:none; z-index: -1; /* z-tier: legacy-bg（porcelain 遗留背景层，按契约保留 -1） */ }
 .vnext-projection-icon { width:24px; height:24px; flex:0 0 24px; display:grid; place-items:center; border-radius:8px; color:var(--vnext-ink-44); background:rgba(72,67,94,.05); }
 .vnext-projection-copy { min-width:0; display:grid; gap:2px; }
-.vnext-projection-copy strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:10.8px; font-weight:620; }
-.vnext-projection-copy small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--vnext-ink-44); font-size:8.8px; }
+.vnext-projection-copy strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size: 10.8px; font-weight:620; }
+.vnext-projection-copy small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--vnext-ink-44); font-size: 12px; }
 .vnext-status-mark { margin-left:auto; width:6px; height:6px; border-radius:50%; background:#8b8c98; }
 .vnext-status-mark.draft { background:var(--vnext-purple); box-shadow:0 0 0 3px rgba(139,92,246,.08); }
 .vnext-status-mark.current { background:#63a77b; }
 .vnext-status-mark.run-running { background:var(--vnext-blue); }
-.vnext-projection-edges { position:absolute; inset:0; width:100%; height:100%; z-index:2; pointer-events:none; }
+.vnext-projection-edges { position:absolute; inset:0; width:100%; height:100%; z-index: var(--lcos-z-content-detail); /* z-tier: canvas-content */ pointer-events:none; }
 .vnext-projection-edges path { fill:none; stroke:rgba(79,75,95,.22); stroke-width:1.25; stroke-dasharray:3 6; vector-effect:non-scaling-stroke; }
 .vnext-projection-edges path.generate,.vnext-projection-edges path.modify { stroke:rgba(76,112,190,.38); stroke-dasharray:none; }
 .vnext-projection-edges path.feedback { stroke:rgba(181,129,60,.34); }
@@ -282,16 +282,16 @@
 .vnext-axis-decoration i { position:absolute; left:122px; right:90px; height:1px; background:linear-gradient(90deg,transparent,rgba(67,63,85,.12) 7%,rgba(67,63,85,.12) 93%,transparent); }
 .vnext-work-bands { position:absolute; inset:74px 78px 86px 96px; display:grid; grid-template-columns:1fr 1fr 1fr; gap:22px; pointer-events:none; }
 .vnext-work-bands i { border:1px solid rgba(73,68,95,.06); border-radius:24px; background:linear-gradient(180deg,rgba(255,255,255,.22),rgba(255,255,255,.06)); }
-.vnext-work-bands span { position:absolute; top:10px; color:var(--vnext-ink-26); font-size:8px; letter-spacing:.12em; text-transform:uppercase; }
+.vnext-work-bands span { position:absolute; top:10px; color:var(--vnext-ink-26); font-size: 11px; letter-spacing:.12em; text-transform:uppercase; }
 .vnext-work-bands span:nth-of-type(1){left:24px}.vnext-work-bands span:nth-of-type(2){left:calc(33.33% + 33px)}.vnext-work-bands span:nth-of-type(3){left:calc(66.66% + 45px)}
-.vnext-delivery-zone { position:absolute; right:80px; top:76px; width:355px; height:490px; display:flex; align-items:center; justify-content:center; gap:8px; border:1px dashed rgba(76,72,96,.12); border-radius:26px; color:var(--vnext-ink-26); font-size:9px; letter-spacing:.08em; }
+.vnext-delivery-zone { position:absolute; right:80px; top:76px; width:355px; height:490px; display:flex; align-items:center; justify-content:center; gap:8px; border:1px dashed rgba(76,72,96,.12); border-radius:26px; color:var(--vnext-ink-26); font-size: 12.5px; letter-spacing:.08em; }
 
 /* -------------------------------------------------------------------------- */
 /* Bottom dock                                                                 */
 /* -------------------------------------------------------------------------- */
 .vnext-bottom-dock {
   position:absolute;
-  z-index:48;
+  z-index: var(--lcos-z-shell-chrome); /* z-tier: shell-chrome */
   left:50%;
   bottom:12px;
   transform:translateX(-50%);
@@ -313,17 +313,17 @@
 .vnext-bottom-dock button:hover { color:var(--vnext-ink); background:rgba(71,66,94,.055); transform:translateY(-1px); }
 .vnext-bottom-dock button.active { color:var(--vnext-ink); background:rgba(255,255,255,.95); border-color:rgba(70,65,93,.1); box-shadow:0 4px 12px rgba(46,43,63,.06); }
 .vnext-lens-axis > button { position:relative; }
-.vnext-lens-axis > button::after { content:attr(data-label); position:absolute; bottom:37px; left:50%; transform:translate(-50%,3px); opacity:0; pointer-events:none; padding:4px 6px; border-radius:7px; background:rgba(36,34,45,.88); color:white; font-size:8.5px; white-space:nowrap; transition:opacity 120ms ease,transform 120ms ease; }
+.vnext-lens-axis > button::after { content:attr(data-label); position:absolute; bottom:37px; left:50%; transform:translate(-50%,3px); opacity:0; pointer-events:none; padding:4px 6px; border-radius:7px; background:rgba(36,34,45,.88); color:white; font-size: 12px; white-space:nowrap; transition:opacity 120ms ease,transform 120ms ease; }
 .vnext-lens-axis > button:hover::after { opacity:1; transform:translate(-50%,0); }
 .vnext-projection-switch { display:flex; align-items:center; gap:1px; margin-left:3px; padding-left:6px; border-left:1px solid var(--vnext-hair); animation:vnext-surface-in 120ms ease both; }
-.vnext-projection-switch button { min-width:auto; width:auto; height:27px; padding:0 8px; font-size:9px; }
-.vnext-scope-current { max-width:118px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding:0 5px; color:var(--vnext-ink-44); font-size:9px; }
+.vnext-projection-switch button { min-width:auto; width:auto; height:27px; padding:0 8px; font-size: 12.5px; }
+.vnext-scope-current { max-width:118px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding:0 5px; color:var(--vnext-ink-44); font-size: 12.5px; }
 .vnext-merge-workbench { color:#4f9271 !important; }
 
 /* -------------------------------------------------------------------------- */
 /* Drop gutters and shelf                                                      */
 /* -------------------------------------------------------------------------- */
-.drop-edge-cue { position:absolute; z-index:78; pointer-events:none; overflow:hidden; opacity:.9; }
+.drop-edge-cue { position:absolute; z-index: var(--lcos-z-overlay-ui-top); /* z-tier: overlay-ui */ pointer-events:none; overflow:hidden; opacity:.9; }
 .drop-edge-cue.anchor-left { left:0; top:0; bottom:0; width:44px; background:linear-gradient(90deg,rgba(139,92,246,.055),transparent); }
 .drop-edge-cue.anchor-bottom { left:0; right:0; bottom:0; height:44px; background:linear-gradient(0deg,rgba(59,130,246,.055),transparent); }
 .drop-edge-cue i { position:absolute; display:block; border-radius:999px; background:linear-gradient(180deg,rgba(139,92,246,.52),rgba(59,130,246,.42)); box-shadow:0 0 18px rgba(107,92,222,.18); }
@@ -332,7 +332,7 @@
 .drop-edge-cue.phase-dwell.anchor-left i { animation:lcos-drop-dwell-y 520ms linear forwards; }
 .drop-edge-cue.phase-dwell.anchor-bottom i { animation:lcos-drop-dwell-x 520ms linear forwards; }
 .drop-edge-cue.phase-preview i { transform:none; background:linear-gradient(180deg,rgba(139,92,246,.66),rgba(59,130,246,.54)); }
-.drop-edge-cue span { position:absolute; padding:5px 9px; border:1px solid rgba(92,75,170,.12); border-radius:999px; background:rgba(253,253,255,.82); color:rgba(73,61,122,.7); font-size:9px; font-weight:600; white-space:nowrap; box-shadow:0 6px 18px rgba(44,41,63,.08); backdrop-filter:blur(10px); opacity:0; }
+.drop-edge-cue span { position:absolute; padding:5px 9px; border:1px solid rgba(92,75,170,.12); border-radius:999px; background:rgba(253,253,255,.82); color:rgba(73,61,122,.7); font-size: 12.5px; font-weight:600; white-space:nowrap; box-shadow:0 6px 18px rgba(44,41,63,.08); backdrop-filter:blur(10px); opacity:0; }
 .drop-edge-cue.anchor-left span { left:9px; top:50%; transform:translateY(-50%); }
 .drop-edge-cue.anchor-bottom span { left:50%; bottom:9px; transform:translateX(-50%); }
 .drop-edge-cue.phase-dwell span { animation:lcos-drop-label-in 1ms linear 312ms forwards; }
@@ -342,7 +342,7 @@
 @keyframes lcos-drop-label-in { to { opacity:.86; } }
 .vnext-drop-shelf {
   position:absolute;
-  z-index:70;
+  z-index: var(--lcos-z-overlay-ui-top); /* z-tier: overlay-ui */
   display:flex;
   align-items:center;
   gap:7px;
@@ -361,13 +361,13 @@
 .vnext-payload-stack { position:relative; width:24px; height:22px; }
 .vnext-payload-stack i { position:absolute; width:18px; height:14px; border-radius:4px; border:1px solid rgba(68,63,90,.12); background:#fff; box-shadow:0 2px 5px rgba(51,47,70,.06); }
 .vnext-payload-stack i:nth-child(1){left:1px;top:6px}.vnext-payload-stack i:nth-child(2){left:4px;top:3px}.vnext-payload-stack i:nth-child(3){left:7px;top:0}
-.vnext-drop-payload strong { position:absolute; right:4px; bottom:1px; min-width:15px; height:15px; display:grid; place-items:center; border-radius:999px; background:#fff; border:1px solid var(--vnext-hair); font-size:8px; }
+.vnext-drop-payload strong { position:absolute; right:4px; bottom:1px; min-width:15px; height:15px; display:grid; place-items:center; border-radius:999px; background:#fff; border:1px solid var(--vnext-hair); font-size: 11px; }
 .vnext-drop-destinations { display:flex; gap:4px; min-width:0; overflow-x:auto; }
 .vnext-destination { display:flex; align-items:stretch; border:1px solid transparent; border-radius:11px; overflow:hidden; background:transparent; transition:background 120ms ease,border-color 120ms ease; }
 .vnext-destination:hover { border-color:rgba(72,67,94,.09); background:rgba(71,66,94,.04); }
 .vnext-destination button { border:0; background:transparent; color:var(--vnext-ink-44); }
 .vnext-destination-main { height:34px; min-width:74px; max-width:140px; display:flex; align-items:center; gap:6px; padding:0 8px; }
-.vnext-destination-main span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:9.5px; }
+.vnext-destination-main span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size: 12.5px; }
 .vnext-destination-follow { width:28px; display:grid; place-items:center; border-left:1px solid var(--vnext-hair) !important; opacity:.36; transition:opacity 120ms ease,color 120ms ease; }
 .vnext-destination:hover .vnext-destination-follow { opacity:1; color:var(--vnext-blue); }
 .vnext-drop-close { width:30px; height:30px; display:grid; place-items:center; border:0; border-radius:9px; background:transparent; color:var(--vnext-ink-44); }
@@ -378,7 +378,7 @@
 /* -------------------------------------------------------------------------- */
 .app-shell.porcelain-studio-v2 .selection-toolbar { gap:3px; padding:4px; border-radius:13px; background:rgba(253,253,255,.92); border:1px solid var(--vnext-hair); box-shadow:0 9px 24px rgba(46,42,66,.075); }
 .app-shell.porcelain-studio-v2 .selection-toolbar > span { display:none; }
-.app-shell.porcelain-studio-v2 .selection-toolbar button { position:static; min-width:auto; height:26px; padding:0 8px; gap:4px; border-radius:9px; font-size:9px; white-space:nowrap; }
+.app-shell.porcelain-studio-v2 .selection-toolbar button { position:static; min-width:auto; height:26px; padding:0 8px; gap:4px; border-radius:9px; font-size: 12.5px; white-space:nowrap; }
 .app-shell.porcelain-studio-v2 .selection-toolbar button svg { width:13px; height:13px; }
 .app-shell.porcelain-studio-v2 .selection-composer { border-radius:17px; background:rgba(253,253,255,.95); border-color:var(--vnext-hair); box-shadow:0 18px 45px rgba(44,41,63,.11),inset 0 1px 0 #fff; }
 .app-shell.porcelain-studio-v2 .selection-composer { pointer-events:none; }
@@ -393,7 +393,7 @@
 .app-shell.porcelain-studio-v2 .selection-composer-header > div:first-child strong { display:none; }
 .app-shell.porcelain-studio-v2 .selection-composer-header-actions .workspace-membership-action,
 .app-shell.porcelain-studio-v2 .selection-composer-header-actions .workspace-move-action { display:none; }
-.app-shell.porcelain-studio-v2 .vnext-surface-host .edges { z-index:6; pointer-events:none; }
+.app-shell.porcelain-studio-v2 .vnext-surface-host .edges { z-index: var(--lcos-z-content-chip); /* z-tier: canvas-content */ pointer-events:none; }
 .app-shell.porcelain-studio-v2 .vnext-surface-host .edges .edge-hit { pointer-events:stroke; }
 .app-shell.porcelain-studio-v2 .vnext-surface-host .edges .edge {
   stroke: rgba(76, 88, 104, .66);
@@ -408,7 +408,7 @@
 .app-shell.porcelain-studio-v2 .vnext-surface-host .edges .edge.selected { stroke:#7a5ce0; stroke-width:2.5px; }
 .vnext-surface-composer {
   position:absolute;
-  z-index:50;
+  z-index: var(--lcos-z-overlay-ui-raised); /* z-tier: overlay-ui */
   left:50%;
   bottom:70px;
   transform:translateX(-50%);
@@ -420,11 +420,11 @@
   box-shadow:0 20px 48px rgba(44,41,63,.12),inset 0 1px 0 #fff;
   backdrop-filter:blur(18px);
 }
-.vnext-surface-composer-context { display:flex; align-items:center; gap:6px; padding:2px 4px 6px; color:var(--vnext-ink-44); font-size:9px; }
-.vnext-surface-composer textarea { width:100%; min-height:54px; resize:none; border:0; outline:0; background:transparent; color:var(--vnext-ink); font:inherit; font-size:11px; line-height:1.45; }
+.vnext-surface-composer-context { display:flex; align-items:center; gap:6px; padding:2px 4px 6px; color:var(--vnext-ink-44); font-size: 12.5px; }
+.vnext-surface-composer textarea { width:100%; min-height:54px; resize:none; border:0; outline:0; background:transparent; color:var(--vnext-ink); font:inherit; font-size: 11px; line-height:1.45; }
 .vnext-surface-composer-controls { display:flex; align-items:center; gap:4px; }
 .vnext-surface-composer-controls label { position:relative; display:flex; align-items:center; }
-.vnext-surface-composer-controls select { height:27px; padding:0 24px 0 8px; appearance:none; border:1px solid var(--vnext-hair); border-radius:9px; background:rgba(248,248,252,.9); color:var(--vnext-ink-66); font-size:9px; }
+.vnext-surface-composer-controls select { height:27px; padding:0 24px 0 8px; appearance:none; border:1px solid var(--vnext-hair); border-radius:9px; background:rgba(248,248,252,.9); color:var(--vnext-ink-66); font-size: 12.5px; }
 .vnext-surface-composer-controls label svg { position:absolute; right:7px; pointer-events:none; color:var(--vnext-ink-26); }
 .vnext-surface-send { margin-left:auto; width:29px; height:29px; display:grid; place-items:center; border:0; border-radius:10px; color:white; background:linear-gradient(135deg,#7660d4,#4f83dd); box-shadow:0 5px 13px rgba(91,81,183,.16); }
 .vnext-surface-send:disabled { opacity:.3; }
@@ -434,7 +434,7 @@
 /* -------------------------------------------------------------------------- */
 .app-shell.porcelain-studio-v2 .work-rail:not(.compact) { top:10px; right:10px; bottom:66px; height:auto; border-radius:22px; box-shadow:0 26px 65px rgba(42,39,60,.15),inset 0 1px 0 #fff; animation:vnext-surface-in 150ms ease both; }
 .vnext-context-scope { display:flex; gap:1px; padding:2px; border:1px solid var(--vnext-hair); border-radius:8px; background:rgba(246,246,250,.8); }
-.vnext-context-scope button { height:20px; padding:0 6px; border:0; border-radius:6px; background:transparent; color:var(--vnext-ink-44); font-size:8px; }
+.vnext-context-scope button { height:20px; padding:0 6px; border:0; border-radius:6px; background:transparent; color:var(--vnext-ink-44); font-size: 11px; }
 .vnext-context-scope button.active { color:var(--vnext-ink); background:white; box-shadow:0 2px 6px rgba(46,42,66,.06); }
 
 /* -------------------------------------------------------------------------- */
@@ -445,21 +445,21 @@
 .app-shell.porcelain-studio-v2 .canvas-node.selected .anchor { opacity:.9; }
 .app-shell.porcelain-studio-v2 .node-context-toolbar button:first-child { display:none; }
 .app-shell.porcelain-studio-v2 .canvas-node.selected::after { opacity:1; }
-.app-shell.porcelain-studio-v2 .workspace-frame { z-index:3; pointer-events:none; border-color:rgba(80,75,103,.10); background:rgba(255,255,255,.045); box-shadow:inset 0 1px 0 rgba(255,255,255,.42); }
+.app-shell.porcelain-studio-v2 .workspace-frame { z-index: var(--lcos-z-content-bounds); /* z-tier: canvas-content */ pointer-events:none; border-color:rgba(80,75,103,.10); background:rgba(255,255,255,.045); box-shadow:inset 0 1px 0 rgba(255,255,255,.42); }
 .app-shell.porcelain-studio-v2 .workspace-frame.active { border-color:rgba(107,91,173,.15); }
 .app-shell.porcelain-studio-v2 .workspace-frame-header { pointer-events:auto; color:var(--vnext-ink-44); background:rgba(253,253,255,.74); border-color:var(--vnext-hair); }
 .app-shell.porcelain-studio-v2 .workspace-frame-resize { position:absolute; right:2px; bottom:2px; width:16px; height:16px; display:grid; place-items:center; border:0; border-radius:6px; background:transparent; color:var(--vnext-ink-26); cursor:nwse-resize; pointer-events:auto; }
 .app-shell.porcelain-studio-v2 .workspace-frame-resize span { width:8px; height:8px; border-right:1.5px solid var(--vnext-ink-44); border-bottom:1.5px solid var(--vnext-ink-44); border-bottom-right-radius:2px; }
 .app-shell.porcelain-studio-v2 .workspace-frame-resize:hover { background:rgba(71,66,94,.07); }
-.app-shell.porcelain-studio-v2 .canvas-hud { z-index:42; right:14px; bottom:72px; }
+.app-shell.porcelain-studio-v2 .canvas-hud { z-index: var(--lcos-z-overlay-ui-raised); /* z-tier: overlay-ui */ right:14px; bottom:72px; }
 .vnext-legacy-breadcrumbs { display:none !important; }
 .app-shell.porcelain-studio-v2 .shortcut-hint { top:17px; right:16px; opacity:.58; }
 .app-shell.porcelain-studio-v2 .prototype-reset { opacity:0; pointer-events:none; }
-.app-shell.porcelain-studio-v2 .run-pill { z-index:52; right:18px; bottom:74px; }
+.app-shell.porcelain-studio-v2 .run-pill { z-index: var(--lcos-z-overlay-ui-panel); /* z-tier: overlay-ui */ right:18px; bottom:74px; }
 
 /* Overlays from older UI must sit above new shell but remain on-demand. */
-.app-shell.porcelain-studio-v2 .capability-popover { z-index:80; }
-.app-shell.porcelain-studio-v2 .notice { z-index:100; }
+.app-shell.porcelain-studio-v2 .capability-popover { z-index: var(--lcos-z-overlay-ui-top); /* z-tier: overlay-ui */ }
+.app-shell.porcelain-studio-v2 .notice { z-index: var(--lcos-z-dialog); /* z-tier: dialog */ }
 
 @media (max-width: 1000px) {
   .vnext-project-name span { display:none; }
@@ -478,7 +478,7 @@
 .vnext-immersive-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 980;
+  z-index: var(--lcos-z-modal-immersive); /* z-tier: modal */
   display: grid;
   place-items: stretch;
   padding: 10px;
@@ -572,7 +572,7 @@
   position: absolute;
   right: 14px;
   top: 14px;
-  z-index: 20;
+  z-index: var(--lcos-z-content-hud); /* z-tier: canvas-content */
   display: flex;
   align-items: center;
   gap: 4px;

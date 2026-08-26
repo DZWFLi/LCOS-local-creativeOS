@@ -3,25 +3,39 @@ import type { AttentionBucketV0, RuntimeProviderStatus } from '@local-creative-o
 import { Copy, CopyPlus, Crosshair, Ellipsis, Fence, FolderTree, GripVertical, LayoutGrid, Pencil, Trash2 } from 'lucide-react'
 import type { Camera, CanvasEdge, CanvasNode, NodeDisplayMode, RunStatus, WorkspaceFrameVM } from '../../model'
 import { getSelectionBounds, nodeDensity } from './canvasGeometry'
+import { getVisualSelectionBounds, MAIN_CANVAS_GRID_STEP, nodeVisualBounds, nodeVisualInsets, snapNodePositionToGrid } from './canvasVisualGeometry'
 import { getPendingZoneBounds } from './canvasLayout'
 import type { LayoutPreviewItem } from './scopeLayout'
 import type { SpatialRegionDraft } from '../../state/spatialRegion'
-import { CanvasNodeVisual, detectFileIdentity, nodeVisualFamily } from './CanvasNodeVisual'
+import { CanvasNodeVisual, detectFileIdentity, displayNodeTitle, nodeVisualFamily } from './CanvasNodeVisual'
 import { SelectionComposer } from './SelectionComposer'
 import type { ArtifactRevisionProvenance } from '../../runtime/projectionAdapters'
 import { SpatialCanvas } from '../spatial/SpatialCanvas'
 import { SpatialEdgeLayer } from '../spatial/SpatialEdgeLayer'
 import { SpatialNodeLayer } from '../spatial/SpatialNodeLayer'
-import { edgeScrollDelta, spatialBoundsForPlacements, spatialScreenToWorld, spatialViewportWorldBounds, spatialWorldToScreen } from '../spatial/spatialCamera'
+import { edgeScrollDelta, spatialBoundsForPlacements, spatialScreenToWorld, spatialWorldToScreen } from '../spatial/spatialCamera'
 import { spatialIdsIntersectingScreenRect } from '../spatial/spatialHitTest'
-import { spatialLodForCount } from '../spatial/spatialLod'
+import { spatialLodForCount, spatialOverviewProjection } from '../spatial/spatialLod'
 import { advanceSpatialMarquee, beginSpatialMarquee, endSpatialPointer, spatialMarqueeRect } from '../spatial/spatialInteractionMachine'
 import { IDLE_SPATIAL_POINTER, type SpatialPointerSession } from '../spatial/spatialTypes'
 import { LightCurtain } from '../drop/LightCurtain'
 import { semanticDropTriggerFromPointer, type SemanticDropTrigger } from '../spatial/semanticDrop'
-import { LcosSignalGlyph, type LcosSignalState } from '../design/DotGlyph'
+import { LCOS_MINDMAP_BRANCH_EXTRACT_EVENT } from './MindMapNoteVisual'
+import { GlythAvatar } from '../spatial/visual/CanvasSprite'
+import { resolveSpatialSignal, type SpatialRuntimeSignal } from '../spatial/visual/spatialSignal'
+import type { SurfaceElement } from '../spatial/model/surfaceElementTypes'
+import { resolveSurfaceComponent } from '../spatial/components/surfaceComponentRegistry'
+import { SurfaceFrame } from '../spatial/components/SurfaceFrame'
+import { SurfaceComponentLayer } from '../spatial/components/SurfaceComponentLayer'
+import { SurfaceComponentShelf } from '../spatial/components/SurfaceComponentShelf'
+import { surfaceViewportOrigin } from '../spatial/model/surfaceGeometry'
+import { AgentSurfaceComposer } from '../surfaces/AgentSurfaceComposer'
+import { SurfaceComponentProposalLayer } from '../spatial/components/SurfaceComponentProposalLayer'
+import { applySurfaceOps, type SurfaceOp, validateSurfaceOps } from '../spatial/model/surfaceOps'
+import { resolveSurfaceIntent, type SurfaceIntent } from '../spatial/model/surfaceIntent'
 
 interface Props {
+  projectId?: string
   surfaceMode?: 'project' | 'capture'
   nodes: CanvasNode[]; setNodes: (nodes: CanvasNode[] | ((current: CanvasNode[]) => CanvasNode[])) => void
   edges: CanvasEdge[]; setEdges: (edges: CanvasEdge[] | ((current: CanvasEdge[]) => CanvasEdge[])) => void
@@ -33,6 +47,7 @@ interface Props {
   workspaceMemberNodes?: CanvasNode[]
   activeWorkspaceId?: string | null
   onWorkspaceActivate?: (workspaceId: string) => void
+  onWorkspaceProjectionMove?: (workspaceId: string, x: number, y: number) => void
   onPresentationInteractionChange?: (active: boolean) => void
   onPresentationCommit?: (kind: 'node-move' | 'node-resize' | 'workspace-group-move') => void
   onFrameBoundsChange?: (workspaceId: string, frameBounds: { x: number; y: number; width: number; height: number }) => void
@@ -57,8 +72,12 @@ interface Props {
     onClose: () => void
   }
   onCreateNodeFromAnchor: (kind: 'note' | 'context', x: number, y: number, from: string) => void; onFilesDropped: (files: File[], x: number, y: number) => void; onExternalTextDrop?: (text: string, x: number, y: number) => void; onMaterialTransferDrop?: (raw: string, x: number, y: number) => void
-  onArrangeSelection: () => void; onSetSelectionDisplayMode?: (mode: NodeDisplayMode) => void; onCopySelection: () => void; onDuplicateSelection: () => void; onCreateScopeFromSelection: () => void; onDeleteSelection: () => void; onPointerWorldChange: (point: { x: number; y: number }) => void; onSpaceCreate: (point: { x: number; y: number }) => void
+  /** G-4 导图分支摘取：按住导图分支拖到空白处松手 → 以正常文本节点形态落画布（区别于外部文本拖入）。 */
+  onMindmapBranchDrop?: (text: string, x: number, y: number) => void
+  onArrangeSelection: () => void; gridSnapEnabled?: boolean; onSetSelectionDisplayMode?: (mode: NodeDisplayMode) => void; onCopySelection: () => void; onDuplicateSelection: () => void; onCreateScopeFromSelection: () => void; onDeleteSelection: () => void; onPointerWorldChange: (point: { x: number; y: number }) => void; onSpaceCreate: (point: { x: number; y: number }) => void
   onReorganize?: () => void
+  /** 文本节点：切换 文本块 ⇄ 大纲思维导图 呈现（仅 Presentation）。 */
+  onToggleNoteLayout?: (id: string, layout: 'text' | 'mindmap') => void
   onDirectProjectViewDrop?: (targetViewId: string, ids: readonly string[]) => void
   /** GUI-6：锚定备注定位（宿主把相机移到锚点目标并脉冲高亮）。 */
   onLocateNode?: (id: string) => void
@@ -71,10 +90,16 @@ interface Props {
   closingCollectionScopeIds?: readonly string[]
   onToggleCollection?: (collectionScopeId: string) => void
   onOpenContextLens?: (node: CanvasNode, lens: 'space' | 'structure' | 'evolution') => void
-  spatialRegion?: SpatialRegionDraft | null
+  spatialRegions?: readonly SpatialRegionDraft[]
+  surfaceElements?: readonly SurfaceElement[]
+  onSurfaceElementsChange?: (elements: SurfaceElement[]) => void
+  portalTargets?: readonly { readonly id: string; readonly label: string; readonly kind: string }[]
+  onOpenPortalTarget?: (projectViewId: string) => void
   onCreateRegion?: () => void
-  onClearRegion?: () => void
-  onPromoteRegionToCollection?: () => void
+  onClearRegion?: (regionId: string) => void
+  onRegionBoundsChange?: (regionId: string, bounds: SpatialRegionDraft['bounds']) => void
+  onRegionBoundsCommit?: (regionId: string, bounds: SpatialRegionDraft['bounds']) => void
+  onPromoteRegionToCollection?: (regionId: string) => void
 }
 
 type DragCandidate = { id: string; startX: number; startY: number; offsetX: number; offsetY: number; group: Array<{ id: string; dx: number; dy: number }>; originals: Array<{ id: string; x: number; y: number }> }
@@ -89,7 +114,7 @@ function additiveSelection(event: { shiftKey: boolean; ctrlKey: boolean; metaKey
   return event.shiftKey || event.ctrlKey || event.metaKey
 }
 
-export const ProjectCanvas = memo(function ProjectCanvas({ surfaceMode = 'project', nodes, setNodes, edges, setEdges, camera, setCamera, selectedId, selectedIds, selectedEdgeId, setSelectedEdgeId, pendingId, runId, runStatus, spaceHeld, locked = false, layoutPreview, workspaceFrames = [], workspaceMemberNodes = nodes, activeWorkspaceId = null, onWorkspaceActivate, onPresentationInteractionChange, onPresentationCommit, onFrameBoundsChange, selectionComposer, onSelect, onClearSelection, onMarqueeSelect, onSelectEdge, onDoubleClick, onDetails, onFocusSelection, onRenameSelection, onCreateNodeFromAnchor, onFilesDropped, onExternalTextDrop, onMaterialTransferDrop, onArrangeSelection, onSetSelectionDisplayMode, onCopySelection, onDuplicateSelection, onCreateScopeFromSelection, onDeleteSelection, onReorganize, onDirectProjectViewDrop, onPointerWorldChange, onSpaceCreate, onLocateNode, locatePulseId, pendingReviewIds = [], attentionBucketsByViewId = {}, collectionMembersByNodeId = {}, expandedCollectionScopeIds = [], openingCollectionScopeIds = [], closingCollectionScopeIds = [], onToggleCollection, onOpenContextLens, spatialRegion = null, onCreateRegion, onClearRegion, onPromoteRegionToCollection }: Props) {
+export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-space', surfaceMode = 'project', nodes, setNodes, edges, setEdges, camera, setCamera, selectedId, selectedIds, selectedEdgeId, setSelectedEdgeId, pendingId, runId, runStatus, spaceHeld, locked = false, layoutPreview, workspaceFrames = [], workspaceMemberNodes = nodes, activeWorkspaceId = null, onWorkspaceActivate, onWorkspaceProjectionMove, onPresentationInteractionChange, onPresentationCommit, onFrameBoundsChange, selectionComposer, onSelect, onClearSelection, onMarqueeSelect, onSelectEdge, onDoubleClick, onDetails, onFocusSelection, onRenameSelection, onCreateNodeFromAnchor, onFilesDropped, onExternalTextDrop, onMaterialTransferDrop, onMindmapBranchDrop, onArrangeSelection, gridSnapEnabled = true, onSetSelectionDisplayMode, onCopySelection, onDuplicateSelection, onCreateScopeFromSelection, onDeleteSelection, onReorganize, onToggleNoteLayout, onDirectProjectViewDrop, onPointerWorldChange, onSpaceCreate, onLocateNode, locatePulseId, pendingReviewIds = [], attentionBucketsByViewId = {}, collectionMembersByNodeId = {}, expandedCollectionScopeIds = [], openingCollectionScopeIds = [], closingCollectionScopeIds = [], onToggleCollection, onOpenContextLens, spatialRegions = [], surfaceElements = [], onSurfaceElementsChange, portalTargets = [], onOpenPortalTarget, onCreateRegion, onClearRegion, onRegionBoundsChange, onRegionBoundsCommit, onPromoteRegionToCollection }: Props) {
   const canvasRef = useRef<HTMLDivElement | null>(null)
   const dragCandidate = useRef<DragCandidate | null>(null)
   const resizeCandidate = useRef<ResizeCandidate | null>(null)
@@ -117,6 +142,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ surfaceMode = 'projec
   const edgeReconnect = useRef<EdgeReconnectCandidate | null>(null)
   const [linkPoint, setLinkPoint] = useState<{ x: number; y: number } | null>(null)
   const [draggingId, setDraggingId] = useState<string | null>(null)
+  const [alignmentGuide, setAlignmentGuide] = useState<{ readonly x?: number; readonly y?: number } | null>(null)
   const [dragSignal, setDragSignal] = useState({ x: 0, y: 0 })
   const collectionMotionByNodeId = useMemo(() => {
     const result = new Map<string, { phase: 'opening' | 'closing'; dx: number; dy: number }>()
@@ -145,34 +171,32 @@ export const ProjectCanvas = memo(function ProjectCanvas({ surfaceMode = 'projec
   const lastDragPointer = useRef<{ x: number; y: number } | null>(null)
   const [resizingId, setResizingId] = useState<string | null>(null)
   const [draggingWorkspaceId, setDraggingWorkspaceId] = useState<string | null>(null)
+  // PERF-150: drag preview is local to ProjectCanvas. Project Presentation commits once on pointerup.
+  const [dragPreviewPositions, setDragPreviewPositions] = useState<Record<string, { x: number; y: number }> | null>(null)
   const directProjectViewTarget = useRef<{ id: string; label: string } | null>(null)
   const directProjectViewElement = useRef<HTMLElement | null>(null)
   const [dropGhost, setDropGhost] = useState<{ x: number; y: number; count: number; label?: string } | null>(null)
   const [dropLight, setDropLight] = useState<{ hot: boolean; label?: string } | null>(null)
   const marquee = useRef<SpatialPointerSession>(IDLE_SPATIAL_POINTER)
   const [marqueeRect, setMarqueeRect] = useState<{ left: number; top: number; width: number; height: number } | null>(null)
+  const [selectedRegionId, setSelectedRegionId] = useState<string | null>(null)
+  const [componentProposalOps, setComponentProposalOps] = useState<readonly SurfaceOp[]>([])
   const [createMenu, setCreateMenu] = useState<{ from: string; x: number; y: number; screenX: number; screenY: number } | null>(null)
   const toWorld = (clientX: number, clientY: number, rect: DOMRect) => spatialScreenToWorld(clientX, clientY, rect, camera)
   // P0 2026-08-17: there is no persistent client-owned arrange mode.
   // Spatial positions in `nodes` are always the user's current presentation.
-  const spatialNodes = nodes
+  const spatialNodes = useMemo(() => dragPreviewPositions
+    ? nodes.map((node) => dragPreviewPositions[node.id] ? { ...node, ...dragPreviewPositions[node.id] } : node)
+    : nodes, [dragPreviewPositions, nodes])
   const effectiveWorkspaceFrames = workspaceFrames
   const lod = spatialLodForCount(spatialNodes.length)
   const renderNodes = useMemo(() => {
-    if (spatialNodes.length < 150) return spatialNodes
-    const viewport = spatialViewportWorldBounds(camera, { width: canvasRef.current?.clientWidth ?? 1440, height: canvasRef.current?.clientHeight ?? 900 }, 460)
-    const left = viewport.x
-    const top = viewport.y
-    const right = viewport.x + viewport.width
-    const bottom = viewport.y + viewport.height
     const keep = new Set([...selectedIds, ...(pendingId ? [pendingId] : [])])
-    const candidates = spatialNodes.filter((node) => keep.has(node.id) || (node.x < right && node.x + node.width > left && node.y < bottom && node.y + node.height > top))
-    if (lod !== 'overview' || candidates.length <= 220) return candidates
-    const selected = candidates.filter((node) => keep.has(node.id))
-    const rest = candidates.filter((node) => !keep.has(node.id))
-    const stride = Math.max(1, Math.ceil(rest.length / Math.max(1, 220 - selected.length)))
-    return [...selected, ...rest.filter((_, index) => index % stride === 0)].slice(0, 220)
-  }, [spatialNodes, selectedIds, pendingId, camera.x, camera.y, camera.zoom, lod])
+    return spatialOverviewProjection(spatialNodes, camera, keep, {
+      width: canvasRef.current?.clientWidth ?? 1440,
+      height: canvasRef.current?.clientHeight ?? 900,
+    })
+  }, [spatialNodes, selectedIds, pendingId, camera])
   const renderIds = useMemo(() => new Set(renderNodes.map((node) => node.id)), [renderNodes])
   const zoomBandForEdges = camera.zoom < 0.35 ? 'far' as const : camera.zoom < 0.65 ? 'mid' as const : 'near' as const
   const focusEdgeIds = useMemo(() => {
@@ -188,16 +212,32 @@ export const ProjectCanvas = memo(function ProjectCanvas({ surfaceMode = 'projec
     }
     return base
   }, [edges, lod, renderIds, selectedIds.length, zoomBandForEdges])
-  const byId = new Map(nodes.map((node) => [node.id, node]))
+  const byId = new Map(spatialNodes.map((node) => [node.id, node]))
   const relationById = new Map(byId)
   workspaceFrames.forEach((frame) => relationById.set(`workspace:${frame.workspaceId}`, {
     id: `workspace:${frame.workspaceId}`, title: frame.label, kind: 'context', x: frame.bounds.x, y: frame.bounds.y, width: frame.bounds.width, height: frame.bounds.height,
   } as CanvasNode))
-  const selectedBounds = useMemo(() => selectedIds.length ? getSelectionBounds(nodes, selectedIds) : null, [nodes, selectedIds])
-  const selectedNodesForTools = useMemo(() => selectedIds.map((id) => nodes.find((node) => node.id === id)).filter((node): node is CanvasNode => Boolean(node)), [nodes, selectedIds])
+  const selectedBounds = useMemo(() => selectedIds.length ? getSelectionBounds(spatialNodes, selectedIds) : null, [selectedIds, spatialNodes])
+  const selectedVisualBounds = useMemo(() => selectedIds.length ? getVisualSelectionBounds(spatialNodes, selectedIds) : null, [selectedIds, spatialNodes])
+  const selectedNodesForTools = useMemo(() => selectedIds.map((id) => byId.get(id)).filter((node): node is CanvasNode => Boolean(node)), [byId, selectedIds])
   const textSelection = selectedNodesForTools.length > 0 && selectedNodesForTools.every((node) => node.kind === 'note' || detectFileIdentity(node) === 'markdown')
   const textSelectionExpanded = textSelection && selectedNodesForTools.some((node) => node.displayMode !== 'compact')
-  const selectionBounds = selectedIds.length > 1 ? selectedBounds : null
+  // 统一文本体系：note 节点与 markdown 文本 artifact 都能编辑/转导图。
+  const noteSelection = selectedNodesForTools.length === 1 && (selectedNodesForTools[0].kind === 'note' || selectedNodesForTools[0].fileType === 'markdown') ? selectedNodesForTools[0] : null
+  const noteSelectionLayout = noteSelection?.noteLayout ?? 'text'
+  // Single note selection also needs the toolbar (text ⇄ mindmap toggle).
+  const selectionBounds = (selectedIds.length > 1 || noteSelection) ? selectedVisualBounds : null
+  const componentSelectionBounds = selectedVisualBounds ? { x: selectedVisualBounds.x, y: selectedVisualBounds.y, w: selectedVisualBounds.width, h: selectedVisualBounds.height } : null
+  const componentProposalElements = useMemo(() => componentProposalOps.flatMap((op) => op.type === 'create-component' ? [op.component] : []), [componentProposalOps])
+  const previewComponentIntent = (intent: SurfaceIntent) => {
+    const ops = resolveSurfaceIntent(intent, { projectId, surface: 'main', existing: surfaceElements, selectionBounds: componentSelectionBounds, viewportOrigin: surfaceViewportOrigin(camera) })
+    setComponentProposalOps(validateSurfaceOps(surfaceElements, ops).ok ? ops : [])
+  }
+  const keepComponentProposal = () => {
+    if (!onSurfaceElementsChange || !componentProposalOps.length) return
+    onSurfaceElementsChange(applySurfaceOps(surfaceElements, componentProposalOps))
+    setComponentProposalOps([])
+  }
   const overlayWidth = canvasRef.current?.clientWidth ?? 1440
   const overlayHeight = canvasRef.current?.clientHeight ?? 900
   const selectionToolbarAnchor = selectionBounds ? spatialWorldToScreen({ x: selectionBounds.x, y: selectionBounds.y }, camera) : null
@@ -228,36 +268,43 @@ export const ProjectCanvas = memo(function ProjectCanvas({ surfaceMode = 'projec
   }, [nodes])
 
   const alignSelection = (mode: 'left' | 'center-x' | 'right' | 'top' | 'center-y' | 'bottom') => {
-    if (!selectedBounds || selectedNodesForTools.length < 2) return
+    if (!selectedVisualBounds || selectedNodesForTools.length < 2) return
     setNodes((current) => current.map((node) => {
       if (!selectedIds.includes(node.id) || node.positionLocked) return node
-      if (mode === 'left') return { ...node, x: selectedBounds.x }
-      if (mode === 'center-x') return { ...node, x: selectedBounds.x + (selectedBounds.width - node.width) / 2 }
-      if (mode === 'right') return { ...node, x: selectedBounds.x + selectedBounds.width - node.width }
-      if (mode === 'top') return { ...node, y: selectedBounds.y }
-      if (mode === 'center-y') return { ...node, y: selectedBounds.y + (selectedBounds.height - node.height) / 2 }
-      return { ...node, y: selectedBounds.y + selectedBounds.height - node.height }
+      const body = nodeVisualBounds(node)
+      const inset = nodeVisualInsets(node)
+      if (mode === 'left') return { ...node, x: selectedVisualBounds.x + inset.left }
+      if (mode === 'center-x') return { ...node, x: selectedVisualBounds.x + (selectedVisualBounds.width - body.width) / 2 + inset.left }
+      if (mode === 'right') return { ...node, x: selectedVisualBounds.x + selectedVisualBounds.width - body.width + inset.left }
+      if (mode === 'top') return { ...node, y: selectedVisualBounds.y + inset.top }
+      if (mode === 'center-y') return { ...node, y: selectedVisualBounds.y + (selectedVisualBounds.height - body.height) / 2 + inset.top }
+      return { ...node, y: selectedVisualBounds.y + selectedVisualBounds.height - body.height + inset.top }
     }))
     onPresentationCommit?.('node-move')
   }
 
   const distributeSelection = (axis: 'x' | 'y') => {
     if (selectedNodesForTools.length < 3) return
-    const ordered = [...selectedNodesForTools].sort((a, b) => axis === 'x' ? a.x - b.x : a.y - b.y)
-    const first = ordered[0]
-    const last = ordered[ordered.length - 1]
+    const visual = selectedNodesForTools.map((node) => ({ node, bounds: nodeVisualBounds(node), inset: nodeVisualInsets(node) }))
+      .sort((a, b) => axis === 'x' ? a.bounds.x - b.bounds.x : a.bounds.y - b.bounds.y)
+    const first = visual[0]
+    const last = visual[visual.length - 1]
     if (!first || !last) return
-    const inner = ordered.slice(1, -1)
-    const span = axis === 'x'
-      ? (last.x - (first.x + first.width)) - inner.reduce((sum, node) => sum + node.width, 0)
-      : (last.y - (first.y + first.height)) - inner.reduce((sum, node) => sum + node.height, 0)
-    const gap = span / Math.max(1, ordered.length - 1)
-    let cursor = axis === 'x' ? first.x + first.width + gap : first.y + first.height + gap
+    const inner = visual.slice(1, -1)
+    const available = axis === 'x'
+      ? (last.bounds.x - (first.bounds.x + first.bounds.width)) - inner.reduce((sum, item) => sum + item.bounds.width, 0)
+      : (last.bounds.y - (first.bounds.y + first.bounds.height)) - inner.reduce((sum, item) => sum + item.bounds.height, 0)
+    const naturalGap = available / Math.max(1, visual.length - 1)
+    const gap = Math.max(18, naturalGap)
+    let cursor = axis === 'x' ? first.bounds.x + first.bounds.width + gap : first.bounds.y + first.bounds.height + gap
     const target = new Map<string, number>()
-    inner.forEach((node) => {
-      target.set(node.id, cursor)
-      cursor += (axis === 'x' ? node.width : node.height) + gap
+    inner.forEach((item) => {
+      target.set(item.node.id, axis === 'x' ? cursor + item.inset.left : cursor + item.inset.top)
+      cursor += (axis === 'x' ? item.bounds.width : item.bounds.height) + gap
     })
+    // If the original span was too tight, move the last node too. Distribution
+    // may expand the selection, but it must never manufacture negative gaps.
+    if (naturalGap < 18 && !last.node.positionLocked) target.set(last.node.id, axis === 'x' ? cursor + last.inset.left : cursor + last.inset.top)
     setNodes((current) => current.map((node) => {
       const value = target.get(node.id)
       if (value === undefined || node.positionLocked) return node
@@ -282,6 +329,30 @@ export const ProjectCanvas = memo(function ProjectCanvas({ surfaceMode = 'projec
     window.addEventListener('keydown', cancel)
     return () => window.removeEventListener('keydown', cancel)
   }, [])
+  // G-4 导图分支摘取：导图分支拖出到画布空白处松手 → 换算世界坐标 →
+  // onMindmapBranchDrop（App 的 createNoteFromBranchText，落成正常文本节点）。
+  useEffect(() => {
+    const drop = onMindmapBranchDrop ?? onExternalTextDrop
+    if (!drop) return
+    const onBranchExtract = (event: Event) => {
+      const detail = (event as CustomEvent<{ text?: unknown; clientX?: unknown; clientY?: unknown }>).detail
+      if (typeof detail?.text !== 'string' || !detail.text.trim()) return
+      const rect = canvasRef.current?.getBoundingClientRect()
+      if (!rect) return
+      if (typeof detail.clientX !== 'number' || typeof detail.clientY !== 'number') return
+      // 落点必须在本画布内（防止落在侧栏/头部的松手误建节点）
+      if (detail.clientX < rect.left || detail.clientX > rect.right || detail.clientY < rect.top || detail.clientY > rect.bottom) return
+      const point = spatialScreenToWorld(detail.clientX, detail.clientY, rect, camera)
+      // G-4 落点对齐 ghost：拖拽预览卡片画在光标 +14/+16px 处（MindMapNoteVisual 的
+      // ghost transform），落点换算必须计入同一偏移，否则新节点出现在 ghost 左上方
+      // 14×16px——用户手测感知的「拖拽有位移」即来源于此。屏幕像素偏移按当前 zoom 换世界坐标。
+      const GHOST_OFFSET_X = 14
+      const GHOST_OFFSET_Y = 16
+      drop(detail.text, point.x + GHOST_OFFSET_X / camera.zoom, point.y + GHOST_OFFSET_Y / camera.zoom)
+    }
+    window.addEventListener(LCOS_MINDMAP_BRANCH_EXTRACT_EVENT, onBranchExtract)
+    return () => window.removeEventListener(LCOS_MINDMAP_BRANCH_EXTRACT_EVENT, onBranchExtract)
+  }, [camera, onExternalTextDrop, onMindmapBranchDrop])
   useEffect(() => {
     if (!locked) return
     if (dragFrame.current !== null) {
@@ -335,9 +406,9 @@ export const ProjectCanvas = memo(function ProjectCanvas({ surfaceMode = 'projec
       const candidate = dragCandidate.current
       const point = dragPoint.current
       if (!candidate || !point) return
-      setNodes((current) => candidate.group.length > 1
-        ? current.map((node) => { const member = candidate.group.find((item) => item.id === node.id); return member ? { ...node, x: point.x + member.dx, y: point.y + member.dy } : node })
-        : current.map((node) => node.id === candidate.id ? { ...node, x: point.x, y: point.y } : node))
+      const preview = Object.fromEntries((candidate.group.length > 1 ? candidate.group : [{ id: candidate.id, dx: 0, dy: 0 }])
+        .map((member) => [member.id, { x: point.x + member.dx, y: point.y + member.dy }]))
+      setDragPreviewPositions(preview)
     })
   }
   const autoPanBounds = (rect: DOMRect) => {
@@ -410,6 +481,27 @@ export const ProjectCanvas = memo(function ProjectCanvas({ surfaceMode = 'projec
   const relationTargetAt = (clientX: number, clientY: number) => {
     const element = document.elementFromPoint(clientX, clientY)?.closest<HTMLElement>('[data-relation-target], [data-node-id]')
     return element?.dataset.relationTarget ?? element?.dataset.nodeId ?? null
+  }
+  const alignmentGuideFor = (node: CanvasNode, x: number, y: number, excludedIds: readonly string[]) => {
+    if (!gridSnapEnabled) return null
+    const threshold = 6 / Math.max(.05, camera.zoom)
+    const excluded = new Set(excludedIds)
+    const ownX = [x, x + node.width / 2, x + node.width]
+    const ownY = [y, y + node.height / 2, y + node.height]
+    let bestX: { value: number; distance: number } | null = null
+    let bestY: { value: number; distance: number } | null = null
+    for (const other of nodes) {
+      if (excluded.has(other.id)) continue
+      for (const value of [other.x, other.x + other.width / 2, other.x + other.width]) {
+        const distance = Math.min(...ownX.map((candidate) => Math.abs(candidate - value)))
+        if (distance <= threshold && (!bestX || distance < bestX.distance)) bestX = { value, distance }
+      }
+      for (const value of [other.y, other.y + other.height / 2, other.y + other.height]) {
+        const distance = Math.min(...ownY.map((candidate) => Math.abs(candidate - value)))
+        if (distance <= threshold && (!bestY || distance < bestY.distance)) bestY = { value, distance }
+      }
+    }
+    return bestX || bestY ? { ...(bestX ? { x: bestX.value } : {}), ...(bestY ? { y: bestY.value } : {}) } : null
   }
   const beginRelation = (from: string, event: React.PointerEvent<HTMLElement>, point: { x: number; y: number }) => {
     event.preventDefault(); event.stopPropagation()
@@ -488,6 +580,12 @@ export const ProjectCanvas = memo(function ProjectCanvas({ surfaceMode = 'projec
     return { element, target: { id, label: element.dataset.projectViewDropLabel ?? '目标空间' } }
   }
 
+  const externalProjectViewTargetAt = (clientX: number, clientY: number) => {
+    const hit = projectViewTargetAt(clientX, clientY)
+    if (!hit || hit.element === canvasRef.current) return null
+    return hit
+  }
+
   const setDirectProjectViewHover = (hit: ReturnType<typeof projectViewTargetAt>) => {
     if (!hit) {
       clearDirectProjectViewTarget()
@@ -517,6 +615,31 @@ export const ProjectCanvas = memo(function ProjectCanvas({ surfaceMode = 'projec
       cancelSemanticDrop()
       return
     }
+    const directMoveHit = !cancelled && dragging.current && dragCandidate.current && onDirectProjectViewDrop
+      ? externalProjectViewTargetAt(event.clientX, event.clientY)
+      : null
+    if (directMoveHit && dragCandidate.current && onDirectProjectViewDrop) {
+      if (dragFrame.current !== null) cancelAnimationFrame(dragFrame.current)
+      dragFrame.current = null
+      const candidate = dragCandidate.current
+      restoreDraggedOriginals(candidate)
+      setDragPreviewPositions(null)
+      onPresentationInteractionChange?.(false)
+      onDirectProjectViewDrop(directMoveHit.target.id, candidate.group.map((item) => item.id))
+      suppressClick.current = candidate.id
+      dragCandidate.current = null
+      dragPoint.current = null
+      dragging.current = false
+      stopAutoPan()
+      setDraggingId(null)
+      setDragSignal({ x: 0, y: 0 })
+      setDropGhost(null)
+      setDropLight(null)
+      setAlignmentGuide(null)
+      clearDirectProjectViewTarget()
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
+      return
+    }
     const wasDragging = dragging.current
     const draggedCandidate = dragCandidate.current
     const draggedId = dragCandidate.current?.id
@@ -526,6 +649,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ surfaceMode = 'projec
     if (cancelled) {
       if (dragFrame.current !== null) cancelAnimationFrame(dragFrame.current)
       dragFrame.current = null
+      setDragPreviewPositions(null)
       restoreDraggedOriginals(draggedCandidate)
       if (resizeCandidate.current) {
         const original = resizeCandidate.current
@@ -561,23 +685,36 @@ export const ProjectCanvas = memo(function ProjectCanvas({ surfaceMode = 'projec
       setDraggingWorkspaceId(null)
       setDropGhost(null)
       setDropLight(null)
+      setAlignmentGuide(null)
       clearDirectProjectViewTarget()
       setMarqueeRect(null)
       setLinkPoint(null)
       if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
       return
     }
-    if (dragFrame.current !== null) {
-      cancelAnimationFrame(dragFrame.current)
-      dragFrame.current = null
-      const point = dragPoint.current
-      if (draggedId && point) setNodes((current) => {
-        const group = dragCandidate.current?.group ?? []
-        return group.length > 1
-          ? current.map((node) => { const member = group.find((item) => item.id === node.id); return member ? { ...node, x: point.x + member.dx, y: point.y + member.dy, positionLocked: true } : node })
-          : current.map((node) => node.id === draggedId ? { ...node, x: point.x, y: point.y, positionLocked: true } : node)
-      })
+    if (dragFrame.current !== null) cancelAnimationFrame(dragFrame.current)
+    dragFrame.current = null
+    const finalDragPoint = dragPoint.current
+    // RAF owns only the transient preview. A completed drag must always commit
+    // its final world position, even when the last preview frame already ran.
+    if (wasDragging && draggedId && finalDragPoint) {
+      const group = dragCandidate.current?.group ?? []
+      // 网格吸附只收敛松手落点（拖动过程保持连续跟手）。
+      const anchorNode = nodes.find((node) => node.id === draggedId)
+      const settledPoint = gridSnapEnabled && anchorNode
+        ? snapNodePositionToGrid(anchorNode, finalDragPoint.x, finalDragPoint.y, camera.zoom)
+        : finalDragPoint
+      const placements = new Map((group.length > 1 ? group : [{ id: draggedId, dx: 0, dy: 0 }])
+        .map((member) => [member.id, { x: settledPoint.x + member.dx, y: settledPoint.y + member.dy }]))
+      setNodes((current) => current.map((node) => {
+        const placement = placements.get(node.id)
+        return placement ? { ...node, ...placement, positionLocked: true } : node
+      }))
+      for (const [id, placement] of placements) {
+        if (id.startsWith('workspace:')) onWorkspaceProjectionMove?.(id.slice('workspace:'.length), placement.x, placement.y)
+      }
     }
+    setDragPreviewPositions(null)
     if (!wasDragging && draggedId && doublePressCandidate.current === draggedId) {
       suppressClick.current = draggedId
       doublePressCandidate.current = null
@@ -607,6 +744,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ surfaceMode = 'projec
     else if (resizeCandidate.current || workspaceDrag.current) onPresentationInteractionChange?.(false)
     setDropGhost(null)
     setDropLight(null)
+    setAlignmentGuide(null)
     dragCandidate.current = null
     resizeCandidate.current = null
     workspaceDrag.current = null
@@ -675,7 +813,9 @@ export const ProjectCanvas = memo(function ProjectCanvas({ surfaceMode = 'projec
   ], 520), [linkPoint, spatialNodes, effectiveWorkspaceFrames])
 
   const spatialOverlays = <>
-      {lod !== 'full' && <div className="lod-badge">{nodes.length} 个节点 · {lod === 'overview' ? '总览聚合' : '视区降密度'}</div>}
+      {lod !== 'full' && <div className="lod-badge">{nodes.length} 个节点 · {lod === 'overview' ? '总览' : lod === 'aggregate' ? '聚合显示' : '简化显示'}</div>}
+    {surfaceMode === 'project' && onSurfaceElementsChange && <SurfaceComponentShelf projectId={projectId} surface="main" elements={surfaceElements} selectionIds={selectedIds} selectionBounds={componentSelectionBounds} viewportOrigin={surfaceViewportOrigin(camera)} portalTargets={portalTargets} onElementsChange={onSurfaceElementsChange}/>}
+    {surfaceMode === 'project' && onSurfaceElementsChange && <AgentSurfaceComposer surface="main" targetIds={selectedIds} previewing={componentProposalOps.length > 0} onPreview={previewComponentIntent} onKeep={keepComponentProposal} onRevert={() => setComponentProposalOps([])}/>}
     {dropGhost && <div className="lcos-drop-ghost" style={{ left: dropGhost.x, top: dropGhost.y }} aria-hidden="true">
       <span className="lcos-drop-ghost-stack"><i /><i /><i /></span>
       <strong>{dropGhost.count}</strong>
@@ -695,6 +835,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ surfaceMode = 'projec
         </div>
       </details>}
       {textSelection && onSetSelectionDisplayMode && <button type="button" className="selection-primary" aria-label={textSelectionExpanded ? '收起文字材料' : '直接阅读文字材料'} title="同一个文字对象只改变呈现，不创建新对象" onClick={(event) => { event.stopPropagation(); onSetSelectionDisplayMode(textSelectionExpanded ? 'compact' : 'standard') }}><span>{textSelectionExpanded ? '收起' : '直接阅读'}</span></button>}
+      {noteSelection && onToggleNoteLayout && <button type="button" className="selection-primary" aria-label={noteSelectionLayout === 'mindmap' ? '切回文本块' : '转为大纲导图'} title="同一份大纲文本，只切换呈现：文本块 ⇄ 思维导图" onClick={(event) => { event.stopPropagation(); onToggleNoteLayout(noteSelection.id, noteSelectionLayout === 'mindmap' ? 'text' : 'mindmap') }}><span>{noteSelectionLayout === 'mindmap' ? '切回文本' : '转为导图'}</span></button>}
       <button type="button" className="selection-primary lcos-agent-arrange-entry" aria-label="让智能体整理这些" title="按内容关系整理；智能体变化需要审查" onClick={(event) => { event.stopPropagation(); if (onReorganize) onReorganize(); else onArrangeSelection() }}><LayoutGrid size={15} /><span>整理这些</span></button>
       {surfaceMode === 'project' && <details className="lcos-selection-more" onPointerDown={(event) => event.stopPropagation()}>
         <summary aria-label="更多操作" title="更多操作"><Ellipsis size={15}/></summary>
@@ -717,7 +858,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ surfaceMode = 'projec
     {marqueeRect && (() => { const rect = canvasRef.current?.getBoundingClientRect(); return <div data-testid="selection-marquee" className="marquee" style={{ left: marqueeRect.left - (rect?.left ?? 0), top: marqueeRect.top - (rect?.top ?? 0), width: marqueeRect.width, height: marqueeRect.height }} /> })()}
   </>
 
-  return <SpatialCanvas ref={canvasRef} testId="canvas" tabIndex={-1} camera={camera} setCamera={setCamera} disabled={locked} ariaBusy={locked} locked={locked} nodeCount={nodes.length} edgeCount={edges.length} className={`canvas lod-${lod} zoom-band-${zoomBand} layout-mode-freeform ${selectedId ? 'has-focus' : ''} ${locked ? 'is-locked' : ''}`} worldClassName="canvas-world" worldTestId="canvas-world" style={{ '--canvas-zoom': String(camera.zoom) } as React.CSSProperties} onPointerDown={({ event }) => {
+  return <SpatialCanvas ref={canvasRef} testId="canvas" tabIndex={-1} camera={camera} setCamera={setCamera} disabled={locked} ariaBusy={locked} locked={locked} nodeCount={nodes.length} edgeCount={edges.length} className={`canvas lod-${lod} zoom-band-${zoomBand} layout-mode-freeform ${gridSnapEnabled ? 'grid-snap-enabled' : ''} ${selectedId ? 'has-focus' : ''} ${locked ? 'is-locked' : ''}`} worldClassName="canvas-world" worldTestId="canvas-world" style={{ '--canvas-zoom': String(camera.zoom), '--lcos-main-grid-size': `${MAIN_CANVAS_GRID_STEP * camera.zoom}px`, '--lcos-main-grid-x': `${camera.x % (MAIN_CANVAS_GRID_STEP * camera.zoom)}px`, '--lcos-main-grid-y': `${camera.y % (MAIN_CANVAS_GRID_STEP * camera.zoom)}px` } as React.CSSProperties} onPointerDown={({ event }) => {
     const target = event.target as HTMLElement
     // Workspace-level Semantic Drop fallback. Node-level Semantic Drop starts in
     // CanvasCard before ordinary node movement so a primary grab-handle drag cannot
@@ -827,7 +968,18 @@ export const ProjectCanvas = memo(function ProjectCanvas({ surfaceMode = 'projec
       if (dragging.current) {
         const pointer = { x: event.clientX, y: event.clientY }
         autoPanPointer.current = pointer
-        // Ordinary primary drag remains spatial movement. Semantic Drop triggers are intercepted before this path.
+        const directHit = onDirectProjectViewDrop ? externalProjectViewTargetAt(event.clientX, event.clientY) : null
+        setDirectProjectViewHover(directHit)
+        if (directHit) {
+          stopAutoPan()
+          setDropGhost({ x: event.clientX, y: event.clientY, count: candidate.group.length, label: `加入 ${directHit.target.label}` })
+          setDropLight({ hot: true, label: `加入 ${directHit.target.label}` })
+          setAlignmentGuide(null)
+          return
+        }
+        setDropGhost(null)
+        setDropLight(null)
+        // Primary drag is free-position movement until it enters an explicit external Surface target.
         scheduleAutoPan(pointer)
         const previousPointer = lastDragPointer.current
         if (previousPointer) {
@@ -838,7 +990,13 @@ export const ProjectCanvas = memo(function ProjectCanvas({ surfaceMode = 'projec
         }
         lastDragPointer.current = { x: event.clientX, y: event.clientY }
         const point = toWorld(event.clientX, event.clientY, rect)
-        dragPoint.current = { x: point.x - candidate.offsetX, y: point.y - candidate.offsetY }
+        const rawPoint = { x: point.x - candidate.offsetX, y: point.y - candidate.offsetY }
+        // 拖动过程连续跟手（Figma/mubu 惯例）：网格吸附只作用于松手落点，
+        // 避免拖动中“先卡住、靠近网格线再跳变”的迟滞观感。
+        dragPoint.current = rawPoint
+        const anchorNode = nodes.find((node) => node.id === candidate.id)
+        const nextGuide = anchorNode ? alignmentGuideFor(anchorNode, rawPoint.x, rawPoint.y, candidate.group.map((item) => item.id)) : null
+        setAlignmentGuide((current) => current?.x === nextGuide?.x && current?.y === nextGuide?.y ? current : nextGuide)
         scheduleDraggedNode()
       }
     }
@@ -861,10 +1019,42 @@ export const ProjectCanvas = memo(function ProjectCanvas({ surfaceMode = 'projec
     }
     if ((kind === 'uri' || kind === 'text') && onExternalTextDrop) onExternalTextDrop(id, point.x, point.y)
   }} overlays={spatialOverlays}>
+    {surfaceMode === 'project' && onSurfaceElementsChange && <SurfaceComponentLayer surface="main" elements={surfaceElements} zoom={camera.zoom} renderContext={{ nodes, edges, onSelectNode: onSelect, onOpenNode: onDoubleClick, onOpenPortal: onOpenPortalTarget }} onElementsChange={onSurfaceElementsChange}/>}
+    {surfaceMode === 'project' && <SurfaceComponentProposalLayer surface="main" elements={componentProposalElements} renderContext={{ nodes, edges }}/>}
     <SpatialNodeLayer className="lcos-arrange-structure-layer">
-      {spatialRegion && <div className="lcos-spatial-region" data-spatial-region={spatialRegion.id} style={{ left: spatialRegion.bounds.x, top: spatialRegion.bounds.y, width: spatialRegion.bounds.width, height: spatialRegion.bounds.height }}>
-        <div className="lcos-spatial-region-head"><span>围栏 · {spatialRegion.memberViewIds.length} 项</span><nav><button type="button" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onPromoteRegionToCollection?.() }}>转 Collection</button><button type="button" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onClearRegion?.() }}>×</button></nav></div>
-      </div>}
+      {alignmentGuide?.x !== undefined && <i className="lcos-alignment-guide axis-x" style={{ left: alignmentGuide.x }}/>} {/* x guide */}
+      {alignmentGuide?.y !== undefined && <i className="lcos-alignment-guide axis-y" style={{ top: alignmentGuide.y }}/>} {/* y guide */}
+      {spatialRegions.map((region) => {
+        const definition = resolveSurfaceComponent('fence')
+        const Renderer = definition.renderer
+        const element: SurfaceElement = {
+          id: `main-fence:${region.id}`,
+          projectId,
+          surface: 'main',
+          type: 'fence',
+          bounds: { x: region.bounds.x, y: region.bounds.y, w: region.bounds.width, h: region.bounds.height },
+          presentation: { zIndex: 1 },
+        }
+        return <SurfaceFrame
+          key={region.id}
+          element={element}
+          definition={definition}
+          zoom={camera.zoom}
+          selected={selectedRegionId === region.id}
+          onSelect={() => setSelectedRegionId(region.id)}
+          onBoundsCommit={(bounds) => {
+            const next = { x: bounds.x, y: bounds.y, width: bounds.w, height: bounds.h }
+            onRegionBoundsChange?.(region.id, next)
+            onRegionBoundsCommit?.(region.id, next)
+          }}
+          onPresentationChange={() => undefined}
+          onRemove={() => onClearRegion?.(region.id)}
+          showPin={false}
+        >
+          <Renderer element={element} selected={selectedRegionId === region.id} meta={`${region.memberViewIds.length} 项 · Presentation-only`}/>
+          <button type="button" className="lcos-main-fence-promote" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onPromoteRegionToCollection?.(region.id) }}>转 Collection</button>
+        </SurfaceFrame>
+      })}
       {effectiveWorkspaceFrames.map((frame) => <div key={frame.workspaceId} data-testid={`workspace-frame-${frame.workspaceId}`} data-workspace-frame={frame.workspaceId} data-member-count={frame.memberViewIds.length} className={`workspace-frame ${frame.active ? 'active' : ''} ${draggingWorkspaceId === frame.workspaceId ? 'dragging' : ''}`} style={{ left: frame.bounds.x, top: frame.bounds.y, width: frame.bounds.width, height: frame.bounds.height }}>
         <button data-testid={`workspace-frame-header-${frame.workspaceId}`} className="workspace-frame-header" type="button" onClick={(event) => { event.stopPropagation(); onWorkspaceActivate?.(frame.workspaceId) }} onPointerDown={(event) => {
           if (locked || event.button !== 0) return
@@ -902,7 +1092,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ surfaceMode = 'projec
       {selectionBounds && <div data-testid="selection-bounds" className="selection-bounds" style={{ left: selectionBounds.x - 10, top: selectionBounds.y - 10, width: selectionBounds.width + 20, height: selectionBounds.height + 20 }} />}
       {renderNodes.map((node) => {
         const collectionScopeId = node.entityKind === 'collection' ? (node.opensScopeId ?? (node.id.startsWith('scope:') ? node.id.slice('scope:'.length) : null)) : null
-        return <CanvasCard key={node.id} node={node} density={nodeDensity(node, lod)} zoom={camera.zoom} showDetails={camera.zoom > .2 && lod !== 'overview'} runId={runId} runStatus={runStatus} selected={selectedIds.includes(node.id)} multiSelected={selectedIds.length > 1 && selectedIds.includes(node.id)} pending={pendingId === node.id} reviewPending={pendingReviewIds.includes(node.id)} dragging={draggingId === node.id} dragSignal={draggingId === node.id ? dragSignal : undefined} resizing={resizingId === node.id} workspaceMember={Boolean(activeWorkspaceId && workspaceFrames.find((frame) => frame.workspaceId === activeWorkspaceId)?.memberViewIds.includes(node.id))} locatePulse={locatePulseId === node.id} attentionBucket={attentionBucketsByViewId[node.id]} collectionExpanded={Boolean(collectionScopeId && expandedCollectionScopeIds.includes(collectionScopeId))} collectionMembers={collectionMembersByNodeId[node.id] ?? (collectionScopeId ? collectionMembersByNodeId[`scope:${collectionScopeId}`] ?? [] : [])} collectionMotion={collectionMotionByNodeId.get(node.id)} onOpenContextLens={onOpenContextLens} onCollectionMemberSelect={onSelect} onLocate={onLocateNode} onDetails={onDetails} onPointerDown={(event) => {
+        return <CanvasCard key={node.id} node={node} density={nodeDensity(node, lod)} zoom={camera.zoom} showDetails={camera.zoom > .2 && lod !== 'overview'} performanceProxy={(lod === 'aggregate' || lod === 'overview') && !selectedIds.includes(node.id) && pendingId !== node.id} runId={runId} runStatus={runStatus} selected={selectedIds.includes(node.id)} multiSelected={selectedIds.length > 1 && selectedIds.includes(node.id)} pending={pendingId === node.id} reviewPending={pendingReviewIds.includes(node.id)} dragging={draggingId === node.id} dragSignal={draggingId === node.id ? dragSignal : undefined} resizing={resizingId === node.id} workspaceMember={Boolean(activeWorkspaceId && workspaceFrames.find((frame) => frame.workspaceId === activeWorkspaceId)?.memberViewIds.includes(node.id))} locatePulse={locatePulseId === node.id} attentionBucket={attentionBucketsByViewId[node.id]} collectionExpanded={Boolean(collectionScopeId && expandedCollectionScopeIds.includes(collectionScopeId))} collectionMembers={collectionMembersByNodeId[node.id] ?? (collectionScopeId ? collectionMembersByNodeId[`scope:${collectionScopeId}`] ?? [] : [])} collectionMotion={collectionMotionByNodeId.get(node.id)} onOpenContextLens={onOpenContextLens} onCollectionMemberSelect={onSelect} onLocate={onLocateNode} onDetails={onDetails} onPointerDown={(event) => {
         const semanticIds = selectedIds.includes(node.id) && selectedIds.length > 1 ? selectedIds : [node.id]
         if (beginCanvasSemanticDrop(semanticIds, event)) return
         if (event.button !== 0) return
@@ -926,7 +1116,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ surfaceMode = 'projec
         selectionCollapseCandidate.current = preserveMultiSelection ? node.id : null
         if (!preserveMultiSelection) onSelect(node.id, additive)
         const groupIds = selectedIds.includes(node.id) && selectedIds.length > 1 ? selectedIds : [node.id]
-        dragCandidate.current = { id: node.id, startX: event.clientX, startY: event.clientY, offsetX: (event.clientX - event.currentTarget.getBoundingClientRect().left) / camera.zoom, offsetY: (event.clientY - event.currentTarget.getBoundingClientRect().top) / camera.zoom, group: groupIds.map((id) => { const member = nodes.find((item) => item.id === id)!; return { id, dx: member.x - node.x, dy: member.y - node.y } }), originals: groupIds.map((id) => { const member = nodes.find((item) => item.id === id)!; return { id, x: member.x, y: member.y } }) }
+        dragCandidate.current = { id: node.id, startX: event.clientX, startY: event.clientY, offsetX: (event.clientX - event.currentTarget.getBoundingClientRect().left) / camera.zoom, offsetY: (event.clientY - event.currentTarget.getBoundingClientRect().top) / camera.zoom, group: groupIds.flatMap((id) => { const member = byId.get(id); return member ? [{ id, dx: member.x - node.x, dy: member.y - node.y }] : [] }), originals: groupIds.flatMap((id) => { const member = byId.get(id); return member ? [{ id, x: member.x, y: member.y }] : [] }) }
       }} onClick={() => {
         if (suppressClick.current === node.id) { suppressClick.current = null; return }
         if (collectionScopeId) onToggleCollection?.(collectionScopeId)
@@ -948,10 +1138,17 @@ function EdgePath({ edge, from, to, selected, focused, dimmed, onSelect, onCut, 
   const x1 = from.x + from.width, y1 = from.y + from.height / 2, x2 = to.x, y2 = to.y + to.height / 2
   const d = `M ${x1} ${y1} C ${x1 + 80} ${y1}, ${x2 - 80} ${y2}, ${x2} ${y2}`
   const mx = (x1 + x2) / 2, my = (y1 + y2) / 2
-  const select = (event: React.PointerEvent<SVGPathElement>) => { event.stopPropagation(); onSelect(edge.id) }
+  const select = (event: React.PointerEvent<SVGElement>) => { event.stopPropagation(); onSelect(edge.id) }
+  const relationLabel = edge.label?.trim()
+  const visibleLabel = relationLabel && relationLabel.length > 18 ? `${relationLabel.slice(0, 18)}…` : relationLabel
+  const labelWidth = visibleLabel ? Math.max(36, Math.min(128, visibleLabel.length * 7 + 18)) : 0
   return <>
     <path className="edge-hit" data-edge-id={edge.id} d={d} onPointerDown={select} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation() }} />
     <path className={`edge ${edge.kind} ${edge.active ? 'active' : ''} ${edge.scope ? `edge-scope-${edge.scope}` : ''} ${focused ? 'focused' : ''} ${selected ? 'selected' : ''} ${dimmed ? 'dimmed' : ''}`} data-edge-id={edge.id} data-edge-from={edge.from} data-edge-to={edge.to} d={d} onPointerDown={select} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation() }} />
+    {visibleLabel && !dimmed && <g className={`lcos-edge-label ${selected ? 'is-selected' : ''}`} transform={`translate(${mx} ${my})`} onPointerDown={select}>
+      <rect x={-labelWidth / 2} y={-10} width={labelWidth} height={20} rx={8}/>
+      <text textAnchor="middle" dominantBaseline="central">{visibleLabel}</text>
+    </g>}
     {edge.active && <circle className="edge-runner" r="2.4"><animateMotion dur="2.4s" repeatCount="indefinite" path={d} /></circle>}
     {selected && <g className="edge-controls" data-testid={`edge-controls-${edge.id}`}>
       <circle className="edge-control edge-terminal" data-testid={`edge-reconnect-from-${edge.id}`} cx={x1} cy={y1} r="7" onPointerDown={(event) => onReconnectStart('from', event)} />
@@ -975,28 +1172,31 @@ function ReconnectTemporaryEdge({ fixed, moving, endpoint }: { fixed: CanvasNode
   return <path className="edge temporary reconnecting" d={`M ${from.x} ${from.y} C ${from.x + 72} ${from.y}, ${to.x - 72} ${to.y}, ${to.x} ${to.y}`} />
 }
 
-function CanvasCard({ node, density, zoom, showDetails, runId, runStatus, selected, multiSelected, pending, reviewPending, dragging, dragSignal, resizing, workspaceMember, locatePulse, attentionBucket, collectionExpanded, collectionMembers, collectionMotion, onCollectionMemberSelect, onLocate, onOpenContextLens, onDetails, onPointerDown, onClick, onResizeStart, relationsEnabled, onLinkStart }: {
-  node: CanvasNode; density: NodeDisplayMode; zoom: number; showDetails: boolean; runId: string; runStatus: RunStatus | null; selected: boolean; multiSelected: boolean; pending: boolean; reviewPending: boolean; dragging: boolean; dragSignal?: { x: number; y: number }; resizing: boolean; workspaceMember: boolean; locatePulse: boolean; attentionBucket?: AttentionBucketV0; collectionExpanded: boolean; collectionMembers: readonly CanvasNode[]
+function CanvasCard({ node, density, zoom, showDetails, performanceProxy = false, runId, runStatus, selected, multiSelected, pending, reviewPending, dragging, dragSignal, resizing, workspaceMember, locatePulse, attentionBucket, collectionExpanded, collectionMembers, collectionMotion, onCollectionMemberSelect, onLocate, onOpenContextLens, onDetails, onPointerDown, onClick, onResizeStart, relationsEnabled, onLinkStart }: {
+  node: CanvasNode; density: NodeDisplayMode; zoom: number; showDetails: boolean; performanceProxy?: boolean; runId: string; runStatus: RunStatus | null; selected: boolean; multiSelected: boolean; pending: boolean; reviewPending: boolean; dragging: boolean; dragSignal?: { x: number; y: number }; resizing: boolean; workspaceMember: boolean; locatePulse: boolean; attentionBucket?: AttentionBucketV0; collectionExpanded: boolean; collectionMembers: readonly CanvasNode[]
   collectionMotion?: { phase: 'opening' | 'closing'; dx: number; dy: number }
   onCollectionMemberSelect: (id: string, additive?: boolean) => void; onLocate?: (id: string) => void; onOpenContextLens?: (node: CanvasNode, lens: 'space' | 'structure' | 'evolution') => void; onDetails: (id: string) => void; onPointerDown: (event: React.PointerEvent<HTMLDivElement>) => void; onClick: (additive?: boolean) => void; onResizeStart: (event: React.PointerEvent<HTMLButtonElement>) => void; relationsEnabled: boolean; onLinkStart: (event: React.PointerEvent<HTMLButtonElement>) => void
 }) {
   const visualFamily = nodeVisualFamily(node)
   const revisionStack = (node.revisionCount ?? 0) > 1
-  const signalState: LcosSignalState = node.error || node.runtimeState === 'failed'
+  const runtimeSignal: SpatialRuntimeSignal = node.error || node.runtimeState === 'failed'
     ? 'failed'
-    : reviewPending || pending || node.draft
-      ? 'pending'
-      : locatePulse
-        ? 'focus'
-        : node.runStatus === 'running' || (node.sourceRunId && runStatus === 'running')
-          ? 'working'
-          : 'stable'
+    : node.runStatus === 'running' || (node.sourceRunId && runStatus === 'running')
+      ? 'processing'
+      : 'idle'
+  const signal = resolveSpatialSignal({
+    selected: locatePulse,
+    runtime: runtimeSignal,
+    semantic: reviewPending ? 'waiting review' : pending || node.draft ? 'candidate draft' : undefined,
+  })
   return <div data-node-id={node.id} data-node-kind={node.kind} data-entity-kind={node.entityKind} data-node-visual-family={visualFamily} data-node-current={node.current || undefined} data-node-draft={node.draft || undefined} data-node-historical={node.historical || undefined} data-revision-count={node.revisionCount} data-result-group={node.resultGroupId} data-node-runtime={node.runtimeState} data-run-status={node.runStatus} data-artifact-id={node.artifactId} data-revision-id={node.revisionId} data-file-record-id={node.fileRecordId} data-current-revision={node.followsCurrentRevision || undefined} data-preview-status={node.previewStatus} data-view-of={node.viewOf} data-scope-id={node.scopeId} data-position-locked={node.positionLocked || undefined} data-context-only={node.contextOnly || undefined} data-attention-bucket={attentionBucket} data-collection-motion={collectionMotion?.phase} data-testid={`canvas-node-${node.id}`} role="button" tabIndex={0} aria-disabled={node.disabled || undefined} className={`canvas-node node-family-${node.kind} visual-family-${visualFamily} density-${density} ${node.kind} ${revisionStack ? 'revision-stack' : ''} ${selected ? 'selected' : ''} ${multiSelected ? 'multi-selected' : ''} ${pending ? 'pending' : ''} ${reviewPending ? 'review-pending' : ''} ${dragging ? 'dragging' : ''} ${resizing ? 'resizing' : ''} ${workspaceMember ? 'workspace-active-member' : ''} ${locatePulse ? 'locate-pulse' : ''} ${attentionBucket ? `attention-${attentionBucket}` : ''} ${collectionMotion ? `collection-${collectionMotion.phase}` : ''} ${node.error ? 'error' : ''} ${node.disabled ? 'disabled' : ''} ${node.positionLocked ? 'position-locked' : ''}`} style={{ left: node.x, top: node.y, width: node.width, height: node.height, '--node-ui-scale': String(1 / Math.max(.2, zoom)), '--canvas-zoom': String(zoom), '--lcos-drag-x': String(dragSignal?.x ?? 0), '--lcos-drag-y': String(dragSignal?.y ?? 0), '--lcos-collection-fold-x': `${collectionMotion?.dx ?? 0}px`, '--lcos-collection-fold-y': `${collectionMotion?.dy ?? 0}px` } as React.CSSProperties} onDragStart={(event) => event.preventDefault()} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation() }} onPointerDown={(event) => { if (!node.disabled) onPointerDown(event) }} onClick={(event) => { event.stopPropagation(); if (!node.disabled) onClick(additiveSelection(event)) }}>
     <span className="lcos-semantic-drop-handle" data-semantic-drop-handle aria-hidden="true" onClick={(event)=>event.stopPropagation()} title="Semantic Drop：拖到上下文或工作流（右键拖 / Alt+左拖）"><GripVertical size={11}/></span>
     {relationsEnabled && <><button data-testid={`anchor-in-${node.id}`} className="anchor anchor-in" aria-label={`连接到 ${node.title}`} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()} />
     <button data-testid={`anchor-out-${node.id}`} className="anchor anchor-out" aria-label={`从 ${node.title} 建立连接`} onPointerDown={onLinkStart} onClick={(event) => event.stopPropagation()} /></>}
     {selected && !multiSelected && <button data-testid={`resize-${node.id}`} className="resize-handle" aria-label={`调整 ${node.title} 大小`} title="拖动调整卡片大小" onPointerDown={onResizeStart} onClick={(event) => event.stopPropagation()} />}
-    <CanvasNodeVisual node={node} density={density} runId={runId} runStatus={runStatus} pending={pending} showDetails={showDetails} onDetails={() => onDetails(node.id)} onLocate={onLocate ? (target) => onLocate(target.id) : undefined} collectionExpanded={collectionExpanded} collectionMembers={collectionMembers} onCollectionMemberSelect={onCollectionMemberSelect} selected={selected} onOpenContextLens={onOpenContextLens} />
-    <span className="lcos-node-system-signal" aria-hidden="true"><LcosSignalGlyph state={signalState}/></span>
+    {performanceProxy
+      ? <div className={`lcos-overview-node-proxy proxy-${detectFileIdentity(node)}`} aria-label={displayNodeTitle(node)}><span>{detectFileIdentity(node).toUpperCase()}</span><strong>{displayNodeTitle(node)}</strong></div>
+      : <CanvasNodeVisual node={node} density={density} runId={runId} runStatus={runStatus} pending={pending} showDetails={showDetails} onDetails={() => onDetails(node.id)} onLocate={onLocate ? (target) => onLocate(target.id) : undefined} collectionExpanded={collectionExpanded} collectionMembers={collectionMembers} onCollectionMemberSelect={onCollectionMemberSelect} selected={selected} onOpenContextLens={onOpenContextLens} />}
+    {(selected || signal.glyph !== 'stable') && node.width >= 56 && <span className="lcos-node-system-signal" data-spatial-signal={signal.glyph} aria-hidden="true"><GlythAvatar state={selected && signal.glyph === 'stable' ? 'absorb' : signal.glyph} reason={selected ? 'selection' : runtimeSignal === 'processing' ? 'running' : 'review'}/></span>}
   </div>
 }

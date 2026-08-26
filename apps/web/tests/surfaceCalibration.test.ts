@@ -19,11 +19,11 @@ describe('v0.5.3 surface calibration guards', () => {
 
   it('keeps generated and decision materials while adding a real compact rail and pending zone', () => {
     const surface = readFileSync(new URL('../src/surface.css', import.meta.url), 'utf8')
-    const porcelain = readFileSync(new URL('../src/porcelain-studio.css', import.meta.url), 'utf8')
+    const foundation = readFileSync(new URL('../src/foundation.css', import.meta.url), 'utf8')
     expect(surface).toContain('.decision-material')
-    expect(porcelain).toContain('.compact-workspace-rail')
-    expect(porcelain).toContain('.pending-return-zone')
+    expect(surface).toContain('.compact-workspace-rail')
+    expect(surface).toContain('.pending-return-zone')
     expect(surface).toContain('.density-options')
-    expect(porcelain).toContain('.app-shell.porcelain-studio-v2 .resize-handle')
+    expect(foundation).toContain('.resize-handle')
   })
 })

@@ -7,7 +7,7 @@ export const CONTEXT_SURFACE_DROP_TARGET_ID = 'surface:context'
 export const WORKFLOW_GRAPH_SURFACE_DROP_TARGET_ID = 'surface:workflow-graph'
 export const WORKFLOW_SURFACE_DROP_TARGET_ID = 'surface:workflow'
 
-export type SemanticDropTrigger = 'secondary-pointer' | 'modifier-primary' | 'handle-primary'
+export type SemanticDropTrigger = 'secondary-pointer' | 'modifier-primary' | 'handle-primary' | 'direct-primary'
 
 interface DropTargetHit {
   id: string
@@ -62,24 +62,31 @@ export function beginSemanticDrop<T extends HTMLElement>(
   sourceIds: readonly string[],
   onDrop?: (targetViewId: string, sourceIds: readonly string[]) => void,
 ): boolean {
-  const trigger = semanticDropTriggerFromPointer(event)
+  const explicitTrigger = semanticDropTriggerFromPointer(event)
+  const trigger: SemanticDropTrigger | null = explicitTrigger ?? (event.button === 0 ? 'direct-primary' : null)
   if (!trigger || !onDrop || sourceIds.length === 0) return false
 
-  event.preventDefault()
-  event.stopPropagation()
+  const directPrimary = trigger === 'direct-primary'
+  if (!directPrimary) {
+    event.preventDefault()
+    event.stopPropagation()
+  }
 
   const pointerId = event.pointerId
   const sourceElement = event.currentTarget
   const startX = event.clientX
   const startY = event.clientY
   const buttonMask = expectedButtonsMask(trigger)
+  const sourceSurface = sourceElement.closest<HTMLElement>('[data-spatial-canvas="true"]')
   let moved = false
   let hovered: HTMLElement | null = null
   let ghost: HTMLDivElement | null = null
 
-  try { sourceElement.setPointerCapture(pointerId) } catch { /* browser may own capture */ }
-  sourceElement.classList.add('is-semantic-drop-source')
-  sourceElement.dataset.semanticDropTrigger = trigger
+  if (!directPrimary) {
+    try { sourceElement.setPointerCapture(pointerId) } catch { /* browser may own capture */ }
+    sourceElement.classList.add('is-semantic-drop-source')
+    sourceElement.dataset.semanticDropTrigger = trigger
+  }
 
   const guardMenu = (menuEvent: Event) => menuEvent.preventDefault()
   if (trigger === 'secondary-pointer') window.addEventListener('contextmenu', guardMenu, true)
@@ -133,15 +140,29 @@ export function beginSemanticDrop<T extends HTMLElement>(
     }
     if (!moved && Math.hypot(pointerEvent.clientX - startX, pointerEvent.clientY - startY) > 4) moved = true
     if (!moved) return
+    const rawHit = targetAt(pointerEvent.clientX, pointerEvent.clientY)
+    const hit = rawHit && rawHit.element !== sourceSurface ? rawHit : null
+    if (directPrimary && !hit) {
+      clearHover()
+      ghost?.remove()
+      ghost = null
+      return
+    }
     pointerEvent.preventDefault()
+    if (directPrimary) {
+      sourceElement.classList.add('is-semantic-drop-source')
+      sourceElement.dataset.semanticDropTrigger = trigger
+    }
     const nextGhost = ensureGhost()
     nextGhost.style.left = `${pointerEvent.clientX}px`
     nextGhost.style.top = `${pointerEvent.clientY}px`
-    updateHover(targetAt(pointerEvent.clientX, pointerEvent.clientY))
+    updateHover(hit)
   }
   const finish = (pointerEvent: PointerEvent) => {
     if (pointerEvent.pointerId !== pointerId) return
-    const hit = moved ? targetAt(pointerEvent.clientX, pointerEvent.clientY) : null
+    const rawHit = moved ? targetAt(pointerEvent.clientX, pointerEvent.clientY) : null
+    const hit = rawHit && rawHit.element !== sourceSurface ? rawHit : null
+    if (hit && directPrimary) pointerEvent.preventDefault()
     cleanup()
     if (hit) onDrop(hit.id, sourceIds)
   }
@@ -159,5 +180,5 @@ export function beginSemanticDrop<T extends HTMLElement>(
   window.addEventListener('pointerup', finish, true)
   window.addEventListener('pointercancel', cancel, true)
   window.addEventListener('keydown', cancelWithEscape, true)
-  return true
+  return !directPrimary
 }

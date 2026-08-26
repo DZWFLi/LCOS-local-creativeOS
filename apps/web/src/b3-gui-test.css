@@ -5,7 +5,7 @@
   position: absolute;
   left: 50%;
   top: 14px;
-  z-index: 42;
+  z-index: var(--lcos-z-overlay-ui-raised); /* z-tier: overlay-ui（原 z42，值保序） */
   transform: translateX(-50%);
   display: flex;
   gap: 2px;
@@ -41,7 +41,7 @@
   transition: left 135ms cubic-bezier(.2,.8,.2,1), top 135ms cubic-bezier(.2,.8,.2,1), transform 120ms ease, box-shadow 120ms ease;
 }
 .canvas.layout-mode-grid .lcos-arrange-node-layer [data-node-id].dragging {
-  z-index: 70;
+  z-index: var(--lcos-z-overlay-ui-top); /* z-tier: overlay-ui（原 z70，归 overlay-ui-top 桶，见 foundation.css「原 z70-z80」） */
   transform: scale(1.025);
   filter: drop-shadow(0 12px 24px rgba(43, 38, 74, .14));
 }
@@ -49,7 +49,7 @@
 /* Region / Fence --------------------------------------------------------- */
 .lcos-spatial-region {
   position: absolute;
-  z-index: 1;
+  z-index: var(--lcos-z-content-inlay); /* z-tier: canvas-content（原 z1，值保序；region 归 canvas-content 桶，与 interaction-system.css 的 .lcos-spatial-region 对齐） */
   pointer-events: none;
   border: 1px dashed color-mix(in srgb, var(--accent, #7776ff) 44%, transparent);
   border-radius: 22px;
@@ -94,7 +94,7 @@
   position: absolute;
   right: 18px;
   bottom: 76px;
-  z-index: 50;
+  z-index: var(--lcos-z-overlay-ui-raised); /* z-tier: overlay-ui（原 z50，inspector 面板归 raised 桶，见 foundation.css「composer、inspector 面板（原 z42/z50）」） */
   width: min(300px, calc(100% - 36px));
   display: grid;
   gap: 9px;

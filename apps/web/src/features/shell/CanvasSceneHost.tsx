@@ -184,6 +184,9 @@ export function CanvasSceneHost(props: CanvasSceneHostProps) {
 
   const title = capabilityKind === 'arrange' ? '主画布' : capabilityKind === 'context' ? '上下文' : '工作流'
   const agentContextLabel = `${title} · ${props.projection.selectedIds?.length ?? props.canvas.selectedIds?.length ?? 0} 项选择`
+  // B-2 互斥：画布选中集（arrange 画布 + 投影视图并集）。
+  // 同一节点同一时刻只显示一个浮层：选中态由 selection-toolbar 负责，详情 Popover 让位。
+  const selectedNodeIds = new Set([...(props.canvas.selectedIds ?? []), ...(props.projection.selectedIds ?? [])])
   const contextSeed = '整理最近项目变化、Agent/Chat 对话与材料，提出值得沉淀到 Context 的内容。只做提案，不自动修改项目结构。'
   const workflowSeed = '回看最近项目工作、Agent/Chat 对话和修改记录，提出已经重复出现、值得保存为 Workflow/Skill 的方法。只做提案，不自动固化流程。'
 
@@ -214,7 +217,8 @@ export function CanvasSceneHost(props: CanvasSceneHostProps) {
     {idleHintVisible && props.idleHint && <ProjectResumeHint eyebrow="刚才这段" title={props.idleHint.title} subtitle={props.idleHint.subtitle} onDismiss={() => setIdleEpisodeHintShown(true)}/>}
     {contextHintVisible && capabilityKind === 'context' && contextItems.length > 0 && <SurfaceDepositHint kind="context" items={contextItems} reflection={contextEvaluatorReason ?? props.depositHints?.contextReflection} onOrganize={() => { setContextHintVisible(false); props.depositHints?.onOrganize('context'); setAgentNode({ x: 180, y: 120, seedPrompt: contextSeed, contextLabel: `上下文 · ${props.projection.selectedIds?.length ?? 0} 项选择` }) }} onDismiss={() => setContextHintVisible(false)}/>}
     {workflowHintVisible && capabilityKind === 'workflow' && workflowItems.length > 0 && <SurfaceDepositHint kind="workflow" items={workflowItems} reflection={workflowEvaluatorReason ?? props.depositHints?.workflowReflection} onOrganize={() => { setWorkflowHintVisible(false); props.depositHints?.onOrganize('workflow'); setAgentNode({ x: 180, y: 120, seedPrompt: workflowSeed, contextLabel: `工作流 · ${props.projection.selectedIds?.length ?? 0} 项选择` }) }} onDismiss={() => setWorkflowHintVisible(false)}/>}
-    {props.nodeInfo && <NodeInfoPopover {...props.nodeInfo}/>}
+    {/* B-2：节点已被选中时 selection-toolbar 正在显示，详情 Popover 与其互斥（同节点不叠两个浮层）。 */}
+    {props.nodeInfo && !selectedNodeIds.has(props.nodeInfo.node.id) && <NodeInfoPopover {...props.nodeInfo}/>}
     {props.layoutPreview && <div className="layout-preview-banner lcos-layout-preview"><span>预览布局</span><button onClick={props.layoutPreview.onApply}>应用</button><button onClick={props.layoutPreview.onCancel}>取消</button></div>}
   </section>
 }

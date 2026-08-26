@@ -3,8 +3,9 @@ import { GripVertical } from 'lucide-react'
 import type { CanvasNode, NodeDisplayMode } from '../../model'
 import { CanvasNodeVisual, detectFileIdentity, displayNodeTitle } from '../canvas/CanvasNodeVisual'
 import { beginSemanticDrop } from '../spatial/semanticDrop'
-import { LcosSignalGlyph, type LcosSignalState } from '../design/DotGlyph'
 import { ArchiveGlyph, AudioGlyph, BenchGlyph, CollectionGlyph, ContextGlyph, DocumentGlyph, ImageGlyph, LinkGlyph, NoteGlyph, RunGlyph, SessionGlyph, VideoGlyph, WorkflowGlyph, WorkGlyph } from '../design/LcosGlyphs'
+import { GlythAvatar } from '../spatial/visual/CanvasSprite'
+import { resolveSpatialSignal, type SpatialRuntimeSignal } from '../spatial/visual/spatialSignal'
 import { nodeRole } from './surfaceModel'
 import type { SurfaceAttentionBucket } from './surfaceContracts'
 
@@ -31,12 +32,15 @@ interface Props {
   node: CanvasNode
   selected: boolean
   compact?: boolean
+  performanceProxy?: boolean
   /** Tiny relationship maps can still request a pure signal, but normal surfaces must reuse the material face. */
   glyph?: boolean
   dim?: boolean
   attentionBucket?: SurfaceAttentionBucket
   /** Surface-specific usage line. Identity/title/material stay canonical. */
   usageHint?: string
+  /** Presentation-only Region hint. It never changes the underlying Entity. */
+  spatialSemantic?: string
   onSelect: (id: string, additive?: boolean) => void
   onDoubleClick: (id: string) => void
   dropIds?: readonly string[]
@@ -47,25 +51,28 @@ export function SurfaceObject({
   node,
   selected,
   compact = false,
+  performanceProxy = false,
   glyph = false,
   dim = false,
   attentionBucket,
   usageHint,
+  spatialSemantic,
   onSelect,
   onDoubleClick,
   dropIds,
   onDirectProjectViewDrop,
 }: Props) {
   const role = nodeRole(node)
-  const signalState: LcosSignalState = node.error || node.runtimeState === 'failed'
+  const runtimeSignal: SpatialRuntimeSignal = node.error || node.runtimeState === 'failed' || node.runStatus === 'failed'
     ? 'failed'
-    : node.draft
-      ? 'pending'
-      : node.runStatus === 'running'
-        ? 'working'
-        : selected
-          ? 'focus'
-          : 'stable'
+    : node.runStatus === 'running'
+      ? 'processing'
+      : 'idle'
+  const signal = resolveSpatialSignal({
+    selected,
+    runtime: runtimeSignal,
+    semantic: [spatialSemantic, node.draft ? 'draft' : ''].filter(Boolean).join(' · '),
+  })
   const semanticDropIds = dropIds?.length ? dropIds : [node.id]
   const onPointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
     beginSemanticDrop(event, semanticDropIds, onDirectProjectViewDrop)
@@ -100,17 +107,19 @@ export function SurfaceObject({
     onDoubleClick={() => onDoubleClick(node.id)}
   >
     <span className="lcos-semantic-drop-handle" data-semantic-drop-handle aria-hidden="true" onClick={(event)=>event.stopPropagation()} title="Semantic Drop：拖到上下文或工作流（右键拖 / Alt+左拖）"><GripVertical size={11}/></span>
-    <CanvasNodeVisual
-      node={node}
-      density={density}
-      runId=""
-      runStatus={node.runStatus ?? null}
-      pending={Boolean(node.draft)}
-      onDetails={() => onDoubleClick(node.id)}
-      showDetails={false}
-      showControls={false}
-    />
+    {performanceProxy
+      ? <div className={`lcos-overview-node-proxy proxy-${detectFileIdentity(node)}`} aria-label={displayNodeTitle(node)}><span>{detectFileIdentity(node).toUpperCase()}</span><strong>{displayNodeTitle(node)}</strong></div>
+      : <CanvasNodeVisual
+          node={node}
+          density={density}
+          runId=""
+          runStatus={node.runStatus ?? null}
+          pending={Boolean(node.draft)}
+          onDetails={() => onDoubleClick(node.id)}
+          showDetails={false}
+          showControls={false}
+        />}
     {usageHint && <span className="lcos-surface-usage-hint">{usageHint}</span>}
-    <span className="lcos-surface-system-signal" aria-hidden="true"><LcosSignalGlyph state={signalState}/></span>
+    {(selected || signal.glyph !== 'stable') && <span className="lcos-surface-system-signal" data-spatial-signal={signal.glyph} aria-hidden="true"><GlythAvatar state={selected && signal.glyph === 'stable' ? 'absorb' : signal.glyph} reason={selected ? 'selection' : runtimeSignal === 'processing' ? 'running' : 'review'}/></span>}
   </button>
 }

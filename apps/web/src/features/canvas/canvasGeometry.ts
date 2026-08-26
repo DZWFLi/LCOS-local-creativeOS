@@ -170,7 +170,7 @@ export function cameraSafeViewportBounds(camera: Camera, viewportWidth: number, 
   }
 }
 
-export function nodeDensity(node: CanvasNode, lod: 'full' | 'simplified' | 'overview'): NodeDisplayMode {
+export function nodeDensity(node: CanvasNode, lod: 'full' | 'simplified' | 'aggregate' | 'overview'): NodeDisplayMode {
   if (lod !== 'full') return 'compact'
   return node.displayMode ?? inferLegacyDisplayMode(node)
 }

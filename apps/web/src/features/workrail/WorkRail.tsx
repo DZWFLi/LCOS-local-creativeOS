@@ -16,6 +16,9 @@ import {
 import type { ActiveRun, CanvasNode, Workspace } from '../../model'
 import { runStatusLabel } from '../../model'
 import { deriveWorkRailMode, isRunBusy, type WorkRailMode } from '../../state/workRailMode'
+import { ToolResultCard, type ToolResultSnapshot } from '../workflow/ToolResultCard'
+import { RunOutlinePanel } from '../workflow/RunOutlinePanel'
+import { buildRunOutline, type RunOutlineItem } from '../workflow/RunOutlineProvider'
 import { PreviewSurface } from './PreviewSurface'
 
 interface Props {
@@ -86,6 +89,9 @@ export function WorkRail(props: Props) {
 
   if (props.collapsed) return null
 
+  // Run 过程大纲投影（第一梯队 ④）：纯只读；Run 尚未与步骤链关联，steps 传空数组。
+  const runOutline: readonly RunOutlineItem[] = props.activeRun ? buildRunOutline(props.activeRun, [], props.runEvents) : []
+
 
   return <aside className="work-rail" data-testid="work-rail" data-mode={mode} style={{ width: props.width, '--lcos-runtime-rail-width': `${props.width}px` } as CSSProperties} onContextMenu={(event) => event.preventDefault()}>
     <WorkRailHeader mode={mode} activeRun={props.activeRun} contextLabel={props.contextLabel} contextCount={props.contextCount} contextScope={props.contextScope} onContextScope={props.onContextScope} onCollapse={props.onCollapse} />
@@ -96,9 +102,9 @@ export function WorkRail(props: Props) {
         : mode === 'review' && props.activeRun && primary
           ? <ReviewState node={primary} run={props.activeRun} onAccept={props.onAccept} onReject={props.onReject} onRetry={props.onRetry} onContinueModify={props.onContinueModify} />
           : mode === 'run' && props.activeRun
-            ? <RunState run={props.activeRun} nodes={props.nodes} onRetry={props.onRetry} onSync={props.onSyncRun} onCancel={props.onCancelRun} onRecover={props.onRecoverRun} recovering={props.runtimeRecovering} />
+            ? <RunState run={props.activeRun} nodes={props.nodes} outline={runOutline} onRetry={props.onRetry} onSync={props.onSyncRun} onCancel={props.onCancelRun} onRecover={props.onRecoverRun} recovering={props.runtimeRecovering} />
             : mode === 'completed' && props.activeRun
-              ? <CompletedState run={props.activeRun} nodes={props.nodes} onUpgradeWithFeedback={props.onUpgradeWithFeedback} />
+              ? <CompletedState run={props.activeRun} nodes={props.nodes} outline={runOutline} onUpgradeWithFeedback={props.onUpgradeWithFeedback} />
               : <RailIdleState contextLabel={props.contextLabel} contextCount={props.contextCount} />}
       {props.activeRun && <RunActivity events={props.runEvents} error={props.runEventsError} />}
     </div>
@@ -142,6 +148,18 @@ function humanRunListStatus(status: string): string {
   return status
 }
 
+/** 0.5 波轻接线：把现有 Run 数据映射为工具结果卡快照（kind='run'）。 */
+function runToolResultSnapshot(run: ActiveRun): ToolResultSnapshot {
+  return {
+    toolCallId: run.id,
+    kind: 'run',
+    status: run.status === 'failed' ? 'failed' : run.status === 'completed' ? 'done' : ['queued', 'cancelled'].includes(run.status) ? 'pending' : 'running',
+    command: run.command,
+    output: run.resultSummary ?? run.providerError,
+    isStreaming: run.status === 'running',
+  }
+}
+
 function WorkRailHeader({ mode, activeRun, contextLabel, contextCount, contextScope, onContextScope, onCollapse }: {
   mode: WorkRailMode
   activeRun: ActiveRun | null
@@ -174,7 +192,7 @@ function RailIdleState({ contextLabel, contextCount }: { contextLabel: string; c
   </div>
 }
 
-function RunState({ run, nodes, onRetry, onSync, onCancel, onRecover, recovering }: { run: ActiveRun; nodes: CanvasNode[]; onRetry: () => void; onSync: () => void; onCancel: () => void; onRecover: () => void; recovering: boolean }) {
+function RunState({ run, nodes, outline, onRetry, onSync, onCancel, onRecover, recovering }: { run: ActiveRun; nodes: CanvasNode[]; outline: readonly RunOutlineItem[]; onRetry: () => void; onSync: () => void; onCancel: () => void; onRecover: () => void; recovering: boolean }) {
   const targets = run.targetIds.map((id) => nodes.find((node) => node.id === id)).filter((node): node is CanvasNode => Boolean(node))
   const stages: ActiveRun['status'][] = run.status === 'cancelled'
     ? ['queued', 'running', 'cancelled']
@@ -182,6 +200,8 @@ function RunState({ run, nodes, onRetry, onSync, onCancel, onRecover, recovering
   return <div className="rail-section run-state" data-testid="rail-run">
     <div className={`run-hero status-${run.status}`}><span><Play size={16} fill="currentColor" /></span><div><small>本地 Agent 任务</small><h3>{runStatusLabel[run.status]}</h3><p>{run.command}</p></div></div>
     {run.proposalSummary && <p className="run-proposal-summary">{run.proposalSummary}</p>}
+    <RunOutlinePanel status={run.status} items={outline} />
+    <ToolResultCard snapshot={runToolResultSnapshot(run)} />
     <ol className="run-stages">{stages.map((status, index) => <li className={status === run.status ? 'active' : ''} key={status}><span>{index + 1}</span>{runStatusLabel[status]}</li>)}</ol>
     <section className="run-targets"><h4>{targets.length ? '将修改的内容' : '参考范围'}</h4>{targets.length ? targets.map((node) => <b key={node.id}>{node.title}</b>) : <p>{run.contextIds.length} 项上下文，无直接覆盖目标。</p>}</section>
     <section className="changed-files"><h4>文件变化</h4>{run.changedFiles.length ? run.changedFiles.map((file) => <b key={file}>{file}</b>) : <p>Agent 返回后会显示文件变化。</p>}</section>
@@ -225,7 +245,7 @@ function ReviewState({ node, run, onAccept, onReject, onRetry, onContinueModify 
   </div>
 }
 
-function CompletedState({ run, nodes, onUpgradeWithFeedback }: { run: ActiveRun; nodes: CanvasNode[]; onUpgradeWithFeedback: () => void }) {
+function CompletedState({ run, nodes, outline, onUpgradeWithFeedback }: { run: ActiveRun; nodes: CanvasNode[]; outline: readonly RunOutlineItem[]; onUpgradeWithFeedback: () => void }) {
   const current = run.resultNodeId
     ? nodes.find((node) => node.id === run.resultNodeId) ?? null
     : run.resultArtifactId
@@ -233,6 +253,8 @@ function CompletedState({ run, nodes, onUpgradeWithFeedback }: { run: ActiveRun;
       : run.pendingArtifactId ? nodes.find((node) => node.id === run.pendingArtifactId) ?? null : null
   return <div className="rail-section completed-state" data-testid="rail-completed">
     <div className="completed-hero"><Check size={19} /><div><small>Agent 任务</small><h3>{run.resultSummary ? '分析完成' : '结果已归位'}</h3><p>{run.resultSummary ?? `${current?.title ?? run.changedFiles[0] ?? '本次结果'} 已写入项目过程与版本记录。`}</p></div></div>
+    <RunOutlinePanel status={run.status} items={outline} />
+    <ToolResultCard expanded snapshot={runToolResultSnapshot(run)} />
     <section className="review-summary"><h4>接下来</h4><ul><li>继续在节点下方输入下一轮要求</li><li>在 Canvas 中查看任务与版本来源</li><li>需要回看细节时，从对应对话记录或来源信息进入</li></ul></section>
     {current?.artifactId && current.revisionId && <button className="rail-secondary pressable" data-testid="upgrade-agent-result" onClick={onUpgradeWithFeedback}>基于反馈生成下一版</button>}
   </div>

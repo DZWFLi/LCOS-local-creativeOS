@@ -38,8 +38,8 @@ describe('GUI-5 Reorganize contract', () => {
     expect(panel).toContain('buildSafeReorganizePositions')
     expect(panel).toContain('positionPatch: Object.fromEntries')
     expect(panel).toContain("onLivePositions?.(positionPlan, 'apply')")
-    expect(app).toContain('onLivePositions={(positions)')
-    expect(canvas).toContain('transition')
+    expect(app).toContain('onLivePositions={(positions, phase)')
+    expect(app).toContain("setReorganizePendingIds(phase === 'apply'")
   })
 
   it('review closes through real whole-ChangeSet accept / safe rollback', () => {

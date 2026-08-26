@@ -122,17 +122,21 @@ export function WorkflowGraphSurface(props: Props) {
     const item=allPlacements.find((placement)=>placement.id===id)
     if(!item)return
     event.stopPropagation()
-    drag.current=beginSpatialNodeDrag(event.pointerId,id,{x:event.clientX,y:event.clientY},{x:item.x,y:item.y})
+    drag.current=beginSpatialNodeDrag(event.pointerId,id,{x:event.clientX,y:event.clientY},{x:item.x,y:item.y},camera.zoom)
     setDraggingId(id)
     try{event.currentTarget.setPointerCapture(event.pointerId)}catch{/* browser owns capture */}
   }
   const moveDrag=(event:ReactPointerEvent<HTMLElement>)=>{
     const session=drag.current
     if(session.kind!=='node-drag')return
-    const next=advanceSpatialNodeDrag(session,{x:event.clientX,y:event.clientY},camera.zoom)
+    const next=advanceSpatialNodeDrag(session,{x:event.clientX,y:event.clientY})
     if(next)setDraftPositions((current)=>({...current,[session.id]:next}))
   }
-  const endDrag=()=>{drag.current=endSpatialPointer();setDraggingId(null)}
+  const endDrag=(event?:ReactPointerEvent<HTMLElement>)=>{
+    const session=drag.current
+    if(event?.defaultPrevented&&session.kind==='node-drag')setDraftPositions((current)=>({...current,[session.id]:session.origin}))
+    drag.current=endSpatialPointer();setDraggingId(null)
+  }
 
   const empty=!workflows.length?<div className="lcos-workflow-graph-empty"><Network size={22}/><strong>还没有 Workflow</strong><span>把项目对象直接拖到下方「工作流」，一次 Drop 就会生成一个 Workflow。</span></div>:undefined
   return <section className="lcos-dedicated-surface lcos-workflow-graph-surface" data-testid="surface-workflow-graph">

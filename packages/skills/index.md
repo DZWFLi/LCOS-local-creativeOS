@@ -12,6 +12,7 @@
 | `local-creative-os-backend-flow` | dev-backend | ≤2K | LCOS 自身 Core/Runtime/Desktop/Integration 维护与排障 | 已托管 |
 | `local-creative-os-frontend-loop` | dev-frontend | ≤2K | LCOS 自身 GUI/交互/浏览器验收 | 已托管 |
 | `workbuddy-orchestrator` | orchestrator | ≤2K | 明确要求派 WorkBuddy / AI Bridge 执行 | 已托管 |
+| `lcos-workspace-steward` | agent | ≤2K | 经营三张 Surface 与 Web Workbench 的可撤销空间意图 | 已托管 |
 
 另有：`opendesign/design-systems/lcos-product/SKILL.md`。它是 PASS8 的 Design System Skill，**不属于**上述 canonical runtime managed skills，不进入 `managed-skills.json`。
 

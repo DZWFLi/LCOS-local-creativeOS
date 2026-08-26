@@ -4,6 +4,12 @@ import { compileContextPromptV1 } from '../src/context-prompt-serializer.js'
 import { contextPromptFixture } from './context-prompt-fixture.js'
 
 describe('ContextPromptSerializerV1 determinism', () => {
+  it('compiles legacy schema v0 manifests that only persisted the project id', () => {
+    const manifest = { project: { id: 'project-legacy' }, lockedElements: ['keep'] }
+    const compiled = compileContextPromptV1({ manifest, userTask: 'Analyze', outputIntent: 'analyze' })
+    expect(compiled.stablePrefix).toContain('project-name: project-legacy')
+  })
+
   it('reproduces byte-identical stable prefixes and hashes across repeated reload-style compilations', () => {
     const input = {
       manifest: contextPromptFixture(),

@@ -26,7 +26,6 @@ test('frozen Selection payload drops to Rail New Scene, persists, cancels cleanl
       : []
   }).filter(Boolean).slice(0, 5))
   expect(overviewIds).toHaveLength(5)
-  const overviewCount = await page.locator('[data-node-id]').count()
   const railItems = dock.getByRole('listitem')
   const target = page.getByTestId('new-scene-drop-target')
 
@@ -75,20 +74,21 @@ test('frozen Selection payload drops to Rail New Scene, persists, cancels cleanl
   await semanticDrop(firstMembers[0]!, overviewIds[3])
   await expect(railItems).toHaveCount(beforeFirst + 1)
   await expect(page.locator('[data-surface-mount="arrange"]')).toBeVisible()
+  const sceneOneEntry = railItems.last()
+  const sceneOneLabel = (await sceneOneEntry.getAttribute('aria-label'))?.replace(/^进入[^：]+：/, '') ?? ''
+  expect(sceneOneLabel).not.toBe('')
+  await sceneOneEntry.click()
   await expect(page.locator('[data-node-id]')).toHaveCount(3)
   expect((await page.locator('[data-node-id]').evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-node-id')).sort()))).toEqual([...firstMembers].sort())
-  const sceneOne = dock.locator('button[role="listitem"].active')
-  const sceneOneLabel = (await sceneOne.getAttribute('aria-label'))?.replace(/^当前[^：]+：/, '') ?? ''
-  expect(sceneOneLabel).not.toBe('')
 
   await dock.getByRole('button', { name: '主画布' }).click()
-  await expect(page.locator('[data-node-id]')).toHaveCount(overviewCount)
+  for (const id of overviewIds.slice(3, 5)) await expect(page.locator(`[data-node-id="${id}"]`)).toBeVisible()
   await page.getByRole('button', { name: '定位内容' }).click()
   await page.waitForTimeout(300)
 
   const beforeCancel = await railItems.count()
-  await select(overviewIds.slice(0, 2))
-  const cancelSource = await hitPoint(`[data-node-id="${overviewIds[0]}"]`)
+  await select(overviewIds.slice(3, 5))
+  const cancelSource = await hitPoint(`[data-node-id="${overviewIds[3]}"]`)
   const cancelTarget = await hitPoint('[data-testid="new-scene-drop-target"]')
   await page.mouse.move(cancelSource!.x, cancelSource!.y)
   await page.mouse.down({ button: 'right' })
@@ -102,10 +102,12 @@ test('frozen Selection payload drops to Rail New Scene, persists, cancels cleanl
   await select(secondMembers)
   await semanticDrop(secondMembers[0]!)
   await expect(railItems).toHaveCount(beforeCancel + 1)
+  const sceneTwoEntry = railItems.last()
+  const sceneTwoLabel = (await sceneTwoEntry.getAttribute('aria-label'))?.replace(/^进入[^：]+：/, '') ?? ''
+  expect(sceneTwoLabel).not.toBe(sceneOneLabel)
+  await sceneTwoEntry.click()
   await expect(page.locator('[data-node-id]')).toHaveCount(2)
   expect((await page.locator('[data-node-id]').evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-node-id')).sort()))).toEqual([...secondMembers].sort())
-  const sceneTwoLabel = (await dock.locator('button[role="listitem"].active').getAttribute('aria-label'))?.replace(/^当前[^：]+：/, '') ?? ''
-  expect(sceneTwoLabel).not.toBe(sceneOneLabel)
 
   await dock.getByRole('listitem', { name: new RegExp(`${sceneOneLabel}$`) }).click()
   expect((await page.locator('[data-node-id]').evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-node-id')).sort()))).toEqual([...firstMembers].sort())

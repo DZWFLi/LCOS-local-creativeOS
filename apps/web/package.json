@@ -10,7 +10,8 @@
     "preview": "vite preview --host 127.0.0.1",
     "typecheck": "tsc -p tsconfig.json --noEmit --pretty false",
     "test": "vitest run apps/web/tests",
-    "smoke": "node ../../scripts/smoke.mjs"
+    "smoke": "node ../../scripts/smoke.mjs",
+    "lint:css": "stylelint src/**/*.css"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
@@ -25,6 +26,7 @@
     "elkjs": "^0.12.0",
     "lucide-react": "^1.24.0",
     "motion": "^12.43.0",
+    "pdfjs-dist": "5.4.296",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-pdf": "^10.4.1",
@@ -37,6 +39,7 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.3",
     "oxlint": "^1.71.0",
+    "stylelint": "^17.14.1",
     "typescript": "~6.0.2",
     "vite": "^8.1.1",
     "vitest": "^4.1.10"

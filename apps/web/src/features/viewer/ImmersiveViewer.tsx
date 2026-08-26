@@ -30,7 +30,7 @@ export function ImmersiveViewer({ node, projectId, onClose }: Props) {
     disablePointerDismissal
   >
     <Drawer.Portal>
-      <Drawer.Viewport className="lcos-viewer-drawer-viewport">
+      <Drawer.Viewport className={`lcos-viewer-drawer-viewport viewer-viewport-${kind}`}>
         <Drawer.Popup className={`lcos-viewer-drawer-popup viewer-${kind}`}>
           <Drawer.Content className="lcos-viewer-drawer-content">
             <div className="lcos-viewer-drawer-grip" aria-hidden="true"><GripVertical size={14}/></div>

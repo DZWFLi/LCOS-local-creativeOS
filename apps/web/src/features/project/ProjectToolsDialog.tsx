@@ -13,6 +13,12 @@ interface SearchResult {
   readonly sourceIds?: readonly string[]
   readonly artifactId?: string
   readonly snippet?: string
+  /** 块级锚点（如 'section:风险' / 'pdf:p3'），来自 SearchHitV0.chunkAnchor；省略 = 文档级命中。 */
+  readonly chunkAnchor?: string
+  /** 块序号（0-based，标题块为 0），来自 SearchHitV0.chunkIndex。 */
+  readonly chunkIndex?: number
+  /** 该实体的总分块数（含标题块），来自 SearchHitV0.chunkCount。 */
+  readonly chunkCount?: number
 }
 
 interface Props {
@@ -151,6 +157,11 @@ export function ProjectToolsDialog(props: Props) {
           ...(hit.viewId ? { sourceIds: [hit.viewId] } : {}),
           ...(hit.entityType === 'artifact' ? { artifactId: hit.entityId } : {}),
           snippet: hit.snippet,
+          // 块级命中信息透传（SearchHitV0 契约的 chunkAnchor / chunkIndex / chunkCount）；
+          // 文档级命中时后端省略这些字段，这里同样保持省略，前端据此区分文档级/块级。
+          ...(hit.chunkAnchor !== undefined ? { chunkAnchor: hit.chunkAnchor } : {}),
+          ...(hit.chunkIndex !== undefined ? { chunkIndex: hit.chunkIndex } : {}),
+          ...(hit.chunkCount !== undefined ? { chunkCount: hit.chunkCount } : {}),
         } satisfies SearchResult]
       })
       setResults([...local, ...remote].slice(0, 18))
@@ -195,11 +206,23 @@ export function ProjectToolsDialog(props: Props) {
           {!props.searchOnly && <h3>查找项目内容</h3>}
           <div className="project-tools-search"><Search size={14} /><input value={query} autoFocus={props.searchOnly} placeholder="搜索对象、标题或内容" onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void search() }} /><button className="pressable" disabled={busy === 'search'} onClick={() => { void search() }}>查找</button></div>
           {results.length > 0 && <div className="project-tools-results">{results.map((result) => <button key={result.key} className="pressable" onClick={() => {
-            if (result.sourceIds?.length && props.onSelectSourceIds) props.onSelectSourceIds(result.sourceIds, result.title)
-            else if (result.artifactId) props.onSelectArtifact(result.artifactId)
-            else props.onNotice(`已找到「${result.title}」，但它目前没有可直接定位的画布 View。`)
+            // 块级命中（chunkAnchor 带值）时先算好锚点文案，定位成功/失败的提示都要带上
+            const anchorLabel = result.chunkAnchor !== undefined ? formatChunkAnchorLabel(result.chunkAnchor) : null
+            if (result.sourceIds?.length && props.onSelectSourceIds) {
+              // 已有 sourceIds 定位逻辑照旧；块级命中时提示改为带锚点
+              props.onSelectSourceIds(result.sourceIds, result.title)
+              if (anchorLabel !== null) props.onNotice(`已定位到「${result.title}」的 ${anchorLabel}`)
+            } else if (result.artifactId) {
+              props.onSelectArtifact(result.artifactId)
+              if (anchorLabel !== null) props.onNotice(`已定位到「${result.title}」的 ${anchorLabel}`)
+            } else {
+              // 无可定位 View：文档级保持原提示；块级命中换成带锚点的提示
+              props.onNotice(anchorLabel !== null
+                ? `已找到「${result.title}」的块级命中：${anchorLabel}，但该文档没有可定位的画布 View。`
+                : `已找到「${result.title}」，但它目前没有可直接定位的画布 View。`)
+            }
             props.onClose()
-          }}><b>{result.title}</b><small>{humanKind(result.kind)}{result.snippet ? ` · ${result.snippet}` : ''}</small></button>)}</div>}
+          }}><b>{result.title}</b><small>{humanKind(result.kind)}{result.chunkAnchor !== undefined && <span className="lcos-search-chunk-badge" data-chunk-anchor={result.chunkAnchor}>{formatChunkAnchorLabel(result.chunkAnchor)}{result.chunkIndex !== undefined && result.chunkCount !== undefined ? ` · 块级 ${result.chunkIndex + 1}/${result.chunkCount}` : ''}</span>}{result.snippet ? ` · ${result.snippet}` : ''}</small></button>)}</div>}
           {query.trim() && busy !== 'search' && results.length === 0 && <p className="project-tools-empty">没有找到匹配内容。</p>}
         </section>
 
@@ -235,6 +258,40 @@ export function ProjectToolsDialog(props: Props) {
   </div>
 }
 
+
+/**
+ * 把块级锚点翻译成人类可读文案（搜索块级引用消费链）。
+ * 锚点来源：后端 projectSearch 返回的 SearchHitV0.chunkAnchor
+ * （packages/contracts/src/search.ts，语义同 ContextManifestOrderedItemV0.sourceAnchor），
+ * 形如 'section:风险' / 'pdf:p3' / 'pdf:p3-p5' / 'chunk:2-4'。
+ * 翻译规则：
+ * - 'section:XXX' → '§ XXX'（章节块，章节名为空时视为未知格式）；
+ * - 'pdf:pN' → '第 N 页'；'pdf:pA-pB' → '第 A-B 页'（PDF 页块）；
+ * - 其他格式（含空串、未知前缀）原样返回。
+ */
+export function formatChunkAnchorLabel(anchor: string): string {
+  // 章节锚点：'section:风险' → '§ 风险'
+  if (anchor.startsWith('section:')) {
+    const sectionName = anchor.slice('section:'.length)
+    return sectionName ? `§ ${sectionName}` : anchor
+  }
+  // PDF 页锚点：'pdf:p3' → '第 3 页'；'pdf:p3-p5' → '第 3-5 页'
+  const pdfMatch = /^pdf:p(\d+)(?:-p(\d+))?$/.exec(anchor)
+  if (pdfMatch) {
+    const fromPage = pdfMatch[1]
+    const toPage = pdfMatch[2]
+    return toPage === undefined ? `第 ${fromPage} 页` : `第 ${fromPage}-${toPage} 页`
+  }
+  // 段落窗口锚点(无标题纯文本):'chunk:1' → '第 1 段'；'chunk:1-3' → '第 1-3 段'
+  const chunkMatch = /^chunk:(\d+)(?:-(\d+))?$/.exec(anchor)
+  if (chunkMatch) {
+    const fromSeg = chunkMatch[1]
+    const toSeg = chunkMatch[2]
+    return toSeg === undefined ? `第 ${fromSeg} 段` : `第 ${fromSeg}-${toSeg} 段`
+  }
+  // 未知格式：原样返回
+  return anchor
+}
 
 function changeSetLabel(changeSet: MutationChangeSetV1): string {
   const kinds = new Set(changeSet.changes.map((change) => change.type))

@@ -15,6 +15,9 @@ import type {
   CommandDraftV1,
   ContextChangeProposalV1,
   ProviderSessionBindingV1,
+  ConnectedConversationV1,
+  ProjectHandoffPackV1,
+  ProjectReceiverBindingV1,
   ContextManifestV0,
   ContinuityAttachBundleV1,
   ContinuityResolveRequestV1,
@@ -364,6 +367,8 @@ export interface LocalCoreClient {
     readonly fileRecordId: string
     readonly title: string
   }>>
+  /** 读取受管 FileRecord 的原始文本内容（SKILL.md 等受管 markdown 读回）。 */
+  readFileRecordText(projectId: string, fileRecordId: string, signal?: AbortSignal): Promise<RuntimeCall<string>>
   exportLcosproj(projectId: string, targetPath: string, signal?: AbortSignal): Promise<RuntimeCall<unknown>>
   downloadLcosproj(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<{ readonly fileName: string; readonly blob: Blob }>>
   downloadHandoffZip(projectId: string, input?: { readonly targetArtifactId?: string; readonly requestedOutput?: string }, signal?: AbortSignal): Promise<RuntimeCall<{ readonly fileName: string; readonly blob: Blob }>>
@@ -433,6 +438,7 @@ export interface LocalCoreClient {
     readonly label: string
     readonly createdAt: string
   }>>
+  checkpoints(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<readonly Checkpoint[]>>
   updateActiveContext(projectId: string, input: {
     readonly workspaceId?: string
     readonly scopeId: string
@@ -474,6 +480,22 @@ export interface LocalCoreClient {
   getProviderSession(projectId: string, provider: 'codex' | 'workbuddy', signal?: AbortSignal): Promise<RuntimeCall<ProviderSessionBindingV1 | null>>
   saveProviderSession(projectId: string, provider: 'codex' | 'workbuddy', input: Omit<ProviderSessionBindingV1, 'projectId' | 'provider' | 'updatedAt'>, signal?: AbortSignal): Promise<RuntimeCall<ProviderSessionBindingV1>>
   deleteProviderSession(projectId: string, provider: 'codex' | 'workbuddy', signal?: AbortSignal): Promise<RuntimeCall<{ readonly deleted: boolean }>>
+  // RECEIVER-0 会话承接（契约面；GUI 接线不在 RECEIVER-0 范围内）
+  listConnectedConversations(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<readonly ConnectedConversationV1[]>>
+  connectConversation(projectId: string, input: { readonly conversationRef: string; readonly executorId: string; readonly provider: 'codex' | 'workbuddy'; readonly label?: string }, signal?: AbortSignal): Promise<RuntimeCall<ConnectedConversationV1>>
+  createConnectedConversation(projectId: string, input: { readonly executorId: string; readonly provider: 'codex' | 'workbuddy'; readonly label?: string }, signal?: AbortSignal): Promise<RuntimeCall<ConnectedConversationV1>>
+  disconnectConversation(projectId: string, connectedConversationId: string, signal?: AbortSignal): Promise<RuntimeCall<{ readonly deleted: boolean }>>
+  getProjectReceiverBinding(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<ProjectReceiverBindingV1>>
+  setActiveReceiver(projectId: string, connectedConversationId: string, signal?: AbortSignal): Promise<RuntimeCall<ProjectReceiverBindingV1>>
+  // RECEIVER-3 会话承接 Handoff（切换时 prepare；发送前读 pending + 注入 + consume）
+  prepareReceiverHandoff(projectId: string, input: {
+    readonly fromConversationId: string | null
+    readonly toConversationId: string
+    readonly surface: { readonly kind: 'main' | 'context' | 'workflow'; readonly surfaceId: string }
+    readonly selectionEntityIds: readonly string[]
+  }, signal?: AbortSignal): Promise<RuntimeCall<ProjectHandoffPackV1>>
+  getPendingReceiverHandoff(projectId: string, conversationId: string, signal?: AbortSignal): Promise<RuntimeCall<ProjectHandoffPackV1 | null>>
+  consumeReceiverHandoff(projectId: string, conversationId: string, signal?: AbortSignal): Promise<RuntimeCall<ProjectHandoffPackV1 | null>>
   proposeContextChange(projectId: string, input: {
     readonly workspaceId?: string
     readonly baseContextVersion: number
@@ -662,6 +684,57 @@ async function request<Value>(
   }
 }
 
+
+/** 读取纯文本端点（响应体是原始文件内容，非 {ok,value} JSON envelope）。 */
+async function requestText(path: string, signal?: AbortSignal): Promise<RuntimeCall<string>> {
+  const startedAt = performance.now()
+  const requestedAt = new Date().toISOString()
+  const controller = new AbortController()
+  let timedOut = false
+  const timeout = globalThis.setTimeout(() => { timedOut = true; controller.abort() }, LOCAL_CORE_REQUEST_TIMEOUT_MS)
+  const abort = () => controller.abort()
+  signal?.addEventListener('abort', abort, { once: true })
+  try {
+    const response = await fetch(`${LOCAL_CORE_API_PREFIX}${path}`, {
+      signal: controller.signal,
+      headers: { accept: 'text/plain, text/markdown, */*' },
+    })
+    if (!response.ok) {
+      const body: unknown = await response.json().catch(() => null)
+      const decoded = decodeResult<never>(body)
+      return {
+        result: decoded.ok ? { ok: false, error: runtimeError('UNAVAILABLE', `Local Core returned HTTP ${response.status}.`, true) } : decoded,
+        origin: 'runtime',
+        latencyMs: Math.round((performance.now() - startedAt) * 10) / 10,
+        requestedAt,
+      }
+    }
+    return {
+      result: { ok: true, value: await response.text() },
+      origin: 'runtime',
+      latencyMs: Math.round((performance.now() - startedAt) * 10) / 10,
+      requestedAt,
+    }
+  } catch (error: unknown) {
+    const aborted = error instanceof DOMException && error.name === 'AbortError'
+    return {
+      result: {
+        ok: false,
+        error: runtimeError(
+          aborted ? 'ABORTED' : 'UNAVAILABLE',
+          timedOut ? '读取超时。' : aborted ? '读取已取消。' : '本地项目服务暂时不可用。',
+          !aborted,
+        ),
+      },
+      origin: 'runtime',
+      latencyMs: Math.round((performance.now() - startedAt) * 10) / 10,
+      requestedAt,
+    }
+  } finally {
+    globalThis.clearTimeout(timeout)
+    signal?.removeEventListener('abort', abort)
+  }
+}
 
 async function requestBlob(path: string, signal?: AbortSignal): Promise<RuntimeCall<{ readonly fileName: string; readonly blob: Blob }>> {
   const startedAt = performance.now()
@@ -1332,6 +1405,10 @@ export function createLocalCoreClient(): LocalCoreClient {
         }>,
       })
     },
+    readFileRecordText(projectId, fileRecordId, signal) {
+      // 端点返回原始文件字节而非 JSON envelope，走 requestText 而不是 request()。
+      return requestText(`/projects/${encodeURIComponent(projectId)}/file-records/${encodeURIComponent(fileRecordId)}/content`, signal)
+    },
     exportLcosproj(projectId, targetPath, signal) {
       return request(`/projects/${encodeURIComponent(projectId)}/export-lcosproj`, {
         signal,
@@ -1616,6 +1693,12 @@ export function createLocalCoreClient(): LocalCoreClient {
         }>,
       })
     },
+    checkpoints(projectId, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/checkpoints`, {
+        signal,
+        decode: decodeResult<readonly Checkpoint[]>,
+      })
+    },
     previewRecords(projectId, signal) {
       return request(`/projects/${encodeURIComponent(projectId)}/preview-records`, {
         signal,
@@ -1742,6 +1825,57 @@ export function createLocalCoreClient(): LocalCoreClient {
     },
     deleteProviderSession(projectId, provider, signal) {
       return request(`/projects/${encodeURIComponent(projectId)}/provider-sessions/${provider}`, { signal, init: { method: 'DELETE' }, decode: decodeResult<{ readonly deleted: boolean }> })
+    },
+    // RECEIVER-0 会话承接：纯 client 面，GUI 不接线
+    listConnectedConversations(projectId, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/connected-conversations`, { signal, decode: decodeResult<readonly ConnectedConversationV1[]> })
+    },
+    connectConversation(projectId, input, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/connected-conversations`, {
+        signal,
+        init: { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'connect', ...input }) },
+        decode: decodeResult<ConnectedConversationV1>,
+      })
+    },
+    createConnectedConversation(projectId, input, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/connected-conversations`, {
+        signal,
+        init: { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'create', ...input }) },
+        decode: decodeResult<ConnectedConversationV1>,
+      })
+    },
+    disconnectConversation(projectId, connectedConversationId, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/connected-conversations/${encodeURIComponent(connectedConversationId)}`, { signal, init: { method: 'DELETE' }, decode: decodeResult<{ readonly deleted: boolean }> })
+    },
+    getProjectReceiverBinding(projectId, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/receiver-binding`, { signal, decode: decodeResult<ProjectReceiverBindingV1> })
+    },
+    setActiveReceiver(projectId, connectedConversationId, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/receiver-binding`, {
+        signal,
+        init: { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ connectedConversationId }) },
+        decode: decodeResult<ProjectReceiverBindingV1>,
+      })
+    },
+    prepareReceiverHandoff(projectId, input, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/receiver-handoff`, {
+        signal,
+        init: { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) },
+        decode: decodeResult<ProjectHandoffPackV1>,
+      })
+    },
+    getPendingReceiverHandoff(projectId, conversationId, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/receiver-handoff/${encodeURIComponent(conversationId)}`, {
+        signal,
+        decode: decodeResult<ProjectHandoffPackV1 | null>,
+      })
+    },
+    consumeReceiverHandoff(projectId, conversationId, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/receiver-handoff/${encodeURIComponent(conversationId)}/consume`, {
+        signal,
+        init: { method: 'POST' },
+        decode: decodeResult<ProjectHandoffPackV1 | null>,
+      })
     },
     proposeContextChange(projectId, input, signal) {
       return request(`/projects/${encodeURIComponent(projectId)}/context-proposals`, {

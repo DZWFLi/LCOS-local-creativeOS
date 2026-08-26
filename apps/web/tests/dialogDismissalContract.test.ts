@@ -30,7 +30,7 @@ describe('dismissible dialog contract', () => {
 
   it('gives the shared modal backdrop the full viewport hit area', () => {
     expect(foundation).toContain('.modal-backdrop { position:fixed; inset:0;')
-    expect(foundation).toContain('z-index:210')
+    expect(foundation).toContain('z-index: var(--lcos-z-modal-raised)') // z-index token 契约：modal 层 token 替代旧硬编码 210
   })
 
   it.each(dismissibleDialogs)('%s uses the shared backdrop protocol', (path) => {

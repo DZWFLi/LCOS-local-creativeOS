@@ -33,7 +33,7 @@
 /* Collection expands in place. Members remain normal Project Views, not clones. */
 .lcos-collection-object.is-expanded {
   position: relative;
-  z-index: 8;
+  z-index: var(--lcos-z-content-raised); /* z-tier: canvas-content（原 z8，集合展开抬升，值保序） */
   overflow: visible;
 }
 .lcos-collection-inline {

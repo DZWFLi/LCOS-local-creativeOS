@@ -1,0 +1,2017 @@
+/* LCOS Spatial Component Foundation v0.4
+   Components are Presentation material. They never become a second Project Truth. */
+
+/* ---------------------------------------------------------------------------
+   Glaze visual material tokens — dual light/dark theme.
+   Single base colour per layer; semantic red is reserved for errors.
+   `[data-lcos-theme]` overrides the OS preference; absence falls back to it.
+--------------------------------------------------------------------------- */
+:root {
+  --lcos-ink: rgba(52, 46, 66, .82);
+  --lcos-signal: rgb(92, 74, 143);
+  --lcos-signal-error: rgb(180, 76, 73);
+  --lcos-matrix-dot: rgba(101, 80, 157, .34);
+  --lcos-segment-off: rgba(92, 74, 143, .26);
+  --lcos-segment-on: rgba(103, 82, 158, .8);
+  --lcos-segment-glow: rgba(105, 85, 164, .2);
+  --lcos-glyth-stable: rgb(87, 69, 137);
+  --lcos-glyth-working: rgb(65, 126, 166);
+  --lcos-glyth-waiting: rgb(181, 126, 56);
+  --lcos-glyth-error: rgb(180, 76, 73);
+  --lcos-glyth-confirm: rgb(84, 125, 104);
+  --lcos-glyth-absorb: rgb(70, 125, 150);
+  --lcos-glyth-output: rgb(122, 86, 175);
+  --lcos-glyth-eye: rgba(255, 255, 255, .96);
+}
+[data-lcos-theme='dark'] {
+  --lcos-ink: rgba(222, 216, 238, .86);
+  --lcos-signal: rgb(158, 141, 208);
+  --lcos-signal-error: rgb(228, 116, 110);
+  --lcos-matrix-dot: rgba(176, 156, 226, .4);
+  --lcos-segment-off: rgba(158, 141, 208, .32);
+  --lcos-segment-on: rgba(186, 166, 234, .88);
+  --lcos-segment-glow: rgba(170, 148, 226, .26);
+  --lcos-glyth-stable: rgb(186, 171, 232);
+  --lcos-glyth-working: rgb(128, 180, 216);
+  --lcos-glyth-waiting: rgb(224, 178, 112);
+  --lcos-glyth-error: rgb(228, 116, 110);
+  --lcos-glyth-confirm: rgb(142, 192, 168);
+  --lcos-glyth-absorb: rgb(128, 184, 206);
+  --lcos-glyth-output: rgb(186, 154, 238);
+  --lcos-glyth-eye: rgba(24, 22, 32, .92);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-lcos-theme='light']) {
+    --lcos-ink: rgba(222, 216, 238, .86);
+    --lcos-signal: rgb(158, 141, 208);
+    --lcos-signal-error: rgb(228, 116, 110);
+    --lcos-matrix-dot: rgba(176, 156, 226, .4);
+    --lcos-segment-off: rgba(158, 141, 208, .32);
+    --lcos-segment-on: rgba(186, 166, 234, .88);
+    --lcos-segment-glow: rgba(170, 148, 226, .26);
+    --lcos-glyth-stable: rgb(186, 171, 232);
+    --lcos-glyth-working: rgb(128, 180, 216);
+    --lcos-glyth-waiting: rgb(224, 178, 112);
+    --lcos-glyth-error: rgb(228, 116, 110);
+    --lcos-glyth-confirm: rgb(142, 192, 168);
+    --lcos-glyth-absorb: rgb(128, 184, 206);
+    --lcos-glyth-output: rgb(186, 154, 238);
+    --lcos-glyth-eye: rgba(24, 22, 32, .92);
+  }
+}
+
+.lcos-surface-component-layer {
+  position: absolute;
+  inset: 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+  z-index: var(--lcos-z-surface-comp); /* z-tier: surface-comp */
+}
+
+/* Handleless frame: the body itself is the drag handle, edges resize.
+   质感（Brief D 系列目标值）：近白液晶实底 + 细线边框 + 4px 直角，禁毛玻璃。 */
+.lcos-surface-component-frame {
+  position: absolute;
+  box-sizing: border-box;
+  pointer-events: auto;
+  isolation: isolate;
+  border-radius: 4px;
+  background: rgba(250, 249, 251, .96);
+  border: 1px solid rgba(92, 74, 143, .12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .6), 0 0 0 1px rgba(92, 74, 143, .04), 0 2px 8px -4px rgba(28, 27, 34, .18);
+  backdrop-filter: none;
+  outline: 0 solid transparent;
+  transition: outline-color 140ms ease, filter 140ms ease;
+  cursor: grab;
+  touch-action: none;
+}
+/* 右上角 3px LED 指示点：复用 segment token，视觉词汇只定义一次。 */
+.lcos-surface-component-frame::before {
+  content: '';
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  z-index: var(--lcos-z-content-detail); /* z-tier: canvas-content */
+  width: 3px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--lcos-segment-on);
+  box-shadow: 0 0 4px var(--lcos-segment-glow);
+  pointer-events: none;
+}
+[data-lcos-theme='dark'] .lcos-surface-component-frame {
+  background: rgba(26, 24, 36, .96);
+  border-color: rgba(158, 141, 208, .14);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05), 0 0 0 1px rgba(158, 141, 208, .06), 0 2px 8px -4px rgba(0, 0, 0, .5);
+}
+.lcos-surface-component-frame:active { cursor: grabbing; }
+.lcos-surface-component-frame button,
+.lcos-surface-component-frame a,
+.lcos-surface-component-frame input,
+.lcos-surface-component-frame textarea,
+.lcos-surface-component-frame select,
+.lcos-surface-component-frame [data-surface-no-drag] { cursor: auto; }
+.lcos-surface-component-frame.is-selected {
+  outline: 1px solid rgba(103, 83, 158, .24);
+  filter: drop-shadow(0 9px 22px rgba(48, 42, 68, .07));
+}
+/* B-4：拖拽碰撞提示——与其它组件重叠 ≥30% 面积时虚线提示（覆盖选中实线，拖拽反馈优先），不强制阻止放置。 */
+.lcos-surface-component-frame.is-overlap {
+  outline: 2px dashed var(--lcos-signal);
+  outline-offset: -1px;
+}
+.lcos-surface-component-frame.is-pinned { outline-style: dashed; cursor: default; }
+.lcos-surface-component-frame.is-collapsed .lcos-surface-component-content { display: none; }
+.lcos-surface-component-frame.is-collapsed { height: 34px !important; min-height: 34px; }
+
+.lcos-surface-component-content { width: 100%; height: 100%; min-width: 0; min-height: 0; }
+
+/* Edge resize hot zones — hover shows the direction cursor, drag resizes that side.
+   2R 实测修:热区 9px→14px(框内 9px 框外 5px),此前框内仅 5px 几乎点不中;
+   hover 增加紫 accent 提示线,可拖性可见(复用 lens-focus 的 accent 系)。 */
+.lcos-surface-component-edge {
+  position: absolute;
+  z-index: var(--lcos-z-content-raised); /* z-tier: canvas-content */
+  display: block;
+}
+.lcos-surface-component-edge.edge-n { top: -5px; left: 10px; right: 10px; height: 14px; cursor: ns-resize; }
+.lcos-surface-component-edge.edge-s { bottom: -5px; left: 10px; right: 10px; height: 14px; cursor: ns-resize; }
+.lcos-surface-component-edge.edge-e { right: -5px; top: 10px; bottom: 10px; width: 14px; cursor: ew-resize; }
+.lcos-surface-component-edge.edge-w { left: -5px; top: 10px; bottom: 10px; width: 14px; cursor: ew-resize; }
+.lcos-surface-component-edge.edge-e::after,
+.lcos-surface-component-edge.edge-w::after { content: ""; position: absolute; top: 0; bottom: 0; width: 2px; background: transparent; border-radius: 2px; }
+.lcos-surface-component-edge.edge-e::after { left: 4px; }
+.lcos-surface-component-edge.edge-w::after { right: 4px; }
+.lcos-surface-component-edge.edge-n::after,
+.lcos-surface-component-edge.edge-s::after { content: ""; position: absolute; left: 0; right: 0; height: 2px; background: transparent; border-radius: 2px; }
+.lcos-surface-component-edge.edge-n::after { bottom: 4px; }
+.lcos-surface-component-edge.edge-s::after { top: 4px; }
+.lcos-surface-component-edge:hover::after,
+.lcos-surface-component-edge:focus-visible::after { background: rgba(103,78,177,.55); }
+
+/* Controls float in only on hover/selection — no permanent title bar.
+   质感（Brief D）：去白色胶囊底与毛玻璃，按钮改为 20×20 深色方钮，hover 边框亮起。 */
+.lcos-surface-component-controls {
+  position: absolute;
+  right: 7px;
+  top: 7px;
+  z-index: var(--lcos-z-content-guide); /* z-tier: canvas-content */
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding: 2px;
+  opacity: 0;
+  transform: translateY(2px);
+  transition: opacity 120ms ease, transform 140ms ease;
+  pointer-events: none;
+}
+.lcos-surface-component-frame:hover > .lcos-surface-component-controls,
+.lcos-surface-component-frame.is-selected > .lcos-surface-component-controls,
+.lcos-surface-component-frame.is-pinned > .lcos-surface-component-controls,
+.lcos-surface-component-frame.is-collapsed > .lcos-surface-component-controls { opacity: 1; transform: none; pointer-events: auto; }
+.lcos-surface-component-controls button {
+  box-sizing: border-box;
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: rgba(30, 27, 40, .85);
+  color: rgba(233, 229, 244, .75);
+  font: inherit;
+  cursor: pointer;
+}
+[data-lcos-theme='dark'] .lcos-surface-component-controls button { background: rgba(64, 58, 84, .9); color: rgba(228, 222, 244, .82); }
+.lcos-surface-component-controls button:hover { border-color: var(--lcos-signal); color: #fff; }
+
+/* G-1 组件卡「最大化」入口：与 .lcos-surface-component-controls button 同款 20×20 深色方钮，
+   出现在结构/演进/关系/Pack/来源链各组件 Header 右端（hover 边框亮起）。 */
+button.lcos-context-maximize {
+  box-sizing: border-box;
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: rgba(30, 27, 40, .85);
+  color: rgba(233, 229, 244, .75);
+  font: inherit;
+  cursor: pointer;
+}
+[data-lcos-theme='dark'] button.lcos-context-maximize { background: rgba(64, 58, 84, .9); color: rgba(228, 222, 244, .82); }
+button.lcos-context-maximize:hover { border-color: var(--lcos-signal); color: #fff; }
+
+/* Light Segment — discrete digital bars (seven-segment rhythm, Nothing semantics).
+   熄灭态：opacity 提到 .7 并加浓 segment-off 底色，段位在浅底上依然可读。 */
+.lcos-light-segment {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+  height: 4px;
+  pointer-events: none;
+  opacity: .7;
+}
+/* vertical 变体加 max-height 守卫：即使高度意外继承父容器全高，
+   也不会拉成通高竖条（正常用法由组件内联显式高度控制）。 */
+.lcos-light-segment.axis-vertical { flex-direction: column; width: 4px; height: auto; max-height: 220px; }
+.lcos-light-segment i {
+  flex: 1 1 0;
+  min-width: 2px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--lcos-segment-off);
+  transition: background 180ms ease, box-shadow 180ms ease;
+}
+.lcos-light-segment.axis-vertical i { width: 4px; height: auto; min-height: 2px; flex: 1 1 auto; }
+.lcos-light-segment i.is-lit { background: var(--lcos-segment-on); }
+.lcos-light-segment.is-active { opacity: .94; }
+.lcos-light-segment.is-active i.is-lit { box-shadow: 0 0 12px var(--lcos-segment-glow); }
+.lcos-light-segment.is-semantic-error i.is-lit { background: var(--lcos-signal-error); box-shadow: 0 0 12px rgba(180, 76, 73, .24); }
+.lcos-light-segment.mode-flow i.is-lit { animation: lcos-segment-flow 1.4s ease-in-out infinite; animation-delay: calc(var(--segment-index) * 90ms); }
+@keyframes lcos-segment-flow {
+  0%, 100% { opacity: .68; }
+  50% { opacity: 1; }
+}
+.lcos-light-segment.mode-checkpoint i.is-lit { opacity: 1; box-shadow: 0 0 12px var(--lcos-segment-glow); }
+
+/* Glyth — bloub 形态（x.ai Grok bot 头像复刻）：单实心身体 + 球面双眼 + 状态点缀。 */
+.lcos-glyth {
+  display: inline-block;
+  flex: 0 0 auto;
+  overflow: visible;
+  color: var(--lcos-glyth-stable);
+  pointer-events: none !important;
+  user-select: none;
+}
+.lcos-glyth-core { fill: currentColor; }
+.lcos-glyth-eyes path { fill: #fff; }
+.lcos-glyth-dots circle,
+.lcos-glyth-dots path { fill: currentColor; }
+.lcos-glyth-arcs-back path,
+.lcos-glyth-arcs-front path {
+  fill: none;
+  stroke-linecap: round;
+}
+.lcos-glyth-notch { fill: currentColor; }
+.lcos-glyth.state-stable { color: var(--lcos-glyth-stable); }
+.lcos-glyth.state-working { color: var(--lcos-glyth-working); }
+.lcos-glyth.state-waiting { color: var(--lcos-glyth-waiting); }
+.lcos-glyth.state-error { color: var(--lcos-glyth-error); }
+.lcos-glyth.state-confirm { color: var(--lcos-glyth-confirm); }
+.lcos-glyth.state-absorb { color: var(--lcos-glyth-absorb); }
+.lcos-glyth.state-output { color: var(--lcos-glyth-output); }
+
+/* Canvas sprite — the one resident liquid-capsule presence per surface (screen space),
+   draggable; parks anywhere and remembers its position per surface. */
+.lcos-canvas-sprite {
+  position: absolute;
+  right: 58px;
+  top: 14px;
+  z-index: var(--lcos-z-overlay-ui); /* z-tier: overlay-ui */
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  pointer-events: auto;
+  cursor: grab;
+  touch-action: none;
+}
+.lcos-canvas-sprite.is-dragging, .lcos-canvas-sprite:active { cursor: grabbing; }
+.lcos-canvas-sprite-plate {
+  width: 64px;
+  height: 64px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .55);
+  box-shadow: 0 10px 30px rgba(42, 36, 58, .12), 0 0 0 1px rgba(76, 69, 94, .06);
+  display: grid;
+  place-items: center;
+  backdrop-filter: blur(8px);
+  transition: transform 180ms cubic-bezier(.2, .9, .3, 1.2);
+}
+[data-lcos-theme='dark'] .lcos-canvas-sprite-plate { background: rgba(24, 22, 34, .55); box-shadow: 0 10px 30px rgba(0, 0, 0, .4), 0 0 0 1px rgba(176, 156, 226, .14); }
+[data-lcos-theme='dark'] .lcos-canvas-sprite-hint { background: rgba(24, 22, 34, .92); color: rgba(222, 216, 238, .8); }
+.lcos-canvas-sprite:hover .lcos-canvas-sprite-plate { transform: scale(1.04); }
+.lcos-canvas-sprite .lcos-glyth { filter: none; }
+.lcos-canvas-sprite-hint {
+  position: absolute;
+  top: calc(100% - 4px);
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .95);
+  box-shadow: 0 4px 14px rgba(42, 37, 55, .12);
+  color: rgba(57, 52, 68, .68);
+  font-size: 10px;
+  /* 受限宽度下截断，避免 nowrap 长文在窄画布上横向溢出成遮挡条 */
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateY(-3px);
+  transition: opacity 140ms ease, transform 140ms ease;
+  pointer-events: none;
+}
+.lcos-canvas-sprite.is-hovered .lcos-canvas-sprite-hint { opacity: 1; transform: none; }
+.lcos-canvas-sprite.mood-alert .lcos-canvas-sprite-plate { animation: lcos-sprite-alert 1.1s ease-in-out infinite; }
+@keyframes lcos-sprite-alert { 25% { transform: translateX(-1.5px) rotate(-1.2deg); } 75% { transform: translateX(1.5px) rotate(1.2deg); } }
+
+/* Glyth avatar —— avatar-slot 语义（LCOS_Glaze_ 材料方案 Demo 裁定规格）：
+   信号容器即 34px 槽，负偏移"粘"在对象边框外面左上角（corner-tl：left:-10px / top:-11px），
+   分身绝不进对象内部；槽内 plate 以 inset:2px 成 30px 圆板，glyth 26px。
+   定位职责全部在信号容器（system-signal）上，avatar 本体只负责填充槽位。 */
+.lcos-glyth-avatar {
+  position: absolute;
+  inset: 0;
+  z-index: var(--lcos-z-content-raised); /* z-tier: canvas-content */
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+.lcos-glyth-avatar-plate {
+  position: absolute;
+  inset: 2px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .92);
+  box-shadow: 0 3px 10px rgba(42, 36, 58, .14);
+  display: grid;
+  place-items: center;
+}
+[data-lcos-theme='dark'] .lcos-glyth-avatar-plate { background: rgba(24, 22, 34, .92); box-shadow: 0 3px 10px rgba(0, 0, 0, .38), 0 0 0 1px rgba(176, 156, 226, .12); }
+.lcos-reconstructed .lcos-node-system-signal,
+.lcos-reconstructed .lcos-surface-system-signal,
+.lcos-reconstructed .lcos-workflow-action-signal {
+  position: absolute;
+  z-index: var(--lcos-z-content-control); /* z-tier: canvas-content */
+  display: grid;
+  place-items: center;
+  opacity: .92;
+  transition: opacity 140ms ease, transform 180ms var(--lcos-ui-ease-out);
+  pointer-events: none;
+}
+/* avatar-slot 槽位：node / surface 挂左上角（corner-tl 规格 34px 槽），
+   workflow 动作卡保持右下角语义但同样负偏移挂外，统一不遮挡对象内部。 */
+.lcos-reconstructed .lcos-node-system-signal { left: -10px; top: -11px; width: 34px; height: 34px; }
+.lcos-reconstructed .lcos-surface-system-signal { left: -10px; top: -11px; width: 34px; height: 34px; }
+.lcos-reconstructed .lcos-workflow-action-signal { right: -10px; bottom: -11px; width: 34px; height: 34px; }
+.lcos-surface-fence-body.signal-waiting, .lcos-surface-region-body.signal-waiting { border-right-color: transparent; }
+.lcos-surface-fence-body.signal-error, .lcos-surface-region-body.signal-error { border-color: rgba(177, 78, 75, .24); }
+.lcos-surface-region-body.signal-working { border-color: rgba(70, 125, 164, .20); background: linear-gradient(145deg, rgba(70, 125, 164, .055), rgba(119, 98, 163, .025)); }
+.lcos-surface-region-body.signal-absorb { border-color: rgba(70, 125, 150, .2); }
+.lcos-surface-region-body.signal-output { border-color: rgba(122, 86, 175, .22); }
+.lcos-workflow-action.signal-working { border-color: rgba(70, 125, 164, .30); }
+.lcos-workflow-action.signal-error { border-color: rgba(177, 78, 75, .32); }
+
+/* Source is a movable Context object. It is never a fixed, click-through strip. */
+.lcos-source-chain {
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  border-radius: 20px;
+  background: linear-gradient(155deg, rgba(255,255,255,.88), rgba(245,241,252,.68));
+}
+.lcos-source-chain > header {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px 4px;
+  color: rgba(50,44,63,.72);
+}
+.lcos-source-chain > header > span { display: inline-flex; align-items: center; gap: 7px; }
+.lcos-source-chain > header > strong,
+.lcos-source-chain > header strong { font-size: 11px; letter-spacing: .01em; }
+.lcos-source-chain > header > small { margin-left: auto; font-size: 12.5px; color: rgba(64,57,77,.43); }
+.lcos-source-chain-flow {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  min-width: 0;
+  padding: 4px 12px 12px;
+  overflow: hidden;
+}
+.lcos-source-chain-segment { min-width: 0; flex: 1 1 0; display: flex; align-items: center; }
+.lcos-source-chain-segment > i { width: 22px; height: 1px; flex: 0 0 22px; background: linear-gradient(90deg, rgba(103,82,157,.10), rgba(103,82,157,.46)); }
+.lcos-source-chain-segment > button {
+  min-width: 0;
+  height: 100%;
+  flex: 1;
+  display: grid;
+  grid-content: center;
+  gap: 3px;
+  padding: 9px 11px;
+  border: 1px solid rgba(96,76,146,.12);
+  border-radius: 13px;
+  background: rgba(255,255,255,.64);
+  color: rgba(42,38,51,.78);
+  text-align: left;
+  transition: flex 180ms ease, border-color 180ms ease, background 180ms ease;
+}
+.lcos-source-chain-segment > button:hover,
+.lcos-source-chain-segment > button:focus-visible { background: rgba(255,255,255,.94); border-color: rgba(99,76,159,.28); outline: none; }
+.lcos-source-chain-segment > button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10.5px; font-weight: 670; }
+.lcos-source-chain-segment > button small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: rgba(58,52,70,.48); }
+.lcos-source-chain-segment > button b { max-height: 0; overflow: hidden; opacity: 0; display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 560; color: rgb(102,76,164); transition: max-height 180ms ease, opacity 180ms ease; }
+.lcos-source-chain-segment > button:hover b,
+.lcos-source-chain-segment > button:focus-visible b { max-height: 18px; opacity: .86; }
+.lcos-source-chain-segment > nav { display: grid; align-content: center; gap: 3px; margin-left: 3px; }
+.lcos-source-chain-segment > nav button { width: 20px; height: 20px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 6px; color: rgba(82,66,124,.52); background: rgba(255,255,255,.56); cursor: pointer; }
+.lcos-source-chain-segment > nav button:hover { color: rgba(87,63,151,.9); background: rgba(255,255,255,.94); }
+.lcos-source-chain-segment:has(> button[draggable="true"]:active) > button { opacity: .58; }
+.lcos-source-chain-empty { display: grid; place-items: center; padding: 16px; color: rgba(58,52,70,.48); font-size: 10px; }
+
+/* Matrix Activity — eight verbs, one base colour, semantic red for errors.
+   质感（Brief D）：3px 圆点 → 4px 方形点（radius 1px），active 微光复用 segment-glow token。 */
+.lcos-matrix-activity {
+  position: absolute;
+  inset: auto 12px 10px auto;
+  display: grid;
+  grid-template-columns: repeat(4, 4px);
+  gap: 2px;
+  pointer-events: none;
+  opacity: .46;
+}
+.lcos-matrix-activity.verb-flow,
+.lcos-matrix-activity.verb-emit,
+.lcos-matrix-activity.verb-absorb { rotate: var(--matrix-direction, 0deg); }
+.lcos-matrix-activity i {
+  width: 4px;
+  height: 4px;
+  border-radius: 1px;
+  background: var(--lcos-matrix-dot);
+  box-shadow: 0 0 3px var(--lcos-segment-glow);
+}
+.lcos-matrix-activity.is-semantic-error i { background: var(--lcos-signal-error); }
+.lcos-matrix-activity.verb-gather i { animation: lcos-mx-gather 1.6s ease-in-out infinite; animation-delay: calc(var(--matrix-index) * 60ms); }
+.lcos-matrix-activity.verb-spread i { animation: lcos-mx-spread 1.6s ease-in-out infinite; animation-delay: calc(var(--matrix-index) * 60ms); }
+.lcos-matrix-activity.verb-gap i { animation: lcos-mx-cell 1.8s ease-in-out infinite; animation-delay: calc(var(--matrix-index) * 70ms); }
+.lcos-matrix-activity.verb-gap i:nth-child(n+4):nth-child(-n+6) { animation-name: lcos-mx-gap; }
+.lcos-matrix-activity.verb-flow i { animation: lcos-mx-flow 1.4s linear infinite; animation-delay: calc(var(--matrix-index) * 110ms); }
+.lcos-matrix-activity.verb-pull i:nth-child(4n+1),
+.lcos-matrix-activity.verb-pull i:nth-child(4n+2) { animation: lcos-mx-pull-left 1.2s ease-in-out infinite; }
+.lcos-matrix-activity.verb-pull i:nth-child(4n+3),
+.lcos-matrix-activity.verb-pull i:nth-child(4n) { animation: lcos-mx-pull-right 1.2s ease-in-out infinite; }
+.lcos-matrix-activity.verb-break i:nth-child(4n+1),
+.lcos-matrix-activity.verb-break i:nth-child(4n+2) { animation: lcos-mx-break-left 1s ease-in-out infinite; }
+.lcos-matrix-activity.verb-break i:nth-child(4n+3),
+.lcos-matrix-activity.verb-break i:nth-child(4n) { animation: lcos-mx-break-right 1s ease-in-out infinite; }
+.lcos-matrix-activity.verb-absorb i { animation: lcos-mx-absorb 1.6s ease-in-out infinite; animation-delay: calc(var(--matrix-index) * 80ms); }
+.lcos-matrix-activity.verb-emit i { animation: lcos-mx-emit 1.6s ease-in-out infinite; animation-delay: calc(var(--matrix-index) * 80ms); }
+@keyframes lcos-mx-cell { 50% { opacity: .24; transform: scale(.72); } }
+@keyframes lcos-mx-gather { 0%, 100% { transform: scale(1); opacity: .5; } 50% { transform: scale(.5); opacity: 1; } }
+@keyframes lcos-mx-spread { 0%, 100% { transform: scale(.5); opacity: 1; } 50% { transform: scale(1.15); opacity: .4; } }
+@keyframes lcos-mx-gap { 0%, 100% { opacity: .3; } 50% { opacity: 0; } }
+@keyframes lcos-mx-flow { 0% { opacity: .2; transform: translateX(-1px); } 50% { opacity: 1; transform: translateX(1px); } 100% { opacity: .2; transform: translateX(-1px); } }
+@keyframes lcos-mx-pull-left { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(-2px); } }
+@keyframes lcos-mx-pull-right { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(2px); } }
+@keyframes lcos-mx-break-left { 0%, 100% { transform: translateX(0); opacity: .6; } 50% { transform: translateX(-3px); opacity: .1; } }
+@keyframes lcos-mx-break-right { 0%, 100% { transform: translateX(0); opacity: .6; } 50% { transform: translateX(3px); opacity: .1; } }
+@keyframes lcos-mx-absorb { 0%, 100% { transform: scale(1); opacity: .4; } 50% { transform: scale(.4); opacity: 1; } }
+@keyframes lcos-mx-emit { 0%, 100% { transform: scale(.4); opacity: 1; } 50% { transform: scale(1.3); opacity: .25; } }
+
+.lcos-surface-fence-body,
+.lcos-surface-region-body,
+.lcos-surface-panel-body,
+.lcos-surface-portal-body { width: 100%; height: 100%; box-sizing: border-box; }
+
+.lcos-surface-fence-body {
+  position: relative;
+  border: 1px solid rgba(105, 88, 151, .18);
+  border-radius: 18px;
+  background: rgba(116, 98, 164, .018);
+}
+.lcos-surface-fence-body > .lcos-light-segment { position: absolute; left: 18px; top: 16px; }
+.lcos-surface-fence-label {
+  position: absolute;
+  left: 17px;
+  top: 27px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: rgba(63, 57, 77, .45);
+}
+.lcos-surface-fence-label span { display: grid; gap: 1px; }
+.lcos-surface-fence-label strong { font-size: 12.5px; font-weight: 650; }
+.lcos-surface-fence-label small { font-size: 10px; opacity: .72; }
+.lcos-surface-fence-corner { position: absolute; width: 15px; height: 15px; border-color: rgba(95, 75, 151, .26); pointer-events: none; }
+.lcos-surface-fence-corner.corner-tr { top: -1px; right: -1px; border-top: 2px solid; border-right: 2px solid; border-radius: 0 18px 0 0; }
+.lcos-surface-fence-corner.corner-bl { left: -1px; bottom: -1px; border-left: 2px solid; border-bottom: 2px solid; border-radius: 0 0 0 18px; }
+
+/* 质感（Brief D）：region 与 frame 同族——近白液晶实底 + 细线边框 + 4px 直角。 */
+.lcos-surface-region-body {
+  position: relative;
+  overflow: hidden;
+  padding: 18px;
+  border: 1px solid rgba(92, 74, 143, .12);
+  border-radius: 4px;
+  background: rgba(250, 249, 251, .96);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .6), 0 0 0 1px rgba(92, 74, 143, .04), 0 2px 8px -4px rgba(28, 27, 34, .18);
+}
+[data-lcos-theme='dark'] .lcos-surface-region-body {
+  border-color: rgba(158, 141, 208, .14);
+  background: rgba(26, 24, 36, .96);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05), 0 0 0 1px rgba(158, 141, 208, .06), 0 2px 8px -4px rgba(0, 0, 0, .5);
+}
+.lcos-surface-region-head { display: flex; align-items: center; gap: 7px; color: rgba(54, 60, 70, .58); }
+.lcos-surface-region-head span { display: grid; gap: 2px; }
+.lcos-surface-region-head strong { font-size: 10px; font-weight: 650; }
+.lcos-surface-region-head small { font-size: 11px; opacity: .66; }
+.lcos-surface-region-body > .lcos-light-segment { margin: 12px 0 0 2px; }
+
+.lcos-surface-portal-body {
+  display: grid;
+  grid-template-columns: auto minmax(0,1fr) auto auto;
+  align-items: center;
+  gap: 9px;
+  padding: 14px 15px;
+  border: 1px solid rgba(88, 75, 121, .10);
+  border-radius: 16px;
+  background: rgba(252, 252, 254, .72);
+  box-shadow: 0 7px 22px rgba(46, 41, 61, .045);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.lcos-surface-portal-body:disabled { cursor: default; opacity: .62; }
+.lcos-surface-portal-copy { min-width: 0; display: grid; gap: 2px; }
+.lcos-surface-portal-copy strong { font-size: 10px; font-weight: 650; color: rgba(50, 46, 59, .72); }
+.lcos-surface-portal-copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: rgba(56, 51, 67, .42); }
+.lcos-surface-portal-body b { font-size: 12px; font-weight: 400; color: rgba(80, 64, 124, .54); }
+
+.lcos-surface-panel-body {
+  position: relative;
+  overflow: hidden;
+  padding: 16px;
+  border: 1px solid rgba(73, 68, 84, .09);
+  border-radius: 18px;
+  background: rgba(252, 252, 254, .72);
+  box-shadow: 0 10px 26px rgba(43, 39, 56, .045);
+  backdrop-filter: blur(9px);
+}
+.lcos-surface-panel-body > header { display: grid; grid-template-columns: auto minmax(0,1fr) auto; align-items: start; gap: 8px; }
+.lcos-surface-panel-body > header span { min-width: 0; display: grid; gap: 3px; }
+.lcos-surface-panel-body > header strong { font-size: 10.5px; font-weight: 650; color: rgba(47, 43, 55, .74); }
+.lcos-surface-panel-body > header small { font-size: 11px; line-height: 1.35; color: rgba(56, 52, 65, .43); }
+.lcos-surface-panel-content { margin: 15px 0 0 26px; display: grid; gap: 7px; }
+.lcos-surface-panel-content p { margin: 0; font-size: 12px; line-height: 1.45; color: rgba(54, 50, 63, .52); }
+.lcos-surface-panel-content > span { width: fit-content; padding: 3px 6px; border-radius: 7px; background: rgba(88, 70, 139, .055); font-size: 10px; color: rgba(76, 60, 117, .55); }
+.lcos-surface-panel-body.panel-review { border-color: rgba(146, 96, 78, .13); background: rgba(255, 250, 247, .74); }
+.lcos-surface-panel-body.panel-workbench { background: linear-gradient(145deg, rgba(250,250,253,.82), rgba(245,244,250,.74)); }
+.lcos-surface-panel-body.panel-structure-map,
+.lcos-surface-panel-body.panel-relationship-field { background: rgba(248, 250, 253, .72); }
+
+/* Context components are NOT cards. They are transparent structures built from
+   the Glaze materials: capsule head + light-segment skeleton + matrix energy.
+   The body stays glass; identity comes from the segment strip, not a border. */
+.lcos-context-component { box-sizing: border-box; width: 100%; height: 100%; min-width: 0; min-height: 0; padding: 14px 15px 12px; display: grid; grid-template-rows: auto 1fr auto; gap: 12px; border: 0; border-radius: 18px; background: linear-gradient(180deg, rgba(245, 242, 251, .5), rgba(247, 246, 251, .32) 88px, rgba(247, 246, 251, .16)); color: rgba(46, 42, 57, .72); box-shadow: none; transition: background 160ms ease; position: relative; }
+.lcos-context-component::before { content: ''; position: absolute; left: 15px; right: 15px; top: 0; height: 3px; border-radius: 999px; background: linear-gradient(90deg, var(--lcos-segment-on) 0 26%, var(--lcos-segment-off) 26% 34%, var(--lcos-segment-on) 34% 58%, var(--lcos-segment-off) 58% 100%); opacity: .5; }
+.lcos-context-component.is-selected { background: linear-gradient(180deg, rgba(243, 240, 252, .78), rgba(246, 244, 251, .5) 88px, rgba(246, 244, 251, .3)); }
+.lcos-context-component.is-selected::before { opacity: 1; box-shadow: 0 0 10px var(--lcos-segment-glow); }
+.lcos-context-component-header { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto auto; gap: 9px; align-items: center; }
+.lcos-context-component-header > span:nth-child(2) { min-width: 0; display: grid; gap: 3px; }
+.lcos-context-component-header strong { font-size: 12px; font-weight: 650; letter-spacing: .01em; }
+.lcos-context-component-header small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; color: rgba(62, 56, 77, .48); }
+.lcos-context-component-icon { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 9px; color: rgba(89, 67, 145, .78); background: rgba(111, 87, 177, .1); }
+.lcos-context-component-header > svg { width: 14px; height: 14px; opacity: .7; }
+.lcos-context-component footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; color: rgba(62, 56, 77, .46); }
+.lcos-context-component footer svg { color: rgba(89, 67, 145, .68); }
+.lcos-context-structure-tree, .lcos-context-evolution-track, .lcos-context-relationship-field { min-height: 0; display: flex; align-items: center; justify-content: center; gap: 8px; color: rgba(66, 58, 82, .58); font-size: 12.5px; }
+.lcos-context-structure-tree { flex-direction: column; align-items: stretch; padding: 7px 14px; border-left: 1px solid rgba(102, 77, 177, .24); }
+.lcos-context-structure-tree i { width: 1px; height: 13px; margin-left: 5px; background: rgba(102, 77, 177, .24); }
+.lcos-context-structure-tree b { padding: 6px 9px; border-radius: 7px; font-weight: 550; background: rgba(111, 87, 177, .08); }
+.lcos-context-evolution-track { justify-content: stretch; }
+.lcos-context-evolution-track span { white-space: nowrap; padding: 7px 8px; border-radius: 8px; background: rgba(111, 87, 177, .08); }
+.lcos-context-evolution-track span.active { color: rgba(77, 56, 133, .82); background: rgba(111, 87, 177, .16); }
+.lcos-context-evolution-track i, .lcos-context-relationship-field i { flex: 1; height: 1px; min-width: 10px; background: rgba(111, 87, 177, .24); }
+.lcos-context-relationship-field span, .lcos-context-relationship-field b { padding: 8px 9px; border-radius: 9px; white-space: nowrap; }
+.lcos-context-relationship-field span { background: rgba(111, 87, 177, .07); }
+.lcos-context-relationship-field b { color: rgba(77, 56, 133, .82); background: rgba(111, 87, 177, .15); font-weight: 600; }
+.lcos-context-pack-list { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; align-items: center; }
+.lcos-context-pack-list span { height: 34px; border-radius: 8px; border: 1px solid rgba(111, 87, 177, .14); background: linear-gradient(135deg, rgba(111,87,177,.13) 0 34%, rgba(255,255,255,.62) 34%); }
+.lcos-context-pack-list small { grid-column: 1 / -1; font-size: 12px; color: rgba(62,56,77,.48); }
+.lcos-context-component-empty { min-height: 72px; display: grid; place-items: center; padding: 14px; border: 1px dashed rgba(92,78,132,.14); border-radius: 11px; color: rgba(62,56,77,.44); font-size: 12.5px; text-align: center; }
+.lcos-context-structure-rows, .lcos-context-evolution-rows, .lcos-context-relationship-rows, .lcos-context-pack-items { min-height: 0; overflow: auto; scrollbar-width: thin; }
+.lcos-context-structure-rows { display: grid; align-content: start; gap: 3px; padding: 3px 0; }
+.lcos-context-structure-rows > button { min-width: 0; min-height: 30px; display: grid; grid-template-columns: 9px minmax(0,1fr) auto; align-items: center; gap: 7px; margin-left: calc(var(--context-depth, 0) * 13px); padding: 4px 7px; border: 0; border-radius: 7px; background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.lcos-context-structure-rows > button:hover { background: rgba(111,87,177,.07); }
+.lcos-context-structure-rows > button i { width: 6px; height: 6px; border: 1px solid rgba(100,78,158,.34); border-radius: 50%; background: rgba(250,249,253,.92); }
+.lcos-context-structure-rows > button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; font-weight: 590; }
+.lcos-context-structure-rows > button small { max-width: 92px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: rgba(62,56,77,.42); }
+.lcos-context-evolution-rows { display: grid; align-content: start; gap: 0; padding-left: 4px; }
+.lcos-context-evolution-rows > button { position: relative; min-width: 0; min-height: 39px; display: grid; grid-template-columns: 11px minmax(0,1fr) auto; align-items: center; gap: 7px; padding: 4px 5px; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.lcos-context-evolution-rows > button::before { content: ''; position: absolute; left: 10px; top: 0; bottom: 0; width: 1px; background: rgba(103,80,163,.18); }
+.lcos-context-evolution-rows > button i { z-index: var(--lcos-z-content-inlay); /* z-tier: canvas-content */ width: 7px; height: 7px; border: 1px solid rgba(103,80,163,.35); border-radius: 50%; background: rgb(249,248,252); }
+.lcos-context-evolution-rows > button.is-current i { background: rgba(106,80,171,.72); box-shadow: 0 0 0 3px rgba(106,80,171,.10); }
+.lcos-context-evolution-rows > button > span { min-width: 0; display: grid; gap: 2px; }
+.lcos-context-evolution-rows strong, .lcos-context-evolution-rows small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lcos-context-evolution-rows strong { font-size: 12.5px; font-weight: 620; }
+.lcos-context-evolution-rows small, .lcos-context-evolution-rows time { font-size: 10px; color: rgba(62,56,77,.42); }
+.lcos-context-relationship-rows { display: grid; align-content: start; gap: 5px; }
+.lcos-context-relationship-rows > div { min-width: 0; display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); align-items: center; gap: 6px; }
+.lcos-context-relationship-rows button { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 6px 7px; border: 1px solid rgba(104,82,162,.10); border-radius: 7px; background: rgba(255,255,255,.52); color: rgba(53,48,65,.68); font-size: 11px; cursor: pointer; }
+.lcos-context-relationship-rows span { position: relative; min-width: 42px; color: rgba(81,63,128,.58); font-size: 10px; text-align: center; }
+.lcos-context-pack-items { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); align-content: start; gap: 6px; }
+.lcos-context-pack-items > button { min-width: 0; display: grid; gap: 3px; padding: 8px 9px; border: 1px solid rgba(104,82,162,.11); border-radius: 9px; background: rgba(255,255,255,.55); color: inherit; text-align: left; cursor: pointer; }
+.lcos-context-pack-items span, .lcos-context-pack-items small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lcos-context-pack-items span { font-size: 12.5px; font-weight: 600; }
+.lcos-context-pack-items small { font-size: 10px; color: rgba(62,56,77,.42); }
+/* 「+N 项」展开/收起胶囊：覆盖各卡行按钮的通用样式；卡内列表容器已有 overflow:auto，展开后卡内滚动 */
+button.lcos-context-expand { display: inline-block; grid-column: 1 / -1; justify-self: center; min-height: 0; margin-left: 0; padding: 3px 11px; border: 1px dashed rgba(104,82,162,.26); border-radius: 999px; background: transparent; color: rgba(89,67,145,.8); font-size: 11px; text-align: center; cursor: pointer; }
+button.lcos-context-expand:hover { background: rgba(111,87,177,.07); }
+.lcos-context-evolution-rows > button.lcos-context-expand::before { display: none; }
+/* 关系行内 kind 语义小标签：辅助层级，不改变「按钮-关系词-按钮」三段行结构 */
+.lcos-context-relationship-rows span small { display: block; font-size: 9px; line-height: 1.3; opacity: .72; }
+/* Workflow components: same material language, bluer tint, direction accent. */
+.lcos-workflow-component { box-sizing: border-box; width: 100%; height: 100%; padding: 13px 14px 11px; display: grid; grid-template-rows: auto 1fr auto; gap: 11px; border: 0; border-radius: 16px; background: linear-gradient(180deg, rgba(240, 246, 250, .52), rgba(243, 247, 250, .3) 78px, rgba(243, 247, 250, .14)); color: rgba(40, 53, 65, .74); box-shadow: none; transition: background 160ms ease; position: relative; }
+.lcos-workflow-component::before { content: ''; position: absolute; left: 14px; right: 14px; top: 0; height: 3px; border-radius: 999px; background: linear-gradient(90deg, var(--lcos-segment-on) 0 42%, var(--lcos-segment-off) 42% 100%); opacity: .5; }
+.lcos-workflow-component.is-selected { background: linear-gradient(180deg, rgba(238, 245, 250, .8), rgba(242, 246, 250, .5) 78px, rgba(242, 246, 250, .3)); }
+.lcos-workflow-component.is-selected::before { opacity: 1; box-shadow: 0 0 10px var(--lcos-segment-glow); }
+.lcos-workflow-component-header { display: grid; grid-template-columns: 27px minmax(0, 1fr) auto 22px; gap: 9px; align-items: center; }
+.lcos-workflow-component-header > span:nth-child(2) { min-width: 0; display: grid; gap: 3px; }
+.lcos-workflow-component-header strong { font-size: 11px; font-weight: 660; }
+.lcos-workflow-component-header small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: rgba(48, 68, 84, .46); }
+.lcos-workflow-component-icon { width: 27px; height: 27px; display: grid; place-items: center; border-radius: 8px; color: rgba(40, 106, 151, .8); background: rgba(77, 145, 188, .12); }
+.lcos-workflow-component footer { font-size: 11px; color: rgba(48, 68, 84, .45); }
+.lcos-workflow-component-binding { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 8px 9px; border-radius: 8px; background: rgba(77,145,188,.08); font-size: 12.5px; font-weight: 560; }
+.lcos-workflow-review-state, .lcos-workflow-checkpoint-row { display: grid; gap: 7px; align-content: center; }
+.lcos-workflow-review-state { width: 100%; padding: 0; border: 0; color: inherit; text-align: left; background: transparent; }
+.lcos-workflow-review-state:not(:disabled) { cursor: pointer; }
+.lcos-workflow-review-state span, .lcos-workflow-checkpoint-row span { width: fit-content; padding: 3px 6px; border-radius: 5px; color: rgba(145, 89, 45, .78); background: rgba(220, 156, 79, .14); font-size: 11px; }
+.lcos-workflow-review-state b, .lcos-workflow-checkpoint-row strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; font-weight: 560; }
+.lcos-workbench-slots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; align-items: center; }
+.lcos-workbench-slots span { padding: 10px 5px; border: 1px dashed rgba(51, 111, 147, .26); border-radius: 7px; text-align: center; font-size: 11px; color: rgba(48, 96, 126, .56); }
+.lcos-web-workbench { min-height: 0; display: grid; gap: 8px; align-content: start; font-size: 11px; }
+.lcos-web-workbench > header, .lcos-web-workbench-tools > header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.lcos-web-workbench > header div, .lcos-web-workbench-tools > header span { display: grid; gap: 2px; }
+.lcos-web-workbench > header strong { font-size: 12.5px; }
+.lcos-web-workbench small { color: rgba(48,68,84,.46); }
+.lcos-web-workbench button { border: 0; background: transparent; color: rgba(45,86,113,.68); cursor: pointer; }
+.lcos-web-workbench button:disabled { cursor: not-allowed; opacity: .42; }
+.lcos-web-workbench-empty { padding: 11px; border: 1px dashed rgba(77,145,188,.18); border-radius: 8px; color: rgba(48,68,84,.48); line-height: 1.5; }
+.lcos-web-workbench > header button { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 7px; background: rgba(77,145,188,.1); }
+.lcos-web-workbench nav { display: flex; gap: 4px; overflow: auto; }
+.lcos-web-workbench nav button { padding: 4px 6px; border-radius: 6px; white-space: nowrap; }
+.lcos-web-workbench nav button.active { color: rgba(37,91,124,.9); background: rgba(77,145,188,.14); }
+.lcos-web-workbench-pages { display: flex; align-items: center; justify-content: space-between; gap: 7px; padding: 7px; border-radius: 8px; background: rgba(77,145,188,.07); }
+.lcos-web-workbench-page { min-width: 0; display: grid; gap: 2px; }
+.lcos-web-workbench-page strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.lcos-web-workbench-open { display: inline-flex; align-items: center; gap: 3px; padding: 5px 6px; border-radius: 6px; background: rgba(255,255,255,.7) !important; white-space: nowrap; }
+.lcos-web-workbench-note { display: grid; gap: 4px; }
+.lcos-web-workbench-note > span, .lcos-web-workbench-tools > header span { display: inline-flex; align-items: center; gap: 4px; color: rgba(43,83,108,.68); }
+.lcos-web-workbench-note textarea { box-sizing: border-box; width: 100%; resize: vertical; border: 1px solid rgba(77,145,188,.16); border-radius: 7px; padding: 6px; font: inherit; color: inherit; background: rgba(255,255,255,.7); }
+.lcos-web-workbench-tools { display: grid; gap: 5px; }
+.lcos-web-workbench-tools > div { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 4px; }
+.lcos-web-workbench-tools > div button { padding: 5px 4px; border-radius: 6px; background: rgba(77,145,188,.07); text-align: left; }
+.lcos-agent-surface-composer-shell { position: absolute; right: 56px; top: 72px; z-index: var(--lcos-z-overlay-ui); /* z-tier: overlay-ui */ pointer-events: auto; }
+.lcos-agent-surface-composer-toggle { width: 34px; height: 34px; display: grid; place-items: center; padding: 0; border: 1px solid rgba(67,60,82,.09); border-radius: 17px; background: rgba(250,250,252,.83); box-shadow: 0 8px 24px rgba(44,39,58,.075); backdrop-filter: blur(16px); color: rgba(77,64,119,.68); cursor: pointer; }
+.lcos-agent-surface-composer-shell.is-open .lcos-agent-surface-composer-toggle { color: rgba(83,61,145,.94); background: rgba(255,255,255,.96); }
+.lcos-agent-surface-composer { position: absolute; top: 42px; right: 0; width: 260px; display: grid; gap: 9px; padding: 11px; border: 1px solid rgba(67,60,82,.10); border-radius: 15px; background: rgba(250,250,252,.95); box-shadow: 0 18px 48px rgba(42,37,55,.13); backdrop-filter: blur(22px); color: rgba(46,42,57,.72); }
+.lcos-agent-surface-composer header, .lcos-agent-surface-composer footer { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.lcos-agent-surface-composer header span { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 650; }
+.lcos-agent-surface-composer header button { width: 22px; height: 22px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 7px; background: transparent; color: rgba(59,54,69,.48); cursor: pointer; }
+.lcos-agent-surface-composer select { min-width: 0; width: 100%; padding: 7px 8px; border: 1px solid rgba(92,78,132,.13); border-radius: 8px; background: rgba(255,255,255,.74); color: inherit; font: inherit; }
+.lcos-agent-surface-composer > small, .lcos-agent-surface-composer footer > span { font-size: 11px; color: rgba(59,54,69,.44); }
+.lcos-agent-surface-composer footer div { display: flex; gap: 5px; }
+.lcos-agent-surface-composer footer button { display: inline-flex; align-items: center; gap: 3px; padding: 5px 7px; border: 0; border-radius: 7px; background: rgba(92,72,143,.07); color: rgba(72,56,112,.68); font-size: 11px; cursor: pointer; }
+.lcos-agent-surface-composer footer button.primary { color: white; background: rgba(91,69,150,.82); }
+.lcos-agent-surface-composer footer button:disabled { opacity: .38; cursor: not-allowed; }
+.lcos-surface-component-proposal-layer { position: absolute; inset: 0; z-index: var(--lcos-z-content-hud); /* z-tier: canvas-content */ pointer-events: none; }
+.lcos-surface-component-proposal { position: absolute; box-sizing: border-box; padding: 4px; border: 1px dashed rgba(101,77,166,.58); border-radius: 18px; background: rgba(245,241,255,.34); box-shadow: 0 0 0 4px rgba(105,80,174,.07), 0 14px 36px rgba(65,47,112,.12); opacity: .78; }
+.lcos-surface-component-proposal > :first-child { width: 100%; height: 100%; }
+.lcos-surface-component-proposal-label { position: absolute; top: -17px; left: 10px; padding: 2px 6px; border-radius: 6px; background: rgba(93,70,154,.86); color: white; font-size: 10px; letter-spacing: .02em; }
+
+/* Screen-space component shelf. */
+.lcos-surface-component-shelf {
+  position: absolute;
+  right: 14px;
+  top: 72px;
+  z-index: var(--lcos-z-overlay-ui); /* z-tier: overlay-ui */
+  pointer-events: auto;
+}
+.lcos-surface-component-shelf-toggle {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid rgba(67, 60, 82, .09);
+  border-radius: 17px;
+  background: rgba(250, 250, 252, .83);
+  box-shadow: 0 8px 24px rgba(44, 39, 58, .075);
+  backdrop-filter: blur(16px);
+  color: rgba(73, 58, 111, .66);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.lcos-surface-component-shelf-toggle:hover { background: rgba(255,255,255,.94); color: rgba(79, 59, 132, .92); }
+.lcos-surface-component-shelf-menu {
+  position: absolute;
+  top: 42px;
+  right: 0;
+  width: 248px;
+  max-height: min(520px, calc(100vh - 150px));
+  overflow: auto;
+  padding: 7px;
+  border: 1px solid rgba(67, 60, 82, .09);
+  border-radius: 16px;
+  background: rgba(250, 250, 252, .94);
+  box-shadow: 0 18px 50px rgba(42, 37, 55, .12);
+  backdrop-filter: blur(22px);
+}
+.lcos-surface-component-shelf-menu header { display: grid; gap: 2px; padding: 7px 8px 9px; }
+.lcos-surface-component-shelf-menu header strong { font-size: 10px; color: rgba(47,43,55,.72); }
+.lcos-surface-component-shelf-menu header small { font-size: 11px; color: rgba(57,52,67,.42); }
+.lcos-surface-component-shelf-menu > button {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 35px minmax(0, 1fr);
+  grid-template-areas: "preview title" "preview detail";
+  align-items: center;
+  column-gap: 8px;
+  gap: 3px;
+  padding: 8px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  text-align: left;
+  cursor: grab;
+  touch-action: none;
+}
+.lcos-surface-component-shelf-menu > button:active { cursor: grabbing; }
+.lcos-surface-component-shelf-menu > button:hover { background: rgba(92, 72, 143, .06); }
+.lcos-surface-component-shelf-menu > button:disabled { opacity: .42; cursor: not-allowed; background: transparent; }
+.lcos-surface-component-shelf-menu > button span { grid-area: title; font-size: 12.5px; font-weight: 620; color: rgba(50,46,59,.70); }
+.lcos-surface-component-shelf-menu > button small { grid-area: detail; font-size: 11px; line-height: 1.35; color: rgba(59,54,69,.43); }
+.lcos-component-preview { grid-area: preview; position: relative; width: 33px; height: 29px; display: block; border: 1px solid rgba(97,76,150,.18); border-radius: 8px; background: rgba(255,255,255,.68); overflow: hidden; }
+.lcos-component-preview b { position: absolute; display: block; border-radius: 999px; background: rgba(100,77,157,.34); }
+.lcos-component-preview b:nth-child(1) { left: 6px; top: 7px; width: 8px; height: 4px; }
+.lcos-component-preview b:nth-child(2) { left: 18px; top: 12px; width: 9px; height: 4px; }
+.lcos-component-preview b:nth-child(3) { left: 8px; top: 19px; width: 17px; height: 2px; }
+.lcos-component-preview.type-region { border-style: dashed; background: radial-gradient(circle at 50% 50%, rgba(117,92,177,.13), transparent 68%); }
+.lcos-component-preview.type-structure-map b:nth-child(1) { left: 4px; top: 12px; }
+.lcos-component-preview.type-structure-map b:nth-child(2) { left: 20px; top: 5px; }
+.lcos-component-preview.type-structure-map b:nth-child(3) { left: 20px; top: 20px; width: 8px; height: 4px; }
+.lcos-component-preview.type-evolution b { left: 6px; width: 21px; height: 2px; }
+.lcos-component-preview.type-evolution b:nth-child(1) { top: 7px; } .lcos-component-preview.type-evolution b:nth-child(2) { top: 13px; } .lcos-component-preview.type-evolution b:nth-child(3) { top: 19px; }
+.lcos-component-preview.type-workbench { background: linear-gradient(135deg, rgba(77,145,188,.14), rgba(255,255,255,.7)); }
+.lcos-surface-portal-targets { margin-top: 4px; border-top: 1px solid rgba(67,60,82,.07); }
+.lcos-surface-portal-targets summary { display: flex; justify-content: space-between; gap: 8px; padding: 9px 8px 7px; color: rgba(50,46,59,.70); font-size: 12.5px; font-weight: 620; cursor: pointer; }
+.lcos-surface-portal-targets summary small { color: rgba(59,54,69,.43); font-size: 11px; font-weight: 450; }
+.lcos-surface-portal-targets > div { display: grid; gap: 2px; }
+.lcos-surface-portal-targets button { display: grid; gap: 2px; padding: 7px 8px; border: 0; border-radius: 9px; color: rgba(50,46,59,.68); text-align: left; background: transparent; cursor: pointer; }
+.lcos-surface-portal-targets button:hover { background: rgba(92,72,143,.06); }
+.lcos-surface-portal-targets button small { color: rgba(59,54,69,.42); font-size: 10px; }
+
+.lcos-surface-component-drag-ghost {
+  position: fixed;
+  z-index: var(--lcos-z-modal-drag-ghost); /* z-tier: modal */
+  width: max-content;
+  min-width: 112px;
+  display: grid;
+  grid-template-columns: 35px auto;
+  grid-template-areas: "preview title" "preview hint";
+  column-gap: 7px;
+  padding: 8px 11px;
+  border: 1px solid rgba(74, 67, 88, .12);
+  border-radius: 13px;
+  background: rgba(250, 250, 252, .92);
+  box-shadow: 0 14px 38px rgba(42, 37, 55, .14);
+  backdrop-filter: blur(18px);
+  pointer-events: none;
+  transform: translate(12px, 12px);
+  color: rgba(53, 49, 62, .68);
+}
+.lcos-surface-component-drag-ghost > .lcos-component-preview { grid-area: preview; align-self: center; }
+.lcos-surface-component-drag-ghost > strong { grid-area: title; font-size: 12.5px; font-weight: 650; }
+.lcos-surface-component-drag-ghost > small { grid-area: hint; font-size: 10px; color: rgba(59,54,69,.42); }
+.lcos-surface-component-drag-ghost.is-valid { border-color: rgba(94, 73, 150, .24); box-shadow: 0 14px 38px rgba(67, 50, 109, .15), inset 0 0 0 1px rgba(108, 86, 168, .06); }
+
+.lcos-surface-component-frame.is-reduced-motion,
+.lcos-surface-component-frame.is-reduced-motion > .lcos-surface-component-controls,
+.lcos-surface-component-edge.is-reduced-motion,
+.lcos-light-segment.is-reduced-motion,
+.lcos-light-segment.is-reduced-motion i,
+.lcos-glyth.is-reduced-motion,
+.lcos-matrix-activity.is-reduced-motion i {
+  transition: none !important; animation: none !important;
+}
+
+/* Alignment is feedback only. It never rewrites the user's free-position result. */
+.lcos-alignment-guide {
+  position: absolute;
+  z-index: var(--lcos-z-overlay-ui-top); /* z-tier: overlay-ui */
+  display: block;
+  pointer-events: none;
+  background: rgba(103, 79, 169, .38);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, .55);
+}
+.lcos-alignment-guide.axis-x { top: -100000px; bottom: -100000px; width: 1px; }
+.lcos-alignment-guide.axis-y { left: -100000px; right: -100000px; height: 1px; }
+
+/* ------------------------------------------------------------------
+   Stack / Compare / Active Path — card-free component material
+   (2026-08-24 catalog widening). Same visual language as the workflow
+   components: soft panel, discrete segments, glyth presence, no borders.
+*/
+.lcos-stack-component, .lcos-compare-component, .lcos-active-path-component {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  padding: 13px 14px 11px;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 10px;
+  border: 0;
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(240, 246, 250, .52), rgba(243, 247, 250, .3) 78px, rgba(243, 247, 250, .14));
+  color: rgba(40, 53, 65, .74);
+  transition: background 160ms ease;
+  position: relative;
+  overflow: hidden;
+}
+.lcos-stack-component::before, .lcos-compare-component::before, .lcos-active-path-component::before {
+  content: '';
+  position: absolute;
+  left: 14px; right: 14px; top: 0;
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--lcos-segment-on) 0 42%, var(--lcos-segment-off) 42% 100%);
+  opacity: .5;
+}
+.lcos-stack-component.is-selected, .lcos-compare-component.is-selected, .lcos-active-path-component.is-selected {
+  background: linear-gradient(180deg, rgba(238, 245, 250, .8), rgba(242, 246, 250, .5) 78px, rgba(242, 246, 250, .3));
+}
+.lcos-stack-component.is-selected::before, .lcos-compare-component.is-selected::before, .lcos-active-path-component.is-selected::before { opacity: 1; box-shadow: 0 0 10px var(--lcos-segment-glow); }
+.lcos-stack-component > header, .lcos-compare-component > header, .lcos-active-path-component > header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.lcos-stack-component > header strong, .lcos-compare-component > header strong, .lcos-active-path-component > header strong { font-size: 11px; font-weight: 660; }
+.lcos-stack-component > header small, .lcos-compare-component > header small, .lcos-active-path-component > header small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: rgba(48, 68, 84, .46); }
+.lcos-stack-component > header .lcos-glyth, .lcos-compare-component > header .lcos-glyth, .lcos-active-path-component > header .lcos-glyth { margin-left: auto; }
+.lcos-stack-empty, .lcos-active-path-empty { align-self: center; justify-self: center; padding: 10px 12px; border-radius: 8px; font-size: 12px; color: rgba(48, 68, 84, .48); text-align: center; }
+
+/* Stack: offset layers read as a physical pile; lit count = pile size. */
+.lcos-stack-layers { margin: 0; padding: 0; list-style: none; display: grid; gap: 5px; align-content: start; }
+.lcos-stack-layers li {
+  display: grid;
+  gap: 2px;
+  padding: 6px 9px;
+  border-radius: 9px;
+  background: rgba(77, 145, 188, .08);
+  transform: translateX(calc(var(--layer-index, 0) * 5px));
+  cursor: pointer;
+}
+.lcos-stack-layers li:hover { background: rgba(77, 145, 188, .14); }
+.lcos-stack-layers li b { font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lcos-stack-layers li small { font-size: 10.5px; color: rgba(48, 68, 84, .44); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lcos-stack-layers li.lcos-stack-more { background: transparent; font-size: 10.5px; color: rgba(48, 68, 84, .42); text-align: right; cursor: default; }
+.lcos-stack-collapsed { align-self: center; padding: 9px 11px; border-radius: 9px; background: rgba(77, 145, 188, .08); font-size: 12px; font-weight: 580; }
+.lcos-stack-component footer { display: flex; align-items: center; gap: 8px; }
+
+/* Compare: two honest sides split by a vertical discrete divider. */
+.lcos-compare-panels { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: stretch; min-height: 0; }
+.lcos-compare-panels > section {
+  display: grid;
+  gap: 4px;
+  align-content: start;
+  padding: 9px 10px;
+  border-radius: 10px;
+  background: rgba(77, 145, 188, .07);
+  min-width: 0;
+  cursor: pointer;
+}
+.lcos-compare-panels > section:hover { background: rgba(77, 145, 188, .13); }
+.lcos-compare-panels b { font-size: 12px; font-weight: 620; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lcos-compare-panels small { font-size: 10.5px; color: rgba(48, 68, 84, .46); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lcos-compare-hint { font-size: 11px; color: rgba(48, 68, 84, .4); }
+.lcos-compare-divider { align-self: center; }
+
+/* Active path: steps read left to right, joined by flowing segments. */
+.lcos-active-path-steps { margin: 0; padding: 0; list-style: none; display: flex; align-items: center; gap: 9px; overflow-x: auto; min-height: 0; }
+.lcos-active-path-steps li { display: grid; gap: 5px; justify-items: start; padding: 7px 9px; border-radius: 9px; background: rgba(77, 145, 188, .07); cursor: pointer; min-width: 0; }
+.lcos-active-path-steps li:hover { background: rgba(77, 145, 188, .13); }
+.lcos-active-path-steps span { font-size: 11.5px; font-weight: 580; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Web workbench: real tool slots + session todos. */
+.lcos-web-workbench-tool-grid { display: flex; flex-wrap: wrap; gap: 5px; }
+.lcos-web-workbench-tool-grid button {
+  padding: 5px 9px;
+  border-radius: 8px;
+  background: rgba(77, 145, 188, .1);
+  color: rgba(45, 86, 113, .8);
+  font-size: 11px;
+  font-weight: 580;
+}
+.lcos-web-workbench-tool-grid button:not(:disabled):hover { background: rgba(77, 145, 188, .18); }
+.lcos-web-workbench-tool-result { display: grid; gap: 5px; padding: 8px 9px; border-radius: 8px; background: rgba(77, 145, 188, .06); }
+.lcos-web-workbench-tool-result span { display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; color: rgba(48, 68, 84, .5); }
+.lcos-web-workbench-tool-result pre { margin: 0; font: 500 11px/1.5 var(--lcos-font-mono, monospace); white-space: pre-wrap; color: rgba(40, 53, 65, .78); }
+.lcos-web-workbench-todos { display: grid; gap: 6px; }
+.lcos-web-workbench-todo-input { display: flex; align-items: center; gap: 6px; }
+.lcos-web-workbench-todo-input svg { flex: 0 0 auto; color: rgba(45, 86, 113, .6); }
+.lcos-web-workbench-todo-input input { flex: 1; min-width: 0; padding: 5px 8px; border-radius: 7px; border: 1px solid rgba(77, 145, 188, .18); background: transparent; font-size: 11px; color: inherit; }
+.lcos-web-workbench-todo-input input:focus { outline: none; border-color: rgba(77, 145, 188, .4); }
+.lcos-web-workbench-todo-input button { padding: 5px 9px; border-radius: 7px; background: rgba(77, 145, 188, .12); font-size: 11px; font-weight: 580; }
+.lcos-web-workbench-todos ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+.lcos-web-workbench-todos li { display: flex; align-items: center; gap: 7px; padding: 4px 6px; border-radius: 7px; background: rgba(77, 145, 188, .05); }
+.lcos-web-workbench-todos li span { flex: 1; min-width: 0; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lcos-web-workbench-todos li.is-done span { text-decoration: line-through; color: rgba(48, 68, 84, .38); }
+.lcos-web-workbench-todos li button { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 6px; color: rgba(45, 86, 113, .7); }
+.lcos-web-workbench-todos li button:hover { background: rgba(77, 145, 188, .12); }
+.lcos-web-workbench-todos li button.is-remove { color: rgba(140, 84, 84, .6); font-size: 13px; line-height: 1; }
+
+[data-lcos-theme='dark'] .lcos-stack-component,
+[data-lcos-theme='dark'] .lcos-compare-component,
+[data-lcos-theme='dark'] .lcos-active-path-component {
+  background: linear-gradient(180deg, rgba(38, 42, 58, .72), rgba(34, 37, 52, .5) 78px, rgba(34, 37, 52, .28));
+  color: rgba(206, 214, 232, .8);
+}
+[data-lcos-theme='dark'] .lcos-stack-component > header small,
+[data-lcos-theme='dark'] .lcos-compare-component > header small,
+[data-lcos-theme='dark'] .lcos-active-path-component > header small { color: rgba(206, 214, 232, .48); }
+[data-lcos-theme='dark'] .lcos-stack-layers li,
+[data-lcos-theme='dark'] .lcos-compare-panels > section,
+[data-lcos-theme='dark'] .lcos-active-path-steps li { background: rgba(128, 180, 216, .1); }
+[data-lcos-theme='dark'] .lcos-stack-layers li:hover,
+[data-lcos-theme='dark'] .lcos-compare-panels > section:hover,
+[data-lcos-theme='dark'] .lcos-active-path-steps li:hover { background: rgba(128, 180, 216, .17); }
+[data-lcos-theme='dark'] .lcos-stack-empty,
+[data-lcos-theme='dark'] .lcos-active-path-empty,
+[data-lcos-theme='dark'] .lcos-compare-hint { color: rgba(206, 214, 232, .44); }
+@media (prefers-reduced-motion: reduce) {
+  .lcos-surface-component-frame,
+  .lcos-surface-component-controls,
+  .lcos-light-segment i,
+  .lcos-glyth,
+  .lcos-matrix-activity i { transition: none !important; animation: none !important; }
+}
+
+.lcos-main-fence-promote {
+  position: absolute;
+  left: 18px;
+  bottom: 14px;
+  z-index: var(--lcos-z-content-chip); /* z-tier: canvas-content */
+  min-height: 23px;
+  padding: 0 7px;
+  border: 1px solid rgba(82, 68, 118, .10);
+  border-radius: 8px;
+  background: rgba(252, 252, 254, .82);
+  color: rgba(64, 55, 83, .54);
+  font-size: 11px;
+  cursor: pointer;
+}
+.lcos-main-fence-promote:hover { background: rgba(255,255,255,.96); color: rgba(76,58,125,.82); }
+
+/* ---------------------------------------------------------------------------
+   Tool result card — Run / 工具结果折叠卡（0.5 波）。
+   结构来自 grok-bot tool-results/view.tsx；视觉词汇走 Glaze：
+   液晶实底 + 细线边框 + 4px 直角 + 等宽字体；状态色复用 glyth 语义 token
+   （done=confirm 绿、failed=error 红、running=working 蓝、pending=灰）。
+   静态文档流元素，不参与 z-index 分层。
+--------------------------------------------------------------------------- */
+.lcos-tool-result-card {
+  box-sizing: border-box;
+  margin-block: 8px;
+  max-width: min(760px, 100%);
+  border-radius: 4px;
+  background: rgba(250, 249, 251, .96);
+  border: 1px solid rgba(92, 74, 143, .12);
+  color: var(--lcos-ink);
+  overflow: hidden;
+}
+.lcos-tool-result-card-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 9px 12px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.lcos-tool-result-card-summary::-webkit-details-marker { display: none; }
+.lcos-tool-result-card-summary > code {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 600 11px/1.4 var(--lcos-font-mono, monospace);
+  color: var(--lcos-ink);
+}
+.lcos-tool-result-card-summary:hover { background: rgba(238, 236, 244, .45); }
+/* 状态徽标：等宽小写胶囊，四态分别复用 confirm / error / working / 中性灰。 */
+.lcos-tool-result-state {
+  flex: 0 0 auto;
+  margin-inline-start: auto;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font: 650 9.5px/1.4 var(--lcos-font-mono, monospace);
+  letter-spacing: .04em;
+}
+.lcos-tool-result-state.state-done { color: var(--lcos-glyth-confirm); border-color: rgba(84, 125, 104, .34); background: rgba(84, 125, 104, .08); }
+.lcos-tool-result-state.state-failed { color: var(--lcos-glyth-error); border-color: rgba(180, 76, 73, .34); background: rgba(180, 76, 73, .07); }
+.lcos-tool-result-state.state-running { color: var(--lcos-glyth-working); border-color: rgba(65, 126, 166, .34); background: rgba(65, 126, 166, .08); }
+.lcos-tool-result-state.state-pending { color: rgba(52, 46, 66, .52); border-color: rgba(92, 74, 143, .18); background: rgba(92, 74, 143, .05); }
+.lcos-tool-result-card-body {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px 12px;
+  border-top: 1px solid rgba(92, 74, 143, .08);
+}
+.lcos-tool-result-card-cwd {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 500 10.5px/1.5 var(--lcos-font-mono, monospace);
+  color: rgba(52, 46, 66, .55);
+}
+/* pre 块：比卡面深一档的底，40vh 封顶滚动，保留换行。 */
+.lcos-tool-result-card-pre {
+  margin: 0;
+  max-height: 40vh;
+  overflow: auto;
+  padding: 10px;
+  border-radius: 4px;
+  background: rgba(238, 236, 244, .55);
+  font: 500 11px/1.55 var(--lcos-font-mono, monospace);
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+  color: rgba(40, 53, 65, .82);
+}
+[data-lcos-theme='dark'] .lcos-tool-result-card {
+  background: rgba(26, 24, 36, .96);
+  border-color: rgba(158, 141, 208, .14);
+}
+[data-lcos-theme='dark'] .lcos-tool-result-card-summary:hover { background: rgba(158, 141, 208, .08); }
+[data-lcos-theme='dark'] .lcos-tool-result-card-body { border-top-color: rgba(158, 141, 208, .1); }
+[data-lcos-theme='dark'] .lcos-tool-result-card-cwd { color: rgba(222, 216, 238, .5); }
+[data-lcos-theme='dark'] .lcos-tool-result-card-pre {
+  background: rgba(16, 15, 24, .6);
+  color: rgba(206, 214, 232, .82);
+}
+[data-lcos-theme='dark'] .lcos-tool-result-state.state-done { border-color: rgba(142, 192, 168, .32); background: rgba(142, 192, 168, .1); }
+[data-lcos-theme='dark'] .lcos-tool-result-state.state-failed { border-color: rgba(228, 116, 110, .32); background: rgba(228, 116, 110, .1); }
+[data-lcos-theme='dark'] .lcos-tool-result-state.state-running { border-color: rgba(128, 180, 216, .32); background: rgba(128, 180, 216, .1); }
+[data-lcos-theme='dark'] .lcos-tool-result-state.state-pending { color: rgba(222, 216, 238, .55); border-color: rgba(158, 141, 208, .2); background: rgba(158, 141, 208, .07); }
+
+/* ---------------------------------------------------------------------------
+   RECEIVER-1/2 会话承接 Chip + Switcher（Glaze 规则：4px 圆角液晶实底、细线边框、
+   等宽 label；状态色复用 Glyth token：working/waiting/ready，offline 用中性灰）。
+--------------------------------------------------------------------------- */
+.lcos-receiver-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid rgba(92, 74, 143, .18);
+  border-radius: 4px;
+  background: rgba(253, 253, 255, .92);
+  font: 650 10.5px/1 var(--lcos-font-mono, monospace);
+  letter-spacing: .02em;
+  color: var(--lcos-ink);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+.lcos-receiver-chip:hover { border-color: rgba(92, 74, 143, .36); background: rgb(253, 253, 255); }
+.lcos-receiver-chip.is-idle { color: rgba(52, 46, 66, .5); }
+.lcos-receiver-chip-label { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+.lcos-receiver-chip-dot { flex: none; width: 6px; height: 6px; border-radius: 999px; }
+.lcos-receiver-chip-dot.status-working,
+.lcos-receiver-dot.status-working { background: var(--lcos-glyth-working); }
+.lcos-receiver-chip-dot.status-waiting,
+.lcos-receiver-dot.status-waiting { background: var(--lcos-glyth-waiting); }
+.lcos-receiver-chip-dot.status-ready,
+.lcos-receiver-dot.status-ready { background: var(--lcos-glyth-stable); }
+.lcos-receiver-chip-dot.status-offline,
+.lcos-receiver-dot.status-offline { background: #9ca3af; }
+/* 0.5 波 GUI 收口：Chip 三态补 loading/error（复用既有视觉 token，不新造语义）。 */
+.lcos-receiver-chip-dot.status-loading { background: var(--lcos-glyth-waiting); }
+.lcos-receiver-chip-dot.status-error { background: var(--lcos-signal-error); }
+
+/* Switcher：Chip 下展开的轻量浮层（宽 300px，非抽屉）；默认锚位仅作无 JS 定位兜底。 */
+.lcos-receiver-switcher {
+  position: fixed;
+  right: 12px;
+  top: 50px;
+  z-index: var(--lcos-z-overlay-ui-top); /* z-tier: overlay-ui（shell 级浮层，同 capability popover；低于 ConfirmDialog 的 dialog 层） */
+  width: 300px;
+  padding: 12px;
+  border: 1px solid rgba(92, 74, 143, .18);
+  border-radius: 4px;
+  background: rgba(253, 253, 255, .97);
+  box-shadow: 0 16px 44px rgba(48, 44, 69, .14);
+  color: var(--lcos-ink);
+}
+.lcos-receiver-switcher header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.lcos-receiver-switcher header small { display: block; font: 700 9px/1.4 var(--lcos-font-mono, monospace); letter-spacing: .08em; text-transform: uppercase; color: rgba(52, 46, 66, .44); }
+.lcos-receiver-switcher header h3 { margin: 1px 0 0; font-size: 13px; font-weight: 660; color: var(--lcos-ink); }
+.lcos-receiver-close { display: grid; place-items: center; width: 22px; height: 22px; border: 0; border-radius: 6px; background: transparent; color: rgba(52, 46, 66, .5); cursor: pointer; }
+.lcos-receiver-close:hover { color: var(--lcos-ink); background: rgba(92, 74, 143, .08); }
+.lcos-receiver-error { margin: 0 0 8px; font-size: 10.5px; color: var(--lcos-signal-error); }
+.lcos-receiver-retry { margin-left: 6px; padding: 1px 6px; border: 1px solid rgba(92, 74, 143, .28); border-radius: 6px; background: transparent; color: var(--lcos-ink); font: 600 10.5px/1.4 var(--lcos-font-mono, monospace); cursor: pointer; vertical-align: baseline; }
+.lcos-receiver-retry:hover { background: rgba(92, 74, 143, .08); }
+.lcos-receiver-section { margin-bottom: 10px; }
+.lcos-receiver-section > h4 { margin: 0 0 5px; font: 700 9.5px/1.4 var(--lcos-font-mono, monospace); letter-spacing: .06em; text-transform: uppercase; color: rgba(52, 46, 66, .44); }
+.lcos-receiver-hint { margin: 0; font-size: 10.5px; line-height: 1.6; color: rgba(52, 46, 66, .52); }
+.lcos-receiver-empty { padding: 8px 0; }
+.lcos-receiver-empty p { margin: 0; font-size: 11px; color: var(--lcos-ink); }
+.lcos-receiver-empty small { display: block; margin-top: 2px; font-size: 10px; line-height: 1.5; color: rgba(52, 46, 66, .5); }
+.lcos-receiver-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.lcos-receiver-row { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 0 4px 0 2px; border-radius: 4px; }
+.lcos-receiver-row.is-active { padding: 7px 6px; border: 1px solid rgba(92, 74, 143, .16); background: rgba(92, 74, 143, .05); }
+.lcos-receiver-row:not(.is-active):has(.lcos-receiver-select:hover) { background: rgba(92, 74, 143, .06); }
+.lcos-receiver-select { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; padding: 6px 4px; border: 0; background: transparent; text-align: left; cursor: pointer; }
+.lcos-receiver-select:disabled { opacity: .5; cursor: default; }
+.lcos-receiver-select:hover strong { color: var(--lcos-signal); }
+.lcos-receiver-dot { flex: none; width: 6px; height: 6px; border-radius: 999px; }
+.lcos-receiver-row-main { display: grid; gap: 1px; min-width: 0; flex: 1; }
+.lcos-receiver-row-main strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; font-weight: 640; color: var(--lcos-ink); }
+.lcos-receiver-row-main time { font: 500 9.5px/1.4 var(--lcos-font-mono, monospace); color: rgba(52, 46, 66, .48); }
+.lcos-receiver-provider { flex: none; padding: 1.5px 6px; border: 1px solid rgba(92, 74, 143, .2); border-radius: 999px; font: 650 8.5px/1.4 var(--lcos-font-mono, monospace); letter-spacing: .04em; color: rgba(52, 46, 66, .6); }
+.lcos-receiver-unlink { display: grid; place-items: center; flex: none; width: 20px; height: 20px; border: 0; border-radius: 5px; background: transparent; color: rgba(52, 46, 66, .4); cursor: pointer; }
+.lcos-receiver-unlink:hover { color: var(--lcos-signal-error); background: rgba(180, 76, 73, .08); }
+.lcos-receiver-unlink:disabled { opacity: .4; cursor: default; }
+.lcos-receiver-create { width: 100%; display: flex; align-items: center; justify-content: center; gap: 5px; padding: 7px 8px; border: 1px dashed rgba(92, 74, 143, .3); border-radius: 4px; background: transparent; font-size: 11px; font-weight: 620; color: var(--lcos-signal); cursor: pointer; }
+.lcos-receiver-create:hover { background: rgba(92, 74, 143, .06); border-color: rgba(92, 74, 143, .5); }
+.lcos-receiver-create:disabled { opacity: .5; cursor: default; }
+.lcos-receiver-divider { height: 1px; margin: 9px 0; background: rgba(92, 74, 143, .14); }
+.lcos-receiver-archive { width: 100%; padding: 6px 8px; border: 0; border-radius: 4px; background: transparent; font-size: 10.5px; color: rgba(52, 46, 66, .56); cursor: pointer; }
+.lcos-receiver-archive:hover { color: var(--lcos-ink); background: rgba(92, 74, 143, .06); }
+
+/* RECEIVER-5 会话失效（43O）：Chip 断开态 = 虚线边框 + 灰点；当前承接行 = 语义红弱化底（警示但非错误，与 site-mismatch 同色族）。 */
+.lcos-receiver-chip[data-stale='true'] { border-style: dashed; border-color: rgba(180, 76, 73, .38); color: rgba(52, 46, 66, .62); }
+.lcos-receiver-row.is-stale { padding: 7px 6px; border: 1px dashed rgba(180, 76, 73, .34); background: rgba(180, 76, 73, .05); }
+.lcos-receiver-stale-note { display: block; margin-top: 1px; font-size: 10px; line-height: 1.5; color: var(--lcos-signal-error); }
+.lcos-receiver-reconnect { flex: none; margin-left: auto; padding: 3.5px 9px; border: 1px solid rgba(180, 76, 73, .32); border-radius: 4px; background: transparent; font: 620 10.5px/1.4 var(--lcos-font-mono, monospace); color: var(--lcos-ink); cursor: pointer; }
+.lcos-receiver-reconnect:hover { background: rgba(180, 76, 73, .08); border-color: rgba(180, 76, 73, .5); }
+.lcos-receiver-reconnect:disabled { opacity: .5; cursor: default; }
+
+/* RECEIVER-3 承接确认小卡：点选目标会话后的轻浮层（复用 confirm-backdrop；宽约 320px 结构卡）。 */
+.lcos-receiver-handoff-confirm {
+  width: min(320px, calc(100vw - 32px));
+  padding: 14px;
+  border: 1px solid rgba(92, 74, 143, .18);
+  border-radius: 6px;
+  background: rgba(253, 253, 255, .98);
+  box-shadow: 0 16px 44px rgba(48, 44, 69, .16);
+  color: var(--lcos-ink);
+}
+.lcos-receiver-handoff-confirm header { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 10px; color: rgba(52, 46, 66, .52); }
+.lcos-receiver-handoff-confirm header > div { flex: 1; }
+.lcos-receiver-handoff-confirm header small { display: block; font: 700 9px/1.4 var(--lcos-font-mono, monospace); letter-spacing: .08em; text-transform: uppercase; color: rgba(52, 46, 66, .44); }
+.lcos-receiver-handoff-confirm header h3 { margin: 1px 0 0; font-size: 13px; font-weight: 660; color: var(--lcos-ink); }
+.lcos-receiver-handoff-route { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; font-size: 11.5px; }
+.lcos-receiver-handoff-route > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: rgba(52, 46, 66, .6); }
+.lcos-receiver-handoff-route > i { flex: none; font-style: normal; color: rgba(52, 46, 66, .4); }
+.lcos-receiver-handoff-route > strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 660; color: var(--lcos-ink); }
+.lcos-receiver-handoff-facts { list-style: none; margin: 0 0 8px; padding: 6px 8px; border: 1px solid rgba(92, 74, 143, .14); border-radius: 4px; background: rgba(92, 74, 143, .04); display: grid; gap: 3px; }
+.lcos-receiver-handoff-facts li { font-size: 10.5px; line-height: 1.5; color: rgba(52, 46, 66, .68); }
+.lcos-receiver-handoff-facts li.is-pending { color: var(--lcos-signal-error); }
+/* RECEIVER-6 施工现场差异提醒（43I.2）：警示但非错误——语义红弱化底 + 等宽现场标识。 */
+.lcos-receiver-handoff-facts li.is-site-mismatch { color: var(--lcos-signal-error); background: rgba(196, 64, 64, .06); border-radius: 3px; padding: 2px 5px; margin: 1px -5px 0; font-family: var(--lcos-font-mono, monospace); font-size: 10px; }
+.lcos-receiver-handoff-hint { margin: 0 0 10px; font-size: 10px; line-height: 1.6; color: rgba(52, 46, 66, .5); }
+.lcos-receiver-handoff-confirm footer { display: flex; gap: 8px; justify-content: flex-end; }
+
+/* dark 双轨（照 Glyth token 的显式覆盖 + OS 偏好回退模式）。 */
+[data-lcos-theme='dark'] .lcos-receiver-chip { background: rgba(32, 28, 44, .92); border-color: rgba(158, 141, 208, .24); }
+[data-lcos-theme='dark'] .lcos-receiver-chip:hover { background: rgb(36, 32, 50); border-color: rgba(158, 141, 208, .4); }
+[data-lcos-theme='dark'] .lcos-receiver-chip.is-idle { color: rgba(222, 216, 238, .5); }
+[data-lcos-theme='dark'] .lcos-receiver-switcher { background: rgba(30, 27, 42, .97); border-color: rgba(158, 141, 208, .24); box-shadow: 0 16px 44px rgba(0, 0, 0, .42); }
+[data-lcos-theme='dark'] .lcos-receiver-switcher header small { color: rgba(222, 216, 238, .42); }
+[data-lcos-theme='dark'] .lcos-receiver-close { color: rgba(222, 216, 238, .5); }
+[data-lcos-theme='dark'] .lcos-receiver-close:hover { color: rgba(222, 216, 238, .9); background: rgba(158, 141, 208, .12); }
+[data-lcos-theme='dark'] .lcos-receiver-section > h4 { color: rgba(222, 216, 238, .42); }
+[data-lcos-theme='dark'] .lcos-receiver-hint { color: rgba(222, 216, 238, .5); }
+[data-lcos-theme='dark'] .lcos-receiver-empty small { color: rgba(222, 216, 238, .48); }
+[data-lcos-theme='dark'] .lcos-receiver-row.is-active { border-color: rgba(158, 141, 208, .26); background: rgba(158, 141, 208, .08); }
+[data-lcos-theme='dark'] .lcos-receiver-row:not(.is-active):has(.lcos-receiver-select:hover) { background: rgba(158, 141, 208, .1); }
+[data-lcos-theme='dark'] .lcos-receiver-select:hover strong { color: var(--lcos-signal); }
+[data-lcos-theme='dark'] .lcos-receiver-row-main time { color: rgba(222, 216, 238, .46); }
+[data-lcos-theme='dark'] .lcos-receiver-provider { border-color: rgba(158, 141, 208, .28); color: rgba(222, 216, 238, .58); }
+[data-lcos-theme='dark'] .lcos-receiver-unlink { color: rgba(222, 216, 238, .42); }
+[data-lcos-theme='dark'] .lcos-receiver-create { border-color: rgba(158, 141, 208, .34); color: var(--lcos-signal); }
+[data-lcos-theme='dark'] .lcos-receiver-create:hover { background: rgba(158, 141, 208, .1); border-color: rgba(158, 141, 208, .5); }
+[data-lcos-theme='dark'] .lcos-receiver-divider { background: rgba(158, 141, 208, .18); }
+[data-lcos-theme='dark'] .lcos-receiver-archive { color: rgba(222, 216, 238, .52); }
+[data-lcos-theme='dark'] .lcos-receiver-archive:hover { color: rgba(222, 216, 238, .9); background: rgba(158, 141, 208, .1); }
+[data-lcos-theme='dark'] .lcos-receiver-chip[data-stale='true'] { border-color: rgba(216, 122, 118, .42); color: rgba(222, 216, 238, .62); }
+[data-lcos-theme='dark'] .lcos-receiver-row.is-stale { border-color: rgba(216, 122, 118, .38); background: rgba(216, 122, 118, .08); }
+[data-lcos-theme='dark'] .lcos-receiver-reconnect { border-color: rgba(216, 122, 118, .36); color: rgba(222, 216, 238, .86); }
+[data-lcos-theme='dark'] .lcos-receiver-reconnect:hover { background: rgba(216, 122, 118, .12); border-color: rgba(216, 122, 118, .55); }
+[data-lcos-theme='dark'] .lcos-receiver-handoff-confirm { background: rgba(30, 27, 42, .98); border-color: rgba(158, 141, 208, .24); box-shadow: 0 16px 44px rgba(0, 0, 0, .42); }
+[data-lcos-theme='dark'] .lcos-receiver-handoff-confirm header small { color: rgba(222, 216, 238, .42); }
+[data-lcos-theme='dark'] .lcos-receiver-handoff-route > span { color: rgba(222, 216, 238, .55); }
+[data-lcos-theme='dark'] .lcos-receiver-handoff-route > i { color: rgba(222, 216, 238, .4); }
+[data-lcos-theme='dark'] .lcos-receiver-handoff-facts { border-color: rgba(158, 141, 208, .2); background: rgba(158, 141, 208, .07); }
+[data-lcos-theme='dark'] .lcos-receiver-handoff-facts li { color: rgba(222, 216, 238, .66); }
+[data-lcos-theme='dark'] .lcos-receiver-handoff-hint { color: rgba(222, 216, 238, .48); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-lcos-theme='light']) .lcos-receiver-chip { background: rgba(32, 28, 44, .92); border-color: rgba(158, 141, 208, .24); }
+  :root:not([data-lcos-theme='light']) .lcos-receiver-chip:hover { background: rgb(36, 32, 50); border-color: rgba(158, 141, 208, .4); }
+  :root:not([data-lcos-theme='light']) .lcos-receiver-chip.is-idle { color: rgba(222, 216, 238, .5); }
+  :root:not([data-lcos-theme='light']) .lcos-receiver-switcher { background: rgba(30, 27, 42, .97); border-color: rgba(158, 141, 208, .24); box-shadow: 0 16px 44px rgba(0, 0, 0, .42); }
+  :root:not([data-lcos-theme='light']) .lcos-receiver-switcher header small { color: rgba(222, 216, 238, .42); }
+  :root:not([data-lcos-theme='light']) .lcos-receiver-close { color: rgba(222, 216, 238, .5); }
+  :root:not([data-lcos-theme='light']) .lcos-receiver-close:hover { color: rgba(222, 216, 238, .9); background: rgba(158, 141, 208, .12); }
+  :root:not([data-lcos-theme='light']) .lcos-receiver-section > h4 { color: rgba(222, 216, 238, .42); }
+  :root:not([data-lcos-theme='light']) .lcos-receiver-hint { color: rgba(222, 216, 238, .5); }
+  :root:not([data-lcos-theme='light']) .lcos-receiver-empty small { color: rgba(222, 216, 238, .48); }
+  :root:not([data-lcos-theme='light']) .lcos-receiver-row.is-active { border-color: rgba(158, 141, 208, .26); background: rgba(158, 141, 208, .08); }
+  :root:not([data-lcos-theme='light']) .lcos-receiver-row:not(.is-active):has(.lcos-receiver-select:hover) { background: rgba(158, 141, 208, .1); }
+  :root:not([data-lcos-theme='light']) .lcos-receiver-row-main time { color: rgba(222, 216, 238, .46); }
+  :root:not([data-lcos-theme='light']) .lcos-receiver-provider { border-color: rgba(158, 141, 208, .28); color: rgba(222, 216, 238, .58); }
+  :root:not([data-lcos-theme='light']) .lcos-receiver-unlink { color: rgba(222, 216, 238, .42); }
+  :root:not([data-lcos-theme='light']) .lcos-receiver-divider { background: rgba(158, 141, 208, .18); }
+  :root:not([data-lcos-theme='light']) .lcos-receiver-archive { color: rgba(222, 216, 238, .52); }
+}
+
+/* ---------------------------------------------------------------------------
+   Run outline — Run 过程大纲面板（第一梯队 ④）。
+   结构来自 grok-bot conversation-outline-view；视觉词汇走 Glaze：
+   液晶实底 + 细线边框 + 4px 直角 + 等宽 label；顶部 3px 状态色条、行内状态
+   图标与横幅 chip 全部复用 glyth 语义 token（done=confirm、failed=error、
+   running=working、pending/info=中性灰、等待徽标=waiting）。
+   只读静态文档流元素，不参与 z-index 分层。
+--------------------------------------------------------------------------- */
+.lcos-run-outline {
+  box-sizing: border-box;
+  margin-block: 8px;
+  max-width: min(260px, 100%);
+  border: 1px solid rgba(92, 74, 143, .12);
+  border-top: 3px solid var(--lcos-glyth-stable);
+  border-radius: 4px;
+  background: rgba(250, 249, 251, .96);
+  color: var(--lcos-ink);
+  overflow: hidden;
+}
+/* 顶部状态色条：Run 状态 → glyth token。 */
+.lcos-run-outline[data-run-status='queued'],
+.lcos-run-outline[data-run-status='waiting_input'] { border-top-color: var(--lcos-glyth-waiting); }
+.lcos-run-outline[data-run-status='running'] { border-top-color: var(--lcos-glyth-working); }
+.lcos-run-outline[data-run-status='review'] { border-top-color: var(--lcos-glyth-output); }
+.lcos-run-outline[data-run-status='completed'] { border-top-color: var(--lcos-glyth-confirm); }
+.lcos-run-outline[data-run-status='failed'] { border-top-color: var(--lcos-glyth-error); }
+.lcos-run-outline-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 12px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.lcos-run-outline-summary::-webkit-details-marker { display: none; }
+.lcos-run-outline-summary:hover { background: rgba(238, 236, 244, .45); }
+.lcos-run-outline-title {
+  flex: 0 0 auto;
+  font: 700 9.5px/1.4 var(--lcos-font-mono, monospace);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: rgba(52, 46, 66, .48);
+}
+.lcos-run-outline-progress {
+  flex: 0 0 auto;
+  font: 650 10px/1.4 var(--lcos-font-mono, monospace);
+  color: rgba(52, 46, 66, .55);
+}
+/* 横幅状态 chip：与 tool-result-state 同语义的等宽胶囊。 */
+.lcos-run-outline-state {
+  flex: 0 0 auto;
+  margin-inline-start: auto;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font: 650 9.5px/1.4 var(--lcos-font-mono, monospace);
+  letter-spacing: .04em;
+}
+.lcos-run-outline-state.state-queued,
+.lcos-run-outline-state.state-waiting_input { color: var(--lcos-glyth-waiting); border-color: rgba(181, 126, 56, .34); background: rgba(181, 126, 56, .08); }
+.lcos-run-outline-state.state-running { color: var(--lcos-glyth-working); border-color: rgba(65, 126, 166, .34); background: rgba(65, 126, 166, .08); }
+.lcos-run-outline-state.state-review { color: var(--lcos-glyth-output); border-color: rgba(122, 86, 175, .34); background: rgba(122, 86, 175, .08); }
+.lcos-run-outline-state.state-completed { color: var(--lcos-glyth-confirm); border-color: rgba(84, 125, 104, .34); background: rgba(84, 125, 104, .08); }
+.lcos-run-outline-state.state-failed { color: var(--lcos-glyth-error); border-color: rgba(180, 76, 73, .34); background: rgba(180, 76, 73, .07); }
+.lcos-run-outline-state.state-cancelled { color: rgba(52, 46, 66, .52); border-color: rgba(92, 74, 143, .18); background: rgba(92, 74, 143, .05); }
+/* 条目列表：40vh 封顶滚动，行级 hover 提示可展开。 */
+.lcos-run-outline-items {
+  margin: 0;
+  padding: 6px 8px 10px;
+  list-style: none;
+  display: grid;
+  gap: 2px;
+  max-height: 40vh;
+  overflow: auto;
+  border-top: 1px solid rgba(92, 74, 143, .08);
+}
+.lcos-run-outline-empty {
+  margin: 0;
+  padding: 10px 12px 12px;
+  border-top: 1px solid rgba(92, 74, 143, .08);
+  font-size: 10.5px;
+  line-height: 1.6;
+  color: rgba(52, 46, 66, .5);
+}
+.lcos-run-outline-item { min-width: 0; display: grid; gap: 2px; padding: 3px 4px; border-radius: 4px; }
+.lcos-run-outline-item:hover { background: rgba(238, 236, 244, .4); }
+.lcos-run-outline-row { display: flex; align-items: flex-start; gap: 7px; min-width: 0; }
+.lcos-run-outline-mark { flex: 0 0 auto; display: inline-flex; margin-top: 1px; }
+.lcos-run-outline-mark.status-done { color: var(--lcos-glyth-confirm); }
+.lcos-run-outline-mark.status-failed { color: var(--lcos-glyth-error); }
+.lcos-run-outline-mark.status-running { color: var(--lcos-glyth-working); }
+.lcos-run-outline-mark.status-pending { color: rgba(52, 46, 66, .38); }
+.lcos-run-outline-mark.status-info { color: rgba(52, 46, 66, .45); }
+/* running 图标转圈（reduced-motion 时停转）。 */
+.lcos-run-outline-mark.status-running svg { animation: lcos-run-outline-spin .9s linear infinite; }
+@keyframes lcos-run-outline-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .lcos-run-outline-mark.status-running svg { animation: none; } }
+.lcos-run-outline-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 500 10.5px/1.5 var(--lcos-font-mono, monospace);
+  color: var(--lcos-ink);
+}
+/* 暂停态徽标（等待输入 / 待确认）：waiting 琥珀。 */
+.lcos-run-outline-badge {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  padding: 1.5px 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(181, 126, 56, .34);
+  background: rgba(181, 126, 56, .08);
+  color: var(--lcos-glyth-waiting);
+  font: 650 8.5px/1.4 var(--lcos-font-mono, monospace);
+  letter-spacing: .04em;
+}
+/* 行内可展开详情：19px = 图标 12 + 间距 7，与 label 对齐。 */
+.lcos-run-outline-item-detail { min-width: 0; margin: 1px 0 1px 19px; }
+.lcos-run-outline-item-detail summary {
+  width: max-content;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  font: 650 9px/1.4 var(--lcos-font-mono, monospace);
+  letter-spacing: .04em;
+  color: rgba(52, 46, 66, .42);
+}
+.lcos-run-outline-item-detail summary::-webkit-details-marker { display: none; }
+.lcos-run-outline-item-detail summary::after { content: '▸'; display: inline-block; margin-left: 4px; transition: transform 120ms ease; }
+.lcos-run-outline-item-detail[open] summary::after { transform: rotate(90deg); }
+.lcos-run-outline-item-detail pre {
+  margin: 4px 0 0;
+  padding: 7px 9px;
+  border-radius: 4px;
+  background: rgba(238, 236, 244, .55);
+  font: 500 10px/1.5 var(--lcos-font-mono, monospace);
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+  color: rgba(40, 53, 65, .82);
+}
+/* dark 双轨（显式覆盖 + OS 偏好回退；glyth token 自身随主题翻转无需重复）。 */
+[data-lcos-theme='dark'] .lcos-run-outline { background: rgba(26, 24, 36, .96); border-color: rgba(158, 141, 208, .14); }
+[data-lcos-theme='dark'] .lcos-run-outline-summary:hover { background: rgba(158, 141, 208, .08); }
+[data-lcos-theme='dark'] .lcos-run-outline-title { color: rgba(222, 216, 238, .42); }
+[data-lcos-theme='dark'] .lcos-run-outline-progress { color: rgba(222, 216, 238, .48); }
+[data-lcos-theme='dark'] .lcos-run-outline-items { border-top-color: rgba(158, 141, 208, .1); }
+[data-lcos-theme='dark'] .lcos-run-outline-empty { color: rgba(222, 216, 238, .48); }
+[data-lcos-theme='dark'] .lcos-run-outline-item:hover { background: rgba(158, 141, 208, .08); }
+[data-lcos-theme='dark'] .lcos-run-outline-mark.status-pending { color: rgba(222, 216, 238, .38); }
+[data-lcos-theme='dark'] .lcos-run-outline-mark.status-info { color: rgba(222, 216, 238, .45); }
+[data-lcos-theme='dark'] .lcos-run-outline-state.state-queued,
+[data-lcos-theme='dark'] .lcos-run-outline-state.state-waiting_input { border-color: rgba(224, 178, 112, .32); background: rgba(224, 178, 112, .1); }
+[data-lcos-theme='dark'] .lcos-run-outline-state.state-running { border-color: rgba(128, 180, 216, .32); background: rgba(128, 180, 216, .1); }
+[data-lcos-theme='dark'] .lcos-run-outline-state.state-review { border-color: rgba(186, 154, 238, .32); background: rgba(186, 154, 238, .1); }
+[data-lcos-theme='dark'] .lcos-run-outline-state.state-completed { border-color: rgba(142, 192, 168, .32); background: rgba(142, 192, 168, .1); }
+[data-lcos-theme='dark'] .lcos-run-outline-state.state-failed { border-color: rgba(228, 116, 110, .32); background: rgba(228, 116, 110, .1); }
+[data-lcos-theme='dark'] .lcos-run-outline-state.state-cancelled { color: rgba(222, 216, 238, .55); border-color: rgba(158, 141, 208, .2); background: rgba(158, 141, 208, .07); }
+[data-lcos-theme='dark'] .lcos-run-outline-badge { border-color: rgba(224, 178, 112, .32); background: rgba(224, 178, 112, .1); }
+[data-lcos-theme='dark'] .lcos-run-outline-item-detail summary { color: rgba(222, 216, 238, .4); }
+[data-lcos-theme='dark'] .lcos-run-outline-item-detail pre { background: rgba(16, 15, 24, .6); color: rgba(206, 214, 232, .82); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-lcos-theme='light']) .lcos-run-outline { background: rgba(26, 24, 36, .96); border-color: rgba(158, 141, 208, .14); }
+  :root:not([data-lcos-theme='light']) .lcos-run-outline-summary:hover { background: rgba(158, 141, 208, .08); }
+  :root:not([data-lcos-theme='light']) .lcos-run-outline-title { color: rgba(222, 216, 238, .42); }
+  :root:not([data-lcos-theme='light']) .lcos-run-outline-progress { color: rgba(222, 216, 238, .48); }
+  :root:not([data-lcos-theme='light']) .lcos-run-outline-items { border-top-color: rgba(158, 141, 208, .1); }
+  :root:not([data-lcos-theme='light']) .lcos-run-outline-empty { color: rgba(222, 216, 238, .48); }
+  :root:not([data-lcos-theme='light']) .lcos-run-outline-item:hover { background: rgba(158, 141, 208, .08); }
+  :root:not([data-lcos-theme='light']) .lcos-run-outline-mark.status-pending { color: rgba(222, 216, 238, .38); }
+  :root:not([data-lcos-theme='light']) .lcos-run-outline-mark.status-info { color: rgba(222, 216, 238, .45); }
+  :root:not([data-lcos-theme='light']) .lcos-run-outline-state.state-queued,
+  :root:not([data-lcos-theme='light']) .lcos-run-outline-state.state-waiting_input { border-color: rgba(224, 178, 112, .32); background: rgba(224, 178, 112, .1); }
+  :root:not([data-lcos-theme='light']) .lcos-run-outline-state.state-running { border-color: rgba(128, 180, 216, .32); background: rgba(128, 180, 216, .1); }
+  :root:not([data-lcos-theme='light']) .lcos-run-outline-state.state-review { border-color: rgba(186, 154, 238, .32); background: rgba(186, 154, 238, .1); }
+  :root:not([data-lcos-theme='light']) .lcos-run-outline-state.state-completed { border-color: rgba(142, 192, 168, .32); background: rgba(142, 192, 168, .1); }
+  :root:not([data-lcos-theme='light']) .lcos-run-outline-state.state-failed { border-color: rgba(228, 116, 110, .32); background: rgba(228, 116, 110, .1); }
+  :root:not([data-lcos-theme='light']) .lcos-run-outline-state.state-cancelled { color: rgba(222, 216, 238, .55); border-color: rgba(158, 141, 208, .2); background: rgba(158, 141, 208, .07); }
+  :root:not([data-lcos-theme='light']) .lcos-run-outline-badge { border-color: rgba(224, 178, 112, .32); background: rgba(224, 178, 112, .1); }
+  :root:not([data-lcos-theme='light']) .lcos-run-outline-item-detail summary { color: rgba(222, 216, 238, .4); }
+  :root:not([data-lcos-theme='light']) .lcos-run-outline-item-detail pre { background: rgba(16, 15, 24, .6); color: rgba(206, 214, 232, .82); }
+}
+
+/* ---------------------------------------------------------------------------
+   Command palette — ⌘K 全局命令面板（第一梯队 ⑤）。
+   结构抄 grok-bot CommandPalette（provider 可插拔 + 纯键盘驱动），视觉走 Glaze：
+   液晶实底 + 细线边框 + 4px 圆角 + 等宽标题 + 分组小标题；portal 到 body，
+   z-index 用 modal 层 token（命令面板是全局顶层瞬态，取 modal 档最高位）。
+--------------------------------------------------------------------------- */
+.lcos-command-palette-layer {
+  position: fixed;
+  inset: 0;
+  z-index: var(--lcos-z-modal-top); /* z-tier: modal（全局顶层瞬态，压过各业务 modal） */
+}
+.lcos-command-palette-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(25, 40, 55, .18);
+  backdrop-filter: blur(3px);
+}
+.lcos-command-palette {
+  position: absolute;
+  left: 50%;
+  top: 12vh;
+  transform: translateX(-50%);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: min(520px, calc(100vw - 32px));
+  max-height: 68vh;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid rgba(92, 74, 143, .18);
+  border-radius: 4px;
+  background: rgba(253, 253, 255, .98);
+  box-shadow: 0 18px 52px rgba(48, 44, 69, .18);
+  color: var(--lcos-ink);
+}
+.lcos-command-palette-input {
+  min-width: 0;
+  padding: 12px 14px 10px;
+  border: 0;
+  border-bottom: 1px solid rgba(92, 74, 143, .12);
+  background: transparent;
+  font: 520 13px/1.5 var(--lcos-font-mono, monospace);
+  color: var(--lcos-ink);
+  outline: none;
+}
+.lcos-command-palette-input::placeholder { color: rgba(52, 46, 66, .38); }
+.lcos-command-palette-list {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px 0 8px;
+}
+.lcos-command-palette-group + .lcos-command-palette-group { margin-top: 4px; }
+.lcos-command-palette-group-title {
+  margin: 6px 14px 3px;
+  font: 700 9.5px/1.4 var(--lcos-font-mono, monospace);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: rgba(52, 46, 66, .42);
+}
+.lcos-command-palette-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  padding: 6px 14px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.lcos-command-palette-row:hover,
+.lcos-command-palette-row.is-selected { background: rgba(92, 74, 143, .07); }
+.lcos-command-palette-row.is-selected .lcos-command-palette-row-title { color: var(--lcos-signal); }
+.lcos-command-palette-row-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 620 12px/1.5 var(--lcos-font-mono, monospace);
+  color: var(--lcos-ink);
+}
+.lcos-command-palette-row-hint {
+  flex: none;
+  max-width: 46%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 500 9.5px/1.5 var(--lcos-font-mono, monospace);
+  color: rgba(52, 46, 66, .44);
+}
+.lcos-command-palette-empty {
+  margin: 0;
+  padding: 18px 14px;
+  font: 520 11.5px/1.6 var(--lcos-font-mono, monospace);
+  color: rgba(52, 46, 66, .5);
+}
+.lcos-command-palette-footer {
+  display: flex;
+  gap: 14px;
+  padding: 7px 14px;
+  border-top: 1px solid rgba(92, 74, 143, .12);
+  font: 650 9px/1.4 var(--lcos-font-mono, monospace);
+  letter-spacing: .05em;
+  color: rgba(52, 46, 66, .42);
+}
+
+/* dark 双轨（显式覆盖 + OS 偏好回退）。 */
+[data-lcos-theme='dark'] .lcos-command-palette { background: rgba(30, 27, 42, .97); border-color: rgba(158, 141, 208, .24); box-shadow: 0 18px 52px rgba(0, 0, 0, .42); }
+[data-lcos-theme='dark'] .lcos-command-palette-input { border-bottom-color: rgba(158, 141, 208, .14); color: rgba(222, 216, 238, .92); }
+[data-lcos-theme='dark'] .lcos-command-palette-input::placeholder { color: rgba(222, 216, 238, .38); }
+[data-lcos-theme='dark'] .lcos-command-palette-group-title { color: rgba(222, 216, 238, .42); }
+[data-lcos-theme='dark'] .lcos-command-palette-row:hover,
+[data-lcos-theme='dark'] .lcos-command-palette-row.is-selected { background: rgba(158, 141, 208, .1); }
+[data-lcos-theme='dark'] .lcos-command-palette-row-title { color: rgba(222, 216, 238, .88); }
+[data-lcos-theme='dark'] .lcos-command-palette-row.is-selected .lcos-command-palette-row-title { color: var(--lcos-signal); }
+[data-lcos-theme='dark'] .lcos-command-palette-row-hint { color: rgba(222, 216, 238, .44); }
+[data-lcos-theme='dark'] .lcos-command-palette-empty { color: rgba(222, 216, 238, .5); }
+[data-lcos-theme='dark'] .lcos-command-palette-footer { border-top-color: rgba(158, 141, 208, .14); color: rgba(222, 216, 238, .42); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-lcos-theme='light']) .lcos-command-palette { background: rgba(30, 27, 42, .97); border-color: rgba(158, 141, 208, .24); box-shadow: 0 18px 52px rgba(0, 0, 0, .42); }
+  :root:not([data-lcos-theme='light']) .lcos-command-palette-input { border-bottom-color: rgba(158, 141, 208, .14); color: rgba(222, 216, 238, .92); }
+  :root:not([data-lcos-theme='light']) .lcos-command-palette-input::placeholder { color: rgba(222, 216, 238, .38); }
+  :root:not([data-lcos-theme='light']) .lcos-command-palette-group-title { color: rgba(222, 216, 238, .42); }
+  :root:not([data-lcos-theme='light']) .lcos-command-palette-row:hover,
+  :root:not([data-lcos-theme='light']) .lcos-command-palette-row.is-selected { background: rgba(158, 141, 208, .1); }
+  :root:not([data-lcos-theme='light']) .lcos-command-palette-row-title { color: rgba(222, 216, 238, .88); }
+  :root:not([data-lcos-theme='light']) .lcos-command-palette-row.is-selected .lcos-command-palette-row-title { color: var(--lcos-signal); }
+  :root:not([data-lcos-theme='light']) .lcos-command-palette-row-hint { color: rgba(222, 216, 238, .44); }
+  :root:not([data-lcos-theme='light']) .lcos-command-palette-empty { color: rgba(222, 216, 238, .5); }
+  :root:not([data-lcos-theme='light']) .lcos-command-palette-footer { border-top-color: rgba(158, 141, 208, .14); color: rgba(222, 216, 238, .42); }
+}
+
+/* ---------------------------------------------------------------------------
+   权限确认卡（第一梯队 ⑥）：写意图 Run 发送前的授权门。
+   复用 ConfirmDialog 的 backdrop/浮层协议与 receiver 系列的 Glaze 样式语言
+   （4px 圆角液晶实底、细线边框、等宽 label、Glyth token 状态色）。
+--------------------------------------------------------------------------- */
+.permission-confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--lcos-z-dialog, 210); /* 与 ConfirmDialog 同层：同属确认类浮层 */
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(24, 22, 33, .28);
+}
+.permission-confirm-card {
+  width: min(380px, calc(100vw - 32px));
+  padding: 16px;
+  border: 1px solid rgba(92, 74, 143, .18);
+  border-radius: 4px;
+  background: rgba(253, 253, 255, .97);
+  box-shadow: 0 18px 44px rgba(24, 22, 33, .22);
+}
+.permission-confirm-card > header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--lcos-glyth-waiting, #b7833e); /* 写操作=待授权：waiting 警示色 */
+}
+.permission-confirm-card > header > div { flex: 1; min-width: 0; }
+.permission-confirm-card > header span {
+  display: block;
+  font: 700 9px/1.4 var(--lcos-font-mono, monospace);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: rgba(52, 46, 66, .44);
+}
+.permission-confirm-card > header h2 {
+  margin: 1px 0 0;
+  font-size: 13.5px;
+  font-weight: 660;
+  color: var(--lcos-ink);
+}
+.permission-confirm-card > header > button {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(52, 46, 66, .5);
+  cursor: pointer;
+}
+.permission-confirm-card > header > button:hover { color: var(--lcos-ink); background: rgba(92, 74, 143, .08); }
+.permission-confirm-note {
+  margin: 10px 0 0;
+  font: 520 10.5px/1.6 var(--lcos-font-mono, monospace);
+  color: rgba(52, 46, 66, .52);
+}
+.permission-confirm-items {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+.permission-confirm-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 6px 7px;
+  border: 1px solid rgba(92, 74, 143, .14);
+  border-radius: 4px;
+  background: rgba(92, 74, 143, .04);
+  font: 620 11.5px/1.4 var(--lcos-font-mono, monospace);
+  color: var(--lcos-ink);
+}
+.permission-confirm-item-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--lcos-glyth-waiting, #b7833e);
+}
+.permission-confirm-card > footer {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+/* dark 双轨（显式覆盖 + OS 偏好回退），同 command-palette 模式。 */
+[data-lcos-theme='dark'] .permission-confirm-backdrop { background: rgba(8, 7, 14, .45); }
+[data-lcos-theme='dark'] .permission-confirm-card { background: rgba(30, 27, 42, .97); border-color: rgba(158, 141, 208, .24); box-shadow: 0 18px 52px rgba(0, 0, 0, .42); }
+[data-lcos-theme='dark'] .permission-confirm-card > header span { color: rgba(222, 216, 238, .42); }
+[data-lcos-theme='dark'] .permission-confirm-card > header h2 { color: rgba(222, 216, 238, .92); }
+[data-lcos-theme='dark'] .permission-confirm-card > header > button { color: rgba(222, 216, 238, .5); }
+[data-lcos-theme='dark'] .permission-confirm-card > header > button:hover { color: rgba(222, 216, 238, .92); background: rgba(158, 141, 208, .12); }
+[data-lcos-theme='dark'] .permission-confirm-note { color: rgba(222, 216, 238, .5); }
+[data-lcos-theme='dark'] .permission-confirm-item { border-color: rgba(158, 141, 208, .16); background: rgba(158, 141, 208, .07); color: rgba(222, 216, 238, .88); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-lcos-theme='light']) .permission-confirm-backdrop { background: rgba(8, 7, 14, .45); }
+  :root:not([data-lcos-theme='light']) .permission-confirm-card { background: rgba(30, 27, 42, .97); border-color: rgba(158, 141, 208, .24); box-shadow: 0 18px 52px rgba(0, 0, 0, .42); }
+  :root:not([data-lcos-theme='light']) .permission-confirm-card > header span { color: rgba(222, 216, 238, .42); }
+  :root:not([data-lcos-theme='light']) .permission-confirm-card > header h2 { color: rgba(222, 216, 238, .92); }
+  :root:not([data-lcos-theme='light']) .permission-confirm-card > header > button { color: rgba(222, 216, 238, .5); }
+  :root:not([data-lcos-theme='light']) .permission-confirm-card > header > button:hover { color: rgba(222, 216, 238, .92); background: rgba(158, 141, 208, .12); }
+  :root:not([data-lcos-theme='light']) .permission-confirm-note { color: rgba(222, 216, 238, .5); }
+  :root:not([data-lcos-theme='light']) .permission-confirm-item { border-color: rgba(158, 141, 208, .16); background: rgba(158, 141, 208, .07); color: rgba(222, 216, 238, .88); }
+}
+
+/* ================================================================
+   内容真实性收口（第一梯队⑦）——rail 真 mini 布局 / 图片三态 / 死交互修复
+   rail 预览 = 成员真实 x/y 归一化排布（与画布 WorkspaceProjectionObject
+   同一几何语义），不再渲染装饰性假条；无几何数据时退回真实统计。
+   ================================================================ */
+
+/* 债1：真 mini 布局容器（kind 着色沿用旧类名，几何是真实成员）。 */
+.lcos-reconstructed .lcos-rail-member-map { position: relative; display: block; width: 28px; height: 28px; overflow: hidden; border: 1px solid rgba(73, 66, 91, .16); border-radius: 7px; background: rgba(247, 246, 250, .9); }
+.lcos-reconstructed .lcos-rail-member-map.is-large { width: 100%; height: 100%; border-radius: 8px; }
+.lcos-reconstructed .lcos-project-view-preview-map .lcos-rail-member-map.is-large { width: 100%; height: 100%; transform: none; }
+/* 旧 context 预览的中线装饰与旧 is-large 缩放对新布局失效，显式关闭。 */
+.lcos-reconstructed .lcos-rail-preview-context.lcos-rail-member-map::before { content: none; }
+.lcos-reconstructed .lcos-rail-preview-context.lcos-rail-member-map { display: block; }
+/* kind 着色：保留四种视图的可辨识语法，但内容是真实成员。 */
+.lcos-reconstructed .lcos-rail-preview-scene.lcos-rail-member-map { border-color: rgba(68, 91, 126, .2); background: rgba(247, 250, 253, .88); }
+.lcos-reconstructed .lcos-rail-preview-context.lcos-rail-member-map { border-color: rgba(96, 75, 158, .22); background: rgba(248, 246, 254, .9); }
+.lcos-reconstructed .lcos-rail-preview-workflow.lcos-rail-member-map { border-color: rgba(48, 104, 111, .24); background: rgba(247, 252, 252, .9); }
+.lcos-reconstructed .lcos-rail-preview-collection.lcos-rail-member-map { border-color: rgba(77, 69, 97, .18); background: rgba(250, 249, 252, .9); }
+/* 真实成员方块：位置/尺寸是成员真实几何的归一化投影，颜色按成员文件类型。 */
+.lcos-reconstructed .lcos-rail-member-cell { position: absolute; display: block; border: 1px solid rgba(73, 66, 91, .26); border-radius: 2px; background: rgba(255, 255, 255, .92); }
+.lcos-reconstructed .lcos-rail-member-map.is-large .lcos-rail-member-cell { border-radius: 3px; }
+/* 2R 单色纪律修正:mini 预览块原为 9 色粉彩(黄/粉/橙/红…),28px 尺寸下糊成一片且违反
+   Glaze 单色纪律(一个紫 accent+语义红)。收敛为紫 accent 密度阶梯(液晶深浅感):
+   文本类最深(主要工作对象)→视觉类中→轻类型浅;中性类型用灰;类型精确名走 title 提示。 */
+.lcos-reconstructed .lcos-rail-member-cell[data-member-kind='markdown'] { background: rgba(103, 78, 177, .5); }
+.lcos-reconstructed .lcos-rail-member-cell[data-member-kind='pdf'] { background: rgba(103, 78, 177, .4); }
+.lcos-reconstructed .lcos-rail-member-cell[data-member-kind='ppt'] { background: rgba(103, 78, 177, .4); }
+.lcos-reconstructed .lcos-rail-member-cell[data-member-kind='image'] { background: rgba(103, 78, 177, .3); }
+.lcos-reconstructed .lcos-rail-member-cell[data-member-kind='video'] { background: rgba(103, 78, 177, .24); }
+.lcos-reconstructed .lcos-rail-member-cell[data-member-kind='audio'] { background: rgba(103, 78, 177, .18); }
+.lcos-reconstructed .lcos-rail-member-cell[data-member-kind='link'] { background: transparent; border-color: rgba(103, 78, 177, .45); }
+.lcos-reconstructed .lcos-rail-member-cell[data-member-kind='archive'] { background: rgba(148, 163, 184, .35); }
+.lcos-reconstructed .lcos-rail-member-cell[data-member-kind='file'] { background: rgba(148, 163, 184, .25); }
+/* 真实溢出计数：超过显示上限的成员数量。
+   带显式 reset（left/top/height/background/transform）——旧 scene/workflow 预览的
+   `b` 规则（1px 装饰线/旋转线）特异性同级，必须靠 map 前缀提权并逐项覆盖。 */
+.lcos-reconstructed .lcos-rail-member-map .lcos-rail-member-overflow { position: absolute; left: auto; top: auto; right: 2px; bottom: 1px; height: auto; background: transparent; transform: none; font-size: 9px; font-weight: 700; color: rgba(73, 66, 91, .85); }
+.lcos-reconstructed .lcos-rail-member-map.is-large .lcos-rail-member-overflow { right: 4px; bottom: 2px; font-size: 10px; }
+/* 债1 退路 A：有成员但无几何坐标（全部为实体引用）——真实类型分布统计，不画假图形。 */
+.lcos-reconstructed .lcos-rail-member-stats { position: relative; display: flex; flex-wrap: wrap; align-content: center; justify-content: center; gap: 2px 5px; width: 28px; height: 28px; padding: 2px; border: 1px solid rgba(73, 66, 91, .14); border-radius: 7px; background: rgba(247, 246, 250, .9); }
+.lcos-reconstructed .lcos-rail-member-stats.is-large { width: 100%; height: 100%; align-items: center; }
+/* b 显式 reset：旧 scene/workflow 预览的 b 是 1px 装饰线（绝对定位/旋转/带底色），
+   同级特异性下未声明的属性会残留，必须逐项覆盖。 */
+.lcos-reconstructed .lcos-rail-member-stats b { position: static; left: auto; top: auto; right: auto; bottom: auto; height: auto; background: transparent; transform: none; font-size: 10px; font-weight: 700; color: rgba(73, 66, 91, .8); }
+.lcos-reconstructed .lcos-rail-member-stats em { font-style: normal; font-size: 9.5px; line-height: 1.2; color: rgba(73, 66, 91, .72); }
+.lcos-reconstructed .lcos-rail-member-stats.is-large em { font-size: 11px; }
+/* 债1 退路 B：聚合层拿不到成员节点投影——只有真实计数。 */
+.lcos-reconstructed .lcos-rail-member-empty { position: relative; display: grid; place-items: center; width: 28px; height: 28px; border: 1px solid rgba(73, 66, 91, .14); border-radius: 7px; background: rgba(247, 246, 250, .9); }
+.lcos-reconstructed .lcos-rail-member-empty.is-large { width: 100%; height: 100%; }
+.lcos-reconstructed .lcos-rail-member-empty b { position: static; left: auto; top: auto; right: auto; bottom: auto; height: auto; background: transparent; transform: none; font-size: 10px; font-weight: 700; color: rgba(73, 66, 91, .8); }
+.lcos-reconstructed .lcos-rail-member-empty em { font-style: normal; font-size: 11px; color: rgba(73, 66, 91, .66); }
+
+/* 债2：图片三态。loading = 等宽闪烁骨架占位；error = ImageOff + 文案 + 重试。 */
+.lcos-reconstructed .lcos-image-skeleton { position: absolute; inset: 0; z-index: var(--lcos-z-content-inlay); /* z-tier: canvas-content（原 z1，图片骨架占位即节点内嵌入内容，值保序） */ display: grid; place-content: center; gap: 4px; background: linear-gradient(145deg, #eeedf3, #e5e3ec); }
+.lcos-reconstructed .lcos-image-skeleton i { width: 46px; height: 5px; border-radius: 999px; background: rgba(129, 124, 145, .2); animation: lcos-image-skeleton-pulse 1.1s ease-in-out infinite; }
+.lcos-reconstructed .lcos-image-skeleton i:nth-child(2) { animation-delay: .18s; }
+.lcos-reconstructed .lcos-image-skeleton i:nth-child(3) { animation-delay: .36s; }
+@keyframes lcos-image-skeleton-pulse { 0%, 100% { opacity: .35; } 50% { opacity: .9; } }
+.lcos-reconstructed .lcos-image-error { gap: 3px; padding: 8px; grid-auto-rows: min-content; }
+.lcos-reconstructed .lcos-image-error small { color: #8f8d99; font-size: 11px; }
+.lcos-reconstructed .lcos-image-retry { margin-top: 2px; padding: 3px 12px; border: 1px solid rgba(73, 66, 91, .18); border-radius: 999px; background: rgba(255, 255, 255, .9); color: #5c5768; font-size: 11px; font-weight: 600; cursor: pointer; }
+.lcos-reconstructed .lcos-image-retry:hover { border-color: rgba(103, 71, 199, .4); color: #6747c7; }
+
+/* 债3：「新 Scene」从假 div 升级为真按钮——rail 悬停时可见（默认仍是透明语义
+   投送目标，拖拽高亮沿用旧规则），点击创建空白 Scene，键盘可聚焦。 */
+.lcos-reconstructed .lcos-new-scene-drop-target { padding: 0; font: inherit; cursor: pointer; }
+.lcos-reconstructed .vnext-workspace-rail:hover .lcos-new-scene-drop-target,
+.lcos-reconstructed .lcos-new-scene-drop-target:focus-visible { opacity: .92; color: rgba(103, 71, 199, .78); border-color: rgba(103, 71, 199, .3); background: rgba(247, 245, 252, .92); }
+.lcos-reconstructed .lcos-new-scene-drop-target:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(139, 92, 246, .22); }
+/* 债3：resize handle 支持 slider 键盘操作，聚焦可见。 */
+.lcos-reconstructed .lcos-rail-resize-handle:focus-visible { outline: none; }
+.lcos-reconstructed .lcos-rail-resize-handle:focus-visible::after { opacity: 1; background: rgba(139, 92, 246, .65); }
+
+/* ================================================================
+   2R 收口——整页 surface 的「放大阅读」标识
+   结构/演进整页定位降为放大阅读模式（从投影节点 launcher 进入）。
+   视觉词汇复用 .lcos-search-chunk-badge（紫 accent / mono / 圆角 6px，
+   浅底深字），不造新颜色；选择器特异性需压过 reconstruction.css
+   里 .lcos-surface-heading span 的通用灰字规则。
+   ================================================================ */
+.lcos-reconstructed .lcos-surface-heading .lcos-lens-zoom-badge { display:inline-block; padding:0 5px; border:1px solid rgba(103,78,177,.22); border-radius:6px; color:rgba(88,64,158,.85); background:rgba(103,78,177,.06); font-family:var(--lcos-font-mono, ui-monospace, monospace); font-size:10.5px; line-height:16px; vertical-align:1px; }
+
+/* lens 三键聚焦反馈：被定位/创建的组件短暂高亮脉冲（复用紫 accent，一次动画后自动消失）。 */
+.lcos-reconstructed .lcos-surface-component-frame.is-lens-focus { animation: lcos-lens-focus-pulse 1.3s ease-out 1; }
+@keyframes lcos-lens-focus-pulse {
+  0%   { box-shadow: 0 0 0 3px rgba(103,78,177,.42), 0 0 0 1px rgba(103,78,177,.28); }
+  60%  { box-shadow: 0 0 0 3px rgba(103,78,177,.22), 0 0 0 1px rgba(103,78,177,.16); }
+  100% { box-shadow: 0 0 0 3px rgba(103,78,177,0), 0 0 0 1px rgba(103,78,177,0); }
+}
+@media (prefers-reduced-motion: reduce) { .lcos-reconstructed .lcos-surface-component-frame.is-lens-focus { animation: none; box-shadow: 0 0 0 3px rgba(103,78,177,.3); } }
+
+/* ================================================================
+   演进时间轴（EvolutionComponent）：Codex 式水平时间带。
+   一条银灰基线 + 标记点；悬停由指针位置驱动弹出层，
+   弹出层只作用于时间带容器内部（容器 relative、卡 absolute）。
+   ================================================================ */
+
+/* 时间带容器：占满卡内容行；指针事件的吸附半径在组件内计算 */
+.lcos-context-timeline { position: relative; min-height: 48px; }
+
+/* 基线：细线，银灰——复用导图连线色（#7862c8 按 .48 不透明度在浅底上的渲染观感） */
+.lcos-context-timeline-base { position: absolute; left: 0; right: 0; top: 50%; height: 1px; translate: 0 -50%; border-radius: 1px; background: rgba(120, 98, 200, .48); pointer-events: none; }
+
+/* 标记点：18px 命中区 + 8px 视觉圆点；当前条目紫 accent 实心 + 外圈，其余空心 */
+.lcos-context-timeline-node { position: absolute; top: 50%; translate: -50% -50%; width: 18px; height: 18px; display: grid; place-items: center; padding: 0; border: 0; background: transparent; cursor: pointer; }
+.lcos-context-timeline-node::after { content: ''; width: 8px; height: 8px; box-sizing: border-box; border: 1px solid rgba(103, 78, 177, .38); border-radius: 50%; background: rgba(250, 249, 253, .95); transition: transform .14s ease, border-color .14s ease, box-shadow .14s ease; }
+.lcos-context-timeline-node:hover::after { transform: scale(1.18); border-color: rgba(103, 78, 177, .62); }
+.lcos-context-timeline-node:focus-visible { outline: none; }
+.lcos-context-timeline-node:focus-visible::after { box-shadow: 0 0 0 3px rgba(103, 78, 177, .26); }
+.lcos-context-timeline-node.is-current::after { border-color: rgba(103, 78, 177, .9); background: rgba(103, 78, 177, .92); box-shadow: 0 0 0 3px rgba(103, 78, 177, .16); }
+.lcos-context-timeline-node.is-current:hover::after { box-shadow: 0 0 0 3px rgba(103, 78, 177, .24); }
+
+/* 预览卡：白底 + 细边框 + 轻投影（照抄 .lcos-surface-hover-card 的观感参数）；
+   translate 属性与 motion 的 transform 互不覆盖，实现「点上方居中」锚定 */
+.lcos-context-timeline-card { position: absolute; z-index: var(--lcos-z-content-raised, 60); /* z-tier: canvas-content */ bottom: calc(100% + 9px); width: 216px; box-sizing: border-box; display: grid; gap: 3px; padding: 9px 10px; border: 1px solid rgba(61, 55, 79, .08); border-radius: 11px; background: rgba(253, 253, 254, .92); box-shadow: 0 14px 34px rgba(42, 37, 57, .12); backdrop-filter: blur(14px); color: rgba(42, 38, 54, .76); translate: -50% 0; transform-origin: 50% 100%; pointer-events: none; text-align: left; }
+.lcos-context-timeline-card strong { overflow: hidden; font-size: 11px; font-weight: 620; text-overflow: ellipsis; white-space: nowrap; }
+.lcos-context-timeline-card small { display: -webkit-box; overflow: hidden; color: rgba(48, 44, 62, .52); font-size: 11.5px; line-height: 1.4; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+/* 卡内元信息行：相对时间（mono）+ 对象数，左右分立 */
+.lcos-context-timeline-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.lcos-context-timeline-meta time { font: 500 10px/1.4 var(--lcos-font-mono, ui-monospace, monospace); color: rgba(62, 56, 77, .45); }
+.lcos-context-timeline-meta em { overflow: hidden; font-style: normal; font-size: 10px; color: rgba(103, 78, 177, .55); text-overflow: ellipsis; white-space: nowrap; }
+
+/* 空带时间提示：mono 小号，与预览卡同一条弹出泳道，交叉淡入淡出 */
+.lcos-context-timeline-hint { position: absolute; z-index: var(--lcos-z-content-raised, 60); /* z-tier: canvas-content */ bottom: calc(100% + 9px); max-width: 70%; box-sizing: border-box; overflow: hidden; padding: 3px 8px; border: 1px solid rgba(61, 55, 79, .08); border-radius: 7px; background: rgba(253, 253, 254, .9); box-shadow: 0 6px 18px rgba(42, 37, 57, .08); color: rgba(62, 56, 77, .55); font: 500 10.5px/1.4 var(--lcos-font-mono, ui-monospace, monospace); text-overflow: ellipsis; white-space: nowrap; translate: -50% 0; pointer-events: none; }
+
+/* ================================================================
+   2R 收口（续）——结构组件卡：大纲列表 → 卡内思维导图（只读）
+   节点与连线复用整页导图（ContextTreeSurface）既有类：
+   .lcos-mind-topic-wrap / .lcos-mind-topic / .lcos-mind-map-edges /
+   .lcos-mind-map-root（定义在 product-interface.css，.lcos-reconstructed
+   下全局生效）。本文件只补卡内容器、缩放舞台与卡内差异化：
+   银灰连线、中心根加粗边框；紫 accent 只用 rgba(103,78,177,.x)。
+   ================================================================ */
+
+/* 卡内导图容器：占满组件卡 1fr 内容行；自动缩放 fit 进容器，不放滚动条 */
+.lcos-reconstructed .lcos-context-mindmap { position: relative; min-width: 0; min-height: 0; overflow: hidden; border-radius: 11px; }
+
+/* 缩放舞台：保持 layoutMindMap 原始坐标系（画布尺寸随容器实测自适应），
+   JS 用 fitMindMapScale 结果写 translate+scale，缩放原点固定左上 */
+.lcos-reconstructed .lcos-context-mindmap-stage { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
+
+/* 卡内连线统一银灰：整页导图按分支着色（--branch-color），卡内空间小、
+   银灰更克制；rgba(73,66,91,.x) 与本文件既有成员块描边同源，不造新色 */
+.lcos-reconstructed .lcos-context-mindmap .lcos-mind-map-edges path { stroke: rgba(73, 66, 91, .34); }
+
+/* 中心根节点差异化：加粗边框 + 同系底衬投影，紫 accent 只取 2R 收口同款 rgba(103,78,177,.x) */
+.lcos-reconstructed .lcos-context-mindmap .lcos-context-mindmap-root { border-width: 2px; border-color: rgba(103, 78, 177, .48); box-shadow: 0 12px 30px rgba(68, 48, 116, .12), inset 0 1px 0 #fff; }
+
+/* ================================================================
+   §4.13 画布引导·边缘气泡标点（CanvasEdgePin / EdgePinCluster）
+   一级导航系统成员：浮岛公式小壳（14px 圆角）+ Matrix 方点箭头 + 单色纪律，
+   跟 minimap/dock/selection-toolbar 同族；颜色全部复用现有 --lcos-* token。
+   ================================================================ */
+
+/* 气泡层：不跟随相机 transform 的固定屏幕层（SpatialOverlayLayer 内、minimap 同层）；
+   整层不接指针，只有气泡/巢本身 pointer-events:auto，不阻塞画布交互 */
+.lcos-edge-pin-layer { position: absolute; inset: 0; z-index: var(--lcos-z-content-hud); pointer-events: none; }
+
+/* 单气泡：浮岛小壳 ~28×16，锚点经 translate(-50%,-50%) 居中在边缘 clamp 点 */
+.lcos-edge-pin {
+  position: absolute;
+  min-width: 28px;
+  height: 16px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 0 5px;
+  transform: translate(-50%, -50%);
+  border: 1px solid rgba(65, 58, 80, .085);
+  border-radius: 14px;
+  background: rgba(250, 250, 252, .76);
+  box-shadow: 0 10px 30px rgba(40, 35, 56, .085), inset 0 1px 0 rgba(255, 255, 255, .84);
+  backdrop-filter: blur(20px) saturate(1.08);
+  cursor: pointer;
+  pointer-events: auto;
+  transition: transform 120ms ease;
+}
+.lcos-edge-pin:hover { transform: translate(-50%, calc(-50% - 1px)); }
+.lcos-edge-pin:focus-visible { outline: none; box-shadow: 0 10px 30px rgba(40, 35, 56, .085), inset 0 1px 0 rgba(255, 255, 255, .84), 0 0 0 3px rgba(103, 82, 158, .22); }
+
+/* Matrix 方点箭头：3 个 4×4 方点（radius 1px）排成默认指向 +x 的箭头，
+   容器随 angle 旋转指向对象真实方位（内联 transform 提供） */
+.lcos-edge-pin-dots { position: relative; flex: none; width: 12px; height: 12px; display: block; pointer-events: none; }
+.lcos-edge-pin-dots i { position: absolute; width: 4px; height: 4px; border-radius: 1px; background: var(--lcos-matrix-dot); }
+.lcos-edge-pin-dots i:nth-child(1) { left: 0; top: 4px; }
+.lcos-edge-pin-dots i:nth-child(2) { right: 0; top: 0; }
+.lcos-edge-pin-dots i:nth-child(3) { right: 0; bottom: 0; }
+/* hover/focus 点亮：segment-on + 微光 glow（§4.13.1 A 规格） */
+.lcos-edge-pin:hover .lcos-edge-pin-dots i,
+.lcos-edge-pin:focus-visible .lcos-edge-pin-dots i { background: var(--lcos-segment-on); box-shadow: 0 0 12px var(--lcos-segment-glow); }
+
+/* hover 显示对象名：等宽字体 mono + 文字阶梯 ink-soft，默认隐藏不扰画布 */
+.lcos-edge-pin-label {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 5px);
+  transform: translateX(-50%);
+  max-width: 200px;
+  box-sizing: border-box;
+  overflow: hidden;
+  padding: 2px 7px;
+  border: 1px solid rgba(65, 58, 80, .085);
+  border-radius: 7px;
+  background: rgba(250, 250, 252, .92);
+  color: var(--lcos-ui-ink-soft, rgba(55, 51, 66, .62));
+  font: 500 10px/1.5 var(--lcos-font-mono, monospace);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+.lcos-edge-pin:hover .lcos-edge-pin-label,
+.lcos-edge-pin:focus-visible .lcos-edge-pin-label { opacity: 1; }
+
+/* 聚合巢（同边缘多标点）：浮岛小壳 + 中心 mono 数字 + Matrix 点阵（n 个标点 = n 个点）。
+   巢容器负责锚点居中，内部 toggle 复用 .lcos-edge-pin 壳但转为静态布局 */
+.lcos-edge-pin-cluster { position: absolute; transform: translate(-50%, -50%); pointer-events: none; }
+.lcos-edge-pin-cluster > .lcos-edge-pin { position: static; transform: none; }
+.lcos-edge-pin-cluster > .lcos-edge-pin:hover { transform: translateY(-1px); }
+.lcos-edge-pin-count { font: 650 10px/1 var(--lcos-font-mono, monospace); color: var(--lcos-ui-ink-soft, rgba(55, 51, 66, .62)); }
+.lcos-edge-pin-cluster-dots { display: flex; align-items: center; gap: 2px; pointer-events: none; }
+.lcos-edge-pin-cluster-dots i { width: 4px; height: 4px; border-radius: 1px; background: var(--lcos-matrix-dot); }
+.lcos-edge-pin-cluster > .lcos-edge-pin:hover .lcos-edge-pin-cluster-dots i,
+.lcos-edge-pin-cluster > .lcos-edge-pin:focus-visible .lcos-edge-pin-cluster-dots i { background: var(--lcos-segment-on); box-shadow: 0 0 8px var(--lcos-segment-glow); }
+
+/* 巢展开的堆叠列表：浮岛壳 + 纵向小列表，每行 label + 方位箭头，点行跳转；
+   默认向上弹，上边缘的巢向下弹，避免溢出画布 */
+.lcos-edge-pin-cluster-list {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 6px);
+  transform: translateX(-50%);
+  min-width: 148px;
+  max-width: 220px;
+  box-sizing: border-box;
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  border: 1px solid rgba(65, 58, 80, .085);
+  border-radius: 14px;
+  background: rgba(250, 250, 252, .9);
+  box-shadow: 0 10px 30px rgba(40, 35, 56, .085), inset 0 1px 0 rgba(255, 255, 255, .84);
+  backdrop-filter: blur(20px) saturate(1.08);
+  pointer-events: auto;
+}
+.lcos-edge-pin-cluster.is-top .lcos-edge-pin-cluster-list { bottom: auto; top: calc(100% + 6px); }
+.lcos-edge-pin-cluster-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  padding: 3px 7px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+.lcos-edge-pin-cluster-row:hover { background: rgba(101, 80, 157, .08); }
+.lcos-edge-pin-cluster-row:hover .lcos-edge-pin-dots i { background: var(--lcos-segment-on); box-shadow: 0 0 8px var(--lcos-segment-glow); }
+.lcos-edge-pin-cluster-row:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(103, 82, 158, .26); }
+.lcos-edge-pin-cluster-row-label { min-width: 0; overflow: hidden; color: var(--lcos-ui-ink-soft, rgba(55, 51, 66, .62)); font: 500 10px/1.5 var(--lcos-font-mono, monospace); text-overflow: ellipsis; white-space: nowrap; }
+
+/* ================================================================
+   WorkbenchFrame 四区 UI 壳（第一梯队 ② 轻量版，§4.7-②）
+   浮岛公式大壳（20px 圆角）+ Glaze token 单色纪律，零新颜色：
+   壳/分隔线/LED/文字全部复用本文件既有值与 --lcos-* token，
+   跟 minimap/dock/edge-pin 同族。四区宽度只给弹性区间，不做死布局。
+   ================================================================ */
+
+/* 大壳：浮岛公式（border-radius 20px + 半透实底 + 双层影 + blur） */
+.lcos-workbench-frame {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid rgba(65, 58, 80, .085);
+  border-radius: 20px;
+  background: rgba(250, 250, 252, .76);
+  box-shadow: 0 10px 30px rgba(40, 35, 56, .085), inset 0 1px 0 rgba(255, 255, 255, .84);
+  backdrop-filter: blur(20px) saturate(1.08);
+  color: rgba(46, 42, 57, .72);
+  overflow: hidden;
+}
+
+/* 运行中横幅（active 相位）：Matrix 方点 LED + 单色浅紫衬（同 edge-pin 行 hover 洗色） */
+.lcos-workbench-frame-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 16px;
+  border-bottom: 1px solid rgba(65, 58, 80, .085);
+  background: rgba(101, 80, 157, .08);
+}
+.lcos-workbench-frame-banner-led { display: inline-flex; align-items: center; pointer-events: none; }
+.lcos-workbench-frame-banner-led i { width: 4px; height: 4px; border-radius: 1px; background: var(--lcos-segment-on); box-shadow: 0 0 12px var(--lcos-segment-glow); animation: lcos-workbench-frame-pulse 1.6s ease-in-out infinite; }
+@keyframes lcos-workbench-frame-pulse { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .lcos-workbench-frame-banner-led i { animation: none; } }
+.lcos-workbench-frame-banner-text { font: 620 11px/1.4 var(--lcos-font-mono, monospace); color: var(--lcos-ink); }
+.lcos-workbench-frame-banner-action { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; }
+
+/* 常态 header：标题 + Run 状态徽标 + 宿主动作插槽 */
+.lcos-workbench-frame-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px 8px; }
+.lcos-workbench-frame-heading { min-width: 0; display: grid; gap: 1px; }
+.lcos-workbench-frame-kicker { font: 600 10px/1.4 var(--lcos-font-mono, monospace); letter-spacing: .06em; color: var(--lcos-ui-ink-soft, rgba(55, 51, 66, .62)); }
+.lcos-workbench-frame-title { margin: 0; overflow: hidden; font-size: 14px; font-weight: 660; line-height: 1.35; color: var(--lcos-ink); text-overflow: ellipsis; white-space: nowrap; }
+.lcos-workbench-frame-header-side { display: inline-flex; flex: none; align-items: center; gap: 8px; }
+.lcos-workbench-frame-header-action { display: inline-flex; align-items: center; gap: 6px; }
+
+/* Run 状态徽标：小浮岛胶囊 + Matrix 方点；非终态点亮（segment-on+glow），终态熄灭（segment-off），失败红（signal-error） */
+.lcos-workbench-frame-run-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  border: 1px solid rgba(65, 58, 80, .085);
+  border-radius: 999px;
+  background: rgba(250, 250, 252, .9);
+  font: 500 10px/1.5 var(--lcos-font-mono, monospace);
+  color: var(--lcos-ui-ink-soft, rgba(55, 51, 66, .62));
+}
+.lcos-workbench-frame-run-badge i { width: 4px; height: 4px; border-radius: 1px; background: var(--lcos-segment-off); }
+.lcos-workbench-frame-run-badge.is-queued i,
+.lcos-workbench-frame-run-badge.is-running i,
+.lcos-workbench-frame-run-badge.is-waiting_input i,
+.lcos-workbench-frame-run-badge.is-review i { background: var(--lcos-segment-on); box-shadow: 0 0 8px var(--lcos-segment-glow); }
+.lcos-workbench-frame-run-badge.is-failed i { background: var(--lcos-signal-error); box-shadow: 0 0 8px rgba(180, 76, 73, .24); }
+
+/* 四区主体：左（大纲）/ 中（内容）/ 右（工具结果卡）；侧区只给弹性宽度区间，插槽缺省不渲染空壳 */
+.lcos-workbench-frame-body { display: flex; flex: 1; min-height: 0; }
+.lcos-workbench-frame-zone { min-width: 0; min-height: 0; }
+.lcos-workbench-frame-left { flex: none; width: clamp(200px, 22%, 264px); padding: 10px 12px; border-right: 1px solid rgba(65, 58, 80, .085); overflow-y: auto; }
+.lcos-workbench-frame-center { flex: 1; padding: 12px 16px; overflow: auto; }
+.lcos-workbench-frame-right { flex: none; width: clamp(220px, 24%, 296px); padding: 10px 12px; border-left: 1px solid rgba(65, 58, 80, .085); overflow-y: auto; }

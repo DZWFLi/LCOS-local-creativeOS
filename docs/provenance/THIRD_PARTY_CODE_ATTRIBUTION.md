@@ -24,3 +24,9 @@
 - Domain Relation vs Presentation Edge
 - Agent Reorganize / manual anchors / rollback
 - Session continuity / thin indexed Skill / Ollama optional local intelligence
+# Bloub animation-engine reference
+
+- Project: `jeremy-prt/bloub`
+- License: MIT, Copyright (c) 2026 Jérémy Perret
+- Source: https://github.com/jeremy-prt/bloub
+- LCOS use: engineering reference for a framework-free, clock-free pure-time sampler and continuous state morphing. LCOS does not copy the xAI/Grok visual design reproduced by that project; Glyth geometry, body, eyes, shells, states and rendering are original LCOS implementations.

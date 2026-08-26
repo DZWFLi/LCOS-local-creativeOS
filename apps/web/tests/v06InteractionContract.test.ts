@@ -5,7 +5,7 @@ describe('Gate F desktop interaction contract', () => {
   const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8')
   const rail = readFileSync(new URL('../src/features/workrail/WorkRail.tsx', import.meta.url), 'utf8')
   const canvas = readFileSync(new URL('../src/features/canvas/ProjectCanvas.tsx', import.meta.url), 'utf8')
-  const porcelain = readFileSync(new URL('../src/porcelain-studio.css', import.meta.url), 'utf8')
+  const appShell = readFileSync(new URL('../src/features/shell/AppShellView.tsx', import.meta.url), 'utf8')
 
   it('keeps one contextual composer without turning selection into an inspector route', () => {
     expect(app).toContain('<WorkRail')
@@ -36,8 +36,9 @@ describe('Gate F desktop interaction contract', () => {
     expect(app).not.toContain('setFocusPreviewId(id)')
   })
 
-  it('overlays the adaptive Work Rail without resizing the Canvas', () => {
-    expect(porcelain).toContain('.app-shell.porcelain-studio-v2 .canvas {')
-    expect(porcelain).not.toContain('transition: right')
+  it('porcelain retired: shell mounts the reconstruction stack only (Tier-3c)', () => {
+    // porcelain 退役（Tier-3c）：shell 只挂 reconstruction 栈，旧 porcelain 主题 shell class 锁定不再回归。
+    expect(appShell).toContain('app-shell lcos-reconstructed')
+    expect(appShell).not.toContain('porcelain-studio-v2')
   })
 })

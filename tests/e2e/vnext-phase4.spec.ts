@@ -30,10 +30,10 @@ test.describe('LCOS vNext Phase 4', () => {
     await page.goto(SEED_PROJECT_URL)
     await expect(page.getByTestId('vnext-bottom-dock')).toBeVisible()
     await dockButton(page, '上下文').click()
-    await expect(page.locator('[data-surface-mount="context-graph"]')).toBeVisible()
+    await expect(page.getByTestId('surface-context-space')).toBeVisible()
     await dockButton(page, '工作流').click()
-    await expect(page.locator('[data-testid="surface-workflow-graph"]')).toBeVisible()
-    await dockButton(page, '整理').click()
+    await expect(page.getByTestId('surface-workflow')).toBeVisible()
+    await dockButton(page, '主画布').click()
     await expect(page.locator('[data-surface-mount="arrange"]')).toBeVisible()
   })
 
@@ -55,12 +55,12 @@ test.describe('LCOS vNext Phase 4', () => {
 
   test('context projections stay inside a Context and relation editing stays on the canvas', async ({ page }) => {
     await waitForSeedNodes(page)
-    // 收敛契约：上下文入口是 Context Graph；大纲/思维导图是进入具体 Context 后的投影，
-    // 不再作为 bottom dock 常驻按钮
+    // 收敛契约：上下文入口直接进入当前理解现场；结构/演进是现场内部镜头，
+    // 不再作为 bottom dock 常驻按钮。
     await dockButton(page, '上下文').click()
-    await expect(page.locator('[data-surface-mount="context-graph"]')).toBeVisible()
+    await expect(page.getByTestId('surface-context-space')).toBeVisible()
     await expect(dockButton(page, '大纲')).toHaveCount(0)
-    await dockButton(page, '整理').click()
+    await dockButton(page, '主画布').click()
     await expect(page.locator('[data-surface-mount="arrange"]')).toBeVisible()
     const edge = page.locator('.edge-hit').first()
     test.skip(await edge.count() === 0, 'Seed project needs at least one relation')
