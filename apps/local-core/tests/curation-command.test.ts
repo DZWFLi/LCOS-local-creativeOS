@@ -41,6 +41,8 @@ describe('Curation command (Phase E)', () => {
     expect(created.revisionId).toBeTruthy()
 
     const revised = await service.updateText(projectId, { artifactId: created.artifactId }, 'v2 content')
+    expect(revised.outcome).toBe('applied')
+    if (revised.outcome !== 'applied') throw new Error('expected applied outcome')
     expect(revised.artifactId).toBe(created.artifactId)
     expect(revised.revisionId).not.toBe(created.revisionId)
     const artifact = repository.getArtifact(created.artifactId)!
@@ -68,6 +70,8 @@ describe('Curation command (Phase E)', () => {
     repository.upsertFileRecord({ ...current, observedPath: legacyPath })
 
     const revised = await service.updateText(projectId, { artifactId: created.artifactId }, 'migrated content')
+    expect(revised.outcome).toBe('applied')
+    if (revised.outcome !== 'applied') throw new Error('expected applied outcome')
     expect(revised.legacyMigrated).toBe(true)
     const previousFile = repository.getFileRecord(created.fileRecordId!)!
     expect(previousFile.observedPath).not.toBe(legacyPath)

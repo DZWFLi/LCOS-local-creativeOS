@@ -166,29 +166,33 @@ export async function handleCurationRoute(ctx: CurationRouteContext): Promise<bo
         return true
       }
       // HU-2: Agent update 必须有 full-read lease（用户 GUI 直编不带 sessionId，走内部 CAS）
+      // HU-2b（任务三第二刀）：guard 已下沉 mutation 层（CurationCommandService.updateText），
+      // route 只保留参数/存在性 precheck，并把拒绝结果以结构化 conflicts + conflictHint 返回（message 前缀向后兼容）。
       if (typeof body.sessionId === 'string') {
         const artifactId = body.artifactId ?? (body.viewId === undefined ? undefined : metadata.getArtifactView(body.viewId)?.artifactId)
         if (artifactId === undefined) {
           sendJson(response, 400, failure('INVALID_ARGUMENT', 'update-text requires viewId or artifactId.'))
           return true
         }
-        const artifact = metadata.getArtifact(String(artifactId))
-        if (artifact === undefined) {
+        if (metadata.getArtifact(String(artifactId)) === undefined) {
           sendJson(response, 404, failure('NOT_FOUND', 'Artifact not found.'))
           return true
         }
-        const lease = sessionReadSet.getLease(body.sessionId, String(artifactId))
-        if (lease === undefined) {
-          sendJson(response, 409, failure('VALIDATION', `NO_READ_CURRENT_REVISION artifactId=${artifactId} currentRevisionId=${artifact.currentRevisionId ?? ''}; instruction: reread current body before writing.`))
-          return true
-        }
-        if (artifact.currentRevisionId !== undefined && lease.revisionId !== String(artifact.currentRevisionId)) {
-          sendJson(response, 409, failure('VALIDATION', `STALE_ARTIFACT_REVISION artifactId=${artifactId} leased=${lease.revisionId} current=${artifact.currentRevisionId}; instruction: reread current body, reconcile, retry.`))
-          return true
-        }
       }
-      const value = await curationCommand.updateText(projectId, { ...(body.viewId === undefined ? {} : { viewId: body.viewId }), ...(body.artifactId === undefined ? {} : { artifactId: body.artifactId }) }, body.body)
-      sendJson(response, 200, { ok: true, value })
+      const outcome = await curationCommand.updateText(projectId, { ...(body.viewId === undefined ? {} : { viewId: body.viewId }), ...(body.artifactId === undefined ? {} : { artifactId: body.artifactId }) }, body.body, { ...(typeof body.sessionId === 'string' ? { sessionId: body.sessionId } : {}) })
+      if (outcome.outcome === 'rejected') {
+        const head = outcome.conflicts[0]
+        if (head === undefined) {
+          sendJson(response, 409, failure('VALIDATION', 'Curation write rejected without conflicts.'))
+          return true
+        }
+        const message = head.reason === 'not-read'
+          ? `NO_READ_CURRENT_REVISION artifactId=${head.artifactId} currentRevisionId=${head.currentRevisionId ?? ''}; instruction: reread current body before writing.`
+          : `STALE_ARTIFACT_REVISION artifactId=${head.artifactId} leased=${head.expectedRevisionId ?? ''} current=${head.currentRevisionId ?? ''}; instruction: reread current body, reconcile, retry.`
+        sendJson(response, 409, { ...failure('VALIDATION', message), value: { conflicts: outcome.conflicts, conflictHint: outcome.conflictHint } })
+        return true
+      }
+      sendJson(response, 200, { ok: true, value: { artifactId: outcome.artifactId, viewId: outcome.viewId, revisionId: outcome.revisionId, legacyMigrated: outcome.legacyMigrated } })
     } catch (error: unknown) {
       sendJson(response, 400, failure('VALIDATION', error instanceof Error ? error.message : 'Text curation failed.'))
     }

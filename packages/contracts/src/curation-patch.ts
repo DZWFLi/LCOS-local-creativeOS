@@ -146,3 +146,54 @@ export interface MutationChangeSetV1 {
   readonly revertedAt?: string
   readonly reappliedAt?: string
 }
+
+/**
+ * 任务三第二刀（20260826，huabu ExecuteConflict 同构）：
+ * Agent 写已有 text content 时的 CAS 拒绝两态。
+ * - `not-read`：本次 session 从未 full-read 过该 artifact——必须先 read 再写，
+ *   原样重试恒失败（write guard 只认 server 侧 readSet lease，模型不能手带）。
+ * - `stale`：读到过的 revision 已被并发写更新——重读、reconcile、再发。
+ */
+export type CurationWriteConflictReasonV1 = 'not-read' | 'stale'
+
+export interface CurationWriteConflictV1 {
+  readonly artifactId: string
+  readonly viewId?: string
+  readonly reason: CurationWriteConflictReasonV1
+  /** Agent 读到过的 revision；`not-read` 时缺失。 */
+  readonly expectedRevisionId?: string
+  /** 仓库当前 revision；artifact 无 current revision 时缺失。 */
+  readonly currentRevisionId?: string
+  /** 给模型的下一步指令（huabu buildConflictHint 直译）。 */
+  readonly hint: string
+}
+
+/** huabu canvas-write.ts buildConflictHint 同构：拼一句模型可执行的指令。 */
+export function buildCurationConflictHintV1(conflicts: readonly CurationWriteConflictV1[]): string {
+  const parts: string[] = []
+  if (conflicts.some((conflict) => conflict.reason === 'not-read')) {
+    parts.push('Read before write: read the conflicted node(s) first, then re-issue. Retrying as-is fails again.')
+  }
+  if (conflicts.some((conflict) => conflict.reason === 'stale')) {
+    parts.push('Node(s) changed since your last read — re-read, reconcile, then re-issue.')
+  }
+  return parts.join(' ')
+}
+
+/**
+ * updateText（修订已有受管 text）的结果：成功 or 被 CAS guard 拒绝。
+ * 拒绝时永远带结构化 conflicts + conflictHint；无 sessionId（GUI 直编）不设防，恒 applied。
+ */
+export type CurationTextUpdateOutcomeV1 =
+  | {
+      readonly outcome: 'applied'
+      readonly artifactId: string
+      readonly viewId: string
+      readonly revisionId: string
+      readonly legacyMigrated: boolean
+    }
+  | {
+      readonly outcome: 'rejected'
+      readonly conflicts: readonly CurationWriteConflictV1[]
+      readonly conflictHint: string
+    }

@@ -130,3 +130,48 @@ describe('HU-2 Session Read-Before-Write', () => {
     expect(healed.status).toBe(200)
   })
 })
+
+describe('HU-2b structured CAS conflicts (任务三第二刀)', () => {
+  it('not-read 409 carries structured conflicts + conflictHint', async () => {
+    const { baseUrl } = await startServer()
+    const { viewId, artifactId } = await createText(baseUrl)
+    const update = await call(baseUrl, '/projects/hu2-project/curation/text', { viewId, sessionId: 's-structured', body: 'should fail' }, 'PUT')
+    expect(update.status).toBe(409)
+    expect(update.json.error.message).toContain('NO_READ_CURRENT_REVISION')
+    expect(update.json.value.conflicts).toHaveLength(1)
+    expect(update.json.value.conflicts[0].reason).toBe('not-read')
+    expect(update.json.value.conflicts[0].artifactId).toBe(artifactId)
+    expect(update.json.value.conflictHint).toContain('Read before write')
+  })
+
+  it('stale 409 carries expectedRevisionId + currentRevisionId', async () => {
+    const { baseUrl } = await startServer()
+    const { viewId } = await createText(baseUrl)
+    await call(baseUrl, '/projects/hu2-project/curation/read', { viewIds: [viewId], sessionId: 's-structured-2', readMode: 'full' })
+    await call(baseUrl, '/projects/hu2-project/curation/text', { viewId, body: 'user v2' }, 'PUT')
+    const stale = await call(baseUrl, '/projects/hu2-project/curation/text', { viewId, sessionId: 's-structured-2', body: 'agent stale' }, 'PUT')
+    expect(stale.status).toBe(409)
+    expect(stale.json.error.message).toContain('STALE_ARTIFACT_REVISION')
+    expect(stale.json.value.conflicts[0].reason).toBe('stale')
+    expect(stale.json.value.conflicts[0].expectedRevisionId).toBeTruthy()
+    expect(stale.json.value.conflicts[0].currentRevisionId).toBeTruthy()
+    expect(stale.json.value.conflictHint).toContain('changed since your last read')
+  })
+
+  it('mutation-layer guard fires even when route precheck passes (lease source is server-side)', async () => {
+    const { baseUrl } = await startServer()
+    const { viewId } = await createText(baseUrl)
+    // sessionId 提供且 artifact 存在（route precheck 通过），但从未 full-read → mutation 层拒绝
+    const update = await call(baseUrl, '/projects/hu2-project/curation/text', { viewId, sessionId: 's-mutation-layer', body: 'x' }, 'PUT')
+    expect(update.status).toBe(409)
+    expect(update.json.value.conflicts[0].reason).toBe('not-read')
+  })
+
+  it('GUI direct edit without sessionId still bypasses the guard', async () => {
+    const { baseUrl } = await startServer()
+    const { viewId } = await createText(baseUrl)
+    const direct = await call(baseUrl, '/projects/hu2-project/curation/text', { viewId, body: 'user direct edit' }, 'PUT')
+    expect(direct.status).toBe(200)
+    expect(direct.json.value.revisionId).toBeTruthy()
+  })
+})

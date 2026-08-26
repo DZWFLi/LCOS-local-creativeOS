@@ -4,14 +4,18 @@ import type {
   CurationPatchReceiptV0,
   CurationPatchStepReceiptV0,
   CurationPatchV0,
+  CurationTextUpdateOutcomeV1,
+  CurationWriteConflictV1,
   MutationChangeItemV1,
   MutationChangeSetV1,
   PresentationStateV0,
 } from '@local-creative-os/contracts'
+import { buildCurationConflictHintV1 } from '@local-creative-os/contracts'
 import type { ProjectId, Relation, RelationId } from '@local-creative-os/domain'
 
 import { PresentationApplicationService } from './presentation-application-service.js'
 import type { SqliteMetadataRepository } from './metadata-repository.js'
+import type { SessionReadSet } from './session-read-set.js'
 import { buildTextArtifactDraft, createTextArtifact, reviseManagedTextArtifact } from './text-artifact-service.js'
 import { dirname } from 'node:path'
 import { mkdir, rename, rm } from 'node:fs/promises'
@@ -19,6 +23,8 @@ import { mkdir, rename, rm } from 'node:fs/promises'
 export interface CurationCommandServiceDeps {
   readonly repository: SqliteMetadataRepository
   readonly presentations: PresentationApplicationService
+  /** HU-2b（任务三第二刀）：agent 写 guard 的 lease 源；缺省则 updateText 不设防（向后兼容）。 */
+  readonly sessionReadSet?: SessionReadSet
 }
 
 /**
@@ -34,8 +40,50 @@ export class CurationCommandService {
     return createTextArtifact(this.deps.repository, projectId as ProjectId, input)
   }
 
-  async updateText(projectId: string, target: { readonly viewId?: string; readonly artifactId?: string }, body: string) {
-    return reviseManagedTextArtifact(this.deps.repository, projectId as ProjectId, target, body)
+  /**
+   * HU-2b / 任务三第二刀（20260826）：CAS guard 下沉 mutation 层。
+   * sessionId 存在 = agent 写：必须持有该 session 的 full-read lease（not-read/stale 两态拒绝）；
+   * 无 sessionId（GUI 直编）不设防。拒绝时返回结构化 conflicts + conflictHint（huabu ExecuteConflict 同构）。
+   */
+  async updateText(
+    projectId: string,
+    target: { readonly viewId?: string; readonly artifactId?: string },
+    body: string,
+    options: { readonly sessionId?: string } = {},
+  ): Promise<CurationTextUpdateOutcomeV1> {
+    if (typeof options.sessionId === 'string' && this.deps.sessionReadSet !== undefined) {
+      const artifactId = target.artifactId
+        ?? (target.viewId === undefined ? undefined : this.deps.repository.getArtifactView(target.viewId)?.artifactId)
+      if (artifactId !== undefined) {
+        const artifact = this.deps.repository.getArtifact(String(artifactId))
+        if (artifact !== undefined) {
+          const lease = this.deps.sessionReadSet.getLease(options.sessionId, String(artifactId))
+          if (lease === undefined) {
+            const conflicts: CurationWriteConflictV1[] = [{
+              artifactId: String(artifactId),
+              ...(target.viewId === undefined ? {} : { viewId: target.viewId }),
+              reason: 'not-read',
+              ...(artifact.currentRevisionId === undefined ? {} : { currentRevisionId: String(artifact.currentRevisionId) }),
+              hint: 'Read before write: read the conflicted node(s) first, then re-issue. Retrying as-is fails again.',
+            }]
+            return { outcome: 'rejected', conflicts, conflictHint: buildCurationConflictHintV1(conflicts) }
+          }
+          if (artifact.currentRevisionId !== undefined && lease.revisionId !== String(artifact.currentRevisionId)) {
+            const conflicts: CurationWriteConflictV1[] = [{
+              artifactId: String(artifactId),
+              ...(target.viewId === undefined ? {} : { viewId: target.viewId }),
+              reason: 'stale',
+              expectedRevisionId: lease.revisionId,
+              currentRevisionId: String(artifact.currentRevisionId),
+              hint: 'Node(s) changed since your last read — re-read, reconcile, then re-issue.',
+            }]
+            return { outcome: 'rejected', conflicts, conflictHint: buildCurationConflictHintV1(conflicts) }
+          }
+        }
+      }
+    }
+    const result = await reviseManagedTextArtifact(this.deps.repository, projectId as ProjectId, target, body)
+    return { outcome: 'applied', ...result }
   }
 
   async applyPatch(projectId: string, patch: CurationPatchV0): Promise<CurationPatchReceiptV0> {

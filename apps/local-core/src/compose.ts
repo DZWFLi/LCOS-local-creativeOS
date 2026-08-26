@@ -196,6 +196,8 @@ export function composeLocalCoreServices(options: LocalCoreServerOptions = {}): 
     curationCommand: metadata === undefined ? undefined : new CurationCommandService({
       repository: metadata,
       presentations: presentation!,
+      // HU-2b（任务三第二刀）：mutation 层 CAS guard 接 sessionReadSet（与 routes /curation/read 同一实例）
+      sessionReadSet,
     }),
     runtimeRegistry,
     intelligence,
