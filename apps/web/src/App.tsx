@@ -80,7 +80,7 @@ import { PALETTE_KEYS } from './features/shell/keymap'
 import { WorkspaceRailVNext, type ProjectRailViewItem, type RailMemberPreview } from './features/shell/WorkspaceRailVNext'
 import { SurfaceDock, normalizeSurfaceId, type SurfaceId } from './features/shell/SurfaceDock'
 import { ProjectionSurface } from './features/surfaces/ProjectionSurfaces'
-import { buildReplayInstruction, collectSkillMaterialViewIds, parseWorkflowSkillSteps, projectSkillRunStats, serializeWorkflowSkill, type SkillStepInput, type WorkflowSkillSummary } from './features/workflow/skillLibrary'
+import { buildReplayInstruction, collectSkillMaterialViewIds, deriveSkillRunSteps, parseWorkflowSkillSteps, projectSkillRunStats, serializeWorkflowSkill, type SkillStepInput, type WorkflowSkillSummary } from './features/workflow/skillLibrary'
 import { evaluateRunPermission } from './features/workflow/permissionGate'
 import { PermissionConfirmCard } from './features/workflow/PermissionConfirmCard'
 import type { ContextHistoryEntry, ContextSurfaceRuntime, DeliverSurfaceRuntime, WorkSurfaceRuntime } from './features/surfaces/surfaceContracts'
@@ -5392,6 +5392,10 @@ export function App() {
     return () => { cancelled = true }
   }, [activeProjectId, bootMode, projectPresentationNodes])
 
+  // Run↔步骤链接通（做实 20260826）：技能重放的 Run 在大纲面板投影出技能步骤链；
+  // 普通指令 Run 反解不出技能名，自然落空数组（deriveSkillRunSteps 纯函数）。
+  const activeRunSkillSteps = useMemo(() => activeRun === null ? [] : deriveSkillRunSteps(activeRun, workflowSkills), [activeRun, workflowSkills])
+
   const handleSaveWorkflowSkill = useCallback(async (input: { readonly name: string; readonly steps: readonly SkillStepInput[] }): Promise<boolean> => {
     if (bootMode !== 'runtime') { setNotice('原型模式不能保存技能；请连接 Runtime 项目'); return false }
     const call = await bridgeRef.current.client.createTextArtifact(activeProjectId, {
@@ -7207,6 +7211,7 @@ export function App() {
       contextCount: globalContextIds.length,
       contextScope: globalContextScope,
       onContextScope: setGlobalContextScope,
+      runSteps: activeRunSkillSteps,
       composerText: globalComposerText,
       composerRef,
       composerFocusRequest,

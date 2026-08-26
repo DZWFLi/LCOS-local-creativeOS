@@ -78,13 +78,10 @@ export const CanvasNodeVisual = memo(function CanvasNodeVisual(props: Props) {
   const family = nodeVisualFamily(props.node)
   if (family === 'process') return <RunObject {...props} />
   if (family === 'context') {
-    // §4.7 卡片 Registry 薄层平移（第一步示范）：查表优先，命中即走注册表渲染；
-    // 未命中 fallback 到下方既有分支——不全量迁移，注册表为空时行为与平移前一致。
+    // §4.7 卡片 Registry（context 族已全量入表，20260826 做实）：查表即分发；
+    // 未注册的 entityKind 回落 CollectionObject——行为兜底，非错误路径。
     const RegistryCard = resolveNodeCard(props.node)
     if (RegistryCard) return <RegistryCard {...props} />
-    if (props.node.entityKind === 'workflow') return <WorkflowProjectionObject {...props} />
-    if (props.node.entityKind === 'workspace') return <WorkspaceProjectionObject {...props} />
-    if (props.node.entityKind === 'context') return <ContextProjectionObject {...props} />
     return <CollectionObject {...props} />
   }
   if (family === 'decision') return <DecisionObject {...props} />
@@ -131,7 +128,7 @@ function ImageObject({ node, pending, onDetails, showDetails, showControls = tru
   const [phase, setPhase] = useState<ImageLoadPhase>('loading')
   const [attempt, setAttempt] = useState(0)
   useEffect(() => { setPhase('loading') }, [src])
-  return <div className={`lcos-object lcos-image-object lcos-material-face is-${phase}`} data-image-phase={phase} title={node.title}>
+  return <div className={`lcos-object lcos-image-object lcos-material-face lcos-node-dot-identity is-${phase}`} data-image-phase={phase} title={node.title}>
     {!src ? <div className="lcos-image-fallback"><ImageOff size={24}/></div>
       : phase === 'error'
         ? <div className="lcos-image-fallback lcos-image-error" role="alert">
@@ -146,7 +143,7 @@ function ImageObject({ node, pending, onDetails, showDetails, showControls = tru
             onDragStart={(event) => event.preventDefault()}/>
           {phase === 'loading' && <span className="lcos-image-skeleton" aria-hidden="true"><i/><i/><i/></span>}
         </>}
-    <div className="lcos-image-caption lcos-material-caption"><strong>{title}</strong>{secondary && <small>{secondary}</small>}</div>
+    <div className="lcos-image-caption lcos-material-caption lcos-material-body"><strong>{title}</strong>{secondary && <small>{secondary}</small>}</div>
     <ObjectState node={node} pending={pending}/>
     <InfoButton show={showControls && showDetails} label={`查看 ${title} 信息`} onDetails={onDetails}/>
   </div>
@@ -164,7 +161,7 @@ function DocumentObject({ node, kind, density, pending, onDetails, showDetails, 
   const mindmap = kind === 'markdown' && node.noteLayout === 'mindmap'
   const readableText = kind === 'markdown' && Boolean(preview) && density !== 'compact'
 
-  return <div className={`lcos-object lcos-document-object lcos-material-face file-${kind} ${mindmap || readableText ? 'is-direct-reading' : 'is-collapsed-material'}`} title={node.title}>
+  return <div className={`lcos-object lcos-document-object lcos-material-face lcos-node-dot-identity file-${kind} ${mindmap || readableText ? 'is-direct-reading' : 'is-collapsed-material'}`} title={node.title}>
     {mindmap
       ? <MindMapNoteVisual node={node} density={density}/>
       : thumbnail && !preview
@@ -172,7 +169,7 @@ function DocumentObject({ node, kind, density, pending, onDetails, showDetails, 
         : readableText && preview
           ? <div className="lcos-readable-document"><TextPreview text={preview} expanded={density === 'expanded'} /></div>
           : <MaterialPaperFallback node={node} kind={kind} tag={tag}/>}
-    <div className="lcos-object-caption lcos-material-caption">
+    <div className="lcos-object-caption lcos-material-caption lcos-material-body">
       <strong>{title}</strong>
       {secondary && <small>{secondary}</small>}
     </div>
@@ -255,12 +252,12 @@ function LinkObject({ node, pending, onDetails, showDetails, showControls = true
   const thumbnail = node.previewDataUrl ?? node.previewUrl
   const showThumbnail = Boolean(thumbnail && (node.previewMimeType?.startsWith('image/') || thumbnail.startsWith('data:image/')))
   const title = displayNodeTitle(node)
-  return <div className="lcos-object lcos-link-object lcos-material-face" title={node.title}>
+  return <div className="lcos-object lcos-link-object lcos-material-face lcos-node-dot-identity" title={node.title}>
     {showThumbnail
       ? <OcrImage artifactId={node.artifactId} ocrEnabled={false} className="lcos-link-thumbnail" src={thumbnail} alt="" draggable={false} onDragStart={(event) => event.preventDefault()} />
       : <span className="lcos-favicon">{initial}</span>}
-    <div><small>{domain}</small><strong>{title}</strong>{node.subtitle && <span>{node.subtitle}</span>}</div>
-    <LinkGlyph className="lcos-link-glyph"/>
+    <div className="lcos-material-body"><small>{domain}</small><strong>{title}</strong>{node.subtitle && <span>{node.subtitle}</span>}</div>
+    <LinkGlyph className="lcos-link-glyph lcos-material-accent"/>
     <ObjectState node={node} pending={pending}/>
     <InfoButton show={showControls && showDetails} label={`查看 ${title} 信息`} onDetails={onDetails}/>
   </div>
@@ -270,9 +267,9 @@ function MediaObject({ node, kind, onDetails, showDetails, showControls = true }
   const Icon = kind === 'video' ? VideoGlyph : AudioGlyph
   const src = node.previewDataUrl ?? node.previewUrl
   const title = displayNodeTitle(node)
-  return <div className={`lcos-object lcos-media-object lcos-material-face media-${kind}`} title={node.title}>
+  return <div className={`lcos-object lcos-media-object lcos-material-face lcos-node-dot-identity media-${kind}`} title={node.title}>
     <div className="lcos-media-stage">{kind === 'video' && src ? <OcrImage artifactId={node.artifactId} ocrEnabled={false} src={src} alt="" draggable={false}/> : <Icon className="lcos-media-glyph"/>}</div>
-    <div className="lcos-object-caption lcos-material-caption"><strong>{title}</strong>{nodeSecondaryLine(node) && <small>{nodeSecondaryLine(node)}</small>}</div>
+    <div className="lcos-object-caption lcos-material-caption lcos-material-body"><strong>{title}</strong>{nodeSecondaryLine(node) && <small>{nodeSecondaryLine(node)}</small>}</div>
     <InfoButton show={showControls && showDetails} label={`查看 ${title} 信息`} onDetails={onDetails}/>
   </div>
 }
@@ -295,7 +292,7 @@ function ContextProjectionObject({ node, collectionMembers = [], selected = fals
     event.stopPropagation()
     onOpenContextLens?.(node, lens)
   }
-  return <div className="lcos-object lcos-project-entity-object lcos-context-projection" title={node.title}>
+  return <div className="lcos-object lcos-project-entity-object lcos-node-dot-identity lcos-context-projection" title={node.title}>
     <div className="lcos-context-dossier-back" aria-hidden="true"><i/><i/></div>
     <div className="lcos-context-dossier-face">
       <span className="lcos-project-entity-tab">Context</span>
@@ -319,7 +316,7 @@ function WorkflowProjectionObject({ node, collectionMembers = [], onDetails, sho
   const title = displayNodeTitle(node)
   const count = collectionMembers.length || node.contextCount || 0
   const attachments = collectionMembers.filter((member) => !member.id.startsWith('scope:') && !member.id.startsWith('workspace:')).slice(0, 3)
-  return <div className="lcos-object lcos-project-entity-object lcos-workflow-projection" title={node.title}>
+  return <div className="lcos-object lcos-project-entity-object lcos-node-dot-identity lcos-workflow-projection" title={node.title}>
     <div className="lcos-workflow-folio-sheet back" aria-hidden="true"/>
     <div className="lcos-workflow-folio-sheet middle" aria-hidden="true"/>
     <div className="lcos-workflow-folio-face">
@@ -443,8 +440,8 @@ function RunObject({ node, runId, runStatus, onDetails, showDetails, showControl
   const label = status ? runStatusLabel[status] : '执行记录'
   const title = displayNodeTitle(node)
   return <div className={`lcos-object lcos-run-object lcos-material-face status-${status ?? 'idle'}`} title={node.title}>
-    <span className="lcos-run-machine"><RunGlyph/></span>
-    <div><strong>{title}</strong><small>{node.commandText || node.subtitle || label}</small></div>
+    <span className="lcos-run-machine lcos-material-accent"><RunGlyph/></span>
+    <div className="lcos-material-body"><strong>{title}</strong><small>{node.commandText || node.subtitle || label}</small></div>
     <div className="lcos-run-state"><i/>{label}</div>
     {status === 'running' && <span className="lcos-run-pulse" aria-hidden="true"/>}
     {runId && <span className="lcos-sr-only">{runId}</span>}
@@ -454,7 +451,7 @@ function RunObject({ node, runId, runStatus, onDetails, showDetails, showControl
 
 function DecisionObject({ node, onDetails, showDetails, showControls = true }: Props) {
   const title = displayNodeTitle(node)
-  return <div className="lcos-object lcos-decision-object lcos-material-face" title={node.title}><DecisionGlyph/><div><strong>{title}</strong><small>{node.subtitle}</small></div><InfoButton show={showControls && showDetails} label={`查看 ${title} 信息`} onDetails={onDetails}/></div>
+  return <div className="lcos-object lcos-decision-object lcos-material-face" title={node.title}><DecisionGlyph className="lcos-node-dot-identity lcos-material-accent"/><div className="lcos-material-body"><strong>{title}</strong><small>{node.subtitle}</small></div><InfoButton show={showControls && showDetails} label={`查看 ${title} 信息`} onDetails={onDetails}/></div>
 }
 
 function NoteObject({ node, density, onDetails, showDetails, showControls = true, onLocate }: Props) {
@@ -464,7 +461,7 @@ function NoteObject({ node, density, onDetails, showDetails, showControls = true
   const mindmap = node.noteLayout === 'mindmap'
   return <div className={`lcos-object lcos-note-object lcos-material-face ${mindmap ? 'is-mindmap' : directRead ? 'is-direct-reading' : 'is-collapsed-material'}`} title={node.title}>
     {mindmap ? <MindMapNoteVisual node={node} density={density}/> : directRead && body ? <div className="lcos-readable-document"><TextPreview text={body} expanded={density === 'expanded'} /></div> : <CollapsedNotePaper node={node}/>}
-    <div className="lcos-material-caption"><strong>{title}</strong>{nodeSecondaryLine(node) && <small>{nodeSecondaryLine(node)}</small>}</div>
+    <div className="lcos-material-caption lcos-material-body"><strong>{title}</strong>{nodeSecondaryLine(node) && <small>{nodeSecondaryLine(node)}</small>}</div>
     {showControls && Boolean(node.anchors?.length) && <button className="lcos-note-locate" type="button" aria-label="定位到锚定对象" title="定位到锚定对象" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onLocate?.(node) }}><LocateFixed size={12}/><b>定位</b></button>}
     <InfoButton show={showControls && showDetails} label={`查看 ${title} 信息`} onDetails={onDetails}/>
   </div>
@@ -568,7 +565,10 @@ export const nodeTypeIcon = (node: CanvasNode) => {
   return DocumentGlyph
 }
 
-// —— §4.7 卡片 Registry 薄层平移（第一步示范）——
-// entity:context（组合键由 nodeCardKey 从 entityKind 派生）走表渲染；
-// 其余卡（workflow/workspace/collection 及 file 族）暂留上方 fallback 链，稳定后再逐步迁移。
+// —— §4.7 卡片 Registry：context 族全量入表（20260826 做实，取代第一步示范卡）——
+// 四类 entityKind（组合键由 nodeCardKey 派生）全部走表渲染；新增卡片类型只需在此注册。
+// file 族（ContentObject 内的 image/link/video/audio/document）留待后续按 file:<type> 迁移。
+registerNodeCard('entity:workflow', WorkflowProjectionObject)
+registerNodeCard('entity:workspace', WorkspaceProjectionObject)
 registerNodeCard('entity:context', ContextProjectionObject)
+registerNodeCard('entity:collection', CollectionObject)

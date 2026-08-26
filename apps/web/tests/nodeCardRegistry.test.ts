@@ -37,8 +37,7 @@ function nodeKey(overrides: Partial<CanvasNode>): string {
 }
 
 describe('NODE-CARD-REGISTRY fallback 语义', () => {
-  it('未注册的键查表返回 undefined（调用方须回落到既有 switch 分支，非错误路径）', () => {
-    expect(resolveNodeCard(nodeFixture({ entityKind: 'workflow' }))).toBeUndefined()
+  it('未注册的键查表返回 undefined（调用方须回落 CollectionObject 兜底，非错误路径）', () => {
     expect(resolveNodeCard(nodeFixture({ fileType: 'pdf' }))).toBeUndefined()
     expect(resolveNodeCard(nodeFixture())).toBeUndefined()
   })
@@ -55,19 +54,23 @@ describe('NODE-CARD-REGISTRY fallback 语义', () => {
   })
 })
 
-describe('NODE-CARD-REGISTRY 示范卡走表（entity:context → ContextProjectionObject）', () => {
-  it('宿主模块加载后注册表含示范卡，查表命中同一渲染器', () => {
-    const registered = NODE_CARD_REGISTRY['entity:context']
-    expect(typeof registered).toBe('function')
-    expect(resolveNodeCard(nodeFixture({ entityKind: 'context' }))).toBe(registered)
+describe('NODE-CARD-REGISTRY context 族全量入表（20260826 做实）', () => {
+  it('宿主模块加载后四类 entityKind 卡全部注册，查表命中注册项', () => {
+    for (const kind of ['workflow', 'workspace', 'context', 'collection'] as const) {
+      const registered = NODE_CARD_REGISTRY[`entity:${kind}`]
+      expect(typeof registered).toBe('function')
+      expect(resolveNodeCard(nodeFixture({ entityKind: kind }))).toBe(registered)
+    }
   })
 
-  it('源码契约：分发处查表优先、miss 时 fallback 链保持既有分支（行为零变化）', () => {
+  it('源码契约：四卡注册在表；分发处查表即走，唯一 fallback 是 CollectionObject 兜底', () => {
     expect(nodeVisualSource).toContain('resolveNodeCard(props.node)')
-    expect(nodeVisualSource).toContain(`registerNodeCard('entity:context', ContextProjectionObject)`)
-    // fallback 链四分支原样保留：registry 为空时行为与平移前一致。
+    for (const kind of ['workflow', 'workspace', 'context', 'collection'] as const) {
+      expect(nodeVisualSource).toContain(`registerNodeCard('entity:${kind}'`)
+    }
+    // entityKind switch 分支已删（20260826 做实）：查表未命中只剩 CollectionObject 兜底。
     for (const branch of ['workflow', 'workspace', 'context'] as const) {
-      expect(nodeVisualSource).toContain(`props.node.entityKind === '${branch}'`)
+      expect(nodeVisualSource).not.toContain(`props.node.entityKind === '${branch}'`)
     }
     expect(nodeVisualSource).toContain('return <CollectionObject {...props} />')
   })

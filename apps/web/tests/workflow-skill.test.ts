@@ -9,6 +9,7 @@ import {
   buildReplayInstruction,
   buildWorkflowSkillSpec,
   collectSkillMaterialViewIds,
+  deriveSkillRunSteps,
   filterWorkflowSkills,
   formatSkillRunStats,
   isWorkflowSkillMarkdown,
@@ -110,6 +111,43 @@ describe('workflow-skill — 重放参数构造纯函数', () => {
 
   it('collectSkillMaterialViewIds 对空材料链返回空数组', () => {
     expect(collectSkillMaterialViewIds([{ label: '空步', materials: [] }])).toEqual([])
+  })
+})
+
+describe('workflow-skill — Run↔步骤链投影（deriveSkillRunSteps，20260826 做实）', () => {
+  const skillWithMaterials: WorkflowSkillSummary = {
+    artifactId: 'art-1', viewId: 'view-skill', title: 'SKILL · 品牌方案三步走', name: '品牌方案三步走',
+    description: '', stepCount: 2,
+    steps: [
+      { label: '确认创意方向', materials: [{ viewId: 'view-a', title: '品牌手册' }] },
+      { label: '产出方案初稿', materials: [] },
+    ],
+    createdAt: 100,
+  }
+
+  it('技能重放的 Run：从 instruction 反解技能并投影步骤链（label/status/材料 detail/viewIds）', () => {
+    const instruction = buildReplayInstruction({ name: '品牌方案三步走', steps: skillWithMaterials.steps })
+    const steps = deriveSkillRunSteps({ command: instruction, status: 'running' }, [skillWithMaterials])
+    expect(steps).toHaveLength(2)
+    expect(steps[0]).toMatchObject({ label: '确认创意方向', status: 'running' })
+    expect(steps[0]?.detail).toBe('材料：品牌手册')
+    expect(steps[0]?.viewIds).toEqual(['view-a'])
+    expect(steps[1]).toMatchObject({ label: '产出方案初稿', status: 'running' })
+    expect(steps[1]?.detail).toBeUndefined()
+  })
+
+  it('Run 状态如实映射步骤状态：completed→done、failed→failed、queued→pending、cancelled→info', () => {
+    const instruction = buildReplayInstruction({ name: '品牌方案三步走', steps: skillWithMaterials.steps })
+    expect(deriveSkillRunSteps({ command: instruction, status: 'completed' }, [skillWithMaterials])[0]?.status).toBe('done')
+    expect(deriveSkillRunSteps({ command: instruction, status: 'failed' }, [skillWithMaterials])[0]?.status).toBe('failed')
+    expect(deriveSkillRunSteps({ command: instruction, status: 'queued' }, [skillWithMaterials])[0]?.status).toBe('pending')
+    expect(deriveSkillRunSteps({ command: instruction, status: 'cancelled' }, [skillWithMaterials])[0]?.status).toBe('info')
+  })
+
+  it('普通指令 Run / 技能已删除 / 指令格式损坏：一律返回空数组（不伪造步骤）', () => {
+    expect(deriveSkillRunSteps({ command: '把第二页的图表改成柱状图', status: 'running' }, [skillWithMaterials])).toEqual([])
+    expect(deriveSkillRunSteps({ command: '按已确认的工作流技能「不存在」执行：\n1. x', status: 'running' }, [skillWithMaterials])).toEqual([])
+    expect(deriveSkillRunSteps({ command: '按已确认的工作流技能「', status: 'running' }, [skillWithMaterials])).toEqual([])
   })
 })
 

@@ -18,7 +18,7 @@ import { runStatusLabel } from '../../model'
 import { deriveWorkRailMode, isRunBusy, type WorkRailMode } from '../../state/workRailMode'
 import { ToolResultCard, type ToolResultSnapshot } from '../workflow/ToolResultCard'
 import { RunOutlinePanel } from '../workflow/RunOutlinePanel'
-import { buildRunOutline, type RunOutlineItem } from '../workflow/RunOutlineProvider'
+import { buildRunOutline, type RunOutlineItem, type RunOutlineStep } from '../workflow/RunOutlineProvider'
 import { PreviewSurface } from './PreviewSurface'
 
 interface Props {
@@ -32,6 +32,8 @@ interface Props {
   contextCount: number
   contextScope: 'workspace' | 'scope' | 'project'
   onContextScope: (scope: 'workspace' | 'scope' | 'project') => void
+  /** Run 大纲的步骤链（技能重放的 Run 由 App 经 deriveSkillRunSteps 映射；普通 Run 缺省空）。 */
+  runSteps?: readonly RunOutlineStep[]
   composerText: string
   composerRef: RefObject<HTMLTextAreaElement | null>
   composerFocusRequest: number
@@ -89,8 +91,9 @@ export function WorkRail(props: Props) {
 
   if (props.collapsed) return null
 
-  // Run 过程大纲投影（第一梯队 ④）：纯只读；Run 尚未与步骤链关联，steps 传空数组。
-  const runOutline: readonly RunOutlineItem[] = props.activeRun ? buildRunOutline(props.activeRun, [], props.runEvents) : []
+  // Run 过程大纲投影（第一梯队 ④）：纯只读；技能重放的 Run 由 App 映射步骤链
+  // （deriveSkillRunSteps 从 instruction 反解），普通 Run 传空数组。
+  const runOutline: readonly RunOutlineItem[] = props.activeRun ? buildRunOutline(props.activeRun, props.runSteps ?? [], props.runEvents) : []
 
 
   return <aside className="work-rail" data-testid="work-rail" data-mode={mode} style={{ width: props.width, '--lcos-runtime-rail-width': `${props.width}px` } as CSSProperties} onContextMenu={(event) => event.preventDefault()}>

@@ -30,9 +30,9 @@ export interface RunOutlineItem {
 }
 
 /**
- * 步骤链投影输入。0.1 的 Run 尚未与 Workflow 步骤链关联
- * （ActiveRun 无 step 字段，查 model.ts 确认），调用方传空数组即可；
- * 关联方式出现后由调用方把步骤链映射进来，本层不改。
+ * 步骤链投影输入。Run 与 Workflow 步骤链的关联已接通（20260826 做实）：
+ * 技能重放的 Run 由调用方经 deriveSkillRunSteps（skillLibrary，从 instruction
+ * 反解技能步骤链）映射传入；普通 Run 传空数组。本层保持纯投影不改。
  */
 export interface RunOutlineStep {
   readonly id: string

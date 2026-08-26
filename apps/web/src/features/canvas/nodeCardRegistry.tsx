@@ -11,9 +11,10 @@ import type { Props as CanvasNodeVisualProps } from './CanvasNodeVisual'
  * 新增卡片类型只需注册、不需改分发逻辑（ToolResultCard / RunOutlinePanel 的卡后续也挂这里）。
  *
  * 风险控制（施工单原话：薄层平移不分大步）：
- * - 0.1 只迁一个示范卡（entity:context → ContextProjectionObject），其余分支保持原 switch；
- * - 查表未命中时 resolveNodeCard 返回 undefined，调用方 fallback 到既有分支——注册表为空
- *   时行为与平移前完全一致（行为零变化的验收基线）。
+ * - 20260826 做实：context 族四类卡（workflow/workspace/context/collection）已全量入表，
+ *   宿主分发查表即走；file 族仍由 ContentObject 内部分发，后续按 file:<type> 迁移；
+ * - 查表未命中时 resolveNodeCard 返回 undefined，调用方 fallback 到 CollectionObject
+ *   （未知 entityKind 的行为兜底，非错误路径）。
  *
  * 注册方向：由宿主（CanvasNodeVisual）在模块底部自注册，本文件不反向 import 渲染器，
  * 运行时依赖单向（CanvasNodeVisual → nodeCardRegistry），无循环。
@@ -33,7 +34,7 @@ export function nodeCardKey(node: CanvasNode): string {
   return 'default'
 }
 
-/** 注册表本体：key 为 nodeCardKey 派生的组合键。0.1 只预置示范卡，逐步扩充。 */
+/** 注册表本体：key 为 nodeCardKey 派生的组合键。context 族已全量预置，file 族逐步扩充。 */
 export const NODE_CARD_REGISTRY: Record<string, NodeCardRenderer> = {}
 
 /** 注册一张卡（同名键后写覆盖先写，方便测试与后续宿主按需重挂）。 */

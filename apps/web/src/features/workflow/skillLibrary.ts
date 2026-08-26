@@ -8,6 +8,8 @@
  * 依赖 workflowModel 的 frontmatter 双向能力；纯函数零副作用。
  */
 
+import type { RunStatus } from '../../model'
+import type { RunOutlineStep } from './RunOutlineProvider'
 import { parseWorkflowFile, serializeWorkflowFile, type WorkflowSpec } from './workflowModel'
 
 /** 技能步骤的语义：做什么（label）+ 用什么材料（viewId live pointer 引用）。 */
@@ -223,4 +225,45 @@ export function collectSkillMaterialViewIds(steps: readonly SkillStep[]): readon
     if (material.viewId && !seen.has(material.viewId)) seen.add(material.viewId)
   }
   return [...seen]
+}
+
+/** Run 整体状态 → 步骤条目状态：与 buildRunOutline 的 instructionStatus 同规则。 */
+function skillRunStepStatus(status: RunStatus): RunOutlineStep['status'] {
+  if (status === 'failed') return 'failed'
+  if (status === 'running') return 'running'
+  if (status === 'completed') return 'done'
+  if (status === 'queued' || status === 'waiting_input' || status === 'review') return 'pending'
+  return 'info' // cancelled：已撤回按中性记录
+}
+
+/**
+ * Run 大纲的步骤链投影（纯函数）：技能重放的 Run 从 instruction 反解出步骤链。
+ * 关联契约：重放指令由 buildReplayInstruction 写入（SKILL_REPLAY_INSTRUCTION_PREFIX + 技能名），
+ * 这里按同一前缀反解并在技能表里按名匹配——Run 与 Workflow 步骤链由此接通，
+ * 大纲面板经 buildRunOutline(run, steps, events) 消费（RunOutlineStep 的设计入口）。
+ * 每步状态如实取 Run 整体状态：provider 把整条 instruction 当一次 Run 执行，不伪造分步进度。
+ */
+export function deriveSkillRunSteps(
+  run: { readonly command: string; readonly status: RunStatus },
+  skills: readonly WorkflowSkillSummary[],
+): readonly RunOutlineStep[] {
+  const command = run.command ?? ''
+  if (!command.startsWith(SKILL_REPLAY_INSTRUCTION_PREFIX)) return []
+  const rest = command.slice(SKILL_REPLAY_INSTRUCTION_PREFIX.length)
+  const nameEnd = rest.indexOf('」执行')
+  if (nameEnd <= 0) return []
+  const skill = skills.find((item) => item.name === rest.slice(0, nameEnd))
+  if (skill === undefined) return []
+  const status = skillRunStepStatus(run.status)
+  return skill.steps.map((step, index) => {
+    const viewIds = step.materials.map((material) => material.viewId).filter((viewId) => viewId.length > 0)
+    const titles = step.materials.map((material) => material.title).filter((title) => title.length > 0)
+    return {
+      id: `${skill.viewId}:${index}`,
+      label: step.label,
+      status,
+      ...(titles.length === 0 ? {} : { detail: `材料：${titles.join('、')}` }),
+      ...(viewIds.length === 0 ? {} : { viewIds }),
+    }
+  })
 }

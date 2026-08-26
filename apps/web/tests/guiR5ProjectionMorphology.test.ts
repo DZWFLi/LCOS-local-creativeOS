@@ -9,9 +9,10 @@ const css = source('interaction-system.css')
 
 describe('GUI R5 Spatial-style Project Entity projections', () => {
   it('gives Context, Workflow and Workspace different physical morphologies on Main', () => {
-    expect(visual).toContain("props.node.entityKind === 'workflow'")
-    expect(visual).toContain("props.node.entityKind === 'workspace'")
-    expect(visual).toContain("props.node.entityKind === 'context'")
+    // 20260826 注册表做实后，entityKind 分发走 nodeCardRegistry 查表（不同渲染器=不同形态）。
+    expect(visual).toContain("registerNodeCard('entity:workflow', WorkflowProjectionObject)")
+    expect(visual).toContain("registerNodeCard('entity:workspace', WorkspaceProjectionObject)")
+    expect(visual).toContain("registerNodeCard('entity:context', ContextProjectionObject)")
     expect(visual).toContain('lcos-context-projection')
     expect(visual).toContain('lcos-workflow-projection')
     expect(visual).toContain('lcos-workspace-projection')
