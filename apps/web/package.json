@@ -17,7 +17,6 @@
     "@base-ui/react": "^1.6.0",
     "@local-creative-os/contracts": "0.1.0",
     "@local-creative-os/domain": "0.1.0",
-    "@local-creative-os/ui": "0.1.0",
     "@pagus-kit/core": "^0.1.1",
     "@pagus-kit/react": "^0.1.1",
     "@pagus-kit/renderer": "^0.1.1",
