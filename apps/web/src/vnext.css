@@ -19,15 +19,10 @@
   --vnext-shadow: 0 14px 38px rgba(47, 44, 68, .09), 0 2px 8px rgba(47, 44, 68, .045), inset 0 1px 0 rgba(255,255,255,.88);
 }
 
-@property --vnext-edge-angle {
-  syntax: '<angle>';
-  inherits: false;
-  initial-value: 0deg;
-}
-
-@keyframes vnext-edge-travel { to { --vnext-edge-angle: 360deg; } }
-@keyframes vnext-surface-in { from { opacity: 0; transform: scale(1.006) translateY(3px); } to { opacity: 1; transform: scale(1) translateY(0); } }
-@keyframes vnext-run-dash { to { stroke-dashoffset: -26; } }
+/* A-2a 合并：双轨消除 — vnext-edge-travel / vnext-surface-in 与 reconstruction.css 的
+   lcos-ring-travel（@property --lcos-ring-angle）/ lcos-surface-in 同语义重复定义，删除本侧
+   副本，下方引用统一改为 lcos 侧动画；@property --vnext-edge-angle 一并退役。 */
+@keyframes vnext-run-dash { to { stroke-dashoffset: -26; } } /* A-2a 保留：与 lcos-edge-march 同动词但 dasharray 参数耦合（7 9/周期16 vs 4 5/周期9），强并会引入循环跳变，待 Phase 统一边词汇 */
 
 .app-shell.porcelain-studio-v2 {
   background: var(--vnext-ground);
@@ -74,7 +69,7 @@
   border-radius: 10px;
   background: transparent;
   color: var(--vnext-ink-44);
-  transition: background 140ms ease, color 140ms ease, transform 140ms ease;
+  transition: background var(--lcos-dur-micro) ease, color var(--lcos-dur-micro) ease, transform var(--lcos-dur-micro) ease;
 }
 .vnext-brand-dot:hover,
 .vnext-project-actions button:hover { color: var(--vnext-ink); background: rgba(67,62,91,.055); transform: scale(1.035); }
@@ -96,7 +91,7 @@
   background: rgba(253,253,255,.6);
   font-size: 10.5px;
   white-space: nowrap;
-  transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
+  transition: background var(--lcos-dur-micro) ease, color var(--lcos-dur-micro) ease, border-color var(--lcos-dur-micro) ease;
 }
 .vnext-capture-target:hover { color: var(--vnext-ink); background: rgba(67,62,91,.05); border-color: var(--vnext-hair-strong); }
 .vnext-capture-target.pinned { color: #4a5fc7; background: rgba(70,90,190,.08); border-color: rgba(70,90,190,.18); }
@@ -178,7 +173,7 @@
   border-radius: 10px;
   background: transparent;
   color: var(--vnext-ink-44);
-  transition: transform 140ms ease, background 140ms ease, color 140ms ease, border-color 140ms ease;
+  transition: transform var(--lcos-dur-micro) ease, background var(--lcos-dur-micro) ease, color var(--lcos-dur-micro) ease, border-color var(--lcos-dur-micro) ease;
 }
 .vnext-rail-button:hover,.vnext-workspace-mini:hover { transform: scale(1.045); color: var(--vnext-ink); background: rgba(72,67,99,.055); }
 .vnext-rail-button.active,.vnext-workspace-mini.active { color: var(--vnext-ink); background: rgba(255,255,255,.94); border-color: rgba(97,86,136,.12); box-shadow: 0 4px 12px rgba(55,51,75,.065); }
@@ -208,7 +203,7 @@
   border-radius: 15px;
   background: rgba(253,253,255,.94);
   box-shadow: var(--vnext-shadow);
-  animation: vnext-surface-in 150ms ease both;
+  animation: lcos-surface-in var(--lcos-dur-fast) ease both; /* A-2a 合并：双轨消除 */
 }
 .vnext-workspace-preview-map { position:relative; height:46px; border-radius:10px; background:var(--vnext-ground); overflow:hidden; border:1px solid rgba(60,56,77,.06); }
 .vnext-workspace-preview-map i { position:absolute; border-radius:3px; background:rgba(74,69,96,.28); }
@@ -238,7 +233,7 @@
     radial-gradient(circle at 65% 12%, rgba(139,92,246,.026), transparent 26%),
     radial-gradient(rgba(77,73,94,.055) .58px, transparent .68px);
   background-size:auto,23px 23px;
-  animation:vnext-surface-in 160ms cubic-bezier(.2,.75,.25,1) both;
+  animation:lcos-surface-in var(--lcos-dur-fast) var(--lcos-ease-apple) both; /* A-2a 合并：双轨消除；easing 收敛至 appleDefault */
 }
 .vnext-projection-title { position:absolute; left:84px; top:22px; z-index: var(--lcos-z-content-handle); /* z-tier: canvas-content */ display:flex; align-items:baseline; gap:9px; pointer-events:none; }
 .vnext-projection-title span { font-size: 12px; font-weight:650; letter-spacing:-.01em; }
@@ -256,14 +251,14 @@
   border-radius:13px;
   background:rgba(255,255,255,.72);
   box-shadow:0 7px 20px rgba(45,42,64,.052), inset 0 1px 0 rgba(255,255,255,.92);
-  transition:background 120ms ease,border-color 120ms ease,box-shadow 120ms ease,transform 120ms ease;
+  transition:background var(--lcos-dur-micro) ease,border-color var(--lcos-dur-micro) ease,box-shadow var(--lcos-dur-micro) ease,transform var(--lcos-dur-micro) ease;
 }
 .projection-outline .vnext-projection-node { border-width:0 0 1px; border-radius:0; box-shadow:none; background:transparent; padding:6px 8px; }
 .projection-context-graph .vnext-projection-node { justify-content:center; border-radius:999px; background:rgba(255,255,255,.75); }
 .projection-context-graph .vnext-projection-node.muted { opacity:.56; }
 .vnext-projection-node:hover { border-color:rgba(69,64,92,.17); background:rgba(255,255,255,.9); transform:translateY(-1px); }
 .vnext-projection-node.selected { border-color:transparent; }
-.vnext-edge-light { position:absolute; inset:-1.5px; border-radius:inherit; padding:1.5px; background:conic-gradient(from var(--vnext-edge-angle),var(--vnext-purple),var(--vnext-blue),var(--vnext-cyan),var(--vnext-blue),var(--vnext-purple)); -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0); -webkit-mask-composite:xor; mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0); mask-composite:exclude; animation:vnext-edge-travel 5.5s linear infinite; pointer-events:none; }
+.vnext-edge-light { position:absolute; inset:-1.5px; border-radius:inherit; padding:1.5px; background:conic-gradient(from var(--lcos-ring-angle),var(--vnext-purple),var(--vnext-blue),var(--vnext-cyan),var(--vnext-blue),var(--vnext-purple)); -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0); -webkit-mask-composite:xor; mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0); mask-composite:exclude; animation:lcos-ring-travel 5.5s linear infinite; /* A-2a 合并：双轨消除 */ pointer-events:none; }
 .vnext-edge-bloom { position:absolute; inset:-13px; border-radius:inherit; background:radial-gradient(60% 60% at 50% 50%,rgba(139,92,246,.14),rgba(59,130,246,.07) 56%,transparent 80%); filter:blur(8px); pointer-events:none; z-index: -1; /* z-tier: legacy-bg（porcelain 遗留背景层，按契约保留 -1） */ }
 .vnext-projection-icon { width:24px; height:24px; flex:0 0 24px; display:grid; place-items:center; border-radius:8px; color:var(--vnext-ink-44); background:rgba(72,67,94,.05); }
 .vnext-projection-copy { min-width:0; display:grid; gap:2px; }
@@ -309,13 +304,13 @@
 }
 .vnext-scope-axis,.vnext-lens-axis { display:flex; align-items:center; gap:2px; }
 .vnext-scope-axis { padding-right:8px; border-right:1px solid var(--vnext-hair); }
-.vnext-bottom-dock button { height:32px; min-width:32px; display:grid; place-items:center; border:1px solid transparent; border-radius:10px; background:transparent; color:var(--vnext-ink-44); transition:background 130ms ease,color 130ms ease,transform 130ms ease; }
+.vnext-bottom-dock button { height:32px; min-width:32px; display:grid; place-items:center; border:1px solid transparent; border-radius:10px; background:transparent; color:var(--vnext-ink-44); transition:background var(--lcos-dur-micro) ease,color var(--lcos-dur-micro) ease,transform var(--lcos-dur-micro) ease; }
 .vnext-bottom-dock button:hover { color:var(--vnext-ink); background:rgba(71,66,94,.055); transform:translateY(-1px); }
 .vnext-bottom-dock button.active { color:var(--vnext-ink); background:rgba(255,255,255,.95); border-color:rgba(70,65,93,.1); box-shadow:0 4px 12px rgba(46,43,63,.06); }
 .vnext-lens-axis > button { position:relative; }
-.vnext-lens-axis > button::after { content:attr(data-label); position:absolute; bottom:37px; left:50%; transform:translate(-50%,3px); opacity:0; pointer-events:none; padding:4px 6px; border-radius:7px; background:rgba(36,34,45,.88); color:white; font-size: 12px; white-space:nowrap; transition:opacity 120ms ease,transform 120ms ease; }
+.vnext-lens-axis > button::after { content:attr(data-label); position:absolute; bottom:37px; left:50%; transform:translate(-50%,3px); opacity:0; pointer-events:none; padding:4px 6px; border-radius:7px; background:rgba(36,34,45,.88); color:white; font-size: 12px; white-space:nowrap; transition:opacity var(--lcos-dur-micro) ease,transform var(--lcos-dur-micro) ease; }
 .vnext-lens-axis > button:hover::after { opacity:1; transform:translate(-50%,0); }
-.vnext-projection-switch { display:flex; align-items:center; gap:1px; margin-left:3px; padding-left:6px; border-left:1px solid var(--vnext-hair); animation:vnext-surface-in 120ms ease both; }
+.vnext-projection-switch { display:flex; align-items:center; gap:1px; margin-left:3px; padding-left:6px; border-left:1px solid var(--vnext-hair); animation:lcos-surface-in var(--lcos-dur-fast) ease both; /* A-2a 合并：双轨消除 */ }
 .vnext-projection-switch button { min-width:auto; width:auto; height:27px; padding:0 8px; font-size: 12.5px; }
 .vnext-scope-current { max-width:118px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding:0 5px; color:var(--vnext-ink-44); font-size: 12.5px; }
 .vnext-merge-workbench { color:#4f9271 !important; }
@@ -353,7 +348,7 @@
   background:rgba(253,253,255,.96);
   box-shadow:0 22px 58px rgba(44,41,63,.13),0 3px 12px rgba(44,41,63,.05),inset 0 1px 0 #fff;
   backdrop-filter:blur(20px) saturate(1.04);
-  animation:vnext-surface-in 150ms ease both;
+  animation:lcos-surface-in var(--lcos-dur-fast) ease both; /* A-2a 合并：双轨消除 */
 }
 .vnext-drop-shelf.anchor-left { left:64px; top:50%; transform:translateY(-50%); }
 .vnext-drop-shelf.anchor-bottom { left:50%; bottom:66px; transform:translateX(-50%); }
@@ -363,12 +358,12 @@
 .vnext-payload-stack i:nth-child(1){left:1px;top:6px}.vnext-payload-stack i:nth-child(2){left:4px;top:3px}.vnext-payload-stack i:nth-child(3){left:7px;top:0}
 .vnext-drop-payload strong { position:absolute; right:4px; bottom:1px; min-width:15px; height:15px; display:grid; place-items:center; border-radius:999px; background:#fff; border:1px solid var(--vnext-hair); font-size: 11px; }
 .vnext-drop-destinations { display:flex; gap:4px; min-width:0; overflow-x:auto; }
-.vnext-destination { display:flex; align-items:stretch; border:1px solid transparent; border-radius:11px; overflow:hidden; background:transparent; transition:background 120ms ease,border-color 120ms ease; }
+.vnext-destination { display:flex; align-items:stretch; border:1px solid transparent; border-radius:11px; overflow:hidden; background:transparent; transition:background var(--lcos-dur-micro) ease,border-color var(--lcos-dur-micro) ease; }
 .vnext-destination:hover { border-color:rgba(72,67,94,.09); background:rgba(71,66,94,.04); }
 .vnext-destination button { border:0; background:transparent; color:var(--vnext-ink-44); }
 .vnext-destination-main { height:34px; min-width:74px; max-width:140px; display:flex; align-items:center; gap:6px; padding:0 8px; }
 .vnext-destination-main span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size: 12.5px; }
-.vnext-destination-follow { width:28px; display:grid; place-items:center; border-left:1px solid var(--vnext-hair) !important; opacity:.36; transition:opacity 120ms ease,color 120ms ease; }
+.vnext-destination-follow { width:28px; display:grid; place-items:center; border-left:1px solid var(--vnext-hair) !important; opacity:.36; transition:opacity var(--lcos-dur-micro) ease,color var(--lcos-dur-micro) ease; }
 .vnext-destination:hover .vnext-destination-follow { opacity:1; color:var(--vnext-blue); }
 .vnext-drop-close { width:30px; height:30px; display:grid; place-items:center; border:0; border-radius:9px; background:transparent; color:var(--vnext-ink-44); }
 .vnext-drop-close:hover { background:rgba(71,66,94,.05); }
@@ -432,7 +427,7 @@
 /* -------------------------------------------------------------------------- */
 /* On-demand right drawer                                                      */
 /* -------------------------------------------------------------------------- */
-.app-shell.porcelain-studio-v2 .work-rail:not(.compact) { top:10px; right:10px; bottom:66px; height:auto; border-radius:22px; box-shadow:0 26px 65px rgba(42,39,60,.15),inset 0 1px 0 #fff; animation:vnext-surface-in 150ms ease both; }
+.app-shell.porcelain-studio-v2 .work-rail:not(.compact) { top:10px; right:10px; bottom:66px; height:auto; border-radius:22px; box-shadow:0 26px 65px rgba(42,39,60,.15),inset 0 1px 0 #fff; animation:lcos-surface-in var(--lcos-dur-fast) ease both; } /* A-2a 合并：双轨消除 */
 .vnext-context-scope { display:flex; gap:1px; padding:2px; border:1px solid var(--vnext-hair); border-radius:8px; background:rgba(246,246,250,.8); }
 .vnext-context-scope button { height:20px; padding:0 6px; border:0; border-radius:6px; background:transparent; color:var(--vnext-ink-44); font-size: 11px; }
 .vnext-context-scope button.active { color:var(--vnext-ink); background:white; box-shadow:0 2px 6px rgba(46,42,66,.06); }
@@ -440,7 +435,7 @@
 /* -------------------------------------------------------------------------- */
 /* Existing Arrange canvas corrections                                        */
 /* -------------------------------------------------------------------------- */
-.app-shell.porcelain-studio-v2 .canvas-node .anchor { display:grid; place-items:center; width:18px; height:18px; opacity:0; transition:opacity 100ms ease,transform 100ms ease; }
+.app-shell.porcelain-studio-v2 .canvas-node .anchor { display:grid; place-items:center; width:18px; height:18px; opacity:0; transition:opacity var(--lcos-dur-micro) ease,transform var(--lcos-dur-micro) ease; }
 .app-shell.porcelain-studio-v2 .canvas-node:hover .anchor,
 .app-shell.porcelain-studio-v2 .canvas-node.selected .anchor { opacity:.9; }
 .app-shell.porcelain-studio-v2 .node-context-toolbar button:first-child { display:none; }
@@ -472,6 +467,9 @@
 @media (prefers-reduced-motion: reduce) {
   .vnext-projection-surface,.vnext-drop-shelf,.vnext-workspace-preview,.vnext-surface-host * { animation-duration:.001ms !important; animation-iteration-count:1 !important; scroll-behavior:auto !important; }
   .vnext-edge-light,.vnext-projection-edges path.active { animation:none !important; }
+  /* A-2a 补口：dock 投影切换、右栏 drawer、drop 边缘光此前未落入 reduced-motion 覆盖 */
+  .vnext-projection-switch,.app-shell.porcelain-studio-v2 .work-rail:not(.compact) { animation-duration:.001ms !important; animation-iteration-count:1 !important; }
+  .drop-edge-cue i,.drop-edge-cue span { animation:none !important; transition-duration:.001ms !important; }
 }
 
 /* Immersive artifact viewer: media owns the screen, chrome stays quiet. */

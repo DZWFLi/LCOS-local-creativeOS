@@ -23,15 +23,44 @@
      裸 mono 散值收敛：reconstruction.css、interaction-system.css 共 2 处已改引本 token。 */
   --lcos-font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', 'Segoe UI Mono', Consolas, 'Liberation Mono', monospace;
 
-  /* Core palette */
-  --ink: #192837;
-  --ink-72: rgba(25, 40, 55, 0.72);
-  --ink-58: rgba(25, 40, 55, 0.58);
-  --ink-42: rgba(25, 40, 55, 0.42);
-  --ink-22: rgba(25, 40, 55, 0.22);
-  --ink-12: rgba(25, 40, 55, 0.12);
-  --ink-08: rgba(25, 40, 55, 0.08);
-  --ink-05: rgba(25, 40, 55, 0.05);
+  /* =====================================================================
+     Apple 语义色架构 · A-1a（Wave A-1a 颜色系统收敛）
+     灰阶全部收成 Label×4 / Fill×4 / Separator×2 共十个 token（十 token 架构）。
+     纪律：颜色承担语义差异，不承担装修；Dark Mode 只换基色，不重新设计一套灰。
+     基色：label light #3c3c43 → dark #ebebf5（透明度阶梯不变）；
+           fill 基色 120,120,128（dark 透明度提至 .36/.32/.24/.16）；
+           separator opaque light #c6c6c8 → dark #38383a；hairline 黑基/白基。
+     冻结来源：Apple Donor Map §2.2 + Design Grammar §6。
+     迁移策略：旧灰系 token（--ink* / --porcelain-border）已改引本层，旧名保留
+     作别名（零破坏迁移）；业务组件 var() 接线替换放后续批次。
+     ===================================================================== */
+  --lcos-label-primary: rgba(60, 60, 67, 1);        /* 主文字/图标 */
+  --lcos-label-secondary: rgba(60, 60, 67, 0.60);   /* 次级文字 */
+  --lcos-label-tertiary: rgba(60, 60, 67, 0.30);    /* 三级文字/占位 */
+  --lcos-label-quaternary: rgba(60, 60, 67, 0.18);  /* 极弱文字/下划线 */
+  --lcos-fill-primary: rgba(120, 120, 128, 0.20);   /* 强填充：选中底/滑块轨 */
+  --lcos-fill-secondary: rgba(120, 120, 128, 0.16); /* 常规填充 */
+  --lcos-fill-tertiary: rgba(120, 120, 128, 0.12);  /* 弱填充：输入框/按钮底 */
+  --lcos-fill-quaternary: rgba(120, 120, 128, 0.08);/* 极弱填充/hover 沉淀 */
+  --lcos-sep-opaque: #c6c6c8;                       /* 实色分隔线（dark #38383a） */
+  --lcos-sep-hairline: rgba(0, 0, 0, 0.12);         /* 发丝线（dark 白基 .17） */
+
+  /* 语义色补位（Grammar §6 冻结语义：red→error；blue→active/system signal；
+     cyan/teal→Context family。success/warning 语义已由 interaction-system.css
+     的 --lcos-ui-success/--lcos-ui-warning 承担，本层不重复定义避免双轨） */
+  --lcos-ui-error: #ff383c;       /* dark #ff4245 */
+  --lcos-ui-active: #0088ff;      /* active/system signal，dark #0091ff */
+  --lcos-domain-context: #00c3d0; /* Context 域青（C5 语义色撕裂治理地基）；深底可读，暂不切 dark 基色 */
+
+  /* Core palette（A-1a 起为上方 Apple 层的别名；旧名保留防断链） */
+  --ink: var(--lcos-label-primary);
+  --ink-72: var(--lcos-label-secondary);
+  --ink-58: var(--lcos-label-secondary);
+  --ink-42: var(--lcos-label-tertiary);
+  --ink-22: var(--lcos-label-quaternary);
+  --ink-12: var(--lcos-sep-hairline);
+  --ink-08: var(--lcos-sep-hairline);
+  --ink-05: var(--lcos-sep-hairline);
 
   --app-bg: #ecece8;
   --canvas-bg: #f5f4f0;
@@ -67,7 +96,7 @@
 
   /* Material */
   --porcelain-gradient: linear-gradient(145deg, rgba(255, 255, 253, 0.99), rgba(245, 245, 241, 0.97));
-  --porcelain-border: rgba(25, 40, 55, 0.105);
+  --porcelain-border: var(--lcos-sep-hairline); /* A-1a：边框灰收编为 hairline 别名 */
   --porcelain-shadow:
     0 18px 42px rgba(25, 40, 55, 0.075),
     0 3px 9px rgba(25, 40, 55, 0.035),
@@ -171,6 +200,44 @@
   --lcos-z-modal-toast: 1200;         /* Toast 容器（原 z1200） */
   --lcos-z-modal-drag-handle: 1250;   /* 选区拖拽把手（原 z1250） */
   --lcos-z-modal-top: 1600;           /* 文档预览，瞬态最顶层（原 z1600） */
+}
+/* =====================================================================
+   Apple 语义色架构 · A-1a —— Dark 基色切换
+   机制与 interaction-system 一致：<html data-lcos-theme> 显式偏好优先，
+   缺省跟随 OS（显式 light 时尊重 light）。只换基色，不重新设计灰阶：
+   label 基色 #ebebf5（透明度阶梯不变）；fill 基色 120,120,128 不变、
+   dark 透明度提至 Apple 标准 .36/.32/.24/.16；sep-opaque #38383a；
+   hairline 换白基 .17。语义色 error/active 用 dark 冻结变体。
+   ===================================================================== */
+[data-lcos-theme='dark'] {
+  --lcos-label-primary: rgba(235, 235, 245, 1);
+  --lcos-label-secondary: rgba(235, 235, 245, 0.60);
+  --lcos-label-tertiary: rgba(235, 235, 245, 0.30);
+  --lcos-label-quaternary: rgba(235, 235, 245, 0.18);
+  --lcos-fill-primary: rgba(120, 120, 128, 0.36);
+  --lcos-fill-secondary: rgba(120, 120, 128, 0.32);
+  --lcos-fill-tertiary: rgba(120, 120, 128, 0.24);
+  --lcos-fill-quaternary: rgba(120, 120, 128, 0.16);
+  --lcos-sep-opaque: #38383a;
+  --lcos-sep-hairline: rgba(255, 255, 255, 0.17);
+  --lcos-ui-error: #ff4245;
+  --lcos-ui-active: #0091ff;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-lcos-theme='light']) {
+    --lcos-label-primary: rgba(235, 235, 245, 1);
+    --lcos-label-secondary: rgba(235, 235, 245, 0.60);
+    --lcos-label-tertiary: rgba(235, 235, 245, 0.30);
+    --lcos-label-quaternary: rgba(235, 235, 245, 0.18);
+    --lcos-fill-primary: rgba(120, 120, 128, 0.36);
+    --lcos-fill-secondary: rgba(120, 120, 128, 0.32);
+    --lcos-fill-tertiary: rgba(120, 120, 128, 0.24);
+    --lcos-fill-quaternary: rgba(120, 120, 128, 0.16);
+    --lcos-sep-opaque: #38383a;
+    --lcos-sep-hairline: rgba(255, 255, 255, 0.17);
+    --lcos-ui-error: #ff4245;
+    --lcos-ui-active: #0091ff;
+  }
 }
 
 .scene.intent-understand,
@@ -2210,6 +2277,9 @@ body { color: var(--ink); }
 .canvas-node.density-compact .node-details { opacity:.78; }
 .canvas-node.density-expanded .node-preview-slot { min-height:64px; }
 .canvas-node .node-footer small { display:block; color:var(--ink-42); font-size: 10px; }
+
+/* Apple Donor Map §2.5 冻结值 · A-2a */
+:root { --lcos-dur-micro:.1s; --lcos-dur-fast:.2s; --lcos-dur-normal:.3s; --lcos-dur-slow:.4s; --lcos-dur-xslow:.5s; --lcos-dur-menu-open:.25s; --lcos-dur-menu-close:.15s; --lcos-dur-popover:.28s; --lcos-dur-morph:.35s; --lcos-dur-sheet-in:.5s; --lcos-dur-sheet-out:.3s; --lcos-dur-press:.1s; --lcos-ease-apple:cubic-bezier(.25,.46,.45,.94); --lcos-ease-out:cubic-bezier(0,0,.58,1); --lcos-ease-spring:cubic-bezier(.34,1.56,.64,1); }
 .resize-handle { position:absolute; right:5px; bottom:5px; width:14px; height:14px; z-index: var(--lcos-z-content-handle); /* z-tier: canvas-content */ border:0; border-right:2px solid rgba(60,73,90,.34); border-bottom:2px solid rgba(60,73,90,.34); border-radius:0 0 3px 0; background:transparent; cursor:nwse-resize; opacity:.62; }
 .resize-handle:hover { opacity:1; border-color:var(--accent); }
 .canvas-node.multi-selected .resize-handle { display:none; }

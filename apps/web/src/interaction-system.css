@@ -810,7 +810,7 @@
 /* Grid modes preserve spatial tone without changing entity semantics. */
 .lcos-reconstructed .canvas.layout-mode-freeform .canvas-world { --lcos-layout-dot-opacity: .20; }
 .lcos-reconstructed .canvas.layout-mode-grid .canvas-world { --lcos-layout-dot-opacity: .38; background-size: 22px 22px, 110px 110px; }
-.lcos-reconstructed .canvas.layout-mode-grid .lcos-arrange-node-layer [data-node-id] { transition: left 135ms var(--lcos-ui-ease-out), top 135ms var(--lcos-ui-ease-out); }
+.lcos-reconstructed .canvas.layout-mode-grid .lcos-arrange-node-layer [data-node-id] { transition: left 135ms var(--lcos-ui-ease-out), top 135ms var(--lcos-ui-ease-out); } /* A-2a 记录上报：left/top 布局属性动画（b3 同款违规），只记录不修 */
 
 @media (max-width: 760px) {
   .lcos-reconstructed .lcos-spatial-mode-switch { top: 9px; }
@@ -1310,7 +1310,7 @@
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .lcos-mindmap-branch-ghost small { font-size: 9px; color: rgba(103, 82, 158, .78); }
-.lcos-reconstructed .lcos-mindmap-fold { transition: fill 140ms ease; }
+.lcos-reconstructed .lcos-mindmap-fold { transition: fill var(--lcos-dur-micro) ease; }
 .lcos-reconstructed .lcos-note-mindmap.is-empty { display: grid; place-items: center; min-height: 96px; color: rgba(60,55,72,.5); font-size: 10px; }
 .lcos-reconstructed .lcos-note-mindmap-hint { position: sticky; bottom: 0; display: block; padding-top: 4px; color: rgba(60,55,72,.38); font-size: 9px; text-align: right; }
 
@@ -1329,7 +1329,7 @@
   white-space: nowrap;
   pointer-events: none;
   opacity: 0;
-  transition: opacity 140ms ease;
+  transition: opacity var(--lcos-dur-micro) ease;
 }
 .lcos-reconstructed :is(.lcos-surface-object:hover, .lcos-surface-object.selected) .lcos-surface-usage-hint { opacity: .72; }
 
@@ -1374,7 +1374,7 @@
    glowing. The displacement is sub-cell so the glyph remains recognizable. */
 .lcos-reconstructed .canvas-node.dragging .lcos-dot-glyph {
   transform: translate(calc(var(--lcos-drag-x, 0) * .65px), calc(var(--lcos-drag-y, 0) * .65px));
-  transition: transform 70ms linear;
+  transition: transform var(--lcos-dur-micro) linear;
 }
 .lcos-reconstructed .canvas-node.dragging .lcos-dot-cell.level-3 {
   transform: translate(calc(var(--lcos-drag-x, 0) * .22px), calc(var(--lcos-drag-y, 0) * .22px)) scale(1.16);
@@ -1693,7 +1693,7 @@
   background: rgba(250,250,253,.985);
   box-shadow: -18px 0 58px rgba(35,31,49,.13), 0 3px 10px rgba(35,31,49,.05);
   transform: translateX(var(--drawer-swipe-movement-x, 0));
-  transition: transform 220ms cubic-bezier(.2,.82,.28,1), opacity 160ms ease;
+  transition: transform var(--lcos-dur-fast) var(--lcos-ease-apple), opacity var(--lcos-dur-fast) ease;
 }
 .lcos-viewer-drawer-popup[data-ending-style] { transform: translateX(calc(100% + 18px)); opacity: .7; }
 .lcos-viewer-drawer-popup[data-starting-style] { transform: translateX(calc(100% + 18px)); opacity: .7; }
@@ -1818,7 +1818,7 @@
   background: transparent;
   cursor: grab;
   text-align: left;
-  transition: border-color 120ms ease, background 120ms ease, box-shadow 140ms ease;
+  transition: border-color var(--lcos-dur-micro) ease, background var(--lcos-dur-micro) ease, box-shadow var(--lcos-dur-micro) ease;
 }
 .lcos-page-thumb:hover {
   border-color: rgba(104,87,189,.12);
@@ -1965,7 +1965,7 @@
   background: rgba(253,253,255,.985);
   box-shadow: 0 -12px 38px rgba(35,31,49,.12), 0 -1px 4px rgba(35,31,49,.04);
   transform: translateY(var(--drawer-swipe-movement-y, 0));
-  transition: transform 220ms cubic-bezier(.2,.82,.28,1), opacity 150ms ease;
+  transition: transform var(--lcos-dur-fast) var(--lcos-ease-apple), opacity var(--lcos-dur-fast) ease;
 }
 .lcos-review-drawer-popup[data-starting-style],
 .lcos-review-drawer-popup[data-ending-style] { transform: translateY(calc(100% + 12px)); opacity: .72; }
@@ -2529,7 +2529,7 @@
 /* bloub is the hero: the mood label tints toward the emotion color. */
 .capture-float-mood {
   color: var(--lcos-ui-ink);
-  transition: color 240ms ease;
+  transition: color var(--lcos-dur-fast) ease;
 }
 .capture-float.mood-observing .capture-float-mood { color: #8a6fd6; }
 .capture-float.mood-working .capture-float-mood { color: var(--lcos-ui-signal, #6f5bd6); }
@@ -2660,10 +2660,10 @@
   box-shadow: none !important;
   backdrop-filter: none !important;
   transition:
-    left 300ms cubic-bezier(.22,1,.36,1),
-    top 300ms cubic-bezier(.22,1,.36,1),
-    opacity 180ms ease,
-    transform 240ms cubic-bezier(.22,1,.36,1) !important;
+    left var(--lcos-dur-normal) cubic-bezier(.22,1,.36,1),
+    top var(--lcos-dur-normal) cubic-bezier(.22,1,.36,1),
+    opacity var(--lcos-dur-fast) ease,
+    transform var(--lcos-dur-fast) cubic-bezier(.22,1,.36,1) !important; /* A-2a 记录上报：left/top 布局属性动画，待统一整改 */
 }
 .lcos-reconstructed .canvas-node[data-entity-kind="collection"]::before,
 .lcos-reconstructed .canvas-node[data-entity-kind="collection"]::after {
@@ -2704,9 +2704,9 @@
   box-shadow: 0 5px 14px rgba(34, 39, 48, .055);
   transform-origin: 50% 92%;
   transition:
-    transform 260ms cubic-bezier(.22,1,.36,1),
-    opacity 180ms ease,
-    filter 180ms ease;
+    transform var(--lcos-dur-normal) cubic-bezier(.22,1,.36,1),
+    opacity var(--lcos-dur-fast) ease,
+    filter var(--lcos-dur-fast) ease;
 }
 .lcos-reconstructed .lcos-collection-stack-sheet > img {
   width: 100%;
@@ -2760,10 +2760,10 @@
     0 8px 20px rgba(35, 42, 54, .075),
     inset 0 1px 0 rgba(255,255,255,.92);
   transition:
-    transform 220ms cubic-bezier(.22,1,.36,1),
-    border-color 160ms ease,
-    box-shadow 180ms ease,
-    background-color 160ms ease;
+    transform var(--lcos-dur-fast) cubic-bezier(.22,1,.36,1),
+    border-color var(--lcos-dur-fast) ease,
+    box-shadow var(--lcos-dur-fast) ease,
+    background-color var(--lcos-dur-fast) ease;
 }
 .lcos-reconstructed .lcos-collection-folder-tab {
   position: absolute;
@@ -2831,7 +2831,7 @@
   font-size: 11px;
   font-weight: 500;
   line-height: 1;
-  transition: transform 220ms cubic-bezier(.22,1,.36,1), background-color 160ms ease;
+  transition: transform var(--lcos-dur-fast) cubic-bezier(.22,1,.36,1), background-color var(--lcos-dur-fast) ease;
 }
 
 .lcos-reconstructed .canvas-node[data-entity-kind="collection"]:hover .lcos-collection-folder-face,
@@ -2891,21 +2891,21 @@
   transform: translate(var(--lcos-collection-fold-x), var(--lcos-collection-fold-y)) scale(.90);
   opacity: 0;
   transition:
-    left 300ms cubic-bezier(.22,1,.36,1),
-    top 300ms cubic-bezier(.22,1,.36,1),
-    transform 240ms cubic-bezier(.22,1,.36,1),
-    opacity 175ms ease !important;
+    left var(--lcos-dur-normal) cubic-bezier(.22,1,.36,1),
+    top var(--lcos-dur-normal) cubic-bezier(.22,1,.36,1),
+    transform var(--lcos-dur-fast) cubic-bezier(.22,1,.36,1),
+    opacity var(--lcos-dur-fast) ease !important; /* A-2a 记录上报：left/top 布局属性动画，待统一整改 */
 }
 .lcos-reconstructed .canvas-node:not(.dragging):not(.resizing):not([data-entity-kind="collection"]) {
   transition:
-    left 300ms cubic-bezier(.22,1,.36,1),
-    top 300ms cubic-bezier(.22,1,.36,1),
-    box-shadow 160ms cubic-bezier(.22,1,.36,1),
-    background-color 160ms cubic-bezier(.22,1,.36,1),
-    border-color 160ms cubic-bezier(.22,1,.36,1),
-    color 160ms cubic-bezier(.22,1,.36,1),
-    opacity 175ms ease,
-    transform 240ms cubic-bezier(.22,1,.36,1);
+    left var(--lcos-dur-normal) cubic-bezier(.22,1,.36,1),
+    top var(--lcos-dur-normal) cubic-bezier(.22,1,.36,1),
+    box-shadow var(--lcos-dur-fast) cubic-bezier(.22,1,.36,1),
+    background-color var(--lcos-dur-fast) cubic-bezier(.22,1,.36,1),
+    border-color var(--lcos-dur-fast) cubic-bezier(.22,1,.36,1),
+    color var(--lcos-dur-fast) cubic-bezier(.22,1,.36,1),
+    opacity var(--lcos-dur-fast) ease,
+    transform var(--lcos-dur-fast) cubic-bezier(.22,1,.36,1); /* A-2a 记录上报：left/top 布局属性动画，待统一整改 */
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2955,7 +2955,7 @@
   font-size: 10px;
   font-weight: 560;
   letter-spacing: .01em;
-  transition: background 150ms ease, color 150ms ease, box-shadow 150ms ease;
+  transition: background var(--lcos-dur-fast) ease, color var(--lcos-dur-fast) ease, box-shadow var(--lcos-dur-fast) ease;
 }
 .lcos-reconstructed .lcos-context-lens-switch button:hover {
   color: rgba(36, 41, 49, .72);
@@ -2986,7 +2986,7 @@
 .lcos-reconstructed .lcos-context-space-node {
   position: absolute;
   transform-origin: 50% 50%;
-  transition: left 260ms cubic-bezier(.22,.72,.22,1), top 260ms cubic-bezier(.22,.72,.22,1), opacity 160ms ease;
+  transition: left var(--lcos-dur-normal) cubic-bezier(.22,.72,.22,1), top var(--lcos-dur-normal) cubic-bezier(.22,.72,.22,1), opacity var(--lcos-dur-fast) ease; /* A-2a 记录上报：left/top 布局属性动画，待统一整改 */
 }
 .lcos-reconstructed .lcos-context-space-node.is-dragging {
   z-index: var(--lcos-z-content-raised); /* z-tier: canvas-content */
@@ -3118,7 +3118,7 @@
   background: rgba(255,255,255,.90);
   box-shadow: 0 5px 13px rgba(38,43,54,.045);
   transform-origin: 50% 90%;
-  transition: transform 240ms cubic-bezier(.22,1,.36,1), opacity 170ms ease;
+  transition: transform var(--lcos-dur-fast) cubic-bezier(.22,1,.36,1), opacity var(--lcos-dur-fast) ease;
 }
 .lcos-reconstructed .lcos-context-dossier-back > i:first-child { transform: translate(-4px,-1px) rotate(-2.2deg); }
 .lcos-reconstructed .lcos-context-dossier-back > i:last-child { transform: translate(5px,2px) rotate(2deg); opacity: .84; }
@@ -3140,7 +3140,7 @@
     linear-gradient(150deg, rgba(252,253,255,.985), rgba(var(--lcos-ui-context-rgb), .065)),
     rgba(249,250,252,.98);
   box-shadow: 0 8px 20px rgba(35,42,54,.07), inset 0 1px 0 rgba(255,255,255,.94);
-  transition: transform 220ms cubic-bezier(.22,1,.36,1), border-color 160ms ease, box-shadow 180ms ease;
+  transition: transform var(--lcos-dur-fast) cubic-bezier(.22,1,.36,1), border-color var(--lcos-dur-fast) ease, box-shadow var(--lcos-dur-fast) ease;
 }
 .lcos-reconstructed .lcos-context-dossier-preview {
   position: relative;
@@ -3289,7 +3289,7 @@
   color: rgba(var(--lcos-ui-context-rgb), .70);
   background: transparent;
   cursor: pointer;
-  transition: transform 140ms cubic-bezier(.22,1,.36,1), background 120ms ease, color 120ms ease;
+  transition: transform var(--lcos-dur-micro) cubic-bezier(.22,1,.36,1), background var(--lcos-dur-micro) ease, color var(--lcos-dur-micro) ease;
 }
 .lcos-reconstructed .lcos-context-lens-launcher button:hover {
   transform: translateX(1px);
@@ -3311,7 +3311,7 @@
   white-space: nowrap;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 100ms ease, transform 130ms cubic-bezier(.22,1,.36,1);
+  transition: opacity var(--lcos-dur-micro) ease, transform var(--lcos-dur-micro) cubic-bezier(.22,1,.36,1);
 }
 .lcos-reconstructed .lcos-context-lens-launcher button:hover > span { opacity: 1; transform: translate(0,-50%); }
 
@@ -3330,7 +3330,7 @@
   background: rgba(252,251,254,.88);
   box-shadow: 0 5px 13px rgba(42,37,55,.04);
   transform-origin: 50% 80%;
-  transition: transform 220ms cubic-bezier(.22,1,.36,1), opacity 160ms ease;
+  transition: transform var(--lcos-dur-fast) cubic-bezier(.22,1,.36,1), opacity var(--lcos-dur-fast) ease;
 }
 .lcos-reconstructed .lcos-workflow-folio-sheet.back { transform: translate(-3px,1px) rotate(-1.7deg); opacity: .68; }
 .lcos-reconstructed .lcos-workflow-folio-sheet.middle { transform: translate(4px,3px) rotate(1.5deg); opacity: .83; }
@@ -3347,7 +3347,7 @@
   border-radius: 12px 13px 13px 13px;
   background: linear-gradient(145deg, rgba(253,252,255,.985), rgba(var(--lcos-ui-workflow-rgb), .055));
   box-shadow: 0 8px 20px rgba(40,35,54,.067), inset 0 1px 0 rgba(255,255,255,.95);
-  transition: transform 220ms cubic-bezier(.22,1,.36,1), border-color 160ms ease, box-shadow 180ms ease;
+  transition: transform var(--lcos-dur-fast) cubic-bezier(.22,1,.36,1), border-color var(--lcos-dur-fast) ease, box-shadow var(--lcos-dur-fast) ease;
 }
 .lcos-reconstructed .lcos-workflow-kicker {
   color: rgba(var(--lcos-ui-workflow-rgb), .72);
@@ -3444,7 +3444,7 @@
   border-radius: 10px 12px 11px 11px;
   background: rgba(248,248,250,.92);
   box-shadow: 0 7px 18px rgba(38,42,52,.065), inset 0 1px 0 rgba(255,255,255,.92);
-  transition: transform 220ms cubic-bezier(.22,1,.36,1), border-color 160ms ease, box-shadow 180ms ease;
+  transition: transform var(--lcos-dur-fast) cubic-bezier(.22,1,.36,1), border-color var(--lcos-dur-fast) ease, box-shadow var(--lcos-dur-fast) ease;
 }
 .lcos-reconstructed .lcos-workspace-board-rim::before {
   content: "";
@@ -3542,7 +3542,7 @@
   border-radius: 13px;
   background: rgba(var(--lcos-ui-context-rgb), .018);
   box-shadow: inset 0 1px 0 rgba(255,255,255,.42);
-  transition: left 360ms cubic-bezier(.22,1,.36,1), top 360ms cubic-bezier(.22,1,.36,1), width 360ms cubic-bezier(.22,1,.36,1), height 360ms cubic-bezier(.22,1,.36,1), opacity 180ms ease;
+  transition: left var(--lcos-dur-slow) cubic-bezier(.22,1,.36,1), top var(--lcos-dur-slow) cubic-bezier(.22,1,.36,1), width var(--lcos-dur-slow) cubic-bezier(.22,1,.36,1), height var(--lcos-dur-slow) cubic-bezier(.22,1,.36,1), opacity var(--lcos-dur-fast) ease; /* A-2a 记录上报：left/top/width/height 布局属性动画，待统一整改 */
 }
 .lcos-reconstructed .lcos-context-understanding-region > span {
   position: absolute;
@@ -3573,7 +3573,7 @@
   stroke: rgba(var(--lcos-ui-context-rgb), .22);
   stroke-width: 1.05;
   vector-effect: non-scaling-stroke;
-  transition: stroke 150ms ease, stroke-width 150ms ease, opacity 150ms ease;
+  transition: stroke var(--lcos-dur-fast) ease, stroke-width var(--lcos-dur-fast) ease, opacity var(--lcos-dur-fast) ease;
 }
 .lcos-reconstructed .lcos-context-space-edges .lcos-context-relation.relation-reference > path { stroke: rgba(70,75,86,.16); }
 .lcos-reconstructed .lcos-context-space-edges .lcos-context-relation.relation-feedback > path { stroke-dasharray: 4 3; stroke: rgba(var(--lcos-ui-context-rgb), .31); }
@@ -3590,7 +3590,7 @@
   stroke: rgba(252,252,253,.94);
   stroke-width: 4px;
   pointer-events: none;
-  transition: opacity 120ms ease;
+  transition: opacity var(--lcos-dur-micro) ease;
 }
 .lcos-reconstructed .lcos-context-space-edges .lcos-context-relation:hover > path,
 .lcos-reconstructed .lcos-context-space-edges .lcos-context-relation.active > path { stroke-width: 1.35; }
@@ -3729,7 +3729,7 @@
   background: linear-gradient(145deg, rgba(254,253,255,.985), rgba(var(--lcos-ui-workflow-rgb), .045));
   box-shadow: 0 7px 18px rgba(41,37,51,.06), inset 0 1px 0 rgba(255,255,255,.96);
   cursor: grab;
-  transition: transform 170ms cubic-bezier(.22,1,.36,1), border-color 150ms ease, box-shadow 160ms ease;
+  transition: transform var(--lcos-dur-fast) cubic-bezier(.22,1,.36,1), border-color var(--lcos-dur-fast) ease, box-shadow var(--lcos-dur-fast) ease;
 }
 .lcos-reconstructed .lcos-workflow-action:hover,
 .lcos-reconstructed .lcos-workflow-action.selected { border-color: rgba(var(--lcos-ui-workflow-rgb), .29); box-shadow: 0 10px 25px rgba(41,37,51,.09), inset 0 1px 0 rgba(255,255,255,.96); }
@@ -3775,14 +3775,14 @@
 }
 .lcos-reconstructed .lcos-workflow-action-attachments > span > button { flex: none; width: 11px; height: 11px; padding: 0; border: 0; color: rgba(50,52,60,.34); background: transparent; font-size: 9px; line-height: 10px; cursor: pointer; }
 .lcos-reconstructed .lcos-workflow-action-attachments > em { color: rgba(50,52,60,.34); font-size: 7px; font-style: normal; }
-.lcos-reconstructed .lcos-workflow-action-tools { grid-column: 3; grid-row: 1 / span 2; display: flex; align-items: flex-start; gap: 2px; opacity: 0; transition: opacity 120ms ease; }
+.lcos-reconstructed .lcos-workflow-action-tools { grid-column: 3; grid-row: 1 / span 2; display: flex; align-items: flex-start; gap: 2px; opacity: 0; transition: opacity var(--lcos-dur-micro) ease; }
 .lcos-reconstructed .lcos-workflow-action:hover .lcos-workflow-action-tools,
 .lcos-reconstructed .lcos-workflow-action.selected .lcos-workflow-action-tools { opacity: 1; }
 .lcos-reconstructed .lcos-workflow-action-tools button { width: 23px; height: 23px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 6px; color: rgba(53,55,64,.45); background: transparent; cursor: pointer; }
 .lcos-reconstructed .lcos-workflow-action-tools button:hover:not(:disabled) { color: rgba(var(--lcos-ui-workflow-rgb), .82); background: rgba(var(--lcos-ui-workflow-rgb), .065); }
 .lcos-reconstructed .lcos-workflow-action-tools button:disabled { opacity: .26; cursor: default; }
 
-.lcos-reconstructed .lcos-workflow-action .lcos-workflow-port { opacity: 0; transition: opacity 110ms ease, transform 130ms cubic-bezier(.22,1,.36,1); }
+.lcos-reconstructed .lcos-workflow-action .lcos-workflow-port { opacity: 0; transition: opacity var(--lcos-dur-micro) ease, transform var(--lcos-dur-micro) cubic-bezier(.22,1,.36,1); }
 .lcos-reconstructed .lcos-workflow-action:hover .lcos-workflow-port,
 .lcos-reconstructed .lcos-workflow-action.selected .lcos-workflow-port,
 .lcos-reconstructed .lcos-workflow-action.is-link-target .lcos-workflow-port,
@@ -3797,7 +3797,7 @@
   stroke: rgba(var(--lcos-ui-workflow-rgb), .37);
   stroke-width: 1.35;
   vector-effect: non-scaling-stroke;
-  transition: stroke 140ms ease, stroke-width 140ms ease;
+  transition: stroke var(--lcos-dur-micro) ease, stroke-width var(--lcos-dur-micro) ease;
 }
 .lcos-reconstructed .lcos-workflow-action-edge:hover > path,
 .lcos-reconstructed .lcos-workflow-action-edge.selected > path { stroke: rgba(var(--lcos-ui-workflow-rgb), .68); stroke-width: 1.7; }
@@ -3976,7 +3976,7 @@
   opacity: .62;
   transform-box: fill-box;
   transform-origin: center;
-  transition: transform 180ms var(--lcos-ui-ease-out), opacity 180ms ease, filter 180ms ease;
+  transition: transform var(--lcos-dur-fast) var(--lcos-ui-ease-out), opacity var(--lcos-dur-fast) ease, filter var(--lcos-dur-fast) ease;
 }
 /* System signal slots now host Glyth avatars that are only rendered when the
    object is actually touched (selection / run / review). Old always-on styling
@@ -4041,7 +4041,7 @@
 /* R10 — real ChangeSet movement is visible on the work scene. We animate only
    externally-applied position changes; pointer drag/resizes remain immediate. */
 .lcos-reconstructed .canvas-node:not(.dragging):not(.resizing) {
-  transition: left 420ms cubic-bezier(.2,.82,.26,1), top 420ms cubic-bezier(.2,.82,.26,1);
+  transition: left var(--lcos-dur-slow) var(--lcos-ease-apple), top var(--lcos-dur-slow) var(--lcos-ease-apple); /* A-2a：easing 收敛至 appleDefault；left/top 布局属性动画记录上报，待统一整改 */
 }
 .lcos-reconstructed .lcos-review-pending-signal { display:inline-flex !important; align-items:center; gap:4px; }
 .lcos-reconstructed .lcos-review-pending-signal .lcos-signal-glyph { width:13px; height:13px; }

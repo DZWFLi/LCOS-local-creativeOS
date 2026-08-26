@@ -1,0 +1,362 @@
+/* ============================================================================
+ * LCOS UI Primitives —— 控件原语唯一样式源（apps/web/src/features/ui/）
+ * ----------------------------------------------------------------------------
+ * 宪法（grok-bot Donor Map A5 / §14）：业务组件不再决定 button / input 长什么样。
+ * 业务一律消费本文件配套的 Lcos* 原语组件，禁止再新增私有 button/input/popover。
+ * 本文件由并行施工单元共享：只允许在文件末尾追加自己的段落，勿改他人段落。
+ * ========================================================================== */
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Wave A0-2 · LcosButton / LcosIconButton / LcosTextField
+ * 冻结值来源：纪律包 4（Apple 按钮规格）与 5（Apple 输入框规格）。
+ * ───────────────────────────────────────────────────────────────────────────
+ * 局部语义 token ——「待 A-1 token 收编」：
+ * 全仓尚无 --lcos-ui-accent 等全局 token（已核对 interaction-system.css 与
+ * opendesign tokens colors_and_type.css，仅有 --lcos-ui-ink/signal 等旧名），
+ * 故先定义在本文件；A-1 token 阶段落成全局 token 后本段整块迁走、此处仅引用。
+ * 主题约定与 house 一致：`[data-lcos-theme]` 覆盖 OS 偏好；未设置时跟随系统。
+ * ═══════════════════════════════════════════════════════════════════════════ */
+:root {
+  /* accent 蓝（文字按钮 / 主按钮底 / focus 描边同源）：light #0088ff / dark #0091ff */
+  --lcos-ui-accent: #0088ff;
+  /* Apple 语义 label：primary 主文字 · tertiary 三级文字（disabled 同源，不用降 opacity） */
+  --lcos-ui-label-primary: rgba(0, 0, 0, .85);
+  --lcos-ui-label-tertiary: rgba(60, 60, 67, .3);
+  /* Apple 语义 fill：secondary 次级填充（secondary 按钮底 / disabled 底 / 图标按钮 hover 底） */
+  --lcos-ui-fill-secondary: rgba(120, 120, 128, .16);
+  /* 破坏色（#ff383c 系；dark 取 Apple 深色红 #ff453a） */
+  --lcos-ui-destructive: #ff383c;
+  /* Apple 输入框冻结：背景 + 描边 */
+  --lcos-ui-field-bg: #ffffff;
+  --lcos-ui-field-border: rgba(60, 60, 67, .29);
+}
+
+[data-lcos-theme='dark'] {
+  --lcos-ui-accent: #0091ff;
+  --lcos-ui-label-primary: rgba(255, 255, 255, .85);
+  --lcos-ui-label-tertiary: rgba(235, 235, 245, .3);
+  --lcos-ui-fill-secondary: rgba(120, 120, 128, .32);
+  --lcos-ui-destructive: #ff453a;
+  --lcos-ui-field-bg: #000000;
+  --lcos-ui-field-border: rgba(235, 235, 245, .3);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-lcos-theme='light']) {
+    --lcos-ui-accent: #0091ff;
+    --lcos-ui-label-primary: rgba(255, 255, 255, .85);
+    --lcos-ui-label-tertiary: rgba(235, 235, 245, .3);
+    --lcos-ui-fill-secondary: rgba(120, 120, 128, .32);
+    --lcos-ui-destructive: #ff453a;
+    --lcos-ui-field-bg: #000000;
+    --lcos-ui-field-border: rgba(235, 235, 245, .3);
+  }
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+ * LcosButton —— 唯一按钮原语（四 variant × 两 size）
+ * 冻结：radius 12px · 按压 opacity .4 / 100ms（无阴影无缩放）·
+ *       disabled 用 label-tertiary 色 · 最小高 sm 32px / md 36px
+ * 剪影自查（涂黑可辨）：primary=实底 · secondary=浅底容器 · ghost=纯字 · destructive=红字
+ * ─────────────────────────────────────────────────────────────────────────── */
+.lcos-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--lcos-ui-label-primary);
+  font: 560 13px/1 var(--lcos-font-ui, sans-serif);
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  -webkit-app-region: no-drag;
+  transition: opacity 100ms ease-out;
+}
+
+/* 按压反馈：仅 opacity，无阴影无缩放（§2.5 button press 100ms） */
+.lcos-btn:active { opacity: .4; }
+
+.lcos-btn:focus-visible { outline: 2px solid var(--lcos-ui-accent); outline-offset: 2px; }
+
+/* disabled：统一 label-tertiary 色（冻结：不用降 opacity 方案）；primary 的 accent 底同时退到 fill-secondary */
+.lcos-btn:disabled { color: var(--lcos-ui-label-tertiary); cursor: default; }
+.lcos-btn--primary:disabled { background: var(--lcos-ui-fill-secondary); }
+
+.lcos-btn--sm { min-height: 32px; padding: 0 12px; font-size: 12px; }
+.lcos-btn--md { min-height: 36px; padding: 0 16px; font-size: 13px; }
+
+.lcos-btn--primary { background: var(--lcos-ui-accent); color: #ffffff; }
+.lcos-btn--secondary { background: var(--lcos-ui-fill-secondary); color: var(--lcos-ui-label-primary); }
+.lcos-btn--ghost { background: transparent; color: var(--lcos-ui-accent); }
+.lcos-btn--destructive { background: transparent; color: var(--lcos-ui-destructive); }
+
+/* ───────────────────────────────────────────────────────────────────────────
+ * LcosIconButton —— 唯一图标按钮原语
+ * 裁决（游戏 GUI §1 病灶②⑥）：有机形状容器（正圆 50% / 胶囊 999px，不用矩形圆角）。
+ * 冻结：40×40 最小点击区（sm 视觉 32×32，由 ::before 扩命中区）·
+ *       按压 opacity .4 / 100ms · disabled 用 label-tertiary 色
+ * ─────────────────────────────────────────────────────────────────────────── */
+.lcos-icon-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  color: var(--lcos-ui-label-primary);
+  font: 560 13px/1 var(--lcos-font-ui, sans-serif);
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  -webkit-app-region: no-drag;
+  transition: opacity 100ms ease-out;
+}
+
+/* 按压反馈与 LcosButton 同规格；hover 才给中性 fill-secondary 容器提示 */
+.lcos-icon-btn:active { opacity: .4; }
+.lcos-icon-btn:hover { background: var(--lcos-ui-fill-secondary); }
+.lcos-icon-btn:focus-visible { outline: 2px solid var(--lcos-ui-accent); outline-offset: 2px; }
+.lcos-icon-btn:disabled { color: var(--lcos-ui-label-tertiary); background: transparent; cursor: default; }
+
+/* 有机形状：正圆（默认）/ 胶囊；不用矩形圆角 */
+.lcos-icon-btn--circle { border-radius: 50%; }
+.lcos-icon-btn--sm { width: 32px; height: 32px; }
+.lcos-icon-btn--md { width: 40px; height: 40px; }
+
+/* 胶囊：图标+文字组合场景；宽度自适应但不小于 40（最小点击区冻结值） */
+.lcos-icon-btn--capsule {
+  width: auto;
+  min-width: 40px;
+  padding: 0 12px;
+  border-radius: 999px;
+}
+
+/* sm 视觉 32×32 → 透明 ::before 外扩 4px，命中区补足 40×40 最小点击区 */
+.lcos-icon-btn--sm::before { content: ''; position: absolute; inset: -4px; }
+
+/* ───────────────────────────────────────────────────────────────────────────
+ * LcosTextField —— 唯一文本输入原语
+ * 冻结（Apple 输入框规格）：背景 light #ffffff / dark #000000 ·
+ *   描边 rgba(60,60,67,.29) / rgba(235,235,245,.3)（已收进 --lcos-ui-field-* token）·
+ *   focus 描边 accent + ring 2px accent · 圆角 10px · 内 padding 8px 12px ·
+ *   disabled 用 label-tertiary 色（不降 opacity）
+ * ─────────────────────────────────────────────────────────────────────────── */
+.lcos-field {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.lcos-field__label {
+  color: var(--lcos-ui-label-primary);
+  font: 560 12px/1.2 var(--lcos-font-ui, sans-serif);
+}
+
+.lcos-field__input {
+  width: 100%;
+  min-height: 36px;
+  padding: 8px 12px;
+  border: 1px solid var(--lcos-ui-field-border);
+  border-radius: 10px;
+  background: var(--lcos-ui-field-bg);
+  color: var(--lcos-ui-label-primary);
+  font: 450 13px/1.3 var(--lcos-font-ui, sans-serif);
+  cursor: text;
+  transition: border-color 100ms ease-out, box-shadow 100ms ease-out;
+}
+
+.lcos-field__input::placeholder { color: var(--lcos-ui-label-tertiary); }
+
+/* focus：描边转 accent + 2px accent ring（冻结值） */
+.lcos-field__input:focus {
+  outline: none;
+  border-color: var(--lcos-ui-accent);
+  box-shadow: 0 0 0 2px var(--lcos-ui-accent);
+}
+
+.lcos-field__input:disabled {
+  color: var(--lcos-ui-label-tertiary);
+  background: var(--lcos-ui-fill-secondary);
+  cursor: default;
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+ * Reduced motion：输入框描边/ring 过渡关闭。
+ * 按钮与图标按钮的按压过渡（100ms opacity）按纪律包 §2.5 保留——
+ * 它本就是无位移、无缩放的纯透明度反馈，不属于需要削减的运动。
+ * ─────────────────────────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .lcos-field__input { transition: none; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Wave A0-1 · LcosPopover / LcosTooltip —— 浮层原语（真的浮在世界上方的 UI）
+ * 冻结值来源：纪律包 4（Apple Popover 规格冻结值）与游戏裁决 §2.1（HUD 收边缘）。
+ * ───────────────────────────────────────────────────────────────────────────
+ * 玻璃材质（Apple Popover 冻结，light / dark 双值）：
+ *   圆角 13px · backdrop blur(40px) saturate(1.8)
+ *   背景 rgba(255,255,255,.72) / rgba(30,30,30,.78)
+ *   边框 0.5px rgba(255,255,255,.3) / rgba(255,255,255,.15)
+ *   阴影 0 8px 24px rgba(0,0,0,.18) · 内边距 12px 16px · 宽 200/260/320 · 高上限 60vh
+ * 动画（冻结）：
+ *   出场 scale .85→1 + opacity 280ms cubic-bezier(.34,1.56,.64,1)，origin 在箭头侧（data-side）
+ *   退场 scale→.92 + opacity 0 200ms ease-out
+ * 机制：Base UI data-starting-style（挂载首帧）/ data-ending-style（退场帧）驱动 CSS 过渡。
+ * 局部语义 token 同 A0-2 段约定：「待 A-1 token 收编」后整块迁走、此处仅引用。
+ * ═══════════════════════════════════════════════════════════════════════════ */
+:root {
+  /* popover glass 冻结（Apple Donor Map §2.1：popover / menu / transient orbit satellite 共用） */
+  --lcos-ui-glass-bg: rgba(255, 255, 255, .72);
+  --lcos-ui-glass-border: rgba(255, 255, 255, .3);
+}
+
+[data-lcos-theme='dark'] {
+  --lcos-ui-glass-bg: rgba(30, 30, 30, .78);
+  --lcos-ui-glass-border: rgba(255, 255, 255, .15);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-lcos-theme='light']) {
+    --lcos-ui-glass-bg: rgba(30, 30, 30, .78);
+    --lcos-ui-glass-border: rgba(255, 255, 255, .15);
+  }
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+ * 触发器外观重置（popover / tooltip 共用）：button 语义，视觉交给调用方内容
+ * ─────────────────────────────────────────────────────────────────────────── */
+.lcos-popover-trigger,
+.lcos-tooltip-trigger {
+  appearance: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.lcos-popover-trigger:focus-visible,
+.lcos-tooltip-trigger:focus-visible {
+  outline: 2px solid var(--lcos-ui-accent);
+  outline-offset: 2px;
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+ * LcosPopover —— 玻璃底板 + 冻结出场/退场动画
+ * 层级：z-tier dialog（popover 群，token 见 foundation.css）
+ * ─────────────────────────────────────────────────────────────────────────── */
+.lcos-popover-positioner {
+  z-index: var(--lcos-z-dialog, 100); /* z-tier: dialog */
+}
+
+.lcos-popover {
+  box-sizing: border-box;
+  width: 260px; /* 宽度三档默认 260，档位由 data-lcos-width 切换 */
+  max-height: 60vh; /* 高上限冻结 */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 12px 16px; /* 内边距冻结 */
+  border: 0.5px solid var(--lcos-ui-glass-border); /* 边框冻结 */
+  border-radius: 13px; /* 圆角冻结 */
+  background: var(--lcos-ui-glass-bg);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .18); /* 阴影冻结 */
+  color: var(--lcos-ui-label-primary); /* 文字三保底：玻璃底板上的正文色 */
+  -webkit-backdrop-filter: blur(40px) saturate(1.8);
+  backdrop-filter: blur(40px) saturate(1.8); /* 材质冻结 */
+  -webkit-app-region: no-drag;
+}
+
+.lcos-popover[data-lcos-width='200'] { width: 200px; }
+.lcos-popover[data-lcos-width='320'] { width: 320px; }
+
+/* 出场/退场动画（冻结值）。transform-origin 在箭头侧：data-side 为停靠侧，箭头贴锚点。 */
+.lcos-popover-anim {
+  transition: transform 280ms cubic-bezier(.34, 1.56, .64, 1), opacity 280ms cubic-bezier(.34, 1.56, .64, 1);
+}
+
+.lcos-popover-anim[data-side='top'] { transform-origin: center bottom; }
+.lcos-popover-anim[data-side='bottom'] { transform-origin: center top; }
+.lcos-popover-anim[data-side='left'] { transform-origin: right center; }
+.lcos-popover-anim[data-side='right'] { transform-origin: left center; }
+.lcos-popover-anim[data-side='inline-start'] { transform-origin: right center; } /* LTR 近似 */
+.lcos-popover-anim[data-side='inline-end'] { transform-origin: left center; } /* LTR 近似 */
+
+/* 出场：scale .85→1 + opacity 0→1，280ms 回弹（冻结） */
+.lcos-popover-anim[data-starting-style] {
+  opacity: 0;
+  transform: scale(.85);
+}
+
+/* 退场：scale→.92 + opacity→0，200ms ease-out（冻结；Esc / trigger press 关闭同样播放） */
+.lcos-popover-anim[data-ending-style] {
+  opacity: 0;
+  transform: scale(.92);
+  transition: transform 200ms ease-out, opacity 200ms ease-out;
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+ * LcosTooltip —— 收边缘 HUD：同源玻璃材质 · 无箭头（游戏裁决）·
+ * 120ms 延迟显示后快速淡入 · 瞬间隐藏（ending 无过渡，getAnimations 为空即刻卸载）
+ * 层级：z-tier modal（瞬态顶层）；popup pointer-events none，永远不遮世界交互
+ * ─────────────────────────────────────────────────────────────────────────── */
+.lcos-tooltip-positioner {
+  z-index: var(--lcos-z-modal, 200); /* z-tier: modal */
+}
+
+.lcos-tooltip {
+  box-sizing: border-box;
+  max-width: 320px;
+  padding: 5px 10px;
+  border: 0.5px solid var(--lcos-ui-glass-border);
+  border-radius: 8px; /* 收边缘：比 popover 13px 更收敛的 HUD 规格 */
+  background: var(--lcos-ui-glass-bg);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .18);
+  color: var(--lcos-ui-label-primary);
+  font: 450 12px/1.45 var(--lcos-font-ui, sans-serif);
+  -webkit-backdrop-filter: blur(40px) saturate(1.8);
+  backdrop-filter: blur(40px) saturate(1.8);
+  pointer-events: none; /* 可消失 HUD：不拦截世界交互 */
+  -webkit-app-region: no-drag;
+  transition: opacity 120ms ease-out;
+}
+
+.lcos-tooltip[data-starting-style] { opacity: 0; }
+
+/* 瞬间隐藏：退场无过渡 */
+.lcos-tooltip[data-ending-style] {
+  opacity: 0;
+  transition: none;
+}
+
+/* Base UI 即时语义（focus 打开 / dismiss）：无淡入，直接出现/消失 */
+.lcos-tooltip[data-instant] { transition: none; }
+
+/* ───────────────────────────────────────────────────────────────────────────
+ * Reduced motion（纪律包 4 降级）：popover 只留 opacity 200ms（去 scale 与回弹曲线）；
+ * tooltip 本就无位移，淡入对齐 200ms；瞬间隐藏保持不变（无运动可削减）。
+ * ─────────────────────────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .lcos-popover-anim,
+  .lcos-popover-anim[data-ending-style] {
+    transition: opacity 200ms ease-out;
+  }
+
+  .lcos-popover-anim[data-starting-style],
+  .lcos-popover-anim[data-ending-style] {
+    opacity: 0;
+    transform: none;
+  }
+
+  .lcos-tooltip {
+    transition: opacity 200ms ease-out;
+  }
+}
