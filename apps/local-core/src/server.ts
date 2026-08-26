@@ -89,6 +89,7 @@ import { handleProjectEventsRoute, handleRealtimeDebugRoute } from './routes/pro
 import { handleWorkflowRoute } from './routes/workflow.js'
 import { handleCurationRoute } from './routes/curation.js'
 import { handleSpaceRoute } from './routes/space.js'
+import { handleAgentletsRoute } from './routes/agentlets.js'
 import { handleRetrievalRoute } from './routes/retrieval.js'
 import { handleAttentionRoute } from './routes/attention.js'
 import { handleArtifactsRoute } from './routes/artifacts.js'
@@ -203,6 +204,8 @@ export interface LocalCoreServerOptions {
   readonly captureWatchService?: import('./capture-watch-service.js').CaptureWatchService
   readonly reorganizeService?: import('./reorganize-service.js').ReorganizeService
   readonly sessionReadSet?: import('./session-read-set.js').SessionReadSet
+  /** 任务四 P3：agentlet 包根目录（缺省 packages/agentlets）。 */
+  readonly agentletsRoot?: string
 }
 
 export interface LocalCoreAddress {
@@ -337,7 +340,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
     resourceReader, matcher, contextManifest, runtimeReview, runtimeApplication, activeContext,
     contextProposals, runEventListeners, obsidian, obsidianSessions, connectorRegistry,
     ownsConversationService, conversations, previewWorker, presentation, curation, search, curationCommand,
-    runtimeRegistry, intelligence, captureStaging, resolveProjectAffinity, captureApplication, captureWatch, captureSpace, reorganize, sessionReadSet, spaceSandbox, spatialRetrieval, attentionRuntime, boundaryEvaluator, projectEvents, projectMutations, mutationSafety, feedbackRevision, continuityRuntime, receiverRuntime,
+    runtimeRegistry, intelligence, captureStaging, resolveProjectAffinity, captureApplication, captureWatch, captureSpace, reorganize, sessionReadSet, spaceSandbox, agentletRuntime, spatialRetrieval, attentionRuntime, boundaryEvaluator, projectEvents, projectMutations, mutationSafety, feedbackRevision, continuityRuntime, receiverRuntime,
   } = services
   metadata?.setRunEventSink?.((event) => {
     const payloadProjectId = (event.payload as { projectId?: string } | null)?.projectId
@@ -1261,6 +1264,17 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
         spaceSandbox,
         helpers: routeHelpers,
       })) return
+      if (await handleAgentletsRoute({
+        method,
+        pathname,
+        url,
+        request,
+        response,
+        controller,
+        metadata,
+        agentletRuntime,
+        helpers: routeHelpers,
+      })) return
       if (await handleRetrievalRoute({
         method,
         pathname,
@@ -1440,6 +1454,8 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
         throw new Error('Local Core did not receive a TCP address.')
       }
       currentAddress = { host: LOOPBACK_HOST, port: bound.port }
+      // 任务四 P3：agentlet 子进程需要实际地址做 Reachback 回调（ephemeral port 场景必需）
+      agentletRuntime?.setAddress(currentAddress)
       // HU-1C: 启动 orphan sweep —— 归位/清理 LCOS staging 命名空间（不碰用户文件）。
       if (metadata !== undefined) {
         try {
@@ -1461,6 +1477,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
 
     async close(): Promise<void> {
       captureWatch?.stop()
+      agentletRuntime?.close()
       const activeServer = server
       if (activeServer === undefined) return
       if (lifecycleSignal !== undefined && lifecycleAbort !== undefined) {

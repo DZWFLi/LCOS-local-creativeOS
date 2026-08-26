@@ -1,0 +1,6 @@
+schema: lcos-agentlet-schema-v1
+name: canvas-organizer
+description: 通用画布整理 agentlet——经 Reachback 读取项目节点（/space/），产出一张符合命名规范的摘要节点（CAS 写通道 + ChangeSet 归因）。是「换 agent 只换目录」的参考实现。
+command:
+  node: node main.mjs
+timeoutSeconds: 120

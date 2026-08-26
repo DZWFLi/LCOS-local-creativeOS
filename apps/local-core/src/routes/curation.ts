@@ -154,14 +154,14 @@ export async function handleCurationRoute(ctx: CurationRouteContext): Promise<bo
       return true
     }
     const projectId = decodeURIComponent(textMatch[1] ?? '')
-    const body = await readJsonBody(request, controller.signal) as { scopeId?: string; title?: string; body?: string; viewId?: string; artifactId?: string; sessionId?: string }
+    const body = await readJsonBody(request, controller.signal) as { scopeId?: string; title?: string; body?: string; viewId?: string; artifactId?: string; sessionId?: string; x?: number; y?: number }
     if (typeof body.body !== 'string' || body.body.trim() === '') {
       sendJson(response, 400, failure('INVALID_ARGUMENT', 'body is required.'))
       return true
     }
     try {
       if (method === 'POST') {
-        const value = await curationCommand.createText(projectId, { scopeId: body.scopeId ?? '', ...(body.title === undefined ? {} : { title: body.title }), body: body.body, ...(typeof body.sessionId === 'string' && body.sessionId !== '' ? { sessionId: body.sessionId } : {}) })
+        const value = await curationCommand.createText(projectId, { scopeId: body.scopeId ?? '', ...(body.title === undefined ? {} : { title: body.title }), body: body.body, ...(typeof body.sessionId === 'string' && body.sessionId !== '' ? { sessionId: body.sessionId } : {}), ...(typeof body.x === 'number' && Number.isFinite(body.x) ? { x: body.x } : {}), ...(typeof body.y === 'number' && Number.isFinite(body.y) ? { y: body.y } : {}) })
         sendJson(response, 200, { ok: true, value })
         return true
       }
