@@ -335,35 +335,14 @@ export function App() {
   }, [activeProjectId])
   const [presentationCommit, setPresentationCommit] = useState(0)
   const [overviewLayers, setOverviewLayers] = useState<NodeLayer[]>(['core', 'process'])
-  // 画布之外 UI 层（侧栏/底栏/顶栏/工作轨）的独立比例缩放；Ctrl/Cmd+滚轮在画布外调节。
-  const [uiScale, setUiScale] = useState<number>(() => {
-    try {
-      const raw = window.localStorage.getItem('lcos:ui-scale')
-      const value = raw === null ? 1 : Number(raw)
-      return Number.isFinite(value) ? Math.min(1.6, Math.max(0.7, value)) : 1
-    } catch {
-      return 1
-    }
-  })
+  // UI 层独立缩放（Ctrl/Cmd+滚轮，0.7–1.6）在 0.1 收口裁定禁用：组件级 zoom 与
+  // getBoundingClientRect 坐标系分裂，造成 dock/顶条命中错位与窄视口溢出（P0-C 根因）。
+  // 特性留给 0.2 重做（根容器统一缩放或物理坐标布局）。这里钉死 1 并清掉遗留持久值。
   useEffect(() => {
     try {
-      window.localStorage.setItem('lcos:ui-scale', String(uiScale))
-      // 写到 documentElement：NodeInfoPopover 等 portal 到 body 的浮层不在
-      // .lcos-reconstructed 内，需要从根继承同一比例。
-      document.documentElement.style.setProperty('--lcos-ui-scale', String(uiScale))
-    } catch { /* 可丢失 UI 偏好 */ }
-  }, [uiScale])
-  useEffect(() => {
-    const onWheel = (event: WheelEvent) => {
-      const target = event.target as Element | null
-      if (target?.closest('[data-testid="canvas"]')) return
-      if (!(event.ctrlKey || event.metaKey)) return
-      event.preventDefault()
-      const factor = event.deltaY < 0 ? 1.05 : 1 / 1.05
-      setUiScale((current) => Math.min(1.6, Math.max(0.7, current * factor)))
-    }
-    window.addEventListener('wheel', onWheel, { capture: true, passive: false })
-    return () => window.removeEventListener('wheel', onWheel, { capture: true } as EventListenerOptions)
+      window.localStorage.removeItem('lcos:ui-scale')
+      document.documentElement.style.setProperty('--lcos-ui-scale', '1')
+    } catch { /* 清理失败不影响主流程 */ }
   }, [])
   const [handoffOpen, setHandoffOpen] = useState(false)
   const [handoffLoading, setHandoffLoading] = useState(false)
@@ -6689,7 +6668,6 @@ export function App() {
     <AppShellView
     layoutDensity={layoutDensity}
     layoutMode={layoutMode}
-    uiScale={uiScale}
     narrowCollaboration={layoutMode === 'sidecar' && viewportWidth <= 560}
     layoutStyle={sceneStyle}
     notice={notice}

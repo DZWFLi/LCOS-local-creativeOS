@@ -13,7 +13,6 @@ import type { WorkRail } from '../workrail/WorkRail'
 export interface AppShellViewProps {
   readonly layoutDensity: 'comfortable' | 'compact' | 'constrained'
   readonly layoutMode: 'desktop' | 'sidecar'
-  readonly uiScale: number
   readonly layoutStyle: CSSProperties
   readonly narrowCollaboration?: boolean
   readonly notice: string | null
@@ -60,7 +59,8 @@ export function AppShellView(props: AppShellViewProps) {
     </>
   }
   // porcelain 退役（Tier-3c）：shell 只挂 reconstruction 栈；旧 porcelain 主题 shell class 已移除。
-  return <main className="app-shell lcos-reconstructed" style={{ ...props.layoutStyle, '--lcos-ui-scale': String(props.uiScale) } as CSSProperties} data-testid="creative-os-app" data-layout-density={props.layoutDensity} data-layout-mode={props.layoutMode} data-collaboration-mode={props.narrowCollaboration ? "narrow" : "normal"}>
+  // --lcos-ui-scale 由 CSS 根默认值固定为 1（0.1 收口禁用组件级缩放，见 App.tsx 注释）。
+  return <main className="app-shell lcos-reconstructed" style={props.layoutStyle} data-testid="creative-os-app" data-layout-density={props.layoutDensity} data-layout-mode={props.layoutMode} data-collaboration-mode={props.narrowCollaboration ? "narrow" : "normal"}>
     <LcosToaster notice={props.notice} />
     <ProjectStripVNext {...props.strip} />
     <CanvasSceneHost {...props.scene} />

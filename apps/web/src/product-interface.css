@@ -526,6 +526,13 @@
   padding-left: 6px;
 }
 
+/* 窄视口（<1180 进 compact/constrained）：保存状态只留圆点、隐去文字，
+   把宽度让给右侧操作按钮（搜索/导入等此前被挤出视口点不到）。 */
+.lcos-reconstructed[data-layout-density="compact"] .vnext-save-copy,
+.lcos-reconstructed[data-layout-density="constrained"] .vnext-save-copy {
+  display: none;
+}
+
 .lcos-reconstructed[data-layout-density="compact"] .vnext-project-actions,
 .lcos-reconstructed[data-layout-density="constrained"] .vnext-project-actions {
   gap: 2px;
@@ -3043,7 +3050,10 @@
 }
 .lcos-reconstructed:not([data-layout-mode="sidecar"]) .vnext-bottom-dock .lcos-scope-axis {
   position: absolute !important;
-  right: 14px !important;
+  /* 漏洞2：旧值 14px 与右侧主题 pill（right:12，宽约 34-48px）盒子重叠 30px+，
+     「当前现场」按钮右半被主题按钮盖住点不中。右移让出主题 pill 宽度（活体复测
+     56px 时圆角边缘仍残留 1px 相交，58px 严格归零）。 */
+  right: 58px !important;
   bottom: 0 !important;
   margin: 0 !important;
   gap: 4px !important;

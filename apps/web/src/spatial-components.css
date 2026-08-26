@@ -1092,7 +1092,7 @@ button.lcos-context-expand:hover { background: rgba(111,87,177,.07); }
 }
 .lcos-receiver-chip:hover { border-color: rgba(92, 74, 143, .36); background: rgb(253, 253, 255); }
 .lcos-receiver-chip.is-idle { color: rgba(52, 46, 66, .5); }
-.lcos-receiver-chip-label { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+.lcos-receiver-chip-label { max-width: min(220px, 15vw); overflow: hidden; text-overflow: ellipsis; }
 .lcos-receiver-chip-dot { flex: none; width: 6px; height: 6px; border-radius: 999px; }
 .lcos-receiver-chip-dot.status-working,
 .lcos-receiver-dot.status-working { background: var(--lcos-glyth-working); }

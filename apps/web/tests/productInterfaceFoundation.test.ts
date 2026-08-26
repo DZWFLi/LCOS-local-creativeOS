@@ -93,7 +93,9 @@ describe('LCOS product interface foundation', () => {
     expect(app).not.toContain("if (window.innerWidth < 1160) setWorkRail((current) => ({ ...current, collapsed: true }))")
     expect(shell).toContain('data-layout-density={props.layoutDensity}')
     expect(shell).toContain('data-layout-mode={props.layoutMode}')
-    expect(shell).toContain("style={{ ...props.layoutStyle, '--lcos-ui-scale': String(props.uiScale) }")
+    // 0.1 收口：UI 层独立缩放钉死为 1（P0-C 坐标分裂根因），shell 不再内联 ui-scale。
+    expect(shell).toContain('style={props.layoutStyle}')
+    expect(app).toContain("window.localStorage.removeItem('lcos:ui-scale')")
     expect(shell).toContain("props.layoutMode === 'desktop' ? <WorkRailHost")
     expect(workRail).toContain("'--lcos-runtime-rail-width': `${props.width}px`")
     expect(interfaceCss).toContain(':has(.work-rail:not(.collapsed)) .minimap')
