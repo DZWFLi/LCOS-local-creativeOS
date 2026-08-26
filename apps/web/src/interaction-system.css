@@ -262,7 +262,7 @@
 .lcos-reconstructed .lcos-collection-object footer { font-size: 9px; }
 
 /* Collection expansion is an anchored material shelf. */
-.lcos-reconstructed .lcos-collection-object.is-expanded { z-index: 8; overflow: visible; }
+.lcos-reconstructed .lcos-collection-object.is-expanded { z-index: var(--lcos-z-content-raised); /* z-tier: canvas-content */ overflow: visible; }
 .lcos-reconstructed .lcos-collection-inline {
   position: absolute;
   left: 7px;
@@ -354,7 +354,7 @@
   position: absolute;
   left: 50%;
   top: 12px;
-  z-index: 42;
+  z-index: var(--lcos-z-overlay-ui-raised); /* z-tier: overlay-ui */
   transform: translateX(-50%);
   display: flex;
   gap: 1px;
@@ -380,7 +380,7 @@
 /* Regions are spatial annotations; remove the inflated rounded-glass look. */
 .lcos-reconstructed .lcos-spatial-region {
   position: absolute;
-  z-index: 1;
+  z-index: var(--lcos-z-canvas-content); /* z-tier: canvas-content */
   pointer-events: none;
   border: 1px dashed rgba(var(--lcos-ui-signal-rgb), .27);
   border-radius: 12px;
@@ -493,7 +493,7 @@
    edges layer (vnext sets .edges z-index 6), otherwise the 14px .edge-hit
    stroke covers anchor-out and the drag-to-connect gesture never starts. */
 .lcos-reconstructed .vnext-surface-host .canvas .lcos-arrange-node-layer {
-  z-index: 7;
+  z-index: var(--lcos-z-content-control); /* z-tier: canvas-content */
 }
 .lcos-reconstructed .lcos-context-dot-edges path { fill: none; stroke: rgba(var(--lcos-ui-context-rgb), .20); stroke-width: 1; vector-effect: non-scaling-stroke; }
 .lcos-reconstructed .lcos-context-dot-edges .lcos-context-overlap-edge path { stroke-width: calc(.8px + var(--overlap, .2) * 2px); stroke-dasharray: 2 6; }
@@ -701,7 +701,7 @@
 .lcos-reconstructed .lcos-workflow-node > .lcos-surface-object { background: rgba(252,252,253,.86); }
 .lcos-reconstructed .lcos-workflow-node:hover > .lcos-surface-object { border-color: rgba(var(--lcos-ui-workflow-rgb), .20); }
 .lcos-reconstructed .lcos-workflow-node.selected > .lcos-surface-object { border-color: rgba(var(--lcos-ui-workflow-rgb), .38); box-shadow: 0 6px 16px rgba(43,38,58,.06), 0 0 0 2px rgba(var(--lcos-ui-workflow-rgb), .055); }
-.lcos-reconstructed .lcos-workflow-node.is-dragging { z-index: 12; transform: scale(.985); filter: drop-shadow(0 10px 18px rgba(43,38,58,.12)); }
+.lcos-reconstructed .lcos-workflow-node.is-dragging { z-index: var(--lcos-z-content-guide); /* z-tier: canvas-content */ transform: scale(.985); filter: drop-shadow(0 10px 18px rgba(43,38,58,.12)); }
 .lcos-reconstructed .lcos-workflow-node.is-link-source > .lcos-surface-object { border-color: rgba(var(--lcos-ui-workflow-rgb), .34); }
 .lcos-reconstructed .lcos-workflow-node.is-link-target > .lcos-surface-object {
   transform: translateX(2px);
@@ -749,7 +749,7 @@
   position: absolute;
   right: 16px;
   bottom: 68px;
-  z-index: 50;
+  z-index: var(--lcos-z-overlay-ui-raised); /* z-tier: overlay-ui */
   width: min(290px, calc(100% - 32px));
   display: grid;
   gap: 8px;
@@ -918,7 +918,7 @@
   transform: translateY(-50%);
   opacity: .48;
 }
-.lcos-reconstructed .lcos-signal-insert-gap.is-receiving span { position: relative; z-index: 1; padding: 0 4px; background: rgba(248,251,254,.96); }
+.lcos-reconstructed .lcos-signal-insert-gap.is-receiving span { position: relative; z-index: var(--lcos-z-content-inlay); /* z-tier: canvas-content */ padding: 0 4px; background: rgba(248,251,254,.96); }
 
 /* Capability Dock participates in the same signal language as its surfaces. */
 .lcos-reconstructed .lcos-bottom-dock .lcos-dock-signal {
@@ -1156,6 +1156,29 @@
 }
 .lcos-reconstructed .lcos-readable-copy .md-list { position: relative; padding-left: 10px; }
 .lcos-reconstructed .lcos-readable-copy .md-list::before { content: "·"; position: absolute; left: 1px; color: rgba(var(--lcos-ui-signal-rgb), .72); }
+/* 幕布式大纲层级（卡片版）：每级挂线圆点 + 缩进，步长 11px 适配小卡。
+   与编辑器 data-indent / 导图分支深度同一份层级数据。 */
+.lcos-reconstructed .lcos-readable-copy .md-depth-1,
+.lcos-reconstructed .lcos-readable-copy .md-depth-2,
+.lcos-reconstructed .lcos-readable-copy .md-depth-3,
+.lcos-reconstructed .lcos-readable-copy .md-depth-4,
+.lcos-reconstructed .lcos-readable-copy .md-depth-5 { position: relative; }
+.lcos-reconstructed .lcos-readable-copy .md-depth-1 { padding-left: 12px; }
+.lcos-reconstructed .lcos-readable-copy .md-depth-2 { padding-left: 23px; }
+.lcos-reconstructed .lcos-readable-copy .md-depth-3 { padding-left: 34px; }
+.lcos-reconstructed .lcos-readable-copy .md-depth-4 { padding-left: 45px; }
+.lcos-reconstructed .lcos-readable-copy .md-depth-5 { padding-left: 56px; }
+.lcos-reconstructed .lcos-readable-copy .md-depth-1::before { content: ""; position: absolute; left: 3px; top: .52em; width: 4.5px; height: 4.5px; border-radius: 50%; background: rgba(var(--lcos-ui-signal-rgb), .62); }
+.lcos-reconstructed .lcos-readable-copy .md-depth-2::before { content: ""; position: absolute; left: 14px; top: .52em; width: 4px; height: 4px; border-radius: 50%; box-shadow: inset 0 0 0 1.3px rgba(var(--lcos-ui-signal-rgb), .58); }
+.lcos-reconstructed .lcos-readable-copy .md-depth-3::before { content: ""; position: absolute; left: 25px; top: .55em; width: 3.5px; height: 3.5px; border-radius: 50%; background: rgba(var(--lcos-ui-signal-rgb), .5); }
+.lcos-reconstructed .lcos-readable-copy .md-depth-4::before { content: ""; position: absolute; left: 36px; top: .55em; width: 3px; height: 3px; border-radius: 50%; background: rgba(var(--lcos-ui-signal-rgb), .44); }
+.lcos-reconstructed .lcos-readable-copy .md-depth-5::before { content: ""; position: absolute; left: 47px; top: .55em; width: 3px; height: 3px; border-radius: 50%; background: rgba(var(--lcos-ui-signal-rgb), .38); }
+/* md-list 自带 · 圆点，挂线圆点接管后退役（避免双点）。 */
+.lcos-reconstructed .lcos-readable-copy .md-list.md-depth-1::before,
+.lcos-reconstructed .lcos-readable-copy .md-list.md-depth-2::before,
+.lcos-reconstructed .lcos-readable-copy .md-list.md-depth-3::before,
+.lcos-reconstructed .lcos-readable-copy .md-list.md-depth-4::before,
+.lcos-reconstructed .lcos-readable-copy .md-list.md-depth-5::before { content: ""; }
 .lcos-reconstructed .lcos-readable-copy .md-quote { padding-left: 8px; border-left: 2px solid rgba(var(--lcos-ui-signal-rgb), .18); color: var(--lcos-ui-ink-soft); font-style: normal; }
 .lcos-reconstructed .lcos-readable-copy code { padding: 2px 4px; border-radius: 4px; background: rgba(49,45,59,.045); font: 9.5px/1.38 "JetBrains Mono", monospace; }
 .lcos-reconstructed .lcos-readable-fade {
@@ -1172,6 +1195,17 @@
 }
 .lcos-reconstructed .lcos-note-object.is-direct-reading,
 .lcos-reconstructed .lcos-document-object.is-direct-reading { gap: 6px; }
+/* Direct reading / mindmap notes own the full card width. The collapsed
+   25px icon column (reconstruction.css) must not squeeze the readable
+   document into a 15px vertical sliver that overflows the card. */
+.lcos-reconstructed .lcos-note-object.is-direct-reading,
+.lcos-reconstructed .lcos-note-object.is-mindmap {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  align-items: stretch;
+}
+.lcos-reconstructed .lcos-note-object.is-direct-reading > .lcos-readable-document,
+.lcos-reconstructed .lcos-note-object.is-mindmap > .lcos-note-mindmap { min-width: 0; }
 .lcos-reconstructed .lcos-note-object.is-collapsed-material {
   display: grid;
   grid-template-columns: 28px minmax(0,1fr);
@@ -1244,11 +1278,38 @@
 /* Mind-map note (mubu-style outline rendering inside a text node). */
 .lcos-reconstructed .lcos-note-object.is-mindmap .lcos-note-mindmap { min-height: 120px; max-height: 420px; overflow: auto; scrollbar-width: thin; padding: 4px 2px 2px; }
 .lcos-reconstructed .lcos-note-mindmap svg { display: block; width: 100%; min-width: 220px; height: auto; }
-.lcos-reconstructed .lcos-mindmap-link { fill: none; stroke-width: 2.6; stroke-linecap: round; opacity: .78; }
+/* 导图连线 = 主画布关系统一：银灰细线、圆头、微光晕（同 .edge 设计语言，
+   卡片预览与沉浸式编辑器共用；色彩只留给节点框）。 */
+.lcos-mindmap-link {
+  fill: none;
+  stroke: rgba(137, 144, 151, 0.44);
+  stroke-width: 1.45px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 2.5px rgba(var(--workspace-glow-rgb), .12));
+}
 .lcos-reconstructed .lcos-mindmap-topic { cursor: pointer; }
 .lcos-reconstructed .lcos-mindmap-topic text { fill: #2c2a36; font-weight: 600; dominant-baseline: middle; pointer-events: none; }
 .lcos-reconstructed .lcos-mindmap-topic.depth-0 text { font-weight: 750; }
 .lcos-reconstructed .lcos-mindmap-topic:hover rect { filter: brightness(.97); }
+/* G-4 分支拖出：非根分支可摘取（grab 手势 + 禁文字选择，防指针被文本选择抢走）；
+   根是整图锚点不可拖出。 */
+.lcos-reconstructed .lcos-mindmap-topic:not(.depth-0) { cursor: grab; user-select: none; -webkit-user-select: none; }
+/* 拖出时跟手的幽灵标签（浮岛小壳 + 单色紫 accent，Glaze 词汇） */
+.lcos-mindmap-branch-ghost {
+  position: fixed; left: 0; top: 0; z-index: var(--lcos-z-overlay-ui-high); /* z-tier: overlay-ui（原 z60，归 high 桶，见 foundation.css「原 z58/z59/z60」） */ pointer-events: none;
+  display: flex; flex-direction: column; gap: 2px; max-width: 240px;
+  padding: 7px 11px; border-radius: 10px;
+  background: rgba(250, 250, 252, .94);
+  border: 1px solid rgba(103, 82, 158, .38);
+  box-shadow: 0 10px 30px rgba(40, 35, 56, .16), inset 0 1px 0 rgba(255, 255, 255, .84);
+  backdrop-filter: blur(12px) saturate(1.06);
+}
+.lcos-mindmap-branch-ghost span {
+  font-size: 12px; font-weight: 650; color: #2c2a36;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.lcos-mindmap-branch-ghost small { font-size: 9px; color: rgba(103, 82, 158, .78); }
 .lcos-reconstructed .lcos-mindmap-fold { transition: fill 140ms ease; }
 .lcos-reconstructed .lcos-note-mindmap.is-empty { display: grid; place-items: center; min-height: 96px; color: rgba(60,55,72,.5); font-size: 10px; }
 .lcos-reconstructed .lcos-note-mindmap-hint { position: sticky; bottom: 0; display: block; padding-top: 4px; color: rgba(60,55,72,.38); font-size: 9px; text-align: right; }
@@ -1280,16 +1341,16 @@
   height: 76px;
   transform: translate(-50%,-50%);
 }
-.lcos-reconstructed .lcos-graph-dot.ring-0 { z-index: 4; }
-.lcos-reconstructed .lcos-graph-dot.ring-1 { z-index: 3; }
-.lcos-reconstructed .lcos-graph-dot.ring-2 { z-index: 2; opacity: .64; }
+.lcos-reconstructed .lcos-graph-dot.ring-0 { z-index: var(--lcos-z-content-handle); /* z-tier: canvas-content */ }
+.lcos-reconstructed .lcos-graph-dot.ring-1 { z-index: var(--lcos-z-content-bounds); /* z-tier: canvas-content */ }
+.lcos-reconstructed .lcos-graph-dot.ring-2 { z-index: var(--lcos-z-content-detail); /* z-tier: canvas-content */ opacity: .64; }
 .lcos-reconstructed .lcos-graph-dot.ring-0 .lcos-surface-material {
   box-shadow: 0 0 0 1px rgba(var(--lcos-ui-context-rgb), .08);
 }
 .lcos-reconstructed .lcos-graph-dot.ring-0 .lcos-surface-usage-hint { color: rgba(var(--lcos-ui-context-rgb), .66); }
 .lcos-reconstructed .lcos-graph-dot.ring-1 .lcos-surface-usage-hint,
 .lcos-reconstructed .lcos-graph-dot.ring-2 .lcos-surface-usage-hint { opacity: .52; }
-.lcos-reconstructed .lcos-graph-dot:hover { z-index: 8; opacity: 1; }
+.lcos-reconstructed .lcos-graph-dot:hover { z-index: var(--lcos-z-content-raised); /* z-tier: canvas-content */ opacity: 1; }
 .lcos-reconstructed .lcos-graph-edges path.focus-edge { stroke: rgba(var(--lcos-ui-context-rgb), .48); }
 .lcos-reconstructed .lcos-graph-edges path.secondary-edge { stroke: rgba(var(--lcos-ui-context-rgb), .16); stroke-dasharray: 2 6; }
 
@@ -1342,7 +1403,7 @@
   position: fixed;
   left: 50%;
   bottom: 74px;
-  z-index: 140;
+  z-index: var(--lcos-z-dialog-drawer); /* z-tier: dialog */
   width: min(430px, calc(100vw - 32px));
   max-height: min(520px, calc(100vh - 112px));
   overflow: auto;
@@ -1593,7 +1654,7 @@
 [data-sonner-toaster] {
   --width: min(380px, calc(100vw - 28px));
   font-family: inherit;
-  z-index: 1200 !important;
+  z-index: var(--lcos-z-modal-toast) !important; /* z-tier: modal（值收敛为 token；important 保留以压过 sonner 库内联样式） */
 }
 [data-sonner-toast].lcos-sonner-toast,
 [data-sonner-toast] {
@@ -1614,7 +1675,7 @@
 .lcos-viewer-drawer-viewport {
   position: fixed;
   inset: 0 0 0 auto;
-  z-index: 960;
+  z-index: var(--lcos-z-modal-viewer-drawer); /* z-tier: modal */
   width: min(760px, max(520px, 56vw));
   pointer-events: none;
   overflow: hidden;
@@ -1649,7 +1710,7 @@
   position: absolute;
   left: -1px;
   top: 50%;
-  z-index: 4;
+  z-index: var(--lcos-z-content-handle); /* z-tier: canvas-content */
   width: 20px;
   height: 42px;
   display: grid;
@@ -1737,7 +1798,7 @@
 .lcos-page-rail-heading {
   position: sticky;
   top: -9px;
-  z-index: 3;
+  z-index: var(--lcos-z-content-bounds); /* z-tier: canvas-content */
   display: grid;
   gap: 1px;
   padding: 9px 2px 7px;
@@ -1794,7 +1855,7 @@
 .lcos-page-stage-toolbar {
   position: sticky;
   top: 10px;
-  z-index: 8;
+  z-index: var(--lcos-z-content-raised); /* z-tier: canvas-content */
   min-height: 32px;
   display: flex;
   align-items: center;
@@ -1812,6 +1873,11 @@
   font-size: 9.5px;
 }
 .lcos-page-stage-toolbar > div { display: flex; gap: 2px; }
+/* PDF 页码读数：等宽数字 + mono 字体，页码跳变不抖动。 */
+.lcos-page-stage-toolbar .lcos-pdf-page-readout {
+  font-family: var(--lcos-font-mono, monospace);
+  font-variant-numeric: tabular-nums;
+}
 .lcos-page-stage-toolbar button {
   width: 25px;
   height: 24px;
@@ -1823,6 +1889,7 @@
   cursor: pointer;
 }
 .lcos-page-stage-toolbar button:hover { background: rgba(72,65,95,.07); }
+.lcos-page-stage-toolbar button:disabled { opacity: .35; cursor: default; background: transparent; }
 .lcos-page-stage-toolbar .lcos-page-zoom-readout { width: auto; min-width: 42px; padding-inline: 6px; font-size: 9px; font-variant-numeric: tabular-nums; }
 .lcos-page-stage-toolbar small { color: rgba(60,55,72,.42); font-size: 8.7px; }
 .lcos-page-sheet {
@@ -1843,7 +1910,7 @@
    canvas working point; drag = explicit placement. */
 .lcos-selection-drop-handle {
   position: fixed;
-  z-index: 1250;
+  z-index: var(--lcos-z-modal-drag-handle); /* z-tier: modal */
   width: 29px;
   height: 29px;
   display: grid;
@@ -1864,7 +1931,7 @@
   content: '';
   position: absolute;
   inset: 8px;
-  z-index: 18;
+  z-index: var(--lcos-z-content-hud); /* z-tier: canvas-content */
   border: 1px solid rgba(104,87,189,.30);
   border-radius: 14px;
   box-shadow: inset 0 0 0 3px rgba(104,87,189,.035);
@@ -1881,7 +1948,7 @@
 .lcos-review-drawer-viewport {
   position: fixed;
   inset: auto 0 0;
-  z-index: 970;
+  z-index: var(--lcos-z-modal-review-drawer); /* z-tier: modal */
   height: min(570px, calc(100vh - 92px));
   pointer-events: none;
   display: grid;
@@ -1908,7 +1975,7 @@
   position: static !important;
   left: auto !important;
   bottom: auto !important;
-  z-index: auto !important;
+  z-index: auto !important; /* z-tier: dialog（有意重置为 auto，非层刻度，按契约保留） */
   width: auto !important;
   max-height: none !important;
   overflow: visible !important;
@@ -1963,7 +2030,7 @@
 
 .lcos-reconstructed .lcos-semantic-drop-handle {
   position: absolute;
-  z-index: 8;
+  z-index: var(--lcos-z-content-raised); /* z-tier: canvas-content */
   top: 5px;
   right: 5px;
   width: 19px;
@@ -2066,14 +2133,15 @@
   border-color: rgba(var(--lcos-ui-signal-rgb), .23);
 }
 
-.app-shell.porcelain-studio-v2 .agent-proposal-modify {
+/* porcelain 退役：agent-proposal-modify 原挂在 porcelain shell 前缀下，改挂 reconstruction 栈（.lcos-reconstructed）。 */
+.lcos-reconstructed .agent-proposal-modify {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 6px;
   width: 100%;
   margin-top: 7px;
 }
-.app-shell.porcelain-studio-v2 .agent-proposal-modify input {
+.lcos-reconstructed .agent-proposal-modify input {
   min-width: 0;
   height: 30px;
   box-sizing: border-box;
@@ -2086,17 +2154,17 @@
   font: inherit;
   font-size: 10.5px;
 }
-.app-shell.porcelain-studio-v2 .agent-proposal-modify input:focus {
+.lcos-reconstructed .agent-proposal-modify input:focus {
   border-color: rgba(92, 75, 170, .28);
   box-shadow: 0 0 0 3px rgba(92, 75, 170, .045);
 }
-.app-shell.porcelain-studio-v2 .agent-proposal-modify button {
+.lcos-reconstructed .agent-proposal-modify button {
   white-space: nowrap;
 }
 
 .lcos-revision-upgrade-backdrop {
   position: fixed;
-  z-index: 116;
+  z-index: var(--lcos-z-dialog-upgrade); /* z-tier: dialog */
   inset: 0;
   display: grid;
   place-items: center;
@@ -2207,7 +2275,7 @@
 .capture-space-header {
   grid-column: 1 / -1;
   grid-row: 1;
-  z-index: 80;
+  z-index: var(--lcos-z-overlay-ui-top); /* z-tier: overlay-ui */
   display: grid;
   grid-template-columns: 118px 1fr auto;
   align-items: center;
@@ -2279,7 +2347,7 @@
 .capture-project-targets {
   grid-column: 1;
   grid-row: 2;
-  z-index: 60;
+  z-index: var(--lcos-z-overlay-ui-high); /* z-tier: overlay-ui */
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -2323,7 +2391,7 @@
 }
 .capture-project-targets button em {
   position: absolute;
-  z-index: 10;
+  z-index: var(--lcos-z-content-guide); /* z-tier: canvas-content */
   left: calc(100% + 9px);
   top: 50%;
   max-width: 180px;
@@ -2458,6 +2526,15 @@
   font: 610 12px/1.2 var(--lcos-font-ui, sans-serif);
   letter-spacing: -.012em;
 }
+/* bloub is the hero: the mood label tints toward the emotion color. */
+.capture-float-mood {
+  color: var(--lcos-ui-ink);
+  transition: color 240ms ease;
+}
+.capture-float.mood-observing .capture-float-mood { color: #8a6fd6; }
+.capture-float.mood-working .capture-float-mood { color: var(--lcos-ui-signal, #6f5bd6); }
+.capture-float.mood-satisfied .capture-float-mood { color: #4f9d6b; }
+.capture-float.mood-alert .capture-float-mood { color: #d0554f; }
 .capture-float section small {
   display: block;
   max-width: 100%;
@@ -2542,7 +2619,11 @@
   background: rgba(249,249,252,.76);
   backdrop-filter: blur(22px) saturate(1.10);
   box-shadow: 0 10px 30px rgba(39,34,55,.09), inset 0 1px 0 rgba(255,255,255,.82);
-  z-index: 2;
+  z-index: var(--lcos-z-content-detail); /* z-tier: canvas-content */
+  /* 漏洞1：dock 容器在非 sidecar 下 pointer-events:none（继承属性），
+     lens/scope/zoom 轴各自恢复了 auto，主题按钮此前被遗漏——点击穿透后被
+     下层 absolute 的 scope-axis 盒子拦截。这里显式恢复命中。 */
+  pointer-events: auto;
 }
 .lcos-reconstructed .lcos-theme-toggle button {
   height: 26px !important;
@@ -2606,7 +2687,7 @@
 
 .lcos-reconstructed .lcos-collection-stack {
   position: absolute;
-  z-index: 0;
+  z-index: var(--lcos-z-canvas-base); /* z-tier: canvas-base */
   inset: 0 9px 21px 9px;
   pointer-events: none;
 }
@@ -2662,7 +2743,7 @@
 
 .lcos-reconstructed .lcos-collection-folder-face {
   position: absolute;
-  z-index: 3;
+  z-index: var(--lcos-z-content-bounds); /* z-tier: canvas-content */
   left: 0;
   right: 0;
   bottom: 0;
@@ -2799,7 +2880,7 @@
   border-color: transparent;
   background: rgba(255,255,255,.42);
 }
-.lcos-reconstructed .lcos-collection-version-beads { position: absolute; left: 13px; bottom: 7px; z-index: 5; opacity: .55; }
+.lcos-reconstructed .lcos-collection-version-beads { position: absolute; left: 13px; bottom: 7px; z-index: var(--lcos-z-content-chip); /* z-tier: canvas-content */ opacity: .55; }
 
 /* The fold/unfold path is transient presentation feedback. Committed member
    coordinates already contain the opened layout; transforms only animate from
@@ -2886,7 +2967,11 @@
   box-shadow: 0 1px 4px rgba(42, 48, 58, .08);
 }
 .lcos-reconstructed .lcos-context-space {
-  position: relative;
+  /* 基类 .lcos-dedicated-surface 是 absolute+inset:0 撑满 mount;此前这里被覆盖成
+     relative 又没给高度,section 塌成 48px header 一条线,画布整体不可见(2R 实测修)。
+     保持 absolute 撑满,stage(absolute inset:48px 0 0)仍以本层为定位父。 */
+  position: absolute;
+  inset: 0;
   min-width: 0;
   min-height: 0;
 }
@@ -2904,7 +2989,7 @@
   transition: left 260ms cubic-bezier(.22,.72,.22,1), top 260ms cubic-bezier(.22,.72,.22,1), opacity 160ms ease;
 }
 .lcos-reconstructed .lcos-context-space-node.is-dragging {
-  z-index: 9;
+  z-index: var(--lcos-z-content-raised); /* z-tier: canvas-content */
   transition: none;
 }
 .lcos-reconstructed .lcos-context-space-node > .lcos-surface-object {
@@ -3018,7 +3103,7 @@
 }
 .lcos-reconstructed .lcos-context-dossier-back {
   position: absolute;
-  z-index: 0;
+  z-index: var(--lcos-z-canvas-base); /* z-tier: canvas-base */
   inset: 7px 10px 18px 12px;
   pointer-events: none;
 }
@@ -3039,7 +3124,7 @@
 .lcos-reconstructed .lcos-context-dossier-back > i:last-child { transform: translate(5px,2px) rotate(2deg); opacity: .84; }
 .lcos-reconstructed .lcos-context-dossier-face {
   position: absolute;
-  z-index: 2;
+  z-index: var(--lcos-z-content-detail); /* z-tier: canvas-content */
   left: 0;
   right: 0;
   bottom: 0;
@@ -3178,7 +3263,7 @@
    Single click = select/show choices. Double click stays the direct Space path. */
 .lcos-reconstructed .lcos-context-lens-launcher {
   position: absolute;
-  z-index: 24;
+  z-index: var(--lcos-z-content-hud); /* z-tier: canvas-content */
   left: calc(100% + 8px);
   top: 50%;
   width: 38px;
@@ -3235,7 +3320,7 @@
 .lcos-reconstructed .lcos-workflow-projection { isolation: isolate; }
 .lcos-reconstructed .lcos-workflow-folio-sheet {
   position: absolute;
-  z-index: 0;
+  z-index: var(--lcos-z-canvas-base); /* z-tier: canvas-base */
   left: 9px;
   right: 8px;
   top: 10px;
@@ -3251,7 +3336,7 @@
 .lcos-reconstructed .lcos-workflow-folio-sheet.middle { transform: translate(4px,3px) rotate(1.5deg); opacity: .83; }
 .lcos-reconstructed .lcos-workflow-folio-face {
   position: absolute;
-  z-index: 2;
+  z-index: var(--lcos-z-content-detail); /* z-tier: canvas-content */
   inset: 4px 0 0;
   display: grid;
   grid-template-rows: auto minmax(34px,1fr) 25px;
@@ -3447,7 +3532,7 @@
 .lcos-reconstructed .lcos-context-understanding-regions {
   position: absolute;
   inset: 0;
-  z-index: 0;
+  z-index: var(--lcos-z-canvas-base); /* z-tier: canvas-base */
   pointer-events: none;
 }
 .lcos-reconstructed .lcos-context-understanding-region {
@@ -3480,8 +3565,8 @@
   font-size: 7.5px;
   line-height: 15px;
 }
-.lcos-reconstructed .lcos-context-space-edges { z-index: 1; }
-.lcos-reconstructed .lcos-context-space-node { z-index: 2; }
+.lcos-reconstructed .lcos-context-space-edges { z-index: var(--lcos-z-content-inlay); /* z-tier: canvas-content */ }
+.lcos-reconstructed .lcos-context-space-node { z-index: var(--lcos-z-content-detail); /* z-tier: canvas-content */ }
 .lcos-reconstructed .lcos-context-space-edges marker path { fill: rgba(var(--lcos-ui-context-rgb), .36); }
 .lcos-reconstructed .lcos-context-space-edges .lcos-context-relation > path {
   fill: none;
@@ -3516,7 +3601,7 @@
    real Project object. Ports and the strong directional skeleton belong to Step. */
 .lcos-reconstructed .lcos-workflow-step-composer {
   position: absolute;
-  z-index: 46;
+  z-index: var(--lcos-z-overlay-ui-panel); /* z-tier: overlay-ui */
   left: 50%;
   top: 66px;
   display: grid;
@@ -3549,9 +3634,70 @@
 .lcos-reconstructed .lcos-workflow-step-composer > button { height: 29px; padding: 0 10px; border: 0; border-radius: 8px; color: rgba(255,255,255,.94); background: rgba(var(--lcos-ui-workflow-rgb), .76); font-size: 9px; cursor: pointer; }
 .lcos-reconstructed .lcos-workflow-step-composer > button.quiet { color: rgba(51,53,61,.55); background: transparent; }
 
+/* 教工作流「放」：StepLibrary 沉淀池（SKILL.md artifacts → 搜索/排序/详情/一键重放） */
+.lcos-reconstructed .lcos-workflow-skill-panel {
+  position: absolute;
+  z-index: var(--lcos-z-overlay-ui-panel); /* z-tier: overlay-ui */
+  right: 18px;
+  top: 64px;
+  display: grid;
+  gap: 8px;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  width: min(560px, calc(100% - 80px));
+  max-height: min(520px, calc(100% - 120px));
+  padding: 10px;
+  border: 1px solid rgba(var(--lcos-ui-workflow-rgb), .13);
+  border-radius: 12px;
+  background: rgba(253,253,254,.97);
+  box-shadow: 0 13px 32px rgba(37,34,46,.11), inset 0 1px 0 rgba(255,255,255,.96);
+  backdrop-filter: blur(12px) saturate(110%);
+}
+.lcos-reconstructed .lcos-workflow-skill-panel > header { display: flex; align-items: center; gap: 7px; }
+.lcos-reconstructed .lcos-workflow-skill-panel > header strong { color: rgba(35,38,47,.84); font-size: 10.5px; }
+.lcos-reconstructed .lcos-workflow-skill-panel > header small { flex: 1; color: rgba(49,52,62,.42); font-size: 8px; }
+.lcos-reconstructed .lcos-workflow-skill-panel > header > button { width: 20px; height: 20px; border: 0; border-radius: 6px; color: rgba(51,53,61,.5); background: transparent; font-size: 11px; line-height: 1; cursor: pointer; }
+.lcos-reconstructed .lcos-workflow-skill-panel > header > button:hover { background: rgba(55,58,68,.06); }
+.lcos-reconstructed .lcos-workflow-skill-panel .lcos-workflow-skill-empty { margin: 4px 0; color: rgba(50,52,60,.45); font-size: 8.8px; }
+
+/* 沉淀池工具行：搜索 + 排序 */
+.lcos-reconstructed .lcos-skill-toolbar { display: flex; gap: 6px; }
+.lcos-reconstructed .lcos-skill-toolbar > input { flex: 1; min-width: 0; height: 26px; padding: 0 9px; border: 1px solid rgba(55,58,68,.12); border-radius: 7px; color: rgba(35,38,47,.82); background: rgba(250,250,252,.9); font-size: 9px; outline: none; }
+.lcos-reconstructed .lcos-skill-toolbar > input:focus { border-color: rgba(var(--lcos-ui-workflow-rgb), .28); box-shadow: 0 0 0 2px rgba(var(--lcos-ui-workflow-rgb), .055); }
+.lcos-reconstructed .lcos-skill-toolbar > select { height: 26px; padding: 0 6px; border: 1px solid rgba(55,58,68,.12); border-radius: 7px; color: rgba(35,38,47,.72); background: rgba(250,250,252,.9); font-size: 8.5px; outline: none; cursor: pointer; }
+
+/* 沉淀池主体：左列表 + 右详情（master/detail，skills-viewer 范式） */
+.lcos-reconstructed .lcos-skill-body { display: grid; grid-template-columns: minmax(180px, 224px) minmax(0, 1fr); gap: 8px; min-height: 0; }
+.lcos-reconstructed .lcos-skill-list { display: grid; gap: 5px; align-content: start; margin: 0; padding: 0; overflow-y: auto; list-style: none; }
+.lcos-reconstructed .lcos-skill-list > li { display: flex; align-items: stretch; gap: 5px; padding: 6px 6px 6px 7px; border: 1px solid rgba(55,58,68,.08); border-radius: 9px; background: rgba(249,249,251,.9); }
+.lcos-reconstructed .lcos-skill-list > li.selected { border-color: rgba(var(--lcos-ui-workflow-rgb), .3); background: rgba(var(--lcos-ui-workflow-rgb), .05); }
+.lcos-reconstructed .lcos-skill-list > li > .lcos-skill-row { flex: 1; min-width: 0; display: grid; gap: 2px; padding: 2px; border: 0; background: transparent; text-align: left; cursor: pointer; }
+.lcos-reconstructed .lcos-skill-list > li strong { overflow: hidden; color: rgba(35,38,47,.82); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.lcos-reconstructed .lcos-skill-list > li small { overflow: hidden; color: rgba(49,52,62,.44); font-size: 7.8px; text-overflow: ellipsis; white-space: nowrap; }
+.lcos-reconstructed .lcos-skill-list > li small.lcos-skill-meta { color: rgba(var(--lcos-ui-workflow-rgb), .62); font-family: var(--lcos-font-mono, monospace); }
+.lcos-reconstructed .lcos-skill-list > li > .lcos-skill-replay { display: inline-flex; align-items: center; gap: 4px; align-self: center; height: 24px; padding: 0 8px; border: 0; border-radius: 7px; color: rgba(255,255,255,.94); background: rgba(var(--lcos-ui-workflow-rgb), .74); font-size: 8.5px; cursor: pointer; white-space: nowrap; }
+.lcos-reconstructed .lcos-skill-list > li > .lcos-skill-replay:hover { background: rgba(var(--lcos-ui-workflow-rgb), .86); }
+
+/* 详情区：frontmatter 元数据 + 步骤序列 + 动作 */
+.lcos-reconstructed .lcos-skill-detail { display: grid; gap: 6px; align-content: start; min-width: 0; padding: 8px 9px; border: 1px solid rgba(55,58,68,.08); border-radius: 9px; background: rgba(249,249,251,.9); overflow-y: auto; }
+.lcos-reconstructed .lcos-skill-detail > strong { overflow: hidden; color: rgba(35,38,47,.86); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.lcos-reconstructed .lcos-skill-detail > p { margin: 0; color: rgba(49,52,62,.5); font-size: 8.4px; line-height: 1.5; }
+.lcos-reconstructed .lcos-skill-detail > .lcos-skill-meta { color: rgba(var(--lcos-ui-workflow-rgb), .62); font-family: var(--lcos-font-mono, monospace); font-size: 7.8px; }
+.lcos-reconstructed .lcos-skill-detail > ol { display: grid; gap: 5px; margin: 0; padding: 0; list-style: none; }
+.lcos-reconstructed .lcos-skill-detail > ol > li { display: grid; gap: 3px; }
+.lcos-reconstructed .lcos-skill-detail > ol > li > span { display: flex; align-items: baseline; gap: 6px; color: rgba(38,41,50,.78); font-size: 9px; }
+.lcos-reconstructed .lcos-skill-detail > ol > li > span > b { flex: none; display: grid; place-items: center; width: 14px; height: 14px; border-radius: 4px; color: rgba(var(--lcos-ui-workflow-rgb), .8); background: rgba(var(--lcos-ui-workflow-rgb), .08); font-family: var(--lcos-font-mono, monospace); font-size: 7.5px; }
+.lcos-reconstructed .lcos-skill-materials { display: flex; flex-wrap: wrap; gap: 4px; padding-left: 20px; }
+.lcos-reconstructed .lcos-skill-materials > button { max-width: 100%; overflow: hidden; padding: 1px 7px; border: 1px solid rgba(55,58,68,.12); border-radius: 6px; color: rgba(52,55,64,.6); background: rgba(252,252,253,.92); font-size: 7.5px; line-height: 15px; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.lcos-reconstructed .lcos-skill-materials > button:hover { border-color: rgba(var(--lcos-ui-workflow-rgb), .3); color: rgba(var(--lcos-ui-workflow-rgb), .8); }
+.lcos-reconstructed .lcos-skill-actions { display: flex; gap: 6px; padding-top: 2px; border-top: 1px solid rgba(55,58,68,.07); }
+.lcos-reconstructed .lcos-skill-actions > button { display: inline-flex; align-items: center; gap: 4px; height: 25px; padding: 0 9px; border: 1px solid rgba(55,58,68,.14); border-radius: 7px; color: rgba(52,55,64,.66); background: transparent; font-size: 8.5px; cursor: pointer; }
+.lcos-reconstructed .lcos-skill-actions > button:hover { border-color: rgba(var(--lcos-ui-workflow-rgb), .32); color: rgba(var(--lcos-ui-workflow-rgb), .8); }
+.lcos-reconstructed .lcos-skill-actions > button.primary { border: 0; color: rgba(255,255,255,.94); background: rgba(var(--lcos-ui-workflow-rgb), .74); }
+.lcos-reconstructed .lcos-skill-actions > button.primary:hover { background: rgba(var(--lcos-ui-workflow-rgb), .86); }
+
 .lcos-reconstructed .lcos-workflow-step-empty {
   position: absolute;
-  z-index: 18;
+  z-index: var(--lcos-z-content-hud); /* z-tier: canvas-content */
   left: 50%;
   top: 84px;
   display: flex;
@@ -3571,7 +3717,7 @@
 
 .lcos-reconstructed .lcos-workflow-action {
   position: absolute;
-  z-index: 4;
+  z-index: var(--lcos-z-content-handle); /* z-tier: canvas-content */
   box-sizing: border-box;
   display: grid;
   grid-template-columns: 29px minmax(0,1fr) auto;
@@ -3660,7 +3806,7 @@
 .lcos-reconstructed .lcos-workflow-edge-group.material-relation:hover,
 .lcos-reconstructed .lcos-workflow-edge-group.material-relation.selected { opacity: .88; }
 
-.lcos-reconstructed .lcos-workflow-material { z-index: 3; }
+.lcos-reconstructed .lcos-workflow-material { z-index: var(--lcos-z-content-bounds); /* z-tier: canvas-content */ }
 .lcos-reconstructed .lcos-workflow-material.is-attached::before {
   content: "";
   position: absolute;
@@ -3834,18 +3980,7 @@
 }
 /* System signal slots now host Glyth avatars that are only rendered when the
    object is actually touched (selection / run / review). Old always-on styling
-   is retired; sizing lives in spatial-components.css. */
-.lcos-reconstructed .lcos-node-system-signal,
-.lcos-reconstructed .lcos-surface-system-signal,
-.lcos-reconstructed .lcos-workflow-action-signal {
-  position: absolute;
-  z-index: 7;
-  display: grid;
-  place-items: center;
-  opacity: 1;
-  transition: opacity 140ms ease, transform 180ms var(--lcos-ui-ease-out);
-  pointer-events: none;
-}
+   is retired; ALL sizing and positioning lives in spatial-components.css. */
 
 /* Stable = closed, quiet presence. */
 .lcos-reconstructed .lcos-signal-glyph[data-signal-state="stable"] [data-signal-role^="core"] { opacity: .78; }

@@ -17,6 +17,7 @@ import { addTrackSegmentMembers, createSegmentsFromStrands, ensureTrackSegmentsC
 import type { ContextSurfaceRuntime } from './surfaceContracts'
 import { ContextLensSwitch } from './ContextLensSwitch'
 import type { SurfaceId } from '../shell/SurfaceDock'
+import { relativeTime } from '../shell/relativeTime'
 import { SurfaceObject } from './SurfaceObject'
 
 interface Props {
@@ -67,9 +68,28 @@ function segmentHeight(memberCount: number, collapsed: boolean) {
   return Math.max(128, 58 + rows * (CHILD_HEIGHT + CHILD_GAP_Y))
 }
 
-function waveform(count: number) {
-  const bars = Math.max(8, Math.min(14, count + 7))
-  return Array.from({ length: bars }, (_, index) => 24 + ((index * 23 + count * 17) % 68))
+/** ensureTrackSegmentsCoverMembers 自动补的收容段 id：不是用户编排，不计入「已编排」判定。 */
+const AUTO_SHELTER_SEGMENT_IDS = new Set(['segment:unassigned', 'segment:auto'])
+
+/** 密度灯段：把 trackSegmentDensity 的真实密度（1-12）映射成 12 格灯段的点亮数量，
+ *  点亮比例即 density / 12，不含任何装饰性随机；density 无意义（≤0）时返回空数组，由调用方整体不渲染。 */
+const DENSITY_LAMP_COUNT = 12
+function densityLampHeights(density: number): number[] {
+  if (!Number.isFinite(density) || density <= 0) return []
+  const litCount = Math.min(DENSITY_LAMP_COUNT, Math.round(density))
+  return Array.from({ length: DENSITY_LAMP_COUNT }, (_, index) => (index < litCount ? 100 : 22))
+}
+
+/** 段时间锚：取段内成员最新的真实时间戳。CanvasNode 没有 updatedAt/modifiedAt，
+ *  只有 createdAt 可用，因此锚定「最新创建时间」；无有效时间返回 null，不强造。 */
+function segmentLatestCreatedAt(nodes: readonly CanvasNode[]): number | null {
+  let latest: number | null = null
+  for (const node of nodes) {
+    const time = node.createdAt === undefined ? NaN : Date.parse(node.createdAt)
+    if (!Number.isFinite(time)) continue
+    if (latest === null || time > latest) latest = time
+  }
+  return latest
 }
 
 function moveSegmentBefore<T extends { id: string; order: number }>(segments: readonly T[], sourceId: string, targetId: string): T[] {
@@ -104,7 +124,9 @@ export function ContextFlowSurface(props: Props) {
   const mechanicalSeed = useMemo(() => createSegmentsFromStrands(layoutContextStrands(props.nodes, props.edges).strands), [props.edges, props.nodes])
   const [segments, setSegments] = useContextTrackState(props.projectId, props.scopeId, mechanicalSeed)
   const normalizedSegments = useMemo(() => ensureTrackSegmentsCoverMembers(segments, props.nodes.map((node) => node.id)), [props.nodes, segments])
-  const assignedIds = useMemo(() => new Set(normalizedSegments.flatMap((segment) => segment.memberViewIds)), [normalizedSegments])
+  // 「未编排」必须按已保存的用户编排（segments，剔除自动收容段）判定：
+  // normalizedSegments 已被 ensureTrackSegmentsCoverMembers 兜底覆盖全部成员，按它算永远是 0（死指标）。
+  const assignedIds = useMemo(() => new Set(segments.filter((segment) => !AUTO_SHELTER_SEGMENT_IDS.has(segment.id)).flatMap((segment) => segment.memberViewIds)), [segments])
   const unassignedIds = useMemo(() => props.nodes.map((node) => node.id).filter((id) => !assignedIds.has(id)), [assignedIds, props.nodes])
 
   const placements = useMemo<SegmentPlacement[]>(() => {
@@ -157,6 +179,17 @@ export function ContextFlowSurface(props: Props) {
     setCamera(fitSpatialBounds(spatialBoundsForPlacements(selectedSpatialItems, 38), root.clientWidth || 1, root.clientHeight || 1, 84))
   }
 
+  // 定位未编排对象：复用父级多选通道（onMarqueeSelect）选中它们，再把相机对准它们在收容段里的放置区域。
+  const focusUnassigned = () => {
+    if (unassignedIds.length === 0) return
+    props.onMarqueeSelect?.(unassignedIds, false)
+    const root = canvasRef.current
+    if (!root) return
+    const items = spatialMemberItems.filter((item) => unassignedIds.includes(item.id))
+    if (items.length === 0) return
+    setCamera(fitSpatialBounds(spatialBoundsForPlacements(items, 38), root.clientWidth || 1, root.clientHeight || 1, 84))
+  }
+
   // A Context can keep its own camera while the user works, but stale HMR/session
   // camera state must never make a populated Signal Track look empty. On each
   // concrete Context entry, verify that at least part of the track is on screen;
@@ -183,18 +216,32 @@ export function ContextFlowSurface(props: Props) {
     return () => cancelAnimationFrame(frame)
   }, [camera, contentBounds, placements.length, props.projectId, props.scopeId, setCamera])
 
+  // 放大阅读模式的回画布通道:Esc 回理解现场画布;仅在无模态弹窗、无输入焦点时生效。
+  useEffect(() => {
+    const onSurfaceEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      if (document.querySelector('[role="dialog"][aria-modal="true"]')) return
+      const active = document.activeElement
+      if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) return
+      if (active instanceof HTMLElement && active.isContentEditable) return
+      props.onSurfaceChange?.('context-space')
+    }
+    window.addEventListener('keydown', onSurfaceEscape)
+    return () => window.removeEventListener('keydown', onSurfaceEscape)
+  }, [props.onSurfaceChange])
+
   const beginChildDrag = (event: ReactPointerEvent<HTMLDivElement>, id: string, fallback: { x: number; y: number }) => {
     if (event.button !== 0) return
     event.stopPropagation()
     const origin = localPositions[id] ?? fallback
-    childDrag.current = beginSpatialNodeDrag(event.pointerId, id, { x: event.clientX, y: event.clientY }, origin)
+    childDrag.current = beginSpatialNodeDrag(event.pointerId, id, { x: event.clientX, y: event.clientY }, origin, camera.zoom)
     event.currentTarget.setPointerCapture(event.pointerId)
   }
   const moveChildDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
     const session = childDrag.current
     if (session.kind !== 'node-drag') return
     event.stopPropagation()
-    const next = advanceSpatialNodeDrag(session, { x: event.clientX, y: event.clientY }, camera.zoom)
+    const next = advanceSpatialNodeDrag(session, { x: event.clientX, y: event.clientY })
     if (next) setLocalPositions((current) => ({ ...current, [session.id]: next }))
   }
   const endChildDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -263,8 +310,8 @@ export function ContextFlowSurface(props: Props) {
 
   return <section className="lcos-dedicated-surface lcos-context-signal" data-testid="surface-context-flow">
     <header className="lcos-surface-heading lcos-signal-heading">
-      <div><strong>上下文</strong><span>演进</span></div>
-      <div className="lcos-context-heading-actions"><div className="lcos-signal-summary"><small>{normalizedSegments.length} 段 · {props.nodes.length} 项 · 纵向顺序表达这份理解的演进</small>{unassignedIds.length > 0 && <span>{unassignedIds.length} 项未编排</span>}{selectedSpatialItems.length > 0 && <button type="button" className="lcos-signal-focus-selection" onClick={focusSelected} title="把当前选中对象定位到视区中央"><Crosshair size={11}/><span>定位选中 · {selectedSpatialItems.length}</span></button>}</div><ContextLensSwitch active="context-flow" onSelect={props.onSurfaceChange}/></div>
+      <div><strong>上下文</strong><span>演进</span><span className="lcos-lens-zoom-badge" title="放大阅读模式:点「现场」或 Esc 回到理解现场画布">放大阅读</span></div>
+      <div className="lcos-context-heading-actions"><div className="lcos-signal-summary"><small>{normalizedSegments.length} 段 · {props.nodes.length} 项 · 纵向顺序表达这份理解的演进</small>{unassignedIds.length > 0 && <button type="button" className="lcos-signal-focus-selection" onClick={focusUnassigned} title="选中并定位到未编排对象"><Crosshair size={11}/><span>{unassignedIds.length} 项未编排</span></button>}{selectedSpatialItems.length > 0 && <button type="button" className="lcos-signal-focus-selection" onClick={focusSelected} title="把当前选中对象定位到视区中央"><Crosshair size={11}/><span>定位选中 · {selectedSpatialItems.length}</span></button>}</div><ContextLensSwitch active="context-flow" onSelect={props.onSurfaceChange}/></div>
     </header>
     <div className={`lcos-context-origin-chip source-${props.source.kind}`} title="这只是来源记录，不是操作入口"><i/><span>{props.source.label}</span><small>来源</small></div>
     <SpatialCanvas ref={canvasRef} camera={camera} setCamera={setCamera} marqueeItems={spatialMemberItems} minimapItems={minimapItems} minimapLabel="Context Evolution" onMarqueeSelect={props.onMarqueeSelect} className="lcos-signal-stage lcos-presentation-spatial" worldClassName="lcos-presentation-world lcos-signal-world" worldStyle={{ width: WORLD_WIDTH, height: worldHeight }} testId="context-flow-spatial" overlays={emptyOverlay} onPointerUp={() => { childDrag.current = endSpatialPointer() }} onPointerCancel={() => { childDrag.current = endSpatialPointer() }}>
@@ -308,7 +355,9 @@ export function ContextFlowSurface(props: Props) {
           const segmentIndex = normalizedSegments.findIndex((item) => item.id === segment.id)
           const selectedInSegment = props.selectedIds.filter((id) => segment.memberViewIds.includes(id))
           const previous = segmentIndex > 0 ? normalizedSegments[segmentIndex - 1] : undefined
-          const bars = waveform(segment.memberViewIds.length)
+          // 密度视觉与时间锚都取真实数据：灯段由 trackSegmentDensity 驱动，时间锚取段内成员最新创建时间。
+          const lampHeights = densityLampHeights(trackSegmentDensity(segment))
+          const latestCreatedAt = segmentLatestCreatedAt(segment.memberViewIds.map((id) => nodeById.get(id)).filter((node): node is CanvasNode => node !== undefined))
           return <div key={segment.id} className={`lcos-signal-segment ${placement.collapsed ? 'is-collapsed' : ''} ${selectedInSegment.length ? 'has-selection' : ''} ${receivingSegmentId === segment.id ? 'is-receiving' : ''}`} style={{ left: placement.x, top: placement.y, width: placement.width, minHeight: placement.collapsed ? 70 : 104 } as CSSProperties}
             draggable
             onDragStart={(event) => { setDraggedSegmentId(segment.id); event.dataTransfer.setData('application/x-lcos-context-segment', segment.id); event.dataTransfer.effectAllowed = 'move' }}
@@ -319,8 +368,8 @@ export function ContextFlowSurface(props: Props) {
             <button type="button" className="lcos-signal-segment-grip" aria-label={`拖动第 ${segmentIndex + 1} 段`}><GripVertical size={12}/></button>
             <button type="button" className="lcos-signal-segment-main" onClick={() => setSegments(toggleTrackSegmentCollapsed(normalizedSegments, segment.id))}>
               <span className="lcos-signal-order">{String(segmentIndex + 1).padStart(2, '0')}</span>
-              <span className="lcos-signal-copy"><strong>{segment.label || `第 ${segmentIndex + 1} 段`}</strong><small>{segment.memberViewIds.length} 项 · density {trackSegmentDensity(segment)}</small></span>
-              <span className="lcos-signal-wave" aria-hidden="true">{bars.map((height, index) => <i key={index} style={{ height: `${height}%` }}/>)}</span>
+              <span className="lcos-signal-copy"><strong>{segment.label || `第 ${segmentIndex + 1} 段`}</strong><small>{segment.memberViewIds.length} 项{latestCreatedAt !== null && <> · <time dateTime={new Date(latestCreatedAt).toISOString()} title={`段内最新创建：${new Date(latestCreatedAt).toLocaleString()}`}>{relativeTime(latestCreatedAt, Date.now())}</time></>}</small></span>
+              {lampHeights.length > 0 && <span className="lcos-signal-wave" aria-hidden="true">{lampHeights.map((height, index) => <i key={index} style={{ height: `${height}%` }}/>)}</span>}
               <ChevronRight size={13} className={placement.collapsed ? '' : 'expanded'}/>
             </button>
             <div className="lcos-signal-segment-tools">

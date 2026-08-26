@@ -59,7 +59,8 @@ export function AppShellView(props: AppShellViewProps) {
       <DialogsHost {...props.dialogs} />
     </>
   }
-  return <main className="app-shell porcelain-studio-v2 lcos-reconstructed" style={{ ...props.layoutStyle, '--lcos-ui-scale': String(props.uiScale) } as CSSProperties} data-testid="creative-os-app" data-layout-density={props.layoutDensity} data-layout-mode={props.layoutMode} data-collaboration-mode={props.narrowCollaboration ? "narrow" : "normal"}>
+  // porcelain 退役（Tier-3c）：shell 只挂 reconstruction 栈；旧 porcelain 主题 shell class 已移除。
+  return <main className="app-shell lcos-reconstructed" style={{ ...props.layoutStyle, '--lcos-ui-scale': String(props.uiScale) } as CSSProperties} data-testid="creative-os-app" data-layout-density={props.layoutDensity} data-layout-mode={props.layoutMode} data-collaboration-mode={props.narrowCollaboration ? "narrow" : "normal"}>
     <LcosToaster notice={props.notice} />
     <ProjectStripVNext {...props.strip} />
     <CanvasSceneHost {...props.scene} />

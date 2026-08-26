@@ -174,7 +174,7 @@ describe('Spatial Component Foundation integrity', () => {
     expect(relationship).toContain('真实 Brief')
 
     const pack = renderToStaticMarkup(createElement(ContextPackComponent, { element: { ...bound, type: 'context-pack' }, context: { nodes } }))
-    expect(pack).toContain('2 个引用')
+    expect(pack).toContain('2 个视图引用')
     expect(pack).not.toContain('范围外对象')
   })
 
@@ -186,11 +186,12 @@ describe('Spatial Component Foundation integrity', () => {
     expect(html).not.toContain('lcos-surface-component-chrome')
   })
 
-  it('keeps one recognizable Glyth liquid capsule while semantic states change its pose', () => {
+  it('keeps one recognizable Glyth bloub body while semantic states change its pose', () => {
     for (const state of ['stable', 'working', 'waiting', 'error', 'confirm', 'absorb', 'output'] as const) {
       const html = renderToStaticMarkup(createElement(LcosGlyth, { state }))
       expect(html).toContain(`data-glyth-state="${state}"`)
-      expect(html.match(/data-glyth-segment=/g)).toHaveLength(4)
+      expect(html).toContain('lcos-glyth-arcs-front')
+      expect(html).toContain('data-glyth-notif')
       expect(html).toContain('lcos-glyth-core')
       expect(html).toContain('lcos-glyth-eyes')
       expect(html).toContain('data-glyth-body')

@@ -6,11 +6,12 @@ import {
   LocateFixed,
   Network,
 } from 'lucide-react'
-import { memo } from 'react'
+import { memo, useEffect, useState } from 'react'
 import type { MouseEvent as ReactMouseEvent } from 'react'
 import type { CanvasNode, NodeDisplayMode, RunStatus } from '../../model'
 import { runStatusLabel } from '../../model'
 import { MindMapNoteVisual } from './MindMapNoteVisual'
+import { registerNodeCard, resolveNodeCard } from './nodeCardRegistry'
 import { visualFamilyFor } from '../presentation/visualFamily'
 import { OcrImage } from '../ocr/OcrImage'
 import {
@@ -27,7 +28,7 @@ import {
   VideoGlyph,
 } from '../design/LcosGlyphs'
 
-interface Props {
+export interface Props {
   node: CanvasNode
   density: NodeDisplayMode
   runId: string
@@ -77,6 +78,10 @@ export const CanvasNodeVisual = memo(function CanvasNodeVisual(props: Props) {
   const family = nodeVisualFamily(props.node)
   if (family === 'process') return <RunObject {...props} />
   if (family === 'context') {
+    // §4.7 卡片 Registry 薄层平移（第一步示范）：查表优先，命中即走注册表渲染；
+    // 未命中 fallback 到下方既有分支——不全量迁移，注册表为空时行为与平移前一致。
+    const RegistryCard = resolveNodeCard(props.node)
+    if (RegistryCard) return <RegistryCard {...props} />
     if (props.node.entityKind === 'workflow') return <WorkflowProjectionObject {...props} />
     if (props.node.entityKind === 'workspace') return <WorkspaceProjectionObject {...props} />
     if (props.node.entityKind === 'context') return <ContextProjectionObject {...props} />
@@ -108,12 +113,39 @@ function ContentObject({ node, density, pending, onDetails, showDetails, showCon
   return <DocumentObject node={node} kind={kind} density={density} pending={pending} onDetails={onDetails} showDetails={showDetails} showControls={showControls} />
 }
 
+/** 图片加载三态（纯状态机）：loading → ready/error；retry/reset 通过 key 重置重新加载。 */
+export type ImageLoadPhase = 'loading' | 'ready' | 'error'
+export type ImageLoadEvent = 'load' | 'error' | 'retry' | 'reset'
+
+export function nextImageLoadPhase(_phase: ImageLoadPhase, event: ImageLoadEvent): ImageLoadPhase {
+  if (event === 'load') return 'ready'
+  if (event === 'error') return 'error'
+  return 'loading'
+}
+
 function ImageObject({ node, pending, onDetails, showDetails, showControls = true }: Pick<Props, 'node' | 'pending' | 'onDetails' | 'showDetails' | 'showControls'>) {
   const src = node.previewDataUrl ?? node.previewUrl
   const title = displayNodeTitle(node)
   const secondary = nodeSecondaryLine(node)
-  return <div className="lcos-object lcos-image-object lcos-material-face" title={node.title}>
-    {src ? <OcrImage artifactId={node.artifactId} ocrEnabled={false} src={src} alt={title} draggable={false} onDragStart={(event) => event.preventDefault()} /> : <div className="lcos-image-fallback"><ImageOff size={24}/></div>}
+  // 债2：图片三态——loading 骨架 / ready 正常 / error 兜底（可重试，key 重置重载）。
+  const [phase, setPhase] = useState<ImageLoadPhase>('loading')
+  const [attempt, setAttempt] = useState(0)
+  useEffect(() => { setPhase('loading') }, [src])
+  return <div className={`lcos-object lcos-image-object lcos-material-face is-${phase}`} data-image-phase={phase} title={node.title}>
+    {!src ? <div className="lcos-image-fallback"><ImageOff size={24}/></div>
+      : phase === 'error'
+        ? <div className="lcos-image-fallback lcos-image-error" role="alert">
+          <ImageOff size={22}/>
+          <small>图片加载失败</small>
+          <button type="button" className="lcos-image-retry" aria-label={`重试加载 ${title}`} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); setPhase((current) => nextImageLoadPhase(current, 'retry')); setAttempt((current) => current + 1) }}>重试</button>
+        </div>
+        : <>
+          <OcrImage key={`${src}#${attempt}`} artifactId={node.artifactId} ocrEnabled={false} src={src} alt={title} draggable={false}
+            onLoad={() => setPhase((current) => nextImageLoadPhase(current, 'load'))}
+            onError={() => setPhase((current) => nextImageLoadPhase(current, 'error'))}
+            onDragStart={(event) => event.preventDefault()}/>
+          {phase === 'loading' && <span className="lcos-image-skeleton" aria-hidden="true"><i/><i/><i/></span>}
+        </>}
     <div className="lcos-image-caption lcos-material-caption"><strong>{title}</strong>{secondary && <small>{secondary}</small>}</div>
     <ObjectState node={node} pending={pending}/>
     <InfoButton show={showControls && showDetails} label={`查看 ${title} 信息`} onDetails={onDetails}/>
@@ -122,19 +154,24 @@ function ImageObject({ node, pending, onDetails, showDetails, showControls = tru
 
 function DocumentObject({ node, kind, density, pending, onDetails, showDetails, showControls = true }: Pick<Props, 'node' | 'density' | 'pending' | 'onDetails' | 'showDetails' | 'showControls'> & { kind: FileIdentity }) {
   const tag = kind === 'markdown' ? 'TEXT' : kind === 'ppt' ? 'PPT' : kind === 'pdf' ? 'PDF' : kind === 'archive' ? 'ZIP' : fileExtension(node.title) || 'FILE'
-  const preview = node.previewText?.trim()
+  // 文本类（markdown）统一编辑体系统一：就地编辑保存的 noteBody 优先于服务器 previewText，
+  // 富文本（**粗体**/==高光==/# 标题）即刻渲染在卡片上，而不是退回纸片。
+  const preview = node.noteBody?.trim() || node.previewText?.trim()
   const thumbnailCandidate = node.previewDataUrl ?? node.previewUrl
   const thumbnail = thumbnailCandidate && (node.previewMimeType?.startsWith('image/') || thumbnailCandidate.startsWith('data:image/')) ? thumbnailCandidate : null
   const title = displayNodeTitle(node)
   const secondary = nodeSecondaryLine(node)
+  const mindmap = kind === 'markdown' && node.noteLayout === 'mindmap'
   const readableText = kind === 'markdown' && Boolean(preview) && density !== 'compact'
 
-  return <div className={`lcos-object lcos-document-object lcos-material-face file-${kind} ${readableText ? 'is-direct-reading' : 'is-collapsed-material'}`} title={node.title}>
-    {thumbnail
-      ? <div className="lcos-document-thumbnail lcos-real-document-preview"><OcrImage artifactId={node.artifactId} ocrEnabled={false} src={thumbnail} alt={`${title} 预览`} draggable={false} onDragStart={(event) => event.preventDefault()}/><span>{tag}</span></div>
-      : readableText && preview
-        ? <div className="lcos-readable-document"><TextPreview text={preview} expanded={density === 'expanded'} /></div>
-        : <MaterialPaperFallback node={node} kind={kind} tag={tag}/>}
+  return <div className={`lcos-object lcos-document-object lcos-material-face file-${kind} ${mindmap || readableText ? 'is-direct-reading' : 'is-collapsed-material'}`} title={node.title}>
+    {mindmap
+      ? <MindMapNoteVisual node={node} density={density}/>
+      : thumbnail && !preview
+        ? <div className="lcos-document-thumbnail lcos-real-document-preview"><OcrImage artifactId={node.artifactId} ocrEnabled={false} src={thumbnail} alt={`${title} 预览`} draggable={false} onDragStart={(event) => event.preventDefault()}/><span>{tag}</span></div>
+        : readableText && preview
+          ? <div className="lcos-readable-document"><TextPreview text={preview} expanded={density === 'expanded'} /></div>
+          : <MaterialPaperFallback node={node} kind={kind} tag={tag}/>}
     <div className="lcos-object-caption lcos-material-caption">
       <strong>{title}</strong>
       {secondary && <small>{secondary}</small>}
@@ -146,15 +183,27 @@ function DocumentObject({ node, kind, density, pending, onDetails, showDetails, 
   </div>
 }
 
+/**
+ * 债4：文档预览状态按枚举如实分档（纯函数）。PreviewAvailability 只有
+ * not-generated/ready/failed/unsupported 四值，不存在“生成中”中间态——
+ * 数据没有进行时就不虚构“正在生成预览…”文案（生成请求由 App 的 notice 播报）。
+ */
+export function documentPreviewStateCopy(node: CanvasNode): string {
+  if (node.previewStatus === 'failed') return node.previewError ? `预览生成失败：${node.previewError}` : '预览生成失败'
+  if (node.previewStatus === 'not-generated') return '预览未生成'
+  if (node.previewStatus === 'unsupported') return '预览不支持'
+  if (node.previewStatus === 'ready') return '预览已生成'
+  return node.observedPath ? '本地来源' : '项目材料'
+}
+
 function MaterialPaperFallback({ node, kind, tag }: { node: CanvasNode; kind: FileIdentity; tag: string }) {
   const Icon = kind === 'archive' ? ArchiveGlyph : kind === 'markdown' ? NoteGlyph : DocumentGlyph
-  const previewState = node.previewStatus === 'failed' ? '预览暂不可用' : node.observedPath ? '本地来源' : '项目材料'
   return <div className={`lcos-material-paper-fallback paper-${kind}`} data-material-kind={kind}>
     <span className="lcos-material-paper-fold" aria-hidden="true"/>
     <span className="lcos-material-paper-type">{tag}</span>
     <span className="lcos-material-paper-lines" aria-hidden="true"><i/><i/><i/><i/></span>
     {kind === 'archive' && <span className="lcos-material-paper-archive" aria-hidden="true"><Icon/></span>}
-    <small>{previewState}</small>
+    <small>{documentPreviewStateCopy(node)}</small>
   </div>
 }
 
@@ -169,17 +218,32 @@ function CollapsedNotePaper({ node }: { node: CanvasNode }) {
   </div>
 }
 
+/** 行内富文本：**加粗**、==高光==（与编辑器工具栏语法一致，预览即所得）。 */
+function richInline(text: string) {
+  const parts = text.split(/(\*\*[^*]+\*\*|==[^=]+==)/g).filter(Boolean)
+  return parts.map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**')) return <strong key={i}>{part.slice(2, -2)}</strong>
+    if (part.startsWith('==') && part.endsWith('==')) return <mark key={i} className="md-highlight">{part.slice(2, -2)}</mark>
+    return <span key={i}>{part}</span>
+  })
+}
+
 function TextPreview({ text, expanded }: { text: string; expanded: boolean }) {
   const limit = expanded ? 22 : 11
   const lines = text.replace(/\r/g, '').split('\n').filter((line, index, source) => line.trim() || (index > 0 && source[index - 1]?.trim())).slice(0, limit)
   return <div className="lcos-readable-copy">
     {lines.map((raw, index) => {
       const line = raw.trimEnd()
-      if (/^#{1,3}\s+/.test(line)) return <strong key={index} className="md-heading">{line.replace(/^#{1,3}\s+/, '')}</strong>
-      if (/^[-*]\s+/.test(line)) return <span key={index} className="md-list">{line.replace(/^[-*]\s+/, '')}</span>
-      if (/^>\s?/.test(line)) return <em key={index} className="md-quote">{line.replace(/^>\s?/, '')}</em>
-      if (/^```/.test(line) || /^\s{4}/.test(raw)) return <code key={index}>{line.replace(/^```\w*/, '')}</code>
-      return <span key={index}>{line || ' '}</span>
+      // 大纲层级（两空格一级）→ 幕布式挂线圆点 + 引导线缩进（与编辑器/导图同一份层级数据）。
+      const depth = Math.min(5, Math.floor((raw.length - raw.trimStart().length) / 2))
+      const depthClass = depth ? ` md-depth-${depth}` : ''
+      const heading = line.match(/^(#{1,3})\s+/)
+      if (heading) return <strong key={index} className={`md-heading md-h${heading[1].length}${depthClass}`}>{richInline(line.replace(/^#{1,3}\s+/, ''))}</strong>
+      if (/^[-*]\s+/.test(line)) return <span key={index} className={`md-list${depthClass}`}>{richInline(line.replace(/^[-*]\s+/, ''))}</span>
+      if (/^>\s?/.test(line)) return <em key={index} className={`md-quote${depthClass}`}>{richInline(line.replace(/^>\s?/, ''))}</em>
+      // 代码块只认 ``` 围栏 —— 缩进留给大纲层级（4 空格 = 两级深度，不再当代码）。
+      if (/^```/.test(line)) return <code key={index}>{line.replace(/^```\w*/, '')}</code>
+      return <span key={index} className={depthClass || undefined}>{richInline(line || ' ')}</span>
     })}
     {text.split('\n').length > limit && <i className="lcos-readable-fade">继续阅读</i>}
   </div>
@@ -503,3 +567,8 @@ export const nodeTypeIcon = (node: CanvasNode) => {
   if (`${node.title} ${node.subtitle}`.toLowerCase().includes('session')) return SessionGlyph
   return DocumentGlyph
 }
+
+// —— §4.7 卡片 Registry 薄层平移（第一步示范）——
+// entity:context（组合键由 nodeCardKey 从 entityKind 派生）走表渲染；
+// 其余卡（workflow/workspace/collection 及 file 族）暂留上方 fallback 链，稳定后再逐步迁移。
+registerNodeCard('entity:context', ContextProjectionObject)

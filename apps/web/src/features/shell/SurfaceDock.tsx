@@ -2,6 +2,7 @@ import { CheckCircle2, ChevronRight, ChevronUp, Monitor, Moon, Sun, ZoomIn, Zoom
 import { useEffect, useState } from 'react'
 import type { CanvasScope } from '../../model'
 import { BenchGlyph, ContextGlyph, RootGlyph, WorkflowGlyph } from '../design/LcosGlyphs'
+import { ConfirmDialog } from '../ui/ConfirmDialog'
 import { cycleThemePreference, readThemePreference, THEME_CHANGE_EVENT, writeThemePreference, type LcosThemePreference } from '../../state/themePreference'
 
 /**
@@ -81,6 +82,8 @@ const SURFACE_ENTRIES = [
 
 export function SurfaceDock({ surface, scopePath, activeScopeId, workbenchScopeId, onSurface, onScope, onWorkbench, onMergeWorkbench, workbenchCount, zoom, onZoomBy, onZoomReset, onProjectViewDrop }: Props) {
   const [dropCapability, setDropCapability] = useState<Extract<CapabilityId, 'context' | 'workflow'> | null>(null)
+  // 并回是破坏性操作（清空当前现场），先经 ConfirmDialog 确认再执行。
+  const [confirmMergeOpen, setConfirmMergeOpen] = useState(false)
   const [theme, setTheme] = useState<LcosThemePreference>(() => readThemePreference())
   useEffect(() => {
     const sync = () => setTheme(readThemePreference())
@@ -102,7 +105,8 @@ export function SurfaceDock({ surface, scopePath, activeScopeId, workbenchScopeI
     if(next === 'context') onSurface('context-space')
     if(next === 'workflow') onSurface('workflow')
   }
-  return <nav className="vnext-bottom-dock lcos-bottom-dock" data-testid="vnext-bottom-dock" aria-label="LCOS 工作现场" onContextMenu={(event) => event.preventDefault()}>
+  return <>
+  <nav className="vnext-bottom-dock lcos-bottom-dock" data-testid="vnext-bottom-dock" aria-label="LCOS 工作现场" onContextMenu={(event) => event.preventDefault()}>
     <div className="vnext-lens-axis lcos-lens-axis lcos-primary-surface-axis" aria-label="工作现场">
       {SURFACE_ENTRIES.map(({id,label,hint,Icon}) => {
         const semanticTarget = id === 'context' || id === 'workflow'
@@ -131,7 +135,7 @@ export function SurfaceDock({ surface, scopePath, activeScopeId, workbenchScopeI
       {onWorkbench && <button type="button" className={`${workbenchScopeId===activeScopeId?'active':''} lcos-workbench-entry`} aria-label="当前现场" onClick={onWorkbench}><BenchGlyph/><span className="lcos-dock-label">当前现场</span>{workbenchCount !== undefined && workbenchCount > 0 && <span className="lcos-workbench-badge">{workbenchCount}</span>}</button>}
       {parent && <button type="button" data-label={`返回 ${parent.label}`} aria-label={`返回 ${parent.label}`} onClick={()=>onScope(parent.id)}><ChevronUp size={14}/></button>}
       {currentScope && scopePath.length>1 && workbenchScopeId!==activeScopeId && <button type="button" className="lcos-scope-breadcrumb" title={currentScope.label} onClick={()=>onScope(currentScope.id)}><span>{currentScope.label}</span></button>}
-      {onMergeWorkbench && workbenchScopeId===activeScopeId && <button type="button" className="vnext-merge-workbench lcos-merge-workbench" data-label="并回" aria-label="并回主画布并清空现场" onClick={onMergeWorkbench}><CheckCircle2 size={14}/></button>}
+      {onMergeWorkbench && workbenchScopeId===activeScopeId && <button type="button" className="vnext-merge-workbench lcos-merge-workbench" data-label="并回" aria-label="并回主画布并清空现场" onClick={() => setConfirmMergeOpen(true)}><CheckCircle2 size={14}/></button>}
     </div></>}
     {onZoomBy && onZoomReset && <div className="lcos-zoom-controls" aria-label="画布缩放">
       <button type="button" aria-label="缩小" title="缩小画布" onClick={() => onZoomBy(1 / 1.25)}><ZoomOut size={15}/></button>
@@ -144,4 +148,12 @@ export function SurfaceDock({ surface, scopePath, activeScopeId, workbenchScopeI
       </button>
     </div>
   </nav>
+  {confirmMergeOpen && <ConfirmDialog
+    title="并回主画布"
+    description="并回主画布并清空当前现场？现场对象会并回主画布，当前现场将被清空。"
+    confirmLabel="并回并清空"
+    onCancel={() => setConfirmMergeOpen(false)}
+    onConfirm={() => { setConfirmMergeOpen(false); onMergeWorkbench?.() }}
+  />}
+  </>
 }

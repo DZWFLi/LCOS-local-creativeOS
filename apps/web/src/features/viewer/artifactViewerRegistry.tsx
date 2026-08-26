@@ -1,24 +1,17 @@
 import { parse as parsePptx } from '@pagus-kit/core'
 import { renderSlide } from '@pagus-kit/renderer'
-import { Document, Page, pdfjs } from 'react-pdf'
-import 'react-pdf/dist/Page/AnnotationLayer.css'
-import 'react-pdf/dist/Page/TextLayer.css'
-import { ExternalLink, FileText, GripVertical, Link2, LoaderCircle, Music, Video } from 'lucide-react'
+import { ExternalLink, FileText, Link2, LoaderCircle, Music, Video } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'motion/react'
-import type { DragEvent as ReactDragEvent, ReactNode, RefObject } from 'react'
+import type { DragEvent as ReactDragEvent, ReactNode } from 'react'
 
 import type { CanvasNode } from '../../model'
 import { LOCAL_CORE_API_PREFIX } from '../../runtime/localCoreClient'
+import { decodeTextBuffer } from '../shell/appShell'
 import { OcrImage } from '../ocr/OcrImage'
 import { LCOS_FRAGMENT_CLIPBOARD_MIME, serializeFragmentClipboard, type LcosFragmentClipboardV0 } from '../../state/fragmentClipboard'
-import { LCOS_MATERIAL_CAPTURE_EVENT, LCOS_MATERIAL_TRANSFER_MIME, serializeMaterialTransfer, writeMaterialTransfer, type MaterialSourceV1, type MaterialTransferPayloadV1 } from '../../state/materialTransfer'
-
-
-pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.mjs',
-  import.meta.url,
-).toString()
+import { LCOS_MATERIAL_TRANSFER_MIME, serializeMaterialTransfer, writeMaterialTransfer, type MaterialSourceV1, type MaterialTransferPayloadV1 } from '../../state/materialTransfer'
+import { PdfViewer, SelectionDropHandle } from './PdfViewer'
 
 /**
  * Artifact Viewer Registry (UI-03): one read-only entry for every supported
@@ -266,79 +259,6 @@ function materialSourceForNode(node: CanvasNode, projectId: string, locator?: Ma
   }
 }
 
-function emitMaterialCapture(payload: MaterialTransferPayloadV1) {
-  window.dispatchEvent(new CustomEvent<MaterialTransferPayloadV1>(LCOS_MATERIAL_CAPTURE_EVENT, { detail: payload }))
-}
-
-function SelectionDropHandle({ containerRef, source }: {
-  containerRef: RefObject<HTMLElement | null>
-  source: () => MaterialSourceV1
-}) {
-  const [selection, setSelection] = useState<{ text: string; left: number; top: number } | null>(null)
-
-  useEffect(() => {
-    const update = () => {
-      const container = containerRef.current
-      const current = window.getSelection()
-      if (!container || !current || current.rangeCount === 0 || current.isCollapsed) {
-        setSelection(null)
-        return
-      }
-      const range = current.getRangeAt(0)
-      const common = range.commonAncestorContainer
-      const element = common.nodeType === Node.ELEMENT_NODE ? common as Element : common.parentElement
-      if (!element || !container.contains(element)) {
-        setSelection(null)
-        return
-      }
-      const text = current.toString().trim()
-      const rect = range.getBoundingClientRect()
-      if (!text || rect.width <= 0 || rect.height <= 0) {
-        setSelection(null)
-        return
-      }
-      setSelection({
-        text,
-        left: Math.min(window.innerWidth - 42, Math.max(8, rect.right + 7)),
-        top: Math.min(window.innerHeight - 42, Math.max(8, rect.bottom + 6)),
-      })
-    }
-    document.addEventListener('selectionchange', update)
-    window.addEventListener('resize', update)
-    return () => {
-      document.removeEventListener('selectionchange', update)
-      window.removeEventListener('resize', update)
-    }
-  }, [containerRef])
-
-  if (!selection) return null
-  const payload = (): MaterialTransferPayloadV1 => ({
-    schemaVersion: 1,
-    kind: 'material-transfer',
-    capturedAt: new Date().toISOString(),
-    source: source(),
-    content: { kind: 'text', text: selection.text },
-  })
-
-  return <button
-    type="button"
-    className="lcos-selection-drop-handle"
-    style={{ left: selection.left, top: selection.top }}
-    title="拖到画布；点击直接放入"
-    aria-label="把选中文字放入 LCOS"
-    draggable
-    onDragStart={(event) => {
-      writeMaterialTransfer(event.dataTransfer, payload())
-    }}
-    onPointerDown={(event) => event.stopPropagation()}
-    onClick={() => {
-      emitMaterialCapture(payload())
-      window.getSelection()?.removeAllRanges()
-      setSelection(null)
-    }}
-  ><GripVertical size={13}/></button>
-}
-
 function TextViewer({ node, projectId }: { node: CanvasNode; projectId: string }) {
   const [text, setText] = useState<string | null>(node.previewText && node.previewText.trim().length > 0 ? node.previewText : null)
   const [error, setError] = useState('')
@@ -362,7 +282,8 @@ function TextViewer({ node, projectId }: { node: CanvasNode; projectId: string }
           const detail = await response.json().catch(() => null) as { error?: { message?: string } } | null
           throw new Error(detail?.error?.message ?? `预览请求失败 (${response.status})`)
         }
-        setText(await response.text())
+        // 智能解码：UTF-8 严格探测 → GBK 回退（Windows 记事本 ANSI）→ latin1，避免中文 txt 乱码。
+        setText(decodeTextBuffer(await response.arrayBuffer()))
       } catch (reason) {
         if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : '预览失败')
       }
@@ -489,6 +410,10 @@ function DocumentViewer({ node, projectId }: { node: CanvasNode; projectId: stri
   const isPdf = resolveArtifactViewerKind(node) === 'pdf'
   const [buffer, setBuffer] = useState<ArrayBuffer | null>(null)
   const [error, setError] = useState('')
+  // 字节视图保持引用稳定，避免 <Document> 因 file prop 变化无谓重载。
+  const pdfData = useMemo(() => (buffer === null ? null : new Uint8Array(buffer)), [buffer])
+  // PDF 材料溯源工厂：页拖拽 / 选区提取时随 PdfViewer 一起带上节点出处。
+  const pdfMaterialSource = useCallback((locator?: MaterialSourceV1['locator']) => materialSourceForNode(node, projectId, locator), [node, projectId])
 
   useEffect(() => {
     if (node.fileRecordId === undefined) {
@@ -513,87 +438,10 @@ function DocumentViewer({ node, projectId }: { node: CanvasNode; projectId: stri
   }, [node.fileRecordId, projectId])
 
   if (error) return <div className="viewer-body viewer-error"><strong>无法预览</strong><span>{error}</span></div>
-  if (!buffer) return <div className="viewer-body viewer-loading"><LoaderCircle size={20} />正在载入{isPdf ? ' PDF' : ' PPTX'}…</div>
+  if (!buffer || pdfData === null) return <div className="viewer-body viewer-loading"><LoaderCircle size={20} />正在载入{isPdf ? ' PDF' : ' PPTX'}…</div>
   return isPdf
-    ? <PdfMaterialViewer node={node} projectId={projectId} buffer={buffer}/>
-    : <PptMaterialViewer node={node} projectId={projectId} buffer={buffer}/>
-}
-
-function PdfMaterialViewer({ node, projectId, buffer }: { node: CanvasNode; projectId: string; buffer: ArrayBuffer }) {
-  const [numPages, setNumPages] = useState(0)
-  const [pageNumber, setPageNumber] = useState(1)
-  const [fitWidth, setFitWidth] = useState(720)
-  const [pageScale, setPageScale] = useState(1)
-  const [pdfError, setPdfError] = useState('')
-  const stageRef = useRef<HTMLElement | null>(null)
-  const pdfFile = useMemo(() => ({ data: new Uint8Array(buffer) }), [buffer])
-  const pageWidth = Math.max(360, Math.min(1320, fitWidth * pageScale))
-
-  useEffect(() => {
-    const stage = stageRef.current
-    if (!stage || typeof ResizeObserver === 'undefined') return
-    const apply = () => setFitWidth(Math.max(420, Math.min(1040, stage.clientWidth - 72)))
-    apply()
-    const observer = new ResizeObserver(apply)
-    observer.observe(stage)
-    return () => observer.disconnect()
-  }, [numPages])
-
-  const startPageDrag = useCallback((event: ReactDragEvent<HTMLElement>, page: number) => {
-    const canvas = event.currentTarget.querySelector('canvas')
-    let previewDataUrl: string | undefined
-    try { previewDataUrl = canvas?.toDataURL('image/png') } catch { /* source reference remains valid without raster snapshot */ }
-    const payload: MaterialTransferPayloadV1 = {
-      schemaVersion: 1,
-      kind: 'material-transfer',
-      capturedAt: new Date().toISOString(),
-      source: materialSourceForNode(node, projectId, { kind: 'page', pageNumber: page, label: `第 ${page} 页` }),
-      content: { kind: 'document-page', pageNumber: page, ...(previewDataUrl ? { previewDataUrl } : {}) },
-    }
-    writeMaterialTransfer(event.dataTransfer, payload)
-    event.currentTarget.dataset.dragging = 'true'
-  }, [node, projectId])
-
-  if (pdfError) return <div className="viewer-body viewer-error"><strong>PDF 解析失败</strong><span>{pdfError}</span></div>
-  return <div className="viewer-body lcos-pdf-material-viewer">
-    <Document
-      file={pdfFile}
-      className="lcos-page-viewer lcos-document-pages"
-      loading={<div className="viewer-loading"><LoaderCircle size={20}/>正在解析 PDF…</div>}
-      onLoadSuccess={({ numPages: count }) => {
-        setNumPages(count)
-        setPageNumber((current) => Math.min(Math.max(1, current), count))
-      }}
-      onLoadError={(reason) => setPdfError(reason instanceof Error ? reason.message : 'PDF 解析失败')}
-    >
-      <aside className="lcos-page-rail" aria-label="PDF 页面">
-        <div className="lcos-page-rail-heading"><strong>{numPages || '…'} 页</strong><small>拖一页到画布</small></div>
-        {Array.from({ length: numPages }, (_, index) => index + 1).map((page) => <button
-          key={page}
-          type="button"
-          className={`lcos-page-thumb ${page === pageNumber ? 'is-current' : ''}`}
-          onClick={() => setPageNumber(page)}
-          draggable
-          onDragStart={(event) => startPageDrag(event, page)}
-          onDragEnd={(event) => { delete event.currentTarget.dataset.dragging }}
-          aria-label={`第 ${page} 页，拖到画布可提取`}
-        >
-          <span className="lcos-page-thumb-canvas"><Page pageNumber={page} width={118} renderTextLayer={false} renderAnnotationLayer={false}/></span>
-          <span>{page}</span>
-        </button>)}
-      </aside>
-      <main ref={stageRef} className="lcos-page-stage">
-        <div className="lcos-page-stage-toolbar">
-          <span>第 {pageNumber} / {numPages || '…'} 页</span>
-          <div><button type="button" aria-label="缩小页面" onClick={() => setPageScale((value) => Math.max(.5, Number((value - .1).toFixed(2))))}>−</button><button type="button" className="lcos-page-zoom-readout" onClick={() => setPageScale(1)}>{Math.round(pageScale * 100)}%</button><button type="button" aria-label="放大页面" onClick={() => setPageScale((value) => Math.min(1.8, Number((value + .1).toFixed(2))))}>＋</button></div>
-        </div>
-        <motion.div key={pageNumber} className="lcos-page-sheet" initial={{ opacity: .65, y: 4 }} animate={{ opacity: 1, y: 0 }}>
-          <Page pageNumber={pageNumber} width={pageWidth} renderTextLayer renderAnnotationLayer/>
-        </motion.div>
-        <SelectionDropHandle containerRef={stageRef} source={() => materialSourceForNode(node, projectId, { kind: 'page', pageNumber, label: `第 ${pageNumber} 页选区` })}/>
-      </main>
-    </Document>
-  </div>
+    ? <PdfViewer url={pdfData} fileName={node.title} materialSource={pdfMaterialSource} />
+    : <PptMaterialViewer node={node} projectId={projectId} buffer={buffer} />
 }
 
 function PptMaterialViewer({ node, projectId, buffer }: { node: CanvasNode; projectId: string; buffer: ArrayBuffer }) {
@@ -699,6 +547,9 @@ function LinkViewer({ node }: { node: CanvasNode }) {
 }
 
 function FallbackViewer({ node, note }: { node: CanvasNode; note?: string }) {
+  // docx 预览缺口裁定（0.1 收口）：Word/Excel 只读预览不进 0.1（mammoth 未安装，收尾不新增依赖），
+  // fallback 保持诚实告知——对 Office 文档点名说明「预览未接入但文件完整可用」，其余未知格式沿用通用文案。
+  const isOfficeDoc = /\.(docx?|xlsx?)$/i.test(node.title) || /(wordprocessingml|spreadsheetml)/i.test(node.fileType ?? '')
   return <div className="viewer-body fallback-viewer">
     <FileText size={20} />
     <strong>{node.title}</strong>
@@ -708,7 +559,9 @@ function FallbackViewer({ node, note }: { node: CanvasNode; note?: string }) {
       <dt>预览状态</dt><dd>{node.previewStatus ?? 'not-generated'}</dd>
       <dt>文件可用性</dt><dd>{node.fileAvailability ?? '—'}</dd>
     </dl>
-    <small>{note ?? '该格式只读预览未接入；文件仍可导入、分析与参与 Run。'}</small>
+    <small>{note ?? (isOfficeDoc
+      ? 'Word/Excel 文档预览暂未接入（列入后续版本）；文件已完整导入，可参与分析与 Agent Run。'
+      : '该格式只读预览未接入；文件仍可导入、分析与参与 Run。')}</small>
   </div>
 }
 

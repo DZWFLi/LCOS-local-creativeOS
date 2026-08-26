@@ -19,6 +19,10 @@
   text-rendering: geometricPrecision;
   -webkit-font-smoothing: antialiased;
 
+  /* Glaze 出圈——数据/状态/标签文本统一 mono，仪表盘密度感前提。
+     裸 mono 散值收敛：reconstruction.css、interaction-system.css 共 2 处已改引本 token。 */
+  --lcos-font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', 'Segoe UI Mono', Consolas, 'Liberation Mono', monospace;
+
   /* Core palette */
   --ink: #192837;
   --ink-72: rgba(25, 40, 55, 0.72);
@@ -36,7 +40,7 @@
   --surface-recessed: #efefeb;
   --surface-muted: #f3f3ef;
 
-  --accent: #7342e2;
+  --accent: var(--lcos-signal, #7342e2); /* Glaze 单色收敛：紫 accent 唯一源 --lcos-signal，回退防加载顺序闪烁 */
   --accent-rgb: 115, 66, 226;
   --accent-soft: #eee9fc;
 
@@ -97,6 +101,76 @@
       #a8aeb3 76%,
       #ffffff 91%,
       #e2e4e5 100%);
+
+  /* =====================================================================
+     z-index 7 层契约（LCOS 0.1 收口）
+     全局只允许以下 token；同层内真实排序需求用命名子层表达，
+     子层值即迁移前生效值（保序迁移）。声明处禁止出现新的 z-index 数字，
+     每处替换以行内注释 "z-tier: 层名" 标记便于审计。
+     ===================================================================== */
+  /* —— 7 个主层 —— */
+  --lcos-z-canvas-base: 1;      /* 画布背景、网格、底图 */
+  --lcos-z-canvas-content: 2;   /* 节点、边、便签等内容基准 */
+  --lcos-z-surface-comp: 3;     /* 空间组件 Fence/Region/Portal */
+  --lcos-z-overlay-ui: 40;      /* hover card、toolbar、控制浮层 */
+  --lcos-z-shell-chrome: 60;    /* Dock、Rail、Strip */
+  --lcos-z-dialog: 100;         /* 对话框、内联编辑器、popover 群 */
+  --lcos-z-modal: 200;          /* 模态遮罩、drag-ghost 等瞬态顶层 */
+
+  /* —— canvas-content 桶内保序子层（画布内容微层序，值为迁移前原值） —— */
+  --lcos-z-content-inlay: 1;    /* 节点头/正文槽等嵌入内容（原 z1） */
+  --lcos-z-content-detail: 2;   /* 节点彩条、树/图节点主体（原 z2） */
+  --lcos-z-content-bounds: 3;   /* 选择框、布局虚影、插入位（原 z3） */
+  --lcos-z-content-handle: 4;   /* 缩放手柄、折叠钮、卡片（原 z4） */
+  --lcos-z-content-chip: 5;     /* 锚点、角标、状态珠、edges 层（原 z5/z6） */
+  --lcos-z-content-control: 7;  /* 节点控件、节点层（原 z6/z7，须高于 edges） */
+  --lcos-z-content-raised: 8;   /* info 按钮、空态、拖拽中节点（原 z8/z9） */
+  --lcos-z-content-guide: 12;   /* 标题、拖放目标、提示（原 z10/z12/z13） */
+  --lcos-z-content-hud: 18;     /* 画布顶栏、横幅、图控件、HUD（原 z17-z24） */
+
+  /* —— surface-comp 子层 —— */
+  --lcos-z-surface-comp-selected: 4;  /* 选中组件抬升（surface-comp + 1） */
+
+  /* —— overlay-ui 桶内保序子层 —— */
+  --lcos-z-overlay-ui-under: 30;   /* 画布覆盖层、历史栏（原 z30/z32/z35） */
+  --lcos-z-overlay-ui-raised: 42;  /* composer、inspector 面板（原 z42/z50） */
+  --lcos-z-overlay-ui-panel: 48;   /* 布局预览条、checkpoint（原 z46/z48/z52/z55） */
+  --lcos-z-overlay-ui-high: 58;    /* selection toolbar/composer、内联命令（原 z58/z59/z60） */
+  --lcos-z-overlay-ui-top: 80;     /* capability popover、drop cue、notice（原 z70-z80） */
+
+  /* —— dialog 桶内保序子层（popover 群真实叠序，值即原值） —— */
+  --lcos-z-dialog-scrim: 88;        /* 内联编辑遮罩（原 z88） */
+  --lcos-z-dialog-agent: 88;        /* Agent 上下文浮层（原 z88） */
+  --lcos-z-dialog-preview: 90;      /* rail 悬浮预览卡、reorganize 面板（原 z90） */
+  --lcos-z-dialog-inline: 90;       /* 内联重命名/编辑器（原 z90） */
+  --lcos-z-dialog-hint: 91;         /* boundary hint（原 z91） */
+  --lcos-z-dialog-curtain: 92;      /* 渐变光幕（原 z92） */
+  --lcos-z-dialog-node: 94;         /* surface agent node（原 z94） */
+  --lcos-z-dialog-shelf: 95;        /* drop shelf（原 z95） */
+  --lcos-z-dialog-menu: 96;         /* surface context menu、merge proposal（原 z96） */
+  --lcos-z-dialog-popover: 105;     /* composer 菜单（原 z105） */
+  --lcos-z-dialog-advanced: 108;    /* composer advanced（原 z108） */
+  --lcos-z-dialog-dock-menu: 110;   /* workspace/dock 弹出菜单（原 z110） */
+  --lcos-z-dialog-upgrade: 116;     /* revision upgrade 遮罩（原 z116） */
+  --lcos-z-dialog-navigator: 118;   /* project focus navigator（原 z118） */
+  --lcos-z-dialog-ghost: 120;       /* drop ghost、project tools（原 z120） */
+  --lcos-z-dialog-drag: 130;        /* rail 拖拽浮卡（原 z130） */
+  --lcos-z-dialog-drawer: 140;      /* work-rail 抽屉、reorganize review、handoff（原 z140） */
+
+  /* —— modal 桶内保序子层（全屏层，值即原值） —— */
+  --lcos-z-modal-lower: 180;          /* workspace-states 遮罩、sidecar capability（原 z180） */
+  --lcos-z-modal-raised: 210;         /* modal backdrop（原 z210） */
+  --lcos-z-modal-scope-create: 240;   /* scope 创建层（原 z240） */
+  --lcos-z-modal-project-create: 300; /* 项目创建层（原 z300） */
+  --lcos-z-modal-canvas-create: 420;  /* 画布创建层（原 z420） */
+  --lcos-z-modal-run-confirm: 440;    /* 运行确认层（原 z440） */
+  --lcos-z-modal-viewer-drawer: 960;  /* 右侧阅读抽屉（原 z960） */
+  --lcos-z-modal-review-drawer: 970;  /* 底部审阅抽屉（原 z970） */
+  --lcos-z-modal-immersive: 980;      /* 沉浸式查看器（原 z980） */
+  --lcos-z-modal-drag-ghost: 1000;    /* 画布 drag-ghost（原 z1000） */
+  --lcos-z-modal-toast: 1200;         /* Toast 容器（原 z1200） */
+  --lcos-z-modal-drag-handle: 1250;   /* 选区拖拽把手（原 z1250） */
+  --lcos-z-modal-top: 1600;           /* 文档预览，瞬态最顶层（原 z1600） */
 }
 
 .scene.intent-understand,
@@ -133,7 +207,7 @@ button:focus-visible, textarea:focus-visible, input:focus-visible {
 
 .tabbar {
   position: relative;
-  z-index: 30;
+  z-index: var(--lcos-z-overlay-ui-under); /* z-tier: overlay-ui */
   height: 48px;
   display: flex;
   align-items: center;
@@ -265,7 +339,7 @@ button:focus-visible, textarea:focus-visible, input:focus-visible {
 
 .scene-title {
   position: absolute;
-  z-index: 12;
+  z-index: var(--lcos-z-content-guide); /* z-tier: canvas-content */
   left: 232px;
   top: 18px;
   display: flex;
@@ -293,7 +367,7 @@ button:focus-visible, textarea:focus-visible, input:focus-visible {
 }
 .shortcut-hint {
   position: absolute;
-  z-index: 10;
+  z-index: var(--lcos-z-content-guide); /* z-tier: canvas-content */
   top: 21px;
   right: 20px;
   display: flex;
@@ -327,7 +401,7 @@ button:focus-visible, textarea:focus-visible, input:focus-visible {
 
 .workspace-dock {
   position: absolute;
-  z-index: 22;
+  z-index: var(--lcos-z-content-hud); /* z-tier: canvas-content */
   top: 50%;
   left: 14px;
   width: 194px;
@@ -485,7 +559,7 @@ button:focus-visible, textarea:focus-visible, input:focus-visible {
 .canvas-node::before {
   content: "";
   position: absolute;
-  z-index: 2;
+  z-index: var(--lcos-z-content-detail); /* z-tier: canvas-content */
   top: 0;
   left: 18px;
   right: 18px;
@@ -497,7 +571,7 @@ button:focus-visible, textarea:focus-visible, input:focus-visible {
 .canvas-node::after {
   content: "";
   position: absolute;
-  z-index: -1;
+  z-index: -1; /* z-tier: legacy-bg（porcelain 遗留背景层，按契约保留 -1） */
   inset: 10px 14px -10px;
   border-radius: inherit;
   background: rgba(var(--node-rgb), .08);
@@ -514,7 +588,7 @@ button:focus-visible, textarea:focus-visible, input:focus-visible {
 .node-preview-slot,
 .node-footer {
   position: absolute;
-  z-index: 1;
+  z-index: var(--lcos-z-content-inlay); /* z-tier: canvas-content */
   left: 13px;
   right: 13px;
 }
@@ -603,7 +677,7 @@ button:focus-visible, textarea:focus-visible, input:focus-visible {
 .draft-mark,
 .current-mark {
   position: absolute;
-  z-index: 5;
+  z-index: var(--lcos-z-content-chip); /* z-tier: canvas-content */
   right: 10px;
   bottom: 9px;
   padding: 3px 6px;
@@ -621,7 +695,7 @@ button:focus-visible, textarea:focus-visible, input:focus-visible {
 
 .minimap {
   position: absolute;
-  z-index: 22;
+  z-index: var(--lcos-z-content-hud); /* z-tier: canvas-content */
   left: 14px;
   bottom: 14px;
   width: 178px;
@@ -666,6 +740,8 @@ button:focus-visible, textarea:focus-visible, input:focus-visible {
   border-radius: 12px;
   background: rgba(239,239,235,.8);
   box-shadow: inset 0 2px 6px rgba(25,40,55,.045), inset 0 -1px 0 #fff;
+  /* 漏洞2：容器留白（gap/padding）不吃点击，命中落空时穿透而非拦截 */
+  pointer-events: none;
 }
 .map-controls button {
   width: 28px;
@@ -677,6 +753,8 @@ button:focus-visible, textarea:focus-visible, input:focus-visible {
   color: var(--ink-58);
   background: rgba(255,255,253,.72);
   box-shadow: inset 0 1px 0 #fff;
+  /* 漏洞2：容器 pe:none 后按钮本体单独恢复命中 */
+  pointer-events: auto;
 }
 .map-controls button:last-of-type {
   background: var(--chrome);
@@ -691,7 +769,7 @@ button:focus-visible, textarea:focus-visible, input:focus-visible {
 }
 .minimap-collapsed {
   position: absolute;
-  z-index: 22;
+  z-index: var(--lcos-z-content-hud); /* z-tier: canvas-content */
   left: 14px;
   bottom: 14px;
   width: 48px;
@@ -718,7 +796,7 @@ button:focus-visible, textarea:focus-visible, input:focus-visible {
 
 .node-overlay {
   position: fixed;
-  z-index: 60;
+  z-index: var(--lcos-z-overlay-ui-high); /* z-tier: overlay-ui */
   width: 304px;
   padding: 15px;
   border-radius: 20px;
@@ -769,7 +847,7 @@ button:focus-visible, textarea:focus-visible, input:focus-visible {
 .inspector,
 .command-composer {
   position: absolute;
-  z-index: 50;
+  z-index: var(--lcos-z-overlay-ui-raised); /* z-tier: overlay-ui */
   top: 12px;
   right: 12px;
   bottom: 12px;
@@ -1055,7 +1133,7 @@ button:focus-visible, textarea:focus-visible, input:focus-visible {
 
 .run-pill {
   position: absolute;
-  z-index: 35;
+  z-index: var(--lcos-z-overlay-ui-under); /* z-tier: overlay-ui */
   right: 202px;
   bottom: 20px;
   min-height: 36px;
@@ -1081,7 +1159,7 @@ button:focus-visible, textarea:focus-visible, input:focus-visible {
 
 .checkpoint {
   position: absolute;
-  z-index: 55;
+  z-index: var(--lcos-z-overlay-ui-panel); /* z-tier: overlay-ui */
   left: 50%;
   bottom: 18px;
   transform: translateX(-50%);
@@ -1111,7 +1189,7 @@ button:focus-visible, textarea:focus-visible, input:focus-visible {
 .checkpoint .quiet { color: var(--ink-42); background: transparent; border-color: transparent; box-shadow: none; }
 .notice {
   position: absolute;
-  z-index: 70;
+  z-index: var(--lcos-z-overlay-ui-top); /* z-tier: overlay-ui */
   top: 13px;
   left: 50%;
   transform: translateX(-50%);
@@ -1389,7 +1467,7 @@ body { color: var(--ink); }
 .dock-add::before {
   content: "";
   position: absolute;
-  z-index: -1;
+  z-index: -1; /* z-tier: legacy-bg（porcelain 遗留背景层，按契约保留 -1） */
   right: -5px;
   top: 3px;
   bottom: 3px;
@@ -1743,7 +1821,7 @@ body { color: var(--ink); }
 /* Anchors + small controls */
 .anchor {
   position: absolute;
-  z-index: 5;
+  z-index: var(--lcos-z-content-chip); /* z-tier: canvas-content */
   width: 15px;
   height: 15px;
   padding: 0;
@@ -1766,7 +1844,7 @@ body { color: var(--ink); }
 
 .node-details {
   position: absolute;
-  z-index: 6;
+  z-index: var(--lcos-z-content-control); /* z-tier: canvas-content */
   top: 8px;
   right: 8px;
   width: 20px;
@@ -1883,7 +1961,7 @@ body { color: var(--ink); }
 .lod-overview .edge:not(.focused):not(.selected) { opacity: .10; }
 .lod-badge {
   position: absolute;
-  z-index: 12;
+  z-index: var(--lcos-z-content-guide); /* z-tier: canvas-content */
   top: 17px;
   left: 50%;
   transform: translateX(-50%);
@@ -1897,7 +1975,7 @@ body { color: var(--ink); }
 /* Selection marquee */
 .marquee {
   position: fixed;
-  z-index: 40;
+  z-index: var(--lcos-z-overlay-ui); /* z-tier: overlay-ui */
   border: 1px solid rgba(var(--workspace-glow-rgb), .58);
   border-radius: 8px;
   background: rgba(var(--workspace-glow-rgb), .075);
@@ -1908,7 +1986,7 @@ body { color: var(--ink); }
 /* Connection creation */
 .anchor-create-menu {
   position: fixed;
-  z-index: 75;
+  z-index: var(--lcos-z-overlay-ui-top); /* z-tier: overlay-ui */
   display: grid;
   grid-template-columns: repeat(3, auto);
   gap: 5px;
@@ -1937,7 +2015,7 @@ body { color: var(--ink); }
 /* Inline command */
 .inline-command {
   position: absolute;
-  z-index: 58;
+  z-index: var(--lcos-z-overlay-ui-high); /* z-tier: overlay-ui */
   right: auto;
   bottom: auto;
   width: min(360px, calc(100vw - 32px));
@@ -2005,9 +2083,9 @@ body { color: var(--ink); }
 .command-advanced-toggle svg { transition: transform 160ms ease; }
 .command-advanced-toggle svg.open { transform: rotate(180deg); }
 .command-state-source { margin:12px 18px 0; padding:8px 10px; border-radius:9px; color:var(--ink-58); background:var(--surface-recessed); font-size: 10px; font-weight:720; text-transform:capitalize; }
-.modal-backdrop { position:fixed; inset:0; z-index:210; display:grid; place-items:center; min-width:0; min-height:0; padding:24px; overflow:auto; }
-.confirm-backdrop { position:fixed; inset:0; z-index:100; display:grid; place-items:center; background:rgba(25,40,55,.16); backdrop-filter:blur(3px); }
-.confirm-dialog { width:min(390px,calc(100vw - 32px)); padding:18px; border:1px solid rgba(25,40,55,.1); border-radius:20px; background:rgba(255,255,253,.97); box-shadow:0 24px 70px rgba(25,40,55,.2), inset 0 1px #fff; }
+.modal-backdrop { position:fixed; inset:0; z-index: var(--lcos-z-modal-raised); /* z-tier: modal */ display:grid; place-items:center; min-width:0; min-height:0; padding:24px; overflow:auto; }
+.confirm-backdrop { position:fixed; inset:0; z-index: var(--lcos-z-dialog); /* z-tier: dialog */ display:grid; place-items:center; background:rgba(25,40,55,.16); backdrop-filter:blur(3px); }
+.confirm-dialog { width:min(390px,calc(100vw - 32px)); padding:18px; border:1px solid rgba(25,40,55,.1); border-radius:6px; /* Glaze 出圈：确认框对齐浮层族圆角（palette 4px / switcher-confirm 6px），替换原 20px */ background:rgba(255,255,253,.97); box-shadow:0 24px 70px rgba(25,40,55,.2), inset 0 1px #fff; }
 .confirm-dialog header { display:flex; align-items:center; gap:10px; color:var(--warning,#b7833e); }
 .confirm-dialog header > div { flex:1; }
 .confirm-dialog h2 { margin:3px 0 0; color:var(--ink); font-size: 15px; }
@@ -2041,7 +2119,7 @@ body { color: var(--ink); }
 .map-controls button:last-of-type::after {
   content: "";
   position: absolute;
-  z-index: 0;
+  z-index: var(--lcos-z-canvas-base); /* z-tier: canvas-base */
   top: -45%;
   left: -38%;
   width: 42%;
@@ -2122,7 +2200,7 @@ body { color: var(--ink); }
 .activity-summary { margin:8px 0 0; color:var(--ink-58); font-size: 10px; }
 .compare-panel { overflow:auto; }
 
-.selection-bounds { position:absolute; z-index:3; pointer-events:none; border:1px solid rgba(115,66,226,.48); border-radius:14px; box-shadow:0 0 0 1px rgba(255,255,255,.7) inset, 0 8px 22px rgba(80,63,125,.08); }
+.selection-bounds { position:absolute; z-index: var(--lcos-z-content-bounds); /* z-tier: canvas-content */ pointer-events:none; border:1px solid rgba(115,66,226,.48); border-radius:14px; box-shadow:0 0 0 1px rgba(255,255,255,.7) inset, 0 8px 22px rgba(80,63,125,.08); }
 .selection-bounds span { position:absolute; left:8px; top:-22px; padding:3px 7px; border-radius:8px; color:#5d4a84; background:rgba(255,255,253,.92); font-size: 10px; font-weight:760; box-shadow:0 2px 8px rgba(40,30,60,.09); }
 .selection-bounds button { position:absolute; right:-8px; bottom:-8px; width:18px; height:18px; pointer-events:auto; border:1px solid rgba(115,66,226,.38); border-radius:50%; background:#f6f2ff; box-shadow:0 2px 7px rgba(80,63,125,.16); cursor:grab; }
 .selection-bounds button:active { cursor:grabbing; transform:scale(.94); }
@@ -2132,7 +2210,7 @@ body { color: var(--ink); }
 .canvas-node.density-compact .node-details { opacity:.78; }
 .canvas-node.density-expanded .node-preview-slot { min-height:64px; }
 .canvas-node .node-footer small { display:block; color:var(--ink-42); font-size: 10px; }
-.resize-handle { position:absolute; right:5px; bottom:5px; width:14px; height:14px; z-index:4; border:0; border-right:2px solid rgba(60,73,90,.34); border-bottom:2px solid rgba(60,73,90,.34); border-radius:0 0 3px 0; background:transparent; cursor:nwse-resize; opacity:.62; }
+.resize-handle { position:absolute; right:5px; bottom:5px; width:14px; height:14px; z-index: var(--lcos-z-content-handle); /* z-tier: canvas-content */ border:0; border-right:2px solid rgba(60,73,90,.34); border-bottom:2px solid rgba(60,73,90,.34); border-radius:0 0 3px 0; background:transparent; cursor:nwse-resize; opacity:.62; }
 .resize-handle:hover { opacity:1; border-color:var(--accent); }
 .canvas-node.multi-selected .resize-handle { display:none; }
 .canvas-node.resizing { transition:none !important; cursor:nwse-resize; }
@@ -2202,7 +2280,7 @@ body { color: var(--ink); }
 .workspace-more { width: 26px; height: 26px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 9px; color: var(--ink-42); opacity: 0; }
 .workspace-row:hover .workspace-more, .workspace-more:focus-visible, .workspace-more[aria-expanded="true"] { opacity: 1; }
 .workspace-more:hover, .workspace-more[aria-expanded="true"] { background: rgba(25,40,55,.06); color: var(--ink); }
-.workspace-menu, .dock-create-menu { position: absolute; z-index: 110; display: grid; min-width: 188px; padding: 7px; border: 1px solid rgba(25,40,55,.1); border-radius: 15px; background: rgba(255,255,255,.98); box-shadow: 0 20px 48px rgba(25,40,55,.14), inset 0 1px 0 #fff; backdrop-filter: blur(20px); }
+.workspace-menu, .dock-create-menu { position: absolute; z-index: var(--lcos-z-dialog-dock-menu); /* z-tier: dialog */ display: grid; min-width: 188px; padding: 7px; border: 1px solid rgba(25,40,55,.1); border-radius: 15px; background: rgba(255,255,255,.98); box-shadow: 0 20px 48px rgba(25,40,55,.14), inset 0 1px 0 #fff; backdrop-filter: blur(20px); }
 .workspace-menu { left: calc(100% + 8px); top: 0; }
 .workspace-menu button, .dock-create-menu button { display: flex; align-items: center; gap: 9px; width: 100%; min-height: 34px; padding: 7px 9px; border-radius: 10px; color: var(--ink-72); font-size: 11px; text-align: left; }
 .workspace-menu button:hover, .dock-create-menu button:hover { background: rgba(25,40,55,.06); color: var(--ink); }
@@ -2210,7 +2288,7 @@ body { color: var(--ink); }
 .workspace-menu button.danger { color: #a24f46; }
 .workspace-menu button.danger:hover { background: #fff0ed; }
 .menu-rule { height: 1px; margin: 5px 3px; background: rgba(25,40,55,.08); }
-.filter-check { width: 17px; height: 17px; display: grid; place-items: center; border-radius: 6px; border: 1px solid rgba(25,40,55,.1); background: rgba(255,255,255,.58); color: #7342e2; }
+.filter-check { width: 17px; height: 17px; display: grid; place-items: center; border-radius: 6px; border: 1px solid rgba(25,40,55,.1); background: rgba(255,255,255,.58); color: var(--lcos-signal, #7342e2); } /* Glaze 单色收敛：紫 accent 唯一源 --lcos-signal */
 .workspace.filter-active { color: var(--ink); }
 .workspace.filter-active .filter-check { border-color: rgba(115,66,226,.2); background: #f2effd; }
 .dock-create-wrap { position: relative; margin-top: 8px; }
@@ -2223,7 +2301,7 @@ body { color: var(--ink); }
 .intent-swatch.intent-decide { background: #b78a52; box-shadow: 0 0 0 4px rgba(183,138,82,.10); }
 .intent-swatch.intent-blank { background: linear-gradient(135deg,#7aa8ff,#9b68ef 38%,#ee789c 66%,#e8c65e); box-shadow: 0 0 0 4px rgba(139,114,217,.08); }
 
-.editor-backdrop { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; padding: 24px; background: rgba(225,228,228,.46); backdrop-filter: blur(12px) saturate(1.05); }
+.editor-backdrop { position: fixed; inset: 0; z-index: var(--lcos-z-modal); /* z-tier: modal */ display: grid; place-items: center; padding: 24px; background: rgba(225,228,228,.46); backdrop-filter: blur(12px) saturate(1.05); }
 .entity-editor { width: min(520px, calc(100vw - 32px)); max-height: min(720px, calc(100vh - 32px)); overflow: auto; border: 1px solid rgba(25,40,55,.1); border-radius: 28px; background: linear-gradient(145deg,rgba(255,255,255,.99),rgba(248,249,247,.98)); box-shadow: 0 34px 90px rgba(25,40,55,.18), inset 0 1px 0 #fff; }
 .entity-editor.compact { width: min(420px, calc(100vw - 32px)); }
 .entity-editor > header { display: flex; align-items: center; gap: 12px; padding: 20px 22px 16px; border-bottom: 1px solid rgba(25,40,55,.07); }
@@ -2241,7 +2319,7 @@ body { color: var(--ink); }
 .intent-option.active { border-color: rgba(115,66,226,.18); background: linear-gradient(100deg,rgba(255,255,255,.95),rgba(240,236,253,.68)); box-shadow: 0 4px 15px rgba(115,66,226,.07); }
 .intent-option b { font-size: 12px; }
 .intent-option small { color: var(--ink-48, rgba(25,40,55,.48)); font-size: 10.5px; line-height: 1.35; }
-.intent-option > svg { color: #7342e2; }
+.intent-option > svg { color: var(--lcos-signal, #7342e2); } /* Glaze 单色收敛：紫 accent 唯一源 --lcos-signal */
 .editor-help { margin: 14px 22px 0; color: var(--ink-42); font-size: 10.5px; line-height: 1.55; }
 .entity-editor > footer { display: flex; justify-content: flex-end; gap: 9px; padding: 18px 22px 22px; }
 .entity-editor > footer button { min-width: 108px; }
@@ -2259,7 +2337,7 @@ body { color: var(--ink); }
 .scene-title { border: 0; background: transparent; cursor: default; }
 .scene-title:hover small { color: var(--ink-58); }
 .runtime-badge.saved::before { display: none; }
-.prototype-reset { position: absolute; z-index: 8; right: 18px; bottom: 12px; color: rgba(25,40,55,.32); font-size: 12.5px; }
+.prototype-reset { position: absolute; z-index: var(--lcos-z-content-raised); /* z-tier: canvas-content */ right: 18px; bottom: 12px; color: rgba(25,40,55,.32); font-size: 12.5px; }
 .prototype-reset:hover { color: rgba(25,40,55,.62); }
 
 @media (max-width: 900px) {

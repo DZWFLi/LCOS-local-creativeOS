@@ -92,8 +92,6 @@ export interface CanvasNode {
   noteLayout?: 'text' | 'mindmap'
   /** 用户标签（分类；导图模式下决定分支色相）。 */
   noteTags?: readonly string[]
-  /** 导图自动更新：启用后 Agent 在现场结构变化时自动重算大纲（无需用户触发）。 */
-  noteAutoSync?: boolean
 }
 
 export interface CanvasEdge {

@@ -6,7 +6,6 @@ const arrange=source('features/canvas/ProjectCanvas.tsx')
 const spatial=source('features/spatial/SpatialCanvas.tsx')
 const viewport=source('features/spatial/SpatialViewport.tsx')
 const flow=source('features/surfaces/ContextFlowSurface.tsx')
-const graph=source('features/surfaces/ContextGraphSurface.tsx')
 const tree=source('features/surfaces/ContextTreeSurface.tsx')
 const workflow=source('features/surfaces/WorkflowSurface.tsx')
 const outline=source('features/surfaces/OutlineSurface.tsx')
@@ -27,16 +26,16 @@ describe('Phase B shared spatial canvas contract',()=>{
     expect(arrange).toContain('<SpatialNodeLayer')
     expect(arrange).toContain('<SpatialEdgeLayer')
     expect(spatial).not.toContain('CanvasNode')
-    expect(spatial).not.toContain('CanvasEdge')
+    // 域类型隔离：substrate 不 import 画布域（CanvasEdgePinLayer 是 spatial 本地导航组件，非域 CanvasEdge，名字撞前缀属正常）
+    expect(spatial).not.toContain("from '../canvas/'") // 域类型隔离：substrate 不 import 画布域（CanvasEdgePinLayer 为 spatial 本地导航组件，非域 CanvasEdge）
   })
 
   it('uses the same spatial substrate for every spatial Context renderer and Workflow',()=>{
-    for(const renderer of [flow,graph,tree,workflow]){
+    for(const renderer of [flow,tree,workflow]){ // ContextGraphSurface 已删除（RC-8）：关系场由 RelationshipHome 组件承载
       expect(renderer).toContain('<SpatialCanvas')
       expect(renderer).toContain('<SpatialNodeLayer')
     }
     expect(flow).toContain('<SpatialEdgeLayer')
-    expect(graph).toContain('<SpatialEdgeLayer')
     expect(tree).toContain('<SpatialEdgeLayer')
     expect(workflow).toContain('<SpatialEdgeLayer')
   })

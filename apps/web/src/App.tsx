@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { Command, Play } from 'lucide-react'
-import type { Checkpoint, ContextChangeProposalV1, ContextManifestV0, ContinuityResumeSnapshotV1, ConversationSessionV1, ObsidianVaultScanV1, PresentationEntityRefV0, PresentationSpatialRegionV0, RunEvent, RunProposalResult, RunReview, RuntimeProviderStatus, WorkspaceMembership } from '@local-creative-os/contracts'
+import type { Checkpoint, ConnectedConversationV1, ContextChangeProposalV1, ContextManifestV0, ContinuityResumeSnapshotV1, ConversationSessionV1, ObsidianVaultScanV1, PresentationEntityRefV0, PresentationSpatialRegionV0, RunEvent, RunProposalResult, RunReview, RuntimeProviderStatus, WorkspaceMembership } from '@local-creative-os/contracts'
 import { MAX_STRUCTURAL_CONTAINER_DEPTH, type HandoffRecord } from '@local-creative-os/domain'
 import type { ActiveRun, Camera, CanvasNode, CanvasScope, NodeDisplayMode, NodeLayer, PersistedPrototypeState, ProjectPackage, ScopeKind, TargetContextInference, WorkRailPreferences, Workspace } from './model'
 import { nodeMeta, runStatusLabel } from './model'
@@ -42,7 +42,8 @@ import { RuntimeBridge, type DataSource, type SaveStatus } from './runtime/runti
 import { selectRuntimeProject } from './runtime/runtimeProjectSelection'
 import { createWorkspaceRecord, duplicateWorkspaceRecord, moveWorkspaceRecord, removeWorkspaceRecord, toggleWorkspaceLayer, updateWorkspaceRecord } from './state/workspaceState'
 import { fitBounds, fitBoundsForReading, getSelectionBounds, MIN_CANVAS_ZOOM, nodeDimensions, placeNewNodesIncrementally, restorationFocusBounds, restoredCameraIsMeaningful, revealNode } from './features/canvas/canvasGeometry'
-import { displayNodeTitle } from './features/canvas/CanvasNodeVisual'
+import { detectFileIdentity, displayNodeTitle } from './features/canvas/CanvasNodeVisual'
+import { mindmapNodeSize } from './features/canvas/MindMapNoteVisual'
 import { getVisualSelectionBounds, layoutVisualGrid, nodeVisualBounds, repairVisualLayoutPositions } from './features/canvas/canvasVisualGeometry'
 import { findPendingReturnPosition } from './features/canvas/canvasLayout'
 import { layoutExpandedCollectionMembers } from './features/canvas/collectionExpandLayout'
@@ -59,9 +60,9 @@ import { createBlankProjectState } from './state/projectState'
 import { createAggregateScopeEntity, removeScopeTree } from './state/canvasScopes'
 import type { ActiveContextProjection } from './runtime/localCoreClient'
 import type { AttentionBucketV0, AttentionRuntimeSnapshotV0, ProjectViewRailOrderV0, Relation } from '@local-creative-os/contracts'
-import { humanizeRuntimeMessage } from './runtime/messages'
+import { humanizeRuntimeMessage, isReceiverSessionError } from './runtime/messages'
 import { AgentContextSurface } from './features/shell/AgentContextSurface'
-import { buildScopePath, createId, fileNameFromPath, inferFileType, isTextPreviewFile, runtimePresentationStatus } from './features/shell/appShell'
+import { buildScopePath, createId, decodeTextBuffer, fileNameFromPath, inferFileType, isTextPreviewFile, runtimePresentationStatus } from './features/shell/appShell'
 import { AppShellView } from './features/shell/AppShellView'
 import type { SurfaceContextMenuAction, SurfaceContextMenuItem } from './features/shell/SurfaceContextMenu'
 import type { SurfaceAgentRunState, SurfaceAgentSubmission, SurfaceAgentSubmissionResult } from './features/shell/SurfaceAgentNode'
@@ -69,9 +70,18 @@ import type { DepositHintItem } from './features/shell/BoundaryHints'
 import { parseArtifactRevisions, parseProcessProjection, parseWorkspaceStates, type ArtifactRevisionProvenance, type WorkspaceStateSummary } from './runtime/projectionAdapters'
 import { WorkspaceStatesDialog } from './features/workspace/WorkspaceStatesDialog'
 import { ProjectStripVNext } from './features/shell/ProjectStripVNext'
-import { WorkspaceRailVNext, type ProjectRailViewItem } from './features/shell/WorkspaceRailVNext'
+import { ReceiverChip } from './features/shell/ReceiverChip'
+import { receiverProviderLabel } from './features/shell/ReceiverSwitcher'
+import { applyHandoffPrefixToInstruction, handoffSurfaceKindFromSurfaceId, resolveHandoffPrefix, type ReceiverHandoffContext } from './features/shell/receiverHandoff'
+import { CommandPalette } from './features/shell/CommandPalette'
+import { createCommandPaletteProviders } from './features/shell/commandPaletteProviders'
+import { PALETTE_KEYS } from './features/shell/keymap'
+import { WorkspaceRailVNext, type ProjectRailViewItem, type RailMemberPreview } from './features/shell/WorkspaceRailVNext'
 import { SurfaceDock, normalizeSurfaceId, type SurfaceId } from './features/shell/SurfaceDock'
 import { ProjectionSurface } from './features/surfaces/ProjectionSurfaces'
+import { buildReplayInstruction, collectSkillMaterialViewIds, parseWorkflowSkillSteps, projectSkillRunStats, serializeWorkflowSkill, type SkillStepInput, type WorkflowSkillSummary } from './features/workflow/skillLibrary'
+import { evaluateRunPermission } from './features/workflow/permissionGate'
+import { PermissionConfirmCard } from './features/workflow/PermissionConfirmCard'
 import type { ContextHistoryEntry, ContextSurfaceRuntime, DeliverSurfaceRuntime, WorkSurfaceRuntime } from './features/surfaces/surfaceContracts'
 import { handoffToProjection } from './features/surfaces/handoffProjection'
 import { ImmersiveViewer } from './features/viewer/ImmersiveViewer'
@@ -149,6 +159,24 @@ function initialPrototype(projectId: string): PersistedPrototypeState {
   const persisted = loadPrototypeState(projectId)
   if (persisted) return persisted
   return createBlankProjectState({ id: projectId, label: projectId, localPath: '', updatedAt: '', pendingCount: 0 }, defaultRailWidth())
+}
+
+/** 权限门（第一梯队 ⑥）待确认的 Run 请求：card=确认卡内容；args=冻结发起时刻的全部发送入参；resolve=把确认后的 runId（取消时 undefined）还给 await 的调用方。 */
+interface PendingPermissionRun {
+  readonly card: { readonly title: string; readonly items: readonly string[] }
+  readonly args: {
+    readonly command: string
+    readonly targetIds: string[]
+    readonly contextIds: string[]
+    readonly intent: RunOutputIntent
+    readonly requestedProvider: string
+    readonly resultPolicy: ComposerResultPolicy
+    readonly proposalSummary?: string
+    readonly targetRevisionIdOverride?: string
+    readonly sessionIdOverride?: string
+    readonly contextArtifactIdsOverride?: readonly string[]
+  }
+  readonly resolve: (runId: string | undefined) => void
 }
 
 export function App() {
@@ -274,6 +302,10 @@ export function App() {
   const [workspaceEditor, setWorkspaceEditor] = useState<{ id: string } | null>(null)
   const [renameNodeId, setRenameNodeId] = useState<string | null>(null)
   const [noteEditorId, setNoteEditorId] = useState<string | null>(null)
+  /** 投影/本体冲突提示：待确认「复制引用副本」的实体投影节点 id。 */
+  const [forkPromptId, setForkPromptId] = useState<string | null>(null)
+  /** 本会话内由用户创建的文本实体 origin 视图（双击直接编辑，不触发投影冲突提示）。 */
+  const originTextIdsRef = useRef<Set<string>>(new Set())
   const [layoutPreview, setLayoutPreview] = useState<LayoutPreviewItem[] | null>(null)
   const [reorganizeOpen, setReorganizeOpen] = useState(false)
   const [reorganizePendingIds, setReorganizePendingIds] = useState<string[]>([])
@@ -340,6 +372,10 @@ export function App() {
   const [linkDialogOpen, setLinkDialogOpen] = useState(false)
   const [importPanelOpen, setImportPanelOpen] = useState(false)
   const [conversationDialogOpen, setConversationDialogOpen] = useState(false)
+  // RECEIVER-5（43O）：active receiver 会话失效标记。命中 session 失效特征错误时置位，
+  // 只影响 Chip/Switcher 的展示与恢复入口——Project/Surface/Selection 一概不动；
+  // 用户点「重新连接」清除，lease 层在下次 Run 自动恢复替代会话（只建一次）。
+  const [receiverSessionStale, setReceiverSessionStale] = useState(false)
   const [projectToolsMode, setProjectToolsMode] = useState<'search' | 'full' | null>(null)
   const [projectFocusOpen, setProjectFocusOpen] = useState(false)
   const [projectFocusSourceIds, setProjectFocusSourceIds] = useState<string[]>([])
@@ -1603,6 +1639,7 @@ export function App() {
     setExcludedContextIds([])
     setManualInference(null)
     setActiveRun(null)
+    setReceiverSessionStale(false) // RECEIVER-5：stale 是 per-project 的 runtime 状态，切项目必须重置
     setSelectionComposerText('')
     setGlobalComposerText('')
     setLayoutPreview(null)
@@ -1679,8 +1716,10 @@ export function App() {
   // Phase A: Project Focus Signal —— 项目 Tab 获得焦点时上报 Runtime Registry（Capture 亲和性基础）。
   useEffect(() => {
     if (bootMode !== 'runtime' || !activeProjectId) return
+    // 页面重载/卸载时中止在途上报请求，避免浏览器报 net::ERR_ABORTED 噪音
+    const controller = new AbortController()
     const report = () => {
-      void bridgeRef.current.client.runtimeFocusProject(activeProjectId).catch(() => { /* 上报失败不影响界面 */ })
+      void bridgeRef.current.client.runtimeFocusProject(activeProjectId, controller.signal).catch(() => { /* 上报失败不影响界面 */ })
     }
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') report()
@@ -1689,6 +1728,7 @@ export function App() {
     window.addEventListener('focus', report)
     document.addEventListener('visibilitychange', handleVisibility)
     return () => {
+      controller.abort()
       window.removeEventListener('focus', report)
       document.removeEventListener('visibilitychange', handleVisibility)
     }
@@ -2347,17 +2387,43 @@ export function App() {
     ? materializeProjectEntityNodes(activeWorkspaceEntityRefs, nodes, scopes, workspaces)
     : [], [activeWorkspace, activeWorkspaceEntityRefs, nodes, scopes, workspaces])
   const sceneCanvasNodes = useMemo(() => {
+    // 阅读态文本节点的最小可读尺寸：正文行数决定高度，避免旧数据里
+    // 135×70 的 note 卡把白色文本层压成 2-3 行的“白条”。
+    const withReadableSize = (list: CanvasNode[]) => list.map((input) => {
+      // 导图节点：剥掉旧数据里混入 outline 的标题行，并按内容自然尺寸校正卡片大小。
+      if (input.kind === 'note' && input.noteLayout === 'mindmap') {
+        const raw = input.noteOutline || input.noteBody || ''
+        const outline = raw.startsWith(input.title) ? raw.slice(input.title.length).replace(/^\r?\n/, '') : raw
+        const size = mindmapNodeSize(outline, input.title)
+        let node: CanvasNode = input
+        if (outline !== raw) node = { ...node, noteOutline: outline }
+        if (node.width !== size.width || node.height !== size.height) node = { ...node, width: size.width, height: size.height }
+        return node
+      }
+      const node = input
+      // 统一文本体系：note 与 markdown 文本 artifact 同样保证阅读尺寸。
+      const isTextual = node.kind === 'note' || node.fileType === 'markdown'
+      if (!isTextual || node.displayMode === 'compact') return node
+      const body = node.noteBody ?? node.previewText ?? ''
+      if (!body.trim()) return node
+      const maxLines = node.displayMode === 'expanded' ? 22 : 11
+      const lineCount = Math.min(maxLines, Math.max(3, body.split(/\r?\n/).filter((line) => line.trim()).length))
+      const minHeight = Math.round(lineCount * 18 + 96)
+      const minWidth = node.displayMode === 'expanded' ? 296 : 244
+      if (node.width >= minWidth && node.height >= minHeight) return node
+      return { ...node, width: Math.max(node.width, minWidth), height: Math.max(node.height, minHeight) }
+    })
     if (!activeWorkspace) {
       const byId = new Map<string, CanvasNode>()
       visibleNodes.filter((node) => !mainSceneMemberIds.has(node.id)).forEach((node) => byId.set(node.id, node))
       mainWorkspaceProjectionNodes.forEach((node) => byId.set(node.id, node))
-      return [...byId.values()]
+      return withReadableSize([...byId.values()])
     }
     const focused = new Set(workspaceMemberViewIdsById[activeWorkspace.id] ?? activeWorkspace.focusedViewIds)
     const memberNodes = nodes.filter((node) => focused.has(node.id) && visibleLayers.includes(nodeMeta[node.kind].layer))
     const byId = new Map<string, CanvasNode>()
     ;[...memberNodes, ...activeWorkspaceEntityNodes].forEach((node) => byId.set(node.id, node))
-    return [...byId.values()]
+    return withReadableSize([...byId.values()])
   }, [activeWorkspace, activeWorkspaceEntityNodes, mainSceneMemberIds, mainWorkspaceProjectionNodes, nodes, visibleLayers, visibleNodes, workspaceMemberViewIdsById])
   const sceneCanvasEdges = useMemo(() => {
     if (!activeWorkspace) return visibleEdges
@@ -2544,6 +2610,21 @@ export function App() {
   // Scope / Workspace / Presentation state. It deliberately does not create a
   // new Core business entity just to obtain distinct visual families.
   const projectRailViews = useMemo<ProjectRailViewItem[]>(() => {
+    // 债1 数据源：collectionMembersByNodeId 已按 `workspace:`/`scope:` 键聚合出真实
+    // 成员节点（与画布 WorkspaceProjectionObject 同一来源），rail 预览复用这份真实几何，
+    // 不再画装饰性假预览。嵌套实体视图标记为 'entity'，由 rail 端过滤出几何。
+    const railMemberNodesFor = (railViewId: string): RailMemberPreview[] | undefined => {
+      const members = collectionMembersByNodeId[railViewId]
+      if (!members) return undefined
+      return members.map((member) => ({
+        id: member.id,
+        x: member.x,
+        y: member.y,
+        width: member.width,
+        height: member.height,
+        kind: member.id.startsWith('scope:') || member.id.startsWith('workspace:') ? 'entity' : detectFileIdentity(member),
+      }))
+    }
     // Project Rail is deliberately project-wide. Entering a Collection/Context
     // must not make the user's other destinations disappear.
     const sceneWorkspaces = workspaces.filter((workspace) => normalizeSurfaceId(workspace.preferredSurface) !== 'workflow')
@@ -2553,6 +2634,7 @@ export function App() {
       kind: 'scene' as const,
       memberCount: (workspaceMemberViewIdsById[workspace.id]?.length ?? 0) + (workspaceEntityRefsById[workspace.id]?.length ?? 0),
       memberViewIds: workspaceMemberViewIdsById[workspace.id] ?? [],
+      memberNodes: railMemberNodesFor(`workspace:${workspace.id}`),
       // Workspace is a first-class entity; semantic Drop moves the Workspace ref,
       // not an accidental explosion of every member View.
       dragViewIds: [`workspace:${workspace.id}`],
@@ -2577,6 +2659,7 @@ export function App() {
           kind,
           memberCount: members.length + (scope.kind === 'collection' ? (collectionEntityRefsById[scope.id]?.length ?? 0) : scope.kind === 'context' ? (contextEntityRefsById[scope.id]?.length ?? 0) : (workflowEntityRefsById[scope.id]?.length ?? 0)),
           memberViewIds: members,
+          memberNodes: railMemberNodesFor(`scope:${scope.id}`),
           dragViewIds: [`scope:${scope.id}`],
           scopeId: scope.id,
           active: scope.kind === 'context'
@@ -2596,13 +2679,16 @@ export function App() {
       kind: 'workflow' as const,
       memberCount: workflowPresentationIds.length,
       memberViewIds: workflowPresentationIds,
+      // 遗留桥接项没有 workspace:/scope: 聚合键，memberNodes 为 undefined——
+      // rail 端如实退回真实计数统计，不伪造布局。
+      memberNodes: railMemberNodesFor(`workflow:${rootScope.id}`),
       scopeId: rootScope.id,
       active: activeWorkflowId === null && activeSurface === 'workflow',
     }] : []
 
     const baseViews = [...workspaceItems, ...scopeItems, ...legacyWorkflowItems]
     return orderProjectRailViews(baseViews, railOrder)
-  }, [activeContextId, activeSurface, activeWorkflowId, collectionEntityRefsById, collectionMembersById, contextEntityRefsById, contextMembersById, nodes, railOrder, rootScope.id, savedWorkflowViews.length, scopeId, scopes, workspaces, workflowEntityRefsById, workflowMembersById, workflowPresentationIds, workspaceEntityRefsById, workspaceId, workspaceMemberViewIdsById])
+  }, [activeContextId, activeSurface, activeWorkflowId, collectionEntityRefsById, collectionMembersByNodeId, collectionMembersById, contextEntityRefsById, contextMembersById, nodes, railOrder, rootScope.id, savedWorkflowViews.length, scopeId, scopes, workspaces, workflowEntityRefsById, workflowMembersById, workflowPresentationIds, workspaceEntityRefsById, workspaceId, workspaceMemberViewIdsById])
 
   const projectFocusCandidates = useMemo<ProjectFocusLocationCandidate[]>(() => {
     const rootEntityRefs: PresentationEntityRefV0[] = [
@@ -3713,11 +3799,13 @@ export function App() {
       title: title.trim(),
       subtitle: body.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).slice(1).join(' ').trim().slice(0, 24),
       noteBody: body,
-      // Keep the outline in sync when the node is in mindmap mode (title = root).
-      ...(node.noteLayout === 'mindmap' ? { noteOutline: `${title.trim()}\n${body}` } : {}),
+      // 导图模式：大纲与正文同源（body 就是无标题行的大纲，标题独立做根）。
+      ...(node.noteLayout === 'mindmap' ? { noteOutline: body } : {}),
     } : node))
     const edited = nodes.find((item) => item.id === id)
-    if (edited?.noteLayout === 'mindmap') rememberNotePresentation(id, { noteOutline: `${title.trim()}\n${body}` })
+    // 会话级正文记忆：runtime text artifact 的 body 更新在 Core revision API 落地前
+    // 是 presentation-local 的，存这里防刷新丢失（含导图大纲）。
+    rememberNotePresentation(id, edited?.noteLayout === 'mindmap' ? { noteOutline: body, noteBody: body } : { noteBody: body })
     setNoteEditorId(null)
     // Runtime artifact title sync (body updates are presentation-local until
     // a Core text-revision API lands; recorded as known debt, not blocking).
@@ -3728,22 +3816,105 @@ export function App() {
     setNotice('文本已保存')
   }, [bootMode, nodes, setNodes])
 
-  const toggleNoteLayout = useCallback((id: string, layout: 'text' | 'mindmap') => {
+  /** 投影/本体冲突的落地动作：复制一个本地可编辑副本节点，并连一条「引用」边指向原投影。 */
+  const confirmForkProjection = useCallback(() => {
+    const source = forkPromptId ? nodes.find((node) => node.id === forkPromptId) : undefined
+    setForkPromptId(null)
+    if (!source) return
+    const forkId = createId('note')
+    const body = source.noteBody ?? source.previewText ?? ''
+    const fork: CanvasNode = {
+      id: forkId,
+      kind: 'note',
+      title: source.title,
+      subtitle: '引用副本 · 本地可编辑',
+      x: source.x + 48,
+      y: source.y + 64,
+      width: source.width,
+      height: source.height,
+      displayMode: source.displayMode ?? 'standard',
+      noteBody: body,
+      scopeId: source.scopeId,
+      createdAt: new Date().toISOString(),
+      workspaceIds: source.workspaceIds ?? [],
+    }
+    setNodes((current) => [...current, fork])
+    setEdges((current) => [...current, {
+      id: createId('edge'),
+      from: forkId,
+      to: source.id,
+      kind: 'reference',
+      label: '引用',
+      scope: 'presentation',
+      origin: 'user',
+    }])
+    setSelectedIds([forkId])
+    setNoteEditorId(forkId)
+    setNotice('已复制为引用副本，在副本上编辑')
+  }, [forkPromptId, nodes, setEdges, setNodes])
+
+  const toggleNoteLayout = useCallback((id: string, layout: 'text' | 'mindmap', override?: { title: string; body: string }) => {
+    // 统一文本体系：note 与 markdown 文本 artifact 都能转导图（PDF/图片等非文本除外）。
+    const isTextual = (node: CanvasNode) => node.kind === 'note' || node.fileType === 'markdown'
+    const target = nodes.find((node) => node.id === id && isTextual(node))
+    // 标题独立做根；noteOutline 不含标题行（正文首行与标题重复时剥掉）。
+    const stripTitleLine = (text: string, title: string) => text.startsWith(title)
+      ? text.slice(title.length).replace(/^\r?\n/, '')
+      : text
+    // override = 编辑器里尚未保存的最新内容（编辑器内直接转导图）。
+    // markdown 投影的正文可能只在 previewText（noteBody 未投影）—— 回退链必须覆盖。
+    const sourceText = override ? override.body : (target?.noteOutline || target?.noteBody || target?.previewText || '')
+    const sourceTitle = override?.title ?? target?.title ?? ''
+    const targetOutline = target ? stripTitleLine(sourceText, sourceTitle) : ''
+    // 展开导图：节点长到导图的自然尺寸（mubu 行为），再由下方相机适配把整张图收进视口。
+    const size = layout === 'mindmap' && target
+      ? mindmapNodeSize(targetOutline, sourceTitle)
+      : null
+    const mapWidth = size?.width ?? 0
+    const mapHeight = size?.height ?? 0
     setNodes((current) => current.map((node) => {
-      if (node.id !== id || node.kind !== 'note') return node
-      // The outline includes the title line as the root branch.
-      const fullText = `${node.title}\n${node.noteBody ?? ''}`
-      const outline = layout === 'mindmap' ? (node.noteOutline ?? fullText) : node.noteOutline
-      rememberNotePresentation(id, { noteLayout: layout, ...(outline ? { noteOutline: outline } : {}) })
-      return {
-        ...node,
+      if (node.id !== id || !isTextual(node)) return node
+      const outline = layout === 'mindmap'
+        ? (override ? targetOutline : (node.noteOutline || stripTitleLine(node.noteBody || node.previewText || '', node.title)))
+        : node.noteOutline
+      rememberNotePresentation(id, {
         noteLayout: layout,
-        ...(layout === 'mindmap' ? { noteOutline: node.noteOutline ?? fullText } : {}),
+        ...(outline ? { noteOutline: outline } : {}),
+        ...(override ? { noteBody: override.body, noteOutline: override.body } : {}),
+      })
+      const base = override ? { ...node, title: override.title.trim() || node.title, noteBody: override.body } : node
+      if (layout === 'mindmap' && mapWidth && mapHeight) {
+        return {
+          ...base,
+          noteLayout: layout,
+          noteOutline: outline,
+          displayMode: 'expanded',
+          // 以原中心为锚点生长，避免节点左上角固定导致视觉跳变。
+          x: Math.round(node.x + (node.width - mapWidth) / 2),
+          y: Math.round(node.y + (node.height - mapHeight) / 2),
+          width: mapWidth,
+          height: mapHeight,
+        }
+      }
+      return {
+        ...base,
+        noteLayout: layout,
+        ...(layout === 'mindmap' && outline ? { noteOutline: outline } : {}),
         displayMode: layout === 'mindmap' ? 'expanded' : node.displayMode,
       }
     }))
+    if (size && target) {
+      const bounds = {
+        x: target.x + (target.width - mapWidth) / 2,
+        y: target.y + (target.height - mapHeight) / 2,
+        width: mapWidth,
+        height: mapHeight,
+      }
+      const viewport = document.querySelector<HTMLElement>('[data-testid="canvas"]')?.getBoundingClientRect()
+      setCamera(fitBoundsForReading(bounds, viewport?.width ?? 1000, viewport?.height ?? 820, 72, safeInsets))
+    }
     setNotice(layout === 'mindmap' ? '已转为大纲导图（双击可编辑大纲文本）' : '已切回文本块')
-  }, [setNodes])
+  }, [nodes, safeInsets, setCamera, setNodes])
 
   const renameNodeTitle = useCallback((id: string, title: string) => {
     const nextTitle = title.trim()
@@ -3766,132 +3937,42 @@ export function App() {
     }
   }, [bootMode, nodes, setNodes])
 
-  /**
-   * Deterministic local outline for the current scope (材料/文本/上下文/成果/关系
-   * branches). Shared by the manual「摘要成导图」action and the mind-map
-   * auto-sync effect. TODO(0.1+/agent-summary): route the same prompt through
-   * proposeRun when a provider is reachable and parse via parseOutlineLoose.
-   */
-  const buildScopeOutline = useCallback((excludeIds?: ReadonlySet<string>) => {
-    const relevantNodes = nodes.filter((node) => !node.id.startsWith('workspace:') && !node.id.startsWith('runtime-run-view-') && !(excludeIds?.has(node.id)))
-    if (!relevantNodes.length) return null
-    const scopeLabel = activeScope.label || '当前现场'
-    const byKind = new Map<string, string[]>()
-    relevantNodes.forEach((node) => {
-      const family = node.kind === 'note' ? '文本' : node.kind === 'source' ? '材料' : node.kind === 'context' ? '上下文' : node.kind === 'generated' ? '成果' : '其他'
-      byKind.set(family, [...(byKind.get(family) ?? []), displayNodeTitle(node)])
-    })
-    const relationKinds = [...new Set(edges.map((edge) => edge.kind))]
-    const branches = [
-      ...(byKind.get('材料')?.length ? [`  - 材料 #材料`, ...byKind.get('材料')!.slice(0, 6).map((title) => `    ${title}`)] : []),
-      ...(byKind.get('文本')?.length ? [`  - 文本 #文本`, ...byKind.get('文本')!.slice(0, 5).map((title) => `    ${title}`)] : []),
-      ...(byKind.get('上下文')?.length ? [`  - 上下文 #上下文`, ...byKind.get('上下文')!.slice(0, 4).map((title) => `    ${title}`)] : []),
-      ...(byKind.get('成果')?.length ? [`  - 成果 #成果`, ...byKind.get('成果')!.slice(0, 4).map((title) => `    ${title}`)] : []),
-      ...(relationKinds.length ? [`  - 关系 #关系`, ...relationKinds.slice(0, 5).map((kind) => `    ${kind}`)] : []),
-    ]
-    return { rootTitle: `${scopeLabel} · 项目摘要`, branches: branches.join('\n') }
-  }, [activeScope.label, edges, nodes])
-
-  /**
-   * Summarize the current scope into an outline mind-map text node.
-   */
-  const summarizeProjectToMindmap = useCallback(async () => {
-    const built = buildScopeOutline()
-    if (!built) { setNotice('当前现场没有可总结的对象'); return }
-    const outline = `${built.rootTitle}\n${built.branches}`
-    const viewport = document.querySelector<HTMLElement>('[data-testid="canvas"]')?.getBoundingClientRect()
-    const place = { x: ((viewport?.width ?? 1000) / 2 - camera.x) / camera.zoom + 80, y: ((viewport?.height ?? 760) / 2 - camera.y) / camera.zoom + 60 }
-    if (bootMode === 'runtime' && activeProjectId) {
-      const call = await bridgeRef.current.client.createTextArtifact(activeProjectId, {
-        title: built.rootTitle,
-        body: outline,
-        scopeId,
-        x: place.x,
-        y: place.y,
-      })
-      if (call.result.ok) {
-        const value = call.result.value
-        rememberNotePresentation(value.viewId, { noteLayout: 'mindmap', noteOutline: outline, noteTags: ['AI摘要'] })
-        setNodes((current) => [...current, {
-          id: value.viewId,
-          kind: 'note' as const,
-          title: value.title,
-          subtitle: '本地摘要 · 大纲导图',
-          x: place.x, y: place.y,
-          ...nodeDimensions('note', 'standard'),
-          displayMode: 'expanded' as const,
-          scopeId,
-          noteBody: outline,
-          noteOutline: outline,
-          noteLayout: 'mindmap' as const,
-          noteTags: ['AI摘要'],
-          artifactId: value.artifactId,
-          revisionId: value.revisionId,
-          managed: true,
-        }])
-        setSelectedIds([value.viewId])
-        setNotice('已生成本地摘要导图（真实 Agent 摘要接入见 TODO）')
-        return
-      }
-      setNotice(`摘要创建失败：${call.result.error.message}`)
-      return
-    }
-    const localId = createId('note')
-    setNodes((current) => [...current, {
-      id: localId,
-      kind: 'note' as const,
-      title: built.rootTitle,
-      subtitle: '本地摘要 · 大纲导图',
-      x: place.x, y: place.y,
-      ...nodeDimensions('note', 'standard'),
-      displayMode: 'expanded' as const,
-      scopeId,
-      noteBody: outline,
-      noteOutline: outline,
-      noteLayout: 'mindmap' as const,
-      noteTags: ['AI摘要'],
-    }])
-    setSelectedIds([localId])
-    setNotice('已生成本地摘要导图')
-  }, [activeProjectId, bootMode, buildScopeOutline, camera, scopeId, setNodes])
-
-  const toggleNoteAutoSync = useCallback((id: string, enabled: boolean) => {
-    setNodes((current) => current.map((node) => node.id === id && node.kind === 'note' ? { ...node, noteAutoSync: enabled } : node))
-    rememberNotePresentation(id, { noteAutoSync: enabled })
-    setNotice(enabled ? '导图已开启自动更新：现场结构变化后 Agent 自动重算大纲' : '导图已停止自动更新')
-  }, [setNodes])
-
-  /**
-   * Mind-map auto-sync (agent behaviour, no user prompt needed): while any
-   * note node runs in mindmap layout with noteAutoSync, structural changes to
-   * the scene (node titles/ids or edges) trigger a debounced outline refresh.
-   * The refresh keeps the node title as the root and only rewrites branches,
-   * so enabling auto-sync never hijacks the user's own outline header.
-   */
-  const autoSyncedSignatureRef = useRef('')
-  const structureSignature = useMemo(() => [
-    nodes.filter((node) => !node.id.startsWith('runtime-run-view-')).map((node) => `${node.id}:${node.title}`).join('|'),
-    edges.map((edge) => `${edge.from}>${edge.to}:${edge.kind}`).join('|'),
-  ].join('::'), [edges, nodes])
-  const hasAutoSyncMindmap = nodes.some((node) => node.kind === 'note' && node.noteLayout === 'mindmap' && node.noteAutoSync)
+  // ── 文本节点高度自适应（格式化后字号变化，预览跟随内容）──
+  // 标题（md-h1 14.5px 等）比正文行高大，固定 node.height 会截断正文：
+  // 正文签名（长度 + 呈现模式）变化后实测 .lcos-readable-document 的溢出量，
+  // 节点高度跟随增长；内容变少时回缩（仅限本效果调整过的节点，尊重手动 resize）。
+  const noteAutoHeightsRef = useRef(new Map<string, number>())
+  const noteFitSignature = useMemo(() => nodes
+    .filter((node) => node.noteLayout !== 'mindmap' && node.displayMode !== 'compact'
+      && (node.noteBody?.trim() || (node.fileType === 'markdown' && node.previewText?.trim())))
+    .map((node) => `${node.id}:${node.noteBody?.length ?? node.previewText?.length ?? 0}:${node.displayMode}`)
+    .join('|'), [nodes])
   useEffect(() => {
-    if (!hasAutoSyncMindmap) { autoSyncedSignatureRef.current = ''; return }
-    if (autoSyncedSignatureRef.current === structureSignature) return
-    autoSyncedSignatureRef.current = structureSignature
-    const timer = window.setTimeout(() => {
-      const autoIds = new Set(nodes.filter((node) => node.kind === 'note' && node.noteLayout === 'mindmap' && node.noteAutoSync).map((node) => node.id))
-      if (!autoIds.size) return
-      const built = buildScopeOutline(autoIds)
-      if (!built) return
+    if (!noteFitSignature) return
+    const raf = requestAnimationFrame(() => {
+      const auto = noteAutoHeightsRef.current
+      const patches = new Map<string, number>()
+      document.querySelectorAll<HTMLElement>('[data-testid^="canvas-node-"]').forEach((el) => {
+        if (el.querySelector('.lcos-note-mindmap')) return
+        const doc = el.querySelector<HTMLElement>('.lcos-readable-document')
+        if (!doc) return
+        const id = (el.getAttribute('data-testid') ?? '').replace(/^canvas-node-/, '')
+        const overflow = doc.scrollHeight - doc.clientHeight
+        if (overflow >= 2) patches.set(id, overflow + 2)
+        else if (auto.has(id) && doc.clientHeight - doc.scrollHeight >= 24) patches.set(id, doc.scrollHeight - doc.clientHeight + 2)
+      })
+      if (!patches.size) return
       setNodes((current) => current.map((node) => {
-        if (!(node.kind === 'note' && node.noteLayout === 'mindmap' && node.noteAutoSync)) return node
-        const outline = `${node.title}\n${built.branches}`
-        rememberNotePresentation(node.id, { noteOutline: outline })
-        return { ...node, noteBody: outline, noteOutline: outline, subtitle: '自动摘要 · 大纲导图' }
+        const delta = patches.get(node.id)
+        if (delta === undefined || node.noteLayout === 'mindmap' || node.displayMode === 'compact') return node
+        const next = Math.round(Math.max(120, Math.min(620, node.height + delta)))
+        if (Math.abs(next - node.height) < 2) return node
+        auto.set(node.id, next)
+        return { ...node, height: next }
       }))
-    }, 6_000)
-    return () => window.clearTimeout(timer)
-  }, [buildScopeOutline, hasAutoSyncMindmap, nodes, setNodes, structureSignature])
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [noteFitSignature, setNodes])
 
   const getPasteTarget = useCallback(() => {
     if (lastCanvasPointRef.current) return lastCanvasPointRef.current
@@ -3967,28 +4048,92 @@ export function App() {
     await refreshAfterImport(`已粘贴图片「${file.name}」`)
   }, [activeProjectId, refreshAfterImport, scopeId])
 
-  const pasteTextAsNode = useCallback(async (text: string, point: { x: number; y: number }) => {
+  const pasteTextAsNode = useCallback(async (text: string, point: { x: number; y: number }, targetScopeId?: string): Promise<string | null> => {
+    // G-4：targetScopeId 让 Context 视图的导图摘取落进当前 Context scope（默认仍建在当前 scope）。
+    const nodeScopeId = targetScopeId ?? scopeId
     if (/^https?:\/\/\S+$/i.test(text)) {
       const call = await bridgeRef.current.client.importResourceUrl(activeProjectId, {
         url: text,
-        scopeId,
+        scopeId: nodeScopeId,
         x: point.x,
         y: point.y,
       })
-      if (!call.result.ok) { setNotice(`粘贴链接失败：${call.result.error.message}`); return }
+      if (!call.result.ok) { setNotice(`粘贴链接失败：${call.result.error.message}`); return null }
       await refreshAfterImport('已粘贴链接')
-      return
+      return null
     }
     const call = await bridgeRef.current.client.createTextArtifact(activeProjectId, {
       title: inferFragmentLabel(text, '文字摘录'),
       body: text,
-      scopeId,
+      scopeId: nodeScopeId,
       x: point.x,
       y: point.y,
     })
-    if (!call.result.ok) { setNotice(`粘贴文本失败：${call.result.error.message}`); return }
+    if (!call.result.ok) { setNotice(`粘贴文本失败：${call.result.error.message}`); return null }
     await refreshAfterImport('已把剪贴板文字放到画布')
+    return call.result.value.viewId
   }, [activeProjectId, refreshAfterImport, scopeId])
+
+  /**
+   * G-4 导图分支摘取 → 正常文本节点（与 createNodeAt('note') 同一条链路）：
+   * 本地先立 kind:'note' + noteBody/noteOutline（摘取的就是大纲文本，天然可再转导图），
+   * 再落 createTextArtifact 并回填 viewId。不走 pasteTextAsNode 的 refreshAfterImport——
+   * 全量重载会把节点投影成 source 纸片（mapGraphToState 的 markdown→source），不是用户要的文本节点。
+   * 返回新节点 viewId（供 Context 通道写入成员集）。
+   */
+  const createNoteFromBranchText = useCallback(async (text: string, point: { x: number; y: number }, targetScopeId?: string): Promise<string | null> => {
+    if (!isRuntimeProjectMode(bootMode) || !activeProjectId) { setNotice('原型模式不写入导图摘取'); return null }
+    const nodeScopeId = targetScopeId ?? scopeId
+    const localId = createId('note')
+    const isOutline = text.includes('\n')
+    const temp: CanvasNode = {
+      id: localId,
+      kind: 'note',
+      title: inferFragmentLabel(text, '摘取分支'),
+      subtitle: '文本 · 可进入 Context 与修改',
+      x: point.x,
+      y: point.y,
+      width: 244,
+      height: 150,
+      displayMode: 'standard',
+      fileType: 'markdown',
+      noteBody: text,
+      ...(isOutline ? { noteOutline: text } : {}),
+      scopeId: nodeScopeId,
+      createdAt: new Date().toISOString(),
+      workspaceIds: workspaceId ? [workspaceId] : [],
+    }
+    setNodes((current) => [...current, temp])
+    setSelectedIds([localId])
+    const call = await bridgeRef.current.client.createTextArtifact(activeProjectId, {
+      title: temp.title,
+      body: text,
+      scopeId: nodeScopeId,
+      x: point.x,
+      y: point.y,
+    })
+    if (!call.result.ok) {
+      setNodes((current) => current.filter((node) => node.id !== localId))
+      setNotice(`摘取失败：${call.result.error.message}`)
+      return null
+    }
+    const value = call.result.value
+    originTextIdsRef.current.add(value.viewId)
+    // 会话记忆同步写一份：mapGraphToState 重载时按 recallNotePresentation 恢复 noteBody/noteOutline。
+    rememberNotePresentation(value.viewId, { noteBody: text, ...(isOutline ? { noteOutline: text } : {}) })
+    setNodes((current) => current.map((node) => node.id === localId ? {
+      ...node,
+      id: value.viewId,
+      artifactId: value.artifactId,
+      revisionId: value.revisionId,
+      fileRecordId: value.fileRecordId,
+      managed: true,
+      title: value.title || temp.title,
+    } : node))
+    setSelectedIds([value.viewId])
+    setNotice('已把导图分支摘成新文本节点')
+    return value.viewId
+  }, [activeProjectId, bootMode, scopeId, workspaceId])
 
   const saveMaterialReference = useCallback(async (newArtifactId: string, payload: MaterialTransferPayloadV1) => {
     const sourceArtifactId = payload.source.artifactId
@@ -4181,6 +4326,18 @@ export function App() {
     setNodes((current) => current.map((node) => {
       if (!selected.has(node.id)) return node
       const size = nodeDimensions(node.kind, mode)
+      // 文本材料「直接阅读」：节点按实际行数生长，让预览行数与卡片高度匹配
+      // （否则白色文本层被压成 2-3 行的“白条”，文字根本读不全）。
+      const body = node.noteBody ?? ''
+      const textual = node.kind === 'note' || detectFileIdentity(node) === 'markdown'
+      if (mode !== 'compact' && textual && body.trim()) {
+        const maxLines = mode === 'expanded' ? 22 : 11
+        const lineCount = Math.min(maxLines, Math.max(3, body.split(/\r?\n/).filter((line) => line.trim()).length))
+        const lineHeight = 18
+        const height = Math.round(lineCount * lineHeight + 96)
+        const width = Math.max(size.width, mode === 'expanded' ? 296 : 244)
+        return { ...node, displayMode: mode, width, height }
+      }
       return { ...node, displayMode: mode, width: size.width, height: size.height }
     }))
     setNotice(mode === 'compact' ? '已收起所选文字材料' : '已在画布直接展开所选文字材料')
@@ -4262,7 +4419,9 @@ export function App() {
         subtitle: '正在保存到项目…',
         x,
         y,
-        ...nodeDimensions(kind, 'standard'),
+        // 新建即就地可编辑尺寸（幕布式：建好光标就在卡上，不是 135×70 小卡 + 改名弹窗）。
+        width: 244,
+        height: 150,
         displayMode: 'standard',
         scopeId,
         createdAt: new Date().toISOString(),
@@ -4270,6 +4429,7 @@ export function App() {
       }
       setNodes((current) => [...current, temp])
       setSelectedIds([localId])
+      setNoteEditorId(localId)
       void bridgeRef.current.client.createTextArtifact(activeProjectId, {
         body: '',
         scopeId,
@@ -4279,10 +4439,14 @@ export function App() {
       }).then((call) => {
         if (!call.result.ok) {
           setNodes((current) => current.filter((node) => node.id !== localId))
+          setNoteEditorId(null)
           setNotice(`文本创建失败：${call.result.error.message}`)
           return
         }
         const value = call.result.value
+        // 与 runtime 投影对齐（mapGraphToState 的 fileType: artifact.kind）：
+        // 漏掉 fileType 会让 detectFileIdentity 判成 'file'，卡片退回纸片（“老样子”）。
+        originTextIdsRef.current.add(value.viewId)
         setNodes((current) => current.map((node) => node.id === localId ? {
           ...node,
           id: value.viewId,
@@ -4292,10 +4456,11 @@ export function App() {
           managed: true,
           title: value.title,
           subtitle: '文本 · 可进入 Context 与修改',
+          fileType: 'markdown',
           previewText: '',
         } : node))
         setSelectedIds([value.viewId])
-        setRenameNodeId(value.viewId)
+        setNoteEditorId(value.viewId)
       })
       return localId
     }
@@ -4311,9 +4476,9 @@ export function App() {
     }
     const id = createId(kind)
     const displayMode: NodeDisplayMode = 'standard'
-    const next: CanvasNode = { id, kind, title: '新文本', subtitle: '直接输入或交给 Agent 整理', x, y, ...nodeDimensions(kind, displayMode), displayMode, scopeId, createdAt: new Date().toISOString(), workspaceIds: workspaceId ? [workspaceId] : [] }
-    setNodes((current) => [...current, next]); setSelectedIds([id]); setRenameNodeId(id); return id
-  }, [activeProjectId, bootMode, rootScope.id, scopeId, setNodes, setSelectedIds, setRenameNodeId, workspaceId])
+    const next: CanvasNode = { id, kind, title: '新文本', subtitle: '直接输入或交给 Agent 整理', x, y, width: 244, height: 150, displayMode, scopeId, createdAt: new Date().toISOString(), workspaceIds: workspaceId ? [workspaceId] : [] }
+    setNodes((current) => [...current, next]); setSelectedIds([id]); setNoteEditorId(id); return id
+  }, [activeProjectId, bootMode, rootScope.id, scopeId, setNodes, setSelectedIds, setNoteEditorId, setRenameNodeId, workspaceId])
 
   const createWorkflowOperatorNode = useCallback(async (kind: 'condition' | 'parallel-split' | 'parallel-join' | 'reference', point: { x: number; y: number }) => {
     const title = kind === 'condition' ? '条件判断' : kind === 'parallel-split' ? '并行分支' : kind === 'parallel-join' ? '并行汇合' : '引用'
@@ -4607,7 +4772,7 @@ export function App() {
       if (!isTextPreviewFile(file)) continue
       const nodeId = created[index]?.id
       if (nodeId === undefined) continue
-      file.text().then((text) => {
+      file.arrayBuffer().then((buffer) => decodeTextBuffer(buffer)).then((text) => {
         setNodes((current) => current.map((node) => node.id === nodeId ? { ...node, previewText: text.slice(0, 64 * 1024) } : node))
       }).catch(() => {
         setNodes((current) => current.map((node) => node.id === nodeId ? { ...node, previewError: 'Local text preview failed.' } : node))
@@ -4836,6 +5001,9 @@ export function App() {
   }, [activeProjectId, addViewsToWorkspace, obsidianScan, reloadRuntimeProject, scopeId, workspaceId])
 
   const applyRuntimeReview = useCallback((review: RunReview, current: ActiveRun, providerError?: string) => {
+    // RECEIVER-5：在 runtime 错误的汇聚点检测「会话已失效」（用原始错误文本匹配，humanize 前判定）。
+    // 五条路径（dispatch/sync/cancel/answerInput/reconnect）都经过这里，一处检测全覆盖。
+    if (providerError !== undefined && isReceiverSessionError(providerError)) setReceiverSessionStale(true)
     const readableProviderError = providerError === undefined ? undefined : humanizeRuntimeMessage(providerError)
     const pendingReturn = review.returns.find((item) => item.status === 'pending_review')
     const draftRevision = pendingReturn?.draftRevisionId === undefined
@@ -5000,7 +5168,26 @@ export function App() {
     ])
   }, [activeProjectId, bootMode, workspaceId])
 
-  const startRunFrom = useCallback(async (command: string, targetIds: string[], contextIds: string[], intent: RunOutputIntent = 'revise', requestedProvider = 'auto', resultPolicy: ComposerResultPolicy = intent === 'revise' ? 'draft_revision_per_target' : 'create_artifact', proposalSummary?: string, targetRevisionIdOverride?: string, sessionIdOverride?: string, contextArtifactIdsOverride?: readonly string[]): Promise<string | undefined> => {
+  /* ---------------- RECEIVER-3 Handoff：切换现场快照（全部来自真实状态，无假字段） ---------------- */
+
+  // surface=当前视图（main/context/workflow 三类投影）；selection=当前选中；pendingReviewCount=待确认返回数。
+  const receiverHandoffContext = useMemo<ReceiverHandoffContext>(() => {
+    const kind = handoffSurfaceKindFromSurfaceId(activeSurface)
+    const surfaceId = kind === 'context'
+      ? activeContextId ?? rootScope.id
+      : kind === 'workflow'
+        ? activeWorkflowId ?? rootScope.id
+        : workspaceId ?? scopeId
+    return { surface: { kind, surfaceId }, selectionEntityIds: selectedIds, pendingReviewCount: pendingReviews.length }
+  }, [activeContextId, activeSurface, activeWorkflowId, pendingReviews.length, rootScope.id, scopeId, selectedIds, workspaceId])
+
+  /* ---------------- 权限门（第一梯队 ⑥）：写操作 Run 的发送前授权 ---------------- */
+
+  // 待确认的写意图 Run 请求（useState open + pending payload，照 App 现有 dialog 模式）。
+  const [pendingPermissionRun, setPendingPermissionRun] = useState<PendingPermissionRun | null>(null)
+
+  // 原发送链（改名 executeRunFrom）：内部才 createRuntimeRun / dispatchRuntimeRun；权限门确认后由 startRunFrom 调它。
+  const executeRunFrom = useCallback(async (command: string, targetIds: string[], contextIds: string[], intent: RunOutputIntent = 'revise', requestedProvider = 'auto', resultPolicy: ComposerResultPolicy = intent === 'revise' ? 'draft_revision_per_target' : 'create_artifact', proposalSummary?: string, targetRevisionIdOverride?: string, sessionIdOverride?: string, contextArtifactIdsOverride?: readonly string[]): Promise<string | undefined> => {
     if (!command.trim()) return undefined
     const target = nodes.find((node) => node.id === targetIds[0])
     const targetRevisionId = targetRevisionIdOverride ?? target?.revisionId
@@ -5013,8 +5200,36 @@ export function App() {
       const savedContextIdForRun = activeContextId && ['context-space', 'context-tree', 'context-flow', 'outline'].includes(activeSurface)
         ? activeContextId
         : undefined
+      // RECEIVER-3 next-send injection：发送前查 pending Handoff——有未消费的注入「[承接上下文]」前缀
+      // （Project state > chat replay，不灌历史聊天）；已消费则不注入（幂等）。
+      // 注入是拼入 prompt 文本的轻实现：0.1 不动 Runtime 的 prompt compiler，契约字段已存，0.2 升级为结构化注入。
+      let handoffPrefix: string | null = null
+      let handoffConsume: (() => Promise<void>) | null = null
+      try {
+        const bindingCall = await bridgeRef.current.client.getProjectReceiverBinding(activeProjectId)
+        const activeReceiverId = bindingCall.result.ok ? bindingCall.result.value.activeReceiverId : null
+        if (activeReceiverId !== null) {
+          const pendingCall = await bridgeRef.current.client.getPendingReceiverHandoff(activeProjectId, activeReceiverId)
+          const pending = pendingCall.result.ok ? pendingCall.result.value : null
+          if (pending !== null) {
+            // fromLabel 按 fromConversationId 反查前手会话标题（无前手=首次承接）。
+            const conversationsCall = await bridgeRef.current.client.listConnectedConversations(activeProjectId)
+            const fromLabel = conversationsCall.result.ok
+              ? conversationsCall.result.value.find((conversation) => conversation.id === pending.fromConversationId)?.label ?? null
+              : null
+            // 选中对象标题按快照冻结的实体 id 反查当前图（节点已删则如实显示 id）。
+            const selectionTitles = pending.selectionEntityIds.map((entityId) => nodes.find((node) => node.id === entityId)?.title ?? entityId)
+            handoffPrefix = resolveHandoffPrefix(pending, fromLabel, selectionTitles)
+            handoffConsume = async () => {
+              const consumeCall = await bridgeRef.current.client.consumeReceiverHandoff(activeProjectId, activeReceiverId)
+              if (!consumeCall.result.ok) setNotice(`Handoff 快照消费失败：${consumeCall.result.error.message}`)
+            }
+          }
+        }
+      } catch { /* Handoff 查询失败不阻断发送：按原指令继续，快照保持未消费，下次发送重试注入。 */ }
+      const instruction = handoffPrefix === null ? command : applyHandoffPrefixToInstruction(handoffPrefix, command)
       const call = await bridgeRef.current.client.createRuntimeRun(activeProjectId, {
-        instruction: command,
+        instruction,
         outputIntent: intent,
         ...(target?.artifactId === undefined ? {} : { targetArtifactId: target.artifactId }),
         ...(targetRevisionId === undefined ? {} : { targetRevisionId }),
@@ -5032,6 +5247,8 @@ export function App() {
         setNotice(`Run 创建失败：${call.result.error.message}`)
         return undefined
       }
+      // Run 创建成功才消费 Handoff 快照（创建失败保持 pending，下次发送重试注入；幂等由后端保证）。
+      if (handoffConsume !== null) void handoffConsume()
       const created = call.result.value
       const dispatched = await bridgeRef.current.client.dispatchRuntimeRun(String(created.review.run.id))
       const review = dispatched.result.ok ? dispatched.result.value.review : created.review
@@ -5118,6 +5335,230 @@ export function App() {
     setNotice('参考快照、指令和执行记录已自动保存')
     return id
   }, [activeContextId, activeProjectId, activeSurface, applyRuntimeReview, bootMode, clearPersistedCommandDrafts, continuitySessionId, nodes, scopeId, setGraph, workspaceId])
+
+  // 用户在确认卡上点「确认执行」→ 继续原发送链（这一刻才 createRuntimeRun），并把 runId 还给当时 await 的调用方。
+  const confirmPendingPermissionRun = useCallback(() => {
+    const pending = pendingPermissionRun
+    setPendingPermissionRun(null)
+    if (pending === null) return
+    void executeRunFrom(pending.args.command, pending.args.targetIds, pending.args.contextIds, pending.args.intent, pending.args.requestedProvider, pending.args.resultPolicy, pending.args.proposalSummary, pending.args.targetRevisionIdOverride, pending.args.sessionIdOverride, pending.args.contextArtifactIdsOverride)
+      .then(pending.resolve, () => pending.resolve(undefined))
+  }, [executeRunFrom, pendingPermissionRun])
+
+  // 用户拒绝（取消/关卡/点 backdrop）→ resolve(undefined) 放行 await 方；Run 根本不创建（拒绝不半执行）。
+  const cancelPendingPermissionRun = useCallback(() => {
+    const pending = pendingPermissionRun
+    setPendingPermissionRun(null)
+    if (pending === null) return
+    pending.resolve(undefined)
+    setNotice('已取消，未发起任务')
+  }, [pendingPermissionRun, setNotice])
+
+  // 权限门统一入口：所有发起 Run 的路径（WorkRail / Selection Composer / 技能重放 / ⌘K / 局部 Agent / 反馈升级）都走这里。
+  // 读意图（analyze）白名单静默直发——读操作零打扰；写意图先弹确认卡，确认后继续原发送链，取消则不发起。
+  const startRunFrom = useCallback(async (command: string, targetIds: string[], contextIds: string[], intent: RunOutputIntent = 'revise', requestedProvider = 'auto', resultPolicy: ComposerResultPolicy = intent === 'revise' ? 'draft_revision_per_target' : 'create_artifact', proposalSummary?: string, targetRevisionIdOverride?: string, sessionIdOverride?: string, contextArtifactIdsOverride?: readonly string[]): Promise<string | undefined> => {
+    if (!command.trim()) return undefined
+    // 涉及对象 = 修改目标 + 上下文参考（找不到节点时如实显示 id）。
+    const involvedTitles = [...new Set([...targetIds, ...contextIds])].map((id) => nodes.find((node) => node.id === id)?.title ?? id)
+    const permission = evaluateRunPermission({ outputIntent: intent, instruction: command, contextTitles: involvedTitles })
+    if (permission.kind === 'allow') {
+      return executeRunFrom(command, targetIds, contextIds, intent, requestedProvider, resultPolicy, proposalSummary, targetRevisionIdOverride, sessionIdOverride, contextArtifactIdsOverride)
+    }
+    // 写意图：挂起等待用户决定；已有待确认请求时旧的先以 undefined 放行（被新请求取代，不悬挂）。
+    return await new Promise<string | undefined>((resolve) => {
+      setPendingPermissionRun((current) => {
+        current?.resolve(undefined)
+        return { card: permission, args: { command, targetIds, contextIds, intent, requestedProvider, resultPolicy, proposalSummary, targetRevisionIdOverride, sessionIdOverride, contextArtifactIdsOverride }, resolve }
+      })
+    })
+  }, [executeRunFrom, nodes])
+
+  /* ---------------- 教工作流 MVP：编排 → 保存（SKILL.md）→ 一键重放 ---------------- */
+
+  const [workflowSkills, setWorkflowSkills] = useState<readonly WorkflowSkillSummary[]>([])
+  // 技能解析缓存：key = artifactId@revisionId（人工编辑产生新 revision 即失效重读）；null = 不是技能格式。
+  const workflowSkillCacheRef = useRef(new Map<string, WorkflowSkillSummary | null>())
+  useEffect(() => {
+    if (bootMode !== 'runtime') return
+    const candidates = projectPresentationNodes.filter((node) => node.fileType === 'markdown' && node.managed && node.fileRecordId !== undefined && node.artifactId !== undefined && node.revisionId !== undefined)
+    let cancelled = false
+    void Promise.all(candidates.map(async (node) => {
+      const cacheKey = `${node.artifactId}@${node.revisionId}`
+      const cached = workflowSkillCacheRef.current.get(cacheKey)
+      if (cached !== undefined) return cached === null ? null : { ...cached, viewId: node.id, title: node.title }
+      const call = await bridgeRef.current.client.readFileRecordText(activeProjectId, node.fileRecordId!)
+      if (!call.result.ok) return null // 读取失败不写缓存，下次重试
+      const parsed = parseWorkflowSkillSteps(call.result.value)
+      if (parsed === null) {
+        workflowSkillCacheRef.current.set(cacheKey, null)
+        return null
+      }
+      const summary: WorkflowSkillSummary = {
+        artifactId: node.artifactId!,
+        viewId: node.id,
+        title: node.title,
+        name: parsed.name,
+        description: parsed.description,
+        stepCount: parsed.steps.length,
+        steps: parsed.steps,
+        createdAt: node.createdAt !== undefined ? Date.parse(node.createdAt) || 0 : 0,
+      }
+      workflowSkillCacheRef.current.set(cacheKey, summary)
+      return summary
+    })).then((results) => {
+      if (cancelled) return
+      setWorkflowSkills(results.filter((item): item is WorkflowSkillSummary => item !== null))
+    }).catch(() => { /* 扫描失败保持现状，下次 nodes 变化重试 */ })
+    return () => { cancelled = true }
+  }, [activeProjectId, bootMode, projectPresentationNodes])
+
+  const handleSaveWorkflowSkill = useCallback(async (input: { readonly name: string; readonly steps: readonly SkillStepInput[] }): Promise<boolean> => {
+    if (bootMode !== 'runtime') { setNotice('原型模式不能保存技能；请连接 Runtime 项目'); return false }
+    const call = await bridgeRef.current.client.createTextArtifact(activeProjectId, {
+      title: `SKILL · ${input.name}`,
+      body: serializeWorkflowSkill(input),
+      scopeId: workflowPresentationOwnerId,
+    })
+    if (!call.result.ok) { setNotice(`技能保存失败：${call.result.error.message}`); return false }
+    await reloadRuntimeProject()
+    setNotice(`已把 ${input.steps.length} 步链存为技能「${input.name}」；刷新后可一键重放`)
+    return true
+  }, [activeProjectId, bootMode, reloadRuntimeProject, setNotice, workflowPresentationOwnerId])
+
+  const handleReplayWorkflowSkill = useCallback((skill: WorkflowSkillSummary) => {
+    const node = projectPresentationNodes.find((item) => item.artifactId === skill.artifactId)
+    if (bootMode !== 'runtime' || node?.fileRecordId === undefined) { setNotice('原型模式不能重放技能；请连接 Runtime 项目'); return }
+    void bridgeRef.current.client.readFileRecordText(activeProjectId, node.fileRecordId).then((call) => {
+      if (!call.result.ok) { setNotice(`技能读取失败：${call.result.error.message}`); return }
+      const parsed = parseWorkflowSkillSteps(call.result.value)
+      if (parsed === null) { setNotice('这份 SKILL.md 已不是可解析的技能格式'); return }
+      // 材料 live pointer：按 viewId 引用现有对象；找不到的跳过并明示（不静默失败）。
+      const nodeById = new Map(projectPresentationNodes.map((item) => [item.id, item]))
+      const missingTitles: string[] = []
+      const contextIds: string[] = []
+      for (const viewId of collectSkillMaterialViewIds(parsed.steps)) {
+        if (nodeById.has(viewId)) contextIds.push(viewId)
+        else {
+          const material = parsed.steps.flatMap((step) => step.materials).find((item) => item.viewId === viewId)
+          missingTitles.push(material?.title || viewId)
+        }
+      }
+      if (missingTitles.length > 0) setNotice(`技能里有 ${missingTitles.length} 个材料已不在项目中，已跳过：${missingTitles.slice(0, 3).join('、')}`)
+      void startRunFrom(buildReplayInstruction(parsed), [], contextIds, 'analyze', 'auto', 'reply_only', `技能「${parsed.name}」一键重放`)
+    })
+  }, [activeProjectId, bootMode, projectPresentationNodes, setNotice, startRunFrom])
+
+  // 沉淀池运行历史投影：画布 Run 节点的 commandText → 每个技能的 { runs, lastRunAt }。
+  // 不写回 SKILL.md（运行次数是 Run 集合的投影，One Project Truth，无 Core text-revision API 依赖）。
+  const skillRunStats = useMemo(
+    () => projectSkillRunStats(workflowSkills, nodes.filter((node) => node.kind === 'process')),
+    [nodes, workflowSkills])
+
+  /* ---------------- CommandPalette MVP（第一梯队 ⑤）：⌘K 全局命令面板 ---------------- */
+
+  const [paletteOpen, setPaletteOpen] = useState(false)
+  // 面板用的会话承接列表：打开时拉一次（与 ReceiverChip 同源同模式），切换后即时回写。
+  const [paletteConversations, setPaletteConversations] = useState<readonly ConnectedConversationV1[]>([])
+  const [paletteActiveReceiverId, setPaletteActiveReceiverId] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!paletteOpen || bootMode !== 'runtime') return
+    let cancelled = false
+    void Promise.all([
+      bridgeRef.current.client.listConnectedConversations(activeProjectId),
+      bridgeRef.current.client.getProjectReceiverBinding(activeProjectId),
+    ]).then(([listCall, bindingCall]) => {
+      if (cancelled) return
+      if (listCall.result.ok) setPaletteConversations(listCall.result.value)
+      if (bindingCall.result.ok) setPaletteActiveReceiverId(bindingCall.result.value.activeReceiverId)
+    }).catch(() => { /* 拉取失败保持上一次列表；下次打开重试 */ })
+    return () => { cancelled = true }
+  }, [activeProjectId, bootMode, paletteOpen])
+
+  // 定位到任意画布节点：复用 selectArtifactFromTools 的跨画布切换 + revealNode 相机模式，按节点 id 寻址。
+  const locateCanvasNode = useCallback((nodeId: string) => {
+    const node = nodes.find((item) => item.id === nodeId)
+    if (node === undefined) { setNotice('节点不存在或已被移除'); return }
+    if (node.scopeId && node.scopeId !== scopeId) setScopeId(node.scopeId)
+    selectNode(node.id)
+    const viewport = document.querySelector<HTMLElement>('[data-testid="canvas"]')?.getBoundingClientRect()
+    setCamera((current) => revealNode(current, node, viewport?.width ?? 1000, viewport?.height ?? 820, safeInsets))
+    setNotice(`已定位「${node.title}」`)
+  }, [nodes, safeInsets, scopeId, selectNode])
+
+  // 文件类节点 → 选中 + 沉浸式预览（与 NodeInfoPopover 的 onPreview 同一路径）。
+  const openNodePreview = useCallback((nodeId: string) => {
+    const node = nodes.find((item) => item.id === nodeId)
+    if (node === undefined) { setNotice('节点不存在或已被移除'); return }
+    selectNode(node.id)
+    setWorkbench(null)
+    setImmersiveNodeId(node.id)
+  }, [nodes, selectNode])
+
+  // 沉淀池「定位编辑」：技能 artifact 或其材料 → 相机定位（与 ⌘K 节点跳转同一 focus 链）。
+  const locateWorkflowSkill = useCallback((skill: WorkflowSkillSummary) => {
+    locateCanvasNode(skill.viewId)
+  }, [locateCanvasNode])
+
+  // 导出 .lcosproj：走 local-core 的 downloadLcosproj（与 ProjectToolsDialog 同一端点），浏览器锚点下载。
+  const exportProjectLcosproj = useCallback(() => {
+    if (bootMode !== 'runtime') { setNotice('原型模式没有工程文件可导出'); return }
+    void bridgeRef.current.client.downloadLcosproj(activeProjectId).then((call) => {
+      if (!call.result.ok) { setNotice(`工程文件导出失败：${call.result.error.message}`); return }
+      const url = URL.createObjectURL(call.result.value.blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = call.result.value.fileName
+      anchor.click()
+      URL.revokeObjectURL(url)
+      setNotice('已导出 .lcosproj 工程文件')
+    })
+  }, [activeProjectId, bootMode])
+
+  // 展开导图：项目没有全局“展开全部导图”入口，面板动作作用于当前唯一选中的文本节点（toggleNoteLayout）。
+  const expandSelectionMindmap = useCallback(() => {
+    const target = selectedNodes.length === 1 ? selectedNodes[0] : undefined
+    if (!target || (target.kind !== 'note' && target.fileType !== 'markdown')) { setNotice('先选一个文本节点，再展开为导图'); return }
+    toggleNoteLayout(target.id, 'mindmap')
+  }, [selectedNodes, toggleNoteLayout])
+
+  const switchPaletteReceiver = useCallback((conversationId: string) => {
+    if (bootMode !== 'runtime') { setNotice('原型模式不能切换承接会话'); return }
+    void bridgeRef.current.client.setActiveReceiver(activeProjectId, conversationId).then((call) => {
+      if (!call.result.ok) { setNotice(`切换承接失败：${call.result.error.message}`); return }
+      setPaletteActiveReceiverId(call.result.value.activeReceiverId)
+      setNotice('已切换项目承接会话')
+    })
+  }, [activeProjectId, bootMode])
+
+  const replayPaletteSkill = useCallback((artifactId: string) => {
+    const skill = workflowSkills.find((item) => item.artifactId === artifactId)
+    if (!skill) { setNotice('这份技能已不在项目中'); return }
+    handleReplayWorkflowSkill(skill)
+  }, [handleReplayWorkflowSkill, workflowSkills])
+
+  // providers 纯查询 + actions 执行表：全部由 App 现有函数装配，只引用不新造逻辑。
+  const paletteAssembly = useMemo(() => createCommandPaletteProviders({
+    commands: {
+      switchToMainView: () => selectSurface('arrange'),
+      switchToContextView: () => selectSurface('context-space'),
+      switchToWorkflowView: () => selectSurface('workflow'),
+      createTextNode: () => { const point = lastCanvasPointRef.current ?? { x: 180, y: 160 }; createNodeAt('note', point.x, point.y) },
+      expandMindmap: expandSelectionMindmap,
+      exportLcosproj: exportProjectLcosproj,
+      switchReceiver: switchPaletteReceiver,
+      replaySkill: replayPaletteSkill,
+    },
+    navigation: { locateNode: locateCanvasNode, openFile: openNodePreview },
+    nodes: nodes.map((node) => ({ id: node.id, title: node.title, ...(node.fileType === undefined ? {} : { fileType: node.fileType }) })),
+    conversations: paletteConversations.map((conversation) => ({
+      id: conversation.id,
+      label: conversation.label,
+      provider: receiverProviderLabel(conversation.provider),
+      active: conversation.id === paletteActiveReceiverId,
+    })),
+    skills: workflowSkills.map((skill) => ({ artifactId: skill.artifactId, name: skill.name, description: skill.description, stepCount: skill.stepCount })),
+  }), [createNodeAt, expandSelectionMindmap, exportProjectLcosproj, locateCanvasNode, nodes, openNodePreview, paletteActiveReceiverId, paletteConversations, replayPaletteSkill, selectSurface, workflowSkills])
 
   const requestConversationSectionAnnotation = useCallback((input: { readonly conversationId: string; readonly sectionId: string; readonly sectionTitle: string }) => {
     const prompt = [
@@ -5452,16 +5893,18 @@ export function App() {
   const syncRuntimeRun = useCallback(() => {
     if (!activeRun?.runtime || runtimeSyncBusyRef.current) return
     runtimeSyncBusyRef.current = true
-    setNotice('正在更新 Agent 任务状态…')
     void bridgeRef.current.client.syncRuntimeRun(activeRun.id).then((call) => {
       if (!call.result.ok) {
         setNotice(`同步失败：${call.result.error.message}`)
         return
       }
-      applyRuntimeReview(call.result.value.review, activeRun, call.result.value.providerError?.message)
-      setNotice(call.result.value.review.presentationPhase === 'review'
-        ? '结果已摄取为 Draft，等待你的决定'
-        : call.result.value.providerError?.message ?? `状态：${call.result.value.review.presentationPhase}`)
+      const review = call.result.value.review
+      const providerError = call.result.value.providerError?.message
+      const hadReturn = activeRun.pendingArtifactId !== undefined
+      applyRuntimeReview(review, activeRun, providerError)
+      // 只在需要用户决策或真正出错时提示，避免每 3 秒轮询刷屏（queued/running 中间态不弹）。
+      if (review.presentationPhase === 'review' && !hadReturn) setNotice('结果已摄取为 Draft，等待你的决定')
+      else if (providerError) setNotice(humanizeRuntimeMessage(providerError))
     }).finally(() => { runtimeSyncBusyRef.current = false })
   }, [activeRun, applyRuntimeReview])
 
@@ -5925,9 +6368,16 @@ export function App() {
     if (!node) return
     selectNode(id)
     // Text nodes open the inline editor (mubu-style canvas writing), not the Reader.
-    if (node.kind === 'note') {
+    // 统一文本体系：note 与 markdown 文本 artifact 双击都直接就地编辑。
+    if (node.kind === 'note' || node.fileType === 'markdown') {
       setNodeInfoId(null)
       setImmersiveNodeId(null)
+      // 投影/本体冲突：runtime 实体投影的正文属于本体（text-revision API 未落地，
+      // 本地改写只会造成投影分叉）。双击不直接编辑，提示复制一个引用副本节点来改。
+      if (bootMode === 'runtime' && node.artifactId && !originTextIdsRef.current.has(node.id)) {
+        setForkPromptId(id)
+        return
+      }
       setNoteEditorId(id)
       return
     }
@@ -5951,7 +6401,7 @@ export function App() {
       setWorkbench(null)
       setImmersiveNodeId(id)
     }
-  }, [enterScope, nodes, openSavedContextView, openSavedWorkflowView, openWorkspaceScene, scopes, selectNode])
+  }, [bootMode, enterScope, nodes, openSavedContextView, openSavedWorkflowView, openWorkspaceScene, scopes, selectNode])
 
   const showNodeDetails = useCallback((id: string) => {
     setNodeInfoId(id)
@@ -5998,6 +6448,8 @@ export function App() {
       const activeElement = document.activeElement as HTMLElement | null
       const canvasActive = Boolean(activeElement?.closest('[data-testid="canvas"]')) && !document.querySelector('[role="dialog"][aria-modal="true"]')
       if (createDialogOpen || scopeCreateOpen || projectCreateOpen) return
+      // ⌘K / Ctrl+K 全局唤起命令面板（键位进统一键位表 PALETTE_KEYS）。
+      if (modifier && key === PALETTE_KEYS.open) { event.preventDefault(); setPaletteOpen(true); return }
       if (modifier && event.key === 'Enter') {
         event.preventDefault()
         if (layoutMode === 'sidecar') { setNotice('侧边协作模式不提供 LCOS 输入框，请直接使用当前宿主 Agent / Chat'); return }
@@ -6024,7 +6476,7 @@ export function App() {
       if (modifier && event.shiftKey && key === 'l') { event.preventDefault(); if (bootMode === 'runtime') setReorganizeOpen(true); else setNotice('智能体整理只在 Runtime 项目中可用'); return }
       if (modifier && key === 'o' && selectedNodes.length === 1) { event.preventDefault(); openNative(selectedNodes[0]); return }
       if (event.code === 'Space') { event.preventDefault(); setSpaceHeld(true); return }
-      if (event.key === 'Escape') { if (projectFocusOpen) setProjectFocusOpen(false); else if (confirmProjectDelete) setConfirmProjectDelete(null); else if (confirmWorkspaceId) setConfirmWorkspaceId(null); else if (immersiveNodeId) setImmersiveNodeId(null); else if (workbench) setWorkbench(null); else if (capabilityOpen) setCapabilityOpen(false); else if (nodeInfoId) setNodeInfoId(null); else if (layoutPreview) { setLayoutPreview(null); setLayoutPreviewFocusIds(null) } else clearSelection(); return }
+      if (event.key === 'Escape') { if (paletteOpen) { setPaletteOpen(false); return } if (projectFocusOpen) setProjectFocusOpen(false); else if (confirmProjectDelete) setConfirmProjectDelete(null); else if (confirmWorkspaceId) setConfirmWorkspaceId(null); else if (immersiveNodeId) setImmersiveNodeId(null); else if (workbench) setWorkbench(null); else if (capabilityOpen) setCapabilityOpen(false); else if (nodeInfoId) setNodeInfoId(null); else if (layoutPreview) { setLayoutPreview(null); setLayoutPreviewFocusIds(null) } else clearSelection(); return }
       if (key === 'f' && selectedIds.length === 1) { event.preventDefault(); openProjectFocus(); return }
       if (key === 'c') { event.preventDefault(); if (layoutMode === 'sidecar') { setNotice('侧边协作模式不提供 LCOS 输入框'); return } requestComposerFocus(); return }
       if (event.key === 'F2' && selectedIds.length === 1 && selectedNodes.length === 1) { event.preventDefault(); setRenameNodeId(selectedNodes[0]!.id); return }
@@ -6036,7 +6488,7 @@ export function App() {
     const release = (event: KeyboardEvent) => { if (event.code === 'Space') setSpaceHeld(false) }
     window.addEventListener('keydown', handler); window.addEventListener('keyup', release)
     return () => { window.removeEventListener('keydown', handler); window.removeEventListener('keyup', release) }
-  }, [bootMode, clearSelection, confirmProjectDelete, confirmWorkspaceId, copySelection, createDialogOpen, deleteNodes, duplicateSelection, capabilityOpen, immersiveNodeId, layoutMode, nodeInfoId, workbench, layoutPreview, openNative, openProjectFocus, pasteClipboard, projectCreateOpen, projectFocusOpen, redo, requestComposerFocus, requestGlobalRun, requestSelectionRun, scopeCreateOpen, selectMarquee, selectedEdgeId, selectedId, selectedIds, selectedNodes, setEdges, undo, visibleNodes])
+  }, [bootMode, clearSelection, confirmProjectDelete, confirmWorkspaceId, copySelection, createDialogOpen, deleteNodes, duplicateSelection, capabilityOpen, immersiveNodeId, layoutMode, nodeInfoId, paletteOpen, workbench, layoutPreview, openNative, openProjectFocus, pasteClipboard, projectCreateOpen, projectFocusOpen, redo, requestComposerFocus, requestGlobalRun, requestSelectionRun, scopeCreateOpen, selectMarquee, selectedEdgeId, selectedId, selectedIds, selectedNodes, setEdges, undo, visibleNodes])
 
 
   const refreshProjectCatalog = useCallback(() => {
@@ -6232,7 +6684,8 @@ export function App() {
   const nodeToRename = renameNodeId ? nodes.find((node) => node.id === renameNodeId) : undefined
   const noteToEdit = noteEditorId ? nodes.find((node) => node.id === noteEditorId) : undefined
   const scopePath = buildScopePath(scopes, activeScope)
-  return <AppShellView
+  return <>
+    <AppShellView
     layoutDensity={layoutDensity}
     layoutMode={layoutMode}
     uiScale={uiScale}
@@ -6273,6 +6726,9 @@ export function App() {
       onHistory: () => { setConversationDialogOpen(true); setNotice('打开已导入对话；历史导航只属于每条对话本身') },
       onMore: () => setCapabilityOpen((value) => !value),
       onRevealFolder: () => revealProjectFolder(activeProjectId),
+      // RECEIVER-1：项目级会话承接 Chip（Work Identity 常驻顶条；历史对话入口复用现有 ConversationContextDialog）
+      // RECEIVER-3：透传切换现场快照，Switcher 的承接确认小卡据此展示（承接前可见）。
+      receiverSlot: <ReceiverChip projectId={activeProjectId} client={bridgeRef.current.client} onOpenArchive={() => setConversationDialogOpen(true)} handoffContext={receiverHandoffContext} stale={receiverSessionStale} onStaleCleared={() => setReceiverSessionStale(false)} />,
     }}
     scene={{
       sceneStyle,
@@ -6387,14 +6843,14 @@ export function App() {
         onFocusSelection: selectedIds.length === 1 ? () => openProjectFocus() : undefined,
         onRenameSelection: selectedIds.length === 1 && selectedNodes.length === 1 ? () => setRenameNodeId(selectedNodes[0]!.id) : undefined,
         onToggleNoteLayout: toggleNoteLayout,
-        onToggleNoteAutoSync: toggleNoteAutoSync,
-        onSummarizeToMindmap: () => { void summarizeProjectToMindmap() },
         onCreateNodeFromAnchor: createNodeFromAnchor,
         onFilesDropped: dropFiles,
         onExternalTextDrop: (text, x, y) => {
           if (!isRuntimeProjectMode(bootMode)) { setNotice('原型模式不写入外部拖拽内容'); return }
           void pasteTextAsNode(text, { x, y })
         },
+        // G-4 主画布通道：导图分支摘取落成正常文本节点（createNodeAt 同款 note 形态）。
+        onMindmapBranchDrop: (text, x, y) => { void createNoteFromBranchText(text, { x, y }) },
         onMaterialTransferDrop: (raw, x, y) => {
           if (!isRuntimeProjectMode(bootMode)) { setNotice('原型模式不写入材料投送'); return }
           const payload = parseMaterialTransfer(raw)
@@ -6468,6 +6924,22 @@ export function App() {
         activeWorkflowId,
         focusRequest: projectFocusRequest,
         onSurfaceChange: setActiveSurface,
+        // G-4 导图分支摘取（Context 通道）：建进当前 Context scope 并写入成员集——
+        // Context 视图只排 presentation 成员，漏写成员集会让新节点"建了却看不见"。
+        onExternalTextDrop: (text, x, y) => {
+          const ownerId = activeContextId ?? rootScope.id
+          const rootContext = ownerId === rootScope.id
+          const currentMembers = rootContext ? contextGraphPresentationIds : (contextMembersById[ownerId] ?? [])
+          void createNoteFromBranchText(text, { x, y }, ownerId).then((viewId) => {
+            if (!viewId) return
+            void appendExactPresentationMembers('context', ownerId, [viewId], currentMembers).then((members) => {
+              if (members === null) return
+              if (rootContext) { setContextGraphPresentationIds(members); return }
+              setContextMembersById((current) => ({ ...current, [ownerId]: members }))
+              setContextPresentationIds(members)
+            })
+          })
+        },
         onContextMergeAccept: acceptContextMerge,
         onOpenContextView: openSavedContextView,
         onOpenWorkflowView: openSavedWorkflowView,
@@ -6595,6 +7067,11 @@ export function App() {
         onActivateWorkflowWorkspace: (id) => { changeWorkspace(id); setActiveSurface('workflow') },
         onCreateWorkflowWorkspace: () => { createWorkflowPageDirect([], workflowPresentationOwnerId) },
         onAddToWorkspace: (workspaceId, viewIds) => { void addViewsToWorkspace(workspaceId, viewIds, 'user') },
+        skills: workflowSkills,
+        onSaveSkill: handleSaveWorkflowSkill,
+        onReplaySkill: handleReplayWorkflowSkill,
+        skillRunStats,
+        onLocateSkill: locateWorkflowSkill,
         onExportWorkflow: () => {
           if (bootMode !== 'runtime') { setNotice('原型模式没有工作流工程文件'); return }
           void bridgeRef.current.client.exportWorkflow(activeProjectId, workflowPresentationOwnerId).then((call) => {
@@ -6856,6 +7333,7 @@ export function App() {
         camera,
         onCancel: () => setNoteEditorId(null),
         onSave: (input) => saveNoteBody(noteToEdit.id, input),
+        onConvertToMindmap: (input) => { setNoteEditorId(null); toggleNoteLayout(noteToEdit.id, 'mindmap', input) },
       } : null,
       confirmWorkspaceDelete: confirmWorkspaceId ? {
         title: '删除这个工作空间？',
@@ -6874,6 +7352,13 @@ export function App() {
         description: '项目会从项目列表移除；磁盘上的源文件和 .lcosproj 工程文件都会保留，之后仍可重新打开。',
         onCancel: () => setConfirmProjectDelete(null),
         onConfirm: confirmDeleteProject,
+      } : null,
+      confirmForkProjection: forkPromptId ? {
+        title: '这是项目实体的投影，直接修改会与本体冲突',
+        description: '画布上的文本节点是文本实体的投影，正文属于本体。要修改时，可复制一个新节点作为该投影的引用，在副本上编辑；原投影保持与本体一致。',
+        confirmLabel: '复制并编辑',
+        onCancel: () => setForkPromptId(null),
+        onConfirm: confirmForkProjection,
       } : null,
       handoff: handoffOpen ? {
         open: handoffOpen,
@@ -6928,6 +7413,8 @@ export function App() {
         onChanged: () => undefined,
       } : null,
       extraDialogs: <>
+        {/* 权限门确认卡（第一梯队 ⑥）：写意图 Run 挂起在此，确认→原发送链，取消→不发起。 */}
+        {pendingPermissionRun !== null ? <PermissionConfirmCard title={pendingPermissionRun.card.title} items={pendingPermissionRun.card.items} onConfirm={confirmPendingPermissionRun} onCancel={cancelPendingPermissionRun} /> : null}
         {revisionUpgradeOpen && revisionUpgradeTargetNode ? <RevisionUpgradeDialog targetTitle={revisionUpgradeTargetNode.title} busy={revisionUpgradeBusy} onClose={() => { if (!revisionUpgradeBusy) setRevisionUpgradeOpen(false) }} onSubmit={(input) => { void upgradeAgentResultWithFeedback(input) }} /> : null}
         {workspaceStatesOpen && workspaceStatesWorkspaceId ? (() => {
           const stateWorkspace = workspaces.find((workspace) => workspace.id === workspaceStatesWorkspaceId)
@@ -6966,5 +7453,13 @@ export function App() {
       const immersiveNode = nodes.find((node) => node.id === immersiveNodeId)
       return immersiveNode ? { node: immersiveNode, projectId: activeProjectId, onClose: () => setImmersiveNodeId(null) } : null
     })() : null}
-  />
+    />
+    {/* ⌘K 命令面板：portal 到 body 的全局顶层浮层；providers 纯查询、actions 全部为现有函数。 */}
+    <CommandPalette
+      open={paletteOpen}
+      onClose={() => setPaletteOpen(false)}
+      providers={paletteAssembly.providers}
+      actions={paletteAssembly.actions}
+    />
+  </>
 }

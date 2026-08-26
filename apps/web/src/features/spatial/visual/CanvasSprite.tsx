@@ -18,7 +18,7 @@ import { LcosGlyth } from './LcosGlyth'
 
 export type SpriteMood = 'idle' | 'observing' | 'working' | 'satisfied' | 'alert'
 
-const MOOD_STATE: Record<SpriteMood, LcosGlythState> = {
+export const MOOD_STATE: Record<SpriteMood, LcosGlythState> = {
   idle: 'stable',
   observing: 'absorb',
   working: 'working',
@@ -47,7 +47,7 @@ const moodFor = ({ cameraActive, interacting, running, alert }: CanvasSpriteProp
   return 'idle'
 }
 
-const MOOD_TEXT: Record<SpriteMood, string> = {
+export const MOOD_TEXT: Record<SpriteMood, string> = {
   idle: '待命',
   observing: '观察画布',
   working: '正在工作',
@@ -106,11 +106,30 @@ export function CanvasSprite(props: CanvasSpriteProps) {
     const parent = rootRef.current?.parentElement
     if (!parent) return
     const parentRect = parent.getBoundingClientRect()
-    const left = Math.max(-8, Math.min(parentRect.width - SPRITE_SIZE + 8, drag.baseLeft + event.clientX - drag.grabX))
-    const top = Math.max(-8, Math.min(parentRect.height - SPRITE_SIZE + 8, drag.baseTop + event.clientY - drag.grabY))
+    // 拖动边界：不许贴边——至少留出自身宽度 + 8px 边距（此处取 16px 更严）。
+    // 上界先 Math.max 抬到不低于下界，避免小画布下 min/max 反转把精灵钉出画布形成白色遮挡条。
+    const maxX = Math.max(16, parentRect.width - SPRITE_SIZE - 16)
+    const maxY = Math.max(16, parentRect.height - SPRITE_SIZE - 16)
+    const left = Math.max(16, Math.min(maxX, drag.baseLeft + event.clientX - drag.grabX))
+    const top = Math.max(16, Math.min(maxY, drag.baseTop + event.clientY - drag.grabY))
     setPosition({ left, top })
     event.stopPropagation()
   }, [])
+
+  // 脏位置兜底：localStorage 里的历史坐标若让精灵部分出界（窗口缩小 / 分辨率变化 / 旧脏值，
+  // 仅容 8px 溢出容差），丢弃并回到 CSS 默认停靠位，避免半出界的白色圆盘贴在画布边缘成遮挡条。
+  useEffect(() => {
+    if (!position) return
+    const parent = rootRef.current?.parentElement
+    if (!parent) return
+    const parentRect = parent.getBoundingClientRect()
+    const offscreen =
+      position.left < -8 ||
+      position.top < -8 ||
+      position.left > parentRect.width - SPRITE_SIZE + 8 ||
+      position.top > parentRect.height - SPRITE_SIZE + 8
+    if (offscreen) setPosition(null)
+  }, [position])
 
   const onPointerEnd = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     const drag = dragRef.current

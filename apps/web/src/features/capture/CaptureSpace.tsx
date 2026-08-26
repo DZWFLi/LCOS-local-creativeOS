@@ -186,7 +186,7 @@ export function CaptureSpace({ client, projects, onClose, onOpenProject, onNotic
   const select = (id: string, additive = false) => setSelectedIds((current) => additive ? (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]) : [id])
   const marquee = (ids: string[], additive: boolean) => setSelectedIds((current) => additive ? [...new Set([...current, ...ids])] : ids)
 
-  return <main className="capture-space-shell porcelain-studio-v2 lcos-reconstructed" data-testid="capture-space">
+  return <main className="capture-space-shell lcos-reconstructed" data-testid="capture-space"> {/* porcelain 退役：旧主题 class 移除（porcelain 规则均带 .app-shell 前缀，本就不匹配此 shell） */}
     <header className="capture-space-header">
       <button type="button" className="capture-space-back" onClick={onClose}><ArrowLeft size={15}/>项目</button>
       <div className="capture-space-title"><Boxes size={17}/><div><strong>Capture Space</strong><span>项目之前 · {snapshot?.pendingCount ?? 0} 项</span></div></div>

@@ -4,7 +4,8 @@ import { surfaceComponentContract, surfaceSupportsComponent } from './surfaceCom
 
 export type SurfaceOp =
   | { readonly type: 'move'; readonly elementId: string; readonly x: number; readonly y: number }
-  | { readonly type: 'resize'; readonly elementId: string; readonly w: number; readonly h: number }
+  /** resize 携带完整落点(含 x/y):west/north 边拖拽会改变原点,只传 w/h 会把组件弹回旧原点。 */
+  | { readonly type: 'resize'; readonly elementId: string; readonly w: number; readonly h: number; readonly x?: number; readonly y?: number }
   | { readonly type: 'create-component'; readonly component: SurfaceElement }
   | { readonly type: 'remove-projection'; readonly elementId: string }
   | { readonly type: 'bind'; readonly elementId: string; readonly binding: SurfaceBinding }
@@ -62,7 +63,7 @@ function applyValidatedSurfaceOp(elements: readonly SurfaceElement[], op: Surfac
   return elements.map((element) => {
     if (element.id !== op.elementId) return element
     if (op.type === 'move') return { ...element, bounds: { ...element.bounds, x: op.x, y: op.y } }
-    if (op.type === 'resize') return { ...element, bounds: { ...element.bounds, w: op.w, h: op.h } }
+    if (op.type === 'resize') return { ...element, bounds: { ...element.bounds, w: op.w, h: op.h, ...(op.x === undefined ? {} : { x: op.x }), ...(op.y === undefined ? {} : { y: op.y }) } }
     if (op.type === 'bind') return { ...element, binding: { ...op.binding } }
     return element
   })

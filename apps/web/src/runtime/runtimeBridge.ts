@@ -416,6 +416,16 @@ export function mapGraphToState(
       previewMimeType: preview?.mimeType,
       previewDataUrl: previewContent === undefined ? undefined : `data:${previewContent.mimeType};base64,${previewContent.data}`,
       previewText: previewContent === undefined || !previewContent.mimeType.startsWith('text/') ? undefined : decodeBase64Text(previewContent.data),
+      // 统一文本编辑：text artifact 也走 note 编辑体系（noteBody / 导图布局随会话记忆恢复）。
+      ...(() => {
+        const presentation = recallNotePresentation(String(view.id))
+        return {
+          ...(presentation.noteBody !== undefined ? { noteBody: presentation.noteBody } : {}),
+          ...(presentation.noteLayout ? { noteLayout: presentation.noteLayout } : {}),
+          ...(presentation.noteOutline ? { noteOutline: presentation.noteOutline } : {}),
+          ...(presentation.noteTags ? { noteTags: presentation.noteTags } : {}),
+        }
+      })(),
       scopeId: normalizeScopeId(view.scopeId),
       opensScopeId: childScopeByContainerViewId.get(String(view.id)),
       entityKind: (() => {
@@ -491,7 +501,6 @@ export function mapGraphToState(
       ...(presentation.noteLayout ? { noteLayout: presentation.noteLayout } : {}),
       ...(presentation.noteOutline ? { noteOutline: presentation.noteOutline } : {}),
       ...(presentation.noteTags ? { noteTags: presentation.noteTags } : {}),
-      ...(presentation.noteAutoSync ? { noteAutoSync: true } : {}),
     }
   })
 

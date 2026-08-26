@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import type { AttentionBucketV0, RuntimeProviderStatus } from '@local-creative-os/contracts'
-import { Copy, CopyPlus, Crosshair, Ellipsis, Fence, FolderTree, GripVertical, LayoutGrid, Network, Pencil, Trash2 } from 'lucide-react'
+import { Copy, CopyPlus, Crosshair, Ellipsis, Fence, FolderTree, GripVertical, LayoutGrid, Pencil, Trash2 } from 'lucide-react'
 import type { Camera, CanvasEdge, CanvasNode, NodeDisplayMode, RunStatus, WorkspaceFrameVM } from '../../model'
 import { getSelectionBounds, nodeDensity } from './canvasGeometry'
 import { getVisualSelectionBounds, MAIN_CANVAS_GRID_STEP, nodeVisualBounds, nodeVisualInsets, snapNodePositionToGrid } from './canvasVisualGeometry'
@@ -20,7 +20,8 @@ import { advanceSpatialMarquee, beginSpatialMarquee, endSpatialPointer, spatialM
 import { IDLE_SPATIAL_POINTER, type SpatialPointerSession } from '../spatial/spatialTypes'
 import { LightCurtain } from '../drop/LightCurtain'
 import { semanticDropTriggerFromPointer, type SemanticDropTrigger } from '../spatial/semanticDrop'
-import { CanvasSprite, GlythAvatar, useCameraActivity } from '../spatial/visual/CanvasSprite'
+import { LCOS_MINDMAP_BRANCH_EXTRACT_EVENT } from './MindMapNoteVisual'
+import { GlythAvatar } from '../spatial/visual/CanvasSprite'
 import { resolveSpatialSignal, type SpatialRuntimeSignal } from '../spatial/visual/spatialSignal'
 import type { SurfaceElement } from '../spatial/model/surfaceElementTypes'
 import { resolveSurfaceComponent } from '../spatial/components/surfaceComponentRegistry'
@@ -71,14 +72,12 @@ interface Props {
     onClose: () => void
   }
   onCreateNodeFromAnchor: (kind: 'note' | 'context', x: number, y: number, from: string) => void; onFilesDropped: (files: File[], x: number, y: number) => void; onExternalTextDrop?: (text: string, x: number, y: number) => void; onMaterialTransferDrop?: (raw: string, x: number, y: number) => void
+  /** G-4 导图分支摘取：按住导图分支拖到空白处松手 → 以正常文本节点形态落画布（区别于外部文本拖入）。 */
+  onMindmapBranchDrop?: (text: string, x: number, y: number) => void
   onArrangeSelection: () => void; gridSnapEnabled?: boolean; onSetSelectionDisplayMode?: (mode: NodeDisplayMode) => void; onCopySelection: () => void; onDuplicateSelection: () => void; onCreateScopeFromSelection: () => void; onDeleteSelection: () => void; onPointerWorldChange: (point: { x: number; y: number }) => void; onSpaceCreate: (point: { x: number; y: number }) => void
   onReorganize?: () => void
   /** 文本节点：切换 文本块 ⇄ 大纲思维导图 呈现（仅 Presentation）。 */
   onToggleNoteLayout?: (id: string, layout: 'text' | 'mindmap') => void
-  /** 导图自动更新开关：启用后 Agent 在现场结构变化时自动重算大纲。 */
-  onToggleNoteAutoSync?: (id: string, enabled: boolean) => void
-  /** 把当前现场总结成大纲导图文本节点。 */
-  onSummarizeToMindmap?: () => void
   onDirectProjectViewDrop?: (targetViewId: string, ids: readonly string[]) => void
   /** GUI-6：锚定备注定位（宿主把相机移到锚点目标并脉冲高亮）。 */
   onLocateNode?: (id: string) => void
@@ -115,7 +114,7 @@ function additiveSelection(event: { shiftKey: boolean; ctrlKey: boolean; metaKey
   return event.shiftKey || event.ctrlKey || event.metaKey
 }
 
-export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-space', surfaceMode = 'project', nodes, setNodes, edges, setEdges, camera, setCamera, selectedId, selectedIds, selectedEdgeId, setSelectedEdgeId, pendingId, runId, runStatus, spaceHeld, locked = false, layoutPreview, workspaceFrames = [], workspaceMemberNodes = nodes, activeWorkspaceId = null, onWorkspaceActivate, onWorkspaceProjectionMove, onPresentationInteractionChange, onPresentationCommit, onFrameBoundsChange, selectionComposer, onSelect, onClearSelection, onMarqueeSelect, onSelectEdge, onDoubleClick, onDetails, onFocusSelection, onRenameSelection, onCreateNodeFromAnchor, onFilesDropped, onExternalTextDrop, onMaterialTransferDrop, onArrangeSelection, gridSnapEnabled = true, onSetSelectionDisplayMode, onCopySelection, onDuplicateSelection, onCreateScopeFromSelection, onDeleteSelection, onReorganize, onToggleNoteLayout, onToggleNoteAutoSync, onSummarizeToMindmap, onDirectProjectViewDrop, onPointerWorldChange, onSpaceCreate, onLocateNode, locatePulseId, pendingReviewIds = [], attentionBucketsByViewId = {}, collectionMembersByNodeId = {}, expandedCollectionScopeIds = [], openingCollectionScopeIds = [], closingCollectionScopeIds = [], onToggleCollection, onOpenContextLens, spatialRegions = [], surfaceElements = [], onSurfaceElementsChange, portalTargets = [], onOpenPortalTarget, onCreateRegion, onClearRegion, onRegionBoundsChange, onRegionBoundsCommit, onPromoteRegionToCollection }: Props) {
+export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-space', surfaceMode = 'project', nodes, setNodes, edges, setEdges, camera, setCamera, selectedId, selectedIds, selectedEdgeId, setSelectedEdgeId, pendingId, runId, runStatus, spaceHeld, locked = false, layoutPreview, workspaceFrames = [], workspaceMemberNodes = nodes, activeWorkspaceId = null, onWorkspaceActivate, onWorkspaceProjectionMove, onPresentationInteractionChange, onPresentationCommit, onFrameBoundsChange, selectionComposer, onSelect, onClearSelection, onMarqueeSelect, onSelectEdge, onDoubleClick, onDetails, onFocusSelection, onRenameSelection, onCreateNodeFromAnchor, onFilesDropped, onExternalTextDrop, onMaterialTransferDrop, onMindmapBranchDrop, onArrangeSelection, gridSnapEnabled = true, onSetSelectionDisplayMode, onCopySelection, onDuplicateSelection, onCreateScopeFromSelection, onDeleteSelection, onReorganize, onToggleNoteLayout, onDirectProjectViewDrop, onPointerWorldChange, onSpaceCreate, onLocateNode, locatePulseId, pendingReviewIds = [], attentionBucketsByViewId = {}, collectionMembersByNodeId = {}, expandedCollectionScopeIds = [], openingCollectionScopeIds = [], closingCollectionScopeIds = [], onToggleCollection, onOpenContextLens, spatialRegions = [], surfaceElements = [], onSurfaceElementsChange, portalTargets = [], onOpenPortalTarget, onCreateRegion, onClearRegion, onRegionBoundsChange, onRegionBoundsCommit, onPromoteRegionToCollection }: Props) {
   const canvasRef = useRef<HTMLDivElement | null>(null)
   const dragCandidate = useRef<DragCandidate | null>(null)
   const resizeCandidate = useRef<ResizeCandidate | null>(null)
@@ -182,8 +181,6 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
   const [marqueeRect, setMarqueeRect] = useState<{ left: number; top: number; width: number; height: number } | null>(null)
   const [selectedRegionId, setSelectedRegionId] = useState<string | null>(null)
   const [componentProposalOps, setComponentProposalOps] = useState<readonly SurfaceOp[]>([])
-  const cameraActive = useCameraActivity(camera)
-  const surfaceAlert = useMemo(() => nodes.some((node) => node.error), [nodes])
   const [createMenu, setCreateMenu] = useState<{ from: string; x: number; y: number; screenX: number; screenY: number } | null>(null)
   const toWorld = (clientX: number, clientY: number, rect: DOMRect) => spatialScreenToWorld(clientX, clientY, rect, camera)
   // P0 2026-08-17: there is no persistent client-owned arrange mode.
@@ -225,7 +222,8 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
   const selectedNodesForTools = useMemo(() => selectedIds.map((id) => byId.get(id)).filter((node): node is CanvasNode => Boolean(node)), [byId, selectedIds])
   const textSelection = selectedNodesForTools.length > 0 && selectedNodesForTools.every((node) => node.kind === 'note' || detectFileIdentity(node) === 'markdown')
   const textSelectionExpanded = textSelection && selectedNodesForTools.some((node) => node.displayMode !== 'compact')
-  const noteSelection = selectedNodesForTools.length === 1 && selectedNodesForTools[0].kind === 'note' ? selectedNodesForTools[0] : null
+  // 统一文本体系：note 节点与 markdown 文本 artifact 都能编辑/转导图。
+  const noteSelection = selectedNodesForTools.length === 1 && (selectedNodesForTools[0].kind === 'note' || selectedNodesForTools[0].fileType === 'markdown') ? selectedNodesForTools[0] : null
   const noteSelectionLayout = noteSelection?.noteLayout ?? 'text'
   // Single note selection also needs the toolbar (text ⇄ mindmap toggle).
   const selectionBounds = (selectedIds.length > 1 || noteSelection) ? selectedVisualBounds : null
@@ -331,6 +329,30 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
     window.addEventListener('keydown', cancel)
     return () => window.removeEventListener('keydown', cancel)
   }, [])
+  // G-4 导图分支摘取：导图分支拖出到画布空白处松手 → 换算世界坐标 →
+  // onMindmapBranchDrop（App 的 createNoteFromBranchText，落成正常文本节点）。
+  useEffect(() => {
+    const drop = onMindmapBranchDrop ?? onExternalTextDrop
+    if (!drop) return
+    const onBranchExtract = (event: Event) => {
+      const detail = (event as CustomEvent<{ text?: unknown; clientX?: unknown; clientY?: unknown }>).detail
+      if (typeof detail?.text !== 'string' || !detail.text.trim()) return
+      const rect = canvasRef.current?.getBoundingClientRect()
+      if (!rect) return
+      if (typeof detail.clientX !== 'number' || typeof detail.clientY !== 'number') return
+      // 落点必须在本画布内（防止落在侧栏/头部的松手误建节点）
+      if (detail.clientX < rect.left || detail.clientX > rect.right || detail.clientY < rect.top || detail.clientY > rect.bottom) return
+      const point = spatialScreenToWorld(detail.clientX, detail.clientY, rect, camera)
+      // G-4 落点对齐 ghost：拖拽预览卡片画在光标 +14/+16px 处（MindMapNoteVisual 的
+      // ghost transform），落点换算必须计入同一偏移，否则新节点出现在 ghost 左上方
+      // 14×16px——用户手测感知的「拖拽有位移」即来源于此。屏幕像素偏移按当前 zoom 换世界坐标。
+      const GHOST_OFFSET_X = 14
+      const GHOST_OFFSET_Y = 16
+      drop(detail.text, point.x + GHOST_OFFSET_X / camera.zoom, point.y + GHOST_OFFSET_Y / camera.zoom)
+    }
+    window.addEventListener(LCOS_MINDMAP_BRANCH_EXTRACT_EVENT, onBranchExtract)
+    return () => window.removeEventListener(LCOS_MINDMAP_BRANCH_EXTRACT_EVENT, onBranchExtract)
+  }, [camera, onExternalTextDrop, onMindmapBranchDrop])
   useEffect(() => {
     if (!locked) return
     if (dragFrame.current !== null) {
@@ -677,8 +699,13 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
     // its final world position, even when the last preview frame already ran.
     if (wasDragging && draggedId && finalDragPoint) {
       const group = dragCandidate.current?.group ?? []
+      // 网格吸附只收敛松手落点（拖动过程保持连续跟手）。
+      const anchorNode = nodes.find((node) => node.id === draggedId)
+      const settledPoint = gridSnapEnabled && anchorNode
+        ? snapNodePositionToGrid(anchorNode, finalDragPoint.x, finalDragPoint.y, camera.zoom)
+        : finalDragPoint
       const placements = new Map((group.length > 1 ? group : [{ id: draggedId, dx: 0, dy: 0 }])
-        .map((member) => [member.id, { x: finalDragPoint.x + member.dx, y: finalDragPoint.y + member.dy }]))
+        .map((member) => [member.id, { x: settledPoint.x + member.dx, y: settledPoint.y + member.dy }]))
       setNodes((current) => current.map((node) => {
         const placement = placements.get(node.id)
         return placement ? { ...node, ...placement, positionLocked: true } : node
@@ -786,13 +813,6 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
   ], 520), [linkPoint, spatialNodes, effectiveWorkspaceFrames])
 
   const spatialOverlays = <>
-      <CanvasSprite
-        surfaceLabel="main"
-        cameraActive={cameraActive}
-        interacting={Boolean(draggingId || draggingWorkspaceId || marqueeRect)}
-        running={runStatus === 'running'}
-        alert={surfaceAlert}
-      />
       {lod !== 'full' && <div className="lod-badge">{nodes.length} 个节点 · {lod === 'overview' ? '总览' : lod === 'aggregate' ? '聚合显示' : '简化显示'}</div>}
     {surfaceMode === 'project' && onSurfaceElementsChange && <SurfaceComponentShelf projectId={projectId} surface="main" elements={surfaceElements} selectionIds={selectedIds} selectionBounds={componentSelectionBounds} viewportOrigin={surfaceViewportOrigin(camera)} portalTargets={portalTargets} onElementsChange={onSurfaceElementsChange}/>}
     {surfaceMode === 'project' && onSurfaceElementsChange && <AgentSurfaceComposer surface="main" targetIds={selectedIds} previewing={componentProposalOps.length > 0} onPreview={previewComponentIntent} onKeep={keepComponentProposal} onRevert={() => setComponentProposalOps([])}/>}
@@ -816,9 +836,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
       </details>}
       {textSelection && onSetSelectionDisplayMode && <button type="button" className="selection-primary" aria-label={textSelectionExpanded ? '收起文字材料' : '直接阅读文字材料'} title="同一个文字对象只改变呈现，不创建新对象" onClick={(event) => { event.stopPropagation(); onSetSelectionDisplayMode(textSelectionExpanded ? 'compact' : 'standard') }}><span>{textSelectionExpanded ? '收起' : '直接阅读'}</span></button>}
       {noteSelection && onToggleNoteLayout && <button type="button" className="selection-primary" aria-label={noteSelectionLayout === 'mindmap' ? '切回文本块' : '转为大纲导图'} title="同一份大纲文本，只切换呈现：文本块 ⇄ 思维导图" onClick={(event) => { event.stopPropagation(); onToggleNoteLayout(noteSelection.id, noteSelectionLayout === 'mindmap' ? 'text' : 'mindmap') }}><span>{noteSelectionLayout === 'mindmap' ? '切回文本' : '转为导图'}</span></button>}
-      {noteSelection && noteSelectionLayout === 'mindmap' && onToggleNoteAutoSync && <button type="button" className={`selection-primary${noteSelection.noteAutoSync ? ' is-active' : ''}`} aria-pressed={Boolean(noteSelection.noteAutoSync)} aria-label={noteSelection.noteAutoSync ? '关闭导图自动更新' : '开启导图自动更新'} title="开启后 Agent 跟随现场结构变化自动重算大纲，无需手动触发" onClick={(event) => { event.stopPropagation(); onToggleNoteAutoSync(noteSelection.id, !noteSelection.noteAutoSync) }}><span>{noteSelection.noteAutoSync ? '自动更新·开' : '自动更新'}</span></button>}
       <button type="button" className="selection-primary lcos-agent-arrange-entry" aria-label="让智能体整理这些" title="按内容关系整理；智能体变化需要审查" onClick={(event) => { event.stopPropagation(); if (onReorganize) onReorganize(); else onArrangeSelection() }}><LayoutGrid size={15} /><span>整理这些</span></button>
-      {onSummarizeToMindmap && <button type="button" className="selection-primary" aria-label="把当前现场总结成大纲导图" title="总结当前现场的 材料/文本/关系 成大纲思维导图节点" onClick={(event) => { event.stopPropagation(); onSummarizeToMindmap() }}><Network size={15} /><span>摘要成导图</span></button>}
       {surfaceMode === 'project' && <details className="lcos-selection-more" onPointerDown={(event) => event.stopPropagation()}>
         <summary aria-label="更多操作" title="更多操作"><Ellipsis size={15}/></summary>
         <div>
@@ -972,13 +990,12 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
         }
         lastDragPointer.current = { x: event.clientX, y: event.clientY }
         const point = toWorld(event.clientX, event.clientY, rect)
-        const anchorNode = nodes.find((node) => node.id === candidate.id)
         const rawPoint = { x: point.x - candidate.offsetX, y: point.y - candidate.offsetY }
-        const dragPosition = gridSnapEnabled && anchorNode
-          ? snapNodePositionToGrid(anchorNode, rawPoint.x, rawPoint.y, camera.zoom)
-          : rawPoint
-        dragPoint.current = dragPosition
-        const nextGuide = anchorNode ? alignmentGuideFor(anchorNode, dragPosition.x, dragPosition.y, candidate.group.map((item) => item.id)) : null
+        // 拖动过程连续跟手（Figma/mubu 惯例）：网格吸附只作用于松手落点，
+        // 避免拖动中“先卡住、靠近网格线再跳变”的迟滞观感。
+        dragPoint.current = rawPoint
+        const anchorNode = nodes.find((node) => node.id === candidate.id)
+        const nextGuide = anchorNode ? alignmentGuideFor(anchorNode, rawPoint.x, rawPoint.y, candidate.group.map((item) => item.id)) : null
         setAlignmentGuide((current) => current?.x === nextGuide?.x && current?.y === nextGuide?.y ? current : nextGuide)
         scheduleDraggedNode()
       }
@@ -1180,6 +1197,6 @@ function CanvasCard({ node, density, zoom, showDetails, performanceProxy = false
     {performanceProxy
       ? <div className={`lcos-overview-node-proxy proxy-${detectFileIdentity(node)}`} aria-label={displayNodeTitle(node)}><span>{detectFileIdentity(node).toUpperCase()}</span><strong>{displayNodeTitle(node)}</strong></div>
       : <CanvasNodeVisual node={node} density={density} runId={runId} runStatus={runStatus} pending={pending} showDetails={showDetails} onDetails={() => onDetails(node.id)} onLocate={onLocate ? (target) => onLocate(target.id) : undefined} collectionExpanded={collectionExpanded} collectionMembers={collectionMembers} onCollectionMemberSelect={onCollectionMemberSelect} selected={selected} onOpenContextLens={onOpenContextLens} />}
-    {(selected || signal.glyph !== 'stable') && <span className="lcos-node-system-signal" data-spatial-signal={signal.glyph} aria-hidden="true"><GlythAvatar state={selected && signal.glyph === 'stable' ? 'absorb' : signal.glyph} reason={selected ? 'selection' : runtimeSignal === 'processing' ? 'running' : 'review'}/></span>}
+    {(selected || signal.glyph !== 'stable') && node.width >= 56 && <span className="lcos-node-system-signal" data-spatial-signal={signal.glyph} aria-hidden="true"><GlythAvatar state={selected && signal.glyph === 'stable' ? 'absorb' : signal.glyph} reason={selected ? 'selection' : runtimeSignal === 'processing' ? 'running' : 'review'}/></span>}
   </div>
 }

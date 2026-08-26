@@ -5,15 +5,20 @@ import { getDesktopPort } from '../../runtime/desktopPort'
 import { LcosGlyth } from '../spatial/visual/LcosGlyth'
 import { LightSegment } from '../spatial/visual/LightSegment'
 import { MatrixActivity } from '../spatial/visual/MatrixActivity'
+import { MOOD_STATE, MOOD_TEXT, type SpriteMood } from '../spatial/visual/CanvasSprite'
 
 /** Pending gauge: each lit discrete segment stands for one captured item (Nothing-Glyph style). */
 const GAUGE_SEGMENTS = 12
 
 /**
- * Capture float — LCOS visual language only: the living Glyth is the icon
- * (stable → absorb while receiving → confirm on landing, error on failure),
- * a discrete light-segment gauge reads the pending count, and the dot-matrix
- * texture carries the receiving/flow verbs. No card chrome, no generic icons.
+ * Capture float — the bloub itself, as a living resident window.
+ * It inherits the canvas-sprite mood state machine (MOOD_STATE / MOOD_TEXT):
+ * idle → stable, observing (watching the incoming drop) → absorb,
+ * working (material sitting in staging) → working, satisfied (a landing) →
+ * confirm, alert (a capture failure) → error. The discrete light-segment
+ * gauge reads the pending count, and the dot-matrix texture carries the
+ * receiving/flow verbs. The in-canvas CanvasSprite is hidden while the bloub
+ * lives here.
  */
 export function CaptureFloatApp() {
   const client = useState(() => createLocalCoreClient())[0]
@@ -61,11 +66,14 @@ export function CaptureFloatApp() {
     }
   }, [refresh])
 
-  const glythState = failed ? 'error' : receiving ? 'absorb' : confirmed ? 'confirm' : 'stable'
+  // bloub mood inherits the canvas-sprite machine: alert > working > observing > satisfied > idle.
+  const mood: SpriteMood = failed ? 'alert' : receiving ? 'observing' : confirmed ? 'satisfied' : pending > 0 ? 'working' : 'idle'
+  const glythState = MOOD_STATE[mood]
+  const moodText = MOOD_TEXT[mood]
   const gaugeRatio = pending > 0 ? Math.min(1, pending / GAUGE_SEGMENTS) : 0
 
   return <main
-    className={`capture-float lcos-reconstructed ${receiving ? 'is-receiving' : ''}`}
+    className={`capture-float lcos-reconstructed mood-${mood} ${receiving ? 'is-receiving' : ''}`}
     onDragEnter={(event) => { event.preventDefault(); dragDepth.current += 1; setReceiving(true) }}
     onDragOver={(event) => event.preventDefault()}
     onDragLeave={(event) => { event.preventDefault(); dragDepth.current = Math.max(0, dragDepth.current - 1); if (dragDepth.current === 0) setReceiving(false) }}
@@ -84,9 +92,9 @@ export function CaptureFloatApp() {
       />
     </header>
     <section>
-      <LcosGlyth className="capture-float-glyth" state={glythState} size={64} label={`Capture 精灵：${glythState}`}/>
-      <b>{receiving ? '松手收进暂存区' : failed ? 'Capture 失败' : 'Drop anything'}</b>
-      <small>{lastTitle}</small>
+      <LcosGlyth className="capture-float-glyth" state={glythState} size={112} variant="soft" label={`bloub：${moodText}`}/>
+      <b className="capture-float-mood" data-mood={mood}>{moodText}</b>
+      <small>{receiving ? '松手收进暂存区' : failed ? 'Capture 失败' : lastTitle}</small>
       <MatrixActivity
         className="capture-float-matrix"
         active={receiving || pending > 0}

@@ -33,12 +33,13 @@ export function spatialMarqueeRect(session: SpatialPointerSession) {
   }
 }
 
-export function beginSpatialNodeDrag(pointerId: number, id: string, point: SpatialPoint, origin: SpatialPoint): SpatialPointerSession {
-  return { kind: 'node-drag', pointerId, id, start: point, origin }
+export function beginSpatialNodeDrag(pointerId: number, id: string, point: SpatialPoint, origin: SpatialPoint, zoom: number): SpatialPointerSession {
+  return { kind: 'node-drag', pointerId, id, start: point, origin, startZoom: zoom }
 }
 
-export function advanceSpatialNodeDrag(session: SpatialPointerSession, point: SpatialPoint, zoom: number): SpatialPoint | null {
+export function advanceSpatialNodeDrag(session: SpatialPointerSession, point: SpatialPoint): SpatialPoint | null {
   if (session.kind !== 'node-drag') return null
+  const zoom = session.startZoom
   return {
     x: session.origin.x + (point.x - session.start.x) / zoom,
     y: session.origin.y + (point.y - session.start.y) / zoom,

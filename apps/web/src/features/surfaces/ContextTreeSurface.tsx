@@ -1,5 +1,5 @@
 import { ChevronRight, GripVertical, MessageSquareText } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { CSSProperties, KeyboardEvent } from 'react'
 import type { CanvasEdge, CanvasNode } from '../../model'
 import { buildHierarchySeed, hierarchyToContract, moveHierarchySubtreeAfter, parentByIdOf, reparentHierarchyNode, toggleHierarchyCollapsed } from '../presentation/presentationHierarchy'
@@ -48,6 +48,21 @@ export function ContextTreeSurface(props: Props) {
   const byPlaced = useMemo(() => new Map(layout.placements.map((item) => [item.id, item])), [layout.placements])
   const spatialItems = useMemo(() => layout.placements.map((item) => ({ id:item.node.id, x:item.x, y:item.y, width:item.width, height:item.height })), [layout.placements])
   useSpatialFocusRequest({ request: props.focusRequest, items: spatialItems, testId: 'context-tree-spatial', setCamera })
+
+  // 放大阅读模式的回画布通道:Esc 回理解现场画布;仅在无模态弹窗、无输入焦点时生效。
+  useEffect(() => {
+    const onSurfaceEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      if (document.querySelector('[role="dialog"][aria-modal="true"]')) return
+      const active = document.activeElement
+      if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) return
+      if (active instanceof HTMLElement && active.isContentEditable) return
+      props.onSurfaceChange?.('context-space')
+    }
+    window.addEventListener('keydown', onSurfaceEscape)
+    return () => window.removeEventListener('keydown', onSurfaceEscape)
+  }, [props.onSurfaceChange])
+
   const toggle = (id: string) => setState((current) => toggleHierarchyCollapsed(current, id))
   const reportRejectedDrop = (draggedId: string, targetId: string) => {
     setReparentError(draggedId === targetId ? '不能把节点挂到自己下面' : '该操作会形成循环层级，已拒绝')
@@ -99,7 +114,7 @@ export function ContextTreeSurface(props: Props) {
 
   return <section className="lcos-dedicated-surface lcos-context-tree lcos-mind-map" data-testid="surface-context-tree">
     <header className="lcos-surface-heading">
-      <div><strong>上下文</strong><span>结构</span></div>
+      <div><strong>上下文</strong><span>结构</span><span className="lcos-lens-zoom-badge" title="放大阅读模式:点「现场」或 Esc 回到理解现场画布">放大阅读</span></div>
       <div className="lcos-context-heading-actions"><small>{layout.placements.length} 项 · 与理解现场 / 演进共用同一份 Context{reparentError ? ` · ${reparentError}` : ' · 拖动手柄可重排 / 重挂'}</small><ContextLensSwitch active="context-tree" onSelect={props.onSurfaceChange}/></div>
     </header>
     {props.source && <div className={`lcos-renderer-source source-${props.source.kind}`}><i/><span>{props.source.label}</span><small>Hierarchy v{state.version}</small></div>}

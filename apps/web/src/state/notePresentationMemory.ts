@@ -13,8 +13,12 @@ export interface NotePresentation {
   readonly noteLayout?: 'text' | 'mindmap'
   readonly noteTags?: readonly string[]
   readonly noteOutline?: string
-  /** Mindmap auto-sync flag: agent refreshes the outline when the scene changes. */
-  readonly noteAutoSync?: boolean
+  /**
+   * 统一文本编辑体系的正文记忆：runtime text artifact 的 body 更新是
+   * presentation-local 的（Core text-revision API 未落地前），刷新投影时
+   * 由这里恢复，避免“保存后刷新正文丢失”。
+   */
+  readonly noteBody?: string
 }
 
 const memory = new Map<string, NotePresentation>()

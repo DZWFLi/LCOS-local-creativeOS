@@ -6,7 +6,6 @@ const dock=source('features/shell/SurfaceDock.tsx')
 const projection=source('features/surfaces/ProjectionSurfaces.tsx')
 const outline=source('features/surfaces/OutlineSurface.tsx')
 const mind=source('features/surfaces/ContextTreeSurface.tsx')
-const graph=source('features/surfaces/ContextGraphSurface.tsx')
 const flow=source('features/surfaces/ContextFlowSurface.tsx')
 const contextSpace=source('features/surfaces/ContextSpaceSurface.tsx')
 const contextLens=source('features/surfaces/ContextLensSwitch.tsx')
@@ -33,9 +32,10 @@ describe('Phase D renderer isomorphism contract',()=>{
     expect(hierarchyState).not.toContain('window.localStorage')
   })
 
-  it('keeps the old local Relation Graph renderer as unreachable migration code, not a third Context level',()=>{
-    expect(graph).toContain('buildLocalRelationNodes')
-    expect(graph).toContain('usePresentationDraftPinnedIds')
+  it('deletes the old ContextGraphSurface page entirely; relation logic lives on in the relationship home (RC-8 2R closeout)',()=>{
+    // 2R 收口：旧平行入口整页删除（RC-8），关系模型函数由 ContextRelationshipHomeSurface 继续使用。
+    expect(()=>source('features/surfaces/ContextGraphSurface.tsx')).toThrow()
+    expect(source('features/presentation/relationGraphModel.ts')).toContain('buildLocalRelationNodes')
     expect(dock).not.toContain("label:'关系'")
     expect(dock).toContain("if (surface === 'outline') return 'context-tree'")
     expect(projection).not.toContain('<ContextGraphSurface')
@@ -56,7 +56,7 @@ describe('Phase D renderer isomorphism contract',()=>{
     expect(surfaceObject).not.toContain('lcos-glyph-hover-card')
     expect(surfaceObject).toContain('data-surface-role={role}')
     expect(surfaceObject).toContain('SurfaceIdentityGlyph')
-    expect(surfaceObject).toContain('<LcosGlyph state={signal.glyph}/>')
+    expect(surfaceObject).toContain("<GlythAvatar state={selected && signal.glyph === 'stable' ? 'absorb' : signal.glyph}")
     expect(surfaceObject).toContain('onDoubleClick={() => onDoubleClick(node.id)}')
     expect(mind).toContain('lcos-mind-hover-card')
     expect(mind).toContain('onDoubleClick={() => props.onDoubleClick(item.node.id)}')

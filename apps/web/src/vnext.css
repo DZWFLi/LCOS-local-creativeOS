@@ -13,7 +13,7 @@
   --vnext-ink-26: rgba(32, 31, 39, .26);
   --vnext-hair: rgba(39, 37, 49, .09);
   --vnext-hair-strong: rgba(39, 37, 49, .15);
-  --vnext-purple: #8b5cf6;
+  --vnext-purple: var(--lcos-signal, #8b5cf6); /* Glaze 单色收敛：紫 accent 唯一源 --lcos-signal */
   --vnext-blue: #3b82f6;
   --vnext-cyan: #22d3ee;
   --vnext-shadow: 0 14px 38px rgba(47, 44, 68, .09), 0 2px 8px rgba(47, 44, 68, .045), inset 0 1px 0 rgba(255,255,255,.88);
@@ -50,7 +50,7 @@
 /* -------------------------------------------------------------------------- */
 .vnext-project-strip {
   position: relative;
-  z-index: 60;
+  z-index: var(--lcos-z-shell-chrome); /* z-tier: shell-chrome */
   height: 44px;
   display: flex;
   align-items: center;
@@ -105,7 +105,7 @@
 /* GUI-5：Reorganize 提案面板（浮层，不占用主画布） */
 .reorganize-panel {
   position: absolute;
-  z-index: 90;
+  z-index: var(--lcos-z-dialog-preview); /* z-tier: dialog */
   right: 14px;
   top: 58px;
   width: 300px;
@@ -147,7 +147,7 @@
 /* -------------------------------------------------------------------------- */
 .vnext-workspace-rail {
   position: absolute;
-  z-index: 46;
+  z-index: var(--lcos-z-shell-chrome); /* z-tier: shell-chrome */
   left: 10px;
   top: 50%;
   transform: translateY(-50%);
@@ -193,7 +193,7 @@
 .vnext-rail-add { margin-top: 1px; }
 .vnext-workspace-preview {
   position: absolute;
-  z-index: 3;
+  z-index: var(--lcos-z-content-bounds); /* z-tier: canvas-content */
   left: 50px;
   top: 50%;
   transform: translateY(-50%);
@@ -217,7 +217,7 @@
 .vnext-workspace-preview span { color:var(--vnext-ink-44); font-size: 12.5px; }
 .vnext-workspace-preview button { width:27px; height:27px; display:grid; place-items:center; border:0; border-radius:9px; background:transparent; color:var(--vnext-ink-44); }
 .vnext-workspace-preview button:hover { background:rgba(60,56,77,.05); color:var(--vnext-ink); }
-.vnext-workspace-menu { position:absolute; z-index:5; right:8px; bottom:-4px; transform:translateY(100%); display:grid; min-width:180px; padding:6px; border:1px solid rgba(39,37,49,.1); border-radius:13px; background:rgba(255,255,255,.98); box-shadow:0 16px 40px rgba(47,44,68,.14), inset 0 1px 0 #fff; }
+.vnext-workspace-menu { position:absolute; z-index: var(--lcos-z-content-chip); /* z-tier: canvas-content */ right:8px; bottom:-4px; transform:translateY(100%); display:grid; min-width:180px; padding:6px; border:1px solid rgba(39,37,49,.1); border-radius:13px; background:rgba(255,255,255,.98); box-shadow:0 16px 40px rgba(47,44,68,.14), inset 0 1px 0 #fff; }
 .vnext-workspace-menu button { display:flex; align-items:center; gap:8px; width:100%; min-height:31px; padding:6px 8px; border:0; border-radius:9px; background:transparent; color:var(--vnext-ink-66); font-size: 10.5px; text-align:left; cursor:pointer; }
 .vnext-workspace-menu button:hover { background:rgba(71,66,94,.055); color:var(--vnext-ink); }
 .vnext-workspace-menu button:disabled { opacity:.35; cursor:default; }
@@ -228,7 +228,7 @@
 /* -------------------------------------------------------------------------- */
 /* Persistent shell / independent surfaces                                    */
 /* -------------------------------------------------------------------------- */
-.vnext-surface-host { position:absolute; inset:0; z-index:2; overflow:hidden; }
+.vnext-surface-host { position:absolute; inset:0; z-index:var(--lcos-z-canvas-content); overflow:hidden; } /* z-tier: canvas-content */
 .vnext-surface-host > .canvas { inset:0; }
 .vnext-projection-surface {
   position:absolute;
@@ -240,12 +240,12 @@
   background-size:auto,23px 23px;
   animation:vnext-surface-in 160ms cubic-bezier(.2,.75,.25,1) both;
 }
-.vnext-projection-title { position:absolute; left:84px; top:22px; z-index:4; display:flex; align-items:baseline; gap:9px; pointer-events:none; }
+.vnext-projection-title { position:absolute; left:84px; top:22px; z-index: var(--lcos-z-content-handle); /* z-tier: canvas-content */ display:flex; align-items:baseline; gap:9px; pointer-events:none; }
 .vnext-projection-title span { font-size: 12px; font-weight:650; letter-spacing:-.01em; }
 .vnext-projection-title small { color:var(--vnext-ink-44); font-size: 12.5px; letter-spacing:.04em; }
 .vnext-projection-node {
   position:absolute;
-  z-index:5;
+  z-index: var(--lcos-z-content-chip); /* z-tier: canvas-content */
   display:flex;
   align-items:center;
   gap:9px;
@@ -264,7 +264,7 @@
 .vnext-projection-node:hover { border-color:rgba(69,64,92,.17); background:rgba(255,255,255,.9); transform:translateY(-1px); }
 .vnext-projection-node.selected { border-color:transparent; }
 .vnext-edge-light { position:absolute; inset:-1.5px; border-radius:inherit; padding:1.5px; background:conic-gradient(from var(--vnext-edge-angle),var(--vnext-purple),var(--vnext-blue),var(--vnext-cyan),var(--vnext-blue),var(--vnext-purple)); -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0); -webkit-mask-composite:xor; mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0); mask-composite:exclude; animation:vnext-edge-travel 5.5s linear infinite; pointer-events:none; }
-.vnext-edge-bloom { position:absolute; inset:-13px; border-radius:inherit; background:radial-gradient(60% 60% at 50% 50%,rgba(139,92,246,.14),rgba(59,130,246,.07) 56%,transparent 80%); filter:blur(8px); pointer-events:none; z-index:-1; }
+.vnext-edge-bloom { position:absolute; inset:-13px; border-radius:inherit; background:radial-gradient(60% 60% at 50% 50%,rgba(139,92,246,.14),rgba(59,130,246,.07) 56%,transparent 80%); filter:blur(8px); pointer-events:none; z-index: -1; /* z-tier: legacy-bg（porcelain 遗留背景层，按契约保留 -1） */ }
 .vnext-projection-icon { width:24px; height:24px; flex:0 0 24px; display:grid; place-items:center; border-radius:8px; color:var(--vnext-ink-44); background:rgba(72,67,94,.05); }
 .vnext-projection-copy { min-width:0; display:grid; gap:2px; }
 .vnext-projection-copy strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size: 10.8px; font-weight:620; }
@@ -273,7 +273,7 @@
 .vnext-status-mark.draft { background:var(--vnext-purple); box-shadow:0 0 0 3px rgba(139,92,246,.08); }
 .vnext-status-mark.current { background:#63a77b; }
 .vnext-status-mark.run-running { background:var(--vnext-blue); }
-.vnext-projection-edges { position:absolute; inset:0; width:100%; height:100%; z-index:2; pointer-events:none; }
+.vnext-projection-edges { position:absolute; inset:0; width:100%; height:100%; z-index: var(--lcos-z-content-detail); /* z-tier: canvas-content */ pointer-events:none; }
 .vnext-projection-edges path { fill:none; stroke:rgba(79,75,95,.22); stroke-width:1.25; stroke-dasharray:3 6; vector-effect:non-scaling-stroke; }
 .vnext-projection-edges path.generate,.vnext-projection-edges path.modify { stroke:rgba(76,112,190,.38); stroke-dasharray:none; }
 .vnext-projection-edges path.feedback { stroke:rgba(181,129,60,.34); }
@@ -291,7 +291,7 @@
 /* -------------------------------------------------------------------------- */
 .vnext-bottom-dock {
   position:absolute;
-  z-index:48;
+  z-index: var(--lcos-z-shell-chrome); /* z-tier: shell-chrome */
   left:50%;
   bottom:12px;
   transform:translateX(-50%);
@@ -323,7 +323,7 @@
 /* -------------------------------------------------------------------------- */
 /* Drop gutters and shelf                                                      */
 /* -------------------------------------------------------------------------- */
-.drop-edge-cue { position:absolute; z-index:78; pointer-events:none; overflow:hidden; opacity:.9; }
+.drop-edge-cue { position:absolute; z-index: var(--lcos-z-overlay-ui-top); /* z-tier: overlay-ui */ pointer-events:none; overflow:hidden; opacity:.9; }
 .drop-edge-cue.anchor-left { left:0; top:0; bottom:0; width:44px; background:linear-gradient(90deg,rgba(139,92,246,.055),transparent); }
 .drop-edge-cue.anchor-bottom { left:0; right:0; bottom:0; height:44px; background:linear-gradient(0deg,rgba(59,130,246,.055),transparent); }
 .drop-edge-cue i { position:absolute; display:block; border-radius:999px; background:linear-gradient(180deg,rgba(139,92,246,.52),rgba(59,130,246,.42)); box-shadow:0 0 18px rgba(107,92,222,.18); }
@@ -342,7 +342,7 @@
 @keyframes lcos-drop-label-in { to { opacity:.86; } }
 .vnext-drop-shelf {
   position:absolute;
-  z-index:70;
+  z-index: var(--lcos-z-overlay-ui-top); /* z-tier: overlay-ui */
   display:flex;
   align-items:center;
   gap:7px;
@@ -393,7 +393,7 @@
 .app-shell.porcelain-studio-v2 .selection-composer-header > div:first-child strong { display:none; }
 .app-shell.porcelain-studio-v2 .selection-composer-header-actions .workspace-membership-action,
 .app-shell.porcelain-studio-v2 .selection-composer-header-actions .workspace-move-action { display:none; }
-.app-shell.porcelain-studio-v2 .vnext-surface-host .edges { z-index:6; pointer-events:none; }
+.app-shell.porcelain-studio-v2 .vnext-surface-host .edges { z-index: var(--lcos-z-content-chip); /* z-tier: canvas-content */ pointer-events:none; }
 .app-shell.porcelain-studio-v2 .vnext-surface-host .edges .edge-hit { pointer-events:stroke; }
 .app-shell.porcelain-studio-v2 .vnext-surface-host .edges .edge {
   stroke: rgba(76, 88, 104, .66);
@@ -408,7 +408,7 @@
 .app-shell.porcelain-studio-v2 .vnext-surface-host .edges .edge.selected { stroke:#7a5ce0; stroke-width:2.5px; }
 .vnext-surface-composer {
   position:absolute;
-  z-index:50;
+  z-index: var(--lcos-z-overlay-ui-raised); /* z-tier: overlay-ui */
   left:50%;
   bottom:70px;
   transform:translateX(-50%);
@@ -445,21 +445,21 @@
 .app-shell.porcelain-studio-v2 .canvas-node.selected .anchor { opacity:.9; }
 .app-shell.porcelain-studio-v2 .node-context-toolbar button:first-child { display:none; }
 .app-shell.porcelain-studio-v2 .canvas-node.selected::after { opacity:1; }
-.app-shell.porcelain-studio-v2 .workspace-frame { z-index:3; pointer-events:none; border-color:rgba(80,75,103,.10); background:rgba(255,255,255,.045); box-shadow:inset 0 1px 0 rgba(255,255,255,.42); }
+.app-shell.porcelain-studio-v2 .workspace-frame { z-index: var(--lcos-z-content-bounds); /* z-tier: canvas-content */ pointer-events:none; border-color:rgba(80,75,103,.10); background:rgba(255,255,255,.045); box-shadow:inset 0 1px 0 rgba(255,255,255,.42); }
 .app-shell.porcelain-studio-v2 .workspace-frame.active { border-color:rgba(107,91,173,.15); }
 .app-shell.porcelain-studio-v2 .workspace-frame-header { pointer-events:auto; color:var(--vnext-ink-44); background:rgba(253,253,255,.74); border-color:var(--vnext-hair); }
 .app-shell.porcelain-studio-v2 .workspace-frame-resize { position:absolute; right:2px; bottom:2px; width:16px; height:16px; display:grid; place-items:center; border:0; border-radius:6px; background:transparent; color:var(--vnext-ink-26); cursor:nwse-resize; pointer-events:auto; }
 .app-shell.porcelain-studio-v2 .workspace-frame-resize span { width:8px; height:8px; border-right:1.5px solid var(--vnext-ink-44); border-bottom:1.5px solid var(--vnext-ink-44); border-bottom-right-radius:2px; }
 .app-shell.porcelain-studio-v2 .workspace-frame-resize:hover { background:rgba(71,66,94,.07); }
-.app-shell.porcelain-studio-v2 .canvas-hud { z-index:42; right:14px; bottom:72px; }
+.app-shell.porcelain-studio-v2 .canvas-hud { z-index: var(--lcos-z-overlay-ui-raised); /* z-tier: overlay-ui */ right:14px; bottom:72px; }
 .vnext-legacy-breadcrumbs { display:none !important; }
 .app-shell.porcelain-studio-v2 .shortcut-hint { top:17px; right:16px; opacity:.58; }
 .app-shell.porcelain-studio-v2 .prototype-reset { opacity:0; pointer-events:none; }
-.app-shell.porcelain-studio-v2 .run-pill { z-index:52; right:18px; bottom:74px; }
+.app-shell.porcelain-studio-v2 .run-pill { z-index: var(--lcos-z-overlay-ui-panel); /* z-tier: overlay-ui */ right:18px; bottom:74px; }
 
 /* Overlays from older UI must sit above new shell but remain on-demand. */
-.app-shell.porcelain-studio-v2 .capability-popover { z-index:80; }
-.app-shell.porcelain-studio-v2 .notice { z-index:100; }
+.app-shell.porcelain-studio-v2 .capability-popover { z-index: var(--lcos-z-overlay-ui-top); /* z-tier: overlay-ui */ }
+.app-shell.porcelain-studio-v2 .notice { z-index: var(--lcos-z-dialog); /* z-tier: dialog */ }
 
 @media (max-width: 1000px) {
   .vnext-project-name span { display:none; }
@@ -478,7 +478,7 @@
 .vnext-immersive-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 980;
+  z-index: var(--lcos-z-modal-immersive); /* z-tier: modal */
   display: grid;
   place-items: stretch;
   padding: 10px;
@@ -572,7 +572,7 @@
   position: absolute;
   right: 14px;
   top: 14px;
-  z-index: 20;
+  z-index: var(--lcos-z-content-hud); /* z-tier: canvas-content */
   display: flex;
   align-items: center;
   gap: 4px;

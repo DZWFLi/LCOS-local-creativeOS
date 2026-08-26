@@ -1,0 +1,542 @@
+[
+  {
+    "schemaVersion": 0,
+    "id": "presentation:arrange:scope-mvp-root",
+    "projectId": "disposable-mvp-sample",
+    "scopeId": "scope-mvp-root",
+    "capability": "arrange",
+    "renderer": "main-canvas",
+    "state": {
+      "memberViewIds": [],
+      "hiddenViewIds": [],
+      "positions": {},
+      "hierarchy": {
+        "parentByViewId": {},
+        "orderByParent": {}
+      },
+      "presentationEdges": [],
+      "pinnedViewIds": [],
+      "emphasisByViewId": {},
+      "spatialRegions": [],
+      "surfaceElements": [
+        {
+          "id": "surface:fence:showcase-core-story",
+          "projectId": "disposable-mvp-sample",
+          "surface": "main",
+          "type": "fence",
+          "bounds": {
+            "x": -110,
+            "y": -90,
+            "w": 770,
+            "h": 270
+          },
+          "presentation": {
+            "zIndex": 1,
+            "variant": "核心叙事区"
+          }
+        },
+        {
+          "id": "surface:region:showcase-reference",
+          "projectId": "disposable-mvp-sample",
+          "surface": "main",
+          "type": "region",
+          "bounds": {
+            "x": -50,
+            "y": 250,
+            "w": 740,
+            "h": 250
+          },
+          "binding": {
+            "projectViewIds": [
+              "view-reference",
+              "view-feedback"
+            ]
+          },
+          "presentation": {
+            "zIndex": 1,
+            "variant": "参考资料区"
+          }
+        },
+        {
+          "id": "surface:portal:showcase-script-entry",
+          "projectId": "disposable-mvp-sample",
+          "surface": "main",
+          "type": "portal",
+          "bounds": {
+            "x": 750,
+            "y": -90,
+            "w": 210,
+            "h": 100
+          },
+          "binding": {
+            "projectViewId": "view-script"
+          },
+          "presentation": {
+            "zIndex": 2,
+            "variant": "进入剧本"
+          }
+        },
+        {
+          "id": "surface:stack:showcase-story-pile",
+          "projectId": "disposable-mvp-sample",
+          "surface": "main",
+          "type": "stack",
+          "bounds": {
+            "x": 750,
+            "y": 60,
+            "w": 230,
+            "h": 170
+          },
+          "binding": {
+            "projectViewIds": [
+              "view-brief",
+              "view-script"
+            ]
+          },
+          "presentation": {
+            "zIndex": 3,
+            "variant": "叙事材料堆"
+          }
+        },
+        {
+          "id": "surface:compare:showcase-ref-vs-feedback",
+          "projectId": "disposable-mvp-sample",
+          "surface": "main",
+          "type": "compare",
+          "bounds": {
+            "x": 720,
+            "y": 270,
+            "w": 360,
+            "h": 200
+          },
+          "binding": {
+            "projectViewIds": [
+              "view-reference",
+              "view-feedback"
+            ]
+          },
+          "presentation": {
+            "zIndex": 3
+          }
+        },
+        {
+          "id": "surface:workbench:showcase-main",
+          "projectId": "disposable-mvp-sample",
+          "surface": "main",
+          "type": "workbench",
+          "bounds": {
+            "x": 700,
+            "y": 510,
+            "w": 470,
+            "h": 290
+          },
+          "binding": {
+            "projectViewIds": [
+              "view-brief",
+              "view-script",
+              "view-reference",
+              "view-feedback"
+            ]
+          },
+          "presentation": {
+            "zIndex": 3
+          }
+        }
+      ],
+      "surfaceBootstrapVersion": 3
+    },
+    "version": 27,
+    "updatedBy": "web",
+    "createdAt": "2026-08-23T16:07:15.407Z",
+    "updatedAt": "2026-08-24T02:51:22.354Z"
+  },
+  {
+    "schemaVersion": 0,
+    "id": "presentation:context:scope-mvp-root",
+    "projectId": "disposable-mvp-sample",
+    "scopeId": "scope-mvp-root",
+    "capability": "context",
+    "renderer": "context-graph",
+    "state": {
+      "memberViewIds": [
+        "view-brief",
+        "view-script",
+        "view-reference",
+        "view-feedback"
+      ],
+      "hiddenViewIds": [],
+      "positions": {},
+      "hierarchy": {
+        "parentByViewId": {},
+        "orderByParent": {}
+      },
+      "presentationEdges": [],
+      "pinnedViewIds": [],
+      "emphasisByViewId": {},
+      "memberEntityRefs": [],
+      "surfaceElements": [
+        {
+          "id": "context-bootstrap:source-chain",
+          "projectId": "disposable-mvp-sample",
+          "surface": "context",
+          "type": "source-chain",
+          "bounds": {
+            "x": 96,
+            "y": 72,
+            "w": 680,
+            "h": 142
+          },
+          "binding": {
+            "projectViewIds": [
+              "view-brief",
+              "view-script",
+              "view-reference",
+              "view-feedback"
+            ]
+          },
+          "presentation": {
+            "variant": "Context · 5 个对象",
+            "zIndex": 4
+          }
+        },
+        {
+          "id": "context-bootstrap:structure",
+          "projectId": "disposable-mvp-sample",
+          "surface": "context",
+          "type": "structure-map",
+          "bounds": {
+            "x": 96,
+            "y": 266,
+            "w": 440,
+            "h": 320
+          },
+          "binding": {
+            "projectViewIds": [
+              "view-brief",
+              "view-script",
+              "view-reference",
+              "view-feedback",
+              "runtime-run-view-run-2c78d018-9983-4403-a62d-389cf10a82b4"
+            ]
+          },
+          "presentation": {
+            "zIndex": 3
+          }
+        },
+        {
+          "id": "context-bootstrap:evolution",
+          "projectId": "disposable-mvp-sample",
+          "surface": "context",
+          "type": "evolution",
+          "bounds": {
+            "x": 594,
+            "y": 266,
+            "w": 440,
+            "h": 254
+          },
+          "binding": {
+            "projectViewIds": [
+              "view-brief",
+              "view-script",
+              "view-reference",
+              "view-feedback",
+              "runtime-run-view-run-2c78d018-9983-4403-a62d-389cf10a82b4"
+            ]
+          },
+          "presentation": {
+            "zIndex": 3
+          }
+        },
+        {
+          "id": "context-bootstrap:relationship",
+          "projectId": "disposable-mvp-sample",
+          "surface": "context",
+          "type": "relationship-field",
+          "bounds": {
+            "x": 594,
+            "y": 568,
+            "w": 520,
+            "h": 300
+          },
+          "binding": {
+            "projectViewIds": [
+              "view-brief",
+              "view-script",
+              "view-reference",
+              "view-feedback",
+              "runtime-run-view-run-2c78d018-9983-4403-a62d-389cf10a82b4"
+            ]
+          },
+          "presentation": {
+            "zIndex": 3
+          }
+        }
+      ],
+      "surfaceBootstrapVersion": 1
+    },
+    "version": 13,
+    "updatedBy": "web",
+    "createdAt": "2026-08-23T16:07:15.411Z",
+    "updatedAt": "2026-08-24T03:59:25.900Z"
+  },
+  {
+    "schemaVersion": 0,
+    "id": "presentation:workflow:scope-mvp-root",
+    "projectId": "disposable-mvp-sample",
+    "scopeId": "scope-mvp-root",
+    "capability": "workflow",
+    "renderer": "workflow",
+    "state": {
+      "memberViewIds": [],
+      "hiddenViewIds": [],
+      "positions": {},
+      "hierarchy": {
+        "parentByViewId": {},
+        "orderByParent": {}
+      },
+      "presentationEdges": [],
+      "pinnedViewIds": [],
+      "emphasisByViewId": {},
+      "memberEntityRefs": [],
+      "surfaceElements": [
+        {
+          "id": "surface:active-path:showcase",
+          "projectId": "disposable-mvp-sample",
+          "surface": "workflow",
+          "type": "active-path",
+          "bounds": {
+            "x": 60,
+            "y": 40,
+            "w": 500,
+            "h": 140
+          },
+          "binding": {
+            "projectViewIds": [
+              "view-brief",
+              "view-script",
+              "view-feedback"
+            ]
+          },
+          "presentation": {
+            "zIndex": 2
+          }
+        },
+        {
+          "id": "surface:workflow-step:showcase-script",
+          "projectId": "disposable-mvp-sample",
+          "surface": "workflow",
+          "type": "workflow-step",
+          "bounds": {
+            "x": 60,
+            "y": 220,
+            "w": 240,
+            "h": 95
+          },
+          "binding": {
+            "projectViewId": "view-script"
+          },
+          "presentation": {
+            "zIndex": 2,
+            "variant": "剧本打磨"
+          }
+        },
+        {
+          "id": "surface:review:showcase-consistency",
+          "projectId": "disposable-mvp-sample",
+          "surface": "workflow",
+          "type": "review",
+          "bounds": {
+            "x": 330,
+            "y": 220,
+            "w": 330,
+            "h": 200
+          },
+          "binding": {
+            "runId": "run-2c78d018-9983-4403-a62d-389cf10a82b4"
+          },
+          "presentation": {
+            "zIndex": 2
+          }
+        },
+        {
+          "id": "surface:checkpoint:showcase-start",
+          "projectId": "disposable-mvp-sample",
+          "surface": "workflow",
+          "type": "checkpoint",
+          "bounds": {
+            "x": 60,
+            "y": 450,
+            "w": 320,
+            "h": 160
+          },
+          "binding": {
+            "checkpointId": "checkpoint-mvp-sample-start"
+          },
+          "presentation": {
+            "zIndex": 2
+          }
+        },
+        {
+          "id": "surface:workbench:showcase-workflow",
+          "projectId": "disposable-mvp-sample",
+          "surface": "workflow",
+          "type": "workbench",
+          "bounds": {
+            "x": 420,
+            "y": 450,
+            "w": 470,
+            "h": 290
+          },
+          "binding": {
+            "projectViewIds": [
+              "view-brief",
+              "view-script",
+              "view-reference",
+              "view-feedback"
+            ]
+          },
+          "presentation": {
+            "zIndex": 2
+          }
+        }
+      ],
+      "surfaceBootstrapVersion": 3
+    },
+    "version": 18,
+    "updatedBy": "web",
+    "createdAt": "2026-08-23T16:07:15.415Z",
+    "updatedAt": "2026-08-24T04:04:45.465Z"
+  },
+  {
+    "schemaVersion": 0,
+    "id": "presentation:workflow:scope-workflow-script-pipeline",
+    "projectId": "disposable-mvp-sample",
+    "scopeId": "scope-workflow-script-pipeline",
+    "capability": "workflow",
+    "renderer": "workflow",
+    "state": {
+      "memberViewIds": [
+        "view-brief",
+        "view-script",
+        "view-reference",
+        "view-feedback"
+      ],
+      "hiddenViewIds": [],
+      "positions": {},
+      "hierarchy": {
+        "parentByViewId": {},
+        "orderByParent": {}
+      },
+      "presentationEdges": [],
+      "pinnedViewIds": [],
+      "emphasisByViewId": {},
+      "surfaceElements": [
+        {
+          "id": "surface:wf-pipeline:active-path",
+          "projectId": "disposable-mvp-sample",
+          "surface": "workflow",
+          "type": "active-path",
+          "bounds": {
+            "x": 60,
+            "y": 40,
+            "w": 500,
+            "h": 140
+          },
+          "binding": {
+            "projectViewIds": [
+              "view-brief",
+              "view-script",
+              "view-feedback"
+            ]
+          },
+          "presentation": {
+            "zIndex": 2
+          }
+        },
+        {
+          "id": "surface:wf-pipeline:step-script",
+          "projectId": "disposable-mvp-sample",
+          "surface": "workflow",
+          "type": "workflow-step",
+          "bounds": {
+            "x": 60,
+            "y": 220,
+            "w": 240,
+            "h": 95
+          },
+          "binding": {
+            "projectViewId": "view-script"
+          },
+          "presentation": {
+            "zIndex": 2,
+            "variant": "剧本打磨"
+          }
+        },
+        {
+          "id": "surface:wf-pipeline:review-consistency",
+          "projectId": "disposable-mvp-sample",
+          "surface": "workflow",
+          "type": "review",
+          "bounds": {
+            "x": 330,
+            "y": 220,
+            "w": 330,
+            "h": 200
+          },
+          "binding": {
+            "runId": "run-2c78d018-9983-4403-a62d-389cf10a82b4"
+          },
+          "presentation": {
+            "zIndex": 2
+          }
+        },
+        {
+          "id": "surface:wf-pipeline:checkpoint-start",
+          "projectId": "disposable-mvp-sample",
+          "surface": "workflow",
+          "type": "checkpoint",
+          "bounds": {
+            "x": 60,
+            "y": 450,
+            "w": 320,
+            "h": 160
+          },
+          "binding": {
+            "checkpointId": "checkpoint-mvp-sample-start"
+          },
+          "presentation": {
+            "zIndex": 2
+          }
+        },
+        {
+          "id": "surface:wf-pipeline:workbench",
+          "projectId": "disposable-mvp-sample",
+          "surface": "workflow",
+          "type": "workbench",
+          "bounds": {
+            "x": 420,
+            "y": 450,
+            "w": 470,
+            "h": 290
+          },
+          "binding": {
+            "projectViewIds": [
+              "view-brief",
+              "view-script",
+              "view-reference",
+              "view-feedback"
+            ]
+          },
+          "presentation": {
+            "zIndex": 2
+          }
+        }
+      ],
+      "surfaceBootstrapVersion": 1
+    },
+    "version": 0,
+    "updatedBy": "web",
+    "createdAt": "2026-08-24T03:17:59.456Z",
+    "updatedAt": "2026-08-24T03:17:59.456Z"
+  }
+]

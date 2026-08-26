@@ -33,6 +33,18 @@ export function isTextPreviewFile(file: File): boolean {
     || /\.(md|markdown|txt|log|json|csv|tsv|yaml|yml)$/i.test(file.name)
 }
 
+/**
+ * 智能文本解码：优先严格 UTF-8；非法 UTF-8 时回退 GBK（Windows 记事本
+ * ANSI 默认编码），再不行退 latin1 保证字节可见。
+ * 解决中文 txt 拖入/预览时的乱码问题（file.text()/response.text() 永远按 UTF-8）。
+ */
+export function decodeTextBuffer(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer)
+  try { return new TextDecoder('utf-8', { fatal: true }).decode(bytes) } catch { /* 非法 UTF-8，继续回退 */ }
+  try { return new TextDecoder('gbk').decode(bytes) } catch { /* GBK 不受支持（极少见），继续回退 */ }
+  return new TextDecoder('windows-1252').decode(bytes)
+}
+
 export function inferFileType(fileName: string): string {
   if (/\.(md|markdown)$/i.test(fileName)) return 'text/markdown'
   if (/\.txt$/i.test(fileName)) return 'text/plain'

@@ -122,14 +122,14 @@ export function WorkflowGraphSurface(props: Props) {
     const item=allPlacements.find((placement)=>placement.id===id)
     if(!item)return
     event.stopPropagation()
-    drag.current=beginSpatialNodeDrag(event.pointerId,id,{x:event.clientX,y:event.clientY},{x:item.x,y:item.y})
+    drag.current=beginSpatialNodeDrag(event.pointerId,id,{x:event.clientX,y:event.clientY},{x:item.x,y:item.y},camera.zoom)
     setDraggingId(id)
     try{event.currentTarget.setPointerCapture(event.pointerId)}catch{/* browser owns capture */}
   }
   const moveDrag=(event:ReactPointerEvent<HTMLElement>)=>{
     const session=drag.current
     if(session.kind!=='node-drag')return
-    const next=advanceSpatialNodeDrag(session,{x:event.clientX,y:event.clientY},camera.zoom)
+    const next=advanceSpatialNodeDrag(session,{x:event.clientX,y:event.clientY})
     if(next)setDraftPositions((current)=>({...current,[session.id]:next}))
   }
   const endDrag=(event?:ReactPointerEvent<HTMLElement>)=>{

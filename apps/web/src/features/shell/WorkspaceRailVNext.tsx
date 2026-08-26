@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react'
+import type { PointerEvent as ReactPointerEvent } from 'react'
 import { Crosshair, GitBranch, Layers3, LayoutDashboard, LayoutPanelLeft, Network, Pencil, Plus, Waves } from 'lucide-react'
 import type { RunStatus } from '../../model'
 import { LightCurtain } from '../drop/LightCurtain'
@@ -7,12 +7,40 @@ import { NEW_SCENE_DROP_TARGET_ID, semanticDropTriggerFromPointer, type Semantic
 
 export type ProjectRailViewKind = 'scene' | 'collection' | 'context' | 'workflow'
 
+/** Rail 预览用成员几何投影：来自真实 CanvasNode 的 x/y/width/height + 文件类型。 */
+export interface RailMemberPreview {
+  readonly id: string
+  readonly x: number
+  readonly y: number
+  readonly width: number
+  readonly height: number
+  /** detectFileIdentity 结果（image/pdf/markdown…）；嵌套实体视图固定为 'entity'。 */
+  readonly kind: string
+}
+
+export interface RailMemberPlacement {
+  readonly id: string
+  readonly kind: string
+  readonly left: number
+  readonly top: number
+  readonly width: number
+  readonly height: number
+}
+
+export interface RailMiniLayout {
+  readonly placed: readonly RailMemberPlacement[]
+  readonly overflow: number
+  readonly entityCount: number
+}
+
 export interface ProjectRailViewItem {
   id: string
   title: string
   kind: ProjectRailViewKind
   memberCount: number
   memberViewIds?: readonly string[]
+  /** 成员真实节点投影（App 由 collectionMembersByNodeId 聚合），预览据此画真 mini 布局。 */
+  memberNodes?: readonly RailMemberPreview[]
   /** Project View identities dragged when this aggregate rail item is used as a node. */
   dragViewIds?: readonly string[]
   /** Existing Workspace id when this rail item is backed by a Workspace. */
@@ -94,39 +122,124 @@ function RailGlyph({ kind }: { kind: ProjectRailViewKind }) {
   return <Layers3 size={14}/>
 }
 
-function ScenePreview({ count, large = false }: { count: number; large?: boolean }) {
-  return <span className={`lcos-rail-preview-scene ${large ? 'is-large' : ''}`} aria-hidden="true">
-    <i/><i/><i/><b>{count || ''}</b>
+/**
+ * 现场身份徽标文案(§4.13.1-F 识别层):与 scope.kind 对应的现场称谓,
+ * 供 rail 色点徽标的 title / aria-label 使用;数据零新增(读 view.kind 即得)。
+ */
+function railKindSiteLabel(kind: ProjectRailViewKind): string {
+  if (kind === 'scene') return '主画布现场'
+  if (kind === 'context') return '上下文现场'
+  if (kind === 'workflow') return '工作流现场'
+  return '节点集合'
+}
+
+const MEMBER_KIND_LABELS: Record<string, string> = {
+  image: '图片', video: '视频', audio: '音频', pdf: 'PDF', ppt: 'PPT',
+  markdown: '文本', link: '链接', archive: '压缩包', file: '文件', entity: '实体',
+}
+
+function memberKindLabel(kind: string): string {
+  return MEMBER_KIND_LABELS[kind] ?? '对象'
+}
+
+/**
+ * 真 mini 布局（纯函数）：成员按真实 x/y 归一化到百分比面板，与画布
+ * WorkspaceProjectionObject 的 workspaceMiniLayout 同一几何语义；嵌套实体视图
+ * （scope:/workspace: 前缀）不参与几何（与画布投影一致），计入 entityCount。
+ */
+export function railMemberLayout(members: readonly RailMemberPreview[], limit: number): RailMiniLayout {
+  const geometric = members.filter((member) => !member.id.startsWith('scope:') && !member.id.startsWith('workspace:'))
+  const entityCount = members.length - geometric.length
+  const shown = geometric.slice(0, limit)
+  if (!shown.length) return { placed: [], overflow: 0, entityCount }
+  const left = Math.min(...shown.map((member) => member.x))
+  const top = Math.min(...shown.map((member) => member.y))
+  const right = Math.max(...shown.map((member) => member.x + Math.max(1, member.width)))
+  const bottom = Math.max(...shown.map((member) => member.y + Math.max(1, member.height)))
+  const spanX = Math.max(1, right - left)
+  const spanY = Math.max(1, bottom - top)
+  return {
+    placed: shown.map((member) => ({
+      id: member.id,
+      kind: member.kind,
+      left: 6 + ((member.x - left) / spanX) * 72,
+      top: 7 + ((member.y - top) / spanY) * 64,
+      width: Math.max(8, Math.min(24, (Math.max(1, member.width) / spanX) * 72)),
+      height: Math.max(10, Math.min(28, (Math.max(1, member.height) / spanY) * 64)),
+    })),
+    overflow: geometric.length - shown.length,
+    entityCount,
+  }
+}
+
+/** 成员类型真实分布（纯函数）：按 kind 计数降序，用于统计行退路。 */
+export function memberKindDistribution(members: readonly RailMemberPreview[]): readonly { readonly kind: string; readonly count: number }[] {
+  const counts = new Map<string, number>()
+  for (const member of members) counts.set(member.kind, (counts.get(member.kind) ?? 0) + 1)
+  return [...counts.entries()].map(([kind, count]) => ({ kind, count })).sort((a, b) => b.count - a.count || a.kind.localeCompare(b.kind))
+}
+
+/** hover 卡片成员统计行（纯函数）：真实总数 + 类型分布（最多 3 类）。 */
+export function memberSummaryLine(view: ProjectRailViewItem): string {
+  if (!view.memberCount) return '空视图'
+  const members = view.memberNodes
+  if (!members?.length) return `${view.memberCount} 个对象`
+  const distribution = memberKindDistribution(members).slice(0, 3)
+  if (!distribution.length) return `${view.memberCount} 个对象`
+  return `${view.memberCount} 个对象 · ${distribution.map(({ kind, count }) => `${memberKindLabel(kind)}×${count}`).join(' ')}`
+}
+
+/**
+ * 真实成员预览：优先按成员真实 x/y 归一化排 mini 布局（与画布投影同一几何来源），
+ * 无几何数据时退回真实统计（计数/类型分布）。绝不渲染装饰性假几何。
+ */
+function RealMemberPreview({ view, large = false, kindClass }: { view: ProjectRailViewItem; large?: boolean; kindClass: string }) {
+  const members = view.memberNodes
+  // 数据边界：该视图聚合拿不到成员节点投影，只显示真实计数（0 = 空视图）。
+  if (!members || !members.length) {
+    return <span className={`${kindClass} lcos-rail-member-empty ${large ? 'is-large' : ''}`} aria-hidden="true">
+      {large ? <em>{view.memberCount ? `${view.memberCount} 个对象 · 暂无布局数据` : '空视图'}</em> : <b>{view.memberCount || 0}</b>}
+    </span>
+  }
+  const layout = railMemberLayout(members, large ? 12 : 6)
+  if (layout.placed.length) {
+    return <span
+      className={`${kindClass} lcos-rail-member-map ${large ? 'is-large' : ''}`}
+      {...(large ? { role: 'img' as const, 'aria-label': `成员真实布局：共 ${members.length} 个成员` } : { 'aria-hidden': true })}>
+      {layout.placed.map(({ id, kind, left, top, width, height }) => <span key={id} className="lcos-rail-member-cell" data-member-kind={kind} title={memberKindLabel(kind)} style={{ left: `${left}%`, top: `${top}%`, width: `${width}%`, height: `${height}%` }}/>)}
+      {layout.overflow > 0 && <b className="lcos-rail-member-overflow" title={`另有 ${layout.overflow} 个成员未显示`}>+{layout.overflow}</b>}
+    </span>
+  }
+  // 有成员但无几何坐标（如全部为实体引用）：真实类型分布退路，不画假图形。
+  const distribution = memberKindDistribution(members)
+  return <span className={`${kindClass} lcos-rail-member-stats ${large ? 'is-large' : ''}`} aria-hidden="true">
+    {large
+      ? distribution.map(({ kind, count }) => <em key={kind}>{memberKindLabel(kind)}×{count}</em>)
+      : <b>{members.length}</b>}
   </span>
 }
 
-function CollectionPreview({ count, large = false }: { count: number; large?: boolean }) {
-  const cards = Math.max(2, Math.min(4, count || 3))
-  return <span className={`lcos-rail-preview-collection ${large ? 'is-large' : ''}`} aria-hidden="true">
-    {Array.from({ length: cards }, (_, index) => <i key={index} style={{ '--i': index } as CSSProperties}/>) }
-  </span>
+function ScenePreview({ view, large = false }: { view: ProjectRailViewItem; large?: boolean }) {
+  return <RealMemberPreview view={view} large={large} kindClass="lcos-rail-preview-scene"/>
 }
 
-function ContextPreview({ count, large = false }: { count: number; large?: boolean }) {
-  const bars = Math.max(5, Math.min(9, count || 6))
-  return <span className={`lcos-rail-preview-context ${large ? 'is-large' : ''}`} aria-hidden="true">
-    {Array.from({ length: bars }, (_, index) => <i key={index} style={{ '--i': index, '--h': `${28 + ((index * 17 + count * 7) % 58)}%` } as CSSProperties}/>) }
-  </span>
+function CollectionPreview({ view, large = false }: { view: ProjectRailViewItem; large?: boolean }) {
+  return <RealMemberPreview view={view} large={large} kindClass="lcos-rail-preview-collection"/>
 }
 
-function WorkflowPreview({ count, large = false }: { count: number; large?: boolean }) {
-  const nodes = Math.max(2, Math.min(4, count || 3))
-  return <span className={`lcos-rail-preview-workflow ${large ? 'is-large' : ''}`} aria-hidden="true">
-    <b/>
-    {Array.from({ length: nodes }, (_, index) => <i key={index} style={{ '--i': index } as CSSProperties}/>) }
-  </span>
+function ContextPreview({ view, large = false }: { view: ProjectRailViewItem; large?: boolean }) {
+  return <RealMemberPreview view={view} large={large} kindClass="lcos-rail-preview-context"/>
+}
+
+function WorkflowPreview({ view, large = false }: { view: ProjectRailViewItem; large?: boolean }) {
+  return <RealMemberPreview view={view} large={large} kindClass="lcos-rail-preview-workflow"/>
 }
 
 function ViewPreview({ view, large = false }: { view: ProjectRailViewItem; large?: boolean }) {
-  if (view.kind === 'scene') return <ScenePreview count={view.memberCount} large={large}/>
-  if (view.kind === 'context') return <ContextPreview count={view.memberCount} large={large}/>
-  if (view.kind === 'workflow') return <WorkflowPreview count={view.memberCount} large={large}/>
-  return <CollectionPreview count={view.memberCount} large={large}/>
+  if (view.kind === 'scene') return <ScenePreview view={view} large={large}/>
+  if (view.kind === 'context') return <ContextPreview view={view} large={large}/>
+  if (view.kind === 'workflow') return <WorkflowPreview view={view} large={large}/>
+  return <CollectionPreview view={view} large={large}/>
 }
 
 /**
@@ -490,19 +603,28 @@ export function WorkspaceRailVNext({ views, runStatus, onOverview, onActivateVie
             onPointerLeave={() => { if (leftDrag) return; schedulePreviewClose(view.id) }}>
             <button type="button" role="listitem" className={view.active ? 'vnext-workspace-mini lcos-project-view-button active' : 'vnext-workspace-mini lcos-project-view-button'} aria-label={`${view.active ? '当前' : '进入'}${previewLabel(view.kind)}：${view.title}`} onFocus={() => setPreviewId(view.id)} onClick={(event) => { if (suppressClickRef.current) { event.preventDefault(); event.stopPropagation(); return } onActivateView(view); setPreviewId(null) }}>
               <ViewPreview view={view}/>
+              {/* §4.13.1-F 现场身份标识:类型色点徽标(左上,纯识别层)——
+                  纯 lucide 图标辨识度低,色点+title 显式标注现场类型;pointer-events
+                  交由 CSS 置 none,不吃点击(点击进现场行为保持不变)。 */}
+              <span className="lcos-rail-kind-badge" data-kind={view.kind} role="img" aria-label={railKindSiteLabel(view.kind)} title={railKindSiteLabel(view.kind)}/>
               <span className="lcos-project-view-kind-glyph"><RailGlyph kind={view.kind}/></span>
               {attention && <span className={`vnext-workspace-attention status-${runStatus}`}/>}
             </button>
           </div>
         })}
       </div>
-      <div
+      {/* 债3：新 Scene 从 aria-hidden 假 div 升级为真按钮——点击接现有创建入口
+          （onAdd = App 的 createEmptyWorkspaceScene），语义投送目标属性保留。 */}
+      <button
+        type="button"
         className="lcos-new-scene-drop-target"
         data-testid="new-scene-drop-target"
         data-project-view-drop-target={NEW_SCENE_DROP_TARGET_ID}
         data-project-view-drop-label="+ 新 Scene"
-        aria-hidden="true"
-      ><Plus size={14}/><span>新 Scene</span></div>
+        aria-label="新建空白 Scene"
+        title="新建空白 Scene；也可把视图拖到这里生成含内容的 Scene"
+        onClick={() => { setPreviewId(null); onAdd() }}
+      ><Plus size={14}/><span>新 Scene</span></button>
     </div>
     {leftDrag?.moved && (() => { const dragged = views.find((view) => view.id === leftDrag.viewId); return dragged ? <div className="lcos-rail-drag-float" style={{ left: leftDrag.pointerX, top: leftDrag.pointerY }} aria-hidden="true">
       <ViewPreview view={dragged}/><span className="lcos-project-view-kind-glyph"><RailGlyph kind={dragged.kind}/></span>
@@ -512,7 +634,16 @@ export function WorkspaceRailVNext({ views, runStatus, onOverview, onActivateVie
     </div>}
     {dropGhost && <LightCurtain tone="drop" anchors={['left', 'bottom']} hot={dropHot} label={dropGhost.label} count={dropGhost.count}/>}
     {leftDrag?.mode === 'delete' && <LightCurtain tone="delete" anchors={['left']} hot label={`松手删除「${leftDrag.title}」`}/>}
-    <span className="lcos-rail-resize-handle" role="slider" aria-label="拖拽调整侧栏列数" aria-valuetext={effectiveTwoColumn ? '双列' : '单列'} onPointerDown={beginColumnDrag} onPointerMove={moveColumnDrag} onPointerUp={finishColumnDrag} onPointerCancel={finishColumnDrag}/>
+    {/* 债3：resize handle 补齐 slider ARIA（valuenow/min/max）与键盘——左右方向键切换单/双列，
+        与拖拽走同一 columnOverride 通道。 */}
+    <span className="lcos-rail-resize-handle" role="slider" aria-label="拖拽或按左右方向键调整侧栏列数"
+      aria-valuenow={effectiveTwoColumn ? 2 : 1} aria-valuemin={1} aria-valuemax={2}
+      aria-valuetext={effectiveTwoColumn ? '双列' : '单列'} tabIndex={0}
+      onPointerDown={beginColumnDrag} onPointerMove={moveColumnDrag} onPointerUp={finishColumnDrag} onPointerCancel={finishColumnDrag}
+      onKeyDown={(event) => {
+        if (event.key === 'ArrowLeft') { event.preventDefault(); setColumnOverride('one') }
+        else if (event.key === 'ArrowRight') { event.preventDefault(); setColumnOverride('two') }
+      }}/>
     <div className="lcos-rail-footer"><button type="button" className="vnext-rail-button vnext-rail-add" title="新建保存视图" aria-label="新建保存视图" onClick={onAdd}><Plus size={15}/></button></div>
 
     {preview && <div className={`vnext-workspace-preview lcos-workspace-preview lcos-project-view-preview kind-${preview.kind}`} data-project-view-drop-target={preview.id} data-project-view-drop-kind={preview.kind} data-project-view-drop-label={preview.title} role="dialog" aria-label={`${preview.title} ${previewLabel(preview.kind)}`} onPointerEnter={() => { keepPreviewOpen(); setPreviewId(preview.id) }} onPointerLeave={() => schedulePreviewClose(preview.id)}>
@@ -521,7 +652,7 @@ export function WorkspaceRailVNext({ views, runStatus, onOverview, onActivateVie
         {renameFor === preview.id
           ? <input className="lcos-rail-rename-input" value={renameValue} aria-label="重命名视图" autoFocus onChange={(event) => setRenameValue(event.target.value)} onClick={(event) => event.stopPropagation()} onKeyDown={(event) => { if (event.key === 'Enter') commitRename(preview); else if (event.key === 'Escape') setRenameFor(null) }} onBlur={() => commitRename(preview)}/>
           : <strong data-renameable={canRename(preview) ? '' : undefined} title={canRename(preview) ? '点击重命名' : undefined} onClick={(event) => { if (!canRename(preview)) return; event.stopPropagation(); beginRename(preview) }}>{preview.title}</strong>}
-        <span>{preview.memberCount ? `${preview.memberCount} 个对象` : '空视图'}</span></div>
+        <span>{memberSummaryLine(preview)}</span></div>
       {preview.workspaceId && onLocateWorkspace && <button type="button" aria-label={`仅定位 ${preview.title}`} title="定位 Camera" onClick={(event) => { event.stopPropagation(); onLocateWorkspace(preview.workspaceId!); setPreviewId(null) }}><Crosshair size={13}/></button>}
       {canRename(preview) && <button type="button" aria-label={`重命名 ${preview.title}`} title="重命名" onClick={(event) => { event.stopPropagation(); beginRename(preview) }}><Pencil size={13}/></button>}
       <span className="lcos-project-view-preview-footer"><GitBranch size={11}/>{preview.kind === 'scene' ? '保存的工作现场 · 激活后成为 Current Scene' : preview.kind === 'context' ? '进入理解现场 · 可切换结构 / 演进' : preview.kind === 'workflow' ? '进入自由工作流画布' : '同一 Project Truth 的空间投影'}</span>

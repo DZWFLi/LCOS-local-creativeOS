@@ -40,6 +40,7 @@ import { ReorganizeService } from './reorganize-service.js'
 import { MutationSafetyService } from './mutation-safety-service.js'
 import { FeedbackRevisionService } from './feedback-revision-service.js'
 import { ContinuityRuntimeService } from './continuity-runtime-service.js'
+import { ReceiverRuntimeService } from './receiver-runtime-service.js'
 import { SessionReadSet } from './session-read-set.js'
 import { SpatialRetrievalService } from './spatial-retrieval-service.js'
 import { AttentionRuntimeService } from './attention-runtime-service.js'
@@ -95,6 +96,7 @@ export interface LocalCoreServices {
   readonly mutationSafety: MutationSafetyService | undefined
   readonly feedbackRevision: FeedbackRevisionService | undefined
   readonly continuityRuntime: ContinuityRuntimeService | undefined
+  readonly receiverRuntime: ReceiverRuntimeService | undefined
 }
 
 /** 服务装配：把 options 解析成 createLocalCoreServer 需要的一组服务。 */
@@ -149,6 +151,8 @@ export function composeLocalCoreServices(options: LocalCoreServerOptions = {}): 
   const continuityRuntime = metadata === undefined || attentionRuntime === undefined
     ? undefined
     : new ContinuityRuntimeService(metadata, runtimeRegistry, attentionRuntime, projectEvents)
+  // RECEIVER-0 只依赖 metadata + 事件总线（不依赖 attention runtime），承接关系层独立可用。
+  const receiverRuntime = metadata === undefined ? undefined : new ReceiverRuntimeService(metadata, projectEvents)
   if (options.runtimeApplicationService !== undefined && continuityRuntime !== undefined) {
     options.runtimeApplicationService.attachContinuity(continuityRuntime)
   }
@@ -210,5 +214,6 @@ export function composeLocalCoreServices(options: LocalCoreServerOptions = {}): 
     mutationSafety,
     feedbackRevision,
     continuityRuntime,
+    receiverRuntime,
   }
 }

@@ -15,8 +15,15 @@ describe('shared spatial pointer sessions',()=>{
     expect(spatialMarqueeRect(moved)).toEqual({left:10,top:10,width:14,height:20})
   })
 
-  it('translates node drag deltas by camera zoom',()=>{
-    const drag=beginSpatialNodeDrag(2,'a',{x:100,y:100},{x:400,y:300})
-    expect(advanceSpatialNodeDrag(drag,{x:140,y:120},.5)).toEqual({x:480,y:340})
+  it('translates node drag deltas by camera zoom (startZoom 冻结：拖拽中相机缩放不改变位移比例)',()=>{
+    // 拖拽漂移修复后的契约：beginSpatialNodeDrag 第 5 参冻结起始 zoom，
+    // advance 不再收实时 zoom——拖拽中滚轮缩放不会让节点漂移。
+    const drag=beginSpatialNodeDrag(2,'a',{x:100,y:100},{x:400,y:300},.5)
+    expect(advanceSpatialNodeDrag(drag,{x:140,y:120})).toEqual({x:480,y:340})
+  })
+
+  it('advance 对非拖拽会话返回 null（防御：marquee/pan 会话不误走节点位移分支）',()=>{
+    const session=beginSpatialPan(3,{x:0,y:0},{x:0,y:0,zoom:1})
+    expect(advanceSpatialNodeDrag(session,{x:10,y:10})).toBeNull()
   })
 })

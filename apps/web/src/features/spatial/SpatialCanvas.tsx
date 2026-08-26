@@ -5,6 +5,7 @@ import type { Camera } from '../../model'
 import { applySpatialWheelGesture, spatialScreenToWorld } from './spatialCamera'
 import { spatialDensityForSize } from './spatialLod'
 import { advanceSpatialPan, beginSpatialPan, endSpatialPointer } from './spatialInteractionMachine'
+import { CanvasEdgePinLayer, type CanvasEdgePinItem } from './CanvasEdgePinLayer'
 import { SpatialOverlayLayer } from './SpatialOverlayLayer'
 import { SpatialViewport } from './SpatialViewport'
 import { IDLE_SPATIAL_POINTER, type SpatialCameraSetter, type SpatialPoint, type SpatialPointerSession } from './spatialTypes'
@@ -64,6 +65,10 @@ interface Props {
   minimapLabel?: string
   onPanningChange?: (active: boolean) => void
   semanticDropTarget?: { readonly id: string; readonly label: string }
+  /** §4.13 边缘气泡标点:只传「被标点」对象(pinned/选中/被圈,调用方过滤);不传则不出气泡层 */
+  edgePinItems?: readonly CanvasEdgePinItem[]
+  /** 边缘气泡点击回调:复用调用方既有 focus 链把相机滑过去(本组件不新写跳转) */
+  onEdgePinLocate?: (id: string) => void
 }
 
 /**
@@ -100,6 +105,8 @@ export const SpatialCanvas = forwardRef<HTMLDivElement, Props>(function SpatialC
   minimapLabel = '视图地图',
   onPanningChange,
   semanticDropTarget,
+  edgePinItems,
+  onEdgePinLocate,
 }, forwardedRef) {
   const rootRef = useRef<HTMLDivElement | null>(null)
   const wheelHandlerRef = useRef<(event: globalThis.WheelEvent) => void>(() => {})
@@ -352,10 +359,12 @@ export const SpatialCanvas = forwardRef<HTMLDivElement, Props>(function SpatialC
     onDrop={handleDrop}
   >
     <SpatialViewport camera={camera} className={worldClassName} testId={worldTestId} style={worldStyle}>{children}</SpatialViewport>
-    {(overlays !== undefined || marqueeRect || (minimapItems && minimapItems.length > 0)) && <SpatialOverlayLayer>
+    {(overlays !== undefined || marqueeRect || (minimapItems && minimapItems.length > 0) || (edgePinItems && edgePinItems.length > 0 && onEdgePinLocate)) && <SpatialOverlayLayer>
       {overlays}
       {marqueeRect && <div className="lcos-spatial-marquee" style={{ left: marqueeRect.left, top: marqueeRect.top, width: marqueeRect.width, height: marqueeRect.height }} />}
       {minimapItems && minimapItems.length > 0 && <SpatialMiniMap items={minimapItems} camera={camera} setCamera={setCamera} viewportSize={size} label={minimapLabel}/>}
+      {/* §4.13 边缘气泡标点:不跟随相机 transform 的固定屏幕层(minimap 同层),viewportSize 复用容器 ResizeObserver 实测值 */}
+      {edgePinItems && edgePinItems.length > 0 && onEdgePinLocate && <CanvasEdgePinLayer camera={camera} viewportSize={size} items={edgePinItems} onLocate={onEdgePinLocate}/>}
     </SpatialOverlayLayer>}
   </div>
 })
