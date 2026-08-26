@@ -76,6 +76,7 @@ routes:
         - policies/destructive-change.md
       auto_title:
         - policies/naming.md
+        - policies/node-labeling.md
     budget:
       max_reference_files: 7
       max_reference_chars: 22000
