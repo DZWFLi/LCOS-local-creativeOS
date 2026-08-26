@@ -36,6 +36,7 @@ readOrder: ["references/agent-plan.md", "references/context-changes.md"]
 | Saved Context 边界 | references/saved-context-boundary.md | 当前任务来自 Main/Context/Workflow Selection 时 |
 | 读画布上下文 | references/visual-context.md | 解读选择/视口/节点/预览时 |
 | 生成 Agent Plan | references/agent-plan.md | 每次发 Run 前（必读） |
+| 画布产出规范 | references/canvas-output.md | Run 结果要落成画布节点时（必读） |
 | 上下文指令 | references/context-changes.md | 用户说“把X加进参考 / 别参考X”时 |
 | 结构化错误修复 | references/structured-error-repair.md | validate 失败时 |
 | waiting_input | references/waiting-input.md | 任务需要用户回答时 |

@@ -11,6 +11,8 @@ routes:
     entry: routes/ingest-conversation.md
     base_load:
       - policies/provenance.md
+      - policies/node-labeling.md
+      - policies/layout-recipes.md
       - recipes/conversation-to-nodes.md
       - cli/search.md
       - cli/curation-apply.md
@@ -36,6 +38,8 @@ routes:
     base_load:
       - policies/provenance.md
       - policies/resource-value.md
+      - policies/node-labeling.md
+      - policies/layout-recipes.md
       - recipes/capture-batch-to-project.md
       - cli/capture.md
       - cli/search.md
@@ -61,6 +65,7 @@ routes:
       - policies/destructive-change.md
       - policies/review-change.md
       - policies/surface-identity.md
+      - policies/layout-recipes.md
       - recipes/selection-reorganize.md
       - cli/presentation.md
       - diagnostics/verify-reorganize.md
