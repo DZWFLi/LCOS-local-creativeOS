@@ -13,22 +13,24 @@
 
 .lcos-reconstructed {
   --lcos-ui-ink: rgba(37, 34, 44, .93);
-  --lcos-ui-ink-soft: rgba(55, 51, 66, .62);
-  --lcos-ui-ink-faint: rgba(65, 61, 75, .42);
-  --lcos-ui-line: rgba(57, 52, 70, .105);
-  --lcos-ui-line-strong: rgba(72, 63, 98, .19);
+  --lcos-ui-ink-soft: var(--lcos-label-secondary); /* A-1b 收编：原 rgba(55,51,66,.62)，alpha 就近归 secondary(.60)，dark 随 foundation 基色切换 */
+  --lcos-ui-ink-faint: var(--lcos-label-tertiary); /* A-1b 收编：原 rgba(65,61,75,.42)，alpha 就近归 tertiary(.30)，quaternary(.18) 更远 */
+  --lcos-ui-line: var(--lcos-sep-hairline); /* A-1b 收编：原 rgba(57,52,70,.105) → 发丝线（dark 白基 .17） */
+  --lcos-ui-line-strong: var(--lcos-sep-opaque); /* A-1b 收编：原 rgba(72,63,98,.19) → 实色分隔线（dark #38383a） */
   --lcos-ui-porcelain: rgba(253, 253, 255, .93);
   --lcos-ui-porcelain-solid: #fdfdff;
   --lcos-ui-porcelain-soft: rgba(248, 248, 251, .78);
+  /* A-1b 上报：signal(#6857bd)/workflow(#6755b7) 紫系、context(#516d9c) 蓝灰系 accent——
+     Context 域换青绿属 C5 治理批次（牵动全文件引用），本刀不动，仅备案。 */
   --lcos-ui-signal: #6857bd;
   --lcos-ui-signal-rgb: 104, 87, 189;
   --lcos-ui-context: #516d9c;
   --lcos-ui-context-rgb: 81, 109, 156;
   --lcos-ui-workflow: #6755b7;
   --lcos-ui-workflow-rgb: 103, 85, 183;
-  --lcos-ui-success: #4f9074;
-  --lcos-ui-danger: #bf5966;
-  --lcos-ui-warning: #a9763e;
+  --lcos-ui-success: #34c759; /* A-1b：Grammar §6 冻结 light 值（原 #4f9074）；dark 见下方 A-1b dark 覆盖块 */
+  --lcos-ui-danger: #bf5966; /* A-1b 上报：本文件 error/destructive 语义实际承担者，不在本刀范围；冻结 error 定义在 foundation.css（#ff383c/#ff4245），待后续批次收编 */
+  --lcos-ui-warning: #ff8d28; /* A-1b：Grammar §6 冻结 light 值（原 #a9763e）；dark 见下方 A-1b dark 覆盖块 */
   --lcos-ui-ease-out: cubic-bezier(.18, .84, .28, 1);
   --lcos-ui-ease-spring: cubic-bezier(.2, .9, .26, 1.18);
   --lcos-ui-fast: 105ms;
@@ -37,6 +39,20 @@
   --lcos-ui-shadow-1: 0 5px 14px rgba(39, 34, 52, .055), 0 1px 2px rgba(39, 34, 52, .035);
   --lcos-ui-shadow-2: 0 10px 26px rgba(39, 34, 52, .095), 0 2px 5px rgba(39, 34, 52, .04);
   --lcos-ui-shadow-focus: 0 14px 34px rgba(45, 38, 69, .12), 0 0 0 1px rgba(var(--lcos-ui-signal-rgb), .10);
+}
+
+/* A-1b：语义色 dark 冻结值（Grammar §6：success #30d158 / warning #ff9230）。
+   机制沿用本文件既有 dark 契约：<html data-lcos-theme> 显式偏好优先，
+   缺省跟随 OS，显式 light 尊重 light。灰阶四刀经 var() 链自动随 foundation 切换。 */
+[data-lcos-theme='dark'] .lcos-reconstructed {
+  --lcos-ui-success: #30d158;
+  --lcos-ui-warning: #ff9230;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-lcos-theme='light']) .lcos-reconstructed {
+    --lcos-ui-success: #30d158;
+    --lcos-ui-warning: #ff9230;
+  }
 }
 
 /* -----------------------------------------------------------------------

@@ -45,10 +45,13 @@
   --lcos-sep-opaque: #c6c6c8;                       /* 实色分隔线（dark #38383a） */
   --lcos-sep-hairline: rgba(0, 0, 0, 0.12);         /* 发丝线（dark 白基 .17） */
 
-  /* 语义色补位（Grammar §6 冻结语义：red→error；blue→active/system signal；
-     cyan/teal→Context family。success/warning 语义已由 interaction-system.css
-     的 --lcos-ui-success/--lcos-ui-warning 承担，本层不重复定义避免双轨） */
+  /* 语义色补位（Grammar §6 冻结语义：red→error/destructive；green→success；
+     orange→warning；blue→active/system signal；cyan/teal→Context family。
+     A-1b：success/warning 冻结值统一入本层，interaction-system.css 同名 token
+     同值对齐（消灭 #4f9074/#a9763e 旧轨），dark 值见下方 dark 块） */
   --lcos-ui-error: #ff383c;       /* dark #ff4245 */
+  --lcos-ui-success: #34c759;     /* A-1b：dark #30d158 */
+  --lcos-ui-warning: #ff8d28;     /* A-1b：dark #ff9230 */
   --lcos-ui-active: #0088ff;      /* active/system signal，dark #0091ff */
   --lcos-domain-context: #00c3d0; /* Context 域青（C5 语义色撕裂治理地基）；深底可读，暂不切 dark 基色 */
 
@@ -207,7 +210,7 @@
    缺省跟随 OS（显式 light 时尊重 light）。只换基色，不重新设计灰阶：
    label 基色 #ebebf5（透明度阶梯不变）；fill 基色 120,120,128 不变、
    dark 透明度提至 Apple 标准 .36/.32/.24/.16；sep-opaque #38383a；
-   hairline 换白基 .17。语义色 error/active 用 dark 冻结变体。
+   hairline 换白基 .17。语义色 error/success/warning/active 用 dark 冻结变体。
    ===================================================================== */
 [data-lcos-theme='dark'] {
   --lcos-label-primary: rgba(235, 235, 245, 1);
@@ -221,6 +224,8 @@
   --lcos-sep-opaque: #38383a;
   --lcos-sep-hairline: rgba(255, 255, 255, 0.17);
   --lcos-ui-error: #ff4245;
+  --lcos-ui-success: #30d158; /* A-1b：Grammar §6 dark 冻结值 */
+  --lcos-ui-warning: #ff9230; /* A-1b：Grammar §6 dark 冻结值 */
   --lcos-ui-active: #0091ff;
 }
 @media (prefers-color-scheme: dark) {
@@ -236,6 +241,8 @@
     --lcos-sep-opaque: #38383a;
     --lcos-sep-hairline: rgba(255, 255, 255, 0.17);
     --lcos-ui-error: #ff4245;
+    --lcos-ui-success: #30d158; /* A-1b：Grammar §6 dark 冻结值 */
+    --lcos-ui-warning: #ff9230; /* A-1b：Grammar §6 dark 冻结值 */
     --lcos-ui-active: #0091ff;
   }
 }
@@ -1857,7 +1864,7 @@ body { color: var(--ink); }
 .add-tab:hover::after {
   transform: translateX(42%) rotate(8deg);
   opacity: .72;
-  transition: transform 760ms cubic-bezier(.22,1,.36,1), opacity 180ms ease;
+  transition: transform var(--lcos-dur-slow) cubic-bezier(.22,1,.36,1), opacity 180ms ease; /* A-2b：铁律违规修复，原 0.76s。裁决：hover 反射扫光为交互期装饰（Grammar §5 因果=hover 直接触发，非 Idle 发光），长距 translateX 位移取 slow 400ms 保滑感（normal 300ms 过 270% 位移显急促，morph .35s 留给形态切换语境）；曲线与 opacity 180ms 非违规项不动 */
 }
 
 .add-tab:hover,
@@ -2204,7 +2211,7 @@ body { color: var(--ink); }
 .map-controls button:last-of-type:hover::after {
   transform: translateX(270%) rotate(14deg);
   opacity: .68;
-  transition: transform 820ms cubic-bezier(.22,1,.36,1), opacity 180ms ease;
+  transition: transform var(--lcos-dur-slow) cubic-bezier(.22,1,.36,1), opacity 180ms ease; /* A-2b：铁律违规修复，原 0.82s。裁决同前一条 0.76s 修复行：按钮 hover 反射扫光取 slow 400ms；曲线与 opacity 180ms 非违规项不动 */
 }
 
 .new-run-button:hover,
@@ -2413,4 +2420,96 @@ body { color: var(--ink); }
 @media (max-width: 900px) {
   .workspace-menu, .dock-create-menu { position: fixed; left: 72px; top: auto; bottom: 18px; }
   .runtime-badge span { display: none; }
+}
+
+/* ==========================================================================
+   Liquid Glass 材质分级 · A-2b（Wave A-2b 材质六 token 建立）
+   --------------------------------------------------------------------------
+   冻结来源：Apple Donor Map §2.1 材质冻结值（backgroundMaterials）+ Grammar §5。
+   六材质每级三件套子 token：
+     -bg      材质底色（色+opacity，直接作 background-color）
+     -overlay 磨砂叠层（白基 scrim，叠在 blur 之上出奶白玻璃质感）
+     -blur    完整 backdrop-filter 冻结配方（整串含 saturate；消费端整串引用，
+              杜绝各文件再手调 blur+saturate 并行参数——§14 不新增孤立魔数）
+   分域（§2.1 材质冻结原话）：
+     chrome     顶条 / 底部 dock
+     thin       sidebar
+     regular    真实 workbench / setting surface
+     thick      modal / alert backdrop
+     ultrathin  媒体覆盖
+     popover    popover / menu / transient orbit satellite
+   禁止域：Artifact Body→glass、Text→glass card、Collection→glass panel、
+   Canvas content→glass、glass inside glass；Material 的出现必须有因果
+   （floating/selected/focus/drag/transient command），Idle 世界不满屏发光。
+   dark 机制参照 A-1a：<html data-lcos-theme> 显式偏好优先，缺省跟随 OS
+   （显式 light 时尊重 light）。只换基色不重设阶梯：bg 白基→(30,30,30)
+   （popover glass 冻结基色同族）；overlay 白基与 blur 配方为跨主题中性层，
+   dark 块不重声明。
+   迁移策略：本段只立 token 零接线，不动现行值。后续批次：
+   ① vnext.css / interaction-system.css 手调 backdrop-filter 收编改引（清单
+     见 A-2b 施工回报）；② ui-primitives.css 的 --lcos-ui-glass-bg /
+     --lcos-ui-glass-border / blur(40px) saturate(1.8) 改引 --lcos-mat-popover-*，
+     本段即其全局冻结源。
+   ========================================================================== */
+:root {
+  /* chrome —— 顶条/底部 dock（冻结：bgOpacity .75 / blur 50；规格未给 overlay，透明冻结） */
+  --lcos-mat-chrome-bg: rgba(255, 255, 255, .75);
+  --lcos-mat-chrome-overlay: rgba(255, 255, 255, 0);
+  --lcos-mat-chrome-blur: blur(50px);
+  /* thin —— sidebar（冻结：.40 / .05 / 100） */
+  --lcos-mat-thin-bg: rgba(255, 255, 255, .40);
+  --lcos-mat-thin-overlay: rgba(255, 255, 255, .05);
+  --lcos-mat-thin-blur: blur(100px);
+  /* regular —— 真实 workbench/setting surface（冻结：.60 / .25 / 100） */
+  --lcos-mat-regular-bg: rgba(255, 255, 255, .60);
+  --lcos-mat-regular-overlay: rgba(255, 255, 255, .25);
+  --lcos-mat-regular-blur: blur(100px);
+  /* thick —— modal/alert backdrop（冻结：.84 / .34 / 100） */
+  --lcos-mat-thick-bg: rgba(255, 255, 255, .84);
+  --lcos-mat-thick-overlay: rgba(255, 255, 255, .34);
+  --lcos-mat-thick-blur: blur(100px);
+  /* ultrathin —— 媒体覆盖（冻结：.03 / .07 / 100） */
+  --lcos-mat-ultrathin-bg: rgba(255, 255, 255, .03);
+  --lcos-mat-ultrathin-overlay: rgba(255, 255, 255, .07);
+  --lcos-mat-ultrathin-blur: blur(100px);
+  /* popover glass —— popover/menu/transient orbit satellite（冻结值原存
+     ui-primitives.css A0-1 段，此处提升为全局 token 作冻结源；其规格第三腿为
+     0.5px 边框而非 overlay——Apple Popover 冻结规格无叠层，border 即边缘处理） */
+  --lcos-mat-popover-bg: rgba(255, 255, 255, .72);
+  --lcos-mat-popover-border: rgba(255, 255, 255, .3);
+  --lcos-mat-popover-blur: blur(40px) saturate(1.8);
+  /* 复合别名（--lcos-material-* 口径）：材质主色速写，指向 -bg；
+     完整材质用 --lcos-mat-* 三件套按域组合 */
+  --lcos-material-chrome: var(--lcos-mat-chrome-bg);
+  --lcos-material-thin: var(--lcos-mat-thin-bg);
+  --lcos-material-regular: var(--lcos-mat-regular-bg);
+  --lcos-material-thick: var(--lcos-mat-thick-bg);
+  --lcos-material-ultrathin: var(--lcos-mat-ultrathin-bg);
+  --lcos-material-popover: var(--lcos-mat-popover-bg);
+}
+
+/* A-2b dark：显式 <html data-lcos-theme='dark'>（机制同 A-1a）。只换 bg 基色
+   （白→30,30,30）；overlay 白基/blur 配方跨主题同值不重声明；popover 双值为
+   ui-primitives.css 冻结对（bg light .72 / dark .78，border .3 / .15）。 */
+[data-lcos-theme='dark'] {
+  --lcos-mat-chrome-bg: rgba(30, 30, 30, .75);
+  --lcos-mat-thin-bg: rgba(30, 30, 30, .40);
+  --lcos-mat-regular-bg: rgba(30, 30, 30, .60);
+  --lcos-mat-thick-bg: rgba(30, 30, 30, .84);
+  --lcos-mat-ultrathin-bg: rgba(30, 30, 30, .03);
+  --lcos-mat-popover-bg: rgba(30, 30, 30, .78);
+  --lcos-mat-popover-border: rgba(255, 255, 255, .15);
+}
+
+/* A-2b dark：OS 跟随（prefers-color-scheme: dark 且未显式 light；机制同 A-1a） */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-lcos-theme='light']) {
+    --lcos-mat-chrome-bg: rgba(30, 30, 30, .75);
+    --lcos-mat-thin-bg: rgba(30, 30, 30, .40);
+    --lcos-mat-regular-bg: rgba(30, 30, 30, .60);
+    --lcos-mat-thick-bg: rgba(30, 30, 30, .84);
+    --lcos-mat-ultrathin-bg: rgba(30, 30, 30, .03);
+    --lcos-mat-popover-bg: rgba(30, 30, 30, .78);
+    --lcos-mat-popover-border: rgba(255, 255, 255, .15);
+  }
 }
