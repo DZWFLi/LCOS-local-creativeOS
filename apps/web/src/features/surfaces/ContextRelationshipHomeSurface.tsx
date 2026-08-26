@@ -11,6 +11,7 @@ import { fitSpatialBounds, spatialBoundsForPlacements } from '../spatial/spatial
 import { useSpatialSessionCamera } from '../../state/spatialSessionState'
 import { useSpatialFocusRequest, type SpatialFocusRequest } from '../spatial/useSpatialFocusRequest'
 import { beginSemanticDrop } from '../spatial/semanticDrop'
+import { loadPresentationLayoutEngines } from '../layout/layoutEngines'
 
 import { SurfaceIdentityGlyph } from './SurfaceObject'
 import { ContextGlyph } from '../design/LcosGlyphs'
@@ -63,16 +64,21 @@ function projectDimensions(node: CanvasNode) {
   return aggregate ? { width: 122, height: 48 } : decision ? { width: 110, height: 46 } : { width: 92, height: 40 }
 }
 
-/** Obsidian-like associative constellation: no rows, no cards, no implied order. */
-function relationshipLayout(views: readonly ContextViewSummary[]) {
+/**
+ * Obsidian-like associative constellation: no rows, no cards, no implied order.
+ * 无 positionsById 时产出黄金角种子（首帧与 fcose 不可用时的兜底，确定性可测）；
+ * 传入 fCoSE 结果时用真实关系位置覆盖——共享成员的 Context 靠拢，关系强度决定距离。
+ */
+function relationshipLayout(views: readonly ContextViewSummary[], positionsById?: ReadonlyMap<string, { x: number; y: number }>) {
   const placements: ContextPlacement[] = views.map((view, index) => {
     const size = contextDimensions(view)
+    const override = positionsById?.get(`scope:${view.id}`)
     const radius = views.length <= 1 ? 0 : 140 + 82 * Math.sqrt(index + 1)
     const angle = index * GOLDEN_ANGLE - Math.PI / 2
     return {
       view,
-      x: CENTER_X + Math.cos(angle) * radius - size.width / 2,
-      y: CENTER_Y + Math.sin(angle) * radius - size.height / 2,
+      x: override?.x ?? CENTER_X + Math.cos(angle) * radius - size.width / 2,
+      y: override?.y ?? CENTER_Y + Math.sin(angle) * radius - size.height / 2,
       width: size.width,
       height: size.height,
     }
@@ -106,13 +112,51 @@ export function ContextRelationshipHomeSurface(props: Props) {
   const views = props.contextViews ?? []
   const contextContainerIds = useMemo(() => new Set(views.flatMap((view) => [view.containerViewId, `scope:${view.id}`]).filter((id): id is string => Boolean(id))), [views])
   const projectNodes = useMemo(() => props.nodes.filter((node) => !contextContainerIds.has(node.id)), [contextContainerIds, props.nodes])
-  const layout = useMemo(() => relationshipLayout(views), [views])
-  const projectPlacements = useMemo<GraphNodePlacement[]>(() => projectNodes.map((node, index) => {
+  // 种子布局（黄金角/外环）：首帧立即渲染，且是 fCoSE 的初始位置输入（randomize:false 增量稳定）。
+  const seedLayout = useMemo(() => relationshipLayout(views), [views])
+  const seedProjectPlacements = useMemo<GraphNodePlacement[]>(() => projectNodes.map((node, index) => {
     const size = projectDimensions(node)
     const ring = 360 + 58 * Math.floor(index / 12)
     const angle = (index * GOLDEN_ANGLE + Math.PI * .2) % (Math.PI * 2)
     return { node, x: CENTER_X + Math.cos(angle) * ring - size.width / 2, y: CENTER_Y + Math.sin(angle) * ring - size.height / 2, width: size.width, height: size.height }
   }), [projectNodes])
+  // fCoSE 关系位置（异步精化）：图 = Context（scope:id）+ 项目节点，边 = 共享成员 + 真实 CanvasEdge。
+  const [relationalPositions, setRelationalPositions] = useState<ReadonlyMap<string, { x: number; y: number }> | null>(null)
+  useEffect(() => {
+    if (seedLayout.placements.length + seedProjectPlacements.length < 2) { setRelationalPositions(null); return }
+    let cancelled = false
+    void loadPresentationLayoutEngines().then((engines) => {
+      if (engines.relational === undefined) throw new Error('fcose engine unavailable')
+      const idByAnchor = new Map<string, string>()
+      seedLayout.placements.forEach((placement) => { if (placement.view.containerViewId) idByAnchor.set(placement.view.containerViewId, `scope:${placement.view.id}`) })
+      seedProjectPlacements.forEach((placement) => idByAnchor.set(placement.node.id, placement.node.id))
+      const request = {
+        nodes: [
+          ...seedProjectPlacements.map((placement) => ({ id: placement.node.id, x: placement.x, y: placement.y, width: placement.width, height: placement.height })),
+          ...seedLayout.placements.map((placement) => ({ id: `scope:${placement.view.id}`, x: placement.x, y: placement.y, width: placement.width, height: placement.height })),
+        ],
+        edges: [
+          ...seedLayout.overlaps.map((edge) => ({ id: edge.id, from: `scope:${edge.from.view.id}`, to: `scope:${edge.to.view.id}` })),
+          ...props.edges.flatMap((edge) => {
+            const from = idByAnchor.get(edge.from), to = idByAnchor.get(edge.to)
+            return from !== undefined && to !== undefined && from !== to ? [{ id: edge.id, from, to }] : []
+          }),
+        ],
+        strategy: 'relational' as const,
+        gap: 34,
+      }
+      return engines.relational.layout(request)
+    }).then((result) => {
+      if (cancelled) return
+      setRelationalPositions(new Map(result.positions.map((position) => [position.id, { x: position.x, y: position.y }])))
+    }).catch(() => { /* fCoSE 不可用（依赖加载失败等）：保持黄金角种子布局，不伪造关系位置 */ })
+    return () => { cancelled = true }
+  }, [seedLayout, seedProjectPlacements, props.edges])
+  const layout = useMemo(() => relationshipLayout(views, relationalPositions ?? undefined), [views, relationalPositions])
+  const projectPlacements = useMemo<GraphNodePlacement[]>(() => seedProjectPlacements.map((placement) => {
+    const override = relationalPositions?.get(placement.node.id)
+    return override ? { ...placement, x: override.x, y: override.y } : placement
+  }), [seedProjectPlacements, relationalPositions])
   const graphPlacementByViewId = useMemo(() => {
     const map = new Map<string, { x:number; y:number; width:number; height:number }>()
     layout.placements.forEach((item) => { if (item.view.containerViewId) map.set(item.view.containerViewId, item) })
@@ -135,7 +179,8 @@ export function ContextRelationshipHomeSurface(props: Props) {
 
   useEffect(() => {
     if (!views.length && !projectPlacements.length) return
-    const visibilityKey = `${props.projectId}:${props.scopeId}`
+    // 末段 generation：种子→fCoSE 位置落地时各自适配一次（之后不再抢相机）。
+    const visibilityKey = `${props.projectId}:${props.scopeId}:${relationalPositions === null ? 'seed' : 'relational'}`
     if (checkedInitialVisibility.current === visibilityKey) return
     const frame = requestAnimationFrame(() => {
       const root = canvasRef.current
@@ -145,7 +190,7 @@ export function ContextRelationshipHomeSurface(props: Props) {
       setCamera(fitSpatialBounds(contentBounds, width, height, 96))
     })
     return () => cancelAnimationFrame(frame)
-  }, [contentBounds, projectPlacements.length, props.projectId, props.scopeId, setCamera, views.length])
+  }, [contentBounds, projectPlacements.length, props.projectId, props.scopeId, relationalPositions, setCamera, views.length])
 
   const importProjectViewMembers = (raw: string) => {
     if (!raw || !props.onAddMembersToGraph) return
