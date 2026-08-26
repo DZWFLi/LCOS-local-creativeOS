@@ -21,6 +21,7 @@ import type {
 } from '@local-creative-os/domain'
 
 import { SqliteMetadataRepository } from './metadata-repository.js'
+import { extractAgentNodePreview } from './node-ref.js'
 
 const BUILDER_VERSION = '0.1.1'
 const MAX_ITEM_CHARACTERS = 32_000
@@ -98,6 +99,7 @@ function renderMarkdown(input: CanonicalContextManifestV0): string {
   ]
   for (const item of input.orderedItems) {
     sections.push(`## ${item.role.toUpperCase()} · ${item.title}`, ``, `Identity: ${item.identity}`)
+    if (item.preview) sections.push(`Preview: ${item.preview}`)
     if (item.contentHash) sections.push(`Content Hash: ${item.contentHash}`)
     if (item.content) sections.push(``, item.content)
     sections.push(``)
@@ -110,6 +112,7 @@ function renderMarkdown(input: CanonicalContextManifestV0): string {
   }
   return `${sections.join('\n').trim()}\n`
 }
+
 
 export class ContextManifestService {
   constructor(readonly repository: SqliteMetadataRepository) {}
@@ -209,6 +212,8 @@ export class ContextManifestService {
       if (excerpt.content !== boundedContent) truncatedItemIds.push(String(artifact.id))
       remainingCharacters -= boundedContent?.length ?? 0
       const identity = identityOverride ?? String(artifact.id)
+      // L1 扫描头（node-ref 借鉴）：折叠空白截 120 字，Agent 先扫一眼再决定读不读全文。
+      const preview = extractAgentNodePreview(excerpt)
       orderedItems.push({
         role,
         identity,
@@ -218,6 +223,7 @@ export class ContextManifestService {
         mimeType: fileRecord.mimeType,
         ...(sourceAnchorOverride === undefined ? {} : { sourceAnchor: sourceAnchorOverride }),
         contentHash: String(revision.contentHash),
+        ...(preview === undefined ? {} : { preview }),
         ...(boundedContent === undefined ? {} : { content: `<untrusted-context identity="${identity}">\n${boundedContent}\n</untrusted-context>` }),
       })
       return artifactRef(artifact, revision, fileRecord)

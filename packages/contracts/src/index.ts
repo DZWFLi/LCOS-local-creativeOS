@@ -178,6 +178,11 @@ export interface ContextManifestOrderedItemV0 {
   readonly mimeType?: string
   /** Stable source locator for fragments, e.g. pdf:p3-p5. Never an absolute file path. */
   readonly sourceAnchor?: string
+  /**
+   * L1 扫描头（huabu node-ref 借鉴，20260826 任务三）：content 先折叠空白再截 120 字的
+   * 单行切片。Agent 据此决定是否值得读 content 全文；与 content 独立存在。
+   */
+  readonly preview?: string
   readonly content?: string
   readonly contentHash?: string
 }
