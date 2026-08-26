@@ -88,6 +88,7 @@ import { handlePresentationsRoute } from './routes/presentations.js'
 import { handleProjectEventsRoute, handleRealtimeDebugRoute } from './routes/project-events.js'
 import { handleWorkflowRoute } from './routes/workflow.js'
 import { handleCurationRoute } from './routes/curation.js'
+import { handleSpaceRoute } from './routes/space.js'
 import { handleRetrievalRoute } from './routes/retrieval.js'
 import { handleAttentionRoute } from './routes/attention.js'
 import { handleArtifactsRoute } from './routes/artifacts.js'
@@ -336,7 +337,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
     resourceReader, matcher, contextManifest, runtimeReview, runtimeApplication, activeContext,
     contextProposals, runEventListeners, obsidian, obsidianSessions, connectorRegistry,
     ownsConversationService, conversations, previewWorker, presentation, curation, search, curationCommand,
-    runtimeRegistry, intelligence, captureStaging, resolveProjectAffinity, captureApplication, captureWatch, captureSpace, reorganize, sessionReadSet, spatialRetrieval, attentionRuntime, boundaryEvaluator, projectEvents, projectMutations, mutationSafety, feedbackRevision, continuityRuntime, receiverRuntime,
+    runtimeRegistry, intelligence, captureStaging, resolveProjectAffinity, captureApplication, captureWatch, captureSpace, reorganize, sessionReadSet, spaceSandbox, spatialRetrieval, attentionRuntime, boundaryEvaluator, projectEvents, projectMutations, mutationSafety, feedbackRevision, continuityRuntime, receiverRuntime,
   } = services
   metadata?.setRunEventSink?.((event) => {
     const payloadProjectId = (event.payload as { projectId?: string } | null)?.projectId
@@ -1247,6 +1248,17 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
         curationCommand,
         search,
         sessionReadSet,
+        helpers: routeHelpers,
+      })) return
+      if (await handleSpaceRoute({
+        method,
+        pathname,
+        url,
+        request,
+        response,
+        controller,
+        metadata,
+        spaceSandbox,
         helpers: routeHelpers,
       })) return
       if (await handleRetrievalRoute({

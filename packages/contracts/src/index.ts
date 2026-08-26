@@ -74,6 +74,7 @@ export type { CompiledContextPromptV1, ContextCacheTelemetryV1, ContextPromptCac
 export { CONTEXT_PROMPT_SERIALIZER_V1 } from './context-prompt.js'
 export type { MutationChangeItemV1, MutationChangeSetV1, MutationRelationSnapshotV1, CurationWriteConflictReasonV1, CurationWriteConflictV1, CurationTextUpdateOutcomeV1 } from './curation-patch.js'
 export { buildCurationConflictHintV1 } from './curation-patch.js'
+export type { SpaceListNodeV0, SpaceListResultV0, SpaceReadResultV0 } from './space-vfs.js'
 export type { SurfaceSelectionV0 } from './selection.js'
 export { normalizeSurfaceSelectionV0 } from './selection.js'
 export type { DotGlyphCellLevelV0, DotGlyphCellV0, DotGlyphMotionPresetV0, DotGlyphV0 } from './visuals.js'

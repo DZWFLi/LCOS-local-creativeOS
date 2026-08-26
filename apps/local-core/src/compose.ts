@@ -42,6 +42,7 @@ import { FeedbackRevisionService } from './feedback-revision-service.js'
 import { ContinuityRuntimeService } from './continuity-runtime-service.js'
 import { ReceiverRuntimeService } from './receiver-runtime-service.js'
 import { SessionReadSet } from './session-read-set.js'
+import { SpaceSandboxService } from './space-sandbox-service.js'
 import { SpatialRetrievalService } from './spatial-retrieval-service.js'
 import { AttentionRuntimeService } from './attention-runtime-service.js'
 import { BoundaryEvaluatorService } from './boundary-evaluator-service.js'
@@ -88,6 +89,7 @@ export interface LocalCoreServices {
   readonly captureSpace: CaptureSpaceService | undefined
   readonly reorganize: ReorganizeService | undefined
   readonly sessionReadSet: SessionReadSet
+  readonly spaceSandbox: SpaceSandboxService | undefined
   readonly spatialRetrieval: SpatialRetrievalService | undefined
   readonly attentionRuntime: AttentionRuntimeService | undefined
   readonly boundaryEvaluator: BoundaryEvaluatorService
@@ -141,6 +143,8 @@ export function composeLocalCoreServices(options: LocalCoreServerOptions = {}): 
     : options.reorganizeService ?? new ReorganizeService(metadata, presentation, mutationSafety)
   const feedbackRevision = metadata === undefined ? undefined : new FeedbackRevisionService(metadata, projectEvents)
   const sessionReadSet = options.sessionReadSet ?? new SessionReadSet()
+  // /space/ 虚拟命名空间沙箱（任务四 P1）：与 curation 共用同一 SessionReadSet 实例
+  const spaceSandbox = metadata === undefined ? undefined : new SpaceSandboxService({ repository: metadata, sessionReadSet })
   const spatialRetrieval = metadata === undefined ? undefined : new SpatialRetrievalService(metadata)
   const activeContext = options.activeContextStore ?? new ActiveContextStore(metadata, projectEvents)
   const search = metadata === undefined ? undefined : new ProjectSearchService(metadata, conversations, semantic)
@@ -208,6 +212,7 @@ export function composeLocalCoreServices(options: LocalCoreServerOptions = {}): 
     captureSpace,
     reorganize,
     sessionReadSet,
+    spaceSandbox,
     spatialRetrieval,
     attentionRuntime,
     boundaryEvaluator,
