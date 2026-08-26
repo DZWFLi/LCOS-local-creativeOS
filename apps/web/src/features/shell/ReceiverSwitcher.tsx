@@ -133,9 +133,17 @@ export function ReceiverSwitcher(props: Props) {
       if (panelRef.current?.contains(target as Node)) return
       props.onClose()
     }
-    window.addEventListener('pointerdown', closeFromOutside)
-    return () => window.removeEventListener('pointerdown', closeFromOutside)
-  }, [props, props.onClose, props.open])
+    const closeFromEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') props.onClose()
+    }
+    // capture 阶段挂 window：画布/组件层的 pointerdown stopPropagation 不再截断外点关闭链。
+    window.addEventListener('pointerdown', closeFromOutside, true)
+    window.addEventListener('keydown', closeFromEscape, true)
+    return () => {
+      window.removeEventListener('pointerdown', closeFromOutside, true)
+      window.removeEventListener('keydown', closeFromEscape, true)
+    }
+  }, [props.onClose, props.open])
 
   if (!props.open) return null
 

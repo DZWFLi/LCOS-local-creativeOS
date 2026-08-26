@@ -69,6 +69,16 @@ export function ProjectToolsDialog(props: Props) {
     }).finally(() => setBusy((current) => current === 'session' ? null : current))
   }, [props.client, props.open, props.project.id, props.searchOnly])
 
+  // 关闭按钮文案承诺了 Esc：这里兑现（对话框非原生，浏览器不会代劳）。
+  useEffect(() => {
+    if (!props.open) return
+    const closeFromEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') props.onClose()
+    }
+    window.addEventListener('keydown', closeFromEscape, true)
+    return () => window.removeEventListener('keydown', closeFromEscape, true)
+  }, [props.onClose, props.open])
+
   const inspectContinuity = async (): Promise<void> => {
     setBusy('continuity'); setError(null)
     const call = await props.client.continuityResume(props.project.id, {})

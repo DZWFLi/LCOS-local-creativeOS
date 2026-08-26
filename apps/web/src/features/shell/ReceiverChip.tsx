@@ -77,15 +77,18 @@ export function ReceiverChip({ projectId, client, onOpenArchive, handoffContext,
     ? null
     : conversations.find((conversation) => conversation.id === binding.activeReceiverId) ?? null
 
+  // 关闭回调稳定化：Switcher 的外点/Esc 监听依赖它，避免每次渲染重挂监听。
+  const closeSwitcher = useCallback(() => setSwitcherOpen(false), [])
+
   return <>
-    <ReceiverChipFace active={active} expanded={switcherOpen} onToggle={() => setSwitcherOpen(true)} loading={loading} error={error} stale={stale} />
+    <ReceiverChipFace active={active} expanded={switcherOpen} onToggle={() => setSwitcherOpen((open) => !open)} loading={loading} error={error} stale={stale} />
     <ReceiverSwitcher
       open={switcherOpen}
       projectId={projectId}
       client={client}
       conversations={conversations}
       activeReceiverId={binding?.activeReceiverId ?? null}
-      onClose={() => setSwitcherOpen(false)}
+      onClose={closeSwitcher}
       // 承接关系变化（切换/新建/断开）意味着 stale 标记描述的旧会话已不是 active receiver，一并清除。
       onChanged={() => { void refresh(); onStaleCleared?.() }}
       onOpenArchive={onOpenArchive}
