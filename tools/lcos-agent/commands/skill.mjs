@@ -1,8 +1,11 @@
 import { existsSync, mkdirSync, readFileSync, appendFileSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { listLayeredSkills, readLayeredSkillFile, SkillPathEscapeError, userSkillsRootFor } from "./skill-layers.mjs";
 
-const SKILLS_ROOT = resolve(join(process.cwd(), "packages", "skills"));
+// import.meta 定位（cwd 无关）：commands/ -> lcos-agent -> tools -> 仓库根
+const SKILLS_ROOT = resolve(join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "packages", "skills"));
 const LEARNING_ROOT = process.env.LCOS_SKILL_LEARNING_ROOT ?? join(homedir(), ".lcos", "skill-learning");
 
 /** 极简 YAML 子集解析：只处理本 skill.index.yaml 的结构（列表/映射/标量）。 */
@@ -69,6 +72,14 @@ function readIndex(skill) {
   return parseSimpleYaml(readFileSync(path, "utf8"));
 }
 
+/** 任务四 P2：user 层根。--project-root <项目根> -> .creative-os/skills；或 LCOS_SKILL_USER_ROOT 直指；缺省无 user 层。 */
+function resolveUserRoot(option) {
+  const projectRoot = option("project-root") ?? process.env.LCOS_PROJECT_ROOT ?? undefined;
+  if (projectRoot !== undefined) return userSkillsRootFor(projectRoot);
+  if (process.env.LCOS_SKILL_USER_ROOT !== undefined) return process.env.LCOS_SKILL_USER_ROOT;
+  return undefined;
+}
+
 export async function runSkillCommand({ action, rest }) {
   const option = (name) => {
     const index = rest.indexOf(`--${name}`);
@@ -98,6 +109,25 @@ export async function runSkillCommand({ action, rest }) {
       load: [...files],
       budget: route.budget ?? {},
     };
+  }
+
+  if (action === "list") {
+    const userRoot = resolveUserRoot(option);
+    return { skills: listLayeredSkills({ systemRoot: SKILLS_ROOT, ...(userRoot === undefined ? {} : { userRoot }) }) };
+  }
+
+  if (action === "read") {
+    const ref = positional[0];
+    if (!ref) throw new Error("skill read requires a skill id or path (e.g. lcos-project-curator or skills/<id>/policies/x.md)");
+    const userRoot = resolveUserRoot(option);
+    try {
+      const outcome = readLayeredSkillFile({ ref, systemRoot: SKILLS_ROOT, ...(userRoot === undefined ? {} : { userRoot }) });
+      if (outcome === null) throw new Error(`Skill path not found: ${ref} (run "lcos skill list" to see available skills)`);
+      return { ok: true, skill: outcome.skill, source: outcome.source, ref: outcome.ref, content: outcome.content };
+    } catch (error) {
+      if (error instanceof SkillPathEscapeError) throw new Error(`Refusing to read "${ref}": path escapes the skill directory.`);
+      throw error;
+    }
   }
 
   if (action === "trace") {
@@ -146,5 +176,5 @@ export async function runSkillCommand({ action, rest }) {
     };
   }
 
-  throw new Error("Usage: lcos skill resolve|trace|review");
+  throw new Error("Usage: lcos skill resolve|list|read|trace|review");
 }
