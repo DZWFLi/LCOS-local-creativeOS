@@ -1271,6 +1271,16 @@ export function App() {
       try {
         const catalog = await bridge.loadCatalog()
         if (cancelled) return
+        // 目录读取失败（source:'none' + 空 projects）不代表「项目不存在」：网络竞态、
+        // 服务启动时序都会出现。只有 runtime 真源返回的目录才能做 missing/empty 判定，
+        // 否则按暂时不可用重连——绝不把空列表当真相把用户踢回列表页（20260826 演示
+        // 项目打开约 6 秒后自动跳回 /projects 的根因）。
+        if (catalog.source !== 'runtime') {
+          setNotice('项目列表暂时无法读取，正在重连。你的项目文件没有被修改')
+          setBootMode('offline')
+          scheduleRetry()
+          return
+        }
         const runtimeProjects = catalog.projects
         const selection = selectRuntimeProject(runtimeProjects, requestedProjectId ?? null)
         if (selection.kind === 'missing-requested') {
@@ -6483,9 +6493,11 @@ export function App() {
       }
       setProjects([...catalog.projects])
       saveProjectCatalog([...catalog.projects])
-      setProjectOpen(false)
+      // 只有当前项目确实已不在目录里（如被删除）才回到列表；
+      // 常规刷新（导入工程文件 / 项目工具打开项目）不把已打开的项目踢出去。
+      if (!catalog.projects.some((entry) => entry.id === activeProjectId)) setProjectOpen(false)
     })
-  }, [])
+  }, [activeProjectId])
 
   const confirmDeleteProject = useCallback(() => {
     const target = confirmProjectDelete
