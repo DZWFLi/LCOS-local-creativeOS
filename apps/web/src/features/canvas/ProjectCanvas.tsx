@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import type { AttentionBucketV0, RuntimeProviderStatus } from '@local-creative-os/contracts'
-import { Copy, CopyPlus, Crosshair, Ellipsis, Fence, FolderTree, GripVertical, LayoutGrid, Pencil, Trash2 } from 'lucide-react'
+import { Copy, CopyPlus, Crosshair, Ellipsis, Fence, FolderTree, GripVertical, LayoutGrid, MessageSquare, Pencil, Trash2 } from 'lucide-react'
 import type { Camera, CanvasEdge, CanvasNode, NodeDisplayMode, RunStatus, WorkspaceFrameVM } from '../../model'
 import { getSelectionBounds, nodeDensity } from './canvasGeometry'
 import { getVisualSelectionBounds, MAIN_CANVAS_GRID_STEP, nodeVisualBounds, nodeVisualInsets, snapNodePositionToGrid } from './canvasVisualGeometry'
@@ -33,6 +33,8 @@ import { AgentSurfaceComposer } from '../surfaces/AgentSurfaceComposer'
 import { SurfaceComponentProposalLayer } from '../spatial/components/SurfaceComponentProposalLayer'
 import { applySurfaceOps, type SurfaceOp, validateSurfaceOps } from '../spatial/model/surfaceOps'
 import { resolveSurfaceIntent, type SurfaceIntent } from '../spatial/model/surfaceIntent'
+import { ObjectOrbit } from '../ui/ObjectOrbit'
+import { conversationGlythStateFromRecent } from '../conversations/ConversationGlyth'
 
 interface Props {
   projectId?: string
@@ -82,6 +84,8 @@ interface Props {
   /** GUI-6：锚定备注定位（宿主把相机移到锚点目标并脉冲高亮）。 */
   onLocateNode?: (id: string) => void
   locatePulseId?: string | null
+  /** C-3 Glyth Orbit：会话节点「查看对话」动作（App 复用既有 ConversationContextDialog）。 */
+  onOpenConversation?: () => void
   pendingReviewIds?: readonly string[]
   attentionBucketsByViewId?: Readonly<Record<string, AttentionBucketV0>>
   collectionMembersByNodeId?: Readonly<Record<string, readonly CanvasNode[]>>
@@ -114,7 +118,7 @@ function additiveSelection(event: { shiftKey: boolean; ctrlKey: boolean; metaKey
   return event.shiftKey || event.ctrlKey || event.metaKey
 }
 
-export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-space', surfaceMode = 'project', nodes, setNodes, edges, setEdges, camera, setCamera, selectedId, selectedIds, selectedEdgeId, setSelectedEdgeId, pendingId, runId, runStatus, spaceHeld, locked = false, layoutPreview, workspaceFrames = [], workspaceMemberNodes = nodes, activeWorkspaceId = null, onWorkspaceActivate, onWorkspaceProjectionMove, onPresentationInteractionChange, onPresentationCommit, onFrameBoundsChange, selectionComposer, onSelect, onClearSelection, onMarqueeSelect, onSelectEdge, onDoubleClick, onDetails, onFocusSelection, onRenameSelection, onCreateNodeFromAnchor, onFilesDropped, onExternalTextDrop, onMaterialTransferDrop, onMindmapBranchDrop, onArrangeSelection, gridSnapEnabled = true, onSetSelectionDisplayMode, onCopySelection, onDuplicateSelection, onCreateScopeFromSelection, onDeleteSelection, onReorganize, onToggleNoteLayout, onDirectProjectViewDrop, onPointerWorldChange, onSpaceCreate, onLocateNode, locatePulseId, pendingReviewIds = [], attentionBucketsByViewId = {}, collectionMembersByNodeId = {}, expandedCollectionScopeIds = [], openingCollectionScopeIds = [], closingCollectionScopeIds = [], onToggleCollection, onOpenContextLens, spatialRegions = [], surfaceElements = [], onSurfaceElementsChange, portalTargets = [], onOpenPortalTarget, onCreateRegion, onClearRegion, onRegionBoundsChange, onRegionBoundsCommit, onPromoteRegionToCollection }: Props) {
+export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-space', surfaceMode = 'project', nodes, setNodes, edges, setEdges, camera, setCamera, selectedId, selectedIds, selectedEdgeId, setSelectedEdgeId, pendingId, runId, runStatus, spaceHeld, locked = false, layoutPreview, workspaceFrames = [], workspaceMemberNodes = nodes, activeWorkspaceId = null, onWorkspaceActivate, onWorkspaceProjectionMove, onPresentationInteractionChange, onPresentationCommit, onFrameBoundsChange, selectionComposer, onSelect, onClearSelection, onMarqueeSelect, onSelectEdge, onDoubleClick, onDetails, onFocusSelection, onRenameSelection, onCreateNodeFromAnchor, onFilesDropped, onExternalTextDrop, onMaterialTransferDrop, onMindmapBranchDrop, onArrangeSelection, gridSnapEnabled = true, onSetSelectionDisplayMode, onCopySelection, onDuplicateSelection, onCreateScopeFromSelection, onDeleteSelection, onReorganize, onToggleNoteLayout, onDirectProjectViewDrop, onPointerWorldChange, onSpaceCreate, onLocateNode, locatePulseId, onOpenConversation, pendingReviewIds = [], attentionBucketsByViewId = {}, collectionMembersByNodeId = {}, expandedCollectionScopeIds = [], openingCollectionScopeIds = [], closingCollectionScopeIds = [], onToggleCollection, onOpenContextLens, spatialRegions = [], surfaceElements = [], onSurfaceElementsChange, portalTargets = [], onOpenPortalTarget, onCreateRegion, onClearRegion, onRegionBoundsChange, onRegionBoundsCommit, onPromoteRegionToCollection }: Props) {
   const canvasRef = useRef<HTMLDivElement | null>(null)
   const dragCandidate = useRef<DragCandidate | null>(null)
   const resizeCandidate = useRef<ResizeCandidate | null>(null)
@@ -182,6 +186,16 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
   const [selectedRegionId, setSelectedRegionId] = useState<string | null>(null)
   const [componentProposalOps, setComponentProposalOps] = useState<readonly SurfaceOp[]>([])
   const [createMenu, setCreateMenu] = useState<{ from: string; x: number; y: number; screenX: number; screenY: number } | null>(null)
+  // C-3 Glyth Orbit（Grammar §11 单击 = Select + Orbit 并存）：只对 single active 的
+  // conversation 实体出现。anchor 存被点卡片 DOM；conversationId 存原始会话 id
+  // （承接链 setActiveReceiver 所需；画布节点 id 为 conversation:<id> 前缀派生）。
+  const [conversationOrbit, setConversationOrbit] = useState<{ anchor: HTMLElement; conversationId: string; title: string } | null>(null)
+  // §13「只对 single active object 出现」：换选/清选/框选后该会话节点不再被选中即收起
+  // （空白点击与 Esc / outside click 由 ObjectOrbit 行为层统一收口，不在此重复）。
+  useEffect(() => {
+    if (conversationOrbit === null) return
+    if (!selectedIds.includes(`conversation:${conversationOrbit.conversationId}`)) setConversationOrbit(null)
+  }, [conversationOrbit, selectedIds])
   const toWorld = (clientX: number, clientY: number, rect: DOMRect) => spatialScreenToWorld(clientX, clientY, rect, camera)
   // P0 2026-08-17: there is no persistent client-owned arrange mode.
   // Spatial positions in `nodes` are always the user's current presentation.
@@ -859,7 +873,12 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
     {marqueeRect && (() => { const rect = canvasRef.current?.getBoundingClientRect(); return <div data-testid="selection-marquee" className="marquee" style={{ left: marqueeRect.left - (rect?.left ?? 0), top: marqueeRect.top - (rect?.top ?? 0), width: marqueeRect.width, height: marqueeRect.height }} /> })()}
   </>
 
-  return <SpatialCanvas ref={canvasRef} testId="canvas" tabIndex={-1} camera={camera} setCamera={setCamera} disabled={locked} ariaBusy={locked} locked={locked} nodeCount={nodes.length} edgeCount={edges.length} className={`canvas lod-${lod} zoom-band-${zoomBand} layout-mode-freeform ${gridSnapEnabled ? 'grid-snap-enabled' : ''} ${selectedId ? 'has-focus' : ''} ${locked ? 'is-locked' : ''}`} worldClassName="canvas-world" worldTestId="canvas-world" style={{ '--canvas-zoom': String(camera.zoom), '--lcos-main-grid-size': `${MAIN_CANVAS_GRID_STEP * camera.zoom}px`, '--lcos-main-grid-x': `${camera.x % (MAIN_CANVAS_GRID_STEP * camera.zoom)}px`, '--lcos-main-grid-y': `${camera.y % (MAIN_CANVAS_GRID_STEP * camera.zoom)}px` } as React.CSSProperties} onPointerDown={({ event }) => {
+  // C-3：Orbit 状态行（四件套之四）——与 Glyth 身体态同源派生（conversationGlythStateFromRecent：
+  // lastRunAt <1h「刚运行过」/ 否则「安静」）；节点不在当前投影时按「安静」兜底。
+  const conversationOrbitMeta = conversationOrbit !== null ? byId.get(`conversation:${conversationOrbit.conversationId}`)?.conversation : undefined
+  const conversationOrbitWorking = conversationOrbitMeta !== undefined && conversationGlythStateFromRecent(conversationOrbitMeta) === 'working'
+
+  return <><SpatialCanvas ref={canvasRef} testId="canvas" tabIndex={-1} camera={camera} setCamera={setCamera} disabled={locked} ariaBusy={locked} locked={locked} nodeCount={nodes.length} edgeCount={edges.length} className={`canvas lod-${lod} zoom-band-${zoomBand} layout-mode-freeform ${gridSnapEnabled ? 'grid-snap-enabled' : ''} ${selectedId ? 'has-focus' : ''} ${locked ? 'is-locked' : ''}`} worldClassName="canvas-world" worldTestId="canvas-world" style={{ '--canvas-zoom': String(camera.zoom), '--lcos-main-grid-size': `${MAIN_CANVAS_GRID_STEP * camera.zoom}px`, '--lcos-main-grid-x': `${camera.x % (MAIN_CANVAS_GRID_STEP * camera.zoom)}px`, '--lcos-main-grid-y': `${camera.y % (MAIN_CANVAS_GRID_STEP * camera.zoom)}px` } as React.CSSProperties} onPointerDown={({ event }) => {
     const target = event.target as HTMLElement
     // Workspace-level Semantic Drop fallback. Node-level Semantic Drop starts in
     // CanvasCard before ordinary node movement so a primary grab-handle drag cannot
@@ -1118,8 +1137,15 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
         if (!preserveMultiSelection) onSelect(node.id, additive)
         const groupIds = selectedIds.includes(node.id) && selectedIds.length > 1 ? selectedIds : [node.id]
         dragCandidate.current = { id: node.id, startX: event.clientX, startY: event.clientY, offsetX: (event.clientX - event.currentTarget.getBoundingClientRect().left) / camera.zoom, offsetY: (event.clientY - event.currentTarget.getBoundingClientRect().top) / camera.zoom, group: groupIds.flatMap((id) => { const member = byId.get(id); return member ? [{ id, dx: member.x - node.x, dy: member.y - node.y }] : [] }), originals: groupIds.flatMap((id) => { const member = byId.get(id); return member ? [{ id, x: member.x, y: member.y }] : [] }) }
-      }} onClick={() => {
+      }} onClick={(additive, anchor) => {
         if (suppressClick.current === node.id) { suppressClick.current = null; return }
+        // C-3 Grammar §11：单击 conversation = Select + Orbit 并存（Select 已在 pointerdown 落位）；
+        // 追加选/多选不出 Orbit（§13 只对 single active object 出现）。
+        if (node.entityKind === 'conversation' && node.conversation !== undefined && !additive && selectedIds.length <= 1) {
+          setConversationOrbit({ anchor, conversationId: node.conversation.id, title: node.conversation.title })
+        } else if (additive || selectedIds.length > 1) {
+          setConversationOrbit(null)
+        }
         if (collectionScopeId) onToggleCollection?.(collectionScopeId)
       }} onResizeStart={(event) => {
         if (locked || selectedIds.length !== 1) return
@@ -1132,6 +1158,28 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
       })}
     </SpatialNodeLayer>
   </SpatialCanvas>
+  {conversationOrbit !== null && (
+    <ObjectOrbit
+      open
+      onClose={() => setConversationOrbit(null)}
+      anchorRef={{ current: conversationOrbit.anchor }}
+      entry={{
+        title: conversationOrbit.title,
+        kindLabel: '会话',
+        kindShape: 'egg',
+        statusText: conversationOrbitWorking ? '刚运行过' : '安静',
+        statusTone: conversationOrbitWorking ? 'active' : 'neutral',
+      }}
+      actions={[
+        // 「设为当前 Agent」不进本批（完成或删除）：receiver 体系吃的是承接对话
+        // （connected-conversation id），画布投影的导入会话是 session 体系，setActiveReceiver
+        // 会 400 INVALID_ARGUMENT——session→承接桥属 C-4 Active Glyth。
+        { id: 'conversation-open', label: '查看对话', icon: MessageSquare, primary: true, onClick: () => onOpenConversation?.() },
+        { id: 'conversation-locate', label: '在哪', icon: Crosshair, onClick: () => onLocateNode?.(`conversation:${conversationOrbit.conversationId}`) },
+      ]}
+    />
+  )}
+  </>
 })
 
 function EdgePath({ edge, from, to, selected, focused, dimmed, onSelect, onCut, onReconnectStart }: { edge: CanvasEdge; from?: CanvasNode; to?: CanvasNode; selected: boolean; focused: boolean; dimmed: boolean; onSelect: (id: string) => void; onCut: (id: string) => void; onReconnectStart: (endpoint: 'from' | 'to', event: React.PointerEvent<SVGCircleElement>) => void }) {
@@ -1176,7 +1224,7 @@ function ReconnectTemporaryEdge({ fixed, moving, endpoint }: { fixed: CanvasNode
 function CanvasCard({ node, density, zoom, showDetails, performanceProxy = false, runId, runStatus, selected, multiSelected, pending, reviewPending, dragging, dragSignal, resizing, workspaceMember, locatePulse, attentionBucket, collectionExpanded, collectionMembers, collectionMotion, onCollectionMemberSelect, onLocate, onOpenContextLens, onDetails, onPointerDown, onClick, onResizeStart, relationsEnabled, onLinkStart }: {
   node: CanvasNode; density: NodeDisplayMode; zoom: number; showDetails: boolean; performanceProxy?: boolean; runId: string; runStatus: RunStatus | null; selected: boolean; multiSelected: boolean; pending: boolean; reviewPending: boolean; dragging: boolean; dragSignal?: { x: number; y: number }; resizing: boolean; workspaceMember: boolean; locatePulse: boolean; attentionBucket?: AttentionBucketV0; collectionExpanded: boolean; collectionMembers: readonly CanvasNode[]
   collectionMotion?: { phase: 'opening' | 'closing'; dx: number; dy: number }
-  onCollectionMemberSelect: (id: string, additive?: boolean) => void; onLocate?: (id: string) => void; onOpenContextLens?: (node: CanvasNode, lens: 'space' | 'structure' | 'evolution') => void; onDetails: (id: string) => void; onPointerDown: (event: React.PointerEvent<HTMLDivElement>) => void; onClick: (additive?: boolean) => void; onResizeStart: (event: React.PointerEvent<HTMLButtonElement>) => void; relationsEnabled: boolean; onLinkStart: (event: React.PointerEvent<HTMLButtonElement>) => void
+  onCollectionMemberSelect: (id: string, additive?: boolean) => void; onLocate?: (id: string) => void; onOpenContextLens?: (node: CanvasNode, lens: 'space' | 'structure' | 'evolution') => void; onDetails: (id: string) => void; onPointerDown: (event: React.PointerEvent<HTMLDivElement>) => void; onClick: (additive: boolean, anchor: HTMLElement) => void; onResizeStart: (event: React.PointerEvent<HTMLButtonElement>) => void; relationsEnabled: boolean; onLinkStart: (event: React.PointerEvent<HTMLButtonElement>) => void
 }) {
   const visualFamily = nodeVisualFamily(node)
   const revisionStack = (node.revisionCount ?? 0) > 1
@@ -1190,7 +1238,7 @@ function CanvasCard({ node, density, zoom, showDetails, performanceProxy = false
     runtime: runtimeSignal,
     semantic: reviewPending ? 'waiting review' : pending || node.draft ? 'candidate draft' : undefined,
   })
-  return <div data-node-id={node.id} data-node-kind={node.kind} data-entity-kind={node.entityKind} data-node-visual-family={visualFamily} data-node-current={node.current || undefined} data-node-draft={node.draft || undefined} data-node-historical={node.historical || undefined} data-revision-count={node.revisionCount} data-result-group={node.resultGroupId} data-node-runtime={node.runtimeState} data-run-status={node.runStatus} data-artifact-id={node.artifactId} data-revision-id={node.revisionId} data-file-record-id={node.fileRecordId} data-current-revision={node.followsCurrentRevision || undefined} data-preview-status={node.previewStatus} data-view-of={node.viewOf} data-scope-id={node.scopeId} data-position-locked={node.positionLocked || undefined} data-context-only={node.contextOnly || undefined} data-attention-bucket={attentionBucket} data-collection-motion={collectionMotion?.phase} data-testid={`canvas-node-${node.id}`} role="button" tabIndex={0} aria-disabled={node.disabled || undefined} className={`canvas-node node-family-${node.kind} visual-family-${visualFamily} density-${density} ${node.kind} ${revisionStack ? 'revision-stack' : ''} ${selected ? 'selected' : ''} ${multiSelected ? 'multi-selected' : ''} ${pending ? 'pending' : ''} ${reviewPending ? 'review-pending' : ''} ${dragging ? 'dragging' : ''} ${resizing ? 'resizing' : ''} ${workspaceMember ? 'workspace-active-member' : ''} ${locatePulse ? 'locate-pulse' : ''} ${attentionBucket ? `attention-${attentionBucket}` : ''} ${collectionMotion ? `collection-${collectionMotion.phase}` : ''} ${node.error ? 'error' : ''} ${node.disabled ? 'disabled' : ''} ${node.positionLocked ? 'position-locked' : ''}`} style={{ left: node.x, top: node.y, width: node.width, height: node.height, '--node-ui-scale': String(1 / Math.max(.2, zoom)), '--canvas-zoom': String(zoom), '--lcos-drag-x': String(dragSignal?.x ?? 0), '--lcos-drag-y': String(dragSignal?.y ?? 0), '--lcos-collection-fold-x': `${collectionMotion?.dx ?? 0}px`, '--lcos-collection-fold-y': `${collectionMotion?.dy ?? 0}px` } as React.CSSProperties} onDragStart={(event) => event.preventDefault()} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation() }} onPointerDown={(event) => { if (!node.disabled) onPointerDown(event) }} onClick={(event) => { event.stopPropagation(); if (!node.disabled) onClick(additiveSelection(event)) }}>
+  return <div data-node-id={node.id} data-node-kind={node.kind} data-entity-kind={node.entityKind} data-node-visual-family={visualFamily} data-node-current={node.current || undefined} data-node-draft={node.draft || undefined} data-node-historical={node.historical || undefined} data-revision-count={node.revisionCount} data-result-group={node.resultGroupId} data-node-runtime={node.runtimeState} data-run-status={node.runStatus} data-artifact-id={node.artifactId} data-revision-id={node.revisionId} data-file-record-id={node.fileRecordId} data-current-revision={node.followsCurrentRevision || undefined} data-preview-status={node.previewStatus} data-view-of={node.viewOf} data-scope-id={node.scopeId} data-position-locked={node.positionLocked || undefined} data-context-only={node.contextOnly || undefined} data-attention-bucket={attentionBucket} data-collection-motion={collectionMotion?.phase} data-testid={`canvas-node-${node.id}`} role="button" tabIndex={0} aria-disabled={node.disabled || undefined} className={`canvas-node node-family-${node.kind} visual-family-${visualFamily} density-${density} ${node.kind} ${revisionStack ? 'revision-stack' : ''} ${selected ? 'selected' : ''} ${multiSelected ? 'multi-selected' : ''} ${pending ? 'pending' : ''} ${reviewPending ? 'review-pending' : ''} ${dragging ? 'dragging' : ''} ${resizing ? 'resizing' : ''} ${workspaceMember ? 'workspace-active-member' : ''} ${locatePulse ? 'locate-pulse' : ''} ${attentionBucket ? `attention-${attentionBucket}` : ''} ${collectionMotion ? `collection-${collectionMotion.phase}` : ''} ${node.error ? 'error' : ''} ${node.disabled ? 'disabled' : ''} ${node.positionLocked ? 'position-locked' : ''}`} style={{ left: node.x, top: node.y, width: node.width, height: node.height, '--node-ui-scale': String(1 / Math.max(.2, zoom)), '--canvas-zoom': String(zoom), '--lcos-drag-x': String(dragSignal?.x ?? 0), '--lcos-drag-y': String(dragSignal?.y ?? 0), '--lcos-collection-fold-x': `${collectionMotion?.dx ?? 0}px`, '--lcos-collection-fold-y': `${collectionMotion?.dy ?? 0}px` } as React.CSSProperties} onDragStart={(event) => event.preventDefault()} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation() }} onPointerDown={(event) => { if (!node.disabled) onPointerDown(event) }} onClick={(event) => { event.stopPropagation(); if (!node.disabled) onClick(additiveSelection(event), event.currentTarget) }}>
     <span className="lcos-semantic-drop-handle" data-semantic-drop-handle aria-hidden="true" onClick={(event)=>event.stopPropagation()} title="Semantic Drop：拖到上下文或工作流（右键拖 / Alt+左拖）"><GripVertical size={11}/></span>
     {relationsEnabled && <><button data-testid={`anchor-in-${node.id}`} className="anchor anchor-in" aria-label={`连接到 ${node.title}`} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()} />
     <button data-testid={`anchor-out-${node.id}`} className="anchor anchor-out" aria-label={`从 ${node.title} 建立连接`} onPointerDown={onLinkStart} onClick={(event) => event.stopPropagation()} /></>}

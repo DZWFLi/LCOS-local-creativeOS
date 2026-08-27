@@ -6846,6 +6846,8 @@ export function App() {
         onSelectEdge: selectEdge,
         onDoubleClick: handleDoubleClick,
         onDetails: showNodeDetails,
+        // C-3 Glyth Orbit：查看对话走既有 ConversationContextDialog 打开链。
+        onOpenConversation: () => setConversationDialogOpen(true),
         onFocusSelection: selectedIds.length === 1 ? () => openProjectFocus() : undefined,
         onRenameSelection: selectedIds.length === 1 && selectedNodes.length === 1 ? () => setRenameNodeId(selectedNodes[0]!.id) : undefined,
         onToggleNoteLayout: toggleNoteLayout,
