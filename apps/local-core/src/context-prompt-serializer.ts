@@ -44,6 +44,49 @@ function estimateTokens(value: string): number {
   return Math.ceil(Buffer.byteLength(value, 'utf8') / 4)
 }
 
+/** XML 属性值转义（huabu node-element.ts escapeXmlAttr 同构）：preview/label 是自由文本，不许破出属性。 */
+function escapeAttr(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/\r?\n/g, ' ').trim()
+}
+
+/**
+ * `<selected_nodes>` 段（huabu selected-nodes.ts / node-element.ts 同构，20260827 P0 接线）：
+ * 选中节点从裸 artifact-id 列表升级为 node-ref L1 扫描头（label/role/revision/preview），
+ * Agent 先扫一眼再决定读全文。LCOS 化差异：
+ * - huabu 的 file="nodes/<safeLabel>.md" 寻址在 LCOS 对应 /space/read（按 label 寻址），由 intro 指路；
+ * - huabu 的 type（画布节点类型）对应 LCOS 的 role（manifest 语义角色）；
+ * - huabu 的 rev token 对应 revisionId（写前 CAS 比对「读后是否被改」）。
+ * focus id 未命中 manifest 项时渲染裸 `<node artifact />`（L0 引用，不伪造元数据）。
+ */
+function renderSelectedNodesSection(focus: readonly string[], manifest: ContextPromptManifestSourceV1): string {
+  const byArtifact = new Map<string, ContextManifestOrderedItemV0>()
+  for (const item of manifest.orderedItems ?? []) {
+    if (item.artifactId === undefined) continue
+    if (!byArtifact.has(item.artifactId)) byArtifact.set(item.artifactId, item)
+  }
+  const lines = [
+    '<selected_nodes>',
+    'Nodes the user selected for this task. Each <node> is metadata only: `preview` is a scan hint, not the full content. Read the full body via the space sandbox (POST /space/read, addressed by node label) or the artifact/revision ids with the curation tools; compare `revision` before writing to avoid stale overwrites.',
+  ]
+  for (const artifactId of focus) {
+    const item = byArtifact.get(artifactId)
+    if (item === undefined) {
+      lines.push(`<node artifact="${escapeAttr(artifactId)}" />`)
+      continue
+    }
+    const attrs = [
+      `artifact="${escapeAttr(artifactId)}"`,
+      `role="${escapeAttr(item.role)}"`,
+      `label="${escapeAttr(item.title)}"`,
+      item.revisionId === undefined ? '' : `revision="${escapeAttr(item.revisionId)}"`,
+      item.preview === undefined ? '' : `preview="${escapeAttr(item.preview)}"`,
+    ].filter(Boolean).join(' ')
+    lines.push(`<node ${attrs} />`)
+  }
+  lines.push('</selected_nodes>')
+  return lines.join('\n')
+}
+
 function renderItem(item: ContextManifestOrderedItemV0): string {
   const lines = [
     `<context-item role="${item.role}" identity="${scalar(item.identity)}">`,
@@ -95,7 +138,7 @@ export function compileContextPromptV1(input: CompileContextPromptV1Input): Comp
     '# LCOS Stable Context Prefix',
     `serializer: ${CONTEXT_PROMPT_SERIALIZER_V1}`,
     ...(plan?.routeId ? [`route: ${scalar(plan.routeId)}`] : []),
-    ...(plan?.skillId ? [`skill: ${scalar(plan.skillId)}${plan.skillVersion ? `@${scalar(plan.skillVersion)}` : ''}`] : []),
+    ...(plan?.skillId ? [`skill: ${plan.skillId}${plan.skillVersion ? `@${scalar(plan.skillVersion)}` : ''}`] : []),
     ...(plan?.capabilityProfileId ? [`capability-profile: ${scalar(plan.capabilityProfileId)}`] : []),
     '',
     '## Project Baseline',
@@ -117,7 +160,7 @@ export function compileContextPromptV1(input: CompileContextPromptV1Input): Comp
     '# LCOS Dynamic Task Tail',
     `output-intent: ${input.outputIntent}`,
     ...(manifest.target === null || manifest.target === undefined ? [] : [`target-artifact: ${scalar(manifest.target.artifactId)}`, `target-revision: ${scalar(manifest.target.revisionId)}`]),
-    ...(focus.length === 0 ? [] : ['', '## Current Focus', ...focus.map((id) => `- ${scalar(id)}`)]),
+    ...(focus.length === 0 ? [] : ['', '## Current Focus', renderSelectedNodesSection(focus, manifest)]),
     ...(dynamic.length === 0 ? [] : ['', '## Context Delta / Active Items', dynamic.map(renderItem).join('\n\n')]),
     ...((manifest.lockedElements ?? []).length === 0 ? [] : ['', '## Current Locked Elements', ...(manifest.lockedElements ?? []).map((value) => `- ${normalize(value).trim()}`)]),
     ...(manifest.resourceRefs === undefined || manifest.resourceRefs.length === 0
