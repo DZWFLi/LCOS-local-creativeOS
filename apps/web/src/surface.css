@@ -3511,6 +3511,38 @@ body,
 .lcos-readable-copy .md-heading.md-h1 { font-size: 14.5px; letter-spacing: .02em; }
 .lcos-readable-copy .md-heading.md-h2 { font-size: 13px; }
 .lcos-readable-copy .md-heading.md-h3 { font-size: 12px; color: rgba(29, 44, 58, .8); }
+/* A-1：Milkdown Crepe 只读真渲染收编（.lcos-md-preview 容器内最小覆盖，画布卡片空间小）。
+   基准字号 11.5px；标题分级对齐 md-heading 惯例（14.5/13/12px）；正文色对齐 lcos-readable-copy。 */
+.lcos-md-preview .milkdown {
+  --crepe-base-font-size: 11.5px;
+  --crepe-font-title: Inter, 'Noto Sans SC', 'Microsoft YaHei', system-ui, sans-serif;
+  --crepe-font-default: Inter, 'Noto Sans SC', 'Microsoft YaHei', system-ui, sans-serif;
+  --crepe-color-background: transparent;
+  --crepe-color-on-background: rgba(42, 39, 50, .8);
+  --crepe-color-primary: rgb(92, 74, 143);
+  --crepe-color-selected: rgba(92, 74, 143, .12);
+}
+.lcos-md-preview .milkdown .ProseMirror { padding: 1px 2px; }
+.lcos-md-preview .milkdown .ProseMirror h1 { font-size: 14.5px; letter-spacing: .02em; margin-top: 6px; }
+.lcos-md-preview .milkdown .ProseMirror h2 { font-size: 13px; margin-top: 5px; }
+.lcos-md-preview .milkdown .ProseMirror h3 { font-size: 12px; color: rgba(29, 44, 58, .8); margin-top: 4px; }
+.lcos-md-preview .milkdown .ProseMirror h4,
+.lcos-md-preview .milkdown .ProseMirror h5,
+.lcos-md-preview .milkdown .ProseMirror h6 { font-size: 11.5px; margin-top: 4px; }
+.lcos-md-preview .milkdown .ProseMirror p { padding: 1px 0; }
+.lcos-md-preview .milkdown .ProseMirror blockquote { padding-left: 14px; }
+.lcos-md-preview .milkdown .ProseMirror blockquote::before { top: 2px; bottom: 2px; }
+.lcos-md-preview .milkdown .ProseMirror code { font-size: 10.5px; }
+.lcos-md-preview .milkdown .ProseMirror pre { padding: 6px 8px; }
+
+/* 暗色主题：Crepe 变量切暗色基（对齐 crepe-dark 取值方向）。 */
+[data-lcos-theme='dark'] .lcos-md-preview .milkdown {
+  --crepe-color-on-background: rgba(232, 230, 242, .82);
+  --crepe-color-primary: #f4bd6f;
+  --crepe-color-inline-code: #ffb4ab;
+  --crepe-color-inline-area: #3f3830;
+  --crepe-color-selected: #3b342b;
+}
 
 /* 深色主题适配。 */
 [data-lcos-theme='dark'] .inline-note-editor.in-place,

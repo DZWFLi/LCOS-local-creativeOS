@@ -11,6 +11,7 @@ import type { MouseEvent as ReactMouseEvent } from 'react'
 import type { CanvasNode, NodeDisplayMode, RunStatus } from '../../model'
 import { runStatusLabel } from '../../model'
 import { MindMapNoteVisual } from './MindMapNoteVisual'
+import { CrepeHost } from './markdownPreview'
 import { registerNodeCard, resolveNodeCard } from './nodeCardRegistry'
 import { visualFamilyFor } from '../presentation/visualFamily'
 import { OcrImage } from '../ocr/OcrImage'
@@ -167,7 +168,10 @@ function DocumentObject({ node, kind, density, pending, onDetails, showDetails, 
       : thumbnail && !preview
         ? <div className="lcos-document-thumbnail lcos-real-document-preview"><OcrImage artifactId={node.artifactId} ocrEnabled={false} src={thumbnail} alt={`${title} 预览`} draggable={false} onDragStart={(event) => event.preventDefault()}/><span>{tag}</span></div>
         : readableText && preview
-          ? <div className="lcos-readable-document"><TextPreview text={preview} expanded={density === 'expanded'} /></div>
+          // A-1 双轨 LOD：expanded（用户已展开）→ Crepe 只读真渲染；standard 维持 11 行摘要。
+          ? <div className="lcos-readable-document">{density === 'expanded'
+            ? <CrepeHost className="lcos-md-preview" markdown={preview} />
+            : <TextPreview text={preview} expanded={false} />}</div>
           : <MaterialPaperFallback node={node} kind={kind} tag={tag}/>}
     <div className="lcos-object-caption lcos-material-caption lcos-material-body">
       <strong>{title}</strong>
@@ -460,7 +464,9 @@ function NoteObject({ node, density, onDetails, showDetails, showControls = true
   const directRead = density !== 'compact' && Boolean(body)
   const mindmap = node.noteLayout === 'mindmap'
   return <div className={`lcos-object lcos-note-object lcos-material-face ${mindmap ? 'is-mindmap' : directRead ? 'is-direct-reading' : 'is-collapsed-material'}`} title={node.title}>
-    {mindmap ? <MindMapNoteVisual node={node} density={density}/> : directRead && body ? <div className="lcos-readable-document"><TextPreview text={body} expanded={density === 'expanded'} /></div> : <CollapsedNotePaper node={node}/>}
+    {mindmap ? <MindMapNoteVisual node={node} density={density}/> : directRead && body ? <div className="lcos-readable-document">{density === 'expanded'
+              ? <CrepeHost className="lcos-md-preview" markdown={body} />
+              : <TextPreview text={body} expanded={false} />}</div> : <CollapsedNotePaper node={node}/>}
     <div className="lcos-material-caption lcos-material-body"><strong>{title}</strong>{nodeSecondaryLine(node) && <small>{nodeSecondaryLine(node)}</small>}</div>
     {showControls && Boolean(node.anchors?.length) && <button className="lcos-note-locate" type="button" aria-label="定位到锚定对象" title="定位到锚定对象" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onLocate?.(node) }}><LocateFixed size={12}/><b>定位</b></button>}
     <InfoButton show={showControls && showDetails} label={`查看 ${title} 信息`} onDetails={onDetails}/>

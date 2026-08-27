@@ -822,28 +822,29 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
       <small>{dropGhost.label ?? '移动'}</small>
     </div>}
     {dropLight && <LightCurtain tone="drop" anchors={['left', 'bottom']} hot={dropLight.hot} label={dropLight.label} count={dropGhost?.count}/>}
+    {/* B-5 Selection 轻量化（Grammar §11 禁止常驻横向工具条）：条收窄为最小占位——只留「在哪」与主动作「整理这些」，
+        其余动作全部收进 More 菜单；B-6 Orbit 就绪后整条退役（动作进 object-local Orbit）。 */}
     {selectionToolbarPosition && <div data-testid="selection-toolbar" className="selection-toolbar lcos-selection-strip" style={selectionToolbarPosition} onPointerDown={(event) => event.stopPropagation()} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation() }}>
       {onFocusSelection && <button type="button" className="selection-primary" aria-label="定位其它视图" title="查看这个对象还出现在哪些 Context / Workflow / Collection / Workspace" onClick={(event) => { event.stopPropagation(); onFocusSelection() }}><Crosshair size={15} /><span>在哪</span></button>}
-      {onRenameSelection && <button type="button" className="selection-primary" aria-label="重命名 Collection" title="重命名这个 Collection" onClick={(event) => { event.stopPropagation(); onRenameSelection() }}><Pencil size={15}/><span>重命名</span></button>}
-      {selectedIds.length > 1 && onCreateRegion && <button type="button" className="selection-primary" aria-label="建立围栏" title="建立 Scene-local Region，不创建长期 Collection" onClick={(event) => { event.stopPropagation(); onCreateRegion() }}><Fence size={15}/><span>围栏</span></button>}
-      {selectedIds.length > 1 && <details className="lcos-selection-align" onPointerDown={(event) => event.stopPropagation()}>
-        <summary aria-label="对齐与分布" title="客户端几何操作，不调用智能体"><LayoutGrid size={14}/><span>对齐</span></summary>
-        <div>
-          <button type="button" onClick={() => alignSelection('left')}>左对齐</button><button type="button" onClick={() => alignSelection('center-x')}>水平居中</button><button type="button" onClick={() => alignSelection('right')}>右对齐</button>
-          <button type="button" onClick={() => alignSelection('top')}>上对齐</button><button type="button" onClick={() => alignSelection('center-y')}>垂直居中</button><button type="button" onClick={() => alignSelection('bottom')}>下对齐</button>
-          {selectedIds.length > 2 && <><button type="button" onClick={() => distributeSelection('x')}>横向均匀</button><button type="button" onClick={() => distributeSelection('y')}>纵向均匀</button></>}
-        </div>
-      </details>}
-      {textSelection && onSetSelectionDisplayMode && <button type="button" className="selection-primary" aria-label={textSelectionExpanded ? '收起文字材料' : '直接阅读文字材料'} title="同一个文字对象只改变呈现，不创建新对象" onClick={(event) => { event.stopPropagation(); onSetSelectionDisplayMode(textSelectionExpanded ? 'compact' : 'standard') }}><span>{textSelectionExpanded ? '收起' : '直接阅读'}</span></button>}
-      {noteSelection && onToggleNoteLayout && <button type="button" className="selection-primary" aria-label={noteSelectionLayout === 'mindmap' ? '切回文本块' : '转为大纲导图'} title="同一份大纲文本，只切换呈现：文本块 ⇄ 思维导图" onClick={(event) => { event.stopPropagation(); onToggleNoteLayout(noteSelection.id, noteSelectionLayout === 'mindmap' ? 'text' : 'mindmap') }}><span>{noteSelectionLayout === 'mindmap' ? '切回文本' : '转为导图'}</span></button>}
       <button type="button" className="selection-primary lcos-agent-arrange-entry" aria-label="让智能体整理这些" title="按内容关系整理；智能体变化需要审查" onClick={(event) => { event.stopPropagation(); if (onReorganize) onReorganize(); else onArrangeSelection() }}><LayoutGrid size={15} /><span>整理这些</span></button>
-      {surfaceMode === 'project' && <details className="lcos-selection-more" onPointerDown={(event) => event.stopPropagation()}>
+      {(surfaceMode === 'project' || onRenameSelection || selectedIds.length > 1 || (textSelection && onSetSelectionDisplayMode) || (noteSelection && onToggleNoteLayout)) && <details className="lcos-selection-more" onPointerDown={(event) => event.stopPropagation()}>
         <summary aria-label="更多操作" title="更多操作"><Ellipsis size={15}/></summary>
         <div>
-          <button type="button" onClick={(event) => { event.stopPropagation(); onCreateScopeFromSelection() }}><FolderTree size={12}/>创建 Collection</button>
-          <button type="button" onClick={() => onCopySelection()}><Copy size={12}/>复制</button>
-          <button type="button" onClick={() => onDuplicateSelection()}><CopyPlus size={12}/>额外 View</button>
-          <button type="button" className="danger" onClick={() => onDeleteSelection()}><Trash2 size={12}/>删除 View</button>
+          {onRenameSelection && <button type="button" onClick={(event) => { event.stopPropagation(); onRenameSelection() }}><Pencil size={12}/>重命名</button>}
+          {selectedIds.length > 1 && onCreateRegion && <button type="button" onClick={(event) => { event.stopPropagation(); onCreateRegion() }}><Fence size={12}/>围栏</button>}
+          {selectedIds.length > 1 && <>
+            <button type="button" onClick={() => alignSelection('left')}>左对齐</button><button type="button" onClick={() => alignSelection('center-x')}>水平居中</button><button type="button" onClick={() => alignSelection('right')}>右对齐</button>
+            <button type="button" onClick={() => alignSelection('top')}>上对齐</button><button type="button" onClick={() => alignSelection('center-y')}>垂直居中</button><button type="button" onClick={() => alignSelection('bottom')}>下对齐</button>
+            {selectedIds.length > 2 && <><button type="button" onClick={() => distributeSelection('x')}>横向均匀</button><button type="button" onClick={() => distributeSelection('y')}>纵向均匀</button></>}
+          </>}
+          {textSelection && onSetSelectionDisplayMode && <button type="button" onClick={(event) => { event.stopPropagation(); onSetSelectionDisplayMode(textSelectionExpanded ? 'compact' : 'standard') }}>{textSelectionExpanded ? '收起' : '直接阅读'}</button>}
+          {noteSelection && onToggleNoteLayout && <button type="button" onClick={(event) => { event.stopPropagation(); onToggleNoteLayout(noteSelection.id, noteSelectionLayout === 'mindmap' ? 'text' : 'mindmap') }}>{noteSelectionLayout === 'mindmap' ? '切回文本' : '转为导图'}</button>}
+          {surfaceMode === 'project' && <>
+            <button type="button" onClick={(event) => { event.stopPropagation(); onCreateScopeFromSelection() }}><FolderTree size={12}/>创建 Collection</button>
+            <button type="button" onClick={() => onCopySelection()}><Copy size={12}/>复制</button>
+            <button type="button" onClick={() => onDuplicateSelection()}><CopyPlus size={12}/>额外 View</button>
+            <button type="button" className="danger" onClick={() => onDeleteSelection()}><Trash2 size={12}/>删除 View</button>
+          </>}
         </div>
       </details>}
     </div>}

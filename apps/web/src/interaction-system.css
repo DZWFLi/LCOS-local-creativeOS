@@ -202,14 +202,42 @@
   box-shadow: none !important;
   background: transparent !important;
 }
+/* B-5 Selection 轻量化（Grammar §11：普通 Selection 只允许 light rim / local contrast / subtle field）：
+   traveling 渐变环退役改静态 rim；紫色残留（signal-rgb / conic 紫）改 --lcos-ui-active；
+   外发光半径减半 3px→1.5px 且透明度降；描边保持 1px；内衬白保留。 */
 .lcos-reconstructed .canvas-node.selected .lcos-object::after,
 .lcos-reconstructed .lcos-surface-object.selected .lcos-selected-ring,
 .lcos-reconstructed .lcos-surface-glyph.selected .lcos-selected-ring {
   opacity: 1 !important;
-  border-color: rgba(var(--lcos-ui-signal-rgb), .48) !important;
+  background: color-mix(in srgb, var(--lcos-ui-active) 46%, transparent) !important;
+  animation: none !important;
+  border-color: color-mix(in srgb, var(--lcos-ui-active) 46%, transparent) !important;
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, .88) inset,
-    0 0 0 3px rgba(var(--lcos-ui-signal-rgb), .07) !important;
+    0 0 0 1.5px color-mix(in srgb, var(--lcos-ui-active) 6%, transparent) !important;
+}
+/* B-5 多选（Grammar §11 Multi Selection：field only，不每个对象各自 Orbit）：
+   多对象各自 rim-only——去外发光与重阴影，rim 降为极淡 hairline，共享场交给 .selection-bounds。 */
+.lcos-reconstructed .canvas-node.multi-selected {
+  border-color: color-mix(in srgb, var(--lcos-ui-active) 22%, transparent) !important;
+  box-shadow: none !important;
+}
+.lcos-reconstructed .canvas-node.multi-selected.selected .lcos-object::after {
+  background: color-mix(in srgb, var(--lcos-ui-active) 24%, transparent) !important;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, .5) inset !important;
+}
+/* B-5 多选共享 Selection Field：整体一个极淡 fill-tertiary 场 + 发丝线，去紫描边/投影。 */
+.lcos-reconstructed .selection-bounds {
+  border: 1px solid var(--lcos-sep-hairline) !important;
+  border-radius: 12px !important;
+  background: var(--lcos-fill-tertiary) !important;
+  box-shadow: none !important;
+}
+/* B-5 框选（marquee）：拉选矩形改极淡——fill-tertiary 底 + 发丝线边，无紫无 glow。 */
+.lcos-reconstructed .marquee {
+  border: 1px solid var(--lcos-sep-hairline) !important;
+  background: var(--lcos-fill-tertiary) !important;
+  box-shadow: none !important;
 }
 
 /* Material typography: tiny metadata is allowed; content labels are not. */
@@ -338,7 +366,8 @@
   box-shadow: 0 0 0 4px rgba(var(--lcos-ui-signal-rgb), .09) !important;
 }
 
-/* Near-field toolbar follows focus; it should not look like a second app bar. */
+/* B-5 工具条判废（Grammar §11 禁止常驻横向工具条）：条收窄为最小占位小胶囊——
+   只留「在哪」+主动作+More，其余动作收进 More 菜单；B-6 Orbit 就绪后整条退役（动作进 object-local Orbit）。 */
 .lcos-reconstructed .selection-toolbar.lcos-selection-strip {
   gap: 2px !important;
   padding: 3px !important;
@@ -364,6 +393,11 @@
   box-shadow: inset 0 0 0 1px rgba(var(--lcos-ui-signal-rgb), .38);
 }
 .lcos-reconstructed .selection-toolbar.lcos-selection-strip > details > summary { width: 29px !important; min-width: 29px !important; height: 29px !important; border-radius: 8px !important; }
+/* B-5：首钮紫色残留（product-interface 的 #5e49a8 紫 tint）改 active 微 tint。 */
+.lcos-reconstructed .selection-toolbar.lcos-selection-strip > button.selection-primary:first-child {
+  color: color-mix(in srgb, var(--lcos-ui-active) 72%, var(--lcos-ui-ink)) !important;
+  background: color-mix(in srgb, var(--lcos-ui-active) 8%, transparent) !important;
+}
 
 /* Freeform / Grid is a tiny mode switch, not a floating glass pill. */
 .lcos-reconstructed .lcos-spatial-mode-switch {
@@ -970,60 +1004,7 @@
 }
 .lcos-reconstructed .lcos-spatial-mode-switch { display: none !important; }
 
-/* Selection geometry is a local deterministic tool, not a canvas mode. */
-.lcos-reconstructed .selection-toolbar.lcos-selection-strip .lcos-selection-align {
-  position: relative;
-}
-.lcos-reconstructed .selection-toolbar.lcos-selection-strip .lcos-selection-align > summary {
-  list-style: none;
-  display: grid;
-  width: 29px;
-  height: 29px;
-  place-items: center;
-  border-radius: 8px;
-  color: var(--lcos-ui-ink-faint);
-  cursor: pointer;
-}
-.lcos-reconstructed .selection-toolbar.lcos-selection-strip .lcos-selection-align > summary::-webkit-details-marker { display: none; }
-.lcos-reconstructed .selection-toolbar.lcos-selection-strip .lcos-selection-align[open] > summary,
-.lcos-reconstructed .selection-toolbar.lcos-selection-strip .lcos-selection-align > summary:hover {
-  color: var(--lcos-ui-ink);
-  background: rgba(var(--lcos-ui-signal-rgb), .065);
-}
-.lcos-reconstructed .selection-toolbar.lcos-selection-strip .lcos-selection-align > div {
-  position: absolute;
-  left: 50%;
-  bottom: calc(100% + 7px);
-  width: 214px;
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 3px;
-  padding: 6px;
-  transform: translateX(-50%);
-  border: 1px solid var(--lcos-ui-line-strong);
-  border-radius: 10px;
-  background: rgba(253,253,255,.98);
-  box-shadow: var(--lcos-ui-shadow-2);
-  backdrop-filter: var(--lcos-mat-popover-blur); /* A-2c 收编popover */
-}
-.lcos-reconstructed .selection-toolbar.lcos-selection-strip .lcos-selection-align button {
-  min-height: 29px;
-  padding: 0 6px;
-  border: 0;
-  border-radius: 6px;
-  color: var(--lcos-ui-ink-soft);
-  background: transparent;
-  font-size: 10px;
-  cursor: pointer;
-}
-.lcos-reconstructed .selection-toolbar.lcos-selection-strip .lcos-selection-align button:hover {
-  color: var(--lcos-ui-ink);
-  background: rgba(var(--lcos-ui-signal-rgb), .055);
-}
-.lcos-reconstructed .selection-toolbar.lcos-selection-strip .lcos-selection-align button:nth-last-child(-n + 2) {
-  grid-column: span 1;
-  color: rgba(var(--lcos-ui-signal-rgb), .74);
-}
+/* B-5 判废：对齐/分布动作收进 selection strip 的 More 菜单，独立 align 浮层样式随之退役。 */
 
 /* -----------------------------------------------------------------------
    Canonical material face — the same object keeps the same face everywhere.
@@ -1408,7 +1389,6 @@
 }
 
 @media (max-width: 760px) {
-  .lcos-reconstructed .selection-toolbar.lcos-selection-strip .lcos-selection-align > div { width: 190px; }
   .lcos-reconstructed .lcos-graph-dot { width: 156px; height: 68px; }
   .lcos-reconstructed .lcos-readable-copy { font-size: 10px; }
 }
@@ -1641,14 +1621,6 @@
   .lcos-reconstructed .lcos-text-reader-nav nav { display: none; }
   .lcos-reconstructed .lcos-text-reader-document { padding: 24px 20px 64px; font-size: 13px; }
 }
-.lcos-reconstructed .selection-toolbar.lcos-selection-strip .lcos-selection-align > summary {
-  width: auto !important;
-  min-width: 52px !important;
-  grid-template-columns: 15px auto;
-  gap: 4px;
-  padding: 0 7px;
-}
-.lcos-reconstructed .selection-toolbar.lcos-selection-strip .lcos-selection-align > summary span { font-size: 10px; font-weight: 620; }
 
 /* =======================================================================
    PASS3 — Material Drop / maintained React primitives
@@ -2458,168 +2430,104 @@
 .capture-space-shell .workspace-frame-header b { opacity: .52; }
 .capture-space-shell .lcos-agent-arrange-entry { color: var(--lcos-ui-signal); }
 
-/* Capture float — LCOS visual language: the living Glyth is the icon, a
-   discrete segment gauge reads pending count, dot matrix carries verbs. */
+/* Capture float — 去卡片化（Donor Map §4.1 / Grammar §19）：悬浮窗里只有一只
+   bloub 小生物，不再有 header / card body / footer 按钮的卡片结构。窗口空白处
+   仍是 Electron 拖拽区（-webkit-app-region: drag，位置持久化在 main.mjs）；
+   舞台岛 no-drag 承接 hover（aware，眼睛跟 pointer）、双击生物打开
+   Capture Space、拖放投放。状态小字带半透明深色底垫（文字三保底）；
+   receiving 时生物 absorb 形变 + 周身微光圈；LightSegment 微条只在
+   receiving / working 亮起。 */
 .capture-float {
   box-sizing: border-box;
   position: relative;
   width: 100vw;
   height: 100vh;
   margin: 0;
-  padding: 10px 12px;
   display: grid;
-  grid-template-rows: 24px 1fr 27px;
-  gap: 6px;
+  place-items: center;
   overflow: hidden;
-  border: 1px solid rgba(47,43,57,.12);
-  border-radius: 14px;
-  background:
-    radial-gradient(130% 80% at 50% 0%, rgba(var(--lcos-ui-signal-rgb), .055), transparent 58%),
-    rgba(252,252,253,.965);
-  box-shadow: 0 14px 38px rgba(33,29,43,.14), 0 2px 7px rgba(33,29,43,.06);
+  background: #f8f8f7;
   color: var(--lcos-ui-ink);
   font-family: var(--lcos-font-ui, Inter, "Noto Sans SC", "Segoe UI", sans-serif);
   user-select: none;
-  transition: border-color var(--lcos-ui-medium) ease, background var(--lcos-ui-medium) ease, box-shadow var(--lcos-ui-medium) ease;
-}
-/* Digital-bar corner brackets: structure appears only while receiving. */
-.capture-float::before {
-  content: '';
-  position: absolute;
-  inset: 5px;
-  border-radius: 10px;
-  border: 1px solid transparent;
-  background:
-    linear-gradient(var(--lcos-segment-on), var(--lcos-segment-on)) left 0 top 0 / 14px 3px no-repeat,
-    linear-gradient(var(--lcos-segment-on), var(--lcos-segment-on)) left 0 top 0 / 3px 14px no-repeat,
-    linear-gradient(var(--lcos-segment-on), var(--lcos-segment-on)) right 0 bottom 0 / 14px 3px no-repeat,
-    linear-gradient(var(--lcos-segment-on), var(--lcos-segment-on)) right 0 bottom 0 / 3px 14px no-repeat;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity var(--lcos-ui-medium) ease, transform var(--lcos-ui-medium) var(--lcos-ui-ease-out);
-}
-.capture-float.is-receiving {
-  border-color: rgba(var(--lcos-ui-signal-rgb), .4);
-  background:
-    radial-gradient(130% 80% at 50% 0%, rgba(var(--lcos-ui-signal-rgb), .1), transparent 58%),
-    rgba(252,251,255,.98);
-  box-shadow: 0 16px 42px rgba(54,43,101,.16), 0 0 0 4px rgba(var(--lcos-ui-signal-rgb), .055);
-}
-.capture-float.is-receiving::before { opacity: .85; transform: scale(.985); }
-.capture-float header {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-width: 0;
   -webkit-app-region: drag;
+  transition: background var(--lcos-ui-medium) ease;
 }
-.capture-float header strong { font: 640 11px/1 var(--lcos-font-ui, sans-serif); letter-spacing: .01em; }
-.capture-float-count {
-  min-width: 18px;
-  height: 18px;
+/* 投放悬停：底色轻染；微光圈挂在 creature 上。 */
+.capture-float.is-receiving { background: #f5f3fb; }
+.capture-float-stage {
   display: grid;
-  place-items: center;
-  border-radius: 6px;
-  background: rgba(var(--lcos-ui-signal-rgb), .08);
-  color: var(--lcos-ui-signal);
-  font: 700 9.5px/1 var(--lcos-font-mono, monospace);
+  justify-items: center;
+  gap: 5px;
+  max-width: 208px;
+  -webkit-app-region: no-drag;
 }
-.capture-float-count[data-empty] { opacity: .45; }
-/* Pending gauge stretches along the drag region header. */
-.capture-float .capture-float-gauge { flex: 1; width: auto !important; }
-.capture-float section {
+.capture-float-creature {
   position: relative;
   display: grid;
-  align-content: center;
-  justify-items: center;
-  gap: 6px;
-  min-width: 0;
-  padding: 0 6px;
-  text-align: center;
+  place-items: center;
+  width: 96px;
+  height: 96px;
+  cursor: pointer;
 }
+/* 微光圈：receiving 时点亮（身体同时 absorb 形变）。 */
+.capture-float-creature::after {
+  content: '';
+  position: absolute;
+  inset: -7px;
+  border-radius: 999px;
+  border: 1.5px solid rgba(var(--lcos-ui-signal-rgb), .5);
+  box-shadow: 0 0 14px 2px rgba(var(--lcos-ui-signal-rgb), .26);
+  opacity: 0;
+  transform: scale(.92);
+  transition: opacity var(--lcos-ui-medium) ease, transform var(--lcos-ui-medium) var(--lcos-ui-ease-out);
+  pointer-events: none;
+}
+.capture-float.is-receiving .capture-float-creature::after { opacity: 1; transform: scale(1); }
 .capture-float-glyth { display: block; }
-.capture-float section b {
-  font: 610 12px/1.2 var(--lcos-font-ui, sans-serif);
-  letter-spacing: -.012em;
-}
-/* bloub is the hero: the mood label tints toward the emotion color. */
-.capture-float-mood {
-  color: var(--lcos-ui-ink);
-  transition: color var(--lcos-dur-fast) ease;
-}
-.capture-float.mood-observing .capture-float-mood { color: #8a6fd6; }
-.capture-float.mood-working .capture-float-mood { color: var(--lcos-ui-signal, #6f5bd6); }
-.capture-float.mood-satisfied .capture-float-mood { color: #4f9d6b; }
-.capture-float.mood-alert .capture-float-mood { color: #d0554f; }
-.capture-float section small {
-  display: block;
+/* 微条：只在 receiving / working 亮起（占位常在，避免布局跳动）。 */
+.capture-float-segments { opacity: 0; transition: opacity var(--lcos-dur-fast) ease; }
+.capture-float:is(.phase-receiving, .phase-working) .capture-float-segments { opacity: 1; }
+/* 状态小字：半透明深色底垫；默认隐藏，活跃态或 hover（aware）才浮现。 */
+.capture-float-status {
   max-width: 100%;
-  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--lcos-ui-ink-faint);
-  font: 500 10px/1.2 var(--lcos-font-ui, sans-serif);
+  padding: 3px 9px;
+  border-radius: 9px;
+  background: rgba(31, 27, 42, .72);
+  color: rgba(238, 234, 248, .92);
+  font: 540 10px/1.25 var(--lcos-font-ui, sans-serif);
+  letter-spacing: .01em;
+  opacity: 0;
+  transform: translateY(2px);
+  transition: opacity var(--lcos-dur-fast) ease, transform var(--lcos-dur-fast) ease;
+  pointer-events: none;
 }
-/* Dot matrix parks bottom-right of the stage (default absolute anchor). */
-.capture-float .capture-float-matrix { inset: auto 8px 6px auto; }
-.capture-float > button {
-  justify-self: start;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 25px;
-  padding: 0 7px;
-  border: 0;
-  border-radius: 7px;
-  background: rgba(42,39,51,.045);
-  color: var(--lcos-ui-ink-soft);
-  font: 560 10px/1 var(--lcos-font-ui, sans-serif);
-  cursor: pointer;
-  -webkit-app-region: no-drag;
-}
-.capture-float > button:hover { background: rgba(var(--lcos-ui-signal-rgb), .08); color: var(--lcos-ui-signal); }
+.capture-float:is(.phase-receiving, .phase-working, .phase-success, .phase-failure) .capture-float-status,
+.capture-float-stage:hover .capture-float-status { opacity: 1; transform: none; }
+/* 状态色随六态变化（reduced-motion 下形变停，颜色仍变）。 */
+.capture-float.phase-receiving .capture-float-status { color: #cdb9f4; }
+.capture-float.phase-working .capture-float-status { color: #a8cdf0; }
+.capture-float.phase-success .capture-float-status { color: #a9dcc0; }
+.capture-float.phase-failure .capture-float-status { color: #f2b1ac; }
 /* Dark theme: follows the explicit attribute or the OS preference. */
-[data-lcos-theme='dark'] .capture-float {
-  border-color: rgba(214,208,232,.14);
-  background:
-    radial-gradient(130% 80% at 50% 0%, rgba(170,148,226,.09), transparent 58%),
-    rgba(26,24,34,.97);
-  box-shadow: 0 16px 42px rgba(0,0,0,.4), 0 0 0 1px rgba(214,208,232,.05);
-  color: #d6d0e8;
-}
-[data-lcos-theme='dark'] .capture-float.is-receiving {
-  border-color: rgba(186,166,234,.45);
-  background:
-    radial-gradient(130% 80% at 50% 0%, rgba(186,166,234,.14), transparent 58%),
-    rgba(26,24,34,.98);
-}
-[data-lcos-theme='dark'] .capture-float > button { background: rgba(214,208,232,.08); color: rgba(214,208,232,.78); }
-[data-lcos-theme='dark'] .capture-float > button:hover { background: rgba(186,166,234,.14); color: #d6d0e8; }
+[data-lcos-theme='dark'] .capture-float { background: #1a1822; color: #d6d0e8; }
+[data-lcos-theme='dark'] .capture-float.is-receiving { background: #201c2c; }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-lcos-theme='light']) .capture-float {
-    border-color: rgba(214,208,232,.14);
-    background:
-      radial-gradient(130% 80% at 50% 0%, rgba(170,148,226,.09), transparent 58%),
-      rgba(26,24,34,.97);
-    box-shadow: 0 16px 42px rgba(0,0,0,.4), 0 0 0 1px rgba(214,208,232,.05);
-    color: #d6d0e8;
-  }
-  :root:not([data-lcos-theme='light']) .capture-float.is-receiving {
-    border-color: rgba(186,166,234,.45);
-    background:
-      radial-gradient(130% 80% at 50% 0%, rgba(186,166,234,.14), transparent 58%),
-      rgba(26,24,34,.98);
-  }
-  :root:not([data-lcos-theme='light']) .capture-float > button { background: rgba(214,208,232,.08); color: rgba(214,208,232,.78); }
-  :root:not([data-lcos-theme='light']) .capture-float > button:hover { background: rgba(186,166,234,.14); color: #d6d0e8; }
+  :root:not([data-lcos-theme='light']) .capture-float { background: #1a1822; color: #d6d0e8; }
+  :root:not([data-lcos-theme='light']) .capture-float.is-receiving { background: #201c2c; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .capture-project-targets button,
   .capture-float,
-  .capture-float::before { transition: none; }
+  .capture-float-creature::after,
+  .capture-float-status,
+  .capture-float-segments { transition: none; }
 }
+
 
 /* Theme toggle — compact pill at the bottom dock's right edge, always available
    (light / dark / follow-OS cycle). Mirrors the zoom pill material. */
