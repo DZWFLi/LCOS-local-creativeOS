@@ -11,3 +11,4 @@ Run 结果物化为画布节点时（create_artifact / create_collection 产出�
 4. **回传简短**：改动落地后最终回复一俩行即可——动作在画布上说话，不在聊天里复述全部内容。
 
 详细版见 `lcos-project-curator/policies/node-labeling.md` 与 `policies/layout-recipes.md`。
+常见意图（清单/流程/成对/发散/摘要）的完整命令组合序列见 `references/task-recipes.md`。

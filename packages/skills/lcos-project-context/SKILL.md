@@ -2,8 +2,8 @@
 name: lcos-project-context
 description: Read one LCOS Project + ActiveContext, turn the user's natural-language task into AgentExecutionPlanV1, and execute through Local Core/Light Bridge without bypassing Draft Review. Use for ordinary project task sessions; project curation/Saved Context/Workflow organization uses lcos-project-curator, executor turns use lcos-executor-run.
 role: agent
-version: 1.1.0
-estimatedTokens: 760
+version: 1.2.0
+estimatedTokens: 800
 readOrder: ["references/agent-plan.md", "references/context-changes.md"]
 ---
 
@@ -37,6 +37,7 @@ readOrder: ["references/agent-plan.md", "references/context-changes.md"]
 | 读画布上下文 | references/visual-context.md | 解读选择/视口/节点/预览时 |
 | 生成 Agent Plan | references/agent-plan.md | 每次发 Run 前（必读） |
 | 画布产出规范 | references/canvas-output.md | Run 结果要落成画布节点时（必读） |
+| 任务配方 | references/task-recipes.md | 常见意图（清单/流程/成对/发散/摘要）落画布时，与 canvas-output 搭配读 |
 | 上下文指令 | references/context-changes.md | 用户说“把X加进参考 / 别参考X”时 |
 | 结构化错误修复 | references/structured-error-repair.md | validate 失败时 |
 | waiting_input | references/waiting-input.md | 任务需要用户回答时 |
