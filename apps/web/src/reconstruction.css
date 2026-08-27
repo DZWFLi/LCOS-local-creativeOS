@@ -319,6 +319,9 @@
   border-radius:0 !important;
   padding:0 !important;
   overflow:visible !important;
+  /* Grammar S5：画布内容对象不上玻璃——存量 foundation.css:1586 的 blur(10px)
+     此前未被本清理规则覆盖，每个节点 idle 顶着 backdrop-filter（材质无因果）。 */
+  backdrop-filter:none !important;
 }
 .lcos-reconstructed .canvas-node.selected { box-shadow:none !important; }
 .lcos-reconstructed .lcos-object {

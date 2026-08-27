@@ -66,14 +66,15 @@ describe('ConversationGlythObject 卡片渲染（node 环境 renderToStaticMarku
     expect(html).toContain('data-glyth-state="working"')
   })
 
-  it('卡片外壳复用既有 entity 卡类名体系（lcos-object / lcos-project-entity-object / tab / heading）', () => {
+  it('去卡片化（Grammar S1/S2.1）：对象本身就是身体——无通用卡壳，Glyth + 极简标注', () => {
     const html = renderCard()
-    expect(html).toContain('lcos-conversation-glyth-object')
-    expect(html).toContain('lcos-object')
-    expect(html).toContain('lcos-project-entity-tab')
-    expect(html).toContain('lcos-project-entity-heading')
-    expect(html).toContain('Conversation')
+    expect(html).toContain('lcos-conversation-glyth-body')
+    expect(html).toContain('lcos-conversation-glyth-caption')
     expect(html).toContain('需求讨论·第三轮')
+    // 卡片壳词汇零残留（tab/heading/通用卡容器）
+    expect(html).not.toContain('lcos-conversation-glyth-object')
+    expect(html).not.toContain('lcos-project-entity-tab')
+    expect(html).not.toContain('lcos-project-entity-heading')
   })
 
   it('conversation 元数据缺失 → 回落 CollectionObject 兜底（与查表未命中同语义，非错误路径）', () => {
