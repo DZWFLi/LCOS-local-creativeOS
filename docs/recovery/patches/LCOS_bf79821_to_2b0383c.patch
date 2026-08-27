@@ -1,0 +1,23 @@
+diff --git a/tools/lcos-agent/commands/curation-command.mjs b/tools/lcos-agent/commands/curation-command.mjs
+index d92ace4..011b8b2 100644
+--- a/tools/lcos-agent/commands/curation-command.mjs
++++ b/tools/lcos-agent/commands/curation-command.mjs
+@@ -58,12 +58,13 @@ export async function runCurationWriteCommand({ group, action, rest, coreRequest
+     if (jsonFile === undefined) throw new Error('--json <file> required')
+     const patch = JSON.parse(await readFile(jsonFile, 'utf8'))
+     if (patch.projectId === undefined) patch.projectId = projectId
+-    // Phase 6 Execution Gate：含 deleteTexts → artifact.delete（destructive，须 --yes）；
+-    // 否则 curation.text.create/update（reversible，ChangeSet 记账静默放行）。
+-    const operation = Array.isArray(patch.deleteTexts) && patch.deleteTexts.length > 0 ? 'artifact.delete' : 'curation.text.create'
+-    const decision = await evaluateCliGate({ operation, targets: [projectId] })
++    // Phase 6 Execution Gate：curation apply 契约（CurationPatchV0）只含
++    // createTexts + relations + presentation——**没有删除面**。删除走 reorganize
++    // proposal 的 artifactDeleteCandidates（destructive，服务端 PREVIEW 强制）。
++    // 因此这里恒为 reversible（ChangeSet 记账静默放行），不留任何"看似有删除"的死分支。
++    const decision = await evaluateCliGate({ operation: 'curation.text.create', targets: [projectId] })
+     if (!cliDecisionAllows(decision, rest.includes('--yes'))) {
+-      throw new Error(gateRefusalMessage(decision, '（含删除操作；确认后加 --yes 重试）'))
++      throw new Error(gateRefusalMessage(decision))
+     }
+     return coreRequest(`/projects/${encodeURIComponent(projectId)}/curation/apply`, {
+       method: 'POST',
