@@ -12,6 +12,8 @@ import { useSpatialSessionCamera } from '../../state/spatialSessionState'
 import { useSpatialFocusRequest, type SpatialFocusRequest } from '../spatial/useSpatialFocusRequest'
 import { nodeTypeIcon } from '../canvas/CanvasNodeVisual'
 import { beginSemanticDrop } from '../spatial/semanticDrop'
+import { DropFeedbackLayer } from '../drop/dropFeedbackLayer'
+import { useSemanticDropFeedback } from '../drop/useSemanticDropFeedback'
 import { ContextHistoryRail } from './ContextHistoryRail'
 import type { ContextSurfaceRuntime } from './surfaceContracts'
 import { ContextLensSwitch } from './ContextLensSwitch'
@@ -112,7 +114,10 @@ export function ContextTreeSurface(props: Props) {
     }
   }
 
-  return <section className="lcos-dedicated-surface lcos-context-tree lcos-mind-map" data-testid="surface-context-tree">
+  const dropFeedback = useSemanticDropFeedback()
+
+  return <>
+  <section className="lcos-dedicated-surface lcos-context-tree lcos-mind-map" data-testid="surface-context-tree">
     <header className="lcos-surface-heading">
       <div><strong>上下文</strong><span>结构</span><span className="lcos-lens-zoom-badge" title="放大阅读模式:点「现场」或 Esc 回到理解现场画布">放大阅读</span></div>
       <div className="lcos-context-heading-actions"><small>{layout.placements.length} 项 · 与理解现场 / 演进共用同一份 Context{reparentError ? ` · ${reparentError}` : ' · 拖动手柄可重排 / 重挂'}</small><ContextLensSwitch active="context-tree" onSelect={props.onSurfaceChange}/></div>
@@ -138,7 +143,7 @@ export function ContextTreeSurface(props: Props) {
             <span className="lcos-mind-drop-zone before" data-drop-position="before" onDragOver={(event) => { if (event.dataTransfer.types.includes('text/plain')) { event.preventDefault(); setDropTarget({ id: item.node.id, position: 'before' }) } }} onDrop={(event) => { event.preventDefault(); dropRelative(event.dataTransfer.getData('text/plain'), item.node.id, 'before') }}/>
             <div className="lcos-mind-drop-body" onDragOver={(event) => { if (event.dataTransfer.types.includes('text/plain')) { event.preventDefault(); setDropTarget({ id: item.node.id, position: 'inside' }) } }} onDrop={(event) => { event.preventDefault(); dropRelative(event.dataTransfer.getData('text/plain'), item.node.id, 'inside') }}>
               <span className="lcos-mind-drag-handle" aria-hidden="true" title="拖动重排或重挂"><GripVertical size={11}/></span>
-              <button type="button" data-mind-topic={item.node.id} className={`lcos-mind-topic ${props.selectedIds.includes(item.node.id) ? 'selected' : ''}`} onPointerDown={(event)=>beginSemanticDrop(event,props.selectedIds.includes(item.node.id)&&props.selectedIds.length?props.selectedIds:[item.node.id],props.onDirectProjectViewDrop)} onClick={(event) => props.onSelect(item.node.id, event.shiftKey || event.metaKey || event.ctrlKey)} onDoubleClick={() => props.onDoubleClick(item.node.id)} onKeyDown={(event) => navigate(event, index)}>
+              <button type="button" data-mind-topic={item.node.id} className={`lcos-mind-topic ${props.selectedIds.includes(item.node.id) ? 'selected' : ''}`} onPointerDown={(event)=>beginSemanticDrop(event,props.selectedIds.includes(item.node.id)&&props.selectedIds.length?props.selectedIds:[item.node.id],props.onDirectProjectViewDrop,dropFeedback.onPhase)} onClick={(event) => props.onSelect(item.node.id, event.shiftKey || event.metaKey || event.ctrlKey)} onDoubleClick={() => props.onDoubleClick(item.node.id)} onKeyDown={(event) => navigate(event, index)}>
                 <Icon/><span><strong>{item.node.title}</strong>{item.node.subtitle && <small>{item.node.subtitle}</small>}</span>
               </button>
             </div>
@@ -151,4 +156,6 @@ export function ContextTreeSurface(props: Props) {
     </SpatialCanvas>
     {props.runtime && <ContextHistoryRail history={props.runtime.history} handoffs={props.runtime.handoffs} onBranch={props.runtime.onBranchHistory} onCompare={props.runtime.onCompareHistory} onSource={props.runtime.onOpenHistorySource}/>}
   </section>
+    <DropFeedbackLayer phase={dropFeedback.phase} hitElement={dropFeedback.hitElement} />
+  </>
 }
