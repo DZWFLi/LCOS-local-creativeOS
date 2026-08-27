@@ -9,11 +9,14 @@
  * - allowlist 仅 nodes/**；解析只到 artifact（title→safeLabel），永不落盘。
  * - 只有文本 artifact（text/markdown、text/plain）进入命名空间；
  *   媒体节点走 resource 通道，不伪装成 .md。
+ *
+ * 20260827 补检索原语 search：关键词 AND 扫标题+正文前缀。
+ * 搜索不记 lease——片段命中不构成「已读」，写前仍须 /space/read（诚实 CAS 边界）。
  */
 
 import { open } from 'node:fs/promises'
 
-import type { SpaceListResultV0, SpaceListNodeV0, SpaceReadResultV0 } from '@local-creative-os/contracts'
+import type { SpaceListResultV0, SpaceListNodeV0, SpaceReadResultV0, SpaceSearchNodeV0, SpaceSearchResultV0 } from '@local-creative-os/contracts'
 
 import type { SessionReadSet } from './session-read-set.js'
 import type { SqliteMetadataRepository } from './metadata-repository.js'
@@ -24,6 +27,13 @@ import { nodeSpaceRel, parseSpacePath, SPACE_VFS_PREFIX, SpaceVfsError } from '.
 const SPACE_READ_MAX_CHARS = 200_000
 /** ls 时读取做 preview 的前缀字符数。 */
 const PREVIEW_READ_CHARS = 2_000
+/** search 扫描的正文前缀字符数（匹配深度与扫描成本的折中）。 */
+const SEARCH_SCAN_CHARS = 50_000
+/** search 片段窗口（折叠空白后）。 */
+const SEARCH_SNIPPET_CHARS = 200
+/** search 默认/最大返回条数。 */
+const SEARCH_DEFAULT_LIMIT = 20
+const SEARCH_MAX_LIMIT = 50
 const TEXT_MIME = new Set(['text/markdown', 'text/plain'])
 
 /** read 命中不了任何节点时抛出；route 映射 404。 */
@@ -161,6 +171,63 @@ export class SpaceSandboxService {
       contentHash: entry.contentHash,
       content: raw,
       truncated,
+    }
+  }
+
+  /**
+   * 关键词检索（huabu agentic 检索的 grep 直译，20260827）：
+   * 空白分词、全部命中（AND）、大小写不敏感（CJK 无词边界，子串天然可用）。
+   * 标题命中排前，正文命中按命中位置排；同分按 artifactId 保稳定序。
+   * 片段窗口 200 字；**不记 lease**——写前仍须 /space/read。
+   */
+  async search(projectId: string, query: string, limit?: number): Promise<SpaceSearchResultV0> {
+    const terms = [...new Set(query.split(/\s+/).map((term) => term.trim().toLowerCase()).filter((term) => term.length > 0))]
+    if (terms.length === 0) throw new SpaceVfsError({ kind: 'invalid', message: 'search query must contain at least one non-empty term.' })
+    const boundedLimit = Math.max(1, Math.min(SEARCH_MAX_LIMIT, limit ?? SEARCH_DEFAULT_LIMIT))
+    const entries = await this.#entries(projectId)
+    const hits: { node: SpaceSearchNodeV0; rank: number }[] = []
+    for (const entry of entries) {
+      const lowerTitle = entry.title.toLowerCase()
+      const titleHit = terms.every((term) => lowerTitle.includes(term))
+      let matchedIn: 'title' | 'content' | undefined
+      let snippet: string | undefined
+      let rank: number | undefined
+      if (titleHit) {
+        matchedIn = 'title'
+        rank = 0
+      } else {
+        const body = (await readTextPrefix(entry.observedPath, SEARCH_SCAN_CHARS)).toLowerCase()
+        if (terms.every((term) => body.includes(term))) {
+          matchedIn = 'content'
+          const first = Math.min(...terms.map((term) => body.indexOf(term)).filter((index) => index >= 0))
+          const raw = body.slice(Math.max(0, first - SEARCH_SNIPPET_CHARS / 2), first + SEARCH_SNIPPET_CHARS / 2)
+          snippet = raw.replace(/\s+/g, ' ').trim()
+          rank = first
+        }
+      }
+      if (matchedIn === undefined || rank === undefined) continue
+      hits.push({
+        node: {
+          path: `${SPACE_VFS_PREFIX}${entry.rel}`,
+          artifactId: entry.artifactId,
+          title: entry.title,
+          revisionId: entry.revisionId,
+          contentHash: entry.contentHash,
+          matchedIn,
+          ...(matchedIn === 'content' && snippet !== undefined ? { snippet } : {}),
+        },
+        rank,
+      })
+    }
+    hits.sort((left, right) => {
+      if (left.node.matchedIn !== right.node.matchedIn) return left.node.matchedIn === 'title' ? -1 : 1
+      if (left.rank !== right.rank) return left.rank - right.rank
+      return left.node.artifactId.localeCompare(right.node.artifactId, 'en-US')
+    })
+    return {
+      items: hits.slice(0, boundedLimit).map((hit) => hit.node),
+      scanned: entries.length,
+      generatedAt: new Date().toISOString(),
     }
   }
 }

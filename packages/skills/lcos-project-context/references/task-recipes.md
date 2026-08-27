@@ -6,6 +6,8 @@
 ## 通用骨架（所有配方共享）
 
 ```text
+0. 找材料：不确定读哪个 → POST /space/search {query}（多词 AND、标题/正文命中、回片段）
+   注意：搜索命中≠已读（不记 lease），写前仍须 /space/read
 1. 读材料：POST /space/ls 拿 L1 扫描头（label + preview）→ POST /space/read 读需要的全文
    （带 sessionId 读即记 read lease；后续写同 session 不会被 CAS 判 stale）
 2. 写节点：curation/text 带 sessionId + 显式 x/y（坐标按 layout-recipes 模板算）

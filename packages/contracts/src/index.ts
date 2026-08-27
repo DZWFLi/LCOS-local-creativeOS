@@ -74,7 +74,7 @@ export type { CompiledContextPromptV1, ContextCacheTelemetryV1, ContextPromptCac
 export { CONTEXT_PROMPT_SERIALIZER_V1 } from './context-prompt.js'
 export type { MutationChangeItemV1, MutationChangeSetV1, MutationRelationSnapshotV1, CurationWriteConflictReasonV1, CurationWriteConflictV1, CurationTextUpdateOutcomeV1 } from './curation-patch.js'
 export { buildCurationConflictHintV1 } from './curation-patch.js'
-export type { SpaceListNodeV0, SpaceListResultV0, SpaceReadResultV0 } from './space-vfs.js'
+export type { SpaceListNodeV0, SpaceListResultV0, SpaceReadResultV0, SpaceSearchNodeV0, SpaceSearchResultV0 } from './space-vfs.js'
 export { AGENTLET_SCHEMA_V1 } from './agentlet.js'
 export type { AgentletSummaryV1, AgentletRunV1, AgentletRunStatusV1 } from './agentlet.js'
 export type { SurfaceSelectionV0 } from './selection.js'
