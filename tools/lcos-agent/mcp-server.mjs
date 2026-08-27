@@ -5,6 +5,7 @@ import { basename, resolve } from "node:path";
 import { coreRequest, jsonBody } from "./lib/client.mjs";
 import { serveStdioMcp } from "./lib/mcp-stdio-runtime.mjs";
 import { executorToolDefinitions, executorToolNames, invokeExecutorTool } from "./executor-tools.mjs";
+import { evaluateMcpGate, mcpDecisionAllows, gateRefusalMessage, MCP_OPERATION_BY_TOOL } from "./lib/execution-gate.mjs";
 
 const ROLE = process.env.LCOS_MCP_ROLE === "executor" ? "executor" : "agent";
 const SERVER = { name: ROLE === "executor" ? "lcos-executor" : "local-creative-os", version: "0.5.0" };
@@ -272,6 +273,13 @@ if (process.env.LCOS_MCP_NO_SERVE !== "1") {
 }
 
 async function invokeTool(requestedTool, args) {
+  // Phase 6 Execution Gate：写面工具先过统一门（G5/G11）。allow/preview 放行——
+  // propose→accept 与 expectedVersion 已内建预览纪律；confirm/deny 阻断并说明原因。
+  const gateOperation = MCP_OPERATION_BY_TOOL[requestedTool];
+  if (gateOperation !== undefined) {
+    const decision = await evaluateMcpGate({ operation: gateOperation, role: ROLE, targets: [requestedTool] });
+    if (!mcpDecisionAllows(decision)) throw new Error(gateRefusalMessage(decision, `(${requestedTool})`));
+  }
   let value;
   switch (requestedTool) {
     case "list_lcos_projects":

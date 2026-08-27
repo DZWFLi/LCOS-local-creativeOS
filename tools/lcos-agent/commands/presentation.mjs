@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises'
+import { evaluateCliGate, cliDecisionAllows, gateRefusalMessage } from '../lib/execution-gate.mjs'
 
 /**
  * Phase E presentation patch:
@@ -31,6 +32,16 @@ export async function runPresentationCommand({ action, rest, coreRequest }) {
     renderer: patch.setRenderer ?? current.renderer,
     updatedBy: 'agent',
     updatedAt: new Date().toISOString(),
+  }
+  // Phase 6 Execution Gate：presentation.apply = structural → stderr 预览后放行
+  //（expectedVersion CAS 仍守最后一道）；confirm/deny 阻断（须 --yes / 越界）。
+  const decision = await evaluateCliGate({ operation: 'presentation.apply', targets: [presentationId] })
+  if (!cliDecisionAllows(decision, rest.includes('--yes'))) {
+    throw new Error(gateRefusalMessage(decision, '（结构性变更；确认后加 --yes 重试）'))
+  }
+  if (decision.kind === 'preview') {
+    process.stderr.write(`[execution-gate] presentation patch 预览（${presentationId}）: 成员 ${current.state.memberViewIds?.length ?? 0}→${contract.state.memberViewIds.length}，边 ${current.state.presentationEdges?.length ?? 0}→${contract.state.presentationEdges.length}，锁定 ${current.state.pinnedViewIds?.length ?? 0}→${contract.state.pinnedViewIds.length}（v${expectedVersion}）
+`)
   }
   return coreRequest(`/projects/${encodeURIComponent(projectId)}/presentations/${encodeURIComponent(presentationId)}`, {
     method: 'PUT',

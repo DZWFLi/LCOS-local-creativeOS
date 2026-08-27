@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises'
+import { evaluateCliGate, cliDecisionAllows, gateRefusalMessage } from '../lib/execution-gate.mjs'
 
 /**
  * Phase E write commands.
@@ -57,6 +58,13 @@ export async function runCurationWriteCommand({ group, action, rest, coreRequest
     if (jsonFile === undefined) throw new Error('--json <file> required')
     const patch = JSON.parse(await readFile(jsonFile, 'utf8'))
     if (patch.projectId === undefined) patch.projectId = projectId
+    // Phase 6 Execution Gate：含 deleteTexts → artifact.delete（destructive，须 --yes）；
+    // 否则 curation.text.create/update（reversible，ChangeSet 记账静默放行）。
+    const operation = Array.isArray(patch.deleteTexts) && patch.deleteTexts.length > 0 ? 'artifact.delete' : 'curation.text.create'
+    const decision = await evaluateCliGate({ operation, targets: [projectId] })
+    if (!cliDecisionAllows(decision, rest.includes('--yes'))) {
+      throw new Error(gateRefusalMessage(decision, '（含删除操作；确认后加 --yes 重试）'))
+    }
     return coreRequest(`/projects/${encodeURIComponent(projectId)}/curation/apply`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
