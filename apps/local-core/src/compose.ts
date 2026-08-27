@@ -41,6 +41,7 @@ import { MutationSafetyService } from './mutation-safety-service.js'
 import { FeedbackRevisionService } from './feedback-revision-service.js'
 import { ContinuityRuntimeService } from './continuity-runtime-service.js'
 import { ReceiverRuntimeService } from './receiver-runtime-service.js'
+import { SessionLifecycleService } from './session-lifecycle-service.js'
 import { SessionReadSet } from './session-read-set.js'
 import { SpaceSandboxService } from './space-sandbox-service.js'
 import { AgentletRuntimeService } from './agentlet-runtime-service.js'
@@ -101,6 +102,7 @@ export interface LocalCoreServices {
   readonly feedbackRevision: FeedbackRevisionService | undefined
   readonly continuityRuntime: ContinuityRuntimeService | undefined
   readonly receiverRuntime: ReceiverRuntimeService | undefined
+  readonly sessionLifecycle: SessionLifecycleService | undefined
 }
 
 /** 服务装配：把 options 解析成 createLocalCoreServer 需要的一组服务。 */
@@ -166,6 +168,11 @@ export function composeLocalCoreServices(options: LocalCoreServerOptions = {}): 
     : new ContinuityRuntimeService(metadata, runtimeRegistry, attentionRuntime, projectEvents)
   // RECEIVER-0 只依赖 metadata + 事件总线（不依赖 attention runtime），承接关系层独立可用。
   const receiverRuntime = metadata === undefined ? undefined : new ReceiverRuntimeService(metadata, projectEvents)
+  // Phase 5 Live Session Binding：会话七态持久化 + run 事件驱动（G3 taxonomy 落地）。
+  const sessionLifecycle = metadata === undefined ? undefined : new SessionLifecycleService(metadata, projectEvents)
+  if (options.runtimeApplicationService !== undefined && sessionLifecycle !== undefined) {
+    options.runtimeApplicationService.attachSessionLifecycle(sessionLifecycle)
+  }
   if (options.runtimeApplicationService !== undefined && continuityRuntime !== undefined) {
     options.runtimeApplicationService.attachContinuity(continuityRuntime)
   }
@@ -183,6 +190,7 @@ export function composeLocalCoreServices(options: LocalCoreServerOptions = {}): 
     contextManifest: options.contextManifestService ?? (metadata === undefined ? undefined : new ContextManifestService(metadata)),
     runtimeReview: options.runtimeReviewService ?? (metadata === undefined ? undefined : new RuntimeReviewService(metadata)),
     runtimeApplication: options.runtimeApplicationService,
+    sessionLifecycle,
     activeContext,
     contextProposals: options.contextProposalStore ?? new ContextProposalStore(metadata, projectEvents),
     runEventListeners: new Map<string, Set<() => void>>(),

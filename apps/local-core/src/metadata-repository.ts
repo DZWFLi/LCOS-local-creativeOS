@@ -176,6 +176,16 @@ export interface MetadataRepositoryOptions {
   readonly disposableOnly?: boolean
 }
 
+/** Phase 5 Live Session Binding：会话七态持久化行（contracts session-lifecycle taxonomy）。 */
+export interface SessionLifecycleRecordV1 {
+  readonly projectId: string
+  readonly provider: string
+  readonly phase: string
+  readonly staleFrom?: string
+  readonly lastTransitionReason?: string
+  readonly updatedAt: string
+}
+
 export class SqliteMetadataRepository {
   readonly databasePath: string
   readonly #database: DatabaseSync
@@ -255,7 +265,8 @@ export class SqliteMetadataRepository {
     if (current === 37) { this.#migrate_038_from_v37(); current = 38 }
     if (current === 38) { this.#migrate_039_from_v38(); current = 39 }
     if (current === 39) { this.#migrate_040_from_v39(); current = 40 }
-    if (current !== 40) throw new Error(`Unsupported metadata schema version ${current}.`)
+    if (current === 40) { this.#migrate_041_from_v40(); current = 41 }
+    if (current !== 41) throw new Error(`Unsupported metadata schema version ${current}.`)
   }
 
   #migrate_037_from_v36(): void {
@@ -354,6 +365,25 @@ export class SqliteMetadataRepository {
       CREATE INDEX IF NOT EXISTS idx_project_handoff_packs_pending
         ON project_handoff_packs(project_id, to_conversation_id, created_at DESC);
       PRAGMA user_version = 40;
+      COMMIT;
+    `)
+  }
+
+  #migrate_041_from_v40(): void {
+    // Phase 5 Live Session Binding：会话七态持久化（contracts session-lifecycle taxonomy）。
+    // 无行 = dormant；stale 是 freshness 旁路（stale_from 记被中断的主轨前态）。
+    this.#database.exec(`
+      BEGIN;
+      CREATE TABLE IF NOT EXISTS session_lifecycle_states (
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        provider TEXT NOT NULL CHECK(provider IN ('codex','workbuddy')),
+        phase TEXT NOT NULL CHECK(phase IN ('dormant','connecting','online','busy','waiting_input','disconnected','stale')),
+        stale_from TEXT,
+        last_transition_reason TEXT,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (project_id, provider)
+      );
+      PRAGMA user_version = 41;
       COMMIT;
     `)
   }
@@ -5307,6 +5337,60 @@ export class SqliteMetadataRepository {
 
   deleteProviderSessionBinding(projectId: string, provider: 'codex' | 'workbuddy'): void {
     this.#database.prepare(`DELETE FROM provider_session_bindings WHERE project_id = ? AND provider = ?`).run(projectId, provider)
+  }
+
+  // ==================== Phase 5 Live Session Binding：会话七态持久化 ====================
+
+  getSessionLifecycleState(projectId: string, provider: string): SessionLifecycleRecordV1 | undefined {
+    const row = this.#database.prepare('SELECT * FROM session_lifecycle_states WHERE project_id = ? AND provider = ?')
+      .get(projectId, provider) as Row | undefined
+    if (row === undefined) return undefined
+    return {
+      projectId: String(row.project_id),
+      provider: String(row.provider),
+      phase: String(row.phase),
+      ...(row.stale_from ? { staleFrom: String(row.stale_from) } : {}),
+      ...(row.last_transition_reason ? { lastTransitionReason: String(row.last_transition_reason) } : {}),
+      updatedAt: String(row.updated_at),
+    }
+  }
+
+  saveSessionLifecycleState(value: SessionLifecycleRecordV1): void {
+    this.#database.prepare(`
+      INSERT INTO session_lifecycle_states (project_id, provider, phase, stale_from, last_transition_reason, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(project_id, provider) DO UPDATE SET
+        phase = excluded.phase, stale_from = excluded.stale_from,
+        last_transition_reason = excluded.last_transition_reason, updated_at = excluded.updated_at
+    `).run(
+      value.projectId as SQLInputValue,
+      value.provider as SQLInputValue,
+      value.phase as SQLInputValue,
+      value.staleFrom ?? null,
+      value.lastTransitionReason ?? null,
+      value.updatedAt as SQLInputValue,
+    )
+  }
+
+  listSessionLifecycleStates(projectId: string): SessionLifecycleRecordV1[] {
+    const rows = this.#database.prepare('SELECT * FROM session_lifecycle_states WHERE project_id = ? ORDER BY provider')
+      .all(projectId) as Row[]
+    return rows.map((row) => ({
+      projectId: String(row.project_id),
+      provider: String(row.provider),
+      phase: String(row.phase),
+      ...(row.stale_from ? { staleFrom: String(row.stale_from) } : {}),
+      ...(row.last_transition_reason ? { lastTransitionReason: String(row.last_transition_reason) } : {}),
+      updatedAt: String(row.updated_at),
+    }))
+  }
+
+  /** 会话「还有活跃工作吗」判定素材：created/queued/running/waiting_input 的 run 数。 */
+  countActiveRuns(projectId: string): number {
+    const row = this.#database.prepare(
+      "SELECT COUNT(*) AS count FROM runs WHERE project_id = ? AND status IN ('created','queued','running','waiting_input')",
+    ).get(projectId as SQLInputValue) as Row
+    return Number(row.count)
   }
 
   // ==================== RECEIVER-0：会话承接关系层（与 provider_session_bindings 并存） ====================

@@ -11,6 +11,7 @@ import { runtimeConstraintsForOutputIntent, RuntimeAdapterError, RuntimeAdapterS
 import { compileContextPromptV1, contextCacheTelemetryV1, type ContextPromptManifestSourceV1 } from './context-prompt-serializer.js'
 import { RuntimeResultIngestionService } from './runtime-result-ingestion.js'
 import { RuntimeReviewService } from './runtime-review-service.js'
+import type { SessionLifecycleService } from './session-lifecycle-service.js'
 import { ResourceMatcher } from './resources/resource-matcher.js'
 
 export interface CreateRuntimeRunInput {
@@ -50,6 +51,13 @@ export class RuntimeApplicationService {
   /** 由 compose 在 continuity runtime 构建完成后注入；Server 层运行时不直接构造。 */
   attachContinuity(continuity: ContinuityRuntimeService): void {
     this.#continuity = continuity
+  }
+
+  #sessionLifecycle: SessionLifecycleService | undefined = undefined
+
+  /** Phase 5 Live Session Binding：compose 注入；run 状态与桥错误驱动会话七态。 */
+  attachSessionLifecycle(service: SessionLifecycleService): void {
+    this.#sessionLifecycle = service
   }
 
   async create(projectId: ProjectId, input: CreateRuntimeRunInput): Promise<RuntimeRunActionResult> {
@@ -162,7 +170,9 @@ export class RuntimeApplicationService {
     }
     this.repository.createRunWithDispatch(run, dispatch)
     this.emit(run.id, 'run.queued', { outputIntent, projectId: String(projectId), ...(input.sessionId === undefined ? {} : { sessionId: input.sessionId }) })
-    return { review: this.review.getRunReview(run.id) }
+    const createdReview = this.review.getRunReview(run.id)
+    this.#observeSessionLifecycle(createdReview)
+    return { review: createdReview }
   }
 
   /**
@@ -310,14 +320,32 @@ export class RuntimeApplicationService {
       if (before.run.status !== 'failed' && review.run.status === 'failed') {
         this.emit(runId, 'run.failed', { projectId: String(review.run.projectId) })
       }
+      this.#observeSessionLifecycle(review)
       return { review }
     } catch (error: unknown) {
       if (!(error instanceof RuntimeAdapterError)) throw error
+      const failed = this.review.getRunReview(runId)
+      this.#sessionLifecycle?.markDisconnected(
+        String(failed.run.projectId),
+        failed.run.provider,
+        `bridge error: ${error.detail.code} ${error.detail.message}`,
+      )
       return {
-        review: this.review.getRunReview(runId),
+        review: failed,
         providerError: error.detail,
       }
     }
+  }
+
+  /** Phase 5：run 状态 → 会话 phase（七态投影；服务内部做多 run 感知与合法转移）。 */
+  #observeSessionLifecycle(review: RunReview): void {
+    if (this.#sessionLifecycle === undefined) return
+    this.#sessionLifecycle.observeRunStatus(
+      String(review.run.projectId),
+      review.run.provider,
+      review.run.status,
+      `run ${String(review.run.id)} → ${review.run.status}`,
+    )
   }
 
   private emit(runId: RunId, type: RunEvent['type'], payload: JsonValue = {}): void {

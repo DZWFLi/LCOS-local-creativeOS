@@ -1,5 +1,6 @@
 import type { ProjectId, RunId } from '@local-creative-os/domain'
 import type { RuntimeApplicationService } from '../runtime-application-service.js'
+import type { SessionLifecycleService } from '../session-lifecycle-service.js'
 import type { planCodexDispatch } from '../codex-dispatch-service.js'
 import { OcrError, type OcrService } from '../ocr-service.js'
 import { routeRequireMetadata, type RouteHttpContext, type RouteHttpHelpers } from './route-context.js'
@@ -7,6 +8,7 @@ import { routeRequireMetadata, type RouteHttpContext, type RouteHttpHelpers } fr
 export interface RuntimeRouteContext extends RouteHttpContext {
   readonly helpers: RouteHttpHelpers
   readonly runtimeApplication: RuntimeApplicationService | undefined
+  readonly sessionLifecycle: SessionLifecycleService | undefined
   readonly planCodexDispatch: typeof planCodexDispatch
   readonly ocr?: OcrService
 }
@@ -16,8 +18,41 @@ export interface RuntimeRouteContext extends RouteHttpContext {
  * 原为 server.ts 分发器内联块，外迁后行为不变。
  */
 export async function handleRuntimeRoute(ctx: RuntimeRouteContext): Promise<boolean> {
-  const { method, pathname, request, response, controller, metadata, runtimeApplication, ocr } = ctx
+  const { method, pathname, request, response, controller, metadata, runtimeApplication, ocr, sessionLifecycle } = ctx
   const { sendJson, failure, readJsonBody, isRecord } = ctx.helpers
+
+  // Phase 5 Live Session Binding：会话七态读面 + 恢复动作。
+  const sessionLifecycleMatch = /^\/projects\/([^/]+)\/session-lifecycle$/.exec(pathname)
+  if (method === 'GET' && sessionLifecycleMatch !== null) {
+    const db = routeRequireMetadata(ctx); if (db === undefined) return true
+    if (db.getProject(decodeURIComponent(sessionLifecycleMatch[1] ?? '')) === undefined) {
+      sendJson(response, 404, failure('NOT_FOUND', 'Project not found.'))
+      return true
+    }
+    sendJson(response, 200, { ok: true, value: { states: db.listSessionLifecycleStates(decodeURIComponent(sessionLifecycleMatch[1] ?? '')) } })
+    return true
+  }
+  const sessionRecoverMatch = /^\/projects\/([^/]+)\/session-lifecycle\/([^/]+)\/recover$/.exec(pathname)
+  if (method === 'POST' && sessionRecoverMatch !== null) {
+    const db = routeRequireMetadata(ctx); if (db === undefined) return true
+    const projectId = decodeURIComponent(sessionRecoverMatch[1] ?? '')
+    const provider = decodeURIComponent(sessionRecoverMatch[2] ?? '')
+    if (db.getProject(projectId) === undefined) {
+      sendJson(response, 404, failure('NOT_FOUND', 'Project not found.'))
+      return true
+    }
+    if (provider !== 'codex' && provider !== 'workbuddy') {
+      sendJson(response, 400, failure('INVALID_ARGUMENT', 'Provider must be codex or workbuddy.'))
+      return true
+    }
+    if (sessionLifecycle === undefined) {
+      sendJson(response, 503, failure('UNAVAILABLE', 'Session lifecycle service is not configured.'))
+      return true
+    }
+    const state = sessionLifecycle.recover(projectId, provider, 'manual recover')
+    sendJson(response, 200, { ok: true, value: { state } })
+    return true
+  }
 
   const runtimeProvidersMatch = /^\/runtime\/providers$/.exec(pathname)
   if (method === 'GET' && runtimeProvidersMatch !== null) {
