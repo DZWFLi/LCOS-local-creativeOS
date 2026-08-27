@@ -360,3 +360,49 @@
     transition: opacity 200ms ease-out;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Wave A-0b · LcosIcon —— 有机形状图标容器家族（游戏 GUI 裁决 §1 病灶②⑥ / §3.2）
+ * ───────────────────────────────────────────────────────────────────────────
+ * 图标三定律：剪影可辨（涂黑也认得出）/ 形状即身份（卵·叶·胶囊·蛋·超椭圆·花瓣）/
+ * 一个图标一个含义全站一致；矩形只保留给「纸」类（paper，文档缩略）。
+ * Material 因果律（Grammar §5）：容器纯形状+色——不加底、不加玻璃、不加阴影；
+ * 仅 active / identity（身份域 badge 类）允许低饱和色洗底（12% / 14%）。
+ * 尺寸冻结：容器 24×24（sidebar 标准）/ 16×16（紧凑）；glyph 为容器 0.58 倍，
+ * glyph 用 currentColor（tone 改写 color 即换色）。
+ * 本段只立家族；存量 lucide 裸图标不受影响（接线替换属 Wave B+ 批次）。
+ * ═══════════════════════════════════════════════════════════════════════════ */
+.lcos-icon {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
+  shape-rendering: geometricPrecision;
+}
+
+/* 形状容器层：绝对铺满 wrapper；填充色按 tone（default=transparent 无底） */
+.lcos-icon__vessel {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  fill: transparent;
+}
+
+/* 内嵌 glyph（lucide）：currentColor，尺寸由组件按 0.58 倍注入 */
+.lcos-icon__glyph { flex: none; }
+
+/* active：选中态——glyph 色 var(--lcos-ui-active)（A-3 批先例）+ 12% 同源色洗底 */
+.lcos-icon--active { color: var(--lcos-ui-active); }
+.lcos-icon--active .lcos-icon__vessel {
+  fill: color-mix(in srgb, var(--lcos-ui-active) 12%, transparent);
+}
+
+/* identity：身份域 badge——传入色 14% 色洗底 + 传入色 glyph
+ *（--lcos-icon-identity-color 由组件 inline 注入，缺省回落 currentColor） */
+.lcos-icon--identity { color: var(--lcos-icon-identity-color, currentColor); }
+.lcos-icon--identity .lcos-icon__vessel {
+  fill: color-mix(in srgb, var(--lcos-icon-identity-color, currentColor) 14%, transparent);
+}

@@ -2368,48 +2368,52 @@ body,
 .drive-create { display: flex; align-items: center; gap: 7px; padding: 9px 12px; border: 0; border-radius: 12px; color: #fff; background: linear-gradient(135deg,#7a4ce2,#5968d8); font-size: 11px; font-weight: 760; cursor: pointer; }
 .drive-import { display: flex; align-items: center; gap: 7px; padding: 9px 12px; border: 1px solid rgba(29,45,60,.12); border-radius: 12px; color: rgba(24,36,49,.72); background: rgba(255,255,255,.8); font-size: 11px; font-weight: 660; cursor: pointer; }
 .drive-import:hover { border-color: rgba(112,85,199,.25); color: var(--lcos-signal, #7055c7); } /* Glaze 单色收敛：紫 accent 唯一源 --lcos-signal */
+/* A-5b：hero「继续一个项目」大卡已删——非 first-run 只留紧凑标题区（标题+搜索同排）；
+   first-run 引导 hero 仍渲染（onboarding 语义，样式基础在此、覆盖在 product-interface.css）。 */
 .project-drive-hero { max-width: 920px; margin: 0 auto; padding: 70px 24px 34px; }
 .project-drive-hero > span { color: #7047d8; font-size: 11px; font-weight: 780; letter-spacing: .12em; }
 .project-drive-hero h1 { margin: 12px 0 10px; font-size: 38px; letter-spacing: -.04em; }
 .project-drive-hero p { max-width: 620px; margin: 0; color: var(--v06-muted); font-size: 13px; line-height: 1.7; }
-.drive-search { max-width: 620px; height: 48px; display: flex; align-items: center; gap: 10px; margin-top: 26px; padding: 0 14px; border: 1px solid rgba(29,45,60,.09); border-radius: 16px; background: #fff; box-shadow: 0 12px 28px rgba(35,52,69,.07); }
+.project-drive-title { max-width: 920px; display: flex; align-items: center; flex-wrap: wrap; gap: 16px; margin: 0 auto; padding: 32px 24px 16px; }
+.project-drive-title h1 { margin: 0; font-size: 24px; letter-spacing: -.03em; }
+.drive-search { flex: 1; min-width: 220px; max-width: 420px; height: 36px; display: flex; align-items: center; gap: 8px; margin-left: auto; padding: 0 12px; border: 1px solid rgba(29,45,60,.09); border-radius: 10px; background: #fff; }
 .drive-search input { flex: 1; border: 0; outline: 0; background: transparent; font-size: 12px; }
-.project-drive-section,
-.project-drive-recent { max-width: 920px; margin: 0 auto; padding: 0 24px 38px; }
-.drive-section-title { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 12px; }
-.drive-section-title h2,
-.project-drive-recent h2 { margin: 0; font-size: 15px; }
+.project-drive-section { max-width: 920px; margin: 0 auto; padding: 0 24px 24px; }
+.drive-section-title { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 8px; }
+.drive-section-title h2 { margin: 0; font-size: 13px; }
 .drive-section-title span { color: var(--v06-muted); font-size: 10.5px; }
-.project-folder-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 14px; }
-.project-drive-capture { margin-top: 16px; }
-.project-drive-capture-card { display: grid; gap: 4px; padding: 14px 18px; border: 1px dashed rgba(29,45,60,.14); border-radius: 16px; background: rgba(112,71,216,.045); }
-.project-drive-capture-card span { color: var(--v06-muted); font-size: 10px; }
-.project-drive-capture-card strong { color: #7047d8; font-size: 13px; }
-.project-drive-capture-card small { color: var(--v06-muted); font-size: 10.5px; }
-.project-folder { min-height: 170px; display: grid; align-content: start; gap: 8px; padding: 18px; border: 1px solid rgba(29,45,60,.08); border-radius: 22px; text-align: left; background: linear-gradient(145deg,#fff,#f5f6f4); box-shadow: 0 16px 34px rgba(35,52,69,.065), inset 0 1px 0 #fff; }
-.project-folder:hover { transform: translateY(-2px); box-shadow: 0 20px 40px rgba(35,52,69,.09), inset 0 1px 0 #fff; }
-.project-folder { position: relative; }
-.project-folder-main { display: grid; gap: 8px; align-content: start; padding: 0; border: 0; background: transparent; text-align: left; color: inherit; cursor: pointer; }
-.project-folder-delete { position: absolute; top: 10px; right: 10px; width: 26px; height: 26px; display: grid; place-items: center; border: 0; border-radius: 8px; color: rgba(24,36,49,.35); background: transparent; cursor: pointer; }
-.project-folder-delete:hover { background: rgba(190,60,50,.09); color: #a23b33; }
-.project-folder-actions { position: absolute; top: 10px; right: 10px; display: flex; gap: 4px; }
-.project-folder-actions button { width: 26px; height: 26px; display: grid; place-items: center; border: 0; border-radius: 8px; color: rgba(24,36,49,.35); background: transparent; cursor: pointer; }
-.project-folder-actions .project-folder-reveal:hover { background: rgba(70,90,190,.09); color: #4a5fc7; }
-.project-folder-actions .project-folder-delete { position: static; }
 .drive-sort { display: inline-flex; align-items: center; gap: 4px; margin-right: 10px; color: var(--v06-muted); font-size: 10px; }
 .drive-sort select { padding: 3px 6px; border: 1px solid rgba(29,45,60,.1); border-radius: 8px; background: #fff; color: inherit; font-size: 10px; }
-.drive-recent-opened { padding-top: 8px; }
-.project-folder-icon { width: 46px; height: 42px; display: grid; place-items: center; border-radius: 14px; color: #7047d8; background: linear-gradient(145deg,#fff,#eee9ff); }
-.project-folder strong { font-size: 14px; }
-.project-folder small { overflow: hidden; color: var(--v06-muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
-.project-folder footer { display: flex; align-items: center; gap: 8px; margin-top: auto; padding-top: 14px; }
-.project-folder footer span { display: flex; align-items: center; gap: 4px; color: var(--v06-muted); font-size: 12.5px; }
-.project-folder footer b { margin-left: auto; padding: 4px 6px; border-radius: 7px; color: #7144d4; background: #f1ebff; font-size: 12.5px; }
-.project-folder-new { border-style: dashed; background: rgba(255,255,255,.48); }
-.project-drive-recent > button { width: 100%; display: grid; grid-template-columns: 120px 1fr auto; align-items: center; gap: 12px; padding: 14px 16px; border: 1px solid rgba(29,45,60,.08); border-radius: 15px; text-align: left; background: rgba(255,255,255,.76); }
-.project-drive-recent span { color: #7047d8; font-size: 10.5px; font-weight: 760; }
-.project-drive-recent strong { font-size: 11.5px; }
-.project-drive-recent small { color: var(--v06-muted); font-size: 10px; }
+/* A-5b：SaaS 卡网格 → 紧凑行列表。行三态沿用 A-3 冻结规格（与 interaction-system.css 同源）：
+   hover=fill-tertiary；已打开（活跃行）=fill-quaternary 胶囊底；pressed=fill-secondary+scale .98。
+   path/updatedAt 降级为行内次要小字；reveal/delete 收进行尾 hover 态，不占默认排版。 */
+.project-list { display: grid; gap: 2px; }
+.project-row { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; border-radius: 10px; }
+.project-row-main { display: grid; grid-template-columns: auto minmax(0,1fr) auto auto; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border: 0; border-radius: 10px; background: transparent; text-align: left; color: inherit; cursor: pointer; transition: background-color var(--lcos-dur-fast) var(--lcos-ease-apple), transform var(--lcos-dur-press) var(--lcos-ease-apple); }
+.project-row-main:hover { background: var(--lcos-fill-tertiary); }
+.project-row-main:active { background: var(--lcos-fill-secondary); transform: scale(.98); }
+.project-row.is-open .project-row-main { background: var(--lcos-fill-quaternary); }
+.project-row-icon { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 8px; color: #7047d8; background: linear-gradient(145deg,#fff,#eee9ff); }
+.project-row-body { min-width: 0; display: grid; gap: 1px; }
+.project-row-body strong { font-size: 13px; }
+.project-row-body small { overflow: hidden; color: var(--v06-muted); font-size: 10.5px; text-overflow: ellipsis; white-space: nowrap; }
+.project-row-pending { padding: 2px 7px; border-radius: 8px; color: var(--warning); background: rgba(var(--warning-rgb), .075); font-size: 10px; font-weight: 660; }
+.project-row-open { color: #7047d8; font-size: 10.5px; font-style: normal; font-weight: 660; }
+.project-row-actions { display: flex; gap: 2px; padding-right: 4px; opacity: 0; transition: opacity var(--lcos-dur-fast) var(--lcos-ease-apple); }
+.project-row:hover .project-row-actions,
+.project-row:focus-within .project-row-actions { opacity: 1; }
+.project-row-actions button { width: 26px; height: 26px; display: grid; place-items: center; border: 0; border-radius: 8px; color: rgba(24,36,49,.35); background: transparent; cursor: pointer; }
+.project-row-actions .project-row-reveal:hover { background: rgba(70,90,190,.09); color: #4a5fc7; }
+.project-row-actions .project-row-delete:hover { background: rgba(190,60,50,.09); color: #a23b33; }
+/* A-5b：Capture Space 入口 =「一个空间对象」——删虚线上传框语言；标题+预览行+transient pending 徽标（有则显无则隐）。 */
+.project-drive-capture { max-width: 920px; margin: 0 auto; padding: 8px 24px 40px; }
+.project-drive-capture-card { position: relative; display: grid; gap: 3px; width: 100%; padding: 14px 16px; border: 1px solid rgba(29,45,60,.08); border-radius: 14px; background: rgba(255,255,255,.82); text-align: left; color: inherit; cursor: pointer; transition: background-color var(--lcos-dur-fast) var(--lcos-ease-apple), transform var(--lcos-dur-press) var(--lcos-ease-apple); }
+.project-drive-capture-card:hover { background: #fff; }
+.project-drive-capture-card:active { transform: scale(.98); }
+.project-drive-capture-title { font-size: 13px; letter-spacing: .02em; }
+.project-drive-capture-preview { color: var(--v06-muted); font-size: 10.5px; }
+.project-drive-capture-card small { color: var(--v06-muted); font-size: 10px; }
+.capture-pending-badge { position: absolute; top: 12px; right: 14px; min-width: 18px; height: 18px; display: grid; place-items: center; padding: 0 6px; border-radius: 9px; color: #fff; background: var(--lcos-ui-warning); font-size: 10px; font-weight: 700; font-style: normal; }
 
 @media (max-width: 1366px) {
   .work-rail:not(.compact) { min-width: 300px; }
@@ -2419,14 +2423,14 @@ body,
 }
 
 @media (max-width: 1160px) {
-  .project-folder-grid { grid-template-columns: 1fr 1fr; }
   .work-rail:not(.compact) { position: absolute; width: min(420px, calc(100vw - 72px)) !important; max-width: calc(100vw - 72px); box-shadow: -28px 0 58px rgba(35,52,69,.15); }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .work-rail,
   .app-shell.v06 .canvas,
-  .project-folder { transition: none !important; }
+  .project-row,
+  .project-drive-capture-card { transition: none !important; }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -2980,16 +2984,6 @@ body,
 .app-shell.v06-phase3 .project-tab svg { flex: 0 0 auto; opacity: .46; }
 .app-shell.v06-phase3 .project-tab:hover svg { opacity: .78; }
 
-.project-folder footer em {
-  margin-left: auto;
-  padding: 3px 6px;
-  border-radius: 999px;
-  color: #3c7468;
-  background: #e5f3ee;
-  font-size: 12.5px;
-  font-style: normal;
-  font-weight: 760;
-}
 .drive-empty {
   display: grid;
   justify-items: center;

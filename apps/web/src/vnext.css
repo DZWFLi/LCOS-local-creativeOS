@@ -71,13 +71,16 @@
   border-radius: 10px;
   background: transparent;
   color: var(--vnext-ink-44);
-  transition: background var(--lcos-dur-micro) ease, color var(--lcos-dur-micro) ease, transform var(--lcos-dur-micro) ease;
+  transition: background var(--lcos-dur-micro) ease, color var(--lcos-dur-micro) ease, transform var(--lcos-dur-micro) ease, opacity var(--lcos-dur-micro) ease;
 }
 .vnext-brand-dot:hover,
 .vnext-project-actions button:hover { color: var(--vnext-ink); background: rgba(67,62,91,.055); transform: scale(1.035); }
+/* A-3b 按压统一：一级保留按钮（搜索 / 待确认 / ⋯）press = opacity .4 / 100ms（Apple 按钮冻结规格）。
+   runtime .lcos-reconstructed 覆盖层另有 scale(.97) 缩压（reconstruction.css，本批禁动），
+   实际层叠以覆盖层为准——本段是基础语法层（同 A-3 rail 段约定）。 */
+.vnext-project-actions button:active { opacity: .4; }
 .vnext-project-name { min-width: 0; display: flex; align-items: baseline; gap: 8px; padding: 4px 6px; border: 0; background: transparent; text-align: left; }
-.vnext-project-reveal { width: 26px; height: 26px; display: grid; place-items: center; border: 0; border-radius: 8px; color: var(--vnext-ink-44); background: transparent; cursor: pointer; flex: none; }
-.vnext-project-reveal:hover { background: rgba(70,90,190,.09); color: #4a5fc7; }
+/* A-3b 清算：.vnext-project-reveal 一级按钮已降级进 More menu（打开项目目录），原一级样式退役。 */
 .vnext-project-name strong { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--vnext-ink); font-size: 12.5px; font-weight: 660; letter-spacing: -.015em; }
 .vnext-project-name span { color: var(--vnext-ink-44); font-size: 10px; }
 .vnext-project-state { display: flex; gap: 5px; margin-left: 2px; }
@@ -138,6 +141,60 @@
 .vnext-run-dot.status-review,.vnext-run-dot.status-waiting_input { background: #d79a47; }
 .vnext-run-dot.status-failed { background: #cc655f; }
 .vnext-project-actions { margin-left: auto; display: flex; align-items: center; gap: 1px; }
+
+/* ── A-3b · More overflow menu（⋯）：Base UI Menu 行为 + Apple menu visual ──
+   玻璃 token --lcos-mat-popover-*；菜单项 hover = fill-tertiary；
+   open 250ms / close 150ms（--lcos-dur-menu-open / --lcos-dur-menu-close）。
+   portal 挂 body，脱离 strip 内 button 覆盖层管辖（.lcos-reconstructed 不波及）。 */
+.vnext-strip-more-positioner { z-index: var(--lcos-z-dialog); /* z-tier: dialog */ }
+.vnext-strip-more-menu {
+  box-sizing: border-box;
+  min-width: 200px;
+  max-height: 60vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 5px;
+  border: 0.5px solid var(--lcos-mat-popover-border);
+  border-radius: 13px;
+  background: var(--lcos-mat-popover-bg);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .18);
+  color: var(--vnext-ink);
+  -webkit-backdrop-filter: var(--lcos-mat-popover-blur);
+  backdrop-filter: var(--lcos-mat-popover-blur);
+  -webkit-app-region: no-drag;
+  transform-origin: top right;
+  transition: opacity var(--lcos-dur-menu-open) var(--lcos-ease-out), transform var(--lcos-dur-menu-open) var(--lcos-ease-out);
+}
+.vnext-strip-more-menu[data-side='top'] { transform-origin: bottom right; }
+.vnext-strip-more-menu[data-starting-style] { opacity: 0; transform: scale(.96) translateY(-2px); }
+.vnext-strip-more-menu[data-ending-style] { opacity: 0; transform: scale(.97) translateY(-2px); transition-duration: var(--lcos-dur-menu-close); }
+.vnext-strip-more-menu[data-instant] { transition: none; }
+.vnext-strip-more-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  color: var(--vnext-ink);
+  font-size: 12.5px;
+  cursor: pointer;
+  user-select: none;
+  -webkit-app-region: no-drag;
+  transition: background var(--lcos-dur-micro) ease;
+}
+.vnext-strip-more-item svg { color: var(--vnext-ink-44); }
+.vnext-strip-more-item:hover,
+.vnext-strip-more-item[data-highlighted] { background: var(--lcos-fill-tertiary); }
+.vnext-strip-more-item:active { opacity: .4; }
+.vnext-strip-more-separator { height: 1px; margin: 5px 8px; background: var(--vnext-hair); }
+
+/* A-3b reduced motion 降级（同 A0-1 popover 纪律）：menu 只留 opacity 过渡，去 scale 位移。 */
+@media (prefers-reduced-motion: reduce) {
+  .vnext-strip-more-menu,
+  .vnext-strip-more-menu[data-ending-style] { transition: opacity 200ms ease-out; }
+  .vnext-strip-more-menu[data-starting-style],
+  .vnext-strip-more-menu[data-ending-style] { transform: none; }
+}
 
 /* -------------------------------------------------------------------------- */
 /* Workspace rail                                                              */
