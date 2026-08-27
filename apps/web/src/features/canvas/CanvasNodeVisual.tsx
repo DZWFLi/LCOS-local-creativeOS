@@ -197,13 +197,24 @@ export function documentPreviewStateCopy(node: CanvasNode): string {
   return node.observedPath ? '本地来源' : '项目材料'
 }
 
+/**
+ * B-8 document-paper identity fallback（Grammar §10 / Apple Donor Map §9：
+ * 无 preview 的文档用 document identity fallback，不造大卡）。
+ * 纸面即身份：白系底 + 1px sep-hairline 边 + 极浅折角（矩形系唯一形状 = 纸）；
+ * 类型字标并入身份态做纸内 letterhead（旧 kind chip 不再单独成徽章）；
+ * 纸面写真值——TextPreview 首行（noteBody/previewText）已有则复用，否则写真实文件名，不放装饰假线。
+ */
 function MaterialPaperFallback({ node, kind, tag }: { node: CanvasNode; kind: FileIdentity; tag: string }) {
-  const Icon = kind === 'archive' ? ArchiveGlyph : kind === 'markdown' ? NoteGlyph : DocumentGlyph
-  return <div className={`lcos-material-paper-fallback paper-${kind}`} data-material-kind={kind}>
-    <span className="lcos-material-paper-fold" aria-hidden="true"/>
-    <span className="lcos-material-paper-type">{tag}</span>
-    <span className="lcos-material-paper-lines" aria-hidden="true"><i/><i/><i/><i/></span>
-    {kind === 'archive' && <span className="lcos-material-paper-archive" aria-hidden="true"><Icon/></span>}
+  const firstLine = (node.noteBody?.trim() || node.previewText?.trim())
+    ?.split(/\r?\n/)
+    .map((line) => line.trim())
+    .find(Boolean)
+    ?.slice(0, 52)
+  const name = node.title.trim() || tag
+  return <div className={`lcos-material-paper-fallback lcos-file-identity paper-${kind}`} data-material-kind={kind}>
+    <span className="lcos-file-identity-fold" aria-hidden="true"/>
+    <span className="lcos-file-identity-type">{tag}</span>
+    <b className="lcos-file-identity-name" title={name}>{firstLine ?? name}</b>
     <small>{documentPreviewStateCopy(node)}</small>
   </div>
 }

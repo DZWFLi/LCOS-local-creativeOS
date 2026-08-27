@@ -2020,3 +2020,83 @@ button.lcos-context-expand:hover { background: rgba(111,87,177,.07); }
 .lcos-workbench-frame-left { flex: none; width: clamp(200px, 22%, 264px); padding: 10px 12px; border-right: 1px solid rgba(65, 58, 80, .085); overflow-y: auto; }
 .lcos-workbench-frame-center { flex: 1; padding: 12px 16px; overflow: auto; }
 .lcos-workbench-frame-right { flex: none; width: clamp(220px, 24%, 296px); padding: 10px 12px; border-left: 1px solid rgba(65, 58, 80, .085); overflow-y: auto; }
+
+/* ================================================================
+   Wave B-8 — File identity fallback：document-paper 身份态
+   （Grammar §10 / Apple Donor Map §9：无 preview 用 document identity fallback）
+   纸面即身份：白系底 + 1px sep-hairline 边 + 极浅折角线，无玻璃无投影堆叠；
+   类型字标并入纸内 letterhead（合并旧 kind chip，不再单独成徽章）；
+   类型微 tint 复用现有语义 token（PDF=danger 红系 / PPT=warning 橙系 /
+   ZIP·TEXT·FILE=中性白纸），零新色。
+   hover/选中沿用 .canvas-node > .lcos-object 通用规则，本段不特判。
+   ================================================================ */
+
+/* 纸本体：矩形系唯一持有者（iconShapes paper 裁决——形状即身份）。
+   本段选择落在 spatial-components.css：文档材质旧样式位于
+   interaction-system.css（R8 段），本文件是其后加载的画布层，覆盖有效。 */
+.lcos-reconstructed .lcos-material-paper-fallback.lcos-file-identity {
+  min-height: 78px;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 6px;
+  padding: 11px 12px 9px;
+  border: 1px solid var(--lcos-sep-hairline);
+  border-radius: 7px 10px 8px 8px;
+  color: var(--lcos-ui-ink-soft);
+  background: rgba(255, 255, 254, .97);
+  box-shadow: none;
+}
+
+/* 旧装饰退役：fake PDF 红书脊 / fake PPT 幻灯框——身份改由类型字标 + 微 tint 承担 */
+.lcos-reconstructed .lcos-material-paper-fallback.lcos-file-identity.paper-pdf::after,
+.lcos-reconstructed .lcos-material-paper-fallback.lcos-file-identity.paper-ppt::after { content: none; }
+
+/* 极浅折角线：右上一枚 hairline 三角（CSS border 语言），纸的手作感，不加重影 */
+.lcos-reconstructed .lcos-file-identity .lcos-file-identity-fold {
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  width: 14px;
+  height: 14px;
+  border-left: 1px solid var(--lcos-sep-hairline);
+  border-bottom: 1px solid var(--lcos-sep-hairline);
+  border-bottom-left-radius: 4px;
+  background: linear-gradient(225deg, rgba(244, 244, 246, .9) 0 49%, rgba(255, 255, 255, 0) 50%);
+}
+
+/* 类型字标（chip 合并裁决：降为纸内 letterhead）：等宽大写小字标，身份即类型 */
+.lcos-reconstructed .lcos-file-identity .lcos-file-identity-type {
+  position: relative;
+  width: max-content;
+  color: var(--lcos-ui-ink-soft);
+  font: 700 8px/1 var(--lcos-font-mono, monospace);
+  letter-spacing: .08em;
+}
+
+/* 真值内容行：TextPreview 首行或真实文件名（原装饰假线退役） */
+.lcos-reconstructed .lcos-file-identity .lcos-file-identity-name {
+  min-width: 0;
+  overflow: hidden;
+  align-self: center;
+  color: var(--lcos-ui-ink-soft);
+  font: 600 9.5px/1.5 var(--lcos-font-mono, monospace);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 预览状态真值（债4 契约）：faint 小字，如实说明为何无 preview */
+.lcos-reconstructed .lcos-material-paper-fallback.lcos-file-identity > small {
+  position: relative;
+  color: var(--lcos-ui-ink-faint);
+  font-size: 8.5px;
+}
+
+/* 类型微 tint（现有语义 token 低透明度，零新色）：仅 PDF/PPT 上色，其余中性 */
+.lcos-reconstructed .lcos-material-paper-fallback.lcos-file-identity.paper-pdf {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--lcos-ui-danger) 5%, rgba(255, 255, 254, .97)), rgba(255, 255, 254, .97));
+}
+.lcos-reconstructed .lcos-file-identity.paper-pdf .lcos-file-identity-type { color: var(--lcos-ui-danger); }
+.lcos-reconstructed .lcos-material-paper-fallback.lcos-file-identity.paper-ppt {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--lcos-ui-warning) 6%, rgba(255, 255, 254, .97)), rgba(255, 255, 254, .97));
+}
+.lcos-reconstructed .lcos-file-identity.paper-ppt .lcos-file-identity-type { color: var(--lcos-ui-warning); }

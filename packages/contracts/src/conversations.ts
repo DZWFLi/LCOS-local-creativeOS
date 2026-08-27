@@ -39,6 +39,21 @@ export interface ConversationSessionV1 {
   readonly importedAt?: string
   readonly createdAt: string
   readonly updatedAt: string
+  /**
+   * 用户最近一次打开/进入该对话现场的时间（ISO 时间字符串）。
+   * 纯 Presentation 层活动度数据源（UX 收口 §3.2），不是 Project Truth。
+  */
+  readonly lastOpenedAt?: string
+  /**
+   * 该对话最近一次发起 Run 的时间（ISO 时间字符串）。
+   * 纯 Presentation 层活动度数据源（UX 收口 §3.2），不是 Project Truth。
+  */
+  readonly lastRunAt?: string
+  /**
+   * 最近一次被设为当前控制 Agent 的时间（ISO 时间字符串）。
+   * 纯 Presentation 层活动度数据源（UX 收口 §3.2），不是 Project Truth。
+  */
+  readonly lastSelectedAsControllerAt?: string
 }
 
 export interface ConversationFileReferenceV1 {

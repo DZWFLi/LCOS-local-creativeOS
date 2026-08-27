@@ -148,6 +148,8 @@ export interface SurfaceBoundsV0 {
 export interface SurfaceBindingV0 {
   entityId?: string
   artifactId?: string
+  /** 绑定的对话实体（Glyth 投影用）——v0.15 感知层：Conversation 上画布的契约前提；可选，零破坏。 */
+  conversationId?: string
   workflowId?: string
   stepId?: string
   contextId?: string
