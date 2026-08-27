@@ -28,6 +28,7 @@ function session(id: string, overrides: Partial<ConversationSessionV1> = {}): Co
     originMeta: {},
     createdAt: '2026-08-20T10:00:00.000Z',
     updatedAt: '2026-08-27T09:00:00.000Z',
+    conversationArtifactId: 'artifact-text-conv-a',
     ...overrides,
   }
 }
@@ -64,6 +65,9 @@ describe('materializeProjectEntityNodes：conversation ref → 节点', () => {
     expect(node.conversation?.id).toBe('conv-a')
     expect(node.conversation?.title).toBe('架构裁定记录')
     expect(node.conversation?.messageCount).toBe(21)
+    // 批十四：携带转写 artifact 身份（markdown）——「查看对话」沉浸阅读链取数用。
+    expect(node.artifactId).toBe('artifact-text-conv-a')
+    expect(node.fileType).toBe('markdown')
   })
 
   it('确定性位置：沿既有节点包围盒右侧外扩一列（数值钉死：右缘 620+96=716，顶 80）', () => {

@@ -5500,6 +5500,18 @@ export function App() {
     setImmersiveNodeId(node.id)
   }, [nodes, selectNode])
 
+  // C-3/C-14「查看对话」：进入沉浸阅读（Esc 宪法第 3 层 Viewer/子现场）——对话转写是
+  // markdown artifact，走与文件材料同一条 Reader 链（投影节点不在 nodes 状态里，
+  // 从 presentationEntityNodes 派生集找）；档案弹窗（ConversationContextDialog）
+  // 仍留给顶栏「对话」入口做管理/检索。
+  const openConversationReading = useCallback((conversationId: string) => {
+    const nodeId = `conversation:${conversationId}`
+    const node = nodes.find((item) => item.id === nodeId) ?? presentationEntityNodes.find((item) => item.id === nodeId)
+    if (node === undefined || node.artifactId === undefined) { setNotice('这份对话还没有可读正文'); return }
+    setNodeInfoId(null)
+    setWorkbench(null)
+    setImmersiveNodeId(node.id)
+  }, [nodes, presentationEntityNodes])
   // 沉淀池「定位编辑」：技能 artifact 或其材料 → 相机定位（与 ⌘K 节点跳转同一 focus 链）。
   const locateWorkflowSkill = useCallback((skill: WorkflowSkillSummary) => {
     locateCanvasNode(skill.viewId)
@@ -6369,9 +6381,14 @@ export function App() {
       else if (entityScope?.kind === 'collection') return
       return
     }
-    const node = nodes.find((item) => item.id === id)
+    const node = nodes.find((item) => item.id === id) ?? presentationEntityNodes.find((item) => item.id === id)
     if (!node) return
     selectNode(id)
+    // C-3/C-14：对话实体双击 = 进入沉浸阅读（转写 markdown artifact；Esc 宪法第 3 层 Viewer/子现场）。
+    if (node.entityKind === 'conversation') {
+      if (node.artifactId !== undefined) { setNodeInfoId(null); setWorkbench(null); setImmersiveNodeId(id) }
+      return
+    }
     // Text nodes open the inline editor (mubu-style canvas writing), not the Reader.
     // 统一文本体系：note 与 markdown 文本 artifact 双击都直接就地编辑。
     if (node.kind === 'note' || node.fileType === 'markdown') {
@@ -6406,7 +6423,7 @@ export function App() {
       setWorkbench(null)
       setImmersiveNodeId(id)
     }
-  }, [bootMode, enterScope, nodes, openSavedContextView, openSavedWorkflowView, openWorkspaceScene, scopes, selectNode])
+  }, [bootMode, enterScope, nodes, openSavedContextView, openSavedWorkflowView, openWorkspaceScene, presentationEntityNodes, scopes, selectNode])
 
   const showNodeDetails = useCallback((id: string) => {
     setNodeInfoId(id)
@@ -6847,7 +6864,7 @@ export function App() {
         onDoubleClick: handleDoubleClick,
         onDetails: showNodeDetails,
         // C-3 Glyth Orbit：查看对话走既有 ConversationContextDialog 打开链。
-        onOpenConversation: () => setConversationDialogOpen(true),
+        onOpenConversation: openConversationReading,
         onFocusSelection: selectedIds.length === 1 ? () => openProjectFocus() : undefined,
         onRenameSelection: selectedIds.length === 1 && selectedNodes.length === 1 ? () => setRenameNodeId(selectedNodes[0]!.id) : undefined,
         onToggleNoteLayout: toggleNoteLayout,
@@ -7456,7 +7473,7 @@ export function App() {
       </>,
     }}
     immersive={immersiveNodeId ? (() => {
-      const immersiveNode = nodes.find((node) => node.id === immersiveNodeId)
+      const immersiveNode = nodes.find((node) => node.id === immersiveNodeId) ?? presentationEntityNodes.find((node) => node.id === immersiveNodeId)
       return immersiveNode ? { node: immersiveNode, projectId: activeProjectId, onClose: () => setImmersiveNodeId(null) } : null
     })() : null}
     />

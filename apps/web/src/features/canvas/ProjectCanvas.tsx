@@ -34,7 +34,6 @@ import { SurfaceComponentProposalLayer } from '../spatial/components/SurfaceComp
 import { applySurfaceOps, type SurfaceOp, validateSurfaceOps } from '../spatial/model/surfaceOps'
 import { resolveSurfaceIntent, type SurfaceIntent } from '../spatial/model/surfaceIntent'
 import { ObjectOrbit } from '../ui/ObjectOrbit'
-import { conversationGlythStateFromRecent } from '../conversations/ConversationGlyth'
 
 interface Props {
   projectId?: string
@@ -85,7 +84,7 @@ interface Props {
   onLocateNode?: (id: string) => void
   locatePulseId?: string | null
   /** C-3 Glyth Orbit：会话节点「查看对话」动作（App 复用既有 ConversationContextDialog）。 */
-  onOpenConversation?: () => void
+  onOpenConversation?: (conversationId: string) => void
   pendingReviewIds?: readonly string[]
   attentionBucketsByViewId?: Readonly<Record<string, AttentionBucketV0>>
   collectionMembersByNodeId?: Readonly<Record<string, readonly CanvasNode[]>>
@@ -734,6 +733,8 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
       doublePressCandidate.current = null
       selectionCollapseCandidate.current = null
       lastNodePress.current = null
+      // 双击进入（如对话阅读）时收掉同节点 Orbit——进入材料是更深的层，Orbit 不该留在背后。
+      if (draggedId.startsWith('conversation:')) setConversationOrbit(null)
       onDoubleClick(draggedId)
     } else if (!wasDragging && draggedId && selectionCollapseCandidate.current === draggedId) {
       onSelect(draggedId, false)
@@ -872,11 +873,6 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
     {createMenu && <div data-testid="anchor-create-menu" className="anchor-create-menu" style={{ left: createMenu.screenX, top: createMenu.screenY }} onPointerDown={(event) => event.stopPropagation()} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation() }}><span>在此创建并连接</span><button data-testid="anchor-create-note" onClick={() => { onCreateNodeFromAnchor('note', createMenu.x, createMenu.y, createMenu.from); setCreateMenu(null) }}>文本</button><button data-testid="anchor-create-context" onClick={() => { onCreateNodeFromAnchor('context', createMenu.x, createMenu.y, createMenu.from); setCreateMenu(null) }}>内容集合</button><button className="cancel" onClick={() => setCreateMenu(null)}>取消</button></div>}
     {marqueeRect && (() => { const rect = canvasRef.current?.getBoundingClientRect(); return <div data-testid="selection-marquee" className="marquee" style={{ left: marqueeRect.left - (rect?.left ?? 0), top: marqueeRect.top - (rect?.top ?? 0), width: marqueeRect.width, height: marqueeRect.height }} /> })()}
   </>
-
-  // C-3：Orbit 状态行（四件套之四）——与 Glyth 身体态同源派生（conversationGlythStateFromRecent：
-  // lastRunAt <1h「刚运行过」/ 否则「安静」）；节点不在当前投影时按「安静」兜底。
-  const conversationOrbitMeta = conversationOrbit !== null ? byId.get(`conversation:${conversationOrbit.conversationId}`)?.conversation : undefined
-  const conversationOrbitWorking = conversationOrbitMeta !== undefined && conversationGlythStateFromRecent(conversationOrbitMeta) === 'working'
 
   return <><SpatialCanvas ref={canvasRef} testId="canvas" tabIndex={-1} camera={camera} setCamera={setCamera} disabled={locked} ariaBusy={locked} locked={locked} nodeCount={nodes.length} edgeCount={edges.length} className={`canvas lod-${lod} zoom-band-${zoomBand} layout-mode-freeform ${gridSnapEnabled ? 'grid-snap-enabled' : ''} ${selectedId ? 'has-focus' : ''} ${locked ? 'is-locked' : ''}`} worldClassName="canvas-world" worldTestId="canvas-world" style={{ '--canvas-zoom': String(camera.zoom), '--lcos-main-grid-size': `${MAIN_CANVAS_GRID_STEP * camera.zoom}px`, '--lcos-main-grid-x': `${camera.x % (MAIN_CANVAS_GRID_STEP * camera.zoom)}px`, '--lcos-main-grid-y': `${camera.y % (MAIN_CANVAS_GRID_STEP * camera.zoom)}px` } as React.CSSProperties} onPointerDown={({ event }) => {
     const target = event.target as HTMLElement
@@ -1163,18 +1159,14 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
       open
       onClose={() => setConversationOrbit(null)}
       anchorRef={{ current: conversationOrbit.anchor }}
-      entry={{
-        title: conversationOrbit.title,
-        kindLabel: '会话',
-        kindShape: 'egg',
-        statusText: conversationOrbitWorking ? '刚运行过' : '安静',
-        statusTone: conversationOrbitWorking ? 'active' : 'neutral',
-      }}
+      ariaLabel={`会话「${conversationOrbit.title}」的动作`}
       actions={[
         // 「设为当前 Agent」不进本批（完成或删除）：receiver 体系吃的是承接对话
         // （connected-conversation id），画布投影的导入会话是 session 体系，setActiveReceiver
         // 会 400 INVALID_ARGUMENT——session→承接桥属 C-4 Active Glyth。
-        { id: 'conversation-open', label: '查看对话', icon: MessageSquare, primary: true, onClick: () => onOpenConversation?.() },
+        // 查看对话（批十四）：进入沉浸阅读——对话转写是 markdown artifact，走与
+        // 文件材料同一条 Reader 链（Esc 宪法第 3 层 Viewer/子现场），档案弹窗留顶栏。
+        { id: 'conversation-open', label: '查看对话', icon: MessageSquare, primary: true, onClick: () => onOpenConversation?.(conversationOrbit.conversationId) },
         { id: 'conversation-locate', label: '在哪', icon: Crosshair, onClick: () => onLocateNode?.(`conversation:${conversationOrbit.conversationId}`) },
       ]}
     />

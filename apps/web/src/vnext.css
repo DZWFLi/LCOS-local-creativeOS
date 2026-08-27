@@ -667,6 +667,39 @@
 .vnext-immersive-content .media-viewer { display: grid; place-items: center; align-content: center; gap: 12px; padding: 24px; }
 .vnext-immersive-content .media-viewer video { width: min(100%, 1280px); max-height: calc(100vh - 110px); background: #111; border-radius: 12px; }
 .vnext-immersive-content .media-viewer audio { width: min(680px, 90%); }
+/* 批十四：对话时间线阅读器（ConversationViewer）——纯阅读面，排版即层级（S10）；
+   颜色全走冻结语义 token（带缺省回落），无新增玻璃/阴影。 */
+.vnext-immersive-content .lcos-conversation-reader {
+  width: min(720px, 100%);
+  place-self: start center;
+  display: grid;
+  gap: 26px;
+  padding: 26px 24px 48px;
+}
+.vnext-immersive-content .lcos-conversation-section { display: grid; gap: 10px; }
+.vnext-immersive-content .lcos-conversation-section-title {
+  margin: 0;
+  padding-bottom: 6px;
+  border-bottom: 0.5px solid var(--lcos-sep-hairline, rgba(60, 60, 67, .12));
+  font: 600 14px/1.4 var(--lcos-font-ui, sans-serif);
+  color: var(--lcos-label-primary, rgba(60, 60, 67, 1));
+}
+.vnext-immersive-content .lcos-conversation-message { display: grid; grid-template-columns: 34px 1fr; gap: 10px; }
+.vnext-immersive-content .lcos-conversation-message-role {
+  text-align: right;
+  font: 560 11px/1.6 var(--lcos-font-ui, sans-serif);
+  color: var(--lcos-label-tertiary, rgba(60, 60, 67, .45));
+}
+.vnext-immersive-content .lcos-conversation-message[data-role='user'] .lcos-conversation-message-role {
+  color: var(--lcos-ui-accent, #6857bd);
+}
+.vnext-immersive-content .lcos-conversation-message-body {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font: 400 13px/1.7 var(--lcos-font-ui, sans-serif);
+  color: var(--lcos-label-primary, rgba(60, 60, 67, 1));
+}
 @media (prefers-reduced-motion: reduce) {
   .vnext-immersive-backdrop, .vnext-immersive-viewer { scroll-behavior: auto; }
 }

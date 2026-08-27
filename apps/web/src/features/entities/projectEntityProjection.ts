@@ -97,6 +97,8 @@ export function materializeProjectEntityNodes(
         entityKind: 'conversation',
         title: conversation.title,
         subtitle: `${conversation.messageCount ?? 0} 条消息`,
+        // 批十四：携带转写 artifact 身份（markdown）——「查看对话」走沉浸阅读链。
+        ...(conversation.conversationArtifactId !== undefined ? { artifactId: conversation.conversationArtifactId, fileType: 'markdown' as const } : {}),
         x: conversationAnchor.x,
         y: conversationAnchor.y + slot * CONVERSATION_ROW_STRIDE,
         width: CONVERSATION_NODE_WIDTH,
@@ -106,6 +108,7 @@ export function materializeProjectEntityNodes(
         conversation: {
           id: conversation.id,
           title: conversation.title,
+          ...(conversation.conversationArtifactId !== undefined ? { conversationArtifactId: conversation.conversationArtifactId } : {}),
           ...(conversation.messageCount !== undefined ? { messageCount: conversation.messageCount } : {}),
           ...(conversation.updatedAt !== undefined ? { updatedAt: conversation.updatedAt } : {}),
           ...(conversation.lastOpenedAt !== undefined ? { lastOpenedAt: conversation.lastOpenedAt } : {}),

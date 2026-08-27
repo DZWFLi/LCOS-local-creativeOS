@@ -408,99 +408,40 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
- * Wave B-6 · ObjectOrbit —— 对象局部动作语言通用壳（Grammar §13 / 游戏 GUI 裁决 §2.2）
+ * Wave B-6/C-3 · ObjectOrbit —— 对象局部动作语言（Grammar S13 / 批十四径向重写）
  * ───────────────────────────────────────────────────────────────────────────
- * 玻璃材质：复用 A0-1 段 .lcos-popover 冻结底板（Popup 同挂 lcos-popover /
- * lcos-popover-anim 类，出/退场含收场 scale .92 + opacity 200ms 冻结值），
- * 玻璃 token 全局冻结源为 foundation.css A-2b 的 --lcos-mat-popover-* 三件套。
- * 本段只做 Orbit 专属排版：
- *   - 图鉴卡头四件套：立绘区 48px / 名字 / kindLabel 徽章胶囊 / 状态行小字
- *     （裁决 §2.2 原话：这是图鉴卡语言，不是 SaaS 属性面板）；
- *   - satellite 区：水平 flex 简化排布——真弧形（radial arc 围绕 object，按
- *     data-side 与序号算径向角）属后续打磨批次，本段 flex 即其降级基线；
- *   - 状态行语气色走 foundation.css A-1b 冻结语义 token；
- *   - 卫星出/收场动画由 motion variants 内联驱动（ObjectOrbit.tsx），本段不重复声明。
+ * 用户实机裁决后重写：卫星径向围绕锚点身体展开（satellitePlacements 纯函数
+ * 上半圆弧，落点由组件 inline left/top 钉死）；旧图鉴卡头删除——身份已在画布
+ * 身体+标注上，弹层重复编码违反 S8.2 四通道不重复。
+ * 本段只做 Orbit 专属排版，不新增孤立 blur/radius 魔数：卫星胶囊沿用旧值；
+ * 投影为冻结字面值（S5 floating 因果 + 验收四条文字三保底之投影，行内注明）；
+ * 出/收场动画由 motion variants 内联驱动（ObjectOrbit.tsx），本段不重复声明。
  * ═══════════════════════════════════════════════════════════════════════════ */
-.lcos-orbit-positioner {
-  z-index: var(--lcos-z-dialog, 100); /* z-tier: dialog（popover 群——orbit 属其 transient 一员） */
+
+/* 轨道层：全屏透明垫（pointer-events none 不挡画布——HUD 零侵入），只承载卫星 */
+.lcos-orbit-layer {
+  position: fixed;
+  inset: 0;
+  z-index: var(--lcos-z-overlay-ui-top, 100); /* z-tier: overlay-ui（transient 交互层） */
+  pointer-events: none;
 }
 
-/* 卡体：竖排三层（卡头 / satellite 区 / 卡尾） */
-.lcos-orbit-card {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+/* 卫星定位垫：left/top = 环上落点（组件 inline）；motion 只动本层 transform/opacity */
+.lcos-orbit-sat {
+  position: absolute;
+  width: 0;
+  height: 0;
+  pointer-events: none;
 }
 
-/* 四件套卡头：立绘区 + 右侧竖排（名 / 徽章 / 状态行） */
-.lcos-orbit-head {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-/* 立绘区：48px 清晰立绘（形状即身份）；浅色洗底衬托，不加玻璃不加阴影（Grammar §5 因果律） */
-.lcos-orbit-portrait {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 48px;
-  height: 48px;
-  border-radius: 14px;
-  color: var(--lcos-ui-label-primary);
-  background: var(--lcos-ui-fill-secondary);
-}
-
-.lcos-orbit-id {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 3px;
-  min-width: 0;
-}
-
-.lcos-orbit-title {
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--lcos-ui-label-primary);
-  font: 600 13px/1.2 var(--lcos-font-ui, sans-serif);
-}
-
-/* 类型徽章：胶囊（不用矩形圆角——游戏裁决 §1 病灶②⑥） */
-.lcos-orbit-kind-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 1.5px 8px;
-  border-radius: 999px;
-  background: var(--lcos-ui-fill-secondary);
-  color: var(--lcos-ui-label-primary);
-  font: 560 11px/1.2 var(--lcos-font-ui, sans-serif);
-}
-
-/* 状态行小字：语气色 A-1b 冻结语义 token（默认 tertiary 中性） */
-.lcos-orbit-status {
-  font: 450 11px/1.3 var(--lcos-font-ui, sans-serif);
-  color: var(--lcos-ui-label-tertiary);
-}
-
-.lcos-orbit-status[data-lcos-tone='active'] { color: var(--lcos-ui-active); }
-.lcos-orbit-status[data-lcos-tone='warn'] { color: var(--lcos-ui-warning); }
-.lcos-orbit-status[data-lcos-tone='danger'] { color: var(--lcos-ui-destructive); }
-
-/* satellite 区：水平 flex 简化（真弧形排布属后续打磨批次，见段头注释预留） */
-.lcos-orbit-satellites {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-}
-
-/* 卫星按钮：胶囊剪影（图标 + 短标签）；transition 只挂 background，
-   避免与 motion 出/收场的 opacity/transform 内联动画互相干扰 */
-.lcos-orbit-satellite {
+/* 卫星按钮：胶囊剪影（图标 + 短标签），以落点为中心居中（translate 半宽高）。
+   transition 只挂 background，避免与 motion 的 opacity/transform 内联动画互相干扰。 */
+.lcos-orbit-sat .lcos-orbit-satellite {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -515,53 +456,34 @@
   cursor: pointer;
   user-select: none;
   -webkit-app-region: no-drag;
+  /* 冻结值：S5 floating 因果（transient 命令悬浮于世界）+ 验收四条文字三保底之投影 */
+  box-shadow: 0 2px 8px rgba(31, 27, 42, .14);
   transition: background 100ms ease-out;
 }
 
-.lcos-orbit-satellite:hover { background: color-mix(in srgb, var(--lcos-ui-accent) 14%, var(--lcos-ui-fill-secondary)); }
-.lcos-orbit-satellite:active { opacity: .4; }
-.lcos-orbit-satellite:focus-visible { outline: 2px solid var(--lcos-ui-accent); outline-offset: 2px; }
+.lcos-orbit-sat .lcos-orbit-satellite:hover { background: color-mix(in srgb, var(--lcos-ui-accent) 14%, var(--lcos-ui-fill-secondary)); }
+.lcos-orbit-sat .lcos-orbit-satellite:active { opacity: .4; }
+.lcos-orbit-sat .lcos-orbit-satellite:focus-visible { outline: 2px solid var(--lcos-ui-accent); outline-offset: 2px; }
 
-/* primary 卫星：accent 填充胶囊突出（Grammar §11 最高频动作） */
-.lcos-orbit-satellite[data-lcos-primary='true'] {
+/* primary 卫星：accent 填充胶囊突出（Grammar S11 最高频动作） */
+.lcos-orbit-sat .lcos-orbit-satellite[data-lcos-primary='true'] {
   background: var(--lcos-ui-accent);
   color: #ffffff;
 }
 
-/* More 折叠区：竖排低频动作（Donor Map B1 次级菜单；AnimatePresence 高度动画需 overflow hidden） */
-.lcos-orbit-more-fold {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-  overflow: hidden;
-}
-
-.lcos-orbit-satellite--fold {
-  background: transparent;
-}
-
-.lcos-orbit-satellite--fold:hover { background: var(--lcos-ui-fill-secondary); }
-
-/* 卡尾：极简 hint 行 */
-.lcos-orbit-foot {
-  padding-top: 8px;
-  border-top: 0.5px solid var(--lcos-ui-glass-border);
-  color: var(--lcos-ui-label-tertiary);
-  font: 450 10.5px/1.3 var(--lcos-font-ui, sans-serif);
-}
-
 /* ───────────────────────────────────────────────────────────────────────────
  * Reduced motion（纪律包 4 降级，与本文件既有各段同例）：
- * motion 出场 stagger（位移 + opacity）与折叠高度动画削减——用 !important
- * 覆盖 motion 的内联样式（无位移无缩放后卫星直接就位），hover 背景过渡保留。
+ * motion 出场 stagger（位移 + opacity）削减——用 !important 覆盖 motion 的内联
+ * 样式（无位移无缩放后卫星直接就位）；卫星自身 translate(-50%,-50%) 居中保留。
  * ─────────────────────────────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
-  .lcos-orbit-satellites,
-  .lcos-orbit-satellite,
-  .lcos-orbit-more-fold {
+  .lcos-orbit-sat {
     opacity: 1 !important;
     transform: none !important;
+    transition: none !important;
+  }
+  .lcos-orbit-sat .lcos-orbit-satellite {
+    opacity: 1 !important;
     transition: none !important;
   }
 }

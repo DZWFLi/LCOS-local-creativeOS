@@ -20,6 +20,7 @@ import { PdfViewer, SelectionDropHandle } from './PdfViewer'
  */
 
 export type ArtifactViewerKind =
+  | 'conversation'
   | 'image'
   | 'text'
   | 'pdf'
@@ -36,6 +37,7 @@ export interface ArtifactViewerDescriptor {
 }
 
 export const artifactViewerRegistry: Readonly<Record<ArtifactViewerKind, ArtifactViewerDescriptor>> = {
+  conversation: { kind: 'conversation', label: '对话时间线阅读', readOnly: true },
   image: { kind: 'image', label: '图片预览', readOnly: true },
   text: { kind: 'text', label: '文本预览', readOnly: true },
   pdf: { kind: 'pdf', label: 'PDF 只读预览', readOnly: true },
@@ -47,6 +49,9 @@ export const artifactViewerRegistry: Readonly<Record<ArtifactViewerKind, Artifac
 }
 
 export function resolveArtifactViewerKind(node: CanvasNode): ArtifactViewerKind {
+  // 批十四：对话实体直读时间线（conversationMessages API）——转写 artifact 只是
+  // 入口 stub（「原始消息保存在时间线数据库」），正文必须走专用阅读器。
+  if (node.entityKind === 'conversation' && node.conversation !== undefined) return 'conversation'
   const fileType = (node.fileType ?? '').toLocaleLowerCase('en-US')
   const title = node.title.toLocaleLowerCase('en-US')
   if (title.endsWith('.link.md') || title.startsWith('link:') || node.previewText?.startsWith('url:')) return 'link'
@@ -69,6 +74,7 @@ export function canPreviewArtifact(node: CanvasNode): boolean {
 export function ArtifactViewerHost({ node, projectId }: { node: CanvasNode; projectId: string }) {
   const kind = resolveArtifactViewerKind(node)
   switch (kind) {
+    case 'conversation': return <ConversationViewer node={node} projectId={projectId} />
     case 'image': return <ImageViewer node={node} projectId={projectId} />
     case 'text': return <TextViewer node={node} projectId={projectId} />
     case 'pdf':
@@ -78,6 +84,98 @@ export function ArtifactViewerHost({ node, projectId }: { node: CanvasNode; proj
     case 'link': return <LinkViewer node={node} />
     default: return <FallbackViewer node={node} />
   }
+}
+
+/**
+ * ConversationViewer（批十四「查看对话」）：对话实体专用只读阅读器。
+ * 进入对话 = 沉浸抽屉里读真实时间线（conversationProjection 的 section 结构 +
+ * conversationMessages 的正文）——转写 artifact 只是入口 stub，正文在这里。
+ * 纯阅读面（Grammar S10 Artifact）：无玻璃无卡片，排版即层级；管理/检索/标注
+ * 属顶栏档案弹窗（ConversationContextDialog），此处不重复。
+ */
+interface ConversationSectionSummary {
+  readonly id: string
+  readonly title: string
+  readonly startSeq: number
+  readonly endSeq: number
+}
+
+interface ConversationMessageSummary {
+  readonly id: string
+  readonly seq: number
+  readonly role: 'user' | 'assistant' | 'tool' | 'system'
+  readonly contentText: string
+}
+
+const CONVERSATION_ROLE_LABEL: Record<ConversationMessageSummary['role'], string> = {
+  user: '你',
+  assistant: 'AI',
+  tool: '工具',
+  system: '系统',
+}
+
+function ConversationViewer({ node, projectId }: { node: CanvasNode; projectId: string }) {
+  const conversationId = node.conversation?.id
+  const [sections, setSections] = useState<readonly ConversationSectionSummary[] | null>(null)
+  const [messages, setMessages] = useState<readonly ConversationMessageSummary[] | null>(null)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (conversationId === undefined) {
+      setError('该节点不是对话实体。')
+      return
+    }
+    const controller = new AbortController()
+    const load = async () => {
+      try {
+        const base = `${LOCAL_CORE_API_PREFIX}/projects/${encodeURIComponent(projectId)}/conversations/${encodeURIComponent(conversationId)}`
+        const [projectionRes, messagesRes] = await Promise.all([
+          fetch(base, { signal: controller.signal }),
+          fetch(`${base}/messages?limit=500`, { signal: controller.signal }),
+        ])
+        const projection = await projectionRes.json() as { ok?: boolean; error?: { message?: string }; value?: { sections?: ConversationSectionSummary[] } }
+        const messagePayload = await messagesRes.json() as { ok?: boolean; error?: { message?: string }; value?: ConversationMessageSummary[] }
+        if (!projectionRes.ok || projection.ok === false) throw new Error(projection.error?.message ?? `对话读取失败 (${projectionRes.status})`)
+        if (!messagesRes.ok || messagePayload.ok === false) throw new Error(messagePayload.error?.message ?? `时间线读取失败 (${messagesRes.status})`)
+        setSections(projection.value?.sections ?? [])
+        setMessages(messagePayload.value ?? [])
+      } catch (reason) {
+        if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : '读取失败')
+      }
+    }
+    void load()
+    return () => controller.abort()
+  }, [conversationId, projectId])
+
+  if (error) return <div className="lcos-viewer-fallback">{error}</div>
+  if (sections === null || messages === null) {
+    return <div className="lcos-viewer-fallback"><LoaderCircle className="lcos-viewer-fallback-icon" size={18} aria-hidden="true" />读取中…</div>
+  }
+  const unarchived = messages.filter((message) => !sections.some((section) => message.seq >= section.startSeq && message.seq <= section.endSeq))
+  const groups: readonly { key: string; title: string; items: readonly ConversationMessageSummary[] }[] = [
+    ...sections.map((section) => ({
+      key: section.id,
+      title: section.title,
+      items: messages.filter((message) => message.seq >= section.startSeq && message.seq <= section.endSeq),
+    })),
+    // 不落在任何 section 的消息（section 派生滞后时）：不丢字，收进「未归档」。
+    ...unarchived.length === 0 ? [] : [{ key: '__unarchived', title: '未归档', items: unarchived }],
+  ]
+  return (
+    <div className="lcos-conversation-reader">
+      {groups.map((group) => group.items.length === 0 ? null : (
+        <section key={group.key} className="lcos-conversation-section">
+          <h3 className="lcos-conversation-section-title">{group.title}</h3>
+          {group.items.map((message) => (
+            <article key={message.id} id={`conversation-message-${message.id}`} className="lcos-conversation-message" data-role={message.role}>
+              <span className="lcos-conversation-message-role">{CONVERSATION_ROLE_LABEL[message.role] ?? message.role}</span>
+              <p className="lcos-conversation-message-body">{message.contentText}</p>
+            </article>
+          ))}
+        </section>
+      ))}
+    </div>
+  )
 }
 
 function ImageViewer({ node, projectId }: { node: CanvasNode; projectId: string }) {
@@ -270,14 +368,24 @@ function TextViewer({ node, projectId }: { node: CanvasNode; projectId: string }
       setText(node.previewText)
       return
     }
-    if (node.fileRecordId === undefined) {
-      setError('该节点没有可读取的文件记录。')
-      return
-    }
     const controller = new AbortController()
     const load = async () => {
       try {
-        const response = await fetch(`${LOCAL_CORE_API_PREFIX}/projects/${encodeURIComponent(projectId)}/file-records/${encodeURIComponent(String(node.fileRecordId))}/content`, { signal: controller.signal })
+        // managed artifact（如对话转写 markdown）：投影节点只带 artifactId 时，
+        // 经 artifact revision 表解析 fileRecordId 再读正文（批十四「查看对话」阅读链）。
+        let fileRecordId = node.fileRecordId
+        if (fileRecordId === undefined && node.artifactId !== undefined) {
+          const revResponse = await fetch(`${LOCAL_CORE_API_PREFIX}/artifacts/${encodeURIComponent(String(node.artifactId))}/revisions`, { signal: controller.signal })
+          if (!revResponse.ok) throw new Error(`版本列表请求失败 (${revResponse.status})`)
+          const payload = await revResponse.json() as { ok?: boolean; value?: readonly { fileRecordId?: string; status?: string }[] }
+          const current = payload.value?.find((entry) => entry.status === 'current') ?? payload.value?.[0]
+          fileRecordId = current?.fileRecordId
+        }
+        if (fileRecordId === undefined) {
+          setError('该节点没有可读取的文件记录。')
+          return
+        }
+        const response = await fetch(`${LOCAL_CORE_API_PREFIX}/projects/${encodeURIComponent(projectId)}/file-records/${encodeURIComponent(String(fileRecordId))}/content`, { signal: controller.signal })
         if (!response.ok) {
           const detail = await response.json().catch(() => null) as { error?: { message?: string } } | null
           throw new Error(detail?.error?.message ?? `预览请求失败 (${response.status})`)
@@ -290,7 +398,7 @@ function TextViewer({ node, projectId }: { node: CanvasNode; projectId: string }
     }
     void load()
     return () => controller.abort()
-  }, [node.fileRecordId, node.previewText, projectId])
+  }, [node.artifactId, node.fileRecordId, node.previewText, projectId])
 
   const lines = useMemo(() => text?.replace(/\r/g, '').split('\n') ?? [], [text])
   const headings = useMemo(() => lines.flatMap((line, index) => {
@@ -416,14 +524,24 @@ function DocumentViewer({ node, projectId }: { node: CanvasNode; projectId: stri
   const pdfMaterialSource = useCallback((locator?: MaterialSourceV1['locator']) => materialSourceForNode(node, projectId, locator), [node, projectId])
 
   useEffect(() => {
-    if (node.fileRecordId === undefined) {
-      setError('该节点没有可读取的文件记录。')
-      return
-    }
     const controller = new AbortController()
     const load = async () => {
       try {
-        const response = await fetch(`${LOCAL_CORE_API_PREFIX}/projects/${encodeURIComponent(projectId)}/file-records/${encodeURIComponent(String(node.fileRecordId))}/content`, { signal: controller.signal })
+        // managed artifact（如对话转写 markdown）：投影节点只带 artifactId 时，
+        // 经 artifact revision 表解析 fileRecordId 再读正文（批十四「查看对话」阅读链）。
+        let fileRecordId = node.fileRecordId
+        if (fileRecordId === undefined && node.artifactId !== undefined) {
+          const revResponse = await fetch(`${LOCAL_CORE_API_PREFIX}/artifacts/${encodeURIComponent(String(node.artifactId))}/revisions`, { signal: controller.signal })
+          if (!revResponse.ok) throw new Error(`版本列表请求失败 (${revResponse.status})`)
+          const payload = await revResponse.json() as { ok?: boolean; value?: readonly { fileRecordId?: string; status?: string }[] }
+          const current = payload.value?.find((entry) => entry.status === 'current') ?? payload.value?.[0]
+          fileRecordId = current?.fileRecordId
+        }
+        if (fileRecordId === undefined) {
+          setError('该节点没有可读取的文件记录。')
+          return
+        }
+        const response = await fetch(`${LOCAL_CORE_API_PREFIX}/projects/${encodeURIComponent(projectId)}/file-records/${encodeURIComponent(String(fileRecordId))}/content`, { signal: controller.signal })
         if (!response.ok) {
           const detail = await response.json().catch(() => null) as { error?: { message?: string } } | null
           throw new Error(detail?.error?.message ?? `Preview request failed (${response.status}).`)

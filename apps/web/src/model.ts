@@ -33,6 +33,8 @@ export interface CanvasNodeConversation {
   lastOpenedAt?: string
   lastRunAt?: string
   lastSelectedAsControllerAt?: string
+  /** 批十四：对话转写 artifact（导入时由 Core 生成，markdown）——沉浸阅读链取数用。 */
+  conversationArtifactId?: string
 }
 
 export interface CanvasNode {
