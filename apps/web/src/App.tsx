@@ -2411,6 +2411,8 @@ export function App() {
       const byId = new Map<string, CanvasNode>()
       visibleNodes.filter((node) => !mainSceneMemberIds.has(node.id)).forEach((node) => byId.set(node.id, node))
       mainWorkspaceProjectionNodes.forEach((node) => byId.set(node.id, node))
+      // Wave C-2（批十）：对话实体投影进主场景画布——Conversation Glyth 是画布世界内的对象身体（Grammar §8）。
+      presentationEntityNodes.filter((node) => node.entityKind === 'conversation').forEach((node) => byId.set(node.id, node))
       return withReadableSize([...byId.values()])
     }
     const focused = new Set(workspaceMemberViewIdsById[activeWorkspace.id] ?? activeWorkspace.focusedViewIds)
@@ -2418,7 +2420,7 @@ export function App() {
     const byId = new Map<string, CanvasNode>()
     ;[...memberNodes, ...activeWorkspaceEntityNodes].forEach((node) => byId.set(node.id, node))
     return withReadableSize([...byId.values()])
-  }, [activeWorkspace, activeWorkspaceEntityNodes, mainSceneMemberIds, mainWorkspaceProjectionNodes, nodes, visibleLayers, visibleNodes, workspaceMemberViewIdsById])
+  }, [activeWorkspace, activeWorkspaceEntityNodes, mainSceneMemberIds, mainWorkspaceProjectionNodes, nodes, presentationEntityNodes, visibleLayers, visibleNodes, workspaceMemberViewIdsById])
   const sceneCanvasEdges = useMemo(() => {
     if (!activeWorkspace) return visibleEdges
     const ids = new Set(sceneCanvasNodes.map((node) => node.id))

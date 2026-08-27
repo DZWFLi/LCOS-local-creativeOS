@@ -14,6 +14,9 @@ const CONVERSATION_ROW_STRIDE = 170
 const CONVERSATION_FALLBACK_X = 480
 const CONVERSATION_FALLBACK_Y = 360
 const CONVERSATION_NODE_WIDTH = 180
+/** 锚点视口参考尺寸：与 spatialOverviewProjection 的默认 viewport 一致。 */
+const VIEWPORT_REFERENCE_WIDTH = 1440
+const VIEWPORT_REFERENCE_HEIGHT = 900
 const CONVERSATION_NODE_HEIGHT = 132
 
 export function materializeProjectEntityNodes(
@@ -32,9 +35,17 @@ export function materializeProjectEntityNodes(
   const conversationSlotById = new Map(
     [...conversationById.keys()].sort((a, b) => a.localeCompare(b)).map((id, slot) => [id, slot] as const),
   )
-  // 列锚点：既有节点包围盒右侧外扩一列；空画布落固定锚点（不读运行时随机源）。
-  const conversationAnchor = nodes.length
+  // 列锚点（批十修正）：优先落在根 scope 相机视口内右侧——大画布（≥48 节点）时
+  // spatialOverviewProjection 会剔除视口外节点，旧「包围盒最右+96」锚点会把对话列
+  // 放到用户视野之外导致零渲染；无 scope 相机时回退包围盒右列（既有测试路径）。
+  const rootScope = scopes.find((scope) => scope.kind === 'root') ?? scopes[0]
+  const conversationAnchor = rootScope?.camera
     ? {
+        x: -rootScope.camera.x / Math.max(0.1, rootScope.camera.zoom) + (VIEWPORT_REFERENCE_WIDTH / Math.max(0.1, rootScope.camera.zoom)) * 0.78,
+        y: -rootScope.camera.y / Math.max(0.1, rootScope.camera.zoom) + (VIEWPORT_REFERENCE_HEIGHT / Math.max(0.1, rootScope.camera.zoom)) * 0.12,
+      }
+    : nodes.length
+      ? {
         x: Math.max(...nodes.map((node) => node.x + node.width)) + CONVERSATION_COLUMN_GAP,
         y: Math.min(...nodes.map((node) => node.y)),
       }
