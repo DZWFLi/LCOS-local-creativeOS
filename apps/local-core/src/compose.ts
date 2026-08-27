@@ -42,6 +42,7 @@ import { FeedbackRevisionService } from './feedback-revision-service.js'
 import { ContinuityRuntimeService } from './continuity-runtime-service.js'
 import { ReceiverRuntimeService } from './receiver-runtime-service.js'
 import { SessionLifecycleService } from './session-lifecycle-service.js'
+import { ConversationIdentityService } from './conversation-identity-service.js'
 import { SessionReadSet } from './session-read-set.js'
 import { SpaceSandboxService } from './space-sandbox-service.js'
 import { AgentletRuntimeService } from './agentlet-runtime-service.js'
@@ -103,6 +104,7 @@ export interface LocalCoreServices {
   readonly continuityRuntime: ContinuityRuntimeService | undefined
   readonly receiverRuntime: ReceiverRuntimeService | undefined
   readonly sessionLifecycle: SessionLifecycleService | undefined
+  readonly conversationIdentity: ConversationIdentityService | undefined
 }
 
 /** 服务装配：把 options 解析成 createLocalCoreServer 需要的一组服务。 */
@@ -170,6 +172,10 @@ export function composeLocalCoreServices(options: LocalCoreServerOptions = {}): 
   const receiverRuntime = metadata === undefined ? undefined : new ReceiverRuntimeService(metadata, projectEvents)
   // Phase 5 Live Session Binding：会话七态持久化 + run 事件驱动（G3 taxonomy 落地）。
   const sessionLifecycle = metadata === undefined ? undefined : new SessionLifecycleService(metadata, projectEvents)
+  // Conversation Identity Bridge（20260827 P0）：承接会话 ↔ 导入会话 canonical 链 + 出生谱系。
+  const conversationIdentity = metadata === undefined || conversations === undefined
+    ? undefined
+    : new ConversationIdentityService(metadata, conversations, sessionLifecycle, projectEvents)
   if (options.runtimeApplicationService !== undefined && sessionLifecycle !== undefined) {
     options.runtimeApplicationService.attachSessionLifecycle(sessionLifecycle)
   }
@@ -191,6 +197,7 @@ export function composeLocalCoreServices(options: LocalCoreServerOptions = {}): 
     runtimeReview: options.runtimeReviewService ?? (metadata === undefined ? undefined : new RuntimeReviewService(metadata)),
     runtimeApplication: options.runtimeApplicationService,
     sessionLifecycle,
+    conversationIdentity,
     activeContext,
     contextProposals: options.contextProposalStore ?? new ContextProposalStore(metadata, projectEvents),
     runEventListeners: new Map<string, Set<() => void>>(),

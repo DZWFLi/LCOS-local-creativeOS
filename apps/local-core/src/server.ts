@@ -83,6 +83,7 @@ import { handleContextSnapshotsRoute } from './routes/context-snapshots.js'
 import { handleHandoffsRoute } from './routes/handoffs.js'
 import { handleResourcesRoute } from './routes/resources.js'
 import { handleRuntimeRoute } from './routes/runtime.js'
+import { handleConversationIdentityRoute } from './routes/conversation-identity.js'
 import { handleRunsRoute } from './routes/runs.js'
 import { handlePresentationsRoute } from './routes/presentations.js'
 import { handleProjectEventsRoute, handleRealtimeDebugRoute } from './routes/project-events.js'
@@ -340,7 +341,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
     resourceReader, matcher, contextManifest, runtimeReview, runtimeApplication, activeContext,
     contextProposals, runEventListeners, obsidian, obsidianSessions, connectorRegistry,
     ownsConversationService, conversations, previewWorker, presentation, curation, search, curationCommand,
-    runtimeRegistry, intelligence, captureStaging, resolveProjectAffinity, captureApplication, captureWatch, captureSpace, reorganize, sessionReadSet, spaceSandbox, agentletRuntime, spatialRetrieval, attentionRuntime, boundaryEvaluator, projectEvents, projectMutations, mutationSafety, feedbackRevision, continuityRuntime, receiverRuntime, sessionLifecycle,
+    runtimeRegistry, intelligence, captureStaging, resolveProjectAffinity, captureApplication, captureWatch, captureSpace, reorganize, sessionReadSet, spaceSandbox, agentletRuntime, spatialRetrieval, attentionRuntime, boundaryEvaluator, projectEvents, projectMutations, mutationSafety, feedbackRevision, continuityRuntime, receiverRuntime, sessionLifecycle, conversationIdentity,
   } = services
   metadata?.setRunEventSink?.((event) => {
     const payloadProjectId = (event.payload as { projectId?: string } | null)?.projectId
@@ -491,6 +492,17 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
         controller,
         metadata,
         conversations,
+        helpers: routeHelpers,
+      })) return
+      if (await handleConversationIdentityRoute({
+        method,
+        pathname,
+        url,
+        request,
+        response,
+        signal: controller.signal,
+        metadata,
+        identity: conversationIdentity,
         helpers: routeHelpers,
       })) return
 

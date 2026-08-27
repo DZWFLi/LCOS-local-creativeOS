@@ -14,6 +14,11 @@ export interface ConnectedConversationV1 {
   readonly executorId: string
   /** 对外部执行器会话的稳定引用（connect 语义由调用方提供，create 语义由 Core 生成）。 */
   readonly conversationRef: string
+  /**
+   * Conversation Identity Bridge（20260827 P0）：canonical 链接到的导入会话 ID。
+   * 只由显式 link-session 写入；undefined = 未链接（诚实缺席，不按 provider/title/时间猜）。
+   */
+  readonly conversationSessionId?: string
   readonly label: string
   /** 原料字段（投影层算 status）：waitingReason ≠ null → waiting；isRunning → working；否则 ready。 */
   readonly isRunning: boolean

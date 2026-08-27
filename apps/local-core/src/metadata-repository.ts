@@ -266,7 +266,8 @@ export class SqliteMetadataRepository {
     if (current === 38) { this.#migrate_039_from_v38(); current = 39 }
     if (current === 39) { this.#migrate_040_from_v39(); current = 40 }
     if (current === 40) { this.#migrate_041_from_v40(); current = 41 }
-    if (current !== 41) throw new Error(`Unsupported metadata schema version ${current}.`)
+    if (current === 41) { this.#migrate_042_from_v41(); current = 42 }
+    if (current !== 42) throw new Error(`Unsupported metadata schema version ${current}.`)
   }
 
   #migrate_037_from_v36(): void {
@@ -384,6 +385,21 @@ export class SqliteMetadataRepository {
         PRIMARY KEY (project_id, provider)
       );
       PRAGMA user_version = 41;
+      COMMIT;
+    `)
+  }
+
+  #migrate_042_from_v41(): void {
+    // Conversation Identity Bridge + Birth Provenance（20260827 P0）：
+    // connected_conversations.conversation_session_id：canonical 链接（唯一写路径 link-session）。
+    // artifacts.birth_run_id：出生 Run 盖戳（acceptArtifactReturn 诞生分支写入；读取侧带
+    // adopted-returns 兜底覆盖迁移前存量）。
+    this.#database.exec(`
+      BEGIN;
+      ALTER TABLE connected_conversations ADD COLUMN conversation_session_id TEXT;
+      ALTER TABLE artifacts ADD COLUMN birth_run_id TEXT;
+      CREATE INDEX IF NOT EXISTS idx_artifacts_birth_run ON artifacts(birth_run_id);
+      PRAGMA user_version = 42;
       COMMIT;
     `)
   }
@@ -4451,6 +4467,11 @@ export class SqliteMetadataRepository {
         this.#database.prepare(
           'UPDATE artifacts SET current_revision_id = ?, updated_at = ? WHERE id = ? AND current_revision_id IS NULL',
         ).run(draftRevision.id as SQLInputValue, updatedAt, artifact.id as SQLInputValue)
+        // Birth Provenance 盖戳（huabu canvas-write 注入点同构——写入时定，读取只投影）：
+        // 该分支 = artifact 由本 return 诞生（首 current revision 无父）；首诞生后不被后续 run 覆盖。
+        this.#database.prepare(
+          'UPDATE artifacts SET birth_run_id = ? WHERE id = ? AND birth_run_id IS NULL',
+        ).run(artifactReturn.runId as SQLInputValue, artifact.id as SQLInputValue)
         this.#database.prepare('UPDATE artifact_returns SET status = ?, updated_at = ? WHERE id = ? AND status = ?')
           .run('adopted', updatedAt, returnId as SQLInputValue, 'pending_review')
         this.#database.prepare(
@@ -5410,6 +5431,30 @@ export class SqliteMetadataRepository {
     return row === undefined ? undefined : connectedConversationFromRow(row)
   }
 
+  /**
+   * Upsert by (project_id, conversation_ref)：同 ref 重复 connect 保持稳定 id 与 created_at。
+   * conversation_session_id 不在 upsert 写面——canonical 链接只由 linkConnectedConversationSession
+   * 唯一写路径维护，幂等 connect 刷新不得清掉已建立的链接。
+   */
+  linkConnectedConversationSession(projectId: string, connectedConversationId: string, conversationSessionId: string | null): ConnectedConversationV1 | undefined {
+    const result = this.#database.prepare(
+      'UPDATE connected_conversations SET conversation_session_id = ?, updated_at = ? WHERE project_id = ? AND id = ?',
+    ).run(conversationSessionId as SQLInputValue, new Date().toISOString(), projectId as SQLInputValue, connectedConversationId as SQLInputValue)
+    if (Number(result.changes) !== 1) return undefined
+    return this.getConnectedConversation(projectId, connectedConversationId)
+  }
+
+  /** 出生 Run 读取：列值优先；迁移前存量按最早 adopted return 兜底（仍是结构事实，非启发式）。 */
+  getArtifactBirthRunId(artifactId: string): string | undefined {
+    const row = this.#database.prepare('SELECT birth_run_id FROM artifacts WHERE id = ?').get(artifactId as SQLInputValue) as Row | undefined
+    if (row === undefined) return undefined
+    if (row.birth_run_id !== null && row.birth_run_id !== undefined) return String(row.birth_run_id)
+    const fallback = this.#database.prepare(
+      "SELECT run_id FROM artifact_returns WHERE target_artifact_id = ? AND status = 'adopted' ORDER BY created_at, id LIMIT 1",
+    ).get(artifactId as SQLInputValue) as Row | undefined
+    return fallback === undefined ? undefined : String(fallback.run_id)
+  }
+
   /** Upsert by (project_id, conversation_ref)：同 ref 重复 connect 保持稳定 id 与 created_at。 */
   upsertConnectedConversation(value: ConnectedConversationV1): ConnectedConversationV1 {
     this.#database.prepare(`
@@ -5510,6 +5555,7 @@ function connectedConversationFromRow(row: Row): ConnectedConversationV1 {
     provider: String(row.provider) as ConnectedConversationV1['provider'],
     executorId: String(row.executor_id),
     conversationRef: String(row.conversation_ref),
+    ...(row.conversation_session_id === null || row.conversation_session_id === undefined ? {} : { conversationSessionId: String(row.conversation_session_id) }),
     label: String(row.label),
     isRunning: Number(row.is_running) === 1,
     waitingReason: row.waiting_reason === null || row.waiting_reason === undefined ? null : String(row.waiting_reason),
