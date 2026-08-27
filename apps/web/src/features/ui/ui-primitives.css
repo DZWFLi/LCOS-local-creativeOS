@@ -565,3 +565,152 @@
     transition: none !important;
   }
 }
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Wave D-2 · Semantic Drop 五阶段反馈层（dropFeedbackLayer.tsx / dropPhases.ts）
+ * ───────────────────────────────────────────────────────────────────────────
+ * Grammar §14/§15：Drop 固定五阶段 Approaching→Receptive→Accept→Commit→Settle。
+ * 反馈 channel：field（目标轮廓加粗）/ motion（recoil）/ light（光扫）/ optional text。
+ * Toast 只是异常/复杂说明兜底——成功由世界自己说话（§15）。
+ * tldraw hinting 协议（只抄模式不抄码）：可投放=同色加粗不换色不换 dash；
+ * overlay 独立分层（.lcos-drop-feedback 不触碰 shape body 自身样式），
+ * 进行中每帧重算，松手/取消清空。仅追加在文件末尾，勿改他人段落。
+ * ═══════════════════════════════════════════════════════════════════════════ */
+.lcos-drop-feedback {
+  position: fixed;
+  pointer-events: none;
+  z-index: var(--lcos-z-overlay-ui-top); /* z-tier: overlay-ui */
+  border-radius: inherit;
+  isolation: isolate;
+}
+
+.lcos-drop-feedback .lcos-drop-field {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 1.5px solid rgba(var(--lcos-ui-signal-rgb, 104, 87, 189), 0);
+  box-shadow: 0 0 0 0 rgba(var(--lcos-ui-signal-rgb, 104, 87, 189), 0);
+  opacity: 0;
+  transition:
+    opacity var(--lcos-ui-fast, 105ms) ease,
+    border-color var(--lcos-ui-medium, 165ms) ease,
+    box-shadow var(--lcos-ui-medium, 165ms) ease;
+}
+
+/* Approaching：目标区域非常轻地活起来（Local Field 稍增强；不弹文案、不变真实状态）。 */
+.lcos-drop-feedback.phase-approaching .lcos-drop-field {
+  opacity: .42;
+  border-color: rgba(var(--lcos-ui-signal-rgb, 104, 87, 189), .34);
+  box-shadow: 0 0 0 3px rgba(var(--lcos-ui-signal-rgb, 104, 87, 189), .05);
+}
+
+/* Receptive：真正命中 Drop Target——同色加粗不换色不换 dash（tldraw hinting），
+   视觉厚度明显高于 hover 低于 selection；允许极短 label。 */
+.lcos-drop-feedback.phase-receptive .lcos-drop-field {
+  opacity: .9;
+  border-color: rgba(var(--lcos-ui-signal-rgb, 104, 87, 189), .62);
+  border-width: 3px;
+  box-shadow: 0 0 0 4px rgba(var(--lcos-ui-signal-rgb, 104, 87, 189), .10);
+}
+
+.lcos-drop-hint {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 6px);
+  transform: translateX(-50%);
+  padding: 3px 9px;
+  border-radius: 8px;
+  background: rgba(31, 27, 42, .78);
+  color: rgba(238, 234, 248, .94);
+  font: 560 10.5px/1.25 var(--lcos-font-ui, sans-serif);
+  letter-spacing: .01em;
+  white-space: nowrap;
+  opacity: .96;
+  pointer-events: none;
+}
+
+/* Accept：前端确认接受意图——目标轻微 recoil（.98 回弹）+ 一次短促 Light Sweep。 */
+.lcos-drop-feedback.phase-accept .lcos-drop-field,
+.lcos-drop-feedback.phase-commit .lcos-drop-field,
+.lcos-drop-feedback.phase-settle .lcos-drop-field {
+  opacity: 1;
+  border-color: rgba(var(--lcos-ui-signal-rgb, 104, 87, 189), .58);
+  box-shadow: 0 0 0 4px rgba(var(--lcos-ui-signal-rgb, 104, 87, 189), .12);
+}
+
+.lcos-drop-recoil {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: rgba(var(--lcos-ui-signal-rgb, 104, 87, 189), .08);
+  transform: scale(1);
+  animation: lcos-drop-recoil 260ms var(--lcos-ui-ease-spring, cubic-bezier(.2, .9, .26, 1.18)) 1 both;
+}
+
+@keyframes lcos-drop-recoil {
+  0%   { transform: scale(.98); opacity: .9; }
+  45%  { transform: scale(1.014); opacity: .5; }
+  100% { transform: scale(1); opacity: 0; }
+}
+
+/* Light Sweep：一条 200-250ms 光扫过目标宽度（linear-gradient 扫过，Apple ease-out）。 */
+.lcos-drop-sweep {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  overflow: hidden;
+  opacity: 0;
+}
+
+.lcos-drop-feedback.phase-accept .lcos-drop-sweep,
+.lcos-drop-feedback.phase-commit .lcos-drop-sweep,
+.lcos-drop-feedback.phase-settle .lcos-drop-sweep {
+  animation: lcos-drop-sweep 220ms var(--lcos-ui-ease-out, cubic-bezier(.18, .84, .28, 1)) 1 both;
+}
+
+.lcos-drop-feedback.phase-commit .lcos-drop-sweep,
+.lcos-drop-feedback.phase-settle .lcos-drop-sweep {
+  animation-duration: 250ms;
+  animation-delay: 30ms;
+}
+
+@keyframes lcos-drop-sweep {
+  from {
+    background: linear-gradient(105deg, transparent 0%, rgba(var(--lcos-ui-signal-rgb, 104, 87, 189), .06) 8%, rgba(var(--lcos-ui-signal-rgb, 104, 87, 189), .32) 50%, rgba(var(--lcos-ui-signal-rgb, 104, 87, 189), .06) 92%, transparent 100%);
+    transform: translateX(-60%);
+    opacity: 0;
+  }
+  40% { opacity: 1; }
+  to {
+    background: linear-gradient(105deg, transparent 0%, rgba(var(--lcos-ui-signal-rgb, 104, 87, 189), .06) 8%, rgba(var(--lcos-ui-signal-rgb, 104, 87, 189), .32) 50%, rgba(var(--lcos-ui-signal-rgb, 104, 87, 189), .06) 92%, transparent 100%);
+    transform: translateX(60%);
+    opacity: 0;
+  }
+}
+
+/* Commit：光扫完整，对象/投影 settle 到位置（反馈层保持在场）。 */
+.lcos-drop-feedback.phase-commit { opacity: 1; }
+
+/* Settle：空间反馈已足够——整体淡出收尾，文本可不出现。 */
+.lcos-drop-feedback.phase-settle {
+  animation: lcos-drop-settle-out var(--lcos-ui-slow, 260ms) var(--lcos-ui-ease-out, cubic-bezier(.18, .84, .28, 1)) 1 forwards;
+}
+
+@keyframes lcos-drop-settle-out {
+  0%   { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* Reduced-motion 降级（纪律包 4）：只留 opacity，禁位移/缩放/光扫。 */
+@media (prefers-reduced-motion: reduce) {
+  .lcos-drop-feedback,
+  .lcos-drop-feedback * {
+    animation: none !important;
+    transform: none !important;
+    transition: none !important;
+  }
+  .lcos-drop-feedback.phase-receptive .lcos-drop-field,
+  .lcos-drop-feedback.phase-accept .lcos-drop-field,
+  .lcos-drop-feedback.phase-commit .lcos-drop-field,
+  .lcos-drop-feedback.phase-settle .lcos-drop-field { opacity: 1; }
+  .lcos-drop-hint { opacity: 1; }
+}

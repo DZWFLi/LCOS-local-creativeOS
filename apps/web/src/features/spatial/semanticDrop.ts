@@ -1,4 +1,6 @@
 import type { PointerEvent as ReactPointerEvent } from 'react'
+import { DROP_PHASE_NEAR_PX, advanceDropPhase } from '../drop/dropPhases'
+import type { DropPhase, DropProximityInput } from '../drop/dropPhases'
 
 export const NEW_SCENE_DROP_TARGET_ID = 'workspace:new-scene'
 export const ARRANGE_SURFACE_DROP_TARGET_ID = 'surface:arrange'
@@ -9,7 +11,7 @@ export const WORKFLOW_SURFACE_DROP_TARGET_ID = 'surface:workflow'
 
 export type SemanticDropTrigger = 'secondary-pointer' | 'modifier-primary' | 'handle-primary' | 'direct-primary'
 
-interface DropTargetHit {
+export interface DropTargetHit {
   id: string
   label: string
   element: HTMLElement
@@ -51,16 +53,36 @@ function expectedButtonsMask(trigger: SemanticDropTrigger): number {
 }
 
 /**
+ * Approaching 判定：指针是否进入任一合法 drop target 包围盒外扩 DROP_PHASE_NEAR_PX 内。
+ * 只服务反馈相位（tldraw hint 协议：进行中每帧重算），不改命中判定本体 targetAt。
+ */
+function nearDropTarget(clientX: number, clientY: number): boolean {
+  const targets = document.querySelectorAll<HTMLElement>('[data-project-view-drop-target]')
+  for (const target of targets) {
+    const rect = target.getBoundingClientRect()
+    if (rect.width <= 0 && rect.height <= 0) continue
+    const nearestX = Math.max(rect.left, Math.min(clientX, rect.right))
+    const nearestY = Math.max(rect.top, Math.min(clientY, rect.bottom))
+    if (Math.hypot(clientX - nearestX, clientY - nearestY) <= DROP_PHASE_NEAR_PX) return true
+  }
+  return false
+}
+
+/**
  * Shared transient Semantic Drop for non-main-canvas renderers.
  *
  * Source objects never move. The gesture only projects the same Project Entity
  * into another Surface/Entity target. Trigger detection is deliberately kept
  * here so callers do not hard-code "right click = semantic operation".
+ *
+ * onPhase 是 Wave D-2 最小钩子：告诉调用者当前五阶段（走近/接收/接受/提交/稳定），
+ * 用于驱动 dropPhases 反馈层。不改变既有拖拽/命中/意图链行为。
  */
 export function beginSemanticDrop<T extends HTMLElement>(
   event: ReactPointerEvent<T>,
   sourceIds: readonly string[],
   onDrop?: (targetViewId: string, sourceIds: readonly string[]) => void,
+  onPhase?: (phase: DropPhase, hit: DropTargetHit | null) => void,
 ): boolean {
   const explicitTrigger = semanticDropTriggerFromPointer(event)
   const trigger: SemanticDropTrigger | null = explicitTrigger ?? (event.button === 0 ? 'direct-primary' : null)
@@ -81,6 +103,12 @@ export function beginSemanticDrop<T extends HTMLElement>(
   let moved = false
   let hovered: HTMLElement | null = null
   let ghost: HTMLDivElement | null = null
+  let phase: DropPhase = 'idle'
+  const emitPhase = (next: DropPhase, hit: DropTargetHit | null): void => {
+    if (next === phase) return
+    phase = next
+    onPhase?.(next, hit)
+  }
 
   if (!directPrimary) {
     try { sourceElement.setPointerCapture(pointerId) } catch { /* browser may own capture */ }
@@ -135,6 +163,7 @@ export function beginSemanticDrop<T extends HTMLElement>(
     // If the browser/OS steals the pressed button, cancel instead of committing
     // a stale Semantic Drop. This is especially important for Edge mouse gestures.
     if (pointerEvent.pointerType === 'mouse' && (pointerEvent.buttons & buttonMask) === 0) {
+      emitPhase('idle', null)
       cleanup()
       return
     }
@@ -143,6 +172,7 @@ export function beginSemanticDrop<T extends HTMLElement>(
     const rawHit = targetAt(pointerEvent.clientX, pointerEvent.clientY)
     const hit = rawHit && rawHit.element !== sourceSurface ? rawHit : null
     if (directPrimary && !hit) {
+      emitPhase('idle', null)
       clearHover()
       ghost?.remove()
       ghost = null
@@ -157,6 +187,11 @@ export function beginSemanticDrop<T extends HTMLElement>(
     nextGhost.style.left = `${pointerEvent.clientX}px`
     nextGhost.style.top = `${pointerEvent.clientY}px`
     updateHover(hit)
+    const proximity: DropProximityInput = {
+      hitTarget: hit !== null,
+      nearLegalTarget: hit !== null ? false : nearDropTarget(pointerEvent.clientX, pointerEvent.clientY),
+    }
+    emitPhase(advanceDropPhase(phase, proximity, false), hit)
   }
   const finish = (pointerEvent: PointerEvent) => {
     if (pointerEvent.pointerId !== pointerId) return
@@ -164,15 +199,22 @@ export function beginSemanticDrop<T extends HTMLElement>(
     const hit = rawHit && rawHit.element !== sourceSurface ? rawHit : null
     if (hit && directPrimary) pointerEvent.preventDefault()
     cleanup()
-    if (hit) onDrop(hit.id, sourceIds)
+    if (hit) {
+      emitPhase('accept', hit)
+      onDrop(hit.id, sourceIds)
+    } else {
+      emitPhase('idle', null)
+    }
   }
   const cancel = (pointerEvent: PointerEvent) => {
     if (pointerEvent.pointerId !== pointerId) return
+    emitPhase('idle', null)
     cleanup()
   }
   const cancelWithEscape = (keyboardEvent: KeyboardEvent) => {
     if (keyboardEvent.key !== 'Escape') return
     keyboardEvent.preventDefault()
+    emitPhase('idle', null)
     cleanup()
   }
 

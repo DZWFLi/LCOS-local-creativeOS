@@ -3,6 +3,8 @@ import { GripVertical } from 'lucide-react'
 import type { CanvasNode, NodeDisplayMode } from '../../model'
 import { CanvasNodeVisual, detectFileIdentity, displayNodeTitle } from '../canvas/CanvasNodeVisual'
 import { beginSemanticDrop } from '../spatial/semanticDrop'
+import { DropFeedbackLayer } from '../drop/dropFeedbackLayer'
+import { useSemanticDropFeedback } from '../drop/useSemanticDropFeedback'
 import { ArchiveGlyph, AudioGlyph, BenchGlyph, CollectionGlyph, ContextGlyph, DocumentGlyph, ImageGlyph, LinkGlyph, NoteGlyph, RunGlyph, SessionGlyph, VideoGlyph, WorkflowGlyph, WorkGlyph } from '../design/LcosGlyphs'
 import { GlythAvatar } from '../spatial/visual/CanvasSprite'
 import { resolveSpatialSignal, type SpatialRuntimeSignal } from '../spatial/visual/spatialSignal'
@@ -74,52 +76,59 @@ export function SurfaceObject({
     semantic: [spatialSemantic, node.draft ? 'draft' : ''].filter(Boolean).join(' · '),
   })
   const semanticDropIds = dropIds?.length ? dropIds : [node.id]
+  const dropFeedback = useSemanticDropFeedback()
   const onPointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
-    beginSemanticDrop(event, semanticDropIds, onDirectProjectViewDrop)
+    beginSemanticDrop(event, semanticDropIds, onDirectProjectViewDrop, dropFeedback.onPhase)
   }
 
   if (glyph) {
-    return <button
+    return <>
+      <button
+        type="button"
+        data-surface-role={role}
+        data-attention={attentionBucket}
+        className={`lcos-surface-glyph role-${role} ${selected ? 'selected' : ''} ${attentionBucket ? `attention-${attentionBucket}` : ''} ${dim ? 'dim' : ''}`}
+        aria-label={displayNodeTitle(node)}
+        onPointerDown={onPointerDown}
+        onClick={(event) => onSelect(node.id, event.shiftKey || event.metaKey || event.ctrlKey)}
+        onDoubleClick={() => onDoubleClick(node.id)}
+      >
+        <span className="lcos-semantic-drop-handle" data-semantic-drop-handle aria-hidden="true" onClick={(event)=>event.stopPropagation()} title="Semantic Drop：拖到上下文或工作流（右键拖 / Alt+左拖）"><GripVertical size={11}/></span>
+        <span className="lcos-surface-identity-glyph" aria-hidden="true"><SurfaceIdentityGlyph node={node}/></span>
+        <span className="lcos-glyph-label">{displayNodeTitle(node)}</span>
+      </button>
+      <DropFeedbackLayer phase={dropFeedback.phase} hitElement={dropFeedback.hitElement} />
+    </>
+  }
+
+  const density: NodeDisplayMode = compact ? 'compact' : (node.displayMode ?? 'standard')
+  return <>
+    <button
       type="button"
       data-surface-role={role}
       data-attention={attentionBucket}
-      className={`lcos-surface-glyph role-${role} ${selected ? 'selected' : ''} ${attentionBucket ? `attention-${attentionBucket}` : ''} ${dim ? 'dim' : ''}`}
+      className={`lcos-surface-object lcos-surface-material role-${role} ${selected ? 'selected' : ''} ${attentionBucket ? `attention-${attentionBucket}` : ''} ${compact ? 'compact' : ''} ${dim ? 'dim' : ''}`}
       aria-label={displayNodeTitle(node)}
       onPointerDown={onPointerDown}
       onClick={(event) => onSelect(node.id, event.shiftKey || event.metaKey || event.ctrlKey)}
       onDoubleClick={() => onDoubleClick(node.id)}
     >
       <span className="lcos-semantic-drop-handle" data-semantic-drop-handle aria-hidden="true" onClick={(event)=>event.stopPropagation()} title="Semantic Drop：拖到上下文或工作流（右键拖 / Alt+左拖）"><GripVertical size={11}/></span>
-      <span className="lcos-surface-identity-glyph" aria-hidden="true"><SurfaceIdentityGlyph node={node}/></span>
-      <span className="lcos-glyph-label">{displayNodeTitle(node)}</span>
+      {performanceProxy
+        ? <div className={`lcos-overview-node-proxy proxy-${detectFileIdentity(node)}`} aria-label={displayNodeTitle(node)}><span>{detectFileIdentity(node).toUpperCase()}</span><strong>{displayNodeTitle(node)}</strong></div>
+        : <CanvasNodeVisual
+            node={node}
+            density={density}
+            runId=""
+            runStatus={node.runStatus ?? null}
+            pending={Boolean(node.draft)}
+            onDetails={() => onDoubleClick(node.id)}
+            showDetails={false}
+            showControls={false}
+          />}
+      {usageHint && <span className="lcos-surface-usage-hint">{usageHint}</span>}
+      {(selected || signal.glyph !== 'stable') && <span className="lcos-surface-system-signal" data-spatial-signal={signal.glyph} aria-hidden="true"><GlythAvatar state={selected && signal.glyph === 'stable' ? 'absorb' : signal.glyph} reason={selected ? 'selection' : runtimeSignal === 'processing' ? 'running' : 'review'}/></span>}
     </button>
-  }
-
-  const density: NodeDisplayMode = compact ? 'compact' : (node.displayMode ?? 'standard')
-  return <button
-    type="button"
-    data-surface-role={role}
-    data-attention={attentionBucket}
-    className={`lcos-surface-object lcos-surface-material role-${role} ${selected ? 'selected' : ''} ${attentionBucket ? `attention-${attentionBucket}` : ''} ${compact ? 'compact' : ''} ${dim ? 'dim' : ''}`}
-    aria-label={displayNodeTitle(node)}
-    onPointerDown={onPointerDown}
-    onClick={(event) => onSelect(node.id, event.shiftKey || event.metaKey || event.ctrlKey)}
-    onDoubleClick={() => onDoubleClick(node.id)}
-  >
-    <span className="lcos-semantic-drop-handle" data-semantic-drop-handle aria-hidden="true" onClick={(event)=>event.stopPropagation()} title="Semantic Drop：拖到上下文或工作流（右键拖 / Alt+左拖）"><GripVertical size={11}/></span>
-    {performanceProxy
-      ? <div className={`lcos-overview-node-proxy proxy-${detectFileIdentity(node)}`} aria-label={displayNodeTitle(node)}><span>{detectFileIdentity(node).toUpperCase()}</span><strong>{displayNodeTitle(node)}</strong></div>
-      : <CanvasNodeVisual
-          node={node}
-          density={density}
-          runId=""
-          runStatus={node.runStatus ?? null}
-          pending={Boolean(node.draft)}
-          onDetails={() => onDoubleClick(node.id)}
-          showDetails={false}
-          showControls={false}
-        />}
-    {usageHint && <span className="lcos-surface-usage-hint">{usageHint}</span>}
-    {(selected || signal.glyph !== 'stable') && <span className="lcos-surface-system-signal" data-spatial-signal={signal.glyph} aria-hidden="true"><GlythAvatar state={selected && signal.glyph === 'stable' ? 'absorb' : signal.glyph} reason={selected ? 'selection' : runtimeSignal === 'processing' ? 'running' : 'review'}/></span>}
-  </button>
+    <DropFeedbackLayer phase={dropFeedback.phase} hitElement={dropFeedback.hitElement} />
+  </>
 }
