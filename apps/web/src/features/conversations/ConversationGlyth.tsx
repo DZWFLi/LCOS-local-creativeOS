@@ -3,7 +3,7 @@ import type { ConversationSessionV1 } from '@local-creative-os/contracts'
 import type { BotFrame, RenderedEye } from '../spatial/visual/bloub/engine'
 import { STATE_BY_ID, POSES } from '../spatial/visual/bloub/states'
 import type { DotRender } from '../spatial/visual/bloub/decor'
-import { createGlythEngine, GLYTH_TO_BLOUB } from '../spatial/visual/glythBloub'
+import { createConversationGlythEngine, GLYTH_TO_BLOUB } from '../spatial/visual/glythBloub'
 import { coerceGlythState, subscribeGlythClock, type LcosGlythState } from '../spatial/visual/glythMotion'
 import { useReducedSpatialMotion } from '../spatial/visual/useReducedSpatialMotion'
 
@@ -70,7 +70,7 @@ export function conversationActivityScore(conversation: ConversationGlythInput, 
 
 /** 纯函数：给定三态，产出一帧静止姿态（bloub 引擎 sample 是时间的纯函数，SSR 安全）。 */
 export function computeGlythFrame(state: LcosGlythState, scale = GLYTH_SCALE): BotFrame {
-  const engine = createGlythEngine(scale)
+  const engine = createConversationGlythEngine(scale)
   const stateId = GLYTH_TO_BLOUB[state]
   engine.setState(stateId, 0)
   return engine.sample(POSES[stateId])
@@ -101,8 +101,8 @@ export function ConversationGlyth({ conversation, state, activityScore, size = 4
   const dormant = resolvedActivity < DORMANT_THRESHOLD
   const reducedMotion = useReducedSpatialMotion()
   const uid = useId()
-  const engineRef = useRef<ReturnType<typeof createGlythEngine> | null>(null)
-  if (!engineRef.current) engineRef.current = createGlythEngine(GLYTH_SCALE)
+  const engineRef = useRef<ReturnType<typeof createConversationGlythEngine> | null>(null)
+  if (!engineRef.current) engineRef.current = createConversationGlythEngine(GLYTH_SCALE)
   // 初始帧：静态快照（SSR/renderToStaticMarkup 下给出非空身体 + 可读姿态）。
   const [frame, setFrame] = useState<BotFrame>(() => computeGlythFrame(scaledState))
 

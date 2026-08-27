@@ -13,11 +13,11 @@ const CONVERSATION_COLUMN_GAP = 96
 const CONVERSATION_ROW_STRIDE = 170
 const CONVERSATION_FALLBACK_X = 480
 const CONVERSATION_FALLBACK_Y = 360
-const CONVERSATION_NODE_WIDTH = 180
+const CONVERSATION_NODE_WIDTH = 148
 /** 锚点视口参考尺寸：与 spatialOverviewProjection 的默认 viewport 一致。 */
 const VIEWPORT_REFERENCE_WIDTH = 1440
 const VIEWPORT_REFERENCE_HEIGHT = 900
-const CONVERSATION_NODE_HEIGHT = 132
+const CONVERSATION_NODE_HEIGHT = 92
 
 export function materializeProjectEntityNodes(
   refs: readonly PresentationEntityRefV0[],

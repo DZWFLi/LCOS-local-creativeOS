@@ -9,6 +9,7 @@
  * - 把共享指针位置翻译成引擎的注视目标 Look。
  */
 import { BotEngine, type BotFrame, type Look } from './bloub/engine'
+import { SHAPE_BY_ID, type ShapeId } from './bloub/skins'
 import { STATE_BY_ID, type StateId } from './bloub/states'
 import type { LcosGlythState } from './glythMotion'
 
@@ -36,6 +37,19 @@ export function glythStateDuration(state: LcosGlythState): number {
 /** 新建 LCOS 用的 bloub 引擎：idle 起步，不带自定义形状/表情（引擎原样形态）。 */
 export function createGlythEngine(scale: number): BotEngine {
   return new BotEngine(scale, 'idle')
+}
+
+/**
+ * Conversation 物种形态（Grammar S8.2 四通道：Shape -> identity / durable role）。
+ * 水滴形（goutte）：对话是流入并凝结的信息，尖顶朝上与消息流语义契合；
+ * 与 Capture Float / 节点信号 sprite 的默认 cercle 圆形拉开身份区分——
+ * 形状取自 bloub 既有 SHAPES 库（S8.1 冻结：不自行再造形态，LCOS 只做选择）。
+ */
+export const CONVERSATION_GLYTH_SHAPE: ShapeId = 'goutte'
+
+/** Conversation 物种引擎：goutte 轮廓 + idle 起步（状态映射与通用引擎一致）。 */
+export function createConversationGlythEngine(scale: number): BotEngine {
+  return new BotEngine(scale, 'idle', SHAPE_BY_ID.get(CONVERSATION_GLYTH_SHAPE)?.radii ?? null)
 }
 
 const clampUnit = (value: number) => Math.min(1, Math.max(-1, value))

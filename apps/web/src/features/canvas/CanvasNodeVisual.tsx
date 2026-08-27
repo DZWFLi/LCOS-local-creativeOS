@@ -596,12 +596,12 @@ function ConversationGlythObject(props: Props) {
   const conversation = node.conversation
   const title = displayNodeTitle(node)
   if (!conversation) return <CollectionObject {...props} />
-  return <div className="lcos-object lcos-project-entity-object lcos-node-dot-identity lcos-conversation-glyth-object" title={node.title}>
-    <span className="lcos-project-entity-tab">Conversation</span>
-    <div className="lcos-conversation-glyth-stage">
-      <ConversationGlyth conversation={conversation} state={conversationGlythStateFromRecent(conversation)} activityScore={conversationActivityScore(conversation)} size={64} label={title} />
-    </div>
-    <div className="lcos-project-entity-heading"><strong>{title}</strong><small>{node.subtitle}</small></div>
+  // 去卡片化（Grammar S1/S2.1）：对话实体是 Object——Glyth 身体本身就是画布对象，
+  // 不套通用卡壳（无 tab/heading/背景容器）；标题以极简标注悬在身体下方（L1 层）。
+  // 选中/拖拽/详情仍复用宿主 CanvasCard 交互链路，不造第二套。
+  return <div className="lcos-conversation-glyth-body" title={node.title}>
+    <ConversationGlyth conversation={conversation} state={conversationGlythStateFromRecent(conversation)} activityScore={conversationActivityScore(conversation)} size={72} label={title} />
+    <span className="lcos-conversation-glyth-caption">{title}</span>
     <InfoButton show={showControls && showDetails} label={`查看 ${title} 信息`} onDetails={onDetails}/>
   </div>
 }

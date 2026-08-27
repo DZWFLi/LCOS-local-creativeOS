@@ -128,8 +128,8 @@ describe('semanticRefsForSourceIds：conversation 回环', () => {
       subtitle: '',
       x: 480,
       y: 360,
-      width: 180,
-      height: 132,
+      width: 148,
+      height: 92,
       conversation: { id: 'conv-a', title: '架构裁定记录' },
     }
     const result = semanticRefsForSourceIds(['conversation:conv-a'], [conversationNode])

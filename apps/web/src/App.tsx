@@ -91,6 +91,7 @@ import { setOcrClient } from './features/ocr/ocrRuntime'
 import { orderProjectRailViews } from './features/shell/workspaceRailOrder'
 import { deriveContextGraphAutoNodeIds, mergeContextGraphNodeIds } from './features/context/contextGraphPopulation'
 import { materializeProjectEntityNodes, projectEntityNodeId, semanticRefsForSourceIds } from './features/entities/projectEntityProjection'
+import { DROP_FEEDBACK_TOTAL_MS } from './features/drop/useSemanticDropFeedback'
 import { ARRANGE_SURFACE_DROP_TARGET_ID, CONTEXT_GRAPH_SURFACE_DROP_TARGET_ID, CONTEXT_SURFACE_DROP_TARGET_ID, NEW_SCENE_DROP_TARGET_ID, WORKFLOW_GRAPH_SURFACE_DROP_TARGET_ID, WORKFLOW_SURFACE_DROP_TARGET_ID } from './features/spatial/semanticDrop'
 import { ProjectFocusNavigator } from './features/focus/ProjectFocusNavigator'
 import { resolveProjectFocusLocations, type ProjectFocusLocation, type ProjectFocusLocationCandidate, type ProjectFocusSearchEntry } from './state/projectFocus'
@@ -3433,7 +3434,9 @@ export function App() {
 
   const directDropToProjectRailView = useCallback((targetViewId: string, sourceIds: readonly string[]) => {
     if (targetViewId === NEW_SCENE_DROP_TARGET_ID) {
-      createWorkspaceSceneFromDropPayload(sourceIds)
+      // 批十一：drop 命中会切换视图（setActiveSurface），主画布连五阶段反馈层一起被卸载——
+      // 先让反馈播完（accept→commit→settle），再带用户过去（Grammar S15：世界先说完话）。
+      window.setTimeout(() => { createWorkspaceSceneFromDropPayload(sourceIds) }, DROP_FEEDBACK_TOTAL_MS)
       return
     }
     const { viewIds, entityRefs } = semanticRefsForSourceIds(sourceIds, nodes)
@@ -3498,11 +3501,13 @@ export function App() {
     }
 
     if (targetViewId === 'capability:context' || targetViewId === 'generate:context') {
-      createContextFromMembersDirect(viewIds, undefined, entityRefs)
+      // 同上：新建 Context 后 openCreatedContext 会立即切走主画布，延迟到反馈结束。
+      window.setTimeout(() => { createContextFromMembersDirect(viewIds, undefined, entityRefs) }, DROP_FEEDBACK_TOTAL_MS)
       return
     }
     if (targetViewId === 'capability:workflow' || targetViewId === 'generate:workflow') {
-      createWorkflowFromMembersDirect(viewIds, undefined, entityRefs)
+      // 同上：新建 Workflow 会立即切走主画布，延迟到反馈结束。
+      window.setTimeout(() => { createWorkflowFromMembersDirect(viewIds, undefined, entityRefs) }, DROP_FEEDBACK_TOTAL_MS)
       return
     }
 
