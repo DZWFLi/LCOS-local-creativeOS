@@ -21,6 +21,20 @@ export type CanvasNoteAnchor =
   | { readonly type: 'artifact_view'; readonly viewId: string }
   | { readonly type: 'page'; readonly revisionId: string; readonly pageIndex: number }
 
+/**
+ * Wave C-2（批八）：对话实体投影携带的会话字段子集（ConversationSessionV1 的结构子集）。
+ * 由 Web 侧从已加载 conversationSessions 派生，不建第二套状态机；会话重载后投影重建。
+ */
+export interface CanvasNodeConversation {
+  id: string
+  title: string
+  messageCount?: number
+  updatedAt?: string
+  lastOpenedAt?: string
+  lastRunAt?: string
+  lastSelectedAsControllerAt?: string
+}
+
 export interface CanvasNode {
   id: string
   kind: NodeKind
@@ -74,7 +88,9 @@ export interface CanvasNode {
   scopeId?: string
   opensScopeId?: string
   /** Stable user-facing aggregate identity; node kind remains a legacy visual family. */
-  entityKind?: 'collection' | 'context' | 'workflow' | 'workspace'
+  entityKind?: 'collection' | 'context' | 'workflow' | 'workspace' | 'conversation'
+  /** Wave C-2（批八）：对话实体投影元数据（ConversationGlyth 渲染输入；派生投影，非持久化状态）。 */
+  conversation?: CanvasNodeConversation
   editable?: boolean
   contextOnly?: boolean
   runStatus?: RunStatus

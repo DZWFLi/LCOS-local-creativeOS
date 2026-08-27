@@ -4067,3 +4067,19 @@
 }
 /* 注：attention（等待输入/待确认/失败）底色为状态语义，保留 reconstruction.css 原值；
    行选中与 attention 并存时胶囊优先，警示语义由行内状态点承载。 */
+
+/* —— Wave C-2（批八）· Conversation Glyth 投影卡（Grammar §8）——
+   卡片是 Diegetic 舞台不是图标槽：Glyth 身体居中、标题承载身份。只做布局接线，
+   不新增 blur/radius/shadow/transition 值；配色走既有 .lcos-glyth 状态 token，
+   tab/heading 直接复用 .lcos-project-entity-* 类名体系。 */
+.lcos-reconstructed .lcos-conversation-glyth-object {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  align-items: center;
+  justify-items: center;
+  gap: 6px;
+  padding: 18px 10px 10px;
+}
+.lcos-reconstructed .lcos-conversation-glyth-stage { display: grid; place-items: center; min-height: 0; }
+.lcos-reconstructed .lcos-conversation-glyth-stage .lcos-glyth { max-width: 100%; height: auto; }
+.lcos-reconstructed .lcos-conversation-glyth-object .lcos-project-entity-heading { justify-items: center; text-align: center; }

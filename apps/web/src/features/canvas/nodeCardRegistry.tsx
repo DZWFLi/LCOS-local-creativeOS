@@ -24,7 +24,7 @@ import type { Props as CanvasNodeVisualProps } from './CanvasNodeVisual'
 export type NodeCardRenderer = ComponentType<CanvasNodeVisualProps>
 
 /**
- * 判别组合键：entityKind（collection/context/workflow/workspace）优先，
+ * 判别组合键：entityKind（collection/context/workflow/workspace/conversation）优先，
  * 无 entityKind 时退到 fileType（小写归一），都没有则落 default 桶。
  * 后续 file 类卡片按 `file:<type>` 注册即可，不需要改键规则。
  */

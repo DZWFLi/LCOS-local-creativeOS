@@ -14,6 +14,7 @@ import { MindMapNoteVisual } from './MindMapNoteVisual'
 import { CrepeHost } from './markdownPreview'
 import { registerNodeCard, resolveNodeCard } from './nodeCardRegistry'
 import { visualFamilyFor } from '../presentation/visualFamily'
+import { ConversationGlyth, conversationActivityScore, conversationGlythStateFromRecent } from '../conversations/ConversationGlyth'
 import { OcrImage } from '../ocr/OcrImage'
 import {
   ArchiveGlyph,
@@ -582,6 +583,29 @@ export const nodeTypeIcon = (node: CanvasNode) => {
   return DocumentGlyph
 }
 
+/**
+ * Wave C-2（批八）：Conversation Glyth 身体卡——对话实体的画布投影身体（Grammar §8）。
+ * Glyth 不是 avatar/icon/badge，而是可被选中、观察状态的角色身体：state 由 lastRunAt
+ * 派生（conversationGlythStateFromRecent）、activityScore 由 conversationActivityScore
+ * 计算（§8.3 Activity Decay：dormant → 低饱和安静）。选中/拖拽/详情复用 registry 卡
+ * 既有外壳（宿主 CanvasCard + .lcos-object 壳），不造第二套交互链路；conversation
+ * 元数据缺失时回落 CollectionObject（与查表未命中同兜底语义，非错误路径）。
+ */
+function ConversationGlythObject(props: Props) {
+  const { node, onDetails, showDetails, showControls = true } = props
+  const conversation = node.conversation
+  const title = displayNodeTitle(node)
+  if (!conversation) return <CollectionObject {...props} />
+  return <div className="lcos-object lcos-project-entity-object lcos-node-dot-identity lcos-conversation-glyth-object" title={node.title}>
+    <span className="lcos-project-entity-tab">Conversation</span>
+    <div className="lcos-conversation-glyth-stage">
+      <ConversationGlyth conversation={conversation} state={conversationGlythStateFromRecent(conversation)} activityScore={conversationActivityScore(conversation)} size={64} label={title} />
+    </div>
+    <div className="lcos-project-entity-heading"><strong>{title}</strong><small>{node.subtitle}</small></div>
+    <InfoButton show={showControls && showDetails} label={`查看 ${title} 信息`} onDetails={onDetails}/>
+  </div>
+}
+
 // —— §4.7 卡片 Registry：context 族全量入表（20260826 做实，取代第一步示范卡）——
 // 四类 entityKind（组合键由 nodeCardKey 派生）全部走表渲染；新增卡片类型只需在此注册。
 // file 族（ContentObject 内的 image/link/video/audio/document）留待后续按 file:<type> 迁移。
@@ -589,3 +613,5 @@ registerNodeCard('entity:workflow', WorkflowProjectionObject)
 registerNodeCard('entity:workspace', WorkspaceProjectionObject)
 registerNodeCard('entity:context', ContextProjectionObject)
 registerNodeCard('entity:collection', CollectionObject)
+// —— Wave C-2（批八）：对话实体卡——entity:conversation 渲染 ConversationGlyth 身体。 ——
+registerNodeCard('entity:conversation', ConversationGlythObject)

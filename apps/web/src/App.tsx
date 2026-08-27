@@ -2266,20 +2266,24 @@ export function App() {
     return refs
   }), [edges, nodes])
 
+  // Wave C-2（批八）：对话实体 refs 由 App 内已加载 conversationSessions 派生（Web 侧
+  // 派生投影；不写 Core presentation membership，Core 侧持久化留 0.2）。
+  const conversationEntityRefs = useMemo<PresentationEntityRefV0[]>(() => conversationSessions.map((session) => ({ type: 'conversation' as const, id: session.id })), [conversationSessions])
   const allPresentationEntityRefs = useMemo(() => {
     const refs = [
       ...relationEntityRefs,
       ...contextGraphEntityRefs,
       ...contextPresentationEntityRefs,
       ...workflowPresentationEntityRefs,
+      ...conversationEntityRefs,
       ...Object.values(contextEntityRefsById).flat(),
       ...Object.values(collectionEntityRefsById).flat(),
       ...Object.values(workspaceEntityRefsById).flat(),
       ...Object.values(workflowEntityRefsById).flat(),
     ]
     return [...new Map(refs.map((ref) => [`${ref.type}:${ref.id}`, ref])).values()]
-  }, [collectionEntityRefsById, contextEntityRefsById, contextGraphEntityRefs, contextPresentationEntityRefs, relationEntityRefs, workflowEntityRefsById, workflowPresentationEntityRefs, workspaceEntityRefsById])
-  const presentationEntityNodes = useMemo(() => materializeProjectEntityNodes(allPresentationEntityRefs, nodes, scopes, workspaces), [allPresentationEntityRefs, nodes, scopes, workspaces])
+  }, [collectionEntityRefsById, conversationEntityRefs, contextEntityRefsById, contextGraphEntityRefs, contextPresentationEntityRefs, relationEntityRefs, workflowEntityRefsById, workflowPresentationEntityRefs, workspaceEntityRefsById])
+  const presentationEntityNodes = useMemo(() => materializeProjectEntityNodes(allPresentationEntityRefs, nodes, scopes, workspaces, conversationSessions), [allPresentationEntityRefs, conversationSessions, nodes, scopes, workspaces])
   const projectPresentationNodes = useMemo(() => {
     const existing = new Set(nodes.map((node) => node.id))
     return [...nodes, ...presentationEntityNodes.filter((node) => !existing.has(node.id))]

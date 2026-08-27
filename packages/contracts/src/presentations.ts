@@ -39,7 +39,11 @@ export type PresentationEmphasisV0 =
   | 'secondary'
   | 'muted'
 
-export type PresentationEntityTypeV0 = 'view' | 'scope' | 'workspace'
+/**
+ * Wave C-2（批八）：'conversation' 为向后兼容超集成员——对话实体以 Presentation ref
+ * 身份参与投影（Web 侧派生；Core 侧持久化留 0.2）。既有三成员语义不变。
+ */
+export type PresentationEntityTypeV0 = 'view' | 'scope' | 'workspace' | 'conversation'
 
 export interface PresentationEntityRefV0 {
   type: PresentationEntityTypeV0
