@@ -300,7 +300,6 @@
 .lcos-reconstructed .lcos-collection-object,
 .lcos-reconstructed .lcos-run-object,
 .lcos-reconstructed .lcos-decision-object,
-.lcos-reconstructed .lcos-note-object,
 .lcos-reconstructed .lcos-link-object {
   box-shadow: var(--lcos-shadow-object);
 }
@@ -310,7 +309,6 @@
 .lcos-reconstructed .canvas-node:hover .lcos-collection-object,
 .lcos-reconstructed .canvas-node:hover .lcos-run-object,
 .lcos-reconstructed .canvas-node:hover .lcos-decision-object,
-.lcos-reconstructed .canvas-node:hover .lcos-note-object,
 .lcos-reconstructed .canvas-node:hover .lcos-link-object {
   box-shadow: 0 2px 5px rgba(28, 27, 34, .045), 0 14px 30px -17px rgba(28, 27, 34, .34);
 }
@@ -2309,46 +2307,66 @@
    GUI R2 — Project View Rail / Context Home / Signal Track / Workflow
    ================================================================ */
 
-/* Project View Rail: same narrow spatial rail, three unmistakable preview grammars. */
+/* Project View Rail — micro references are LCOS native objects, not 28px cards.
+   The small seed optimizes species recognition while the hover preview below keeps
+   truthful member geometry. Colour is secondary and remains user-themeable. */
 .lcos-reconstructed .lcos-project-view-button { position:relative; overflow:visible; }
-/* 漏洞3：kind 徽章是纯装饰（right:-3px 越出按钮 3px），不吃点击，
-   越界部分点击穿透到画布而非被 rail 元素截走。 */
-.lcos-reconstructed .lcos-project-view-kind-glyph { position:absolute; right:-3px; bottom:-3px; display:grid; width:15px; height:15px; place-items:center; border:1px solid rgba(73,66,91,.10); border-radius:5px; color:rgba(63,56,79,.62); background:rgba(253,253,254,.96); box-shadow:0 2px 7px rgba(39,34,52,.08); pointer-events:none; }
-.lcos-reconstructed .lcos-project-view-kind-glyph svg { width:9px; height:9px; }
-.lcos-reconstructed .lcos-project-view-item.kind-context .lcos-project-view-kind-glyph { color:rgba(83,64,155,.72); }
-.lcos-reconstructed .lcos-project-view-item.kind-workflow .lcos-project-view-kind-glyph { color:rgba(47,105,112,.72); }
+.lcos-reconstructed .lcos-rail-native-micro {
+  position:relative;
+  width:30px;
+  height:30px;
+  display:grid;
+  place-items:center;
+  color:rgba(var(--lcos-ui-signal-rgb), .64);
+  pointer-events:none;
+  transform:translateZ(0);
+  transition:transform 180ms cubic-bezier(.2,.78,.2,1), color 180ms ease, filter 180ms ease;
+}
+.lcos-reconstructed .lcos-project-view-button:hover .lcos-rail-native-micro { transform:translateY(-1px) scale(1.035); color:rgba(var(--lcos-ui-signal-rgb), .82); }
+.lcos-reconstructed .lcos-project-view-button.active .lcos-rail-native-micro { color:var(--lcos-ui-signal); filter:drop-shadow(0 2px 5px rgba(var(--lcos-ui-signal-rgb), .11)); }
+.lcos-reconstructed .lcos-rail-native-micro > svg { position:relative; z-index:3; width:26px; height:26px; overflow:visible; }
 
+/* Collection = restrained folder/container object. Member sheets are data-density hints,
+   not fake member positions. They sit behind the folder lip and separate on hover. */
+.lcos-reconstructed .lcos-rail-native-micro.kind-collection > svg { width:27px; height:27px; }
+.lcos-reconstructed .lcos-rail-folder-members { position:absolute; inset:3px 5px 8px; z-index:1; pointer-events:none; }
+.lcos-reconstructed .lcos-rail-folder-members i {
+  position:absolute; left:3px; right:2px; bottom:0; height:12px;
+  border:1px solid rgba(var(--lcos-ui-signal-rgb), .13);
+  border-radius:3px 5px 2px 3px;
+  background:rgba(255,255,253,.84);
+  transform-origin:50% 100%;
+  transition:transform 190ms cubic-bezier(.2,.78,.2,1);
+}
+.lcos-reconstructed .lcos-rail-folder-members i:nth-child(1) { transform:translateY(-1px) rotate(-2deg); }
+.lcos-reconstructed .lcos-rail-folder-members i:nth-child(2) { transform:translateY(-3px) rotate(1deg); }
+.lcos-reconstructed .lcos-rail-folder-members i:nth-child(3) { transform:translateY(-5px) rotate(3deg); }
+.lcos-reconstructed .lcos-project-view-button:hover .lcos-rail-folder-members i:nth-child(1) { transform:translate(-2px,-3px) rotate(-5deg); }
+.lcos-reconstructed .lcos-project-view-button:hover .lcos-rail-folder-members i:nth-child(2) { transform:translateY(-5px) rotate(0deg); }
+.lcos-reconstructed .lcos-project-view-button:hover .lcos-rail-folder-members i:nth-child(3) { transform:translate(2px,-7px) rotate(5deg); }
 
-/* R6: Scene is a saved working scene, never a Collection visual alias. */
-.lcos-reconstructed .lcos-project-view-item.kind-scene .lcos-project-view-kind-glyph { color:rgba(66,92,132,.78); }
+/* Context = waveform spine + Matrix samples. */
+.lcos-reconstructed .lcos-rail-context-matrix { position:absolute; z-index:4; left:3px; bottom:2px; display:grid; grid-template-columns:repeat(3,2px); gap:2px; }
+.lcos-reconstructed .lcos-rail-context-matrix i { width:2px; height:2px; border-radius:.6px; background:currentColor; opacity:.14; }
+.lcos-reconstructed .lcos-rail-context-matrix i[data-on] { opacity:.52; }
 
-/* §4.13.1-F 现场身份标识:rail 条目左上类型色点徽标(纯识别层,不吃点击)。
-   纯 lucide 图标辨识度低,色点按 data-kind 显式标注现场类型;复用上方
-   kind-glyph 现有色板(context 紫 / workflow 青 / scene 蓝,collection 兜底
-   复用 kind-glyph 默认中性色,外圈复用其底色)——零新增颜色。 */
-.lcos-reconstructed .lcos-rail-kind-badge { position:absolute; left:2px; top:2px; width:8px; height:8px; border-radius:50%; background:rgba(63,56,79,.62); box-shadow:0 0 0 2px rgba(253,253,254,.96); pointer-events:none; }
-.lcos-reconstructed .lcos-rail-kind-badge[data-kind='context'] { background:rgba(83,64,155,.72); }
-.lcos-reconstructed .lcos-rail-kind-badge[data-kind='workflow'] { background:rgba(47,105,112,.72); }
-.lcos-reconstructed .lcos-rail-kind-badge[data-kind='scene'] { background:rgba(66,92,132,.78); }
-.lcos-reconstructed .lcos-rail-preview-scene { position:relative; display:block; width:28px; height:28px; border:1px solid rgba(68,91,126,.14); border-radius:7px; background:rgba(247,250,253,.84); }
-.lcos-reconstructed .lcos-rail-preview-scene b { position:absolute; left:4px; right:4px; bottom:4px; height:1px; background:rgba(65,91,130,.22); }
-.lcos-reconstructed .lcos-rail-preview-scene i { position:absolute; width:5px; height:5px; border-radius:2px; border:1px solid rgba(65,91,130,.28); background:rgba(255,255,255,.96); left:calc(4px + (var(--i) % 3) * 7px); top:calc(5px + (var(--i) / 3) * 8px); }
+/* Workflow = segmented path, not a graph-app icon. */
+.lcos-reconstructed .lcos-rail-workflow-segments { position:absolute; z-index:4; inset:0; pointer-events:none; }
+.lcos-reconstructed .lcos-rail-workflow-segments i { position:absolute; width:4px; height:1.4px; border-radius:2px; background:currentColor; opacity:.34; transform-origin:left center; }
+.lcos-reconstructed .lcos-rail-workflow-segments i:nth-child(1) { left:5px; top:7px; transform:rotate(32deg); }
+.lcos-reconstructed .lcos-rail-workflow-segments i:nth-child(2) { left:12px; top:13px; transform:rotate(30deg); }
+.lcos-reconstructed .lcos-rail-workflow-segments i:nth-child(3) { left:19px; top:19px; transform:rotate(27deg); }
 
-.lcos-reconstructed .lcos-rail-preview-collection,
-.lcos-reconstructed .lcos-rail-preview-context,
-.lcos-reconstructed .lcos-rail-preview-workflow,
-.lcos-reconstructed .lcos-rail-preview-scene { position:relative; display:block; width:28px; height:28px; }
-.lcos-reconstructed .lcos-rail-preview-collection i { position:absolute; left:4px; top:calc(4px + var(--i) * 2px); width:20px; height:14px; border:1px solid rgba(77,69,97,.18); border-radius:4px; background:rgba(255,255,255,.84); transform:translateX(calc((var(--i) - 1) * 1.5px)); }
-.lcos-reconstructed .lcos-rail-preview-collection i:nth-last-child(1) { background:rgba(239,237,246,.94); }
-.lcos-reconstructed .lcos-rail-preview-context { display:flex; align-items:center; justify-content:center; gap:1.5px; }
-.lcos-reconstructed .lcos-rail-preview-context::before { content:""; position:absolute; left:3px; right:3px; top:50%; height:1px; background:rgba(96,75,158,.14); }
-.lcos-reconstructed .lcos-rail-preview-context i { position:relative; width:2px; height:var(--h); min-height:4px; max-height:18px; border-radius:999px; background:rgba(101,76,173,.54); }
-.lcos-reconstructed .lcos-rail-preview-workflow b { position:absolute; left:6px; right:5px; top:13px; height:1px; background:rgba(54,101,109,.24); transform:rotate(-8deg); transform-origin:center; }
-.lcos-reconstructed .lcos-rail-preview-workflow i { position:absolute; width:7px; height:7px; border:1px solid rgba(48,104,111,.28); border-radius:3px; background:rgba(247,252,252,.96); }
-.lcos-reconstructed .lcos-rail-preview-workflow i:nth-of-type(1) { left:2px; top:11px; }
-.lcos-reconstructed .lcos-rail-preview-workflow i:nth-of-type(2) { left:11px; top:5px; }
-.lcos-reconstructed .lcos-rail-preview-workflow i:nth-of-type(3) { right:2px; top:14px; }
-.lcos-reconstructed .lcos-rail-preview-workflow i:nth-of-type(4) { right:4px; top:3px; }
+/* Scene/Main = sparse spatial dust around the native Main glyph. */
+.lcos-reconstructed .lcos-rail-scene-dust { position:absolute; inset:0; z-index:4; pointer-events:none; }
+.lcos-reconstructed .lcos-rail-scene-dust i { position:absolute; width:2px; height:2px; border-radius:50%; background:currentColor; opacity:.3; }
+.lcos-reconstructed .lcos-rail-scene-dust i:nth-child(1) { left:3px; top:15px; }
+.lcos-reconstructed .lcos-rail-scene-dust i:nth-child(2) { right:3px; top:5px; opacity:.2; }
+.lcos-reconstructed .lcos-rail-scene-dust i:nth-child(3) { right:5px; bottom:3px; opacity:.42; }
+
+/* Hover card kind identity uses the same native glyph repertoire without a second badge system. */
+.lcos-reconstructed .lcos-project-view-preview-kind svg { width:13px; height:13px; }
+
 .lcos-reconstructed .lcos-project-view-preview-map { display:grid; place-items:center; }
 .lcos-reconstructed .lcos-project-view-preview-map .is-large { width:64px; height:42px; transform:scale(1.5); }
 .lcos-reconstructed .lcos-project-view-preview-kind { display:flex !important; align-items:center; gap:4px; color:rgba(77,63,119,.58) !important; font-size: 11px !important; font-weight:700; letter-spacing:.05em; text-transform:uppercase; }

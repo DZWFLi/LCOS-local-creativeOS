@@ -1549,8 +1549,6 @@
   box-shadow: 0 16px 38px rgba(52,44,84,.24), inset 0 1px 0 rgba(255,255,255,.92);
   transform: translate(14px, 12px) rotate(2deg) scale(1.06);
 }
-.lcos-reconstructed .lcos-rail-drag-float .lcos-project-view-kind-glyph { position: absolute; right: -3px; bottom: -3px; display: grid; width: 15px; height: 15px; place-items: center; border: 1px solid rgba(73,66,91,.10); border-radius: 5px; color: rgba(63,56,79,.62); background: rgba(253,253,254,.96); box-shadow: 0 2px 7px rgba(39,34,52,.08); }
-.lcos-reconstructed .lcos-rail-drag-float .lcos-project-view-kind-glyph svg { width: 9px; height: 9px; }
 
 /* rail 右缘拖拽调整列数：右拉双列、左拉单列。 */
 /* 漏洞3：列数拖拽手柄此前 right:-8px 伸出 rail 右缘 8px，在画布上形成越界热区；

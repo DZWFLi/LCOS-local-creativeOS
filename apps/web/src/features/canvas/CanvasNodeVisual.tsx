@@ -477,10 +477,13 @@ function NoteObject({ node, density, onDetails, showDetails, showControls = true
   const directRead = density !== 'compact' && Boolean(body)
   const mindmap = node.noteLayout === 'mindmap'
   return <div className={`lcos-object lcos-note-object lcos-material-face ${mindmap ? 'is-mindmap' : directRead ? 'is-direct-reading' : 'is-collapsed-material'}`} title={node.title}>
-    {mindmap ? <MindMapNoteVisual node={node} density={density}/> : directRead && body ? <div className="lcos-readable-document">{density === 'expanded'
+    {mindmap ? <MindMapNoteVisual node={node} density={density}/> : directRead && body ? <>
+      <span className="lcos-text-curtain-rail" aria-hidden="true"><i/><b/><i/></span>
+      <div className="lcos-readable-document lcos-text-curtain-sheet">{density === 'expanded'
               ? <CrepeHost className="lcos-md-preview" markdown={body} />
-              : <TextPreview text={body} expanded={false} />}</div> : <CollapsedNotePaper node={node}/>}
-    <div className="lcos-material-caption lcos-material-body"><strong>{title}</strong>{nodeSecondaryLine(node) && <small>{nodeSecondaryLine(node)}</small>}</div>
+              : <TextPreview text={body} expanded={false} />}</div>
+    </> : <CollapsedNotePaper node={node}/>}
+    <div className={`lcos-material-caption lcos-material-body ${directRead ? 'lcos-text-curtain-caption' : ''}`}><strong>{title}</strong>{nodeSecondaryLine(node) && <small>{nodeSecondaryLine(node)}</small>}</div>
     {showControls && Boolean(node.anchors?.length) && <button className="lcos-note-locate" type="button" aria-label="定位到锚定对象" title="定位到锚定对象" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onLocate?.(node) }}><LocateFixed size={12}/><b>定位</b></button>}
     <InfoButton show={showControls && showDetails} label={`查看 ${title} 信息`} onDetails={onDetails}/>
   </div>

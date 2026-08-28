@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
-import { Crosshair, GitBranch, Layers3, LayoutDashboard, LayoutPanelLeft, Network, Pencil, Plus, Waves } from 'lucide-react'
+import { Crosshair, GitBranch, Pencil, Plus } from 'lucide-react'
+import { CollectionGlyph, ContextGlyph, RootGlyph, WorkflowGlyph } from '../design/LcosGlyphs'
 import type { RunStatus } from '../../model'
 import { LightCurtain } from '../drop/LightCurtain'
 import { NEW_SCENE_DROP_TARGET_ID, semanticDropTriggerFromPointer, type SemanticDropTrigger } from '../spatial/semanticDrop'
@@ -116,21 +117,26 @@ function previewLabel(kind: ProjectRailViewKind) {
 }
 
 function RailGlyph({ kind }: { kind: ProjectRailViewKind }) {
-  if (kind === 'scene') return <LayoutDashboard size={14}/>
-  if (kind === 'context') return <Waves size={14}/>
-  if (kind === 'workflow') return <Network size={14}/>
-  return <Layers3 size={14}/>
+  if (kind === 'scene') return <RootGlyph/>
+  if (kind === 'context') return <ContextGlyph/>
+  if (kind === 'workflow') return <WorkflowGlyph/>
+  return <CollectionGlyph/>
 }
 
 /**
- * 现场身份徽标文案(§4.13.1-F 识别层):与 scope.kind 对应的现场称谓,
- * 供 rail 色点徽标的 title / aria-label 使用;数据零新增(读 view.kind 即得)。
+ * Rail micro objects are species marks, not miniature cards. The hover preview
+ * below remains the truthful member-geometry projection. Small seeds instead
+ * preserve LCOS visual identity so they stay readable while dragged.
  */
-function railKindSiteLabel(kind: ProjectRailViewKind): string {
-  if (kind === 'scene') return '主画布现场'
-  if (kind === 'context') return '上下文现场'
-  if (kind === 'workflow') return '工作流现场'
-  return '节点集合'
+function RailMicroObject({ view }: { view: ProjectRailViewItem }) {
+  const density = Math.min(5, Math.max(0, view.memberCount))
+  return <span className={`lcos-rail-native-micro kind-${view.kind}`} data-density={density} aria-hidden="true">
+    <RailGlyph kind={view.kind}/>
+    {view.kind === 'collection' && <span className="lcos-rail-folder-members">{Array.from({ length: Math.min(3, density) }, (_, index) => <i key={index}/>)}</span>}
+    {view.kind === 'context' && <span className="lcos-rail-context-matrix">{Array.from({ length: 6 }, (_, index) => <i key={index} data-on={index < density + 1 ? '' : undefined}/>)}</span>}
+    {view.kind === 'workflow' && <span className="lcos-rail-workflow-segments"><i/><i/><i/></span>}
+    {view.kind === 'scene' && <span className="lcos-rail-scene-dust"><i/><i/><i/></span>}
+  </span>
 }
 
 const MEMBER_KIND_LABELS: Record<string, string> = {
@@ -236,10 +242,11 @@ function WorkflowPreview({ view, large = false }: { view: ProjectRailViewItem; l
 }
 
 function ViewPreview({ view, large = false }: { view: ProjectRailViewItem; large?: boolean }) {
-  if (view.kind === 'scene') return <ScenePreview view={view} large={large}/>
-  if (view.kind === 'context') return <ContextPreview view={view} large={large}/>
-  if (view.kind === 'workflow') return <WorkflowPreview view={view} large={large}/>
-  return <CollectionPreview view={view} large={large}/>
+  if (!large) return <RailMicroObject view={view}/>
+  if (view.kind === 'scene') return <ScenePreview view={view} large/>
+  if (view.kind === 'context') return <ContextPreview view={view} large/>
+  if (view.kind === 'workflow') return <WorkflowPreview view={view} large/>
+  return <CollectionPreview view={view} large/>
 }
 
 /**
@@ -572,7 +579,7 @@ export function WorkspaceRailVNext({ views, runStatus, onOverview, onActivateVie
 
   return <aside ref={railRef} className={`vnext-workspace-rail lcos-workspace-rail lcos-project-view-rail ${effectiveTwoColumn ? 'is-two-column' : ''} ${columnDrag ? 'is-resizing' : ''}`} data-testid="workspace-dock" aria-label="项目视图" onContextMenu={(event) => event.preventDefault()}>
     <div className="lcos-rail-primary">
-      <button type="button" data-rail-kind="main" className={views.every((view) => !view.active) ? 'vnext-rail-button active' : 'vnext-rail-button'} title="主画布（固定入口）" aria-label="主画布" onClick={() => { setPreviewId(null); onOverview() }}><LayoutPanelLeft size={15}/></button>
+      <button type="button" data-rail-kind="main" className={views.every((view) => !view.active) ? 'vnext-rail-button active' : 'vnext-rail-button'} title="主画布（固定入口）" aria-label="主画布" onClick={() => { setPreviewId(null); onOverview() }}><RootGlyph/></button>
       <div className="vnext-rail-divider"/>
       <div ref={stackRef} className={`vnext-workspace-stack lcos-project-view-stack ${leftDrag?.mode === 'delete' ? 'is-deleting' : ''} ${leftDrag ? 'is-dragging' : ''}`} role="list">
         {views.map((view, index) => {
@@ -603,11 +610,6 @@ export function WorkspaceRailVNext({ views, runStatus, onOverview, onActivateVie
             onPointerLeave={() => { if (leftDrag) return; schedulePreviewClose(view.id) }}>
             <button type="button" role="listitem" className={view.active ? 'vnext-workspace-mini lcos-project-view-button active' : 'vnext-workspace-mini lcos-project-view-button'} aria-label={`${view.active ? '当前' : '进入'}${previewLabel(view.kind)}：${view.title}`} onFocus={() => setPreviewId(view.id)} onClick={(event) => { if (suppressClickRef.current) { event.preventDefault(); event.stopPropagation(); return } onActivateView(view); setPreviewId(null) }}>
               <ViewPreview view={view}/>
-              {/* §4.13.1-F 现场身份标识:类型色点徽标(左上,纯识别层)——
-                  纯 lucide 图标辨识度低,色点+title 显式标注现场类型;pointer-events
-                  交由 CSS 置 none,不吃点击(点击进现场行为保持不变)。 */}
-              <span className="lcos-rail-kind-badge" data-kind={view.kind} role="img" aria-label={railKindSiteLabel(view.kind)} title={railKindSiteLabel(view.kind)}/>
-              <span className="lcos-project-view-kind-glyph"><RailGlyph kind={view.kind}/></span>
               {attention && <span className={`vnext-workspace-attention status-${runStatus}`}/>}
             </button>
           </div>
@@ -627,7 +629,7 @@ export function WorkspaceRailVNext({ views, runStatus, onOverview, onActivateVie
       ><Plus size={14}/><span>新 Scene</span></button>
     </div>
     {leftDrag?.moved && (() => { const dragged = views.find((view) => view.id === leftDrag.viewId); return dragged ? <div className="lcos-rail-drag-float" style={{ left: leftDrag.pointerX, top: leftDrag.pointerY }} aria-hidden="true">
-      <ViewPreview view={dragged}/><span className="lcos-project-view-kind-glyph"><RailGlyph kind={dragged.kind}/></span>
+      <ViewPreview view={dragged}/>
     </div> : null })()}
     {dropGhost && <div className="lcos-drop-ghost lcos-rail-drop-ghost" style={{ left: dropGhost.x, top: dropGhost.y }} aria-hidden="true">
       <span className="lcos-drop-ghost-stack"><i/><i/><i/></span><strong>{dropGhost.count}</strong><small>{dropGhost.label}</small>

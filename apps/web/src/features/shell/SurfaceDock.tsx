@@ -107,7 +107,7 @@ export function SurfaceDock({ surface, scopePath, activeScopeId, workbenchScopeI
     <div className="vnext-lens-axis lcos-lens-axis lcos-primary-surface-axis" aria-label="工作现场">
       {SURFACE_ENTRIES.map(({id,label,hint,Icon}) => {
         const semanticTarget = id === 'context' || id === 'workflow'
-        return <button key={id} type="button" className={`${capability===id?'active':''} ${dropCapability===id?'is-direct-drop-target':''}`.trim()} aria-label={`${label}：${hint}`} title={semanticTarget ? `点击进入${label}；拖入对象直接用于${label}` : hint} onClick={()=>setCapability(id)}
+        return <button key={id} type="button" data-capability={id} className={`${capability===id?'active':''} ${dropCapability===id?'is-direct-drop-target':''}`.trim()} aria-label={`${label}：${hint}`} title={semanticTarget ? `点击进入${label}；拖入对象直接用于${label}` : hint} onClick={()=>setCapability(id)}
           {...(semanticTarget ? {'data-project-view-drop-target':`capability:${id}`,'data-project-view-drop-label':`用于${label}`} : {})}
           onDragEnter={semanticTarget ? (event) => {
             if (!event.dataTransfer.types.includes('application/x-lcos-project-view')) return

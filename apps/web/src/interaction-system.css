@@ -1123,11 +1123,12 @@
   position: relative;
   min-height: 0;
   overflow: hidden;
-  padding: 10px 11px 15px;
-  border: 1px solid rgba(52,48,62,.085);
-  border-radius: 7px 10px 8px 8px;
-  background: rgba(255,255,254,.96);
-  box-shadow: 0 5px 16px rgba(42,37,54,.052), inset 0 1px 0 rgba(255,255,255,.96);
+  padding: 12px 12px 17px;
+  border: 0;
+  border-radius: 2px 2px 7px 6px;
+  clip-path: polygon(.7% 0, 99.4% 0, 98.7% 99.1%, 1.8% 100%);
+  background: linear-gradient(90deg, rgba(246,245,241,.72), rgba(255,255,252,.985) 8%, rgba(255,255,252,.98) 91%, rgba(244,243,239,.7));
+  box-shadow: 0 9px 18px -15px rgba(42,37,54,.35), inset 0 1px 0 rgba(255,255,255,.92);
 }
 .lcos-reconstructed .lcos-readable-copy {
   display: grid;
@@ -1191,7 +1192,25 @@
   text-align: right;
 }
 .lcos-reconstructed .lcos-note-object.is-direct-reading,
-.lcos-reconstructed .lcos-document-object.is-direct-reading { gap: 6px; }
+.lcos-reconstructed .lcos-document-object.is-direct-reading { gap: 5px; }
+.lcos-reconstructed .lcos-note-object.is-direct-reading { position:relative; padding:0; border:0; border-radius:0; background:transparent; box-shadow:none; }
+.lcos-reconstructed .lcos-text-curtain-rail {
+  position:relative;
+  z-index:2;
+  height:6px;
+  margin:0 8px -2px;
+  display:grid;
+  grid-template-columns:4px 1fr 4px;
+  align-items:center;
+  gap:4px;
+  color:rgba(var(--lcos-ui-signal-rgb), .42);
+}
+.lcos-reconstructed .lcos-text-curtain-rail::before { content:""; position:absolute; left:3px; right:3px; top:50%; height:1px; background:currentColor; opacity:.34; }
+.lcos-reconstructed .lcos-text-curtain-rail i { position:relative; z-index:1; width:4px; height:4px; border-radius:50%; background:currentColor; box-shadow:0 0 0 2px rgba(255,255,252,.9); }
+.lcos-reconstructed .lcos-text-curtain-rail b { position:relative; z-index:1; justify-self:center; width:18px; height:2px; border-radius:2px; background:currentColor; opacity:.36; }
+.lcos-reconstructed .lcos-text-curtain-caption { padding:2px 9px 0; background:transparent; }
+.lcos-reconstructed .lcos-note-object.is-direct-reading:hover .lcos-text-curtain-rail { color:rgba(var(--lcos-ui-signal-rgb), .58); }
+
 /* Direct reading / mindmap notes own the full card width. The collapsed
    25px icon column (reconstruction.css) must not squeeze the readable
    document into a 15px vertical sliver that overflows the card. */
@@ -3976,8 +3995,20 @@
 
 /* R11 — same Dock shell, cleaner top-level product mind: Main / Context / Workflow. */
 .lcos-reconstructed .lcos-primary-surface-axis { gap: 2px; }
-.lcos-reconstructed .lcos-dock-object-icon { display:grid; place-items:center; }
-.lcos-reconstructed .lcos-dock-object-icon svg { width:16px; height:16px; }
+.lcos-reconstructed .lcos-dock-object-icon { display:grid; place-items:center; width:22px; height:22px; }
+.lcos-reconstructed .lcos-dock-object-icon svg { width:19px; height:19px; overflow:visible; }
+/* Three view glyphs keep LCOS spatial grammar inside the shared Liquid-Glass dock:
+   Main=sparse world, Context=waveform+matrix, Workflow=segmented path. */
+.lcos-reconstructed .lcos-primary-surface-axis button[data-capability='main'] .lcos-dock-object-icon { transform:translateY(.2px); }
+.lcos-reconstructed .lcos-primary-surface-axis button[data-capability='context'] .lcos-dock-object-icon { transform:scale(.96); }
+.lcos-reconstructed .lcos-primary-surface-axis button[data-capability='workflow'] .lcos-dock-object-icon { transform:scale(.98); }
+.lcos-reconstructed .lcos-primary-surface-axis button:hover .lcos-dock-object-icon,
+.lcos-reconstructed .lcos-primary-surface-axis button.active .lcos-dock-object-icon { transform:translateY(-.5px) scale(1.03); }
+@media (prefers-reduced-motion: reduce) {
+  .lcos-reconstructed .lcos-rail-native-micro,
+  .lcos-reconstructed .lcos-rail-folder-members i,
+  .lcos-reconstructed .lcos-dock-object-icon { transition:none !important; transform:none !important; }
+}
 
 /* R9.1 — object identity uses ordinary line glyphs / real content, never the
    16×16 action signal. Tiny maps stay legible without turning the signal into

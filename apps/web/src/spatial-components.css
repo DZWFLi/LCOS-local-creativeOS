@@ -1604,56 +1604,51 @@ button.lcos-context-expand:hover { background: rgba(111,87,177,.07); }
 }
 
 /* ================================================================
-   内容真实性收口（第一梯队⑦）——rail 真 mini 布局 / 图片三态 / 死交互修复
-   rail 预览 = 成员真实 x/y 归一化排布（与画布 WorkspaceProjectionObject
-   同一几何语义），不再渲染装饰性假条；无几何数据时退回真实统计。
+   Rail truthful hover preview
+   Small Rail seeds are owned by product-interface.css as native micro objects.
+   This block renders only the expanded truthful member-geometry preview.
    ================================================================ */
-
-/* 债1：真 mini 布局容器（kind 着色沿用旧类名，几何是真实成员）。 */
-.lcos-reconstructed .lcos-rail-member-map { position: relative; display: block; width: 28px; height: 28px; overflow: hidden; border: 1px solid rgba(73, 66, 91, .16); border-radius: 7px; background: rgba(247, 246, 250, .9); }
-.lcos-reconstructed .lcos-rail-member-map.is-large { width: 100%; height: 100%; border-radius: 8px; }
-.lcos-reconstructed .lcos-project-view-preview-map .lcos-rail-member-map.is-large { width: 100%; height: 100%; transform: none; }
-/* 旧 context 预览的中线装饰与旧 is-large 缩放对新布局失效，显式关闭。 */
-.lcos-reconstructed .lcos-rail-preview-context.lcos-rail-member-map::before { content: none; }
-.lcos-reconstructed .lcos-rail-preview-context.lcos-rail-member-map { display: block; }
-/* kind 着色：保留四种视图的可辨识语法，但内容是真实成员。 */
-.lcos-reconstructed .lcos-rail-preview-scene.lcos-rail-member-map { border-color: rgba(68, 91, 126, .2); background: rgba(247, 250, 253, .88); }
-.lcos-reconstructed .lcos-rail-preview-context.lcos-rail-member-map { border-color: rgba(96, 75, 158, .22); background: rgba(248, 246, 254, .9); }
-.lcos-reconstructed .lcos-rail-preview-workflow.lcos-rail-member-map { border-color: rgba(48, 104, 111, .24); background: rgba(247, 252, 252, .9); }
-.lcos-reconstructed .lcos-rail-preview-collection.lcos-rail-member-map { border-color: rgba(77, 69, 97, .18); background: rgba(250, 249, 252, .9); }
-/* 真实成员方块：位置/尺寸是成员真实几何的归一化投影，颜色按成员文件类型。 */
-.lcos-reconstructed .lcos-rail-member-cell { position: absolute; display: block; border: 1px solid rgba(73, 66, 91, .26); border-radius: 2px; background: rgba(255, 255, 255, .92); }
-.lcos-reconstructed .lcos-rail-member-map.is-large .lcos-rail-member-cell { border-radius: 3px; }
-/* 2R 单色纪律修正:mini 预览块原为 9 色粉彩(黄/粉/橙/红…),28px 尺寸下糊成一片且违反
-   Glaze 单色纪律(一个紫 accent+语义红)。收敛为紫 accent 密度阶梯(液晶深浅感):
-   文本类最深(主要工作对象)→视觉类中→轻类型浅;中性类型用灰;类型精确名走 title 提示。 */
-.lcos-reconstructed .lcos-rail-member-cell[data-member-kind='markdown'] { background: rgba(103, 78, 177, .5); }
-.lcos-reconstructed .lcos-rail-member-cell[data-member-kind='pdf'] { background: rgba(103, 78, 177, .4); }
-.lcos-reconstructed .lcos-rail-member-cell[data-member-kind='ppt'] { background: rgba(103, 78, 177, .4); }
-.lcos-reconstructed .lcos-rail-member-cell[data-member-kind='image'] { background: rgba(103, 78, 177, .3); }
-.lcos-reconstructed .lcos-rail-member-cell[data-member-kind='video'] { background: rgba(103, 78, 177, .24); }
-.lcos-reconstructed .lcos-rail-member-cell[data-member-kind='audio'] { background: rgba(103, 78, 177, .18); }
-.lcos-reconstructed .lcos-rail-member-cell[data-member-kind='link'] { background: transparent; border-color: rgba(103, 78, 177, .45); }
-.lcos-reconstructed .lcos-rail-member-cell[data-member-kind='archive'] { background: rgba(148, 163, 184, .35); }
-.lcos-reconstructed .lcos-rail-member-cell[data-member-kind='file'] { background: rgba(148, 163, 184, .25); }
-/* 真实溢出计数：超过显示上限的成员数量。
-   带显式 reset（left/top/height/background/transform）——旧 scene/workflow 预览的
-   `b` 规则（1px 装饰线/旋转线）特异性同级，必须靠 map 前缀提权并逐项覆盖。 */
-.lcos-reconstructed .lcos-rail-member-map .lcos-rail-member-overflow { position: absolute; left: auto; top: auto; right: 2px; bottom: 1px; height: auto; background: transparent; transform: none; font-size: 9px; font-weight: 700; color: rgba(73, 66, 91, .85); }
-.lcos-reconstructed .lcos-rail-member-map.is-large .lcos-rail-member-overflow { right: 4px; bottom: 2px; font-size: 10px; }
-/* 债1 退路 A：有成员但无几何坐标（全部为实体引用）——真实类型分布统计，不画假图形。 */
-.lcos-reconstructed .lcos-rail-member-stats { position: relative; display: flex; flex-wrap: wrap; align-content: center; justify-content: center; gap: 2px 5px; width: 28px; height: 28px; padding: 2px; border: 1px solid rgba(73, 66, 91, .14); border-radius: 7px; background: rgba(247, 246, 250, .9); }
-.lcos-reconstructed .lcos-rail-member-stats.is-large { width: 100%; height: 100%; align-items: center; }
-/* b 显式 reset：旧 scene/workflow 预览的 b 是 1px 装饰线（绝对定位/旋转/带底色），
-   同级特异性下未声明的属性会残留，必须逐项覆盖。 */
-.lcos-reconstructed .lcos-rail-member-stats b { position: static; left: auto; top: auto; right: auto; bottom: auto; height: auto; background: transparent; transform: none; font-size: 10px; font-weight: 700; color: rgba(73, 66, 91, .8); }
-.lcos-reconstructed .lcos-rail-member-stats em { font-style: normal; font-size: 9.5px; line-height: 1.2; color: rgba(73, 66, 91, .72); }
-.lcos-reconstructed .lcos-rail-member-stats.is-large em { font-size: 11px; }
-/* 债1 退路 B：聚合层拿不到成员节点投影——只有真实计数。 */
-.lcos-reconstructed .lcos-rail-member-empty { position: relative; display: grid; place-items: center; width: 28px; height: 28px; border: 1px solid rgba(73, 66, 91, .14); border-radius: 7px; background: rgba(247, 246, 250, .9); }
-.lcos-reconstructed .lcos-rail-member-empty.is-large { width: 100%; height: 100%; }
-.lcos-reconstructed .lcos-rail-member-empty b { position: static; left: auto; top: auto; right: auto; bottom: auto; height: auto; background: transparent; transform: none; font-size: 10px; font-weight: 700; color: rgba(73, 66, 91, .8); }
-.lcos-reconstructed .lcos-rail-member-empty em { font-style: normal; font-size: 11px; color: rgba(73, 66, 91, .66); }
+.lcos-reconstructed .lcos-rail-member-map.is-large {
+  position:relative;
+  display:block;
+  width:100%;
+  height:100%;
+  overflow:hidden;
+  border:1px solid rgba(73,66,91,.12);
+  border-radius:8px;
+  background:rgba(249,249,250,.74);
+}
+.lcos-reconstructed .lcos-project-view-preview-map .lcos-rail-member-map.is-large { transform:none; }
+.lcos-reconstructed .lcos-rail-member-map.is-large::before { content:none; }
+.lcos-reconstructed .lcos-rail-member-cell { position:absolute; display:block; border:1px solid rgba(73,66,91,.22); border-radius:3px; background:rgba(255,255,255,.88); }
+.lcos-reconstructed .lcos-rail-member-cell[data-member-kind='markdown'] { background:rgba(var(--lcos-ui-signal-rgb), .38); }
+.lcos-reconstructed .lcos-rail-member-cell[data-member-kind='pdf'],
+.lcos-reconstructed .lcos-rail-member-cell[data-member-kind='ppt'] { background:rgba(var(--lcos-ui-signal-rgb), .3); }
+.lcos-reconstructed .lcos-rail-member-cell[data-member-kind='image'] { background:rgba(var(--lcos-ui-signal-rgb), .23); }
+.lcos-reconstructed .lcos-rail-member-cell[data-member-kind='video'],
+.lcos-reconstructed .lcos-rail-member-cell[data-member-kind='audio'] { background:rgba(var(--lcos-ui-signal-rgb), .16); }
+.lcos-reconstructed .lcos-rail-member-cell[data-member-kind='link'] { background:transparent; border-color:rgba(var(--lcos-ui-signal-rgb), .36); }
+.lcos-reconstructed .lcos-rail-member-cell[data-member-kind='archive'],
+.lcos-reconstructed .lcos-rail-member-cell[data-member-kind='file'] { background:rgba(148,163,184,.24); }
+.lcos-reconstructed .lcos-rail-member-map.is-large .lcos-rail-member-overflow { position:absolute; right:4px; bottom:2px; font-size:10px; font-weight:700; color:rgba(73,66,91,.72); }
+.lcos-reconstructed .lcos-rail-member-stats.is-large,
+.lcos-reconstructed .lcos-rail-member-empty.is-large {
+  position:relative;
+  width:100%;
+  height:100%;
+  display:flex;
+  flex-wrap:wrap;
+  align-content:center;
+  align-items:center;
+  justify-content:center;
+  gap:2px 5px;
+  padding:6px;
+  border:1px solid rgba(73,66,91,.12);
+  border-radius:8px;
+  background:rgba(249,249,250,.74);
+}
+.lcos-reconstructed .lcos-rail-member-stats.is-large em,
+.lcos-reconstructed .lcos-rail-member-empty.is-large em { font-style:normal; font-size:11px; color:rgba(73,66,91,.62); }
 
 /* 图片三态（已实现，状态机在 CanvasNodeVisual.nextImageLoadPhase）：loading = 等宽闪烁骨架占位；error = ImageOff + 文案 + 重试。 */
 .lcos-reconstructed .lcos-image-skeleton { position: absolute; inset: 0; z-index: var(--lcos-z-content-inlay); /* z-tier: canvas-content（原 z1，图片骨架占位即节点内嵌入内容，值保序） */ display: grid; place-content: center; gap: 4px; background: linear-gradient(145deg, #eeedf3, #e5e3ec); }
