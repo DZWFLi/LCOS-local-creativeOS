@@ -387,11 +387,56 @@ export class SemanticIndexService {
     this.repository.deleteSearchDocument(projectId, entityType, entityId)
   }
 
-  async searchVectors(query: string, model = DEFAULT_EMBEDDING_MODEL, limit = 10): Promise<SemanticVectorHitV0[]> {
+  /**
+   * F6 P0-A2（20260828）：mutation-driven reindex 入口——写路径（curation 文本保存 /
+   * import / capture materialize / artifact return accept / OCR 跑完）调这里，
+   * 而不是等 search-time 懒索引。幂等（contentHash 未变即跳过），失败 warn 不阻塞写。
+   */
+  async reindexArtifact(projectId: string, artifactId: string): Promise<void> {
+    try {
+      const artifact = this.repository.getArtifact(artifactId)
+      if (artifact === undefined || String(artifact.projectId) !== projectId) return
+      const revisionId = artifact.currentRevisionId
+      const revision = revisionId === undefined ? undefined : this.repository.getArtifactRevision(revisionId)
+      const fileRecord = revision?.fileRecordId === undefined ? undefined : this.repository.getFileRecord(String(revision.fileRecordId))
+      const { readArtifactIndexBody } = await import('./search-artifact-body.js')
+      const body = await readArtifactIndexBody({
+        fileRecord: fileRecord === undefined ? undefined : { mimeType: fileRecord.mimeType, observedPath: fileRecord.observedPath },
+        maxChars: 200_000,
+        ocrEvidence: (pid, aid) => this.repository.getOcrEvidenceText(pid, aid),
+        projectId,
+        artifactId,
+      })
+      await this.indexEntity({
+        projectId,
+        entityType: 'artifact',
+        entityId: artifactId,
+        title: artifact.title,
+        body,
+      })
+    } catch (error: unknown) {
+      console.warn(`[semantic] reindex failed for artifact ${artifactId}: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
+  /** F6 P0-A2：删除路径的索引清理（tombstone 同步，search 不再命中已删实体）。 */
+  removeArtifact(projectId: string, artifactId: string): void {
+    try {
+      this.repository.deleteSearchDocument(projectId, 'artifact', artifactId)
+    } catch (error: unknown) {
+      console.warn(`[semantic] remove failed for artifact ${artifactId}: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
+  /**
+   * F6 P0-A1：向量检索强制 project scope。projectId 给定时（GUI 搜索路径必给），
+   * sqlite-vec KNN 与 blob fallback 两条路径都不返回跨项目 hit。
+   */
+  async searchVectors(query: string, model = DEFAULT_EMBEDDING_MODEL, limit = 10, projectId?: string): Promise<SemanticVectorHitV0[]> {
     try {
       const [vector] = await this.embed(model, [query])
       if (vector === undefined) return []
-      return this.repository.querySearchChunkVectors(model, vector, limit)
+      return this.repository.querySearchChunkVectors(model, vector, limit, projectId)
     } catch {
       return []
     }

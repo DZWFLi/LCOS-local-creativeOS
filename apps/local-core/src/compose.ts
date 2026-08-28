@@ -118,7 +118,8 @@ export function composeLocalCoreServices(options: LocalCoreServerOptions = {}): 
   const runtimeRegistry = options.runtimeRegistryService ?? new RuntimeRegistryService()
   const intelligence = options.intelligenceService ?? options.localIntelligenceService ?? new IntelligenceProviderService()
   const captureStaging = metadata === undefined ? undefined : options.captureStagingService ?? new CaptureStagingService(metadata)
-  const importCopy = options.importCopyService ?? (metadata === undefined ? undefined : new ImportCopyService(metadata))
+  // F6 P0-A2：import 即索引（可选挂点，semantic 缺席时行为不变）。
+  const importCopy = options.importCopyService ?? (metadata === undefined ? undefined : new ImportCopyService(metadata, semantic))
   const packages = options.resourcePackageService ?? (metadata === undefined ? undefined : new ResourcePackageService(metadata))
   const resources = options.resourceImportService ?? (metadata === undefined || importCopy === undefined ? undefined : new UniversalResourceImportService(metadata, importCopy))
   const obsidian = options.obsidianConnector ?? new ObsidianReadOnlyConnector()
@@ -127,6 +128,8 @@ export function composeLocalCoreServices(options: LocalCoreServerOptions = {}): 
     : options.captureApplicationService ?? new CaptureApplicationService(metadata, resources, captureStaging, runtimeRegistry, {
         blobRoot: process.env.LCOS_CAPTURE_STAGING_ROOT ?? join(homedir(), '.lcos', 'capture-staging', 'blobs'),
         placement: new CapturePlacementService(metadata),
+        // F6 P0-A2：materialize 即索引（可选挂点，semantic 缺席时行为不变）
+        ...(semantic === undefined ? {} : { semantic }),
       })
   const captureWatch = metadata === undefined || captureApplication === undefined
     ? undefined
@@ -194,7 +197,8 @@ export function composeLocalCoreServices(options: LocalCoreServerOptions = {}): 
     resourceReader: options.resourceReader ?? (metadata === undefined ? undefined : new ResourceReader(metadata)),
     matcher: options.resourceMatcher ?? new ResourceMatcher(),
     contextManifest: options.contextManifestService ?? (metadata === undefined ? undefined : new ContextManifestService(metadata)),
-    runtimeReview: options.runtimeReviewService ?? (metadata === undefined ? undefined : new RuntimeReviewService(metadata)),
+    // F6 P0-A2：accept 诞生的 artifact 即索引（第四参可选挂点）。
+    runtimeReview: options.runtimeReviewService ?? (metadata === undefined ? undefined : new RuntimeReviewService(metadata, undefined, undefined, semantic)),
     runtimeApplication: options.runtimeApplicationService,
     sessionLifecycle,
     conversationIdentity,
@@ -228,6 +232,8 @@ export function composeLocalCoreServices(options: LocalCoreServerOptions = {}): 
       sessionReadSet,
       // 任务四 P1：agent 文本写进 change-review 记账
       ...(mutationSafety === undefined ? {} : { mutationSafety }),
+      // F6 P0-A2：文本创建/修订即索引
+      ...(semantic === undefined ? {} : { semantic }),
     }),
     runtimeRegistry,
     intelligence,

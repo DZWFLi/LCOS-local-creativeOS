@@ -267,7 +267,8 @@ export class SqliteMetadataRepository {
     if (current === 39) { this.#migrate_040_from_v39(); current = 40 }
     if (current === 40) { this.#migrate_041_from_v40(); current = 41 }
     if (current === 41) { this.#migrate_042_from_v41(); current = 42 }
-    if (current !== 42) throw new Error(`Unsupported metadata schema version ${current}.`)
+    if (current === 42) { this.#migrate_043_from_v42(); current = 43 }
+    if (current !== 43) throw new Error(`Unsupported metadata schema version ${current}.`)
   }
 
   #migrate_037_from_v36(): void {
@@ -400,6 +401,26 @@ export class SqliteMetadataRepository {
       ALTER TABLE artifacts ADD COLUMN birth_run_id TEXT;
       CREATE INDEX IF NOT EXISTS idx_artifacts_birth_run ON artifacts(birth_run_id);
       PRAGMA user_version = 42;
+      COMMIT;
+    `)
+  }
+
+  #migrate_043_from_v42(): void {
+    // F6 P0-A3（20260828）：OCR evidence 持久化——图片 artifact 的文本证据层。
+    // 显式触发（/runtime/ocr 跑完落库）+ reindex 时读取；没有 evidence 的图片
+    // 正文诚实为空（绝不拿 filename 冒充语义索引）。同 artifact 重跑 OCR = 覆盖。
+    this.#database.exec(`
+      BEGIN;
+      CREATE TABLE IF NOT EXISTS ocr_evidence (
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        artifact_id TEXT NOT NULL,
+        text TEXT NOT NULL,
+        engine TEXT NOT NULL,
+        duration_ms INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (project_id, artifact_id)
+      );
+      PRAGMA user_version = 43;
       COMMIT;
     `)
   }
@@ -2644,7 +2665,7 @@ export class SqliteMetadataRepository {
    * 正文块命中 = 块级（带 chunkAnchor，语义同 contracts 的 sourceAnchor）。
    * vec0 可用走 KNN；不可用/失败走 embedding_blob 线性扫描（与整文档 fallback 同模式）。
    */
-  querySearchChunkVectors(model: string, vector: readonly number[], limit: number): Array<{
+  querySearchChunkVectors(model: string, vector: readonly number[], limit: number, projectId?: string): Array<{
     readonly entityId: string
     readonly distance: number
     readonly documentTitle?: string
@@ -2658,11 +2679,14 @@ export class SqliteMetadataRepository {
     const table = this.#ensureSearchChunkVecTable(model, vector.length)
     if (table !== undefined) {
       try {
+        // F6 P0-A1：vec0 KNN 无 project 分区键——超采样后在 hydrate 阶段按
+        // search_documents.project_id 过滤（跨项目候选被丢弃，不泄漏给调用方）。
+        const k = projectId === undefined ? Math.max(limit, 1) : Math.max(limit * 8, 32)
         const rows = this.#database.prepare(`
           SELECT chunk_key, distance FROM ${table}
           WHERE embedding MATCH ? AND k = ?
           ORDER BY distance
-        `).all(JSON.stringify(vector), Math.max(limit, 1)) as Row[]
+        `).all(JSON.stringify(vector), k) as Row[]
         candidates = rows.flatMap((row) => {
           const chunkKey = String(row.chunk_key)
           const separator = chunkKey.lastIndexOf('#c')
@@ -2679,10 +2703,17 @@ export class SqliteMetadataRepository {
     }
     if (candidates.length === 0) {
       try {
-        const rows = this.#database.prepare(`
-          SELECT c.entity_id, c.chunk_index, c.embedding_blob FROM search_document_chunks c
-          WHERE c.model = ? AND c.embedding_blob IS NOT NULL
-        `).all(model as SQLInputValue) as Row[]
+        // F6 P0-A1：fallback 线性扫描直接在 SQL 层 join search_documents 过滤 project。
+        const rows = projectId === undefined
+          ? this.#database.prepare(`
+              SELECT c.entity_id, c.chunk_index, c.embedding_blob FROM search_document_chunks c
+              WHERE c.model = ? AND c.embedding_blob IS NOT NULL
+            `).all(model as SQLInputValue) as Row[]
+          : this.#database.prepare(`
+              SELECT c.entity_id, c.chunk_index, c.embedding_blob FROM search_document_chunks c
+              JOIN search_documents d ON d.entity_id = c.entity_id
+              WHERE c.model = ? AND c.embedding_blob IS NOT NULL AND d.project_id = ?
+            `).all(model as SQLInputValue, projectId as SQLInputValue) as Row[]
         const scores = rows.map((row) => {
           const raw = Buffer.isBuffer(row.embedding_blob) ? row.embedding_blob : Buffer.from(String(row.embedding_blob ?? ''), 'base64')
           const otherF = new Float32Array(raw.buffer, raw.byteOffset, raw.byteLength / 4)
@@ -2697,7 +2728,7 @@ export class SqliteMetadataRepository {
       }
     }
     const hydrate = this.#database.prepare(`
-      SELECT c.chunk_count, c.chunk_anchor, c.chunk_kind, c.chunk_text, d.title AS document_title
+      SELECT c.chunk_count, c.chunk_anchor, c.chunk_kind, c.chunk_text, d.title AS document_title, d.project_id AS document_project
       FROM search_document_chunks c LEFT JOIN search_documents d ON d.entity_id = c.entity_id
       WHERE c.entity_id = ? AND c.model = ? AND c.chunk_index = ?
     `)
@@ -2714,6 +2745,8 @@ export class SqliteMetadataRepository {
     for (const candidate of candidates) {
       const row = hydrate.get(candidate.entityId as SQLInputValue, model as SQLInputValue, candidate.chunkIndex as SQLInputValue) as Row | undefined
       if (row === undefined) continue // vec0 残留行（块已删除）静默过滤
+      // F6 P0-A1：KNN 超采样候选在 hydrate 处按 project 过滤（fallback 路径已滤，此处幂等）。
+      if (projectId !== undefined && String(row.document_project ?? '') !== projectId) continue
       const chunkKind: 'title' | 'body' = String(row.chunk_kind) === 'title' ? 'title' : 'body'
       hits.push({
         entityId: candidate.entityId,
@@ -2727,6 +2760,7 @@ export class SqliteMetadataRepository {
         } : {}),
         chunkText: String(row.chunk_text),
       })
+      if (hits.length >= limit) break // 超采样 + project 过滤后截断
     }
     return hits
   }
@@ -2736,9 +2770,43 @@ export class SqliteMetadataRepository {
     return row?.project_id !== undefined ? String(row.project_id) : ''
   }
 
+  // ==================== OCR evidence（F6 P0-A3，20260828） ====================
+
+  /** 读取 artifact 的 OCR 文本证据；未跑过 = undefined（诚实缺席，不猜文件名）。 */
+  getOcrEvidenceText(projectId: string, artifactId: string): string | undefined {
+    const row = this.#database.prepare('SELECT text FROM ocr_evidence WHERE project_id = ? AND artifact_id = ?')
+      .get(projectId as SQLInputValue, artifactId as SQLInputValue) as { text?: string } | undefined
+    return row === undefined ? undefined : String(row.text)
+  }
+
+  /** 写入/覆盖 OCR evidence（同一 artifact 重跑 = 覆盖；artifact 不存在时拒绝）。 */
+  saveOcrEvidence(input: {
+    readonly projectId: string
+    readonly artifactId: string
+    readonly text: string
+    readonly engine: string
+    readonly durationMs: number
+  }): void {
+    if (this.getArtifact(input.artifactId) === undefined) throw new Error('Artifact not found for OCR evidence.')
+    this.#database.prepare(`
+      INSERT INTO ocr_evidence (project_id, artifact_id, text, engine, duration_ms, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(project_id, artifact_id) DO UPDATE SET
+        text = excluded.text, engine = excluded.engine,
+        duration_ms = excluded.duration_ms, created_at = excluded.created_at
+    `).run(
+      input.projectId as SQLInputValue,
+      input.artifactId as SQLInputValue,
+      input.text as SQLInputValue,
+      input.engine as SQLInputValue,
+      input.durationMs as SQLInputValue,
+      new Date().toISOString() as SQLInputValue,
+    )
+  }
+
   searchDocumentsFts(projectId: string, query: string, limit: number): Array<{ readonly entityId: string; readonly title: string; readonly body: string }> {
     // FTS5 特殊语法字符全部剥离(含列过滤器的中括号):SKILL 指令等 markdown 文本含 [ ] 会触发 fts5 syntax error(2R 教工作流 E2E 实测修)
-    const sanitized = query.replace(/["*^~():|&!-\\[\\]]/g, ' ').trim()
+    const sanitized = query.replace(/["*^~():|&!\[\]-]/g, ' ').trim()
     if (sanitized === '') return []
     const rows = this.#database.prepare(`
       SELECT f.entity_id, f.title, f.body FROM search_documents_fts f

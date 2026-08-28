@@ -1,11 +1,55 @@
-import type { SearchHitV0, SearchResultV0, SearchEntityTypeV0 } from '@local-creative-os/contracts'
+import type {
+  SearchEntityRefVNext,
+  SearchEntityTypeV0,
+  SearchHitVNext,
+  SearchLocationRefVNext,
+  SearchMatchModalityVNext,
+  SearchMatchReasonVNext,
+  SearchResultVNext,
+} from '@local-creative-os/contracts'
 import { open } from 'node:fs/promises'
 
 import type { ConversationImportService } from './conversation-import-service.js'
 import type { SqliteMetadataRepository } from './metadata-repository.js'
 import type { SemanticIndexService } from './semantic-index-service.js'
+import { readArtifactIndexBody } from './search-artifact-body.js'
 
 const SNIPPET_CHARS = 160
+
+/**
+ * F6 P0-A2：search-time 懒索引从「进程内一次性」降级为「stale/missing repair」。
+ * mutation 挂点（curation/import/capture/accept/OCR）是主索引入口；这里的周期重扫
+ * 只兜 mutation 挂点遗漏的存量（如旧库升级），TTL 内不重复扫。
+ */
+const ENSURE_REPAIR_TTL_MS = 2_000
+
+/** locationRefs 投影上限（read projection，只取前几个位置）。 */
+const LOCATION_REFS_LIMIT = 5
+
+/** source → matchReason 映射（F6 P0-A4：让 GUI 能说「为什么搜到它」）。 */
+const SOURCE_TO_MATCH_REASON: Readonly<Record<string, SearchMatchReasonVNext>> = {
+  'artifact-title': 'title',
+  'artifact-text': 'body',
+  note: 'metadata',
+  'conversation-fts': 'body',
+  'resource-title': 'title',
+  'descriptor-summary': 'source',
+  'search-document-fts': 'body',
+  'search-document-ocr': 'ocr',
+  vector: 'semantic',
+  related: 'relation',
+}
+
+const REASON_TO_MODALITY: Readonly<Record<SearchMatchReasonVNext, SearchMatchModalityVNext>> = {
+  title: 'text',
+  body: 'text',
+  ocr: 'ocr',
+  visual: 'visual',
+  semantic: 'semantic',
+  source: 'text',
+  relation: 'graph',
+  metadata: 'text',
+}
 
 function snippetFrom(text: string, query: string): string {
   const normalized = text.replace(/\s+/g, ' ').trim()
@@ -31,14 +75,22 @@ async function readTextPrefix(observedPath: string | undefined, maxChars: number
   }
 }
 
+export interface ProjectSearchOptions {
+  readonly limit?: number
+  readonly types?: readonly SearchEntityTypeV0[]
+  readonly related?: boolean
+  /** F6 P0-A4：给定时对每个 hit 计算 usedHere（read projection）。 */
+  readonly usedHereTarget?: { readonly kind: 'workspace' | 'scope' | 'conversation'; readonly id: string }
+}
+
 /**
  * Phase D: federated search over existing sources — no new search DB.
  * Ranking V0 (simple, explicit): exact title/phrase > text artifact > note >
  * conversation FTS > resource title > descriptor summary.
  */
 export class ProjectSearchService {
-  /** 懒索引幂等缓存:本进程内每个项目只 ensure 一次(内容增量靠 indexEntity 自身 hash 跳过)。 */
-  readonly #ensuredProjects = new Set<string>()
+  /** 懒索引 repair 幂等缓存：项目 → 上次全量 repair 时间戳（TTL 内跳过）。 */
+  readonly #ensuredAt = new Map<string, number>()
 
   constructor(
     private readonly repository: SqliteMetadataRepository,
@@ -46,13 +98,13 @@ export class ProjectSearchService {
     private readonly semantic: SemanticIndexService | undefined,
   ) {}
 
-  async search(projectId: string, query: string, options: { readonly limit?: number; readonly types?: readonly SearchEntityTypeV0[]; readonly related?: boolean } = {}): Promise<SearchResultV0> {
+  async search(projectId: string, query: string, options: ProjectSearchOptions = {}): Promise<SearchResultVNext> {
     const limit = Math.max(1, Math.min(50, options.limit ?? 10))
     const types = new Set(options.types ?? ['artifact', 'note', 'conversation', 'resource'])
     const seen = new Set<string>()
     const needle = query.trim().toLocaleLowerCase('en-US')
-    const hits: SearchHitV0[] = []
-    const push = (hit: SearchHitV0): void => {
+    const hits: SearchHitVNext[] = []
+    const push = (hit: SearchHitVNext): void => {
       // Derived-document hits may duplicate legacy sources for the same entity;
       // they are collected separately and deduped by entity at the end (best score wins).
       const key = hit.source === 'search-document-fts' || hit.source === 'vector'
@@ -70,6 +122,7 @@ export class ProjectSearchService {
 
     // 核心能力 B 接线:RAG chunking 懒索引——存量/导入的 artifact 首次被搜索时触发
     // indexEntity(分块计划先行落库;Ollama 缺席时 FTS-only,不阻塞搜索)。
+    // F6 P0-A2：主入口已移到 mutation 挂点，此处降级为 TTL repair（见 ENSURE_REPAIR_TTL_MS）。
     if (types.has('artifact')) await this.#ensureProjectIndexed(projectId)
 
     // Artifact title + text content
@@ -78,10 +131,16 @@ export class ProjectSearchService {
         const exactTitle = artifact.title.toLocaleLowerCase('en-US') === needle
         const titleMatch = exactPhrase(artifact.title)
         const viewId = this.repository.getArtifactViews(String(artifact.id))[0]?.id
+        const base = {
+          entityType: 'artifact' as const,
+          entityId: artifact.id,
+          ...(viewId === undefined ? {} : { viewId }),
+          title: artifact.title,
+        }
         if (exactTitle) {
-        push({ entityType: 'artifact', entityId: artifact.id, ...(viewId === undefined ? {} : { viewId }), title: artifact.title, snippet: artifact.title, source: 'artifact-title', score: 100 })
+          push({ ...base, snippet: artifact.title, source: 'artifact-title', score: 100 })
         } else if (titleMatch) {
-          push({ entityType: 'artifact', entityId: artifact.id, ...(viewId === undefined ? {} : { viewId }), title: artifact.title, snippet: artifact.title, source: 'artifact-title', score: 80 })
+          push({ ...base, snippet: artifact.title, source: 'artifact-title', score: 80 })
         } else {
           const revisionId = artifact.currentRevisionId
           const revision = revisionId === undefined ? undefined : this.repository.getArtifactRevision(revisionId)
@@ -89,7 +148,7 @@ export class ProjectSearchService {
           if (fileRecord?.mimeType === 'text/markdown' || fileRecord?.mimeType === 'text/plain') {
             const content = await readTextPrefix(fileRecord.observedPath, 8_000)
             if (exactPhrase(content)) {
-          push({ entityType: 'artifact', entityId: artifact.id, ...(viewId === undefined ? {} : { viewId }), title: artifact.title, snippet: snippetFrom(content, query), source: 'artifact-text', score: 50, ...(this.semantic?.chunkHitFor(String(artifact.id), needle) ?? {}) })
+              push({ ...base, snippet: snippetFrom(content, query), source: 'artifact-text', score: 50, ...(this.semantic?.chunkHitFor(String(artifact.id), needle) ?? {}) })
             }
           }
         }
@@ -143,8 +202,9 @@ export class ProjectSearchService {
     }
 
     // Vector candidates (available only when Ollama + embeddings exist).
+    // F6 P0-A1：向量路径强制 project scope——A 项目的查询绝不返回 B 项目的向量 hit。
     if (this.semantic !== undefined) {
-      const vectorHits = await this.semantic.searchVectors(query, undefined, 10)
+      const vectorHits = await this.semantic.searchVectors(query, undefined, 10, projectId)
       for (const hit of vectorHits) {
         push({
           entityType: 'artifact',
@@ -175,7 +235,7 @@ export class ProjectSearchService {
     }
 
     const ranked = hits.sort((left, right) => right.score - left.score).slice(0, limit * 3)
-    const deduped: SearchHitV0[] = []
+    const deduped: SearchHitVNext[] = []
     const finalSeen = new Set<string>()
     for (const hit of ranked) {
       const key = `${hit.entityType}:${hit.entityId}`
@@ -184,31 +244,96 @@ export class ProjectSearchService {
       deduped.push(hit)
       if (deduped.length >= limit) break
     }
+    // F6 P0-A4：vNext 字段投影（entityRef / matchReason / matchModality / sourceAnchor /
+    // locationRefs / usedHere）——全部 read projection，不改任何 Truth。
+    const enriched = deduped.map((hit) => this.#enrichHit(projectId, hit, options.usedHereTarget))
     return {
       schemaVersion: 0,
       query,
-      hits: deduped,
+      hits: enriched,
       truncated: hits.length > limit,
       generatedAt: new Date().toISOString(),
     }
   }
 
-  /** 读取 artifact 当前正文(markdown/plain 直读全文用于索引;其余类型返回空串,只保留标题块)。 */
+  /** vNext 字段投影：matchReason/matchModality/entityRef/sourceAnchor/location/usedHere。 */
+  #enrichHit(projectId: string, hit: SearchHitVNext, usedHereTarget?: { readonly kind: 'workspace' | 'scope' | 'conversation'; readonly id: string }): SearchHitVNext {
+    const matchReason = SOURCE_TO_MATCH_REASON[hit.source] ?? 'metadata'
+    const entityRef: SearchEntityRefVNext = {
+      type: hit.entityType,
+      id: String(hit.entityId),
+      ...(hit.viewId === undefined ? {} : { viewId: hit.viewId }),
+    }
+    let locationRefs: readonly SearchLocationRefVNext[] | undefined
+    let locationCount: number | undefined
+    if (hit.entityType === 'artifact') {
+      const locations = this.#locationsForArtifact(projectId, String(hit.entityId))
+      locationCount = locations.length
+      locationRefs = locations.slice(0, LOCATION_REFS_LIMIT)
+    }
+    let usedHere: boolean | undefined
+    if (usedHereTarget !== undefined && usedHereTarget.kind === 'workspace' && hit.entityType === 'artifact') {
+      usedHere = this.#locationsForArtifact(projectId, String(hit.entityId))
+        .some((location) => location.id === usedHereTarget.id)
+    }
+    return {
+      ...hit,
+      entityRef,
+      matchReason,
+      matchModality: REASON_TO_MODALITY[matchReason],
+      ...(hit.chunkAnchor === undefined ? {} : { sourceAnchor: hit.chunkAnchor }),
+      ...(locationRefs === undefined ? {} : { locationRefs }),
+      ...(locationCount === undefined ? {} : { locationCount }),
+      ...(usedHere === undefined ? {} : { usedHere }),
+    }
+  }
+
+  /** artifact → 画布位置投影（workspace memberships → read projection，不新建 Truth）。 */
+  #locationsForArtifact(projectId: string, artifactId: string): readonly SearchLocationRefVNext[] {
+    try {
+      const viewIds = new Set(this.repository.getArtifactViews(artifactId).map((view) => String(view.id)))
+      const locations: SearchLocationRefVNext[] = []
+      for (const membership of this.repository.listProjectWorkspaceMemberships(projectId as never)) {
+        if (!viewIds.has(String(membership.artifactViewId))) continue
+        const workspace = this.repository.getWorkspace(String(membership.workspaceId))
+        locations.push({
+          kind: 'workspace',
+          id: String(membership.workspaceId),
+          ...(workspace === undefined ? {} : { name: workspace.name }),
+        })
+      }
+      return locations
+    } catch {
+      return []
+    }
+  }
+
+  /** 读取 artifact 当前正文(共享读取层:md/plain 直读、PDF 页文本、图片 OCR evidence)。 */
   async #artifactBody(artifact: ReturnType<SqliteMetadataRepository['getArtifacts']>[number]): Promise<string> {
     const revisionId = artifact.currentRevisionId
     const revision = revisionId === undefined ? undefined : this.repository.getArtifactRevision(revisionId)
     const fileRecord = revision?.fileRecordId === undefined ? undefined : this.repository.getFileRecord(String(revision.fileRecordId))
-    if (fileRecord?.mimeType !== 'text/markdown' && fileRecord?.mimeType !== 'text/plain') return ''
-    return readTextPrefix(fileRecord.observedPath, 200_000)
+    return readArtifactIndexBody({
+      fileRecord: fileRecord === undefined ? undefined : { mimeType: fileRecord.mimeType, observedPath: fileRecord.observedPath },
+      maxChars: 200_000,
+      ocrEvidence: (pid, aid) => this.repository.getOcrEvidenceText(pid, aid),
+      projectId: String(artifact.projectId),
+      artifactId: String(artifact.id),
+    })
   }
 
   /**
    * 核心能力 B 接线:项目 artifact 的 RAG 分块索引懒接线——首次搜索时补建索引,
    * indexEntity 自带幂等(contentHash 未变即跳过);进程级缓存避免每次搜索重复扫全项目。
+   * F6 P0-A2：从「每项目一次」改为 TTL repair——mutation 挂点是主入口，
+   * 这里只兜存量/旧库（导入新 artifact 后不重启，下一次搜索（TTL 过期后）即可命中）。
    */
   async #ensureProjectIndexed(projectId: string): Promise<void> {
-    if (this.#ensuredProjects.has(projectId) || this.semantic === undefined) return
-    this.#ensuredProjects.add(projectId)
+    if (this.semantic === undefined) return
+    const now = Date.now()
+    const last = this.#ensuredAt.get(projectId)
+    if (last !== undefined && now - last < ENSURE_REPAIR_TTL_MS) return
+    this.#ensuredAt.set(projectId, now)
     for (const artifact of this.repository.getArtifacts(projectId)) {
       try {
         const body = await this.#artifactBody(artifact)

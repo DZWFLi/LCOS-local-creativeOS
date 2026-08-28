@@ -17,6 +17,8 @@ import type { CapturePlacementService } from './capture-placement-service.js'
 export interface CaptureApplicationOptions {
   readonly blobRoot: string
   readonly placement: CapturePlacementService
+  /** F6 P0-A2（20260828）：materialize 即索引；缺省不 reindex（search-time repair 兜底）。 */
+  readonly semantic?: import('./semantic-index-service.js').SemanticIndexService
 }
 
 export class CaptureApplicationService {
@@ -24,6 +26,7 @@ export class CaptureApplicationService {
   readonly #resources: UniversalResourceImportService
   readonly #staging: CaptureStagingService
   readonly #registry: RuntimeRegistryService
+  readonly #semantic: import('./semantic-index-service.js').SemanticIndexService | undefined
   readonly #blobRoot: string
   readonly #placement: CapturePlacementService
 
@@ -40,6 +43,7 @@ export class CaptureApplicationService {
     this.#registry = registry
     this.#blobRoot = options.blobRoot
     this.#placement = options.placement
+    this.#semantic = options.semantic
   }
 
   async capture(request: CaptureRequestV0): Promise<CaptureReceiptV0> {
@@ -80,6 +84,10 @@ export class CaptureApplicationService {
     }
 
     const imported = await this.#importIntoProject(request, affinity.projectId)
+    // F6 P0-A2：materialize 即索引（capture 产出的 artifact 立即可搜，不重启不等 repair）。
+    if (this.#semantic !== undefined && !imported.reused) {
+      await this.#semantic.reindexArtifact(String(affinity.projectId), imported.artifactId)
+    }
     const capturedAt = request.source.capturedAt || new Date().toISOString()
     this.#metadata.saveImportBatch({
       schemaVersion: 1, id: `import-batch-capture-${request.operationId}`, projectId: affinity.projectId,

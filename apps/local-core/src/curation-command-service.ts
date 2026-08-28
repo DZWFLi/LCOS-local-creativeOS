@@ -17,6 +17,7 @@ import { PresentationApplicationService } from './presentation-application-servi
 import type { SqliteMetadataRepository } from './metadata-repository.js'
 import type { SessionReadSet } from './session-read-set.js'
 import type { MutationSafetyService } from './mutation-safety-service.js'
+import type { SemanticIndexService } from './semantic-index-service.js'
 import { buildTextArtifactDraft, createTextArtifact, reviseManagedTextArtifact } from './text-artifact-service.js'
 import { dirname } from 'node:path'
 import { mkdir, rename, rm } from 'node:fs/promises'
@@ -27,6 +28,8 @@ export interface CurationCommandServiceDeps {
   /** HU-2b（任务三第二刀）：agent 写 guard 的 lease 源；缺省则 updateText 不设防（向后兼容）。 */
   readonly sessionReadSet?: SessionReadSet  /** 任务四 P1：change-review 记账（agent 文本写产生 ChangeSet）；缺省不记账。 */
   readonly mutationSafety?: MutationSafetyService
+  /** F6 P0-A2（20260828）：mutation-driven 索引挂点；缺省不 reindex（search-time repair 兜底）。 */
+  readonly semantic?: SemanticIndexService
 }
 
 /**
@@ -40,6 +43,8 @@ export class CurationCommandService {
 
   async createText(projectId: string, input: { readonly scopeId: string; readonly title?: string; readonly body: string; readonly x?: number; readonly y?: number; readonly sessionId?: string }) {
     const result = await createTextArtifact(this.deps.repository, projectId as ProjectId, input)
+    // F6 P0-A2：文本创建即索引（mutation-driven，不等 search-time repair）。
+    if (this.deps.semantic !== undefined) await this.deps.semantic.reindexArtifact(projectId, String(result.artifactId))
     // 任务四 P1：agent 创建也进 change-review（撤销 = 删 artifact；正文被人改过则阻断）。GUI 直建不记账。
     if (typeof input.sessionId === 'string' && input.sessionId !== '' && this.deps.mutationSafety !== undefined) {
       try {
@@ -138,6 +143,10 @@ export class CurationCommandService {
       } catch (error: unknown) {
         console.warn(`[curation] change-set record failed for text update: ${error instanceof Error ? error.message : String(error)}`)
       }
+    }
+    // F6 P0-A2：文本修订即重索引（contentHash 未变时幂等跳过）。
+    if (this.deps.semantic !== undefined && targetArtifactId !== undefined) {
+      await this.deps.semantic.reindexArtifact(projectId, String(targetArtifactId))
     }
     return { outcome: 'applied', ...result }
   }

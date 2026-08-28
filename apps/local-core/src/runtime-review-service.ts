@@ -13,11 +13,17 @@ import type { ArtifactReturnId, JsonValue, Run, RunEvent, RunId, RuntimeDispatch
 import { RuntimeLifecycleConflictError, SqliteMetadataRepository } from './metadata-repository.js'
 
 export class RuntimeReviewService {
+  /** F6 P0-A2（20260828）：accept 诞生/更新 artifact 即索引；缺省不 reindex。 */
+  readonly #semantic: import('./semantic-index-service.js').SemanticIndexService | undefined
+
   constructor(
     private readonly repository: SqliteMetadataRepository,
     private readonly now: () => string = () => new Date().toISOString(),
     private readonly createId: () => string = randomUUID,
-  ) {}
+    semantic?: import('./semantic-index-service.js').SemanticIndexService,
+  ) {
+    this.#semantic = semantic
+  }
 
   getRunReview(runId: RunId): RunReview {
     const run = this.repository.getRun(runId)
@@ -53,6 +59,10 @@ export class RuntimeReviewService {
   accept(returnId: ArtifactReturnId, input: AcceptArtifactReturnInput): AcceptArtifactReturnResult {
     const result = this.repository.acceptArtifactReturn(returnId, input.expectedBaseRevisionId, this.now())
     this.emit(result.run.id, 'run.completed', { projectId: String(result.run.projectId), returnId: String(returnId) })
+    // F6 P0-A2：accept 诞生/更新的 artifact 立即进索引（fire-and-forget，不阻塞 review 返回）。
+    if (this.#semantic !== undefined) {
+      void this.#semantic.reindexArtifact(String(result.run.projectId), String(result.artifactReturn.targetArtifactId))
+    }
     return result
   }
 

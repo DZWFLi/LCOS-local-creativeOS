@@ -58,7 +58,7 @@ afterEach(async () => {
 
 describe('Title Policy (Phase A Zero Naming)', () => {
   it('migrates to schemaVersion 24 and defaults title_mode to auto', async () => {
-    expect(repository.schemaVersion).toBe(42)
+    expect(repository.schemaVersion).toBe(43)
     repository.save(disposableSnapshot())
     expect(repository.getEntityTitleMode('project', 'title-policy-project')).toBe('auto')
     expect(repository.getEntityTitleMode('workspace', 'workspace-main')).toBe('auto')

@@ -58,7 +58,12 @@ function isInsideDirectory(root: string, candidate: string): boolean {
 }
 
 export class ImportCopyService {
-  constructor(readonly repository: SqliteMetadataRepository) {}
+  /** F6 P0-A2（20260828）：mutation-driven 索引挂点；缺省不 reindex（search-time repair 兜底）。 */
+  readonly #semantic: import('./semantic-index-service.js').SemanticIndexService | undefined
+
+  constructor(readonly repository: SqliteMetadataRepository, semantic?: import('./semantic-index-service.js').SemanticIndexService) {
+    this.#semantic = semantic
+  }
 
   async importCopy(projectId: ProjectId, input: ImportCopyInput): Promise<ImportCopyResult> {
     const project = this.repository.getProject(String(projectId))
@@ -177,6 +182,8 @@ export class ImportCopyService {
       await rm(tempPath, { force: true })
       throw error
     }
+    // F6 P0-A2：导入即索引（PDF 页文本在此进入索引；图片等 OCR evidence 后再补）。
+    if (this.#semantic !== undefined) await this.#semantic.reindexArtifact(String(projectId), String(artifact.id))
     return { fileRecord, artifact, revision, view, reused: false }
   }
 }

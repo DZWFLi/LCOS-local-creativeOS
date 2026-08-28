@@ -3,6 +3,7 @@ import type { RuntimeApplicationService } from '../runtime-application-service.j
 import type { SessionLifecycleService } from '../session-lifecycle-service.js'
 import type { planCodexDispatch } from '../codex-dispatch-service.js'
 import { OcrError, type OcrService } from '../ocr-service.js'
+import type { SemanticIndexService } from '../semantic-index-service.js'
 import { routeRequireMetadata, type RouteHttpContext, type RouteHttpHelpers } from './route-context.js'
 
 export interface RuntimeRouteContext extends RouteHttpContext {
@@ -11,6 +12,8 @@ export interface RuntimeRouteContext extends RouteHttpContext {
   readonly sessionLifecycle: SessionLifecycleService | undefined
   readonly planCodexDispatch: typeof planCodexDispatch
   readonly ocr?: OcrService
+  /** F6 P0-A3（20260828）：OCR 结果落 evidence 表 + 触发 reindex 的通道。 */
+  readonly semantic?: SemanticIndexService
 }
 
 /**
@@ -97,6 +100,20 @@ export async function handleRuntimeRoute(ctx: RuntimeRouteContext): Promise<bool
     }
     try {
       const value = await ocr.recognize(imagePath)
+      // F6 P0-A3：OCR 结果落 evidence 表（同 artifact 重跑 = 覆盖）+ 触发 reindex——
+      // 图片正文从此进入 FTS/embedding 检索；没跑过 OCR 的图片正文诚实为空。
+      try {
+        db.saveOcrEvidence({
+          projectId: String(artifact.projectId),
+          artifactId: input.artifactId,
+          text: value.text,
+          engine: value.engine,
+          durationMs: value.durationMs,
+        })
+        if (ctx.semantic !== undefined) await ctx.semantic.reindexArtifact(String(artifact.projectId), input.artifactId)
+      } catch (error: unknown) {
+        console.warn(`[ocr] evidence persist/reindex failed: ${error instanceof Error ? error.message : String(error)}`)
+      }
       sendJson(response, 200, { ok: true, value })
     } catch (error: unknown) {
       if (error instanceof OcrError) {

@@ -10,7 +10,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { MetadataForeignKeyConstraintError, SqliteMetadataRepository } from '../src/metadata-repository.js'
 
 const cleanup: string[] = []
-const SCHEMA_VERSION = 42
+const SCHEMA_VERSION = 43
 
 function disposableSnapshot(): ProjectGraphSnapshot {
   const now = '2026-07-24T12:00:00.000Z'

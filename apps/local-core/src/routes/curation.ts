@@ -116,6 +116,17 @@ export async function handleCurationRoute(ctx: CurationRouteContext): Promise<bo
     const query = url.searchParams.get('q') ?? ''
     const limitRaw = url.searchParams.get('limit')
     const typesRaw = url.searchParams.get('types')
+    // F6 P0-A4：usedHereTarget 投影参数（?usedHereTarget=workspace:<id>；read projection）。
+    const usedHereRaw = url.searchParams.get('usedHereTarget')
+    let usedHereTarget: { readonly kind: 'workspace' | 'scope' | 'conversation'; readonly id: string } | undefined
+    if (usedHereRaw !== null && usedHereRaw !== '') {
+      const separator = usedHereRaw.indexOf(':')
+      const kind = separator > 0 ? usedHereRaw.slice(0, separator) : ''
+      const id = separator > 0 ? usedHereRaw.slice(separator + 1) : ''
+      if (['workspace', 'scope', 'conversation'].includes(kind) && id !== '') {
+        usedHereTarget = { kind: kind as 'workspace' | 'scope' | 'conversation', id }
+      }
+    }
     const types = typesRaw === null
       ? undefined
       : typesRaw.split(',').map((value) => value.trim()).filter((value): value is SearchEntityTypeV0 =>
@@ -123,6 +134,7 @@ export async function handleCurationRoute(ctx: CurationRouteContext): Promise<bo
     const value = await search.search(projectId, query, {
       ...(limitRaw === null ? {} : { limit: Number(limitRaw) || 10 }),
       ...(types === undefined || types.length === 0 ? {} : { types }),
+      ...(usedHereTarget === undefined ? {} : { usedHereTarget }),
     })
     sendJson(response, 200, { ok: true, value })
     return true
