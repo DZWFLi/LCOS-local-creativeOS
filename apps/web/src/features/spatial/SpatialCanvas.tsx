@@ -7,6 +7,7 @@ import { spatialDensityForSize } from './spatialLod'
 import { advanceSpatialPan, beginSpatialPan, endSpatialPointer } from './spatialInteractionMachine'
 import { CanvasEdgePinLayer, type CanvasEdgePinItem } from './CanvasEdgePinLayer'
 import { SpatialBeaconLayer } from './SpatialBeaconLayer'
+import { spatialMarkerSurfaceForCanvas } from './spatialMarkerSystem'
 import { SpatialOverlayLayer } from './SpatialOverlayLayer'
 import { SpatialViewport } from './SpatialViewport'
 import { IDLE_SPATIAL_POINTER, type SpatialCameraSetter, type SpatialPoint, type SpatialPointerSession } from './spatialTypes'
@@ -372,9 +373,9 @@ export const SpatialCanvas = forwardRef<HTMLDivElement, Props>(function SpatialC
       {overlays}
       {marqueeRect && <div className="lcos-spatial-marquee" style={{ left: marqueeRect.left, top: marqueeRect.top, width: marqueeRect.width, height: marqueeRect.height }} />}
       {minimapItems && minimapItems.length > 0 && <SpatialMiniMap items={minimapItems} camera={camera} setCamera={setCamera} viewportSize={size} label={minimapLabel} beacon={beacon}/>}
-      {beacon && <SpatialBeaconLayer beacon={beacon} camera={camera} onArrivalEnd={onBeaconArrivalEnd}/>}
+      {beacon && <SpatialBeaconLayer beacon={beacon} camera={camera} onArrivalEnd={onBeaconArrivalEnd} surface={spatialMarkerSurfaceForCanvas(testId)} sourceSurfaceRef={semanticDropTarget?.id ?? testId}/>}
       {/* §4.13 边缘气泡标点:不跟随相机 transform 的固定屏幕层(minimap 同层),viewportSize 复用容器 ResizeObserver 实测值 */}
-      {edgePinItems && edgePinItems.length > 0 && onEdgePinLocate && <CanvasEdgePinLayer camera={camera} viewportSize={size} items={edgePinItems} onLocate={onEdgePinLocate}/>}
+      {edgePinItems && edgePinItems.length > 0 && onEdgePinLocate && <CanvasEdgePinLayer camera={camera} viewportSize={size} items={edgePinItems} currentSurfaceRef={semanticDropTarget?.id ?? testId} defaultSurface={spatialMarkerSurfaceForCanvas(testId)} onLocate={onEdgePinLocate}/>}
     </SpatialOverlayLayer>}
   </div>
 })

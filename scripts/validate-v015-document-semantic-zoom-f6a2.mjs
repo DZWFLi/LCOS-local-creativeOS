@@ -15,7 +15,7 @@ const checks = [
   ['Main passes world camera zoom into canonical CanvasNodeVisual', canvas.includes('density={density} zoom={zoom}')],
   ['Far LOD uses title identity instead of decorative fake text lines', visual.includes("level === 'title'") && visual.includes('lcos-document-title-identity')],
   ['Spatial labels have one shared priority vocabulary', labels.includes('SPATIAL_LABEL_PRIORITY') && labels.includes('beacon: 1000') && labels.includes('selected: 900')],
-  ['Spatial label contract separates navigation/world collision groups', labels.includes("'navigation' | 'world-label'")],
+  ['Spatial label contract separates navigation/marker/world collision groups (F6A2 marker family)', labels.includes("'navigation' | 'marker' | 'world-label'")],
   ['Spatial label core contains no hand-rolled DOM collision algorithm', !labels.includes('getBoundingClientRect') && !labels.includes('intersects') && !labels.includes('overlap')],
   ['Markdown input shortcuts promote #/##/###/- into structured blocks', editor.includes('applyMarkdownShortcut') && editor.includes("prefix === '###'") && editor.includes("prefix === '-'")],
   ['Pasted multi-line Markdown keeps heading/list block types', editor.includes('applyParsedMarkdownBlock(div, parseMarkdownBlockLine')],

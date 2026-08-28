@@ -1,0 +1,303 @@
+/* Spatial Marker System — Pin / Edge Cursor / Cluster are one presentation family.
+   Marker intent may become Core truth later; all geometry here is camera-derived. */
+
+.lcos-spatial-beacon-layer,
+.lcos-edge-pin-layer,
+.lcos-spatial-marker-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.lcos-spatial-marker-layer {
+  z-index: var(--lcos-z-content-hud, 30);
+  overflow: visible;
+}
+
+.lcos-spatial-marker,
+.lcos-spatial-marker-cluster {
+  --lcos-marker-accent: var(--lcos-ui-signal, var(--lcos-signal));
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+  font: inherit;
+  color: var(--lcos-ui-ink, var(--lcos-ink));
+}
+
+.lcos-spatial-marker[data-marker-surface='context'],
+.lcos-spatial-marker-cluster[data-marker-surface='context'],
+.lcos-spatial-marker-fan-child[data-surface='context'] {
+  --lcos-marker-accent: var(--lcos-ui-context, #516d9c);
+}
+
+.lcos-spatial-marker[data-marker-surface='workflow'],
+.lcos-spatial-marker-cluster[data-marker-surface='workflow'],
+.lcos-spatial-marker-fan-child[data-surface='workflow'] {
+  --lcos-marker-accent: var(--lcos-ui-workflow, #6755b7);
+}
+
+.lcos-spatial-marker {
+  appearance: none;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  display: grid;
+  place-items: center;
+  min-width: 24px;
+  min-height: 24px;
+}
+
+.lcos-spatial-marker-glyph {
+  position: relative;
+  display: block;
+  width: 16px;
+  height: 16px;
+  box-sizing: border-box;
+  color: var(--lcos-marker-accent);
+  transition: transform 150ms ease, opacity 150ms ease;
+}
+
+/* Main = grounded map pin: one calm circular body with a small anchor core. */
+.lcos-spatial-marker.is-main > .lcos-spatial-marker-glyph,
+.lcos-spatial-marker-cluster.is-main .lcos-spatial-marker-cluster-core > .lcos-spatial-marker-glyph,
+.lcos-spatial-marker-fan-child.is-main > .lcos-spatial-marker-glyph {
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 4px color-mix(in srgb, currentColor 8%, transparent);
+}
+.lcos-spatial-marker.is-main > .lcos-spatial-marker-glyph::before,
+.lcos-spatial-marker-cluster.is-main .lcos-spatial-marker-cluster-core > .lcos-spatial-marker-glyph::before,
+.lcos-spatial-marker-fan-child.is-main > .lcos-spatial-marker-glyph::before {
+  content: '';
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  left: 4.5px;
+  top: 4.5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* Context = field/aperture: two open vertical brackets, not another round pin. */
+.lcos-spatial-marker.is-context > .lcos-spatial-marker-glyph::before,
+.lcos-spatial-marker.is-context > .lcos-spatial-marker-glyph::after,
+.lcos-spatial-marker-cluster.is-context .lcos-spatial-marker-cluster-core > .lcos-spatial-marker-glyph::before,
+.lcos-spatial-marker-cluster.is-context .lcos-spatial-marker-cluster-core > .lcos-spatial-marker-glyph::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  width: 5px;
+  border: 1.5px solid currentColor;
+}
+.lcos-spatial-marker.is-context > .lcos-spatial-marker-glyph::before,
+.lcos-spatial-marker-cluster.is-context .lcos-spatial-marker-cluster-core > .lcos-spatial-marker-glyph::before,
+.lcos-spatial-marker-fan-child.is-context > .lcos-spatial-marker-glyph::before {
+  left: 0;
+  border-right: 0;
+  border-radius: 7px 0 0 7px;
+}
+.lcos-spatial-marker.is-context > .lcos-spatial-marker-glyph::after,
+.lcos-spatial-marker-cluster.is-context .lcos-spatial-marker-cluster-core > .lcos-spatial-marker-glyph::after,
+.lcos-spatial-marker-fan-child.is-context > .lcos-spatial-marker-glyph::after {
+  right: 0;
+  border-left: 0;
+  border-radius: 0 7px 7px 0;
+}
+
+/* Workflow = directional notch: process/direction without borrowing Relation arrows. */
+.lcos-spatial-marker.is-workflow > .lcos-spatial-marker-glyph,
+.lcos-spatial-marker-cluster.is-workflow .lcos-spatial-marker-cluster-core > .lcos-spatial-marker-glyph,
+.lcos-spatial-marker-fan-child.is-workflow > .lcos-spatial-marker-glyph {
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid currentColor;
+  border-left-color: transparent;
+  transform: rotate(45deg);
+  border-radius: 2px;
+}
+
+/* Scene / Conversation / Assembly / Collection use neutral family until each earns a
+   distinct morphology. They never borrow Conversation Glyth. */
+.lcos-spatial-marker.is-neutral > .lcos-spatial-marker-glyph,
+.lcos-spatial-marker-cluster.is-neutral .lcos-spatial-marker-cluster-core > .lcos-spatial-marker-glyph,
+.lcos-spatial-marker-fan-child.is-neutral > .lcos-spatial-marker-glyph {
+  border: 1.5px solid currentColor;
+  border-radius: 4px;
+}
+
+.lcos-spatial-marker.is-cross-surface > .lcos-spatial-marker-glyph::after,
+.lcos-spatial-marker-cluster.is-cross-surface .lcos-spatial-marker-cluster-core::after {
+  content: '';
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  right: -4px;
+  bottom: -4px;
+  border: 1px solid var(--lcos-marker-accent);
+  border-radius: 50%;
+  opacity: .5;
+  background: var(--lcos-ui-porcelain, rgba(253, 253, 255, .92));
+}
+
+/* Same identity, different viewport relation. Edge cursor adds direction only. */
+.lcos-spatial-marker.is-edge-cursor::before {
+  content: '';
+  position: absolute;
+  width: 10px;
+  height: 1px;
+  left: 7px;
+  top: 11.5px;
+  transform-origin: 5px 50%;
+  transform: rotate(var(--lcos-marker-angle));
+  background: color-mix(in srgb, var(--lcos-marker-accent) 62%, transparent);
+}
+.lcos-spatial-marker.is-edge-cursor > .lcos-spatial-marker-glyph {
+  transform: scale(.9);
+}
+.lcos-spatial-marker.is-world-pin > .lcos-spatial-marker-glyph {
+  transform: translateY(-2px);
+}
+
+.lcos-spatial-marker-label {
+  position: absolute;
+  top: 21px;
+  left: 50%;
+  max-width: 180px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 11px;
+  line-height: 1.25;
+  padding: 2px 5px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--lcos-ui-porcelain, #fff) 88%, transparent);
+  box-shadow: 0 2px 8px rgba(35, 31, 48, .08);
+  opacity: 0;
+  transition: opacity 120ms ease, transform 140ms ease;
+  pointer-events: none;
+}
+.lcos-spatial-marker:hover .lcos-spatial-marker-label,
+.lcos-spatial-marker:focus-visible .lcos-spatial-marker-label,
+.lcos-spatial-marker.is-edge-cursor .lcos-spatial-marker-label,
+.lcos-spatial-marker.is-beacon .lcos-spatial-marker-label,
+.lcos-spatial-marker.is-focus .lcos-spatial-marker-label,
+.lcos-spatial-marker.is-search .lcos-spatial-marker-label {
+  opacity: .94;
+  transform: translate(-50%, 2px);
+}
+
+/* Search/Focus/Beacon break out of clusters through priority; treatment stays quiet. */
+.lcos-spatial-marker:is(.is-beacon, .is-focus, .is-search) > .lcos-spatial-marker-glyph {
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--lcos-marker-accent) 24%, transparent));
+}
+.lcos-spatial-marker.is-arrival > .lcos-spatial-marker-glyph {
+  animation: lcos-marker-arrival 420ms cubic-bezier(.2,.9,.26,1);
+}
+@keyframes lcos-marker-arrival {
+  0% { transform: scale(.72); opacity: .48; }
+  55% { transform: scale(1.16); opacity: 1; }
+  100% { transform: scale(1); opacity: .92; }
+}
+
+.lcos-spatial-marker-cluster {
+  min-width: 30px;
+  min-height: 30px;
+}
+.lcos-spatial-marker-cluster-core {
+  appearance: none;
+  pointer-events: auto;
+  position: relative;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 6px;
+  border: 1px solid color-mix(in srgb, var(--lcos-marker-accent) 28%, transparent);
+  border-radius: 15px;
+  background: color-mix(in srgb, var(--lcos-ui-porcelain, #fff) 88%, transparent);
+  color: var(--lcos-marker-accent);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  box-shadow: 0 3px 12px rgba(40, 35, 55, .08);
+}
+.lcos-spatial-marker-cluster-core:disabled {
+  opacity: .8;
+}
+.lcos-spatial-marker-cluster-core > .lcos-spatial-marker-glyph {
+  width: 12px;
+  height: 12px;
+}
+.lcos-spatial-marker-cluster-core b {
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 650;
+}
+
+.lcos-spatial-marker-fan,
+.lcos-spatial-marker-fan-children {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  pointer-events: none;
+}
+.lcos-spatial-marker-fan-group {
+  position: absolute;
+  transform: translate(var(--lcos-marker-fan-x), var(--lcos-marker-fan-y));
+  pointer-events: auto;
+}
+.lcos-spatial-marker-fan-button,
+.lcos-spatial-marker-fan-child {
+  appearance: none;
+  border: 1px solid color-mix(in srgb, var(--lcos-marker-accent) 20%, transparent);
+  background: color-mix(in srgb, var(--lcos-ui-porcelain, #fff) 92%, transparent);
+  color: var(--lcos-ui-ink, var(--lcos-ink));
+  box-shadow: 0 4px 14px rgba(38, 33, 52, .08);
+  white-space: nowrap;
+}
+.lcos-spatial-marker-fan-button {
+  min-height: 25px;
+  padding: 3px 7px;
+  border-radius: 13px;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.lcos-spatial-marker-fan-button b {
+  color: var(--lcos-marker-accent);
+  font-size: 9px;
+}
+.lcos-spatial-marker-fan-child {
+  position: absolute;
+  min-height: 24px;
+  max-width: 150px;
+  padding: 3px 7px 3px 5px;
+  border-radius: 12px;
+  transform: translate(var(--lcos-marker-child-x), var(--lcos-marker-child-y));
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+}
+.lcos-spatial-marker-fan-child > span:last-child {
+  max-width: 112px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lcos-spatial-marker-fan-child .lcos-spatial-marker-glyph {
+  width: 10px;
+  height: 10px;
+}
+.lcos-spatial-marker:focus-visible,
+.lcos-spatial-marker-cluster :focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--lcos-marker-accent) 40%, transparent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lcos-spatial-marker *,
+  .lcos-spatial-marker-cluster * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

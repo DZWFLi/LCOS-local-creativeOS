@@ -23,7 +23,8 @@ const birthBadge = readRequired('apps/web/src/features/provenance/BirthProvenanc
 const canvas = readRequired('apps/web/src/features/canvas/ProjectCanvas.tsx')
 const focus = readRequired('apps/web/src/features/spatial/useSpatialFocusRequest.ts')
 const beacon = readRequired('apps/web/src/features/spatial/SpatialBeaconLayer.tsx')
-const beaconGeometry = readRequired('apps/web/src/features/spatial/spatialBeaconGeometry.ts')
+const markerSystem = readRequired('apps/web/src/features/spatial/spatialMarkerSystem.ts')
+const edgeGeometry = readRequired('apps/web/src/features/spatial/edgePinGeometry.ts')
 const conversationSpace = readRequired('apps/web/src/features/surfaces/ConversationSpaceSurface.tsx')
 const shell = readRequired('apps/web/src/features/shell/AppShellView.tsx')
 const dock = readRequired('apps/web/src/features/shell/SurfaceDock.tsx')
@@ -85,8 +86,9 @@ check('Focus/Provenance uses destination-guarded Spatial Beacon with motion comp
   app.includes("targetTestId: 'canvas'") && focus.includes('request.targetTestId') &&
   focus.includes("phase: 'approach'") && focus.includes("phase: 'arrival'") &&
   focus.includes('requestAnimationFrame') && !focus.includes('setTimeout(') && beacon.includes('data-beacon-phase') &&
-  beacon.includes('data-beacon-offscreen') && beacon.includes('projectSpatialBeacon') &&
-  beaconGeometry.includes('offscreen: true') && beaconGeometry.includes('Math.atan2'))
+  // F6A2 收编：Beacon 是瞬时高优先 Spatial Marker（offscreen → edge-cursor 由统一投影承接）
+  beacon.includes("attention: 'beacon' as const") && beacon.includes('SpatialMarkerLayer') &&
+  markerSystem.includes("'world-pin' | 'edge-cursor'") && edgeGeometry.includes('Math.atan2'))
 
 const birthLocate = app.match(/const locateBirthConversationSource[\s\S]*?\n\s*\}, \[activateOverview\]\)/)?.[0] ?? ''
 check('Birth/Where navigation is read-only and never mutates Selection',

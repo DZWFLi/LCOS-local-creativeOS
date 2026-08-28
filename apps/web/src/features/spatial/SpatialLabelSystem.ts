@@ -3,8 +3,8 @@
  * regions. Rendering belongs to a mature map-label provider (deck.gl); this
  * module deliberately contains no collision/DOM placement algorithm.
  */
-export type SpatialLabelRole = 'navigation' | 'selection' | 'glyth' | 'region' | 'document' | 'auxiliary'
-export type SpatialLabelCollisionGroup = 'navigation' | 'world-label'
+export type SpatialLabelRole = 'navigation' | 'marker' | 'marker-cluster' | 'selection' | 'glyth' | 'region' | 'document' | 'auxiliary'
+export type SpatialLabelCollisionGroup = 'navigation' | 'marker' | 'world-label'
 
 export interface SpatialLabelDatum {
   readonly id: string
@@ -20,6 +20,7 @@ export interface SpatialLabelDatum {
 
 export const SPATIAL_LABEL_PRIORITY = {
   beacon: 1000,
+  searchFocus: 950,
   selected: 900,
   activeGlyth: 800,
   region: 650,

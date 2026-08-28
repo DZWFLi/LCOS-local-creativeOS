@@ -11,6 +11,7 @@ import '../../../opendesign/design-systems/lcos-product/tokens/colors_and_type.c
 import './product-interface.css'
 import './interaction-system.css'
 import './spatial-components.css'
+import './spatial-marker.css'
 
 bootThemePreference()
 

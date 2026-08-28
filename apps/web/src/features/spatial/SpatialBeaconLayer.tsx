@@ -1,14 +1,30 @@
 import { useLayoutEffect, useRef, useState } from 'react'
-import type { CSSProperties } from 'react'
 import type { Camera } from '../../model'
-import { projectSpatialBeacon } from './spatialBeaconGeometry'
+import { SpatialMarkerLayer } from './SpatialMarkerLayer'
+import { SPATIAL_LABEL_PRIORITY } from './SpatialLabelSystem'
+import type { SpatialMarkerScope, SpatialMarkerSurfaceKind } from './spatialMarkerSystem'
 import type { SpatialBeaconState } from './useSpatialFocusRequest'
 
 /**
- * Structural Beacon layer: offscreen direction → camera approach → world arrival.
- * Visual treatment stays deliberately quiet until the Native GUI review.
+ * Beacon is no longer a separate arrow system. It is a transient high-priority
+ * Spatial Marker: onscreen it is a world pin; offscreen the same marker becomes
+ * an edge cursor. Search/Focus can therefore share clustering and priority rules.
  */
-export function SpatialBeaconLayer({ beacon, camera, onArrivalEnd }: { readonly beacon: SpatialBeaconState | null; readonly camera: Camera; readonly onArrivalEnd?: () => void }) {
+export function SpatialBeaconLayer({
+  beacon,
+  camera,
+  onArrivalEnd,
+  surface = 'main',
+  scope = 'local',
+  sourceSurfaceRef,
+}: {
+  readonly beacon: SpatialBeaconState | null
+  readonly camera: Camera
+  readonly onArrivalEnd?: () => void
+  readonly surface?: SpatialMarkerSurfaceKind
+  readonly scope?: SpatialMarkerScope
+  readonly sourceSurfaceRef?: string
+}) {
   const layerRef = useRef<HTMLDivElement | null>(null)
   const [viewport, setViewport] = useState({ width: 1000, height: 760 })
 
@@ -26,18 +42,38 @@ export function SpatialBeaconLayer({ beacon, camera, onArrivalEnd }: { readonly 
     return () => observer.disconnect()
   }, [])
 
-  if (!beacon) return null
-  const projected = projectSpatialBeacon(beacon.target, camera, viewport)
-  const labelSide = projected.x < viewport.width / 2 ? 'label-inward-right' : 'label-inward-left'
-  return <div ref={layerRef} className="lcos-spatial-beacon-layer" aria-hidden="true" data-beacon-phase={beacon.phase} data-beacon-offscreen={projected.offscreen || undefined}>
-    <div
-      className={`lcos-spatial-beacon is-${beacon.phase}${projected.offscreen ? ` is-offscreen ${labelSide}` : ''}`}
-      data-beacon-kind={beacon.target.visualKind ?? 'generic'}
-      style={{ left: projected.x, top: projected.y, '--lcos-beacon-angle': `${projected.angleRad}rad` } as CSSProperties}
-      onAnimationEnd={() => { if (beacon.phase === 'arrival') onArrivalEnd?.() }}
-    >
-      <i className="lcos-spatial-beacon-core" />
-      {projected.offscreen && beacon.target.label ? <span className="lcos-spatial-beacon-label">{beacon.target.label}</span> : null}
-    </div>
+  const markerItem = beacon ? {
+    id: `beacon:${beacon.nonce}:${beacon.target.id}`,
+    label: beacon.target.label ?? '目标',
+    bounds: {
+      x: beacon.target.x,
+      y: beacon.target.y,
+      width: beacon.target.width,
+      height: beacon.target.height,
+    },
+    surface,
+    scope,
+    sourceSurfaceRef,
+    attention: 'beacon' as const,
+    priority: SPATIAL_LABEL_PRIORITY.beacon,
+    groupKey: 'navigation',
+    groupLabel: '导航',
+  } : null
+
+  return <div
+    ref={layerRef}
+    className="lcos-spatial-beacon-layer"
+    aria-hidden="true"
+    data-beacon-phase={beacon?.phase}
+    data-beacon-kind={beacon?.target.visualKind ?? undefined}
+  >
+    {beacon && markerItem ? <SpatialMarkerLayer
+      camera={camera}
+      viewportSize={viewport}
+      interactive={false}
+      markerPhase={beacon.phase}
+      onMarkerAnimationEnd={onArrivalEnd}
+      items={[markerItem]}
+    /> : null}
   </div>
 }
