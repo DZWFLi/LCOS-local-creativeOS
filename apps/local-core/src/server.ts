@@ -83,6 +83,7 @@ import { handleContextSnapshotsRoute } from './routes/context-snapshots.js'
 import { handleHandoffsRoute } from './routes/handoffs.js'
 import { handleResourcesRoute } from './routes/resources.js'
 import { handleRuntimeRoute } from './routes/runtime.js'
+import { handleF6AssemblyRoute } from './routes/f6-assembly.js'
 import { handleConversationIdentityRoute } from './routes/conversation-identity.js'
 import { handleRunsRoute } from './routes/runs.js'
 import { handlePresentationsRoute } from './routes/presentations.js'
@@ -340,7 +341,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
     catalog, metadata, fileRegistry, fileObservation, importCopy, resources, packages, uploads,
     resourceReader, matcher, contextManifest, runtimeReview, runtimeApplication, activeContext,
     contextProposals, runEventListeners, obsidian, obsidianSessions, connectorRegistry,
-    ownsConversationService, conversations, previewWorker, presentation, curation, search, curationCommand, semantic,
+    ownsConversationService, conversations, previewWorker, presentation, curation, search, curationCommand, semantic, warehouse, resultSlots,
     runtimeRegistry, intelligence, captureStaging, resolveProjectAffinity, captureApplication, captureWatch, captureSpace, reorganize, sessionReadSet, spaceSandbox, agentletRuntime, spatialRetrieval, attentionRuntime, boundaryEvaluator, projectEvents, projectMutations, mutationSafety, feedbackRevision, continuityRuntime, receiverRuntime, sessionLifecycle, conversationIdentity,
   } = services
   metadata?.setRunEventSink?.((event) => {
@@ -1285,6 +1286,19 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
         controller,
         metadata,
         agentletRuntime,
+        helpers: routeHelpers,
+      })) return
+      if (metadata !== undefined && await handleF6AssemblyRoute({
+        method,
+        pathname,
+        url,
+        request,
+        response,
+        controller,
+        metadata,
+        warehouse,
+        resultSlots,
+        conversationIdentity,
         helpers: routeHelpers,
       })) return
       if (await handleRetrievalRoute({

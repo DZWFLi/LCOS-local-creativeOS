@@ -103,7 +103,7 @@ function dispatchFor(run: Run, id = `dispatch-${String(run.id)}`): RuntimeDispat
 describe('Runtime Schema v6', () => {
   it('creates all five canonical runtime tables in a fresh database', () => {
     const { path, repository } = createRepository()
-    expect(repository.schemaVersion).toBe(43)
+    expect(repository.schemaVersion).toBe(44)
     repository.close()
     repositories.splice(repositories.indexOf(repository), 1)
     const database = new DatabaseSync(path)
@@ -115,7 +115,7 @@ describe('Runtime Schema v6', () => {
       ORDER BY name
     `).all() as Array<{ name: string }>).map((row) => row.name)
     database.close()
-    expect(version.user_version).toBe(43)
+    expect(version.user_version).toBe(44)
     expect(tables).toEqual([
       'artifact_returns',
       'context_manifests',
@@ -206,7 +206,7 @@ describe('Runtime Schema v6', () => {
 
     const migrated = new SqliteMetadataRepository(path)
     repositories.push(migrated)
-    expect(migrated.schemaVersion).toBe(43)
+    expect(migrated.schemaVersion).toBe(44)
     expect(migrated.getProject('project-v5')?.name).toBe('V5')
     expect(statSync(`${path}.v5.bak`).size).toBeGreaterThan(0)
   })

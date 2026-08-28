@@ -160,13 +160,27 @@ export async function handleRunsRoute(ctx: RunsRouteContext): Promise<boolean> {
         || (input.requestedProvider !== undefined && !['workbuddy', 'codex', 'auto'].includes(String(input.requestedProvider)))
         || (input.sessionId !== undefined && typeof input.sessionId !== 'string')
         || (input.resultPolicy !== undefined && (!isRecord(input.resultPolicy) || typeof input.resultPolicy.type !== 'string'))
-        || Object.keys(input).some((key) => !['instruction', 'targetArtifactId', 'targetRevisionId', 'contextArtifactIds', 'savedContextId', 'workspaceId', 'outputIntent', 'requestedProvider', 'resultPolicy', 'sessionId'].includes(key))) {
+        || (input.receiverRef !== undefined && (!isRecord(input.receiverRef) || typeof input.receiverRef.connectedConversationId !== 'string'))
+        || (input.orderedReferences !== undefined && !Array.isArray(input.orderedReferences))
+        || (input.resultSlotId !== undefined && typeof input.resultSlotId !== 'string')
+        || Object.keys(input).some((key) => !['instruction', 'targetArtifactId', 'targetRevisionId', 'contextArtifactIds', 'savedContextId', 'workspaceId', 'outputIntent', 'requestedProvider', 'resultPolicy', 'sessionId', 'receiverRef', 'orderedReferences', 'resultSlotId'].includes(key))) {
         sendJson(response, 400, failure('INVALID_ARGUMENT', 'Run requires instruction and outputIntent (create|revise|analyze); revise also requires an explicit target.'))
         return true
       }
       sendJson(response, 201, {
         ok: true,
-        value: await runtimeApplication.create(projectId, input as unknown as CreateRuntimeRunInput),
+        value: await runtimeApplication.create(projectId, {
+          ...(input as unknown as CreateRuntimeRunInput),
+          // F6 P0-D2：orderedReferences 元素形状校验（ref.type × 必填 id 字段）。
+          ...(Array.isArray(input.orderedReferences) ? { orderedReferences: input.orderedReferences.flatMap((item) => {
+            if (!isRecord(item) || !isRecord(item.ref)) return []
+            const ref = item.ref as Record<string, unknown>
+            const type = String(ref.type)
+            const idField = type === 'artifact' ? 'artifactId' : type === 'view' ? 'viewId' : type === 'scope' ? 'scopeId' : type === 'workspace' ? 'workspaceId' : type === 'conversation' ? 'conversationSessionId' : type === 'component' ? 'componentId' : ''
+            if (idField === '' || typeof ref[idField] !== 'string') return []
+            return [item as never]
+          }) } : {}),
+        }),
       })
     } catch (error: unknown) {
       sendJson(response, 409, failure('CONFLICT', error instanceof Error ? error.message : 'Run could not be created.'))

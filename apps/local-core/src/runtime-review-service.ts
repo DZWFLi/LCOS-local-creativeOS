@@ -15,14 +15,18 @@ import { RuntimeLifecycleConflictError, SqliteMetadataRepository } from './metad
 export class RuntimeReviewService {
   /** F6 P0-A2（20260828）：accept 诞生/更新 artifact 即索引；缺省不 reindex。 */
   readonly #semantic: import('./semantic-index-service.js').SemanticIndexService | undefined
+  /** F6 P0-D5（20260828）：accept 时把产出物化到 Run 关联的 ResultSlot。 */
+  readonly #resultSlots: import('./result-slot-service.js').ResultSlotService | undefined
 
   constructor(
     private readonly repository: SqliteMetadataRepository,
     private readonly now: () => string = () => new Date().toISOString(),
     private readonly createId: () => string = randomUUID,
     semantic?: import('./semantic-index-service.js').SemanticIndexService,
+    resultSlots?: import('./result-slot-service.js').ResultSlotService,
   ) {
     this.#semantic = semantic
+    this.#resultSlots = resultSlots
   }
 
   getRunReview(runId: RunId): RunReview {
@@ -62,6 +66,21 @@ export class RuntimeReviewService {
     // F6 P0-A2：accept 诞生/更新的 artifact 立即进索引（fire-and-forget，不阻塞 review 返回）。
     if (this.#semantic !== undefined) {
       void this.#semantic.reindexArtifact(String(result.run.projectId), String(result.artifactReturn.targetArtifactId))
+    }
+    // F6 P0-D5：Run 带 ResultSlot 时物化（绑定 canonical view；不复制节点；幂等）。
+    if (this.#resultSlots !== undefined) {
+      const slotId = this.repository.getRunResultSlotId(String(result.run.id))
+      if (slotId !== undefined) {
+        try {
+          const views = this.repository.getArtifactViews(String(result.artifactReturn.targetArtifactId))
+          const viewId = views[0]?.id
+          if (viewId !== undefined) {
+            this.#resultSlots.materialize(slotId, String(result.run.id), String(result.artifactReturn.targetArtifactId), String(viewId))
+          }
+        } catch (error: unknown) {
+          console.warn(`[result-slot] materialize failed for slot ${slotId}: ${error instanceof Error ? error.message : String(error)}`)
+        }
+      }
     }
     return result
   }

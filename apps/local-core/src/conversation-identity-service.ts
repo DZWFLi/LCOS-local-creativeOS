@@ -17,6 +17,8 @@
 
 import type {
   ActiveReceiverIdentityV1,
+  ConversationReachItemV0,
+  ConversationReachResultV0,
   ArtifactBirthProvenanceV1,
   ConversationIdentityChainV1,
 } from '@local-creative-os/contracts'
@@ -101,6 +103,81 @@ export class ConversationIdentityService {
     return chain
   }
 
+  /**
+   * F6 P0-D3（20260828）：Conversation Reachability read projection。
+   * 「这只 Glyth 在 LCOS 已经 mapped / produced / referenced 了哪些对象」——
+   * 全部从既有 truth 现算（birth_run_id 反查 / relations kind=conversation_context /
+   * conversation_file_references / workspace memberships），不建第二套 Project Truth。
+   */
+  reach(projectId: string, connectedConversationId: string): ConversationReachResultV0 | undefined {
+    const connected = this.metadata.getConnectedConversation(projectId, connectedConversationId)
+    if (connected === undefined) return undefined
+    const items: ConversationReachItemV0[] = []
+    const seen = new Set<string>()
+    const push = (item: ConversationReachItemV0): void => {
+      const key = `${item.entityRef.type}:${item.entityRef.id}`
+      if (seen.has(key)) return
+      seen.add(key)
+      items.push(item)
+    }
+
+    // ① produced：birth_run_id → runtime_binding.external_session_id → 本 conversation。
+    for (const artifact of this.metadata.getArtifacts(projectId)) {
+      const birthRunId = this.metadata.getArtifactBirthRunId(String(artifact.id))
+      if (birthRunId === undefined) continue
+      const binding = this.metadata.getRuntimeBinding(birthRunId as never)
+      if (binding?.externalSessionId === undefined) continue
+      const birthConnected = this.metadata.getConnectedConversationByRef(projectId, binding.externalSessionId)
+      if (birthConnected === undefined || String(birthConnected.id) !== connectedConversationId) continue
+      push({
+        entityRef: { type: 'artifact', id: String(artifact.id) },
+        tier: 'produced',
+        reason: `born from run ${String(birthRunId)} via this conversation`,
+        ...(typeof (artifact as { readonly createdAt?: string }).createdAt === 'string' ? { createdAt: (artifact as { readonly createdAt?: string }).createdAt } : {}),
+        sourceRef: `run:${String(birthRunId)}`,
+      })
+    }
+
+    // ② bound：显式 conversation_context relation（source = conversationArtifactId 或 conversation ref）。
+    const conversationKeys = new Set<string>([connectedConversationId, connected.conversationRef])
+    if (connected.conversationSessionId !== undefined) conversationKeys.add(connected.conversationSessionId)
+    for (const relation of this.metadata.getRelations(projectId)) {
+      const sourceKey = String(relation.sourceEntityId)
+      if (!conversationKeys.has(sourceKey)) continue
+      if (relation.kind !== 'conversation_context' && relation.kind !== 'conversation-context') continue
+      const targetArtifact = this.metadata.getArtifact(String(relation.targetEntityId))
+      if (targetArtifact !== undefined) {
+        push({
+          entityRef: { type: 'artifact', id: String(relation.targetEntityId) },
+          tier: 'bound',
+          reason: 'explicit conversation_context binding',
+          createdAt: relation.createdAt,
+          sourceRef: `relation:${String(relation.id)}`,
+        })
+      }
+    }
+
+    // ③ referenced：conversation_file_references（导入会话维度）。
+    if (connected.conversationSessionId !== undefined) {
+      for (const artifactId of this.metadata.listArtifactIdsReferencedByConversation(connected.conversationSessionId)) {
+        const artifact = this.metadata.getArtifact(artifactId)
+        if (artifact === undefined || String(artifact.projectId) !== projectId) continue
+        push({
+          entityRef: { type: 'artifact', id: artifactId },
+          tier: 'referenced',
+          reason: 'referenced in imported conversation transcript',
+          sourceRef: `conversation-file-reference:${connected.conversationSessionId}`,
+        })
+      }
+    }
+
+    return {
+      schemaVersion: 0,
+      projectId,
+      connectedConversationId,
+      items,
+    }
+  }
   /** Artifact 出生谱系；artifact 不存在 = undefined（路由层 404）。 */
   resolveBirth(projectId: string, artifactId: string): ArtifactBirthProvenanceV1 | undefined {
     const artifact = this.metadata.getArtifact(artifactId)

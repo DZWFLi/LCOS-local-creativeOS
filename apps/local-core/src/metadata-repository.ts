@@ -268,7 +268,8 @@ export class SqliteMetadataRepository {
     if (current === 40) { this.#migrate_041_from_v40(); current = 41 }
     if (current === 41) { this.#migrate_042_from_v41(); current = 42 }
     if (current === 42) { this.#migrate_043_from_v42(); current = 43 }
-    if (current !== 43) throw new Error(`Unsupported metadata schema version ${current}.`)
+    if (current === 43) { this.#migrate_044_from_v43(); current = 44 }
+    if (current !== 44) throw new Error(`Unsupported metadata schema version ${current}.`)
   }
 
   #migrate_037_from_v36(): void {
@@ -425,6 +426,41 @@ export class SqliteMetadataRepository {
     `)
   }
 
+  #migrate_044_from_v43(): void {
+    // F6 P0-D（20260828）：ResultSlot 表 + Run 的 Composer 三列。
+    // result_slots：Blank Result authoritative truth（empty/running/review/materialized）；
+    // runs.receiver_conversation_id：canonical ReceiverRef（Core 解析，前端不猜 session）；
+    // runs.ordered_references_json：heterogeneous ordered refs V2（artifact/view/scope/
+    // workspace/conversation/component）；runs.result_slot_id：Run→槽位关联。
+    this.#database.exec(`
+      BEGIN;
+      CREATE TABLE IF NOT EXISTS result_slots (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        scope_id TEXT NOT NULL,
+        workspace_id TEXT,
+        x REAL NOT NULL,
+        y REAL NOT NULL,
+        width REAL,
+        height REAL,
+        status TEXT NOT NULL CHECK(status IN ('empty','running','review','materialized')),
+        artifact_view_id TEXT,
+        artifact_id TEXT,
+        run_id TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_result_slots_project
+        ON result_slots(project_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_result_slots_run
+        ON result_slots(run_id);
+      ALTER TABLE runs ADD COLUMN receiver_conversation_id TEXT;
+      ALTER TABLE runs ADD COLUMN ordered_references_json TEXT;
+      ALTER TABLE runs ADD COLUMN result_slot_id TEXT;
+      PRAGMA user_version = 44;
+      COMMIT;
+    `)
+  }
   #migrate_036_from_v35(): void {
     // S6: one durable batch identity for one user-visible import action.
     // Keep this as provenance only; it must never imply Collection membership.
@@ -2804,6 +2840,138 @@ export class SqliteMetadataRepository {
     )
   }
 
+  // ==================== F6 P0-D：ResultSlot CRUD + Run Composer 列（20260828） ====================
+
+  #resultSlotFromRow(row: Row): import('@local-creative-os/contracts').ResultSlotV0 {
+    return {
+      schemaVersion: 0,
+      id: String(row.id),
+      projectId: String(row.project_id),
+      scopeId: String(row.scope_id),
+      ...(row.workspace_id ? { workspaceId: String(row.workspace_id) } : {}),
+      position: { x: Number(row.x), y: Number(row.y) },
+      ...(row.width === null || row.width === undefined ? {} : { size: { width: Number(row.width), height: Number(row.height) } }),
+      status: String(row.status) as import('@local-creative-os/contracts').ResultSlotV0['status'],
+      ...(row.artifact_view_id ? { artifactViewId: String(row.artifact_view_id) } : {}),
+      ...(row.artifact_id ? { artifactId: String(row.artifact_id) } : {}),
+      ...(row.run_id ? { runId: String(row.run_id) } : {}),
+      createdAt: String(row.created_at),
+      updatedAt: String(row.updated_at),
+    }
+  }
+
+  createResultSlot(slot: import('@local-creative-os/contracts').ResultSlotV0): void {
+    this.#database.prepare(`
+      INSERT INTO result_slots (id, project_id, scope_id, workspace_id, x, y, width, height, status, artifact_view_id, artifact_id, run_id, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      slot.id as SQLInputValue, slot.projectId as SQLInputValue, slot.scopeId as SQLInputValue,
+      (slot.workspaceId ?? null) as SQLInputValue, slot.position.x as SQLInputValue, slot.position.y as SQLInputValue,
+      (slot.size?.width ?? null) as SQLInputValue, (slot.size?.height ?? null) as SQLInputValue,
+      slot.status as SQLInputValue, (slot.artifactViewId ?? null) as SQLInputValue, (slot.artifactId ?? null) as SQLInputValue,
+      (slot.runId ?? null) as SQLInputValue, slot.createdAt as SQLInputValue, slot.updatedAt as SQLInputValue,
+    )
+  }
+
+  getResultSlot(slotId: string): import('@local-creative-os/contracts').ResultSlotV0 | undefined {
+    const row = this.#database.prepare('SELECT * FROM result_slots WHERE id = ?').get(slotId as SQLInputValue) as Row | undefined
+    return row === undefined ? undefined : this.#resultSlotFromRow(row)
+  }
+
+  listResultSlots(projectId: string): readonly import('@local-creative-os/contracts').ResultSlotV0[] {
+    return (this.#database.prepare('SELECT * FROM result_slots WHERE project_id = ? ORDER BY created_at DESC').all(projectId as SQLInputValue) as Row[])
+      .map((row) => this.#resultSlotFromRow(row))
+  }
+
+  getResultSlotByRun(runId: string): import('@local-creative-os/contracts').ResultSlotV0 | undefined {
+    const row = this.#database.prepare('SELECT * FROM result_slots WHERE run_id = ? ORDER BY created_at DESC LIMIT 1').get(runId as SQLInputValue) as Row | undefined
+    return row === undefined ? undefined : this.#resultSlotFromRow(row)
+  }
+
+  updateResultSlot(slotId: string, patch: {
+    readonly status?: import('@local-creative-os/contracts').ResultSlotV0['status']
+    readonly artifactId?: string
+    readonly artifactViewId?: string
+    readonly runId?: string | undefined
+  }): import('@local-creative-os/contracts').ResultSlotV0 {
+    const current = this.getResultSlot(slotId)
+    if (current === undefined) throw new Error('Result slot not found.')
+    const next = {
+      ...current,
+      ...(patch.status === undefined ? {} : { status: patch.status }),
+      ...(patch.artifactId === undefined ? {} : { artifactId: patch.artifactId }),
+      ...(patch.artifactViewId === undefined ? {} : { artifactViewId: patch.artifactViewId }),
+      ...(patch.runId === undefined ? {} : { runId: patch.runId }),
+      updatedAt: new Date().toISOString(),
+    }
+    this.#database.prepare(`
+      UPDATE result_slots SET status = ?, artifact_view_id = ?, artifact_id = ?, run_id = ?, updated_at = ?
+      WHERE id = ?
+    `).run(
+      next.status as SQLInputValue, (next.artifactViewId ?? null) as SQLInputValue, (next.artifactId ?? null) as SQLInputValue,
+      (next.runId ?? null) as SQLInputValue, next.updatedAt as SQLInputValue, slotId as SQLInputValue,
+    )
+    return this.getResultSlot(slotId)!
+  }
+
+  deleteResultSlot(slotId: string): void {
+    const result = this.#database.prepare('DELETE FROM result_slots WHERE id = ?').run(slotId as SQLInputValue)
+    if (result.changes !== 1) throw new Error('Result slot not found.')
+  }
+
+  /** Run 的 Composer 三列（receiver / ordered refs / result slot）——domain Run 类型不扩，独立读面。 */
+  getRunReceiverConversationId(runId: string): string | undefined {
+    const row = this.#database.prepare('SELECT receiver_conversation_id FROM runs WHERE id = ?').get(runId as SQLInputValue) as { receiver_conversation_id?: string | null } | undefined
+    return row?.receiver_conversation_id === undefined || row.receiver_conversation_id === null ? undefined : String(row.receiver_conversation_id)
+  }
+
+  getRunOrderedReferences(runId: string): readonly import('@local-creative-os/contracts').OrderedRunReferenceV2[] {
+    const row = this.#database.prepare('SELECT ordered_references_json FROM runs WHERE id = ?').get(runId as SQLInputValue) as { ordered_references_json?: string | null } | undefined
+    if (row?.ordered_references_json === undefined || row.ordered_references_json === null) return []
+    try {
+      const parsed = JSON.parse(row.ordered_references_json) as unknown
+      return Array.isArray(parsed) ? parsed as import('@local-creative-os/contracts').OrderedRunReferenceV2[] : []
+    } catch {
+      return []
+    }
+  }
+
+  getRunResultSlotId(runId: string): string | undefined {
+    const row = this.#database.prepare('SELECT result_slot_id FROM runs WHERE id = ?').get(runId as SQLInputValue) as { result_slot_id?: string | null } | undefined
+    return row?.result_slot_id === undefined || row.result_slot_id === null ? undefined : String(row.result_slot_id)
+  }
+
+  setRunComposerFields(runId: string, patch: {
+    readonly receiverConversationId?: string
+    readonly orderedReferencesJson?: string
+    readonly resultSlotId?: string
+  }): void {
+    const result = this.#database.prepare(`
+      UPDATE runs SET
+        receiver_conversation_id = COALESCE(?, receiver_conversation_id),
+        ordered_references_json = COALESCE(?, ordered_references_json),
+        result_slot_id = COALESCE(?, result_slot_id),
+        updated_at = ?
+      WHERE id = ?
+    `).run(
+      (patch.receiverConversationId ?? null) as SQLInputValue,
+      (patch.orderedReferencesJson ?? null) as SQLInputValue,
+      (patch.resultSlotId ?? null) as SQLInputValue,
+      new Date().toISOString() as SQLInputValue,
+      runId as SQLInputValue,
+    )
+    if (result.changes !== 1) throw new Error('Run not found for composer fields.')
+  }
+
+  /** F6 P0-D3：conversation_file_references 读取（Reachability referenced 层数据源）。 */
+  listArtifactIdsReferencedByConversation(conversationSessionId: string): readonly string[] {
+    const rows = this.#database.prepare(`
+      SELECT DISTINCT r.artifact_id FROM conversation_file_references r
+      JOIN conversation_messages m ON m.id = r.message_id
+      WHERE m.session_id = ?
+    `).all(conversationSessionId as SQLInputValue) as Row[]
+    return rows.map((row) => String(row.artifact_id))
+  }
   searchDocumentsFts(projectId: string, query: string, limit: number): Array<{ readonly entityId: string; readonly title: string; readonly body: string }> {
     // FTS5 特殊语法字符全部剥离(含列过滤器的中括号):SKILL 指令等 markdown 文本含 [ ] 会触发 fts5 syntax error(2R 教工作流 E2E 实测修)
     const sanitized = query.replace(/["*^~():|&!\[\]-]/g, ' ').trim()

@@ -27,6 +27,12 @@ export interface CreateRuntimeRunInput {
   readonly requestedProvider?: 'workbuddy' | 'codex' | 'auto'
   /** B6 Continuity：Run 归属的 LCOS 会话（Session Binding / Attach / Return 的锚点）。 */
   readonly sessionId?: string
+  /** F6 P0-D1（20260828）：canonical receiver——Core 解析 ConnectedConversation 身份桥；未 link 的 Glyth fail-close。 */
+  readonly receiverRef?: { readonly connectedConversationId: string }
+  /** F6 P0-D2：heterogeneous ordered references（artifact/view/scope/workspace/conversation/component）。 */
+  readonly orderedReferences?: readonly import('@local-creative-os/contracts').OrderedRunReferenceV2[]
+  /** F6 P0-D5：Run 产出物化到的结果槽位。 */
+  readonly resultSlotId?: string
 }
 
 export interface RuntimeRunActionResult {
@@ -169,7 +175,22 @@ export class RuntimeApplicationService {
       updatedAt: timestamp,
     }
     this.repository.createRunWithDispatch(run, dispatch)
-    this.emit(run.id, 'run.queued', { outputIntent, projectId: String(projectId), ...(input.sessionId === undefined ? {} : { sessionId: input.sessionId }) })
+    // ---- F6 P0-D（20260828）：Composer 三列落地（receiver / ordered refs / result slot）----
+    // P0-D1：receiverRef 由 Core 解析——linked 的 ConnectedConversation 提供 canonical session；
+    // 未 link = fail-close（不伪造 session，不回退猜测）。receiverRef 与显式 sessionId 并存时后者优先。
+    let effectiveSessionId = input.sessionId
+    if (input.receiverRef !== undefined) {
+      const connected = this.repository.getConnectedConversation(String(projectId), input.receiverRef.connectedConversationId)
+      if (connected === undefined) throw new Error('ReceiverRef resolved to no connected conversation (fail-close).')
+      const linkedSessionId = connected.conversationSessionId
+      if (effectiveSessionId === undefined && linkedSessionId !== undefined) effectiveSessionId = linkedSessionId
+      this.repository.setRunComposerFields(String(run.id), { receiverConversationId: input.receiverRef.connectedConversationId })
+    }
+    // P0-D2：orderedReferences 持久化（Core 冻结时的输入快照；manifest 仍走既有 build）。
+    if (input.orderedReferences !== undefined && input.orderedReferences.length > 0) {
+      this.repository.setRunComposerFields(String(run.id), { orderedReferencesJson: JSON.stringify(input.orderedReferences) })
+    }
+    this.emit(run.id, 'run.queued', { outputIntent, projectId: String(projectId), ...(effectiveSessionId === undefined ? {} : { sessionId: effectiveSessionId }) })
     const createdReview = this.review.getRunReview(run.id)
     this.#observeSessionLifecycle(createdReview)
     return { review: createdReview }

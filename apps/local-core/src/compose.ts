@@ -43,6 +43,8 @@ import { ContinuityRuntimeService } from './continuity-runtime-service.js'
 import { ReceiverRuntimeService } from './receiver-runtime-service.js'
 import { SessionLifecycleService } from './session-lifecycle-service.js'
 import { ConversationIdentityService } from './conversation-identity-service.js'
+import { WarehouseService } from './warehouse-service.js'
+import { ResultSlotService } from './result-slot-service.js'
 import { SessionReadSet } from './session-read-set.js'
 import { SpaceSandboxService } from './space-sandbox-service.js'
 import { AgentletRuntimeService } from './agentlet-runtime-service.js'
@@ -105,6 +107,8 @@ export interface LocalCoreServices {
   readonly receiverRuntime: ReceiverRuntimeService | undefined
   readonly sessionLifecycle: SessionLifecycleService | undefined
   readonly conversationIdentity: ConversationIdentityService | undefined
+  readonly warehouse: WarehouseService | undefined
+  readonly resultSlots: ResultSlotService | undefined
 }
 
 /** 服务装配：把 options 解析成 createLocalCoreServer 需要的一组服务。 */
@@ -176,6 +180,9 @@ export function composeLocalCoreServices(options: LocalCoreServerOptions = {}): 
   // Phase 5 Live Session Binding：会话七态持久化 + run 事件驱动（G3 taxonomy 落地）。
   const sessionLifecycle = metadata === undefined ? undefined : new SessionLifecycleService(metadata, projectEvents)
   // Conversation Identity Bridge（20260827 P0）：承接会话 ↔ 导入会话 canonical 链 + 出生谱系。
+  // F6 P0-B/P0-D（20260828）：Warehouse read model + ResultSlot truth。
+  const warehouse = metadata === undefined ? undefined : new WarehouseService(metadata)
+  const resultSlots = metadata === undefined ? undefined : new ResultSlotService(metadata)
   const conversationIdentity = metadata === undefined || conversations === undefined
     ? undefined
     : new ConversationIdentityService(metadata, conversations, sessionLifecycle, projectEvents)
@@ -198,7 +205,7 @@ export function composeLocalCoreServices(options: LocalCoreServerOptions = {}): 
     matcher: options.resourceMatcher ?? new ResourceMatcher(),
     contextManifest: options.contextManifestService ?? (metadata === undefined ? undefined : new ContextManifestService(metadata)),
     // F6 P0-A2：accept 诞生的 artifact 即索引（第四参可选挂点）。
-    runtimeReview: options.runtimeReviewService ?? (metadata === undefined ? undefined : new RuntimeReviewService(metadata, undefined, undefined, semantic)),
+    runtimeReview: options.runtimeReviewService ?? (metadata === undefined ? undefined : new RuntimeReviewService(metadata, undefined, undefined, semantic, resultSlots)),
     runtimeApplication: options.runtimeApplicationService,
     sessionLifecycle,
     conversationIdentity,
@@ -255,5 +262,7 @@ export function composeLocalCoreServices(options: LocalCoreServerOptions = {}): 
     feedbackRevision,
     continuityRuntime,
     receiverRuntime,
+    warehouse,
+    resultSlots,
   }
 }
