@@ -70,6 +70,12 @@ export class WarehouseService {
       const key = String(membership.artifactViewId)
       usageByView.set(key, (usageByView.get(key) ?? 0) + 1)
     }
+    // 裁决 1：note 的 scene 投影计数（workspace_entity_memberships）。
+    const noteUsageByEntity = new Map<string, number>()
+    for (const membership of this.repository.listProjectWorkspaceEntityMemberships(projectId as never)) {
+      if (membership.entityType !== 'note') continue
+      noteUsageByEntity.set(membership.entityId, (noteUsageByEntity.get(membership.entityId) ?? 0) + 1)
+    }
     // relation 邻居预投影：entityId → 邻居计数 + kind 直方图（scope/workspace 端点同样命中）。
     const relations = this.repository.getRelations(projectId)
     const neighborsByEntity = new Map<string, NeighborEntry>()
@@ -141,7 +147,7 @@ export class WarehouseService {
           kind: 'note',
           title: note.body.slice(0, 60),
           ...(updatedAt === undefined ? {} : { updatedAt }),
-          usageCount: 0,
+          usageCount: noteUsageByEntity.get(String(note.id)) ?? 0,
         })
       }
     }

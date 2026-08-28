@@ -39,6 +39,7 @@ import type {
   WorkspaceId,
   WorkspaceMembership,
   WorkspaceMembershipSource,
+  WorkspaceEntityMembership,
 } from '@local-creative-os/domain'
 import { assertContainmentWrite } from '@local-creative-os/domain'
 import type {
@@ -279,7 +280,8 @@ export class SqliteMetadataRepository {
     if (current === 43) { this.#migrate_044_from_v43(); current = 44 }
     if (current === 44) { this.#migrate_045_from_v44(); current = 45 }
     if (current === 45) { this.#migrate_046_from_v45(); current = 46 }
-    if (current !== 46) throw new Error(`Unsupported metadata schema version ${current}.`)
+    if (current === 46) { this.#migrate_047_from_v46(); current = 47 }
+    if (current !== 47) throw new Error(`Unsupported metadata schema version ${current}.`)
   }
 
   #migrate_037_from_v36(): void {
@@ -436,6 +438,24 @@ export class SqliteMetadataRepository {
     `)
   }
 
+  #migrate_047_from_v46(): void {
+    // 裁决 1（20260828）：Scene working-set 泛化——无 view 的可投影 Project Entity（Note 等）
+    // 以 entity 成员进入 workspace truth。与 workspace_memberships（view 成员）同一逻辑 truth
+    // 的两个物理表；FK 到 workspaces，删除级联。
+    this.#database.exec(`
+      BEGIN;
+      CREATE TABLE IF NOT EXISTS workspace_entity_memberships (
+        workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+        entity_type TEXT NOT NULL CHECK(entity_type IN ('note','scope','workspace','conversation')),
+        entity_id TEXT NOT NULL,
+        added_at TEXT NOT NULL,
+        added_by TEXT NOT NULL CHECK(added_by IN ('user','agent','run','import')),
+        PRIMARY KEY(workspace_id, entity_type, entity_id)
+      );
+      PRAGMA user_version = 47;
+      COMMIT;
+    `)
+  }
   #migrate_046_from_v45(): void {
     // F6 follow-up（20260828 补充冻结）：capture materialize 产物回链——
     // resolvedArtifactId/resolvedViewId 使 capture→surface 的 apply 可安全重试（幂等复用）。
@@ -1836,6 +1856,7 @@ export class SqliteMetadataRepository {
                 .run(projectId as SQLInputValue, `presentation:custom:workspace:${String(op.workspaceId)}` as SQLInputValue)
             }
             this.#database.prepare('DELETE FROM workspace_memberships WHERE workspace_id = ?').run(op.workspaceId as SQLInputValue)
+          this.#database.prepare('DELETE FROM workspace_entity_memberships WHERE workspace_id = ?').run(op.workspaceId as SQLInputValue)
             this.#database.prepare('DELETE FROM workspaces WHERE id = ?').run(op.workspaceId as SQLInputValue)
             break
           case 'reorder_workspaces': {
@@ -2467,6 +2488,8 @@ export class SqliteMetadataRepository {
     }
     readonly workspaceMembershipAdds?: readonly { readonly workspaceId: WorkspaceId; readonly viewId: ArtifactViewId; readonly addedBy: 'user' | 'agent' | 'run' | 'import'; readonly addedAt: string }[]
     readonly workspaceMembershipRemoves?: readonly { readonly workspaceId: WorkspaceId; readonly viewId: ArtifactViewId }[]
+    readonly workspaceEntityMembershipAdds?: readonly { readonly workspaceId: WorkspaceId; readonly entityType: WorkspaceEntityMembership['entityType']; readonly entityId: string; readonly addedBy: WorkspaceMembershipSource; readonly addedAt: string }[]
+    readonly workspaceEntityMembershipRemoves?: readonly { readonly workspaceId: WorkspaceId; readonly entityType: WorkspaceEntityMembership['entityType']; readonly entityId: string }[]
     readonly artifactViewDeletes?: readonly ArtifactViewId[]
     readonly noteDeletes?: readonly NoteId[]
     readonly changeSet?: MutationChangeSetV1
@@ -2518,6 +2541,16 @@ export class SqliteMetadataRepository {
       for (const membership of plan.workspaceMembershipRemoves ?? []) {
         this.#database.prepare('DELETE FROM workspace_memberships WHERE workspace_id = ? AND artifact_view_id = ?')
           .run(membership.workspaceId as SQLInputValue, membership.viewId as SQLInputValue)
+      }
+      for (const membership of plan.workspaceEntityMembershipAdds ?? []) {
+        this.#database.prepare(`
+          INSERT OR IGNORE INTO workspace_entity_memberships (workspace_id, entity_type, entity_id, added_at, added_by)
+          VALUES (?, ?, ?, ?, ?)
+        `).run(membership.workspaceId as SQLInputValue, membership.entityType, membership.entityId, membership.addedAt, membership.addedBy)
+      }
+      for (const membership of plan.workspaceEntityMembershipRemoves ?? []) {
+        this.#database.prepare('DELETE FROM workspace_entity_memberships WHERE workspace_id = ? AND entity_type = ? AND entity_id = ?')
+          .run(membership.workspaceId as SQLInputValue, membership.entityType, membership.entityId)
       }
       for (const viewId of plan.artifactViewDeletes ?? []) this.#database.prepare('DELETE FROM artifact_views WHERE id = ?').run(viewId as SQLInputValue)
       for (const noteId of plan.noteDeletes ?? []) this.#database.prepare('DELETE FROM notes WHERE id = ?').run(noteId as SQLInputValue)
@@ -4403,6 +4436,72 @@ export class SqliteMetadataRepository {
     return this.listWorkspaceMembers(workspaceId)
   }
 
+  // ==================== 裁决 1（20260828）：Scene working-set entity 成员 ====================
+
+  addWorkspaceEntityMembers(
+    workspaceId: WorkspaceId,
+    refs: readonly { readonly entityType: WorkspaceEntityMembership['entityType']; readonly entityId: string }[],
+    addedBy: WorkspaceMembershipSource,
+    addedAt: string,
+  ): readonly WorkspaceEntityMembership[] {
+    this.#database.exec('BEGIN IMMEDIATE;')
+    try {
+      for (const ref of refs) {
+        this.#database.prepare(`
+          INSERT OR IGNORE INTO workspace_entity_memberships (workspace_id, entity_type, entity_id, added_at, added_by)
+          VALUES (?, ?, ?, ?, ?)
+        `).run(workspaceId as SQLInputValue, ref.entityType, ref.entityId, addedAt, addedBy)
+      }
+      this.#database.exec('COMMIT;')
+    } catch (error: unknown) {
+      this.#database.exec('ROLLBACK;')
+      throw error
+    }
+    return this.listWorkspaceEntityMembers(workspaceId)
+  }
+
+  removeWorkspaceEntityMembers(
+    workspaceId: WorkspaceId,
+    refs: readonly { readonly entityType: WorkspaceEntityMembership['entityType']; readonly entityId: string }[],
+  ): void {
+    this.#database.exec('BEGIN IMMEDIATE;')
+    try {
+      for (const ref of refs) {
+        this.#database.prepare('DELETE FROM workspace_entity_memberships WHERE workspace_id = ? AND entity_type = ? AND entity_id = ?')
+          .run(workspaceId as SQLInputValue, ref.entityType, ref.entityId)
+      }
+      this.#database.exec('COMMIT;')
+    } catch (error: unknown) {
+      this.#database.exec('ROLLBACK;')
+      throw error
+    }
+  }
+
+  listWorkspaceEntityMembers(workspaceId: WorkspaceId): readonly WorkspaceEntityMembership[] {
+    const rows = this.#database.prepare('SELECT * FROM workspace_entity_memberships WHERE workspace_id = ? ORDER BY added_at, entity_type, entity_id')
+      .all(workspaceId as SQLInputValue) as Row[]
+    return rows.map((row) => this.#workspaceEntityMembership(row))
+  }
+
+  listProjectWorkspaceEntityMemberships(projectId: ProjectId): readonly WorkspaceEntityMembership[] {
+    const rows = this.#database.prepare(`
+      SELECT m.* FROM workspace_entity_memberships m
+      JOIN workspaces w ON w.id = m.workspace_id
+      WHERE w.project_id = ?
+      ORDER BY m.added_at, m.entity_type, m.entity_id
+    `).all(projectId as SQLInputValue) as Row[]
+    return rows.map((row) => this.#workspaceEntityMembership(row))
+  }
+
+  #workspaceEntityMembership(row: Row): WorkspaceEntityMembership {
+    return {
+      workspaceId: row.workspace_id as WorkspaceId,
+      entityType: String(row.entity_type) as WorkspaceEntityMembership['entityType'],
+      entityId: String(row.entity_id),
+      addedAt: String(row.added_at),
+      addedBy: String(row.added_by) as WorkspaceEntityMembership['addedBy'],
+    }
+  }
   moveWorkspaceMembers(
     fromWorkspaceId: WorkspaceId,
     toWorkspaceId: WorkspaceId,

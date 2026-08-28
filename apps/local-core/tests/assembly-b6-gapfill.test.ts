@@ -348,13 +348,13 @@ describe('F6 B6 P0-F: propose 保留 Unified Execution Contract', () => {
       receiverRef: { connectedConversationId: 'cc-b6' },
       orderedReferences: [
         { ref: { type: 'artifact', artifactId: 'artifact-a' }, order: 0 },
-        { ref: { type: 'note', noteId: 'note-b6-member-1' }, order: 1, mode: 'summary' },
+        { ref: { type: 'scope', scopeId: 'scope-b6-context' }, order: 1, mode: 'summary' },
       ],
       resultSlotId: 'slot-b6',
     })
     expect(value.proposal.receiverRef).toEqual({ connectedConversationId: 'cc-b6' })
     expect(value.proposal.orderedReferences).toHaveLength(2)
-    expect(value.proposal.orderedReferences![1]!.ref).toEqual({ type: 'note', noteId: 'note-b6-member-1' })
+    expect(value.proposal.orderedReferences![1]!.ref).toEqual({ type: 'scope', scopeId: 'scope-b6-context' })
     expect(value.proposal.resultSlotId).toBe('slot-b6')
     expect(value.confidence).toBe('high')
   })

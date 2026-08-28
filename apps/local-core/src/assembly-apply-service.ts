@@ -159,15 +159,19 @@ export class AssemblyApplyService {
       return this.#applySurfaceMembership(projectId, sourceRef, targetRef, placement)
     }
 
-    // ---- 通道 5（B6）：note / aggregate source → surface（entity 成员，memberEntityRefs）----
+    // ---- 通道 5（B6 + 裁决 1）：note / aggregate source → surface（entity 成员）----
     if (sourceRef.kind === 'note' || sourceRef.kind === 'context' || sourceRef.kind === 'workflow' || sourceRef.kind === 'collection' || sourceRef.kind === 'scene') {
+      // 裁决 1（20260828）：Note 可进 Scene——以 entity 成员进 working-set truth，保留 canonical note identity。
+      if (sourceRef.kind === 'note' && (targetRef.kind === 'workspace' || targetRef.kind === 'scene')) {
+        return this.#applySceneEntityMembership(projectId, sourceRef, targetRef, placement)
+      }
       if (targetRef.kind === 'main' || targetRef.kind === 'context' || targetRef.kind === 'workflow') {
         return this.#applyEntityMembership(projectId, sourceRef, targetRef)
       }
       if (targetRef.kind === 'conversation') {
         return this.#applyConversationContext(projectId, sourceRef, targetRef)
       }
-      return unsupported(`Source kind '${sourceRef.kind}' cannot become view-based working-set membership; use a surface or conversation target.`)
+      return unsupported(`Source kind '${sourceRef.kind}' entity membership in a Scene working set is not ruled in v0.15; use a Main/Context/Workflow surface or conversation target.`)
     }
 
     // ---- 通道 6：conversation target（conversation_context relation，复用 Relation truth）----
@@ -217,6 +221,30 @@ export class AssemblyApplyService {
     return this.#applyPresentationMember(projectId, sourceRef, targetRef, { viewId: sourceRef.id }, placement)
   }
 
+  /** 裁决 1（20260828）：note → scene/workspace——entity 成员进 working-set truth（canonical note identity，不伪造 view、不复制正文）。 */
+  #applySceneEntityMembership(projectId: string, sourceRef: AssemblySourceRefV1 & { readonly kind: 'note' }, targetRef: Extract<AssemblyTargetRefV1, { readonly kind: 'workspace' | 'scene' }>, placement: Placement | undefined): AssemblyApplyItemResultV1 {
+    const note = this.metadata.getNote(sourceRef.id)
+    if (note === undefined) return { sourceRef, status: 'failed', channel: 'error', message: 'Note not found.' }
+    if (String(note.projectId) !== projectId) return { sourceRef, status: 'failed', channel: 'error', message: 'Note belongs to another project.' }
+    const workspaceId = targetRef.id
+    if (String(this.metadata.getWorkspace(workspaceId)?.projectId ?? '') !== projectId) {
+      return { sourceRef, status: 'failed', channel: 'error', message: 'Workspace belongs to another project.' }
+    }
+    if (this.mutationSafety === undefined) {
+      return { sourceRef, status: 'skipped', channel: 'unsupported', message: 'Mutation safety service is not configured.' }
+    }
+    try {
+      const changeSet = this.mutationSafety.addWorkspaceEntityMember({ projectId, workspaceId, entityType: 'note', entityId: sourceRef.id, actorKind: 'web' })
+      // placement 入 Scene Presentation（positions key 约定：`note:<id>`；presentation 不存在 = 诚实未落位，前端默认布局接管）。
+      const placementApplied = placement !== undefined && this.#applyPlacementOnly(projectId, `presentation:custom:workspace:${workspaceId}`, `note:${sourceRef.id}`, placement)
+      if (changeSet === undefined) {
+        return { sourceRef, status: 'skipped', channel: 'already-member', message: 'Note is already a member of this scene working set.', ...(placementApplied ? { placementApplied } : {}) }
+      }
+      return { sourceRef, status: 'applied', channel: 'workspace-membership', message: 'Note added to scene working set (ChangeSet-backed, canonical note identity).', changeSetId: changeSet.id, ...(placement !== undefined ? { placementApplied } : {}) }
+    } catch (error: unknown) {
+      return { sourceRef, status: 'failed', channel: 'error', message: error instanceof Error ? error.message : String(error) }
+    }
+  }
   /** note/aggregate → surface：entity 成员（memberEntityRefs；聚合只投影自身不递归展开）。 */
   async #applyEntityMembership(projectId: string, sourceRef: AssemblySourceRefV1, targetRef: SurfaceTargetRef): Promise<AssemblyApplyItemResultV1> {
     let entityRef: PresentationEntityRefV0 | undefined

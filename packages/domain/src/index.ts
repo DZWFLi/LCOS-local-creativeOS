@@ -185,6 +185,16 @@ export interface Workspace {
 }
 
 export type WorkspaceMembershipSource = 'user' | 'agent' | 'run' | 'import'
+/** 裁决 1（20260828）：Scene working-set 的 entity 成员类型（无 view 的可投影 Project Entity）。 */
+export type WorkspaceEntityMemberType = 'note' | 'scope' | 'workspace' | 'conversation'
+
+export interface WorkspaceEntityMembership {
+  readonly workspaceId: WorkspaceId
+  readonly entityType: WorkspaceEntityMemberType
+  readonly entityId: string
+  readonly addedAt: IsoDateTime
+  readonly addedBy: WorkspaceMembershipSource
+}
 
 export interface WorkspaceMembership {
   readonly workspaceId: WorkspaceId

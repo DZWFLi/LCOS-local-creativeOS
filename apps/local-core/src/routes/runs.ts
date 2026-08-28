@@ -363,7 +363,7 @@ export async function handleRunsRoute(ctx: RunsRouteContext): Promise<boolean> {
             if (!isRecord(item) || !isRecord(item.ref)) return []
             const ref = item.ref as Record<string, unknown>
             const type = String(ref.type)
-            const idField = type === 'artifact' ? 'artifactId' : type === 'view' ? 'viewId' : type === 'scope' ? 'scopeId' : type === 'workspace' ? 'workspaceId' : type === 'conversation' ? 'conversationSessionId' : type === 'component' ? 'componentId' : type === 'note' ? 'noteId' : ''
+            const idField = type === 'artifact' ? 'artifactId' : type === 'view' ? 'viewId' : type === 'scope' ? 'scopeId' : type === 'workspace' ? 'workspaceId' : type === 'conversation' ? 'conversationSessionId' : type === 'component' ? 'componentId' : ''
             if (idField === '' || typeof ref[idField] !== 'string') return []
             return [item as never]
           }) } : {}),

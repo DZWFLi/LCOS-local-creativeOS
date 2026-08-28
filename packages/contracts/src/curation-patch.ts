@@ -190,7 +190,25 @@ export type MutationChangeItemV1 =
       readonly forward?: { readonly type: 'result_slot_materialize'; readonly slotId: string; readonly runId: string; readonly artifactId?: string; readonly artifactViewId?: string }
       readonly appliedFingerprint: string
     }
-
+  | {
+      /** 裁决 1（20260828）：Scene working-set 的 entity 成员（Note 等无 view 实体）进 semantic ChangeSet。 */
+      readonly type: 'workspace_entity_membership_add'
+      readonly workspaceId: string
+      readonly entityType: 'note' | 'scope' | 'workspace' | 'conversation'
+      readonly entityId: string
+      readonly inverse: { readonly type: 'workspace_entity_membership_remove'; readonly workspaceId: string; readonly entityType: 'note' | 'scope' | 'workspace' | 'conversation'; readonly entityId: string }
+      readonly forward?: { readonly type: 'workspace_entity_membership_add'; readonly workspaceId: string; readonly entityType: 'note' | 'scope' | 'workspace' | 'conversation'; readonly entityId: string }
+      readonly appliedFingerprint: string
+    }
+  | {
+      readonly type: 'workspace_entity_membership_remove'
+      readonly workspaceId: string
+      readonly entityType: 'note' | 'scope' | 'workspace' | 'conversation'
+      readonly entityId: string
+      readonly inverse: { readonly type: 'workspace_entity_membership_add'; readonly workspaceId: string; readonly entityType: 'note' | 'scope' | 'workspace' | 'conversation'; readonly entityId: string }
+      readonly forward?: { readonly type: 'workspace_entity_membership_remove'; readonly workspaceId: string; readonly entityType: 'note' | 'scope' | 'workspace' | 'conversation'; readonly entityId: string }
+      readonly appliedFingerprint: string
+    }
   | {
       /** 任务四 P1 change-review：agent 经 CAS 通道修订受管 text（updateText）。撤销 = current 指回 before 修订。 */
       readonly type: 'artifact_text_update'

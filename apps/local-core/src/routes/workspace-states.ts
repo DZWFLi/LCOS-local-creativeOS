@@ -96,6 +96,18 @@ export async function handleWorkspaceStatesRoute(ctx: WorkspaceStatesRouteContex
     return true
   }
 
+  // 裁决 1（20260828）：Scene working-set entity 成员读面（Note 等无 view 实体）。
+  const entityMembersMatch = /^\/workspaces\/([^/]+)\/entity-members$/.exec(pathname)
+  if (entityMembersMatch !== null && method === 'GET') {
+    const db = routeRequireMetadata(ctx); if (db === undefined) return true
+    const workspaceId = decodeURIComponent(entityMembersMatch[1] ?? '') as WorkspaceId
+    if (db.getWorkspace(workspaceId) === undefined) {
+      sendJson(response, 404, failure('NOT_FOUND', 'Workspace not found.'))
+      return true
+    }
+    sendJson(response, 200, { ok: true, value: db.listWorkspaceEntityMembers(workspaceId) })
+    return true
+  }
   const membersMatch = /^\/workspaces\/([^/]+)\/members$/.exec(pathname)
   if (membersMatch !== null && (method === 'POST' || method === 'GET')) {
     const db = routeRequireMetadata(ctx); if (db === undefined) return true
