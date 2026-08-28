@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import type { AttentionBucketV0, RuntimeProviderStatus } from '@local-creative-os/contracts'
-import { CheckCircle2, Copy, CopyPlus, Crosshair, Ellipsis, Fence, FolderTree, GripVertical, LayoutGrid, MessageSquare, Pencil, Radio, Trash2 } from 'lucide-react'
+import { CheckCircle2, CircleDot, Copy, CopyPlus, Crosshair, Ellipsis, Fence, FolderTree, GripVertical, LayoutGrid, MessageSquare, Pencil, Radio, Trash2 } from 'lucide-react'
 import type { Camera, CanvasEdge, CanvasNode, NodeDisplayMode, RunStatus, WorkspaceFrameVM } from '../../model'
 import { getSelectionBounds, nodeDensity } from './canvasGeometry'
 import { getVisualSelectionBounds, MAIN_CANVAS_GRID_STEP, nodeVisualBounds, nodeVisualInsets } from './canvasVisualGeometry'
@@ -37,6 +37,7 @@ import { applySurfaceOps, type SurfaceOp, validateSurfaceOps } from '../spatial/
 import { resolveSurfaceIntent, type SurfaceIntent } from '../spatial/model/surfaceIntent'
 import { ObjectOrbit } from '../ui/ObjectOrbit'
 import { BirthProvenanceBadge } from '../provenance/BirthProvenanceBadge'
+import { sessionPhaseLabel } from '../conversations/conversationLifecycle'
 
 interface Props {
   projectId?: string
@@ -195,7 +196,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
   // C-3 Glyth Orbit（Grammar §11 单击 = Select + Orbit 并存）：只对 single active 的
   // conversation 实体出现。anchor 存被点对象 DOM；conversationId 是 canonical ConversationSession id。
   // 物理对象 id 始终是 Core conversationViewId，不再派生第二套会话节点。
-  const [conversationOrbit, setConversationOrbit] = useState<{ anchor: HTMLElement; nodeId: string; conversationId: string; title: string } | null>(null)
+  const [conversationOrbit, setConversationOrbit] = useState<{ anchor: Element; nodeId: string; conversationId: string; title: string; statusLabel: string } | null>(null)
   // §13「只对 single active object 出现」：换选/清选/框选后该会话节点不再被选中即收起
   // （空白点击与 Esc / outside click 由 ObjectOrbit 行为层统一收口，不在此重复）。
   useEffect(() => {
@@ -1151,7 +1152,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
         // C-3 Grammar §11：单击 conversation = Select + Orbit 并存（Select 已在 pointerdown 落位）；
         // 追加选/多选不出 Orbit（§13 只对 single active object 出现）。
         if (node.entityKind === 'conversation' && node.conversation !== undefined && !additive && selectedIds.length <= 1) {
-          setConversationOrbit({ anchor, nodeId: node.id, conversationId: node.conversation.id, title: node.conversation.title })
+          setConversationOrbit({ anchor: anchor.querySelector('.lcos-conversation-glyth') ?? anchor, nodeId: node.id, conversationId: node.conversation.id, title: node.conversation.title, statusLabel: sessionPhaseLabel(node.conversation.lifecyclePhase) })
         } else if (additive || selectedIds.length > 1) {
           setConversationOrbit(null)
         }
@@ -1178,8 +1179,9 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
         { id: 'conversation-open', label: '进入现场', icon: MessageSquare, primary: true, onClick: () => onOpenConversation?.(conversationOrbit.conversationId) },
         { id: 'conversation-locate', label: '在哪', icon: Crosshair, onClick: () => onLocateConversationSource?.(conversationOrbit.nodeId) },
         activeConversationId === conversationOrbit.conversationId
-          ? { id: 'conversation-active', label: '当前承接', icon: CheckCircle2, onClick: () => undefined }
+          ? { id: 'conversation-active', label: '当前承接', icon: CheckCircle2, readOnly: true }
           : { id: 'conversation-activate', label: '设为当前', icon: Radio, onClick: () => onSetActiveConversation?.(conversationOrbit.conversationId) },
+        { id: 'conversation-status', label: conversationOrbit.statusLabel, icon: CircleDot, readOnly: true },
       ]}
     />
   )}

@@ -174,7 +174,7 @@ function DocumentObject({ node, kind, density, pending, onDetails, showDetails, 
           ? <div className="lcos-readable-document">{density === 'expanded'
             ? <CrepeHost className="lcos-md-preview" markdown={preview} />
             : <TextPreview text={preview} expanded={false} />}</div>
-          : <MaterialPaperFallback node={node} kind={kind} tag={tag}/>}
+          : <MaterialIdentityFallback node={node} kind={kind} tag={tag}/>}
     <div className="lcos-object-caption lcos-material-caption lcos-material-body">
       <strong>{title}</strong>
       {secondary && <small>{secondary}</small>}
@@ -197,6 +197,49 @@ export function documentPreviewStateCopy(node: CanvasNode): string {
   if (node.previewStatus === 'unsupported') return '预览不支持'
   if (node.previewStatus === 'ready') return '预览已生成'
   return node.observedPath ? '本地来源' : '项目材料'
+}
+
+/** Native Visual V1: non-text artifacts own their native silhouette. */
+function MaterialIdentityFallback({ node, kind, tag }: { node: CanvasNode; kind: FileIdentity; tag: string }) {
+  if (kind === 'ppt') return <SlideDeckFallback node={node} />
+  if (kind === 'archive') return <ArchiveBundleFallback node={node} tag={tag} />
+  if (kind === 'file') return <GenericFileFallback node={node} tag={tag} />
+  return <MaterialPaperFallback node={node} kind={kind} tag={tag} />
+}
+
+/** PPT owns a 16:9 slide silhouette instead of borrowing the portrait document-paper body. */
+function SlideDeckFallback({ node }: { node: CanvasNode }) {
+  const title = node.title.trim() || 'Presentation'
+  return <div className="lcos-slide-deck-fallback" data-material-kind="ppt">
+    <span className="lcos-slide-deck-back is-back-2" aria-hidden="true"/>
+    <span className="lcos-slide-deck-back is-back-1" aria-hidden="true"/>
+    <span className="lcos-slide-deck-face">
+      <i className="lcos-slide-deck-accent" aria-hidden="true"/>
+      <b title={title}>{title}</b>
+      <span className="lcos-slide-deck-chart" aria-hidden="true"><i/><i/><i/><i/></span>
+      <small>{node.pageCount ? `${node.pageCount} slides` : documentPreviewStateCopy(node)}</small>
+    </span>
+  </div>
+}
+
+/** Archive is a compact bundle/stack, never another white document card. */
+function ArchiveBundleFallback({ node, tag }: { node: CanvasNode; tag: string }) {
+  const name = node.title.trim() || tag
+  return <div className="lcos-archive-bundle-fallback" data-material-kind="archive">
+    <span className="lcos-archive-bundle-band" aria-hidden="true"/>
+    <span className="lcos-archive-bundle-sheet is-back" aria-hidden="true"/>
+    <span className="lcos-archive-bundle-sheet is-front"><b>{tag}</b><small title={name}>{name}</small></span>
+  </div>
+}
+
+/** Generic files keep a strong file silhouette + extension; no generic SaaS card shell. */
+function GenericFileFallback({ node, tag }: { node: CanvasNode; tag: string }) {
+  const name = node.title.trim() || tag
+  return <div className="lcos-generic-file-fallback" data-material-kind="file">
+    <span className="lcos-generic-file-fold" aria-hidden="true"/>
+    <b>{tag}</b>
+    <small title={name}>{name}</small>
+  </div>
 }
 
 /**

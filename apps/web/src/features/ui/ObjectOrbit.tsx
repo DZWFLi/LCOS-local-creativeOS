@@ -5,7 +5,7 @@
  * - 旧版是 Base UI Popover 里竖排图鉴卡（四件套卡头 + 水平卫星行 + 卡尾）——
  *   卫星不围绕对象（S13「围绕 object」违例），卡头身份与画布上已有的身体+标注
  *   重复编码（S8.2 四通道不重复），用户看到的是「卡片」不是「orbit」。
- * - 新版只渲染动作卫星：从身体中心沿径向飞出到环位（上半圆弧），spring 逐个
+ * - 新版只渲染动作卫星：从身体中心沿径向飞出到完整圆环落点，spring 逐个
  *   stagger 出场、反向收拢退场；无卡头无卡尾（身份长在画布身体上，弹层只
  *   承担动作——Object First，Card Last）。
  * - 行为统一（S13 原话：pointer leave / Esc / outside click 行为统一）：
@@ -16,15 +16,13 @@
  *
  * 径向布局（satellitePlacements 纯函数，测试数值钉死）：
  * - 锚点 = anchorRef 元素 getBoundingClientRect（无 DOM 锚时 anchorRect 虚拟锚）；
- * - 半径 = hypot(w,h)/2 + SATELLITE_RING_GAP；角度在上半圆 180°→0° 均分
- *   （1 颗 → 90° 正上；2 颗 → 135°/45°；3 颗 → 150/90/30；上限见 S13）。
+ * - 半径 = hypot(w,h)/2 + SATELLITE_RING_GAP；卫星围绕完整 360° 圆环均分。
  */
 import { useCallback, useEffect, useId, useRef } from 'react'
 import type { RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'motion/react'
 import type { Variants } from 'motion/react'
-import { LcosIcon } from './LcosIcon'
 import { register as registerOverlay } from './overlayStack'
 import './ui-primitives.css'
 
@@ -33,7 +31,7 @@ export const MAX_VISIBLE_SATELLITES = 5
 /** Grammar S13「pointer leave 行为统一」：离开 300ms 后关，期间 re-enter 取消 */
 export const POINTER_LEAVE_CLOSE_DELAY_MS = 300
 /** 卫星环半径 = 锚点半径 + 该间距（px） */
-const SATELLITE_RING_GAP = 36
+const SATELLITE_RING_GAP = 23
 /** Grammar S13 编排区间（0.04~0.08s）取中：卫星逐个出场间隔 */
 const SATELLITE_STAGGER = 0.06
 /** 收场时长：与 LcosPopover 退场窗口同款（200ms） */
@@ -44,9 +42,11 @@ export interface ObjectOrbitAction {
   readonly id: string
   readonly label: string
   readonly icon?: import('lucide-react').LucideIcon
-  readonly onClick: () => void
-  /** primary 动作视觉突出（填充胶囊），不改变顺序 */
+  readonly onClick?: () => void
+  /** primary 动作只做轻量强调，不改变顺序。 */
   readonly primary?: boolean
+  /** readOnly 卫星只展示真实状态，不伪造可点击动作。 */
+  readonly readOnly?: boolean
 }
 
 /** 视口坐标锚框（anchorRef 缺席时的虚拟锚，如画布空间坐标） */
@@ -65,7 +65,7 @@ export interface SatellitePlacement {
 }
 
 /**
- * 径向布局纯函数：上半圆 180°→0° 均分（屏幕坐标 y 向下，取负）。
+ * 径向布局纯函数：从正上方 90° 起，沿完整 360° 圆环均分（屏幕坐标 y 向下）。
  * count 超 MAX_VISIBLE_SATELLITES 按上限截断（防御；调用方按 S13 自律只传高频动作）。
  */
 export function satellitePlacements(
@@ -79,8 +79,7 @@ export function satellitePlacements(
   const cx = anchor.x + anchor.width / 2
   const cy = anchor.y + anchor.height / 2
   return Array.from({ length: total }, (_, index) => {
-    // 上半圆内缩半步均分：不贴水平轴（1→90 正上；2→135/45；3→150/90/30；5→162..18）
-    const angleDeg = 180 - (index + 0.5) * (180 / total)
+    const angleDeg = 90 - index * (360 / total)
     const rad = (angleDeg * Math.PI) / 180
     return {
       x: cx + radius * Math.cos(rad),
@@ -124,7 +123,7 @@ export interface ObjectOrbitProps {
   readonly open: boolean
   readonly onClose: () => void
   /** 锚点元素 ref（优先）：orbit 围绕它的包围盒径向展开 */
-  readonly anchorRef?: RefObject<HTMLElement | null>
+  readonly anchorRef?: RefObject<Element | null>
   readonly anchorRect?: ObjectOrbitAnchorRect | null
   /** 无障碍名称（如「会话 xx 的动作」；身份不在此渲染——身体在画布上） */
   readonly ariaLabel?: string
@@ -154,6 +153,7 @@ export function ObjectOrbit({ open, onClose, anchorRef, anchorRect, ariaLabel, a
     ? []
     : satellitePlacements(visible.length, { x: rect.x, y: rect.y, width: rect.width, height: rect.height })
   const center = rect === null ? null : { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }
+  const ringRadius = rect === null ? 0 : Math.hypot(rect.width, rect.height) / 2 + SATELLITE_RING_GAP
 
   /** overlayStack（A0-4）：kind 'orbit'，onEsc=close，dismissOnOutside=true（栈态一致性） */
   useEffect(() => {
@@ -229,7 +229,7 @@ export function ObjectOrbit({ open, onClose, anchorRef, anchorRect, ariaLabel, a
   /** 卫星执行：先动作后收口（transient orbit：单击即完成并消失） */
   const handleAction = useCallback(
     (action: ObjectOrbitAction) => {
-      action.onClick()
+      action.onClick?.()
       close()
     },
     [close],
@@ -250,10 +250,16 @@ export function ObjectOrbit({ open, onClose, anchorRef, anchorRect, ariaLabel, a
           exit="exiting"
           variants={ringVariants}
         >
+          <motion.span
+            className="lcos-orbit-track"
+            aria-hidden="true"
+            style={{ left: center.x, top: center.y, width: ringRadius * 2, height: ringRadius * 2 }}
+          />
           {visible.map((action, index) => {
             const placement = placements[index]
             if (placement === undefined) return null
             const custom: SatelliteCustom = { dx: center.x - placement.x, dy: center.y - placement.y }
+            const ActionIcon = action.icon
             return (
               <motion.div
                 key={action.id}
@@ -262,20 +268,34 @@ export function ObjectOrbit({ open, onClose, anchorRef, anchorRect, ariaLabel, a
                 custom={custom}
                 variants={satelliteVariants}
               >
-                <button
-                  type="button"
-                  className="lcos-orbit-satellite"
-                  data-lcos-orbit-action={action.id}
-                  data-lcos-primary={action.primary === true ? 'true' : undefined}
-                  onPointerEnter={cancelLeave}
-                  onPointerLeave={scheduleLeave}
-                  onClick={() => handleAction(action)}
-                >
-                  {action.icon !== undefined ? (
-                    <LcosIcon shape="pebble" icon={action.icon} size={16} />
-                  ) : null}
-                  <span className="lcos-orbit-satellite-label">{action.label}</span>
-                </button>
+                {action.readOnly ? (
+                  <span
+                    className="lcos-orbit-satellite is-readonly"
+                    data-lcos-orbit-action={action.id}
+                    data-lcos-primary={action.primary === true ? 'true' : undefined}
+                    data-lcos-readonly="true"
+                    role="status"
+                    aria-label={action.label}
+                    onPointerEnter={cancelLeave}
+                    onPointerLeave={scheduleLeave}
+                  >
+                    {ActionIcon !== undefined ? <ActionIcon size={16} aria-hidden="true" /> : null}
+                    <span className="lcos-orbit-satellite-label">{action.label}</span>
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    className="lcos-orbit-satellite"
+                    data-lcos-orbit-action={action.id}
+                    data-lcos-primary={action.primary === true ? 'true' : undefined}
+                    onPointerEnter={cancelLeave}
+                    onPointerLeave={scheduleLeave}
+                    onClick={() => handleAction(action)}
+                  >
+                    {ActionIcon !== undefined ? <ActionIcon size={16} aria-hidden="true" /> : null}
+                    <span className="lcos-orbit-satellite-label">{action.label}</span>
+                  </button>
+                )}
               </motion.div>
             )
           })}

@@ -2843,12 +2843,8 @@
   transition:
     left var(--lcos-dur-normal) cubic-bezier(.22,1,.36,1),
     top var(--lcos-dur-normal) cubic-bezier(.22,1,.36,1),
-    box-shadow var(--lcos-dur-fast) cubic-bezier(.22,1,.36,1),
-    background-color var(--lcos-dur-fast) cubic-bezier(.22,1,.36,1),
-    border-color var(--lcos-dur-fast) cubic-bezier(.22,1,.36,1),
-    color var(--lcos-dur-fast) cubic-bezier(.22,1,.36,1),
     opacity var(--lcos-dur-fast) ease,
-    transform var(--lcos-dur-fast) cubic-bezier(.22,1,.36,1); /* A-2a 记录上报：left/top 布局属性动画，待统一整改 */
+    transform var(--lcos-dur-fast) cubic-bezier(.22,1,.36,1); /* CanvasNode host only moves/fades; morphology belongs to the body. */
 }
 
 @media (prefers-reduced-motion: reduce) {
