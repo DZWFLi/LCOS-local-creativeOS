@@ -45,6 +45,8 @@ import { SessionLifecycleService } from './session-lifecycle-service.js'
 import { ConversationIdentityService } from './conversation-identity-service.js'
 import { WarehouseService } from './warehouse-service.js'
 import { AssemblyApplyService } from './assembly-apply-service.js'
+import { ProjectSummaryService } from './project-summary-service.js'
+import { SkillCatalogService } from './skill-catalog-service.js'
 import { ResultSlotService } from './result-slot-service.js'
 import { SessionReadSet } from './session-read-set.js'
 import { SpaceSandboxService } from './space-sandbox-service.js'
@@ -111,6 +113,8 @@ export interface LocalCoreServices {
   readonly warehouse: WarehouseService | undefined
   readonly resultSlots: ResultSlotService | undefined
   readonly assemblyApply: AssemblyApplyService | undefined
+  readonly projectSummary: ProjectSummaryService | undefined
+  readonly skillCatalog: SkillCatalogService | undefined
 }
 
 /** 服务装配：把 options 解析成 createLocalCoreServer 需要的一组服务。 */
@@ -186,6 +190,9 @@ export function composeLocalCoreServices(options: LocalCoreServerOptions = {}): 
   const warehouse = metadata === undefined ? undefined : new WarehouseService(metadata)
   const resultSlots = metadata === undefined ? undefined : new ResultSlotService(metadata)
   // F6 P0-B4（20260828）：Semantic Drop 统一 apply——内部路由到 captureSpace/addWorkspaceMembers/upsertRelation，零新 mutation。
+  // F6 P1（20260828）：Launcher summary + Skill Catalog 只读。
+  const projectSummary = metadata === undefined ? undefined : new ProjectSummaryService(metadata)
+  const skillCatalog = metadata === undefined ? undefined : new SkillCatalogService(metadata)
   const assemblyApply = metadata === undefined
     ? undefined
     : new AssemblyApplyService(metadata, captureSpace, mutationSafety, conversations)
@@ -271,5 +278,7 @@ export function composeLocalCoreServices(options: LocalCoreServerOptions = {}): 
     warehouse,
     resultSlots,
     assemblyApply,
+    projectSummary,
+    skillCatalog,
   }
 }

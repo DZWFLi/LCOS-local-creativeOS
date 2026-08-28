@@ -14,12 +14,18 @@ import type {
   WarehouseEntityKindV1,
   AssemblyApplyRequestV1,
   AssemblyApplyResultV1,
+  ProjectSummaryV1,
+  ProjectVisualProfileV0,
+  UpsertProjectVisualProfileInputV0,
 } from '@local-creative-os/contracts'
+import { PROJECT_GLYPH_MARK_REPERTOIRE, PROJECT_TINT_TOKENS } from '@local-creative-os/contracts'
 import type { RunId } from '@local-creative-os/domain'
 import type { ConversationIdentityService } from '../conversation-identity-service.js'
 import type { ResultSlotService } from '../result-slot-service.js'
 import type { WarehouseService } from '../warehouse-service.js'
 import type { AssemblyApplyService } from '../assembly-apply-service.js'
+import type { ProjectSummaryService } from '../project-summary-service.js'
+import type { SkillCatalogService } from '../skill-catalog-service.js'
 import type { SqliteMetadataRepository } from '../metadata-repository.js'
 import { routeRequireProject, type RouteHttpContext, type RouteHttpHelpers } from './route-context.js'
 
@@ -29,11 +35,13 @@ export interface F6AssemblyRouteContext extends RouteHttpContext {
   readonly resultSlots: ResultSlotService | undefined
   readonly conversationIdentity: ConversationIdentityService | undefined
   readonly assemblyApply: AssemblyApplyService | undefined
+  readonly projectSummary: ProjectSummaryService | undefined
+  readonly skillCatalog: SkillCatalogService | undefined
   readonly metadata: SqliteMetadataRepository
 }
 
 export async function handleF6AssemblyRoute(ctx: F6AssemblyRouteContext): Promise<boolean> {
-  const { method, pathname, url, request, response, controller, metadata, warehouse, resultSlots, conversationIdentity, assemblyApply } = ctx
+  const { method, pathname, url, request, response, controller, metadata, warehouse, resultSlots, conversationIdentity, assemblyApply, projectSummary, skillCatalog } = ctx
   const { sendJson, failure, readJsonBody, isRecord } = ctx.helpers
 
   // ---------- P0-B4：Semantic Drop 统一 apply ----------
@@ -237,6 +245,110 @@ export async function handleF6AssemblyRoute(ctx: F6AssemblyRouteContext): Promis
       createdAt: run.createdAt,
     }
     sendJson(response, 200, { ok: true, value })
+    return true
+  }
+
+  // ---------- P1-A1：Project Summary ----------
+  const summaryMatch = /^\/projects\/([^/]+)\/summary$/.exec(pathname)
+  if (method === 'GET' && summaryMatch !== null) {
+    if (projectSummary === undefined) {
+      sendJson(response, 503, failure('UNAVAILABLE', 'Project summary service is not configured.'))
+      return true
+    }
+    const projectId = decodeURIComponent(summaryMatch[1] ?? '')
+    const value: ProjectSummaryV1 | undefined = projectSummary.summary(projectId)
+    if (value === undefined) {
+      sendJson(response, 404, failure('NOT_FOUND', 'Project not found.'))
+      return true
+    }
+    sendJson(response, 200, { ok: true, value })
+    return true
+  }
+
+  // ---------- P1-A2：Project Visual Profile（presentation-only，CAS）----------
+  const profileMatch = /^\/projects\/([^/]+)\/visual-profile$/.exec(pathname)
+  if (profileMatch !== null && method === 'GET') {
+    const projectId = decodeURIComponent(profileMatch[1] ?? '')
+    if (routeRequireProject(projectId, { metadata, response, helpers: ctx.helpers }) === undefined) return true
+    const value = metadata.getProjectVisualProfile(projectId)
+    sendJson(response, 200, { ok: true, value })
+    return true
+  }
+  if (profileMatch !== null && method === 'PUT') {
+    const projectId = decodeURIComponent(profileMatch[1] ?? '')
+    if (routeRequireProject(projectId, { metadata, response, helpers: ctx.helpers }) === undefined) return true
+    let input: unknown
+    try { input = await readJsonBody(request, controller.signal) } catch {
+      sendJson(response, 400, failure('INVALID_ARGUMENT', 'Visual profile body must be valid JSON.'))
+      return true
+    }
+    const isProfileInput = (value: unknown): value is UpsertProjectVisualProfileInputV0 => isRecord(value)
+      && typeof value.tintToken === 'string' && (PROJECT_TINT_TOKENS as readonly string[]).includes(value.tintToken)
+      && typeof value.glythMarkId === 'string' && (PROJECT_GLYPH_MARK_REPERTOIRE as readonly string[]).includes(value.glythMarkId)
+      && typeof value.expectedVersion === 'number' && Number.isInteger(value.expectedVersion) && value.expectedVersion >= 0
+      && (value.glythMarkColor === undefined || (typeof value.glythMarkColor === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(value.glythMarkColor)))
+      && (value.scale === undefined || (typeof value.scale === 'number' && value.scale >= 0.25 && value.scale <= 4))
+      && (value.orientation === undefined || (typeof value.orientation === 'number' && value.orientation >= -180 && value.orientation <= 180))
+    if (!isProfileInput(input)
+      || Object.keys(input).some((key) => !['tintToken', 'glythMarkId', 'glythMarkColor', 'scale', 'orientation', 'expectedVersion'].includes(key))) {
+      sendJson(response, 400, failure('INVALID_ARGUMENT', 'Visual profile requires tintToken, glythMarkId (repertoire-only), expectedVersion; optional color/scale/orientation.'))
+      return true
+    }
+    try {
+      const value: ProjectVisualProfileV0 = metadata.upsertProjectVisualProfile({
+        projectId,
+        expectedVersion: input.expectedVersion,
+        tintToken: input.tintToken,
+        glythMarkId: input.glythMarkId,
+        ...(input.glythMarkColor === undefined ? {} : { glythMarkColor: input.glythMarkColor }),
+        ...(input.scale === undefined ? {} : { scale: input.scale }),
+        ...(input.orientation === undefined ? {} : { orientation: input.orientation }),
+      })
+      sendJson(response, 200, { ok: true, value })
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error)
+      if (message.includes('STALE_VISUAL_PROFILE_VERSION')) {
+        sendJson(response, 409, failure('CONFLICT', message))
+        return true
+      }
+      sendJson(response, 400, failure('VALIDATION', message))
+    }
+    return true
+  }
+
+  // ---------- P1-B：Skill Catalog（只读，方案 1）----------
+  const skillsListMatch = /^\/projects\/([^/]+)\/skills$/.exec(pathname)
+  if (method === 'GET' && skillsListMatch !== null) {
+    if (skillCatalog === undefined) {
+      sendJson(response, 503, failure('UNAVAILABLE', 'Skill catalog service is not configured.'))
+      return true
+    }
+    const projectId = decodeURIComponent(skillsListMatch[1] ?? '')
+    if (routeRequireProject(projectId, { metadata, response, helpers: ctx.helpers }) === undefined) return true
+    const search = url.searchParams.get('search') ?? undefined
+    const value = await skillCatalog.list(projectId, search)
+    sendJson(response, 200, { ok: true, value })
+    return true
+  }
+  const skillOneMatch = /^\/projects\/([^/]+)\/skills\/([^/]+)$/.exec(pathname)
+  if (method === 'GET' && skillOneMatch !== null) {
+    if (skillCatalog === undefined) {
+      sendJson(response, 503, failure('UNAVAILABLE', 'Skill catalog service is not configured.'))
+      return true
+    }
+    const projectId = decodeURIComponent(skillOneMatch[1] ?? '')
+    const skillId = decodeURIComponent(skillOneMatch[2] ?? '')
+    if (routeRequireProject(projectId, { metadata, response, helpers: ctx.helpers }) === undefined) return true
+    try {
+      const value = await skillCatalog.read(skillId, projectId)
+      if (value === undefined) {
+        sendJson(response, 404, failure('NOT_FOUND', 'Skill not found.'))
+        return true
+      }
+      sendJson(response, 200, { ok: true, value })
+    } catch (error: unknown) {
+      sendJson(response, 400, failure('INVALID_ARGUMENT', error instanceof Error ? error.message : 'Skill read failed.'))
+    }
     return true
   }
 

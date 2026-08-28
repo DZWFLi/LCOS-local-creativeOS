@@ -98,6 +98,14 @@ export interface MetadataForeignKeyContext {
   readonly foreignKeyCheck: readonly ForeignKeyCheckRow[]
 }
 
+/** F6 P1-A2：VisualProfile CAS 版本冲突（current 是库内现值，expected 是请求期望值）。 */
+export class StaleVisualProfileVersionError extends Error {
+  constructor(readonly current: number, readonly expected: number) {
+    super(`STALE_VISUAL_PROFILE_VERSION current=${current} expected=${expected}`)
+    this.name = 'StaleVisualProfileVersionError'
+  }
+}
+
 export class MetadataForeignKeyConstraintError extends Error {
   readonly context: MetadataForeignKeyContext
 
@@ -269,7 +277,8 @@ export class SqliteMetadataRepository {
     if (current === 41) { this.#migrate_042_from_v41(); current = 42 }
     if (current === 42) { this.#migrate_043_from_v42(); current = 43 }
     if (current === 43) { this.#migrate_044_from_v43(); current = 44 }
-    if (current !== 44) throw new Error(`Unsupported metadata schema version ${current}.`)
+    if (current === 44) { this.#migrate_045_from_v44(); current = 45 }
+    if (current !== 45) throw new Error(`Unsupported metadata schema version ${current}.`)
   }
 
   #migrate_037_from_v36(): void {
@@ -426,6 +435,26 @@ export class SqliteMetadataRepository {
     `)
   }
 
+  #migrate_045_from_v44(): void {
+    // F6 P1-A2（20260828）：ProjectVisualProfile——Presentation-only 的项目视觉身份。
+    // versioned + CAS（PUT 带 expectedVersion）；不影响 Project business truth；
+    // glythMarkId/tintToken 白名单校验在 service 层（contracts 常量为唯一定义源）。
+    this.#database.exec(`
+      BEGIN;
+      CREATE TABLE IF NOT EXISTS project_visual_profiles (
+        project_id TEXT PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,
+        version INTEGER NOT NULL CHECK(version >= 0),
+        tint TEXT NOT NULL,
+        glyth_mark_id TEXT NOT NULL,
+        glyth_mark_color TEXT,
+        scale REAL,
+        orientation REAL,
+        updated_at TEXT NOT NULL
+      );
+      PRAGMA user_version = 45;
+      COMMIT;
+    `)
+  }
   #migrate_044_from_v43(): void {
     // F6 P0-D（20260828）：ResultSlot 表 + Run 的 Composer 三列。
     // result_slots：Blank Result authoritative truth（empty/running/review/materialized）；
@@ -2840,6 +2869,74 @@ export class SqliteMetadataRepository {
     )
   }
 
+  // ==================== F6 P1（20260828）：ProjectVisualProfile CRUD + Project Summary 聚合 ====================
+
+  getProjectVisualProfile(projectId: string): import('@local-creative-os/contracts').ProjectVisualProfileV0 | undefined {
+    const row = this.#database.prepare('SELECT * FROM project_visual_profiles WHERE project_id = ?').get(projectId as SQLInputValue) as Row | undefined
+    if (row === undefined) return undefined
+    return {
+      schemaVersion: 0,
+      projectId: String(row.project_id),
+      version: Number(row.version),
+      tintToken: String(row.tint) as import('@local-creative-os/contracts').ProjectTintToken,
+      glythMarkId: String(row.glyth_mark_id) as import('@local-creative-os/contracts').ProjectGlyphMarkId,
+      ...(row.glyth_mark_color ? { glythMarkColor: String(row.glyth_mark_color) } : {}),
+      ...(row.scale === null || row.scale === undefined ? {} : { scale: Number(row.scale) }),
+      ...(row.orientation === null || row.orientation === undefined ? {} : { orientation: Number(row.orientation) }),
+      updatedAt: String(row.updated_at),
+    }
+  }
+
+  /** CAS upsert：expectedVersion 不匹配抛 StaleVisualProfileVersionError（路由层转 409）。 */
+  upsertProjectVisualProfile(input: {
+    readonly projectId: string
+    readonly expectedVersion: number
+    readonly tintToken: import('@local-creative-os/contracts').ProjectTintToken
+    readonly glythMarkId: import('@local-creative-os/contracts').ProjectGlyphMarkId
+    readonly glythMarkColor?: string
+    readonly scale?: number
+    readonly orientation?: number
+  }): import('@local-creative-os/contracts').ProjectVisualProfileV0 {
+    const current = this.getProjectVisualProfile(input.projectId)
+    if (current !== undefined && current.version !== input.expectedVersion) {
+      throw new StaleVisualProfileVersionError(current.version, input.expectedVersion)
+    }
+    if (current === undefined && input.expectedVersion !== 0) {
+      throw new StaleVisualProfileVersionError(0, input.expectedVersion)
+    }
+    const now = new Date().toISOString()
+    const nextVersion = input.expectedVersion + 1
+    this.#database.prepare(`
+      INSERT INTO project_visual_profiles (project_id, version, tint, glyth_mark_id, glyth_mark_color, scale, orientation, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(project_id) DO UPDATE SET
+        version = excluded.version, tint = excluded.tint, glyth_mark_id = excluded.glyth_mark_id,
+        glyth_mark_color = excluded.glyth_mark_color, scale = excluded.scale, orientation = excluded.orientation,
+        updated_at = excluded.updated_at
+    `).run(
+      input.projectId as SQLInputValue, nextVersion as SQLInputValue, input.tintToken as SQLInputValue,
+      input.glythMarkId as SQLInputValue, (input.glythMarkColor ?? null) as SQLInputValue,
+      (input.scale ?? null) as SQLInputValue, (input.orientation ?? null) as SQLInputValue, now as SQLInputValue,
+    )
+    return this.getProjectVisualProfile(input.projectId)!
+  }
+
+  /**
+   * F6 P1-A1：lastMeaningfulEditedAt——Core mutation 活动（artifacts/runs/notes/project 的
+   * max(updated_at)），与 last_opened_at 完全无关。无任何活动行 = undefined（诚实缺席）。
+   */
+  // 口径纪律：只算 mutation 活动（artifacts/runs/notes）。projects.updated_at 不参与——
+  // touchProjectOpened 也会刷它（open 不是 mutation，混入会污染口径，测试已证）。
+  lastMeaningfulEditedAt(projectId: string): string | undefined {
+    const row = this.#database.prepare(`
+      SELECT MAX(ts) AS latest FROM (
+        SELECT MAX(updated_at) AS ts FROM artifacts WHERE project_id = ?
+        UNION ALL SELECT MAX(updated_at) AS ts FROM runs WHERE project_id = ?
+        UNION ALL SELECT MAX(updated_at) AS ts FROM notes WHERE project_id = ?
+      )
+    `).get(projectId as SQLInputValue, projectId as SQLInputValue, projectId as SQLInputValue) as { latest?: string | null } | undefined
+    return row?.latest === undefined || row.latest === null || row.latest === '' ? undefined : String(row.latest)
+  }
   // ==================== F6 P0-D：ResultSlot CRUD + Run Composer 列（20260828） ====================
 
   #resultSlotFromRow(row: Row): import('@local-creative-os/contracts').ResultSlotV0 {

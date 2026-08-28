@@ -847,6 +847,7 @@ export * from './curation.js'
 export * from './search.js'
 export * from './assembly.js'
 export * from './run-assembly.js'
+export * from './project-profile.js'
 export * from './curation-patch.js'
 
 // 本地 OCR（RapidOCR）
