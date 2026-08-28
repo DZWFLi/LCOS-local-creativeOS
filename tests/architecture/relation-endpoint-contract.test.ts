@@ -4,7 +4,9 @@ import { describe, expect, it } from 'vitest'
 
 const root = join(__dirname, '../..')
 const domain = readFileSync(join(root, 'packages/domain/src/index.ts'), 'utf8')
-const entityRoute = readFileSync(join(root, 'apps/local-core/src/routes/entity.ts'), 'utf8')
+// B6（20260828）：relations 路由已从 entity.ts 迁至 routes/relations.ts（ChangeSet-backed；
+// entity.ts 中同路径段为不可达死代码并被清除）。归属校验的活体实现现在在 relations.ts。
+const entityRoute = readFileSync(join(root, 'apps/local-core/src/routes/relations.ts'), 'utf8')
 
 describe('Relation endpoint ownership contract (Phase A)', () => {
   it('Domain RelationEntityType declares all five endpoint kinds', () => {
