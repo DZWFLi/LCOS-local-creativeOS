@@ -281,7 +281,7 @@ export class CurationCommandService {
           renderer: patch.presentation.setRenderer ?? current.renderer,
           state: next,
           version: current.version + 1,
-          updatedBy: 'agent',
+          updatedBy: patch.actorKind ?? 'agent',
           createdAt: current.createdAt,
           updatedAt: createdAt,
         },
@@ -293,7 +293,8 @@ export class CurationCommandService {
         beforeVersion: current.version,
         afterVersion: current.version + 1,
         inverse: { type: 'restore_presentation_state', presentationId: current.id, targetVersion: current.version, stateSnapshot: current.state },
-        touchedKeys: ['memberViewIds', 'hierarchy', 'emphasisByViewId', 'pinnedViewIds', 'presentationEdges'],
+        forward: { type: 'restore_presentation_state', presentationId: current.id, stateSnapshot: next },
+        touchedKeys: ['memberViewIds', 'hierarchy', 'emphasisByViewId', 'pinnedViewIds', 'presentationEdges', ...(patch.presentation.setPositions === undefined ? [] : ['positions' as const])],
         appliedFingerprint: `presentation:${current.version + 1}`,
       })
     }
@@ -304,7 +305,7 @@ export class CurationCommandService {
       id: `changeset-${randomUUID()}`,
       projectId,
       operationId,
-      actorKind: 'agent',
+      actorKind: patch.actorKind ?? 'agent',
       changes,
       status: 'applied',
       createdAt,
@@ -315,7 +316,7 @@ export class CurationCommandService {
     }
     for (const relation of relationUpserts) completedSteps.push({ step: 'relation', relationId: relation.id })
     if (presentationPlan !== undefined) completedSteps.push({ step: 'presentation' })
-    const receipt: CurationPatchReceiptV0 = { schemaVersion: 0, operationId, applied: true, completedSteps, createdAt }
+    const receipt: CurationPatchReceiptV0 = { schemaVersion: 0, operationId, applied: true, completedSteps, createdAt, changeSetId: changeSet.id }
     try {
       this.deps.repository.runCurationMutation({
         projectId,
@@ -381,7 +382,7 @@ export class CurationCommandService {
     memberViewIds = memberViewIds.filter((id) => !removed.has(id))
     const members = new Set(memberViewIds)
     const hiddenViewIds = state.hiddenViewIds
-    const positions = state.positions
+    const positions = { ...state.positions, ...(patch?.setPositions ?? {}) }
     let hierarchy = state.hierarchy
     if (patch?.setHierarchy !== undefined) {
       hierarchy = {

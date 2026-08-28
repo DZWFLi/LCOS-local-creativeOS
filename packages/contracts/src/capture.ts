@@ -22,6 +22,13 @@ export interface CaptureStagingItemV0 {
   readonly capturedAt: string
   readonly resolvedProjectId?: string
   readonly resolvedAt?: string
+  /**
+   * F6 follow-up（20260828 补充冻结）：materialize 产物回链——capture→surface 的
+   * apply 第二步失败后可安全重试（materialize 幂等返回既有产物）。
+   * 存量已 resolved 但缺回链的行保持旧行为（fail-close），不回填猜测。
+   */
+  readonly resolvedArtifactId?: string
+  readonly resolvedViewId?: string
 }
 
 export type CaptureKindV0 =
@@ -181,6 +188,8 @@ export interface CaptureMaterializeResultV1 {
     readonly viewId: string
     readonly revisionId?: string
     readonly resourceId?: string
+    /** 幂等复用：capture 已 resolved 到同一 project 时返回既有产物，不重复物化。 */
+    readonly reused?: boolean
   }[]
 }
 

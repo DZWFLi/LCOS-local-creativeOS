@@ -21,7 +21,7 @@ describe('durable resource analysis', () => {
     expect(() => first.enqueueResourceAnalysis({ id: 'job-a', projectId: 'project-a', resourceId: 'resource-a', sourceRevisionId: 'missing-revision', analyzerVersion: 'v1' })).toThrow()
     expect(() => first.close()).not.toThrow()
     const second = new SqliteMetadataRepository(path)
-    expect(second.schemaVersion).toBe(45)
+    expect(second.schemaVersion).toBe(46)
     expect(second.claimResourceAnalysis('worker-a')).toBeUndefined()
     second.upsertResourcePolicy({ projectId: 'project-a', resourceId: 'resource-a', trustLevel: 'reviewed', approvedContext: true, executable: false, annotation: { note: 'human' } })
     expect(second.getResourcePolicy('project-a', 'resource-a')?.annotation).toEqual({ note: 'human' })

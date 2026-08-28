@@ -278,7 +278,8 @@ export class SqliteMetadataRepository {
     if (current === 42) { this.#migrate_043_from_v42(); current = 43 }
     if (current === 43) { this.#migrate_044_from_v43(); current = 44 }
     if (current === 44) { this.#migrate_045_from_v44(); current = 45 }
-    if (current !== 45) throw new Error(`Unsupported metadata schema version ${current}.`)
+    if (current === 45) { this.#migrate_046_from_v45(); current = 46 }
+    if (current !== 46) throw new Error(`Unsupported metadata schema version ${current}.`)
   }
 
   #migrate_037_from_v36(): void {
@@ -431,6 +432,19 @@ export class SqliteMetadataRepository {
         PRIMARY KEY (project_id, artifact_id)
       );
       PRAGMA user_version = 43;
+      COMMIT;
+    `)
+  }
+
+  #migrate_046_from_v45(): void {
+    // F6 follow-up（20260828 补充冻结）：capture materialize 产物回链——
+    // resolvedArtifactId/resolvedViewId 使 capture→surface 的 apply 可安全重试（幂等复用）。
+    // 存量已 resolved 行两列为 NULL，保持旧行为（fail-close），不回填猜测。
+    this.#database.exec(`
+      BEGIN;
+      ALTER TABLE capture_staging_items ADD COLUMN resolved_artifact_id TEXT;
+      ALTER TABLE capture_staging_items ADD COLUMN resolved_view_id TEXT;
+      PRAGMA user_version = 46;
       COMMIT;
     `)
   }
@@ -2451,6 +2465,8 @@ export class SqliteMetadataRepository {
       readonly value: PresentationViewV0
       readonly expectedVersion: number
     }
+    readonly workspaceMembershipAdds?: readonly { readonly workspaceId: WorkspaceId; readonly viewId: ArtifactViewId; readonly addedBy: 'user' | 'agent' | 'run' | 'import'; readonly addedAt: string }[]
+    readonly workspaceMembershipRemoves?: readonly { readonly workspaceId: WorkspaceId; readonly viewId: ArtifactViewId }[]
     readonly changeSet?: MutationChangeSetV1
     readonly receipt?: CurationPatchReceiptV0
   }): { readonly presentationUpdated: boolean } {
@@ -2487,6 +2503,19 @@ export class SqliteMetadataRepository {
         const cas = this.compareAndSwapPresentationView(plan.presentation.value, plan.presentation.expectedVersion)
         if (!cas.updated) throw new Error(`STALE_PRESENTATION_VERSION current=${cas.currentVersion}`)
         presentationUpdated = true
+      }
+      for (const membership of plan.workspaceMembershipAdds ?? []) {
+        const row = this.#database.prepare(
+          'SELECT COALESCE(MAX(sort_order), 0) + 1 AS next_order FROM workspace_memberships WHERE workspace_id = ?',
+        ).get(membership.workspaceId as SQLInputValue) as Row
+        this.#database.prepare(`
+          INSERT OR IGNORE INTO workspace_memberships (workspace_id, artifact_view_id, added_at, added_by, sort_order)
+          VALUES (?, ?, ?, ?, ?)
+        `).run(membership.workspaceId as SQLInputValue, membership.viewId as SQLInputValue, membership.addedAt, membership.addedBy, Number(row.next_order))
+      }
+      for (const membership of plan.workspaceMembershipRemoves ?? []) {
+        this.#database.prepare('DELETE FROM workspace_memberships WHERE workspace_id = ? AND artifact_view_id = ?')
+          .run(membership.workspaceId as SQLInputValue, membership.viewId as SQLInputValue)
       }
       if (plan.changeSet !== undefined) this.createMutationChangeSet(plan.changeSet)
       if (plan.receipt !== undefined) this.saveCurationReceipt(plan.receipt, plan.projectId)
@@ -3416,8 +3445,8 @@ export class SqliteMetadataRepository {
     this.#database.prepare(`
       INSERT INTO capture_staging_items (
         id, operation_id, kind, payload_ref, source_json, suggested_projects_json,
-        semantic_hint_json, captured_at, resolved_project_id, resolved_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        semantic_hint_json, captured_at, resolved_project_id, resolved_at, resolved_artifact_id, resolved_view_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       item.id as SQLInputValue,
       item.operationId,
@@ -3429,6 +3458,8 @@ export class SqliteMetadataRepository {
       item.capturedAt,
       item.resolvedProjectId ?? null,
       item.resolvedAt ?? null,
+      item.resolvedArtifactId ?? null,
+      item.resolvedViewId ?? null,
     )
   }
 
@@ -3459,10 +3490,10 @@ export class SqliteMetadataRepository {
     return Number(row.count)
   }
 
-  resolveCaptureStagingItem(id: string, projectId: string, resolvedAt: string): boolean {
+  resolveCaptureStagingItem(id: string, projectId: string, resolvedAt: string, resolvedArtifactId?: string, resolvedViewId?: string): boolean {
     const result = this.#database.prepare(
-      'UPDATE capture_staging_items SET resolved_project_id = ?, resolved_at = ? WHERE id = ? AND resolved_project_id IS NULL',
-    ).run(projectId, resolvedAt, id as SQLInputValue)
+      'UPDATE capture_staging_items SET resolved_project_id = ?, resolved_at = ?, resolved_artifact_id = ?, resolved_view_id = ? WHERE id = ? AND resolved_project_id IS NULL',
+    ).run(projectId, resolvedAt, resolvedArtifactId ?? null, resolvedViewId ?? null, id as SQLInputValue)
     return result.changes === 1
   }
 
@@ -3647,6 +3678,8 @@ export class SqliteMetadataRepository {
       capturedAt: String(row.captured_at),
       ...(row.resolved_project_id ? { resolvedProjectId: String(row.resolved_project_id) } : {}),
       ...(row.resolved_at ? { resolvedAt: String(row.resolved_at) } : {}),
+      ...(row.resolved_artifact_id ? { resolvedArtifactId: String(row.resolved_artifact_id) } : {}),
+      ...(row.resolved_view_id ? { resolvedViewId: String(row.resolved_view_id) } : {}),
     }
   }
 

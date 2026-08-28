@@ -71,8 +71,9 @@ export class CaptureStagingService {
     return this.#metadata.countPendingCaptureStagingItems()
   }
 
-  resolve(id: string, projectId: string): boolean {
-    return this.#metadata.resolveCaptureStagingItem(id, projectId, new Date().toISOString())
+  /** F6 follow-up：resolved 行携带产物回链（artifact/view），capture→surface apply 可安全重试。 */
+  resolve(id: string, projectId: string, resolvedArtifactId?: string, resolvedViewId?: string): boolean {
+    return this.#metadata.resolveCaptureStagingItem(id, projectId, new Date().toISOString(), resolvedArtifactId, resolvedViewId)
   }
 
   #storeBlob(bytes: Uint8Array): string {

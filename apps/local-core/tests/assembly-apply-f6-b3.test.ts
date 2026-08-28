@@ -17,6 +17,7 @@ import { CaptureStagingService } from '../src/capture-staging-service.js'
 import { CaptureSpaceService } from '../src/capture-space-service.js'
 import { CapturePlacementService } from '../src/capture-placement-service.js'
 import { MutationSafetyService } from '../src/mutation-safety-service.js'
+import { CurationCommandService } from '../src/curation-command-service.js'
 import { PresentationApplicationService } from '../src/presentation-application-service.js'
 import { ConversationImportService } from '../src/conversation-import-service.js'
 import { ImportCopyService } from '../src/import-copy-service.js'
@@ -51,7 +52,8 @@ function setup() {
   const importCopy = new ImportCopyService(repository)
   const resources = new UniversalResourceImportService(repository, importCopy)
   const captureSpace = new CaptureSpaceService(repository, staging, resources, new CapturePlacementService(repository), new IntelligenceProviderService(), blobRoot)
-  const apply = new AssemblyApplyService(repository, captureSpace, mutationSafety, conversations)
+  const curationCommand = new CurationCommandService({ repository, presentations: presentation })
+  const apply = new AssemblyApplyService(repository, captureSpace, mutationSafety, conversations, curationCommand, presentation)
   const rootScope = repository.getScopes(projectId).find((scope) => scope.kind === 'root')
   return { repository, projectId, scopeId: String(rootScope?.id ?? ''), apply, staging, blobRoot }
 }
@@ -150,14 +152,16 @@ describe('F6 P0-C2: Capture → Target Golden (materialize once, provenance pres
     // staging item 已 resolved（不再 pending）
     expect(staging.countPending()).toBe(0)
 
-    // 二次 apply 同一 capture：materializeToProject 的幂等守卫拒绝重复（resolved 检查）
+    // 二次 apply 同一 capture：幂等复用产物（follow-up 冻结后的重试安全语义——不重复物化）
     const second = await apply.apply({
       schemaVersion: 1,
       projectId,
       sourceRefs: [{ kind: 'capture', id: staged.id }],
       targetRef: { kind: 'project', id: projectId },
     })
-    expect(second.results[0]!.status).toBe('failed')
+    expect(second.results[0]!.status).toBe('skipped')
+    expect(second.results[0]!.channel).toBe('already-member')
+    expect(second.results[0]!.memberViewId).toBeTruthy()
     expect(repository.getArtifacts(projectId).length).toBe(artifactCountBefore + 1)
   })
 

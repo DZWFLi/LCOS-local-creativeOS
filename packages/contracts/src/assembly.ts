@@ -25,9 +25,15 @@ export type AssemblySourceRefV1 =
   | { readonly kind: 'collection'; readonly id: string }
   | { readonly kind: 'skill'; readonly id: string; readonly source: 'system' | 'user' | 'merged'; readonly version?: string }
 
-/** Assembly Target Scene 的统一目标引用（P0-B3）：入口来自 Project root / Conversation / Context / Workflow / Scene。 */
+/**
+ * Assembly Target Scene 的统一目标引用（P0-B3 + 20260828 补充冻结）：
+ * 入口来自 Project root / Conversation / Context / Workflow / Scene。
+ * - main：Project Main Presentation（root scope 的 context 投影）——不是 active Workspace 的别名；
+ * - scene 与 workspace 同走 working-set membership 通道（scene.id 即 workspaceId）。
+ */
 export type AssemblyTargetRefV1 =
   | { readonly kind: 'project'; readonly id: string }
+  | { readonly kind: 'main' }
   | { readonly kind: 'workspace'; readonly id: string }
   | { readonly kind: 'conversation'; readonly id: string }
   | { readonly kind: 'context'; readonly id: string }
@@ -85,14 +91,29 @@ export interface AssemblyApplyRequestV1 {
   readonly projectId: string
   readonly sourceRefs: readonly AssemblySourceRefV1[]
   readonly targetRef: AssemblyTargetRefV1
+  /**
+   * Drop 落点（20260828 补充冻结 §6：placement 可选、与 semantic membership 分层）：
+   * - 新成员：位置并入同一 ChangeSet（undo 连 membership+投影一起撤，§7）；
+   * - already-member：纯位置更新，不产生 semantic ChangeSet（§7 纯 placement 不进 semantic history）。
+   * key = sourceRef.id。
+   */
+  readonly placementBySource?: Readonly<Record<string, { readonly x: number; readonly y: number }>>
 }
 
 export interface AssemblyApplyItemResultV1 {
   readonly sourceRef: AssemblySourceRefV1
   readonly status: 'applied' | 'skipped' | 'failed'
   /** 实际写入的 canonical 通道（前端可见的"写了哪条 truth"）。 */
-  readonly channel: 'workspace-membership' | 'relation' | 'capture-materialize' | 'already-member' | 'unsupported' | 'error'
+  readonly channel: 'workspace-membership' | 'presentation-membership' | 'relation' | 'capture-materialize' | 'already-member' | 'unsupported' | 'error'
   readonly message?: string
+  /** membership 落在哪份 Presentation（presentation 通道时返回；projection identity）。 */
+  readonly presentationId?: string
+  /** 成为成员的 view（projection/member identity）。 */
+  readonly memberViewId?: string
+  /** 本条 mutation 的 ChangeSet（可撤销语义历史入口）。 */
+  readonly changeSetId?: string
+  /** placement 是否已持久化（分层：already-member 纯位置更新也为 true）。 */
+  readonly placementApplied?: boolean
 }
 
 export interface AssemblyApplyResultV1 {

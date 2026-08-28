@@ -236,13 +236,28 @@ export class CaptureSpaceService {
     const scopeId = String(rootScope.id)
     const items = captureIds.map((id) => this.metadata.getCaptureStagingItem(id))
     if (items.some((item) => item === undefined)) throw new Error('One or more capture ids do not exist.')
-    if ((items as CaptureStagingItemV0[]).some((item) => item.resolvedProjectId !== undefined)) throw new Error('One or more capture items were already resolved.')
+    // F6 follow-up（20260828 补充冻结）：同 project 已 resolved 且带产物回链 → 幂等复用，
+    // 使 capture→surface 的 apply 两步链失败后可安全重试（不重复物化）。
+    // resolved 到其它 project、或存量行缺回链 → 维持 fail-close，不猜产物。
+    const reused: CaptureMaterializeResultV1['items'][number][] = []
+    const pending: CaptureStagingItemV0[] = []
+    for (const item of items as CaptureStagingItemV0[]) {
+      if (item.resolvedProjectId === undefined) { pending.push(item); continue }
+      if (item.resolvedProjectId !== projectId || item.resolvedArtifactId === undefined || item.resolvedViewId === undefined) {
+        throw new Error('One or more capture items were already resolved.')
+      }
+      reused.push({ captureId: item.id, artifactId: item.resolvedArtifactId, viewId: item.resolvedViewId, reused: true })
+    }
+    if (pending.length === 0) {
+      return { schemaVersion: 1, projectId, batchId: '', imported: 0, items: reused }
+    }
 
     const imported: CaptureMaterializeResultV1['items'][number][] = []
-    for (const item of items as CaptureStagingItemV0[]) {
+    for (const item of pending) {
       const position = this.placement.place({ projectId, scopeId })
-      imported.push(await this.#importItem(projectId, scopeId, item, position))
-      this.staging.resolve(item.id, projectId)
+      const materialized = await this.#importItem(projectId, scopeId, item, position)
+      imported.push(materialized)
+      this.staging.resolve(item.id, projectId, materialized.artifactId, materialized.viewId)
     }
     const now = new Date().toISOString()
     const batchId = `import-batch-capture-space-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
@@ -253,7 +268,7 @@ export class CaptureSpaceService {
       sourceKind: 'capture',
       status: 'completed',
       scopeId,
-      importRequestIds: (items as CaptureStagingItemV0[]).map((item) => item.operationId),
+      importRequestIds: pending.map((item) => item.operationId),
       artifactIds: imported.map((item) => item.artifactId),
       revisionIds: imported.flatMap((item) => item.revisionId ? [item.revisionId] : []),
       viewIds: imported.map((item) => item.viewId),
@@ -267,7 +282,7 @@ export class CaptureSpaceService {
       views: current.views.filter((view) => !moved.has(view.captureId)),
       regions: current.regions.map((region) => ({ ...region, captureIds: region.captureIds.filter((id) => !moved.has(id)) })).filter((region) => region.captureIds.length > 0),
     }, current.version)
-    return { schemaVersion: 1, projectId, batchId, imported: imported.length, items: imported }
+    return { schemaVersion: 1, projectId, batchId, imported: imported.length, items: [...imported, ...reused] }
   }
 
   async #importItem(projectId: string, scopeId: string, item: CaptureStagingItemV0, position: { readonly x: number; readonly y: number }): Promise<CaptureMaterializeResultV1['items'][number]> {

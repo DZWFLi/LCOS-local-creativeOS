@@ -37,6 +37,11 @@ export interface CurationPatchPresentationV0 {
   readonly setHierarchy?: { readonly parentByViewId: Record<string, string | null>; readonly orderByParent: Record<string, string[]> }
   readonly addPresentationEdges?: readonly { readonly id: string; readonly from: CurationPatchTargetRefV0; readonly to: CurationPatchTargetRefV0; readonly label?: string }[]
   readonly removePresentationEdges?: readonly string[]
+  /**
+   * F6 follow-up（20260828 补充冻结）：Drop 落点与 membership 同 patch 提交——
+   * 纯位置微调仍走前端 presentation save（非 semantic）；此处只用于"新成员的初始投影"。
+   */
+  readonly setPositions?: Readonly<Record<string, { readonly x: number; readonly y: number }>>
   readonly setEmphasis?: Readonly<Record<string, 'primary' | 'normal' | 'secondary' | 'muted'>>
   readonly pin?: readonly string[]
   readonly unpin?: readonly string[]
@@ -50,6 +55,8 @@ export interface CurationPatchV0 {
   readonly createTexts: readonly CurationPatchCreateTextV0[]
   readonly relations: readonly CurationPatchRelationV0[]
   readonly presentation?: CurationPatchPresentationV0
+  /** F6 follow-up：apply 通道的用户 drop 写入时如实记 actor（默认 'agent' 兼容既有调用）。 */
+  readonly actorKind?: 'web' | 'agent' | 'core'
 }
 
 export interface CurationPatchStepReceiptV0 {
@@ -68,6 +75,8 @@ export interface CurationPatchReceiptV0 {
   readonly completedSteps: readonly CurationPatchStepReceiptV0[]
   readonly failedStep?: { readonly step: string; readonly error: string }
   readonly createdAt: string
+  /** F6 follow-up：apply 成功时带回 ChangeSet id（前端 undo 入口）。 */
+  readonly changeSetId?: string
 }
 
 /** B5：Change Set 是 technical audit / undo contract，不是新的 Project Domain Entity。 */
@@ -130,6 +139,24 @@ export type MutationChangeItemV1 =
         readonly relation: MutationRelationSnapshotV1
       }
       readonly forward?: { readonly type: 'delete_relation'; readonly relationId: string }
+      readonly appliedFingerprint: string
+    }
+
+  | {
+      /** F6 follow-up（20260828 补充冻结 §7）：Scene working-set membership 进 semantic ChangeSet。 */
+      readonly type: 'workspace_membership_add'
+      readonly workspaceId: string
+      readonly viewId: string
+      readonly inverse: { readonly type: 'workspace_membership_remove'; readonly workspaceId: string; readonly viewId: string }
+      readonly forward?: { readonly type: 'workspace_membership_add'; readonly workspaceId: string; readonly viewId: string }
+      readonly appliedFingerprint: string
+    }
+  | {
+      readonly type: 'workspace_membership_remove'
+      readonly workspaceId: string
+      readonly viewId: string
+      readonly inverse: { readonly type: 'workspace_membership_add'; readonly workspaceId: string; readonly viewId: string }
+      readonly forward?: { readonly type: 'workspace_membership_remove'; readonly workspaceId: string; readonly viewId: string }
       readonly appliedFingerprint: string
     }
 

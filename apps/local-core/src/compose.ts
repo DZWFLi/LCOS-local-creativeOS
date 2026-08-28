@@ -193,9 +193,6 @@ export function composeLocalCoreServices(options: LocalCoreServerOptions = {}): 
   // F6 P1（20260828）：Launcher summary + Skill Catalog 只读。
   const projectSummary = metadata === undefined ? undefined : new ProjectSummaryService(metadata)
   const skillCatalog = metadata === undefined ? undefined : new SkillCatalogService(metadata)
-  const assemblyApply = metadata === undefined
-    ? undefined
-    : new AssemblyApplyService(metadata, captureSpace, mutationSafety, conversations)
   const conversationIdentity = metadata === undefined || conversations === undefined
     ? undefined
     : new ConversationIdentityService(metadata, conversations, sessionLifecycle, projectEvents)
@@ -205,6 +202,21 @@ export function composeLocalCoreServices(options: LocalCoreServerOptions = {}): 
   if (options.runtimeApplicationService !== undefined && continuityRuntime !== undefined) {
     options.runtimeApplicationService.attachContinuity(continuityRuntime)
   }
+  // F6 P0-B4 + follow-up（20260828 补充冻结）：Semantic Drop 统一 apply——内部路由到
+  // captureSpace / curation patch（presentation membership，ChangeSet）/ mutationSafety
+  // workspace membership（ChangeSet）/ upsertRelation，零自有 mutation。
+  // 构造移到 curationCommand 之后：apply 的 presentation 通道复用同一实例。
+  const curationCommandService = metadata === undefined ? undefined : new CurationCommandService({
+    repository: metadata,
+    presentations: presentation!,
+    sessionReadSet,
+    ...(mutationSafety === undefined ? {} : { mutationSafety }),
+    ...(semantic === undefined ? {} : { semantic }),
+  })
+  const assemblyApply = metadata === undefined
+    ? undefined
+    : new AssemblyApplyService(metadata, captureSpace, mutationSafety, conversations, curationCommandService, presentation)
+
   return {
     catalog: options.catalog ?? new ExplicitProjectCatalog([]),
     metadata,
@@ -245,16 +257,7 @@ export function composeLocalCoreServices(options: LocalCoreServerOptions = {}): 
     }),
     search,
     semantic,
-    curationCommand: metadata === undefined ? undefined : new CurationCommandService({
-      repository: metadata,
-      presentations: presentation!,
-      // HU-2b（任务三第二刀）：mutation 层 CAS guard 接 sessionReadSet（与 routes /curation/read 同一实例）
-      sessionReadSet,
-      // 任务四 P1：agent 文本写进 change-review 记账
-      ...(mutationSafety === undefined ? {} : { mutationSafety }),
-      // F6 P0-A2：文本创建/修订即索引
-      ...(semantic === undefined ? {} : { semantic }),
-    }),
+    curationCommand: curationCommandService,
     runtimeRegistry,
     intelligence,
     captureStaging,
