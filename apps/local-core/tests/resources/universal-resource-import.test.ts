@@ -192,7 +192,7 @@ describe('Universal Resource Import (U1)', () => {
     repositories.push(reopened)
     const descriptor = reopened.getResourceDescriptorByResourceId('project-resources', outcome.resourceId)
     expect(descriptor?.artifactId).toBe(String(outcome.artifactId))
-    expect(reopened.schemaVersion).toBe(47)
+    expect(reopened.schemaVersion).toBe(48)
   })
 })
 

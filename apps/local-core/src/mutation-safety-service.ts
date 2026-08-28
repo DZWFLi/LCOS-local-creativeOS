@@ -4,6 +4,7 @@ import type {
   MutationChangeSetV1,
   MutationRelationSnapshotV1,
   ProjectEventOrigin,
+  SpatialMarkerIntentV0,
 } from '@local-creative-os/contracts'
 import type { Relation } from '@local-creative-os/domain'
 import type { SqliteMetadataRepository } from './metadata-repository.js'
@@ -510,6 +511,14 @@ export class MutationSafetyService {
         if (this.#hasWorkspaceEntityMember(change.workspaceId, change.entityType, change.entityId)) {
           return { revertable: false, reason: 'TOUCHED_STATE_CHANGED_AFTER_APPLY', changeSetId }
         }
+      } else if (change.type === 'spatial_marker_add') {
+        if (this.#metadata.getSpatialMarkerIntent(change.markerId) === undefined) {
+          return { revertable: false, reason: 'TOUCHED_STATE_CHANGED_AFTER_APPLY', changeSetId }
+        }
+      } else if (change.type === 'spatial_marker_remove') {
+        if (this.#metadata.getSpatialMarkerIntent(change.markerId) !== undefined) {
+          return { revertable: false, reason: 'TOUCHED_STATE_CHANGED_AFTER_APPLY', changeSetId }
+        }
       }
     }
 
@@ -570,6 +579,10 @@ export class MutationSafetyService {
           projectId: changeSet.projectId,
           workspaceEntityMembershipAdds: [{ workspaceId: change.workspaceId as never, entityType: change.entityType, entityId: change.entityId, addedBy: 'user', addedAt: new Date().toISOString() }],
         })
+      } else if (change.type === 'spatial_marker_add') {
+        this.#metadata.runCurationMutation({ projectId: changeSet.projectId, spatialMarkerDeletes: [change.markerId] })
+      } else if (change.type === 'spatial_marker_remove') {
+        this.#metadata.runCurationMutation({ projectId: changeSet.projectId, spatialMarkerAdds: [change.marker] })
       }
     }
 
@@ -643,6 +656,14 @@ export class MutationSafetyService {
         if (!this.#hasWorkspaceEntityMember(change.workspaceId, change.entityType, change.entityId)) {
           return { revertable: false, reason: 'TOUCHED_STATE_CHANGED_AFTER_APPLY', changeSetId }
         }
+      } else if (change.type === 'spatial_marker_add') {
+        if (this.#metadata.getSpatialMarkerIntent(change.markerId) !== undefined) {
+          return { revertable: false, reason: 'TOUCHED_STATE_CHANGED_AFTER_APPLY', changeSetId }
+        }
+      } else if (change.type === 'spatial_marker_remove') {
+        if (this.#metadata.getSpatialMarkerIntent(change.markerId) === undefined) {
+          return { revertable: false, reason: 'TOUCHED_STATE_CHANGED_AFTER_APPLY', changeSetId }
+        }
       }
     }
 
@@ -705,6 +726,10 @@ export class MutationSafetyService {
           projectId: changeSet.projectId,
           workspaceEntityMembershipRemoves: [{ workspaceId: change.workspaceId as never, entityType: change.entityType, entityId: change.entityId }],
         })
+      } else if (change.type === 'spatial_marker_add') {
+        this.#metadata.runCurationMutation({ projectId: changeSet.projectId, spatialMarkerAdds: [change.marker] })
+      } else if (change.type === 'spatial_marker_remove') {
+        this.#metadata.runCurationMutation({ projectId: changeSet.projectId, spatialMarkerDeletes: [change.markerId] })
       }
     }
 
@@ -712,6 +737,89 @@ export class MutationSafetyService {
     const updated = this.#metadata.getMutationChangeSet(changeSetId) ?? changeSet
     this.#publishChangeSet(updated, origin)
     return { revertable: true, changeSetId }
+  }
+
+  /**
+   * F6A2（20260829）：Spatial Marker 意图创建——用户持久导航意图进 semantic
+   * ChangeSet（envelope 同事务；revert 删除 / reapply 用完整 snapshot 恢复）。
+   * 跨 Project target fail-close（throw；路由层另有 422 前置校验）。
+   */
+  addSpatialMarker(input: {
+    readonly projectId: string
+    readonly targetRef: SpatialMarkerIntentV0['targetRef']
+    readonly scope: SpatialMarkerIntentV0['scope']
+    readonly sourceSurfaceRef?: string
+    readonly operationId?: string
+    readonly actorKind?: MutationChangeSetV1['actorKind']
+    readonly origin?: ProjectEventOrigin
+  }): { readonly marker: SpatialMarkerIntentV0; readonly changeSet: MutationChangeSetV1 } {
+    if (String(input.targetRef.projectId) !== String(input.projectId)) {
+      throw new Error('Cross-project spatial marker target is forbidden.')
+    }
+    const now = new Date().toISOString()
+    const marker: SpatialMarkerIntentV0 = {
+      id: `marker-${randomUUID()}`,
+      projectId: input.projectId,
+      targetRef: input.targetRef,
+      scope: input.scope,
+      ...(input.sourceSurfaceRef === undefined ? {} : { sourceSurfaceRef: input.sourceSurfaceRef }),
+      createdAt: now,
+      updatedAt: now,
+    }
+    const change: MutationChangeItemV1 = {
+      type: 'spatial_marker_add',
+      markerId: marker.id,
+      marker,
+      inverse: { type: 'spatial_marker_remove', markerId: marker.id },
+      forward: { type: 'spatial_marker_add', markerId: marker.id },
+      appliedFingerprint: `spatial-marker:${marker.id}:present`,
+    }
+    const changeSet = this.#buildChangeSet({
+      projectId: input.projectId,
+      operationId: input.operationId ?? input.origin?.operationId ?? `spatial-marker-add-${randomUUID()}`,
+      actorKind: input.actorKind ?? 'web',
+      changes: [change],
+    })
+    this.#metadata.runCurationMutation({
+      projectId: input.projectId,
+      spatialMarkerAdds: [marker],
+      changeSet,
+    })
+    this.#publishChangeSet(changeSet, input.origin)
+    return { marker, changeSet }
+  }
+
+  /** F6A2：marker 删除进 ChangeSet（非存在/跨 Project → undefined，幂等诚实）。 */
+  removeSpatialMarker(input: {
+    readonly projectId: string
+    readonly markerId: string
+    readonly operationId?: string
+    readonly actorKind?: MutationChangeSetV1['actorKind']
+    readonly origin?: ProjectEventOrigin
+  }): MutationChangeSetV1 | undefined {
+    const marker = this.#metadata.getSpatialMarkerIntent(input.markerId)
+    if (marker === undefined || String(marker.projectId) !== String(input.projectId)) return undefined
+    const change: MutationChangeItemV1 = {
+      type: 'spatial_marker_remove',
+      markerId: input.markerId,
+      marker,
+      inverse: { type: 'spatial_marker_add', markerId: input.markerId },
+      forward: { type: 'spatial_marker_remove', markerId: input.markerId },
+      appliedFingerprint: `spatial-marker:${input.markerId}:absent`,
+    }
+    const changeSet = this.#buildChangeSet({
+      projectId: input.projectId,
+      operationId: input.operationId ?? input.origin?.operationId ?? `spatial-marker-remove-${randomUUID()}`,
+      actorKind: input.actorKind ?? 'web',
+      changes: [change],
+    })
+    this.#metadata.runCurationMutation({
+      projectId: input.projectId,
+      spatialMarkerDeletes: [input.markerId],
+      changeSet,
+    })
+    this.#publishChangeSet(changeSet, input.origin)
+    return changeSet
   }
 
   #hasWorkspaceMember(workspaceId: string, viewId: string): boolean {

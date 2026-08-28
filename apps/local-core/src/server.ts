@@ -101,6 +101,7 @@ import { handleRevisionWorkflowsRoute } from './routes/revision-workflows.js'
 import { handleContinuityRoute } from './routes/continuity.js'
 import { handleReceiverRoute } from './routes/receiver.js'
 import { handleWorkspaceStatesRoute } from './routes/workspace-states.js'
+import { handleNavigationMarkersRoute } from './routes/navigation-markers.js'
 import { FORBIDDEN_BROWSER_PATH_FIELDS, isRecord, isStringArray, routeRequireMetadata, routeRequireProject } from './routes/route-context.js'
 import { ContextProposalStore } from './context-proposal-store.js'
 import { RuntimeRegistryService } from './runtime-registry-service.js'
@@ -1230,6 +1231,18 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
         helpers: routeHelpers,
       })) return
       if (await handleWorkspaceStatesRoute({
+        method,
+        pathname,
+        url,
+        request,
+        response,
+        controller,
+        metadata,
+        mutationSafety,
+
+        helpers: routeHelpers,
+      })) return
+      if (await handleNavigationMarkersRoute({
         method,
         pathname,
         url,

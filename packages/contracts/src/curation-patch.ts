@@ -1,4 +1,5 @@
 import type { PresentationEntityRefV0 } from './presentations.js'
+import type { SpatialMarkerIntentV0 } from './navigation-marker.js'
 
 /**
  * CurationPatch V0 — Phase E. A minimal batch write for the Curator skill:
@@ -207,6 +208,23 @@ export type MutationChangeItemV1 =
       readonly entityId: string
       readonly inverse: { readonly type: 'workspace_entity_membership_add'; readonly workspaceId: string; readonly entityType: 'note' | 'scope' | 'workspace' | 'conversation'; readonly entityId: string }
       readonly forward?: { readonly type: 'workspace_entity_membership_remove'; readonly workspaceId: string; readonly entityType: 'note' | 'scope' | 'workspace' | 'conversation'; readonly entityId: string }
+      readonly appliedFingerprint: string
+    }
+  | {
+      /** F6A2（20260829）：Spatial Marker 意图（用户持久导航意图）进 semantic ChangeSet。 */
+      readonly type: 'spatial_marker_add'
+      readonly markerId: string
+      readonly marker: SpatialMarkerIntentV0
+      readonly inverse: { readonly type: 'spatial_marker_remove'; readonly markerId: string }
+      readonly forward?: { readonly type: 'spatial_marker_add'; readonly markerId: string }
+      readonly appliedFingerprint: string
+    }
+  | {
+      readonly type: 'spatial_marker_remove'
+      readonly markerId: string
+      readonly marker: SpatialMarkerIntentV0
+      readonly inverse: { readonly type: 'spatial_marker_add'; readonly markerId: string }
+      readonly forward?: { readonly type: 'spatial_marker_remove'; readonly markerId: string }
       readonly appliedFingerprint: string
     }
   | {

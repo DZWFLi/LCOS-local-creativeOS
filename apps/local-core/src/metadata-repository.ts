@@ -42,6 +42,7 @@ import type {
   WorkspaceEntityMembership,
 } from '@local-creative-os/domain'
 import { assertContainmentWrite } from '@local-creative-os/domain'
+import type { SpatialMarkerIntentV0 } from '@local-creative-os/contracts'
 import type {
   AcceptArtifactReturnResult,
   ActiveContextV2,
@@ -281,7 +282,8 @@ export class SqliteMetadataRepository {
     if (current === 44) { this.#migrate_045_from_v44(); current = 45 }
     if (current === 45) { this.#migrate_046_from_v45(); current = 46 }
     if (current === 46) { this.#migrate_047_from_v46(); current = 47 }
-    if (current !== 47) throw new Error(`Unsupported metadata schema version ${current}.`)
+    if (current === 47) { this.#migrate_048_from_v47(); current = 48 }
+    if (current !== 48) throw new Error(`Unsupported metadata schema version ${current}.`)
   }
 
   #migrate_037_from_v36(): void {
@@ -453,6 +455,27 @@ export class SqliteMetadataRepository {
         PRIMARY KEY(workspace_id, entity_type, entity_id)
       );
       PRAGMA user_version = 47;
+      COMMIT;
+    `)
+  }
+
+  #migrate_048_from_v47(): void {
+    // F6A2（20260829）：Spatial Marker 意图持久化。只存 intent（targetRef/scope/
+    // sourceSurfaceRef）——Pin/Edge Cursor/Cluster/坐标/zoom 全部是前端 viewport
+    // 投影，禁止进 Core truth。跨 Project fail-close 由写路径校验（不存 target projectId 列）。
+    this.#database.exec(`
+      BEGIN;
+      CREATE TABLE IF NOT EXISTS spatial_marker_intents (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        target_kind TEXT NOT NULL CHECK(target_kind IN ('view','entity','surface')),
+        target_id TEXT NOT NULL,
+        scope TEXT NOT NULL CHECK(scope IN ('local','cross-surface')),
+        source_surface_ref TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      PRAGMA user_version = 48;
       COMMIT;
     `)
   }
@@ -2490,6 +2513,9 @@ export class SqliteMetadataRepository {
     readonly workspaceMembershipRemoves?: readonly { readonly workspaceId: WorkspaceId; readonly viewId: ArtifactViewId }[]
     readonly workspaceEntityMembershipAdds?: readonly { readonly workspaceId: WorkspaceId; readonly entityType: WorkspaceEntityMembership['entityType']; readonly entityId: string; readonly addedBy: WorkspaceMembershipSource; readonly addedAt: string }[]
     readonly workspaceEntityMembershipRemoves?: readonly { readonly workspaceId: WorkspaceId; readonly entityType: WorkspaceEntityMembership['entityType']; readonly entityId: string }[]
+    /** F6A2：Spatial Marker 意图增删（与 changeSet 同事务）。 */
+    readonly spatialMarkerAdds?: readonly SpatialMarkerIntentV0[]
+    readonly spatialMarkerDeletes?: readonly string[]
     readonly artifactViewDeletes?: readonly ArtifactViewId[]
     readonly noteDeletes?: readonly NoteId[]
     readonly changeSet?: MutationChangeSetV1
@@ -2552,6 +2578,8 @@ export class SqliteMetadataRepository {
         this.#database.prepare('DELETE FROM workspace_entity_memberships WHERE workspace_id = ? AND entity_type = ? AND entity_id = ?')
           .run(membership.workspaceId as SQLInputValue, membership.entityType, membership.entityId)
       }
+      for (const marker of plan.spatialMarkerAdds ?? []) this.#insertSpatialMarkerIntent(marker)
+      for (const markerId of plan.spatialMarkerDeletes ?? []) this.#database.prepare('DELETE FROM spatial_marker_intents WHERE id = ?').run(markerId as SQLInputValue)
       for (const viewId of plan.artifactViewDeletes ?? []) this.#database.prepare('DELETE FROM artifact_views WHERE id = ?').run(viewId as SQLInputValue)
       for (const noteId of plan.noteDeletes ?? []) this.#database.prepare('DELETE FROM notes WHERE id = ?').run(noteId as SQLInputValue)
       if (plan.changeSet !== undefined) this.createMutationChangeSet(plan.changeSet)
@@ -4491,6 +4519,61 @@ export class SqliteMetadataRepository {
       ORDER BY m.added_at, m.entity_type, m.entity_id
     `).all(projectId as SQLInputValue) as Row[]
     return rows.map((row) => this.#workspaceEntityMembership(row))
+  }
+
+  // ==================== F6A2（20260829）：Spatial Marker Intents（schema 48） ====================
+
+  listSpatialMarkerIntents(projectId: ProjectId): readonly SpatialMarkerIntentV0[] {
+    const rows = this.#database.prepare('SELECT * FROM spatial_marker_intents WHERE project_id = ? ORDER BY created_at, id')
+      .all(projectId as SQLInputValue) as Row[]
+    return rows.map((row) => this.#spatialMarkerIntent(row))
+  }
+
+  getSpatialMarkerIntent(markerId: string): SpatialMarkerIntentV0 | undefined {
+    const rows = this.#database.prepare('SELECT * FROM spatial_marker_intents WHERE id = ?').all(markerId as SQLInputValue) as Row[]
+    return rows.length ? this.#spatialMarkerIntent(rows[0] as Row) : undefined
+  }
+
+  #insertSpatialMarkerIntent(value: SpatialMarkerIntentV0): void {
+    this.#database.prepare(`
+      INSERT INTO spatial_marker_intents (id, project_id, target_kind, target_id, scope, source_surface_ref, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      value.id as SQLInputValue, value.projectId as SQLInputValue,
+      value.targetRef.kind, value.targetRef.id, value.scope,
+      (value.sourceSurfaceRef ?? null) as SQLInputValue,
+      value.createdAt, value.updatedAt,
+    )
+  }
+
+  /** 直接写面（不经 runCurationMutation）：仅快照恢复/测试用；常规路径走 MutationSafety。 */
+  upsertSpatialMarkerIntent(value: SpatialMarkerIntentV0): void {
+    this.#database.exec('BEGIN IMMEDIATE;')
+    try {
+      this.#database.prepare('DELETE FROM spatial_marker_intents WHERE id = ?').run(value.id as SQLInputValue)
+      this.#insertSpatialMarkerIntent(value)
+      this.#database.exec('COMMIT;')
+    } catch (error) {
+      this.#database.exec('ROLLBACK;')
+      throw error
+    }
+  }
+
+  deleteSpatialMarkerIntent(markerId: string): boolean {
+    const result = this.#database.prepare('DELETE FROM spatial_marker_intents WHERE id = ?').run(markerId as SQLInputValue)
+    return Number(result.changes) > 0
+  }
+
+  #spatialMarkerIntent(row: Row): SpatialMarkerIntentV0 {
+    return {
+      id: String(row.id),
+      projectId: String(row.project_id),
+      targetRef: { projectId: String(row.project_id), kind: String(row.target_kind) as SpatialMarkerIntentV0['targetRef']['kind'], id: String(row.target_id) },
+      scope: String(row.scope) as SpatialMarkerIntentV0['scope'],
+      ...(row.source_surface_ref === null || row.source_surface_ref === undefined ? {} : { sourceSurfaceRef: String(row.source_surface_ref) }),
+      createdAt: String(row.created_at),
+      updatedAt: String(row.updated_at),
+    }
   }
 
   #workspaceEntityMembership(row: Row): WorkspaceEntityMembership {
