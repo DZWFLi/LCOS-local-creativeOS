@@ -31,7 +31,7 @@ description: "搭/改 Workflow 面活动路径组件、边交互（临时边/项
    - Delete + `selectedEdge`：仅当 `edge.scope === 'presentation' || edge.id.startsWith('presentation:')` 才本地删临时边；**domain edge 不吃键盘 Delete**，必须走 inspector「删除项目关系」按钮（`deleteDomainEdge` → onDeleteDomainRelation → deleteRelation API），删后 `reloadRuntimeProject()`；
    - 焦点在 input/textarea 时 Delete 一律跳过。
 6. **临时边升级**：「保存为项目关系」（`promoteSelectedEdge`）= onCreateDomainRelation(from, to, label || 'reference')，成功后本地临时边移除。
-7. **运行态接线**：有 runOverlay 时材料节点加 `run-active / run-failed / run-completed` class；Step 用 `resolveSpatialSignal` 出 glyph + `GlythAvatar`。
+7. **运行态接线**：有 runOverlay 时材料节点加 `run-active / run-failed / run-completed` class；Step 用 `resolveSpatialSignal` 出状态，并以 `LcosSignalGlyph` 作为系统信号；严禁借用 Conversation 的 `Glyth/Bloub` 身体。
 
 ## 视觉词汇（复用，禁自带样式）
 

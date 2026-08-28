@@ -889,20 +889,7 @@
 .lcos-reconstructed .lcos-surface-composer-controls label > svg { position:absolute; right:6px; pointer-events:none; }
 .lcos-reconstructed .lcos-surface-context-count { margin-left:auto; min-width:18px; height:18px; display:grid; place-items:center; border-radius:50%; color:#837f8a; background:rgba(84,77,104,.055); font:600 8px/1 "JetBrains Mono",monospace; }
 
-/* Relations: weak lines recede; activity is allowed to move. */
-.lcos-reconstructed .vnext-surface-host .edges .edge { stroke:rgba(104,101,114,.22) !important; stroke-width:1.2px !important; filter:none !important; }
-.lcos-reconstructed .vnext-surface-host .edges .edge.reference { stroke:rgba(100,104,124,.20) !important; stroke-dasharray:3 6 !important; }
-.lcos-reconstructed .vnext-surface-host .edges .edge.feedback { stroke:rgba(181,137,73,.30) !important; stroke-dasharray:2 6 !important; }
-.lcos-reconstructed .vnext-surface-host .edges .edge.generate,
-.lcos-reconstructed .vnext-surface-host .edges .edge.modify { stroke:rgba(94,111,157,.30) !important; }
-.lcos-reconstructed .vnext-surface-host .edges .edge.focused { stroke:rgba(92,84,135,.42) !important; stroke-width:1.5px !important; }
-.lcos-reconstructed .vnext-surface-host .edges .edge.selected { stroke:rgba(105,83,196,.62) !important; stroke-width:1.8px !important; }
-.lcos-reconstructed .vnext-surface-host .edges .edge.active { stroke:rgba(74,111,178,.52) !important; stroke-dasharray:7 10 !important; }
-.lcos-reconstructed .edge-runner { fill:#6688ca !important; opacity:.74; }
-.lcos-reconstructed .lcos-edge-label { pointer-events: auto; cursor: pointer; }
-.lcos-reconstructed .lcos-edge-label rect { fill: rgba(250,249,252,.90); stroke: rgba(93,82,127,.18); stroke-width: 1px; filter: drop-shadow(0 3px 7px rgba(45,39,62,.10)); }
-.lcos-reconstructed .lcos-edge-label text { fill: rgba(56,50,69,.72); font-size: 12.5px; font-weight: 620; letter-spacing: .01em; user-select: none; }
-.lcos-reconstructed .lcos-edge-label.is-selected rect { fill: rgba(247,243,255,.96); stroke: rgba(105,83,196,.48); }
+/* Relation visual ownership moved to interaction-system.css. */
 
 /* Project identity is typography, not another card. */
 .lcos-reconstructed .vnext-project-identity { min-width:0; display:flex; align-items:center; gap:5px; }
@@ -994,32 +981,7 @@
 .lcos-reconstructed .workspace-relation-handle:focus-visible { opacity:1; }
 .lcos-reconstructed .workspace-relation-handle:hover { transform:scale(1.08); }
 
-/* Selected edge endpoints become tangible without reviving a relation mode. */
-.lcos-reconstructed .edge-controls { pointer-events:auto !important; transform:scale(calc(1 / var(--canvas-zoom))) !important; transform-box:fill-box !important; transform-origin:center !important; }
-.lcos-reconstructed .edge-control { pointer-events:auto; cursor:crosshair; }
-.lcos-reconstructed .edge-terminal {
-  fill:rgba(251,250,254,.98);
-  stroke:rgba(104,84,181,.58);
-  stroke-width:1.2px;
-  filter:drop-shadow(0 2px 5px rgba(68,55,106,.10));
-}
-.lcos-reconstructed .edge-cut-hit {
-  fill:rgba(252,251,254,.96);
-  stroke:rgba(98,92,111,.18);
-  stroke-width:1px;
-  cursor:pointer;
-}
-.lcos-reconstructed .edge-cut-mark {
-  pointer-events:none;
-  fill:none;
-  stroke:rgba(98,91,110,.7);
-  stroke-width:1.3px;
-  stroke-linecap:round;
-}
-.lcos-reconstructed .edge.temporary.reconnecting {
-  stroke:rgba(100,82,188,.48)!important;
-  stroke-dasharray:4 6!important;
-}
+/* Edge interaction controls are owned by interaction-system.css. */
 
 /* Context history is a visual version rail, not a second inspector. */
 .lcos-reconstructed .lcos-context-history {

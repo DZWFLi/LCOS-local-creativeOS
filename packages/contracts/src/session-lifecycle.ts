@@ -1,9 +1,7 @@
 /**
  * SessionLifecycle V1 — G3 Session 七态 taxonomy（20260827 草案，UX_RUNTIME_TRUTH_MAP 缺口收口）。
  *
- * 现状（Truth Map G3）：session 只有派生 stale 单态（App.tsx receiverSessionStale /
- * ReceiverSwitcher activeStale），无生命周期模型；runtime_bindings 表有 provider_status
- * 字段但会话生命周期态「不持久也不存在」。
+ * 历史缺口（Truth Map G3）：早期前端只派生 freshness/stale 标志，缺少生命周期模型；runtime_bindings 表虽有 provider_status 字段，但当时会话生命周期态尚未形成 canonical contract。该历史前端派生标志已退役，禁止重新作为 Controller/Lifecycle truth。
  *
  * 七态 = 主轨六态 + stale 旁路：
  * - 主轨：dormant → connecting → online ⇄ busy / waiting_input；任意活跃态可掉线

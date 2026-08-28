@@ -1940,7 +1940,8 @@ body { color: var(--ink); }
 .node-details:hover { box-shadow: 0 5px 12px var(--lcos-sep-hairline), inset 0 1px 0 #fff; }
 
 /* -------------------------------------------------------------------------- */
-/* Silver relationship lines                                                  */
+/* Relationship SVG foundation — geometry/hit only. Visual state lives in
+   interaction-system.css so relation appearance has a single owner.            */
 /* -------------------------------------------------------------------------- */
 
 .edges { position: absolute; inset: 0; overflow: visible; pointer-events: none; }
@@ -1948,51 +1949,13 @@ body { color: var(--ink); }
   pointer-events: stroke;
   cursor: pointer;
   fill: none;
-  stroke: rgba(137, 144, 151, 0.44);
-  stroke-width: 1.45px;
+  stroke: transparent;
+  stroke-width: 1.1px;
   stroke-linecap: round;
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
-  filter: drop-shadow(0 0 2.5px rgba(var(--workspace-glow-rgb), .12));
-  transition: stroke 180ms ease, opacity 180ms ease, filter 180ms ease;
 }
-.edge.reference { stroke: rgba(137,144,151,.35); stroke-dasharray: 4 6; }
-.edge.feedback { stroke: rgba(151,146,139,.42); stroke-dasharray: 2 5; }
-.edge.generate,
-.edge.modify,
-.edge.version,
-.edge-ai {
-  stroke: rgba(177, 182, 187, 0.61);
-  filter:
-    drop-shadow(0 0 2px rgba(255,255,255,.78))
-    drop-shadow(0 0 4px rgba(var(--workspace-glow-rgb), .16));
-}
-
-/* Only selected/running/returning lines flow. Historical lines remain still. */
-.edge.focused,
-.edge.selected {
-  stroke: rgba(196, 201, 205, 0.84);
-  stroke-width: 1.9px;
-  filter:
-    drop-shadow(0 0 2px rgba(255,255,255,.9))
-    drop-shadow(0 0 6px rgba(var(--workspace-glow-rgb), .28));
-}
-.edge.running,
-.edge.artifact-return,
-.edge.selected.generate,
-.edge.focused.generate,
-.edge-ai.running {
-  stroke-dasharray: 8 10;
-  animation: silver-flow 10s linear infinite;
-}
-.edge.artifact-return { animation-duration: 1.05s; animation-iteration-count: 1; }
-.edge.temporary {
-  pointer-events: none;
-  stroke: rgba(var(--workspace-glow-rgb), .72);
-  stroke-width: 1.8px;
-  stroke-dasharray: 5 7;
-  filter: drop-shadow(0 0 5px rgba(var(--workspace-glow-rgb), .22));
-}
+.edge.temporary { pointer-events: none; }
 .edge-hit {
   pointer-events: stroke;
   cursor: pointer;
@@ -2001,15 +1964,7 @@ body { color: var(--ink); }
   stroke-width: 14px;
   vector-effect: non-scaling-stroke;
 }
-.canvas.has-focus .edge:not(.focused):not(.selected) { opacity: .23; }
-.canvas.panning .edge { opacity: .16; }
-.canvas.panning .edge.focused,
-.canvas.panning .edge.selected { opacity: .66; }
 
-@keyframes silver-flow {
-  from { stroke-dashoffset: 0; }
-  to { stroke-dashoffset: -72; }
-}
 
 /* -------------------------------------------------------------------------- */
 /* LOD                                                                        */

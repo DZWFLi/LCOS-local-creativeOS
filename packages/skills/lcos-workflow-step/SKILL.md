@@ -33,7 +33,7 @@ description: "在 Workflow 面搭/改 Step 行动骨架（Step 卡、步骤边�
 
 ## 视觉词汇（复用，禁自带样式）
 
-- Step 卡：`.lcos-workflow-action` + `.lcos-spatial-placement`，序号 `.lcos-workflow-action-index`（`String(index+1).padStart(2,'0')`），端口 `.lcos-workflow-port.input/.output`，附件条 `.lcos-workflow-action-attachments`，信号 `.lcos-workflow-action-signal` + `GlythAvatar`。
+- Step 卡：`.lcos-workflow-action` + `.lcos-spatial-placement`，序号 `.lcos-workflow-action-index`（`String(index+1).padStart(2,'0')`），端口 `.lcos-workflow-port.input/.output`，附件条 `.lcos-workflow-action-attachments`，信号 `.lcos-workflow-action-signal` + `LcosSignalGlyph`（system signal only；严禁借用 Conversation Glyth/Bloub）。
 - 步骤边：`.lcos-workflow-action-edge`（箭头 marker `lcos-workflow-action-arrow`）；材料边 `.lcos-workflow-edge-group.material-relation`。
 - 布局预览：`.lcos-spatial-layout-preview` + ghost `.lcos-layout-ghost-workflow`；锚点标记 `.lcos-manual-anchor-mark`。
 - 材料卡：`.lcos-workflow-node.lcos-workflow-material`（`is-attached/is-unassigned/is-manual-anchor` + attention 桶 class）。

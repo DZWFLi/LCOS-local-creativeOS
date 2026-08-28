@@ -2264,25 +2264,7 @@
   box-shadow: 0 3px 8px rgba(55, 70, 105, .08), inset 0 1px 0 rgba(255, 255, 255, .9);
 }
 
-/* Three edge scopes are mechanical layers. Domain stays structural; presentation
-   is lighter/dashed; runtime is transient and visually alive. */
-.lcos-reconstructed .vnext-surface-host .edges .edge.edge-scope-domain {
-  stroke: rgba(92, 89, 104, .25) !important;
-}
-.lcos-reconstructed .vnext-surface-host .edges .edge.edge-scope-presentation:not(.selected):not(.focused) {
-  stroke: rgba(109, 92, 163, .25) !important;
-  stroke-dasharray: 3 6 !important;
-}
-.lcos-reconstructed .vnext-surface-host .edges .edge.edge-scope-runtime {
-  stroke: rgba(82, 105, 177, .52) !important;
-  stroke-dasharray: 7 9 !important;
-}
-.lcos-reconstructed .vnext-surface-host .edges .edge.focused,
-.lcos-reconstructed .vnext-surface-host .edges .edge.selected {
-  stroke: rgba(103, 78, 190, .70) !important;
-  stroke-width: 1.9px !important;
-}
-
+/* Edge scope visuals are owned by interaction-system.css. */
 
 /* Layout/Reorganize ghosts need to be legible at a glance without resembling
    committed nodes. The dashed contour and tint are future-state language. */
@@ -3002,12 +2984,6 @@
 .lcos-reconstructed .selection-composer.lcos-nearfield-composer {
   --selection-composer-scale: var(--lcos-ui-scale);
 }
-.lcos-reconstructed .edge-controls {
-  transform: scale(calc((1 / var(--canvas-zoom)) * var(--lcos-ui-scale))) !important;
-  transform-box: fill-box !important;
-  transform-origin: center !important;
-}
-
 /* node-info-popover 的入场动画终点必须等于缩放后的 transform，否则 140ms 后会跳变。 */
 @keyframes lcos-popover-ui-in {
   from { opacity: 0; transform: translateY(-2px) scale(calc(var(--lcos-ui-scale) * .982)); }
