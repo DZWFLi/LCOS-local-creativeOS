@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
@@ -7,14 +8,20 @@ const webRoot = join(process.cwd(), 'src')
 const source = (...parts: string[]) => readFileSync(join(webRoot, ...parts), 'utf8')
 
 describe('0.1 productization S4-S8 wiring', () => {
-  it('keeps SurfaceAgent local to Context/Workflow and binds a stable local session with reply summary', () => {
-    const node = source('features', 'shell', 'SurfaceAgentNode.tsx')
+  it('retires SurfaceAgentNode; Context/Workflow execute through UnifiedExecutionComposer (F6 anti-regression)', () => {
+    // F6 truth：SurfaceAgentNode 已删除，不再是 Context/Workflow execution owner；
+    // 执行入口收敛到 UnifiedExecutionComposer（同一 CommandDraft 契约）。
+    expect(existsSync(join(webRoot, 'features', 'shell', 'SurfaceAgentNode.tsx'))).toBe(false)
     const scene = source('features', 'shell', 'CanvasSceneHost.tsx')
-    expect(node).toContain('surface-agent-${crypto.randomUUID()}')
-    expect(node).toContain('onReadRun')
-    expect(node).toContain('runState?.summary')
-    expect(scene).toContain('surface={capabilityKind}')
+    expect(scene).toContain('UnifiedExecutionComposer')
     expect(scene).toContain("capabilityKind !== 'arrange'")
+    // 无 synthetic surface-agent-* session identity：receiver 身份只来自 canonical 会话链。
+    expect(scene).not.toContain('surface-agent-')
+    expect(scene).toContain('ConnectedConversationV1')
+    // Proposal 对未支持 contract fail-close（commandDraft 边界诚实）。
+    const draft = source('features', 'execution', 'commandDraft.ts')
+    expect(draft).toContain('fail-close')
+    expect(draft).toContain('已阻止伪造引用')
   })
 
   it('uses the existing Context Proposal chain and exposes keep/modify/remove review actions', () => {

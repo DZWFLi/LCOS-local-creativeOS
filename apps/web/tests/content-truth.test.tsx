@@ -51,26 +51,34 @@ describe('内容真实性收口 ⑦ —— 债1：rail 真 mini 布局', () => {
     expect(layout.overflow).toBe(1)
   })
 
-  it('rail 渲染真实成员方块（data-member-kind + 归一化 style），不再是无语义假条', () => {
+  it('rail 条内是 F5 native glyph（真实计数驱动），真实成员布局在 hover 大卡', () => {
+    // F5/F6 truth：rail 条内收窄为 native micro glyph（RailMicroObject，density=真实
+    // memberCount 驱动、kind 对应形态）；真实 x/y 归一化布局（RealMemberPreview）
+    // 移入 hover 大卡（preview && <ViewPreview large/>），条内不再渲染成员方块。
     const html = renderRail([railView({ memberNodes: [member('n1', 0, 0, 40, 30, 'image'), member('n2', 200, 100, 60, 40, 'markdown')] })])
-    expect(html).toContain('lcos-rail-member-cell')
-    expect(html).toContain('data-member-kind="image"')
-    expect(html).toContain('data-member-kind="markdown"')
-    expect(html).toMatch(/lcos-rail-member-cell[^>]*style="left:/)
+    expect(html).toContain('lcos-rail-native-micro kind-scene')
+    expect(html).toContain('data-density="2"')
+    // hover 大卡挂载点：preview 卡内 ViewPreview 以 large 模式渲染真实布局。
+    expect(railSource).toContain('<ViewPreview view={preview} large/>')
+    // RealMemberPreview 渲染真实成员方块：data-member-kind + 归一化百分比 style。
+    expect(railSource).toContain('className="lcos-rail-member-cell"')
+    expect(railSource).toContain('data-member-kind={kind}')
+    expect(railSource).toContain("style={{ left: `${left}%`, top: `${top}%`, width: `${width}%`, height: `${height}%` }}")
   })
 
-  it('rail 溢出徽章显示真实未显示成员数（+N）', () => {
-    const html = renderRail([railView({ memberCount: 8, memberNodes: [
-      member('n1', 0, 0), member('n2', 40, 0), member('n3', 80, 0), member('n4', 120, 0),
-      member('n5', 160, 0), member('n6', 200, 0), member('n7', 240, 0), member('n8', 280, 0),
-    ] })])
-    expect(html).toMatch(/\+2<\/b>/)
+  it('hover 大卡溢出徽章显示真实未显示成员数（+N）', () => {
+    // overflow 的几何正确性由纯函数测试覆盖；此处断言渲染契约——
+    // 溢出数来自 railMemberLayout 的真实 placed/overflow，徽章如实显示 +N。
+    expect(railSource).toContain('layout.overflow > 0 && <b className="lcos-rail-member-overflow" title={`另有 ${layout.overflow} 个成员未显示`}>+{layout.overflow}</b>')
   })
 
   it('无成员节点投影时退回真实计数，不伪造布局', () => {
-    const html = renderRail([railView({ memberCount: 5, memberNodes: undefined })])
-    expect(html).toContain('lcos-rail-member-empty')
-    expect(html).not.toContain('data-member-kind')
+    // 数据边界：拿不到成员投影时渲染 lcos-rail-member-empty + 真实 memberCount，
+    // 不画假几何；有成员但无几何坐标时走类型分布退路（stats），也不画假图形。
+    expect(railSource).toContain('lcos-rail-member-empty')
+    expect(railSource).toContain('{view.memberCount || 0}')
+    expect(railSource).toContain('真实类型分布退路，不画假图形')
+    expect(railSource).toContain('lcos-rail-member-stats')
   })
 
   it('memberSummaryLine 是真实类型分布统计行', () => {
@@ -80,11 +88,16 @@ describe('内容真实性收口 ⑦ —— 债1：rail 真 mini 布局', () => {
     ] }))).toContain('图片×2')
   })
 
-  it('真预览 CSS 对旧 scene/workflow 装饰线 b 规则有提权 reset（级联防污染）', () => {
+  it('成员预览 CSS：类型真实着色 + 大卡 overflow 定位（F6 契约）', () => {
+    // 旧「对 scene/workflow 装饰线 b 规则提权 reset」已随样式重构退役（污染源消失）。
+    // 新契约：member-cell 按真实 data-member-kind 类型着色；overflow/stats/empty
+    // 仅在 hover 大卡（is-large）定位渲染。
     const css = source('spatial-components.css')
-    expect(css).toContain('.lcos-reconstructed .lcos-rail-member-map .lcos-rail-member-overflow')
-    expect(css).toMatch(/\.lcos-rail-member-stats b \{ position: static/)
-    expect(css).toMatch(/\.lcos-rail-member-empty b \{ position: static/)
+    expect(css).toContain('.lcos-reconstructed .lcos-rail-member-cell[data-member-kind=\'image\']')
+    expect(css).toContain('.lcos-reconstructed .lcos-rail-member-cell[data-member-kind=\'markdown\']')
+    expect(css).toContain('.lcos-reconstructed .lcos-rail-member-map.is-large .lcos-rail-member-overflow')
+    expect(css).toContain('.lcos-reconstructed .lcos-rail-member-stats.is-large,')
+    expect(css).toContain('.lcos-reconstructed .lcos-rail-member-empty.is-large')
   })
 })
 

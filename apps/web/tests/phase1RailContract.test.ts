@@ -22,7 +22,12 @@ describe('Phase 1 — Shell / Left Rail cleanup contract', () => {
   it('keeps the Left Rail flat with a fixed Main entry first', () => {
     expect(rail).toContain('data-rail-kind="main"')
     expect(rail).toContain('aria-label="主画布"')
-    expect(rail).not.toContain('folder')
+    // F6 truth：rail 仍是 flat 单列视图栈（main 固定首项 + views 列表），无文件夹树导航层级。
+    // 「folder」允许作为 collection 成员预览的 CSS 词汇（lcos-rail-folder-members，真 mini 布局），
+    // 禁止的是旧 folder 树/嵌套导航心智的复活。
+    expect(rail).not.toContain('folder-tree')
+    expect(rail).not.toContain('folderNode')
+    expect(rail).not.toContain('文件夹导航')
   })
 
   it('makes saved views draggable from the rail into the canvas', () => {

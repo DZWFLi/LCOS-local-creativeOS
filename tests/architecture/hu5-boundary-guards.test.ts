@@ -76,6 +76,15 @@ describe('HU-5 architecture boundary guards', () => {
       'server.ts',
       // type-only 注入依赖：semantic 服务由组合层构造后注入，非适配器直连。
       'project-search-service.ts',
+      // F6 P0-A2 同款 type-only 注入：materialize 即索引的可选挂点（compose 注入，
+      // 缺席时行为不变），capture-application-service 无运行时 adapter import。
+      'capture-application-service.ts',
+      // F6 索引注入挂点（type-only：import type / inline 类型引用，compose.ts 构造注入，
+      // 无运行时 adapter import）——curation apply / import copy / review 即索引 / 路由类型聚合。
+      'curation-command-service.ts',
+      'import-copy-service.ts',
+      'runtime-review-service.ts',
+      'runtime.ts',
     ])
     for (const file of walk(core)) {
       const name = relative(core, file).replace(/\\/g, '/').split('/').at(-1) ?? ''

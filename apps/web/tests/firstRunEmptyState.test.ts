@@ -19,7 +19,7 @@ describe('First-run and empty project contract', () => {
     expect(drive).toContain('从一个真实项目开始')
     expect(drive).toContain('打开已有创作文件夹')
     expect(drive).toContain('创建空白项目')
-    expect(drive).toContain('不会移动或覆盖原文件')
+    expect(drive).toContain('不移动或覆盖源文件') // F6 文案：安全承诺同义改写（建立项目现场和索引，不移动或覆盖源文件）
     expect(drive).not.toContain('不负责用圆环图')
   })
 

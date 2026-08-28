@@ -28,15 +28,30 @@ describe('权限门纯函数 evaluateRunPermission（第一梯队 ⑥）', () =>
     expect(decision.items).toEqual(['草稿 v2'])
   })
 
-  it('空/空白 contextTitles → 兜底「当前项目」；未知意图 fail-closed 也走 confirm', () => {
-    expect(evaluateRunPermission({ outputIntent: 'create', instruction: '新建看板', contextTitles: [] }))
-      .toEqual({ kind: 'confirm', title: 'Agent 将执行写操作', items: ['当前项目'] })
+  it('空/空白 contextTitles → 兜底「当前项目」；未知意图 fail-closed 走 confirm + risk=structural', () => {
+    // F6 truth：confirm decision 附带风险分级（risk/riskLabel，G5 词汇与 contracts execution-gate 同源），
+    // 不再是三字段字面量——断言语义字段而非全量深比较。
+    const empty = evaluateRunPermission({ outputIntent: 'create', instruction: '新建看板', contextTitles: [] })
+    expect(empty.kind).toBe('confirm')
+    if (empty.kind !== 'confirm') return
+    expect(empty.title).toBe('Agent 将执行写操作')
+    expect(empty.items).toEqual(['当前项目'])
+    expect(empty.risk).toBe('reversible')
     expect(evaluateRunPermission({ outputIntent: 'create', instruction: '新建看板', contextTitles: ['   ', ''] }).kind).toBe('confirm')
-    expect(evaluateRunPermission({ outputIntent: 'sync', instruction: 'x', contextTitles: ['A'] }).kind).toBe('confirm')
+    // 未知意图 fail-closed：未登记意图当结构级处理（不静默、不拒绝，confirm 交用户裁决）。
+    const unknown = evaluateRunPermission({ outputIntent: 'sync', instruction: 'x', contextTitles: ['A'] })
+    expect(unknown.kind).toBe('confirm')
+    if (unknown.kind !== 'confirm') return
+    expect(unknown.risk).toBe('structural')
+    expect(unknown.riskLabel).toContain('结构')
   })
 
-  it('纯函数零依赖（无 import，不耦合运行时）', () => {
-    expect(readSource('../src/features/workflow/permissionGate.ts')).not.toMatch(/^\s*import\s/m)
+  it('纯函数不耦合运行时（type-only import 合法，禁止运行时模块依赖）', () => {
+    // F6 truth：risk 词汇 import type 自 contracts（G5 同源），类型依赖合法；
+    // 红线是不 import React/App/Client 等运行时模块——判定可独立单测。
+    const gate = readSource('../src/features/workflow/permissionGate.ts')
+    expect(gate).not.toMatch(/^\s*import\s(?!type)/m)
+    expect(gate).toMatch(/import type \{ MutationRisk \}/)
   })
 })
 
