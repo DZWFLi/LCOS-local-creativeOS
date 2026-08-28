@@ -3223,3 +3223,100 @@
 .lcos-overview-node-proxy { width:100%; height:100%; box-sizing:border-box; display:grid; grid-template-rows:auto 1fr; gap:5px; padding:9px 10px; overflow:hidden; border:1px solid rgba(96,90,116,.12); border-radius:10px; background:rgba(252,251,255,.92); box-shadow:0 5px 16px rgba(48,43,66,.045); }
 .lcos-overview-node-proxy span { font-size: 11px; letter-spacing:.08em; color:#9792a6; }
 .lcos-overview-node-proxy strong { align-self:end; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size: 10px; font-weight:600; color:#55505f; }
+
+/* -------------------------------------------------------------------------- */
+/* F6A · Project Search Lens — Search is one project-memory surface            */
+/* -------------------------------------------------------------------------- */
+
+.project-search-lens-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--lcos-z-dialog-menu);
+  display: grid;
+  place-items: start center;
+  padding-top: clamp(58px, 10vh, 108px);
+  background: rgba(30,28,36,.035);
+}
+.project-search-lens {
+  width: min(720px, calc(100vw - 32px));
+  max-height: min(610px, calc(100dvh - 120px));
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto minmax(0,1fr);
+  border: 1px solid rgba(63,58,75,.10);
+  border-radius: 18px;
+  background: rgba(250,250,252,.88);
+  box-shadow: 0 28px 72px rgba(35,31,45,.16), inset 0 1px 0 rgba(255,255,255,.80);
+  -webkit-backdrop-filter: blur(28px) saturate(1.16);
+  backdrop-filter: blur(28px) saturate(1.16);
+  color: var(--lcos-ui-ink);
+}
+.project-search-input-row {
+  min-height: 52px;
+  display: grid;
+  grid-template-columns: auto minmax(0,1fr) auto;
+  align-items: center;
+  gap: 9px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--lcos-ui-line);
+  color: var(--lcos-ui-ink-faint);
+}
+.project-search-input-row input {
+  min-width: 0;
+  height: 50px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--lcos-ui-ink);
+  font: 560 14px/1 var(--lcos-font-ui, sans-serif);
+  letter-spacing: -.015em;
+}
+.project-search-input-row input::placeholder { color: var(--lcos-ui-ink-faint); }
+.project-search-input-row button { width: 27px; height: 27px; display: grid; place-items: center; border: 0; border-radius: 8px; background: transparent; color: var(--lcos-ui-ink-faint); cursor: pointer; }
+.project-search-input-row button:hover { color: var(--lcos-ui-ink); background: var(--lcos-fill-tertiary); }
+.project-search-input-row kbd { padding: 3px 6px; border: 1px solid var(--lcos-ui-line); border-radius: 6px; background: rgba(255,255,255,.45); color: var(--lcos-ui-ink-faint); font: 560 8px/1 var(--lcos-font-mono, monospace); }
+.project-search-spinner { animation: lcos-search-spin .8s linear infinite; }
+@keyframes lcos-search-spin { to { transform: rotate(360deg); } }
+
+.project-search-results { min-height: 112px; overflow: auto; padding: 7px; scrollbar-gutter: stable; }
+.project-search-result {
+  width: 100%;
+  min-height: 58px;
+  display: grid;
+  grid-template-columns: 42px minmax(0,1fr);
+  align-items: center;
+  gap: 9px;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.project-search-result.is-active,
+.project-search-result:hover { background: var(--lcos-fill-tertiary); }
+.project-search-result:focus-visible { outline: 2px solid rgba(var(--lcos-ui-signal-rgb), .26); outline-offset: -2px; }
+.project-search-identity { width: 38px; height: 38px; display: grid; place-items: center; color: var(--lcos-ui-ink-soft); }
+.project-search-identity.is-conversation { transform: scale(.95); }
+.project-search-result-copy { min-width: 0; display: grid; gap: 3px; }
+.project-search-result-copy > strong { overflow: hidden; font: 610 11px/1.2 var(--lcos-font-ui, sans-serif); text-overflow: ellipsis; white-space: nowrap; }
+.project-search-result-copy > small { min-width: 0; display: flex; align-items: center; gap: 5px; overflow: hidden; color: var(--lcos-ui-ink-faint); font: 520 8.5px/1.2 var(--lcos-font-ui, sans-serif); white-space: nowrap; }
+.project-search-result-copy > small b { color: var(--lcos-ui-ink-soft); font-weight: 610; }
+.project-search-result-copy > small em { padding: 2px 5px; border-radius: 6px; background: rgba(var(--lcos-ui-signal-rgb), .065); color: var(--lcos-ui-signal); font-style: normal; }
+.project-search-result-copy > small span { overflow: hidden; text-overflow: ellipsis; }
+.project-search-result-copy > p { margin: 0; overflow: hidden; color: var(--lcos-ui-ink-soft); font: 500 9px/1.35 var(--lcos-font-ui, sans-serif); text-overflow: ellipsis; white-space: nowrap; }
+.project-search-idle,
+.project-search-empty,
+.project-search-error { min-height: 170px; display: grid; align-content: center; justify-items: center; gap: 6px; padding: 28px; color: var(--lcos-ui-ink-faint); text-align: center; }
+.project-search-idle strong,
+.project-search-empty strong,
+.project-search-error strong { color: var(--lcos-ui-ink-soft); font-size: 11px; }
+.project-search-idle span,
+.project-search-empty span,
+.project-search-error span { max-width: 390px; font-size: 9px; line-height: 1.5; }
+.project-search-error strong { color: var(--lcos-ui-danger, #a23b33); }
+
+@media (prefers-reduced-motion: reduce) {
+  .project-search-spinner { animation: none; }
+}

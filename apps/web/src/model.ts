@@ -205,6 +205,8 @@ export interface ProjectPackage {
   localPath: string
   updatedAt: string
   lastOpenedAt?: string
+  /** Core Project summary; undefined until the F6A summary contract is available. */
+  objectCount?: number
   pendingCount: number
   rootScopeId?: string
 }

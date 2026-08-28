@@ -1,25 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Archive, Download, FolderOpen, Link2Off, RotateCcw, RotateCw, Search, X } from 'lucide-react'
+import { Archive, Download, FolderOpen, Link2Off, RotateCcw, RotateCw, X } from 'lucide-react'
 import type { ContinuityResumeSnapshotV1, MutationChangeSetV1, ProviderSessionBindingV1 } from '@local-creative-os/contracts'
-import { searchProjectFocusEntries, type ProjectFocusSearchEntry } from '../../state/projectFocus'
+import type { ProjectFocusSearchEntry } from '../../state/projectFocus'
 import type { ProjectPackage } from '../../model'
 import type { LocalCoreClient } from '../../runtime/localCoreClient'
 import { dismissFromBackdrop } from '../ui/dismissibleLayer'
-
-interface SearchResult {
-  readonly key: string
-  readonly title: string
-  readonly kind: string
-  readonly sourceIds?: readonly string[]
-  readonly artifactId?: string
-  readonly snippet?: string
-  /** 块级锚点（如 'section:风险' / 'pdf:p3'），来自 SearchHitV0.chunkAnchor；省略 = 文档级命中。 */
-  readonly chunkAnchor?: string
-  /** 块序号（0-based，标题块为 0），来自 SearchHitV0.chunkIndex。 */
-  readonly chunkIndex?: number
-  /** 该实体的总分块数（含标题块），来自 SearchHitV0.chunkCount。 */
-  readonly chunkCount?: number
-}
+import { ProjectSearchLens } from './ProjectSearchLens'
 
 interface Props {
   open: boolean
@@ -35,14 +21,12 @@ interface Props {
   onNotice: (message: string) => void
 }
 
-type BusyAction = 'download' | 'backup' | 'open' | 'search' | 'session' | 'change' | 'continuity' | null
+type BusyAction = 'download' | 'backup' | 'open' | 'session' | 'change' | 'continuity' | null
 
 export function ProjectToolsDialog(props: Props) {
   const fileInput = useRef<HTMLInputElement | null>(null)
   const [busy, setBusy] = useState<BusyAction>(null)
   const [error, setError] = useState<string | null>(null)
-  const [query, setQuery] = useState('')
-  const [results, setResults] = useState<readonly SearchResult[]>([])
   const [session, setSession] = useState<ProviderSessionBindingV1 | null>(null)
   const [changeSets, setChangeSets] = useState<readonly MutationChangeSetV1[]>([])
   const [continuity, setContinuity] = useState<ContinuityResumeSnapshotV1 | null>(null)
@@ -50,8 +34,6 @@ export function ProjectToolsDialog(props: Props) {
   useEffect(() => {
     if (!props.open) return
     setError(null)
-    setQuery('')
-    setResults([])
     if (props.searchOnly) {
       setSession(null)
       setBusy(null)
@@ -71,7 +53,7 @@ export function ProjectToolsDialog(props: Props) {
 
   // 关闭按钮文案承诺了 Esc：这里兑现（对话框非原生，浏览器不会代劳）。
   useEffect(() => {
-    if (!props.open) return
+    if (!props.open || props.searchOnly) return
     const closeFromEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') props.onClose()
     }
@@ -137,48 +119,6 @@ export function ProjectToolsDialog(props: Props) {
     setBusy(null)
   }
 
-  const search = async (): Promise<void> => {
-    const normalized = query.trim()
-    if (!normalized) { setResults([]); return }
-    setBusy('search'); setError(null)
-
-    // One Search surface. Presentation titles are matched locally; Local Core
-    // federates exact / FTS / semantic candidates behind one ranked contract.
-    const local = searchProjectFocusEntries(props.searchEntries ?? [], normalized).slice(0, 10).map((entry) => ({
-      key: entry.key,
-      title: entry.title,
-      kind: entry.kind,
-      sourceIds: entry.sourceIds,
-    } satisfies SearchResult))
-
-    const call = await props.client.projectSearch(props.project.id, normalized, { limit: 12, types: ['artifact', 'resource'] })
-    if (!call.result.ok) {
-      setError(call.result.error.message)
-      setResults(local)
-    } else {
-      const seen = new Set(local.map((result) => result.key))
-      const remote = call.result.value.hits.flatMap((hit) => {
-        const key = `${hit.entityType}:${hit.entityId}`
-        if (seen.has(key)) return []
-        return [{
-          key,
-          title: hit.title,
-          kind: hit.entityType,
-          ...(hit.viewId ? { sourceIds: [hit.viewId] } : {}),
-          ...(hit.entityType === 'artifact' ? { artifactId: hit.entityId } : {}),
-          snippet: hit.snippet,
-          // 块级命中信息透传（SearchHitV0 契约的 chunkAnchor / chunkIndex / chunkCount）；
-          // 文档级命中时后端省略这些字段，这里同样保持省略，前端据此区分文档级/块级。
-          ...(hit.chunkAnchor !== undefined ? { chunkAnchor: hit.chunkAnchor } : {}),
-          ...(hit.chunkIndex !== undefined ? { chunkIndex: hit.chunkIndex } : {}),
-          ...(hit.chunkCount !== undefined ? { chunkCount: hit.chunkCount } : {}),
-        } satisfies SearchResult]
-      })
-      setResults([...local, ...remote].slice(0, 18))
-    }
-    setBusy(null)
-  }
-
   const clearSession = async (): Promise<void> => {
     setBusy('session'); setError(null)
     const call = await props.client.deleteProviderSession(props.project.id, 'codex')
@@ -208,34 +148,23 @@ export function ProjectToolsDialog(props: Props) {
     setBusy(null)
   }
 
+  if (props.searchOnly) {
+    return <ProjectSearchLens
+      open={props.open}
+      project={props.project}
+      client={props.client}
+      onClose={props.onClose}
+      onSelectArtifact={props.onSelectArtifact}
+      onSelectSourceIds={props.onSelectSourceIds}
+      searchEntries={props.searchEntries}
+      onNotice={props.onNotice}
+    />
+  }
+
   return <div className="project-tools-backdrop" role="presentation" onPointerDown={(event) => dismissFromBackdrop(event, props.onClose, busy !== null)}>
     <section className={`project-tools-dialog${props.searchOnly ? ' search-only' : ''}`} role="dialog" aria-modal="true" aria-label={props.searchOnly ? '项目搜索' : '项目工具'} data-testid="project-tools-dialog">
       <header className={props.searchOnly ? 'project-search-header' : undefined}><div><small>{props.searchOnly ? 'Search · Ctrl/Cmd F' : '项目工具'}</small><h2>{props.searchOnly ? '查找项目内容' : props.project.label}</h2></div><button className="dialog-close-action pressable" aria-label={props.searchOnly ? '关闭项目搜索' : '关闭项目工具'} title="关闭" onClick={props.onClose}><X size={15} /><span>{props.searchOnly ? 'Esc' : '关闭'}</span></button></header>
       <div className="project-tools-body">
-        <section>
-          {!props.searchOnly && <h3>查找项目内容</h3>}
-          <div className="project-tools-search"><Search size={14} /><input value={query} autoFocus={props.searchOnly} placeholder="搜索对象、标题或内容" onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void search() }} /><button className="pressable" disabled={busy === 'search'} onClick={() => { void search() }}>查找</button></div>
-          {results.length > 0 && <div className="project-tools-results">{results.map((result) => <button key={result.key} className="pressable" onClick={() => {
-            // 块级命中（chunkAnchor 带值）时先算好锚点文案，定位成功/失败的提示都要带上
-            const anchorLabel = result.chunkAnchor !== undefined ? formatChunkAnchorLabel(result.chunkAnchor) : null
-            if (result.sourceIds?.length && props.onSelectSourceIds) {
-              // 已有 sourceIds 定位逻辑照旧；块级命中时提示改为带锚点
-              props.onSelectSourceIds(result.sourceIds, result.title)
-              if (anchorLabel !== null) props.onNotice(`已定位到「${result.title}」的 ${anchorLabel}`)
-            } else if (result.artifactId) {
-              props.onSelectArtifact(result.artifactId)
-              if (anchorLabel !== null) props.onNotice(`已定位到「${result.title}」的 ${anchorLabel}`)
-            } else {
-              // 无可定位 View：文档级保持原提示；块级命中换成带锚点的提示
-              props.onNotice(anchorLabel !== null
-                ? `已找到「${result.title}」的块级命中：${anchorLabel}，但该文档没有可定位的画布 View。`
-                : `已找到「${result.title}」，但它目前没有可直接定位的画布 View。`)
-            }
-            props.onClose()
-          }}><b>{result.title}</b><small>{humanKind(result.kind)}{result.chunkAnchor !== undefined && <span className="lcos-search-chunk-badge" data-chunk-anchor={result.chunkAnchor}>{formatChunkAnchorLabel(result.chunkAnchor)}{result.chunkIndex !== undefined && result.chunkCount !== undefined ? ` · 块级 ${result.chunkIndex + 1}/${result.chunkCount}` : ''}</span>}{result.snippet ? ` · ${result.snippet}` : ''}</small></button>)}</div>}
-          {query.trim() && busy !== 'search' && results.length === 0 && <p className="project-tools-empty">没有找到匹配内容。</p>}
-        </section>
-
         {!props.searchOnly && <section>
           <h3>工程文件</h3>
           <div className="project-tools-grid">
@@ -310,13 +239,6 @@ function changeSetLabel(changeSet: MutationChangeSetV1): string {
   return '项目修改'
 }
 
-function humanKind(kind: string): string {
-  if (/markdown|text/i.test(kind)) return '文本内容'
-  if (/image/i.test(kind)) return '图片'
-  if (/presentation|ppt/i.test(kind)) return '演示文稿'
-  if (/pdf/i.test(kind)) return 'PDF'
-  return '项目内容'
-}
 
 function humanError(message: string): string {
   if (/offline|unavailable|ECONNREFUSED|fetch failed/i.test(message)) return '本地项目服务暂时不可用。你的项目内容没有丢失，重新启动 LCOS 后再试。'

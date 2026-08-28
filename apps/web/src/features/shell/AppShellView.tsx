@@ -7,7 +7,7 @@ import { DialogsHost, type DialogsHostProps } from './DialogsHost'
 import { CanvasSceneHost, type CanvasSceneHostProps } from './CanvasSceneHost'
 import { WorkRailHost } from './WorkRailHost'
 import { LcosToaster } from '../ui/LcosToaster'
-import { CaptureSpace } from '../capture/CaptureSpace'
+import { AssemblyCaptureWorkspace } from '../assembly/AssemblyCaptureWorkspace'
 import { ConversationSpaceSurface } from '../surfaces/ConversationSpaceSurface'
 import type { WorkRail } from '../workrail/WorkRail'
 
@@ -19,11 +19,11 @@ export interface AppShellViewProps {
   readonly notice: string | null
   readonly capture: {
     readonly open: boolean
-    readonly client: ComponentProps<typeof CaptureSpace>['client']
-    readonly projects: ComponentProps<typeof CaptureSpace>['projects']
-    readonly onClose: ComponentProps<typeof CaptureSpace>['onClose']
-    readonly onOpenProject?: ComponentProps<typeof CaptureSpace>['onOpenProject']
-    readonly onNotice?: ComponentProps<typeof CaptureSpace>['onNotice']
+    readonly client: ComponentProps<typeof AssemblyCaptureWorkspace>['client']
+    readonly projects: ComponentProps<typeof AssemblyCaptureWorkspace>['projects']
+    readonly onClose: ComponentProps<typeof AssemblyCaptureWorkspace>['onClose']
+    readonly onOpenProject?: ComponentProps<typeof AssemblyCaptureWorkspace>['onOpenProject']
+    readonly onNotice?: ComponentProps<typeof AssemblyCaptureWorkspace>['onNotice']
   }
   readonly drive: {
     readonly open: boolean
@@ -51,7 +51,7 @@ export function AppShellView(props: AppShellViewProps) {
   if (props.capture.open) {
     return <>
       <LcosToaster notice={props.notice} />
-      <CaptureSpace client={props.capture.client} projects={props.capture.projects} onClose={props.capture.onClose} onOpenProject={props.capture.onOpenProject} onNotice={props.capture.onNotice} />
+      <AssemblyCaptureWorkspace client={props.capture.client} projects={props.capture.projects} onClose={props.capture.onClose} onOpenProject={props.capture.onOpenProject} onNotice={props.capture.onNotice} />
     </>
   }
   if (props.drive.open) {
