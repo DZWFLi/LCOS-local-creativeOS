@@ -12,11 +12,14 @@ import type {
   WarehouseQueryV1,
   WarehouseSnapshotV1,
   WarehouseEntityKindV1,
+  AssemblyApplyRequestV1,
+  AssemblyApplyResultV1,
 } from '@local-creative-os/contracts'
 import type { RunId } from '@local-creative-os/domain'
 import type { ConversationIdentityService } from '../conversation-identity-service.js'
 import type { ResultSlotService } from '../result-slot-service.js'
 import type { WarehouseService } from '../warehouse-service.js'
+import type { AssemblyApplyService } from '../assembly-apply-service.js'
 import type { SqliteMetadataRepository } from '../metadata-repository.js'
 import { routeRequireProject, type RouteHttpContext, type RouteHttpHelpers } from './route-context.js'
 
@@ -25,13 +28,40 @@ export interface F6AssemblyRouteContext extends RouteHttpContext {
   readonly warehouse: WarehouseService | undefined
   readonly resultSlots: ResultSlotService | undefined
   readonly conversationIdentity: ConversationIdentityService | undefined
+  readonly assemblyApply: AssemblyApplyService | undefined
   readonly metadata: SqliteMetadataRepository
 }
 
 export async function handleF6AssemblyRoute(ctx: F6AssemblyRouteContext): Promise<boolean> {
-  const { method, pathname, url, request, response, controller, metadata, warehouse, resultSlots, conversationIdentity } = ctx
+  const { method, pathname, url, request, response, controller, metadata, warehouse, resultSlots, conversationIdentity, assemblyApply } = ctx
   const { sendJson, failure, readJsonBody, isRecord } = ctx.helpers
 
+  // ---------- P0-B4：Semantic Drop 统一 apply ----------
+  const applyMatch = /^\/projects\/([^/]+)\/assembly\/apply$/.exec(pathname)
+  if (method === 'POST' && applyMatch !== null) {
+    if (assemblyApply === undefined) {
+      sendJson(response, 503, failure('UNAVAILABLE', 'Assembly apply service is not configured.'))
+      return true
+    }
+    const projectId = decodeURIComponent(applyMatch[1] ?? '')
+    if (routeRequireProject(projectId, { metadata, response, helpers: ctx.helpers }) === undefined) return true
+    let input: unknown
+    try { input = await readJsonBody(request, controller.signal) } catch {
+      sendJson(response, 400, failure('INVALID_ARGUMENT', 'Assembly apply body must be valid JSON.'))
+      return true
+    }
+    if (!isRecord(input) || input.schemaVersion !== 1 || !Array.isArray(input.sourceRefs) || !isRecord(input.targetRef)) {
+      sendJson(response, 400, failure('INVALID_ARGUMENT', 'Assembly apply requires schemaVersion 1, sourceRefs[], targetRef.'))
+      return true
+    }
+    try {
+      const value: AssemblyApplyResultV1 = await assemblyApply.apply(input as unknown as AssemblyApplyRequestV1)
+      sendJson(response, 200, { ok: true, value })
+    } catch (error: unknown) {
+      sendJson(response, 409, failure('CONFLICT', error instanceof Error ? error.message : 'Assembly apply failed.'))
+    }
+    return true
+  }
   // ---------- P0-B2：Warehouse read model ----------
   const warehouseMatch = /^\/projects\/([^/]+)\/warehouse$/.exec(pathname)
   if (method === 'GET' && warehouseMatch !== null) {

@@ -44,6 +44,7 @@ import { ReceiverRuntimeService } from './receiver-runtime-service.js'
 import { SessionLifecycleService } from './session-lifecycle-service.js'
 import { ConversationIdentityService } from './conversation-identity-service.js'
 import { WarehouseService } from './warehouse-service.js'
+import { AssemblyApplyService } from './assembly-apply-service.js'
 import { ResultSlotService } from './result-slot-service.js'
 import { SessionReadSet } from './session-read-set.js'
 import { SpaceSandboxService } from './space-sandbox-service.js'
@@ -109,6 +110,7 @@ export interface LocalCoreServices {
   readonly conversationIdentity: ConversationIdentityService | undefined
   readonly warehouse: WarehouseService | undefined
   readonly resultSlots: ResultSlotService | undefined
+  readonly assemblyApply: AssemblyApplyService | undefined
 }
 
 /** 服务装配：把 options 解析成 createLocalCoreServer 需要的一组服务。 */
@@ -183,6 +185,10 @@ export function composeLocalCoreServices(options: LocalCoreServerOptions = {}): 
   // F6 P0-B/P0-D（20260828）：Warehouse read model + ResultSlot truth。
   const warehouse = metadata === undefined ? undefined : new WarehouseService(metadata)
   const resultSlots = metadata === undefined ? undefined : new ResultSlotService(metadata)
+  // F6 P0-B4（20260828）：Semantic Drop 统一 apply——内部路由到 captureSpace/addWorkspaceMembers/upsertRelation，零新 mutation。
+  const assemblyApply = metadata === undefined
+    ? undefined
+    : new AssemblyApplyService(metadata, captureSpace, mutationSafety, conversations)
   const conversationIdentity = metadata === undefined || conversations === undefined
     ? undefined
     : new ConversationIdentityService(metadata, conversations, sessionLifecycle, projectEvents)
@@ -264,5 +270,6 @@ export function composeLocalCoreServices(options: LocalCoreServerOptions = {}): 
     receiverRuntime,
     warehouse,
     resultSlots,
+    assemblyApply,
   }
 }

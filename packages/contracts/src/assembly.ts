@@ -28,6 +28,7 @@ export type AssemblySourceRefV1 =
 /** Assembly Target Scene 的统一目标引用（P0-B3）：入口来自 Project root / Conversation / Context / Workflow / Scene。 */
 export type AssemblyTargetRefV1 =
   | { readonly kind: 'project'; readonly id: string }
+  | { readonly kind: 'workspace'; readonly id: string }
   | { readonly kind: 'conversation'; readonly id: string }
   | { readonly kind: 'context'; readonly id: string }
   | { readonly kind: 'workflow'; readonly id: string }

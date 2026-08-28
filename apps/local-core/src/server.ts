@@ -341,7 +341,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
     catalog, metadata, fileRegistry, fileObservation, importCopy, resources, packages, uploads,
     resourceReader, matcher, contextManifest, runtimeReview, runtimeApplication, activeContext,
     contextProposals, runEventListeners, obsidian, obsidianSessions, connectorRegistry,
-    ownsConversationService, conversations, previewWorker, presentation, curation, search, curationCommand, semantic, warehouse, resultSlots,
+    ownsConversationService, conversations, previewWorker, presentation, curation, search, curationCommand, semantic, warehouse, resultSlots, assemblyApply,
     runtimeRegistry, intelligence, captureStaging, resolveProjectAffinity, captureApplication, captureWatch, captureSpace, reorganize, sessionReadSet, spaceSandbox, agentletRuntime, spatialRetrieval, attentionRuntime, boundaryEvaluator, projectEvents, projectMutations, mutationSafety, feedbackRevision, continuityRuntime, receiverRuntime, sessionLifecycle, conversationIdentity,
   } = services
   metadata?.setRunEventSink?.((event) => {
@@ -646,12 +646,34 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
         const search = (url.searchParams.get('search') ?? '').trim().toLocaleLowerCase('en-US')
         const kind = url.searchParams.get('kind') ?? ''
         const limit = Number(url.searchParams.get('limit'))
-        const items = captureStaging.listRecent(Number.isFinite(recentMs) && recentMs > 0 ? recentMs : 30 * 60_000)
+        // F6 P0-C1（20260828）：Capture masonry 素材流 query——search 覆盖 title/payloadRef/source.url/domain；sourceDomain 过滤；cursor 分页。
+        const sourceDomain = (url.searchParams.get('sourceDomain') ?? '').trim().toLocaleLowerCase('en-US')
+        const cursorRaw = url.searchParams.get('cursor') ?? ''
+        const cursorOffset = /^offset:(\d+)$/.test(cursorRaw) ? Number(cursorRaw.slice(7)) : 0
+        const domainOf = (item: CaptureStagingItemV0): string => {
+          try {
+            const raw = String((item.source as { url?: string })?.url ?? '')
+            return raw === '' ? '' : new URL(raw).hostname.toLocaleLowerCase('en-US')
+          } catch { return '' }
+        }
+        const filteredAll = captureStaging.listRecent(Number.isFinite(recentMs) && recentMs > 0 ? recentMs : 30 * 60_000)
           .filter((item) =>
             (kind === '' || item.kind === kind)
-            && (search === '' || String((item.source as { title?: string })?.title ?? '').toLocaleLowerCase('en-US').includes(search) || item.payloadRef.toLocaleLowerCase('en-US').includes(search)))
-          .slice(0, Number.isFinite(limit) && limit > 0 ? limit : 50)
-        sendJson(response, 200, { ok: true, value: { items, pendingCount: captureStaging.countPending() } })
+            && (sourceDomain === '' || domainOf(item) === sourceDomain)
+            && (search === '' || String((item.source as { title?: string })?.title ?? '').toLocaleLowerCase('en-US').includes(search)
+              || item.payloadRef.toLocaleLowerCase('en-US').includes(search)
+              || String((item.source as { url?: string })?.url ?? '').toLocaleLowerCase('en-US').includes(search)
+              || domainOf(item).includes(search)))
+        const pageLimit = Number.isFinite(limit) && limit > 0 ? limit : 50
+        const items = filteredAll.slice(cursorOffset, cursorOffset + pageLimit)
+        sendJson(response, 200, {
+          ok: true,
+          value: {
+            items,
+            pendingCount: captureStaging.countPending(),
+            ...(cursorOffset + pageLimit < filteredAll.length ? { nextCursor: `offset:${cursorOffset + pageLimit}` } : {}),
+          },
+        })
         return
       }
 
@@ -1298,6 +1320,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
         metadata,
         warehouse,
         resultSlots,
+        assemblyApply,
         conversationIdentity,
         helpers: routeHelpers,
       })) return
