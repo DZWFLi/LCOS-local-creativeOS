@@ -6,10 +6,13 @@ import { applySpatialWheelGesture, spatialScreenToWorld } from './spatialCamera'
 import { spatialDensityForSize } from './spatialLod'
 import { advanceSpatialPan, beginSpatialPan, endSpatialPointer } from './spatialInteractionMachine'
 import { CanvasEdgePinLayer, type CanvasEdgePinItem } from './CanvasEdgePinLayer'
+import { SpatialBeaconLayer } from './SpatialBeaconLayer'
 import { SpatialOverlayLayer } from './SpatialOverlayLayer'
 import { SpatialViewport } from './SpatialViewport'
 import { IDLE_SPATIAL_POINTER, type SpatialCameraSetter, type SpatialPoint, type SpatialPointerSession } from './spatialTypes'
 import { LCOS_MATERIAL_TRANSFER_MIME } from '../../state/materialTransfer'
+import type { MiniMapVisualKind } from './minimapSemantics'
+import type { SpatialBeaconState } from './useSpatialFocusRequest'
 
 export interface SpatialPointerContext {
   event: ReactPointerEvent<HTMLDivElement>
@@ -23,6 +26,8 @@ export interface SpatialCanvasItem {
   y: number
   width: number
   height: number
+  label?: string
+  visualKind?: MiniMapVisualKind
 }
 
 const DEFAULT_SEMANTIC_DROP_TARGETS: Readonly<Record<string, { id: string; label: string }>> = {
@@ -63,6 +68,8 @@ interface Props {
   onMarqueeSelect?: (ids: string[], additive: boolean) => void
   minimapItems?: readonly SpatialCanvasItem[]
   minimapLabel?: string
+  beacon?: SpatialBeaconState | null
+  onBeaconArrivalEnd?: () => void
   onPanningChange?: (active: boolean) => void
   semanticDropTarget?: { readonly id: string; readonly label: string }
   /** §4.13 边缘气泡标点:只传「被标点」对象(pinned/选中/被圈,调用方过滤);不传则不出气泡层 */
@@ -103,6 +110,8 @@ export const SpatialCanvas = forwardRef<HTMLDivElement, Props>(function SpatialC
   onMarqueeSelect,
   minimapItems,
   minimapLabel = '视图地图',
+  beacon,
+  onBeaconArrivalEnd,
   onPanningChange,
   semanticDropTarget,
   edgePinItems,
@@ -359,17 +368,18 @@ export const SpatialCanvas = forwardRef<HTMLDivElement, Props>(function SpatialC
     onDrop={handleDrop}
   >
     <SpatialViewport camera={camera} className={worldClassName} testId={worldTestId} style={worldStyle}>{children}</SpatialViewport>
-    {(overlays !== undefined || marqueeRect || (minimapItems && minimapItems.length > 0) || (edgePinItems && edgePinItems.length > 0 && onEdgePinLocate)) && <SpatialOverlayLayer>
+    {(overlays !== undefined || marqueeRect || beacon || (minimapItems && minimapItems.length > 0) || (edgePinItems && edgePinItems.length > 0 && onEdgePinLocate)) && <SpatialOverlayLayer>
       {overlays}
       {marqueeRect && <div className="lcos-spatial-marquee" style={{ left: marqueeRect.left, top: marqueeRect.top, width: marqueeRect.width, height: marqueeRect.height }} />}
-      {minimapItems && minimapItems.length > 0 && <SpatialMiniMap items={minimapItems} camera={camera} setCamera={setCamera} viewportSize={size} label={minimapLabel}/>}
+      {minimapItems && minimapItems.length > 0 && <SpatialMiniMap items={minimapItems} camera={camera} setCamera={setCamera} viewportSize={size} label={minimapLabel} beacon={beacon}/>}
+      {beacon && <SpatialBeaconLayer beacon={beacon} camera={camera} onArrivalEnd={onBeaconArrivalEnd}/>}
       {/* §4.13 边缘气泡标点:不跟随相机 transform 的固定屏幕层(minimap 同层),viewportSize 复用容器 ResizeObserver 实测值 */}
       {edgePinItems && edgePinItems.length > 0 && onEdgePinLocate && <CanvasEdgePinLayer camera={camera} viewportSize={size} items={edgePinItems} onLocate={onEdgePinLocate}/>}
     </SpatialOverlayLayer>}
   </div>
 })
 
-function SpatialMiniMap({ items, camera, setCamera, viewportSize, label }: { items: readonly SpatialCanvasItem[]; camera: Camera; setCamera: SpatialCameraSetter; viewportSize: { width: number; height: number }; label: string }) {
+function SpatialMiniMap({ items, camera, setCamera, viewportSize, label, beacon }: { items: readonly SpatialCanvasItem[]; camera: Camera; setCamera: SpatialCameraSetter; viewportSize: { width: number; height: number }; label: string; beacon?: SpatialBeaconState | null }) {
   const [collapsed, setCollapsed] = useState(false)
   const bounds = spatialItemBounds(items)
   const width = 152, height = 76, padding = 7
@@ -389,7 +399,7 @@ function SpatialMiniMap({ items, camera, setCamera, viewportSize, label }: { ite
       const worldY = bounds.y + (localY - offsetY) / scale
       setCamera((current) => ({ ...current, x: viewportSize.width / 2 - worldX * current.zoom, y: viewportSize.height / 2 - worldY * current.zoom }))
     }}>
-      {items.map((item) => <i key={item.id} style={{ left: worldToMapX(item.x), top: worldToMapY(item.y), width: Math.max(2, item.width * scale), height: Math.max(2, item.height * scale) }} />)}
+      {items.map((item) => <i key={item.id} data-minimap-kind={item.visualKind ?? 'generic'} data-minimap-beacon={beacon?.target.id === item.id || undefined} title={item.label} style={{ left: worldToMapX(item.x), top: worldToMapY(item.y), width: Math.max(2, item.width * scale), height: Math.max(2, item.height * scale) }} />)}
       <b style={{ left: worldToMapX(viewWorld.x), top: worldToMapY(viewWorld.y), width: Math.max(4, viewWorld.width * scale), height: Math.max(4, viewWorld.height * scale) }} />
     </button>
   </section>

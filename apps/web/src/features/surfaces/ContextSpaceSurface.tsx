@@ -16,6 +16,7 @@ import { IDLE_SPATIAL_POINTER, type SpatialPointerSession } from '../spatial/spa
 import { usePresentationDraftPinnedIds, usePresentationDraftPositions, usePresentationSurfaceElements } from '../../state/presentationDraftState'
 import { useSpatialSessionCamera } from '../../state/spatialSessionState'
 import { useSpatialFocusRequest, type SpatialFocusRequest } from '../spatial/useSpatialFocusRequest'
+import { miniMapVisualKindForNode } from '../spatial/minimapSemantics'
 import { SurfaceObject } from './SurfaceObject'
 import { ContextHistoryRail } from './ContextHistoryRail'
 import { ContextLensSwitch, type ContextLensId } from './ContextLensSwitch'
@@ -155,7 +156,7 @@ export function ContextSpaceSurface(props: Props) {
   }), [draftPositions, props.nodes, seed])
   const lod = spatialLodForCount(items.length)
   const byId = useMemo(() => new Map(items.map((item) => [item.node.id, item])), [items])
-  const spatialItems = useMemo(() => items.map((item) => ({ id: item.node.id, x: item.x, y: item.y, width: item.width, height: item.height })), [items])
+  const spatialItems = useMemo(() => items.map((item) => ({ id: item.node.id, x: item.x, y: item.y, width: item.width, height: item.height, label: item.node.title, visualKind: miniMapVisualKindForNode(item.node) })), [items])
   /** G-2:组件卡也进框选命中(bounds 与选框相交即选中);小地图仍只看节点,不掺组件。 */
   const componentMarqueeItems = useMemo(() => surfaceElements.map((element) => ({ id: element.id, x: element.bounds.x, y: element.bounds.y, width: element.bounds.w, height: element.bounds.h })), [surfaceElements])
   const marqueeItems = useMemo(() => [...spatialItems, ...componentMarqueeItems], [spatialItems, componentMarqueeItems])
@@ -175,7 +176,7 @@ export function ContextSpaceSurface(props: Props) {
   const [hierarchy] = usePresentationHierarchyState(props.projectId, props.scopeId, 'context-space', hierarchySeed, props.nodes)
   const understandingRegions = useMemo(() => contextUnderstandingRegions(hierarchy, items), [hierarchy, items])
   const edgeBounds = useMemo(() => spatialBoundsForPlacements(spatialItems, 160), [spatialItems])
-  useSpatialFocusRequest({ request: props.focusRequest, items: spatialItems, testId: 'context-space-spatial', setCamera })
+  const spatialFocus = useSpatialFocusRequest({ request: props.focusRequest, items: spatialItems, testId: 'context-space-spatial', camera, setCamera })
 
   /**
    * §4.13 边缘气泡标点:只对「被标点」对象出气泡——手动固定(pinned)的节点 + 固定的桌上组件。
@@ -343,7 +344,7 @@ export function ContextSpaceSurface(props: Props) {
       <div><strong>上下文</strong><span>理解现场</span></div>
       <div className="lcos-context-heading-actions"><small>{items.length} 项 · 同一份 Context · 三键在桌上定位/创建组件</small><ContextLensSwitch active="context-space" onSelect={(surface) => { if (surface === 'context-space' || surface === 'context-tree' || surface === 'context-flow') focusLens(surface) }}/></div>
     </header>
-    <SpatialCanvas camera={camera} setCamera={setCamera} marqueeItems={marqueeItems} minimapItems={spatialItems} minimapLabel="Context" onMarqueeSelect={handleMarqueeSelect} className="lcos-context-space-stage lcos-presentation-spatial" worldClassName="lcos-presentation-world lcos-context-space-world" testId="context-space-spatial" overlays={overlay} edgePinItems={edgePinItems} onEdgePinLocate={locateEdgePin} onPointerCancel={() => { drag.current = endSpatialPointer(); groupDrag.current = null; setDraggingId(null) }} onExternalDrop={(kind, raw, _screen, point) => {
+    <SpatialCanvas camera={camera} setCamera={setCamera} marqueeItems={marqueeItems} minimapItems={spatialItems} minimapLabel="Context" beacon={spatialFocus.beacon} onBeaconArrivalEnd={spatialFocus.clearBeacon} onMarqueeSelect={handleMarqueeSelect} className="lcos-context-space-stage lcos-presentation-spatial" worldClassName="lcos-presentation-world lcos-context-space-world" testId="context-space-spatial" overlays={overlay} edgePinItems={edgePinItems} onEdgePinLocate={locateEdgePin} onPointerCancel={() => { drag.current = endSpatialPointer(); groupDrag.current = null; setDraggingId(null) }} onExternalDrop={(kind, raw, _screen, point) => {
       if (kind !== 'project-view' || !props.onImportProjectView) return
       try {
         const payload = JSON.parse(raw) as { memberViewIds?: unknown }

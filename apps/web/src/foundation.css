@@ -1770,22 +1770,6 @@ body { color: var(--ink); }
 .run-button,
 .accept-button { min-height: 42px; border-radius: 14px; }
 
-.edge {
-  stroke: rgba(124,136,148,.38);
-  stroke-width: 1.35px;
-  filter: drop-shadow(0 0 2px rgba(var(--workspace-glow-rgb), .10));
-}
-.edge.reference { stroke: rgba(124,136,148,.30); }
-.edge.generate,
-.edge.modify,
-.edge.version,
-.edge-ai {
-  stroke: rgba(154,166,178,.58);
-  filter: drop-shadow(0 0 2px rgba(255,255,255,.9)) drop-shadow(0 0 4px rgba(var(--workspace-glow-rgb), .16));
-}
-.edge.focused,
-.edge.selected { stroke: rgba(var(--workspace-glow-rgb), .72); }
-
 @media (max-width: 1400px) {
   .minimap { width: 170px; }
   .canvas-node { min-width: 190px; min-height: 108px; }
@@ -1977,7 +1961,6 @@ body { color: var(--ink); }
 .lod-simplified .canvas-node:not(.selected) {
   box-shadow: 0 8px 20px var(--lcos-fill-quaternary), inset 0 1px 0 #fff;
 }
-.lod-simplified .edge:not(.focused):not(.selected) { opacity: .18; }
 
 .lod-overview .canvas-node {
   box-shadow: 0 6px 15px var(--lcos-fill-quaternary), inset 0 1px 0 rgba(255,255,255,.9);
@@ -1988,7 +1971,6 @@ body { color: var(--ink); }
 .lod-overview .anchor,
 .lod-overview .draft-mark,
 .lod-overview .current-mark { opacity: 0; pointer-events: none; }
-.lod-overview .edge:not(.focused):not(.selected) { opacity: .10; }
 .lod-badge {
   position: absolute;
   z-index: var(--lcos-z-content-guide); /* z-tier: canvas-content */
@@ -2080,11 +2062,6 @@ body { color: var(--ink); }
 
 /* Motion limits */
 @media (prefers-reduced-motion: reduce) {
-  .edge.running,
-  .edge.artifact-return,
-  .edge.selected.generate,
-  .edge.focused.generate,
-  .edge-ai.running,
   .state-banner.loading .state-icon svg { animation: none !important; }
   .inline-command { animation: none; }
 }
@@ -2197,16 +2174,6 @@ body { color: var(--ink); }
 }
 .workspace:hover { color: var(--ink-72); }
 .dock-add:hover { background: linear-gradient(150deg, #fff, #f8f9fb); }
-
-/* Silver lines move only when they are meaningful. */
-.edge.running,
-.edge.artifact-return,
-.edge.selected.generate,
-.edge.focused.generate,
-.edge-ai.running {
-  stroke-dasharray: 7 12;
-  animation-duration: 11s;
-}
 
 /* Object-driven single-column Inspector. */
 .inspector-flow { flex:1; overflow:auto; padding:10px 14px 18px; scrollbar-width:thin; }

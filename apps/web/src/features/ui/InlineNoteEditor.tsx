@@ -34,18 +34,35 @@ function inlineToHtml(text: string): string {
     .replace(/==([^=\n]+)==/g, '<mark>$1</mark>')
 }
 
+interface ParsedMarkdownBlock {
+  readonly type: LineType
+  readonly indent: number
+  readonly content: string
+}
+
+function parseMarkdownBlockLine(line: string): ParsedMarkdownBlock {
+  const indent = Math.min(6, Math.floor((line.length - line.trimStart().length) / 2))
+  const trimmed = line.trim()
+  const heading = trimmed.match(/^(#{1,3})\s+(.*)$/)
+  if (heading) return { type: `h${heading[1]!.length}` as 'h1' | 'h2' | 'h3', indent, content: heading[2] ?? '' }
+  const list = trimmed.match(/^[-*]\s+(.*)$/)
+  if (list) return { type: 'li', indent, content: list[1] ?? '' }
+  return { type: 'p', indent, content: trimmed }
+}
+
+function applyParsedMarkdownBlock(block: HTMLElement, parsed: ParsedMarkdownBlock): void {
+  block.setAttribute('data-t', parsed.type)
+  block.setAttribute('data-indent', String(parsed.indent))
+  block.innerHTML = inlineToHtml(parsed.content) || '<br>'
+}
+
 /** markdown → contentEditable 块结构：每行一个块，data-t 记录行类型、
  * data-indent 记录层级（两空格一级）。层级即大纲深度 —— 文本视图的
  * 缩进与导图视图的分支是同一份数据（幕布式无缝切换）。 */
 function markdownToHtml(md: string): string {
   return md.split('\n').map((line) => {
-    const indent = Math.min(6, Math.floor((line.length - line.trimStart().length) / 2))
-    const trimmed = line.trim()
-    const heading = trimmed.match(/^(#{1,3})\s+(.*)$/)
-    if (heading) return `<div data-t="h${heading[1].length}" data-indent="${indent}">${inlineToHtml(heading[2]!) || '<br>'}</div>`
-    const list = trimmed.match(/^[-*]\s+(.*)$/)
-    if (list) return `<div data-t="li" data-indent="${indent}">${inlineToHtml(list[1]!) || '<br>'}</div>`
-    return `<div data-t="p" data-indent="${indent}">${inlineToHtml(trimmed) || '<br>'}</div>`
+    const parsed = parseMarkdownBlockLine(line)
+    return `<div data-t="${parsed.type}" data-indent="${parsed.indent}">${inlineToHtml(parsed.content) || '<br>'}</div>`
   }).join('')
 }
 
@@ -297,6 +314,22 @@ export function InlineNoteEditor({ node, onCancel, onSave, onConvertToMindmap }:
     sel.addRange(range)
   }
 
+  const applyMarkdownShortcut = (): boolean => {
+    const area = areaRef.current
+    const sel = window.getSelection()
+    if (!area || !sel || !sel.rangeCount) return false
+    const block = blockOf(sel.anchorNode, area)
+    if (!block || block === area.firstElementChild || block.getAttribute('data-t') !== 'p') return false
+    const prefix = (block.textContent ?? '').trim()
+    const next: LineType | null = prefix === '#' ? 'h1' : prefix === '##' ? 'h2' : prefix === '###' ? 'h3' : prefix === '-' || prefix === '*' ? 'li' : null
+    if (!next) return false
+    block.setAttribute('data-t', next)
+    block.textContent = ''
+    block.appendChild(document.createElement('br'))
+    setCursorStart(block)
+    return true
+  }
+
   const toolbar = <div className="inline-note-editor-toolbar" onPointerDown={(event) => event.preventDefault()}>
     <button type="button" aria-label="加粗" title="加粗 (Ctrl+B)" onClick={() => toggleInline('b')}><Bold size={13}/></button>
     <button type="button" aria-label="高光" title="高光 (Ctrl+G)" onClick={() => toggleInline('mark')}><Highlighter size={13}/></button>
@@ -323,6 +356,8 @@ export function InlineNoteEditor({ node, onCancel, onSave, onConvertToMindmap }:
       if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') { event.preventDefault(); save() }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'b') { event.preventDefault(); toggleInline('b') }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'g') { event.preventDefault(); toggleInline('mark') }
+      // Notion/飞书/Markdown 成熟心智：行首 # / ## / ### / - + Space 立即转结构块。
+      if (event.key === ' ' && !event.metaKey && !event.ctrlKey && !event.altKey && applyMarkdownShortcut()) { event.preventDefault(); return }
       // Tab / Shift+Tab：层级调整 —— 与导图编辑器的 Tab=子级 / Shift+Tab=升级 同一语义。
       if (event.key === 'Tab') { event.preventDefault(); adjustIndent(event.shiftKey ? -1 : 1) }
       // 空行 Backspace：删除该块并把光标收到上一块末尾（导图的 Del=删除节点 同一语义）。
@@ -367,9 +402,7 @@ export function InlineNoteEditor({ node, onCancel, onSave, onConvertToMindmap }:
       let anchor: HTMLElement = block
       for (let i = 1; i < lines.length; i++) {
         const div = document.createElement('div')
-        div.setAttribute('data-t', 'p')
-        if (lines[i]) div.textContent = lines[i]
-        else div.appendChild(document.createElement('br'))
+        applyParsedMarkdownBlock(div, parseMarkdownBlockLine(lines[i] ?? ''))
         anchor.after(div)
         anchor = div
       }

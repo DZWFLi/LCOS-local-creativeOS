@@ -37,6 +37,7 @@ import {
 import { useWorkflowActionState } from '../../state/presentationWorkflowActionState'
 import { useSpatialSessionCamera } from '../../state/spatialSessionState'
 import { useSpatialFocusRequest, type SpatialFocusRequest } from '../spatial/useSpatialFocusRequest'
+import { miniMapVisualKindForNode } from '../spatial/minimapSemantics'
 import { SurfaceObject } from './SurfaceObject'
 import { LcosSignalGlyph } from '../design/DotGlyph'
 import { boundRegionSemanticForView, resolveSpatialSignal, type SpatialRuntimeSignal } from '../spatial/visual/spatialSignal'
@@ -232,8 +233,8 @@ export function WorkflowSurface(props: Props) {
     const item = byId.get(position.id)
     return item ? [{ x: position.x, y: position.y, width: item.width, height: item.height }] : []
   }) ?? [], [byId, layoutPreview])
-  const actionSpatialItems = useMemo(() => actions.map((action) => ({ id: action.id, x: action.x, y: action.y, width: ACTION_WIDTH, height: ACTION_HEIGHT })), [actions])
-  const materialSpatialItems = useMemo(() => items.map(({ node, x, y, width, height }) => ({ id: node.id, x, y, width, height })), [items])
+  const actionSpatialItems = useMemo(() => actions.map((action) => ({ id: action.id, x: action.x, y: action.y, width: ACTION_WIDTH, height: ACTION_HEIGHT, label: action.label, visualKind: 'action' as const })), [actions])
+  const materialSpatialItems = useMemo(() => items.map(({ node, x, y, width, height }) => ({ id: node.id, x, y, width, height, label: node.title, visualKind: miniMapVisualKindForNode(node) })), [items])
   /** G-2:组件卡也进框选命中(bounds 与选框相交即选中);Step 卡走自身点选(selectedActionId),小地图仍只看节点+Step。 */
   const componentMarqueeItems = useMemo(() => surfaceElements.map((element) => ({ id: element.id, x: element.bounds.x, y: element.bounds.y, width: element.bounds.w, height: element.bounds.h })), [surfaceElements])
   const marqueeItems = useMemo(() => [...materialSpatialItems, ...componentMarqueeItems], [materialSpatialItems, componentMarqueeItems])
@@ -249,7 +250,7 @@ export function WorkflowSurface(props: Props) {
   const nextReview = props.reviews?.find((review) => !projectedReviewIds.has(review.runId))
   const nextCheckpoint = props.checkpoints?.find((checkpoint) => !projectedCheckpointIds.has(checkpoint.checkpointId))
   const edgeBounds = spatialBoundsForPlacements([...spatialItems, ...previewPlacements], 180)
-  useSpatialFocusRequest({ request: props.focusRequest, items: materialSpatialItems, testId: 'workflow-spatial', setCamera })
+  const spatialFocus = useSpatialFocusRequest({ request: props.focusRequest, items: materialSpatialItems, testId: 'workflow-spatial', camera, setCamera })
 
   // Core/domain relations stay visible as secondary material evidence. The
   // editable action skeleton is stored separately and never mutates those relations.
@@ -724,6 +725,8 @@ export function WorkflowSurface(props: Props) {
       marqueeItems={marqueeItems}
       minimapItems={spatialItems}
       minimapLabel="Workflow"
+      beacon={spatialFocus.beacon}
+      onBeaconArrivalEnd={spatialFocus.clearBeacon}
       onMarqueeSelect={handleMarqueeSelect}
       className={`lcos-workflow-stage lcos-presentation-spatial ${layoutPreview ? 'has-layout-preview' : ''}`}
       worldClassName="lcos-presentation-world"

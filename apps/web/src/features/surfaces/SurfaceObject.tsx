@@ -85,6 +85,7 @@ export function SurfaceObject({
     return <>
       <button
         type="button"
+        data-node-id={node.id}
         data-surface-role={role}
         data-attention={attentionBucket}
         className={`lcos-surface-glyph role-${role} ${selected ? 'selected' : ''} ${attentionBucket ? `attention-${attentionBucket}` : ''} ${dim ? 'dim' : ''}`}
@@ -105,6 +106,7 @@ export function SurfaceObject({
   return <>
     <button
       type="button"
+      data-node-id={node.id}
       data-surface-role={role}
       data-attention={attentionBucket}
       className={`lcos-surface-object lcos-surface-material role-${role} ${selected ? 'selected' : ''} ${attentionBucket ? `attention-${attentionBucket}` : ''} ${compact ? 'compact' : ''} ${dim ? 'dim' : ''}`}

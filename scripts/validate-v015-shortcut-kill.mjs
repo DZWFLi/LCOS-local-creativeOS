@@ -5,7 +5,7 @@ const root = process.cwd()
 const srcRoot = path.join(root, 'apps/web/src')
 const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => entry.isDirectory() ? walk(path.join(dir, entry.name)) : [path.join(dir, entry.name)])
 const sourceFiles = walk(srcRoot).filter((file) => /\.(ts|tsx)$/.test(file))
-const source = sourceFiles.map((file) => [path.relative(root, file), fs.readFileSync(file, 'utf8')])
+const source = sourceFiles.map((file) => [path.relative(root, file).split(path.sep).join('/'), fs.readFileSync(file, 'utf8')])
 const byFile = new Map(source)
 const app = byFile.get('apps/web/src/App.tsx') ?? ''
 const dock = byFile.get('apps/web/src/features/shell/SurfaceDock.tsx') ?? ''

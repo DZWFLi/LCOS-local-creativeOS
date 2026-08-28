@@ -10,6 +10,7 @@ import { SpatialNodeLayer } from '../spatial/SpatialNodeLayer'
 import { fitSpatialBounds, spatialBoundsForPlacements } from '../spatial/spatialCamera'
 import { useSpatialSessionCamera } from '../../state/spatialSessionState'
 import { useSpatialFocusRequest, type SpatialFocusRequest } from '../spatial/useSpatialFocusRequest'
+import { miniMapVisualKindForNode } from '../spatial/minimapSemantics'
 import { beginSemanticDrop } from '../spatial/semanticDrop'
 import { DropFeedbackLayer } from '../drop/dropFeedbackLayer'
 import { useSemanticDropFeedback } from '../drop/useSemanticDropFeedback'
@@ -170,10 +171,10 @@ export function ContextRelationshipHomeSurface(props: Props) {
     return from && to ? [{ edge, from, to }] : []
   }), [graphPlacementByViewId, props.edges])
   const spatialItems = useMemo(() => [
-    ...projectPlacements.map((item) => ({ id:item.node.id, x:item.x, y:item.y, width:item.width, height:item.height })),
-    ...layout.placements.map((item) => ({ id:`scope:${item.view.id}`, x:item.x, y:item.y, width:item.width, height:item.height })),
+    ...projectPlacements.map((item) => ({ id:item.node.id, x:item.x, y:item.y, width:item.width, height:item.height, label:item.node.title, visualKind:miniMapVisualKindForNode(item.node) })),
+    ...layout.placements.map((item) => ({ id:`scope:${item.view.id}`, x:item.x, y:item.y, width:item.width, height:item.height, label:item.view.title, visualKind:'context' as const })),
   ], [layout.placements, projectPlacements])
-  useSpatialFocusRequest({ request: props.focusRequest, items: spatialItems, testId: 'context-graph-spatial', setCamera })
+  const spatialFocus = useSpatialFocusRequest({ request: props.focusRequest, items: spatialItems, testId: 'context-graph-spatial', camera, setCamera })
   const contentBounds = useMemo(() => spatialBoundsForPlacements([
     ...layout.placements.map(({x,y,width,height}) => ({x,y,width,height})),
     ...projectPlacements.map(({x,y,width,height}) => ({x,y,width,height})),
@@ -215,7 +216,7 @@ export function ContextRelationshipHomeSurface(props: Props) {
       <div><strong>上下文</strong><span>Context Graph</span></div>
       <small>{views.length} 个 Context · {projectNodes.length} 个项目节点 · 关系越重要，节点可以越大</small>
     </header>
-    <SpatialCanvas ref={canvasRef} camera={camera} setCamera={setCamera} marqueeItems={spatialItems} minimapItems={spatialItems} minimapLabel="Context Graph" onMarqueeSelect={props.onMarqueeSelect} className="lcos-context-home-stage lcos-presentation-spatial" worldClassName="lcos-presentation-world lcos-context-dot-world" worldStyle={{ width: WORLD_WIDTH, height: WORLD_HEIGHT }} testId="context-graph-spatial" overlays={empty} onExternalDrop={(kind, raw) => { if (kind === 'project-view') importProjectViewMembers(raw) }}>
+    <SpatialCanvas ref={canvasRef} camera={camera} setCamera={setCamera} marqueeItems={spatialItems} minimapItems={spatialItems} minimapLabel="Context Graph" beacon={spatialFocus.beacon} onBeaconArrivalEnd={spatialFocus.clearBeacon} onMarqueeSelect={props.onMarqueeSelect} className="lcos-context-home-stage lcos-presentation-spatial" worldClassName="lcos-presentation-world lcos-context-dot-world" worldStyle={{ width: WORLD_WIDTH, height: WORLD_HEIGHT }} testId="context-graph-spatial" overlays={empty} onExternalDrop={(kind, raw) => { if (kind === 'project-view') importProjectViewMembers(raw) }}>
       <SpatialEdgeLayer bounds={{ x:0, y:0, width:WORLD_WIDTH, height:WORLD_HEIGHT }} className="lcos-context-home-edges lcos-context-dot-edges" ariaLabel="Context Graph 关系">
         {projectEdges.map(({ edge, from, to }) => {
           const a=centerOf(from), b=centerOf(to)

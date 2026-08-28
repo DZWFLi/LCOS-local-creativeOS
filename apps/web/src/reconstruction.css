@@ -435,36 +435,7 @@
 .lcos-reconstructed .lcos-object-state.state-stale { background:#d19a4c; }
 .lcos-reconstructed .lcos-sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
 
-/* Selected = one quiet branded state. The content itself never flashes. */
-.lcos-reconstructed .canvas-node.selected .lcos-object::after,
-.lcos-reconstructed .lcos-surface-object.selected .lcos-selected-ring,
-.lcos-reconstructed .lcos-surface-glyph.selected .lcos-selected-ring {
-  content:"";
-  position:absolute;
-  inset:-2px;
-  z-index: var(--lcos-z-content-hud); /* z-tier: canvas-content */
-  padding:1.3px;
-  border-radius:inherit;
-  background:conic-gradient(from var(--lcos-ring-angle),var(--lcos-purple),var(--lcos-blue),var(--lcos-cyan),var(--lcos-blue),var(--lcos-purple));
-  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
-  -webkit-mask-composite:xor;
-  mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
-  mask-composite:exclude;
-  animation:lcos-ring-travel 5s linear infinite;
-  pointer-events:none;
-}
-.lcos-reconstructed .canvas-node.selected .lcos-object::before,
-.lcos-reconstructed .lcos-surface-object.selected .lcos-selected-bloom,
-.lcos-reconstructed .lcos-surface-glyph.selected .lcos-selected-bloom {
-  content:"";
-  position:absolute;
-  inset:-15px;
-  z-index: -1; /* z-tier: legacy-bg（porcelain 遗留背景层，按契约保留 -1） */
-  border-radius:inherit;
-  background:radial-gradient(58% 60% at 50% 50%,rgba(139,92,246,.12),rgba(59,130,246,.055) 55%,transparent 78%);
-  filter:blur(8px);
-  pointer-events:none;
-}
+/* Selection visual ownership moved to interaction-system.css. */
 
 /* Hover-proximity connection handles. */
 .lcos-reconstructed .canvas-node .anchor { opacity:0 !important; transform:scale(calc(.8 / var(--canvas-zoom))) !important; transition:opacity .12s ease,transform .12s ease !important; }
@@ -1190,10 +1161,7 @@
 @media (prefers-reduced-motion: reduce) {
   .lcos-reconstructed .lcos-surface-mount,
   .lcos-reconstructed .lcos-active-run-stage.status-running .lcos-run-actor-status i,
-  .lcos-reconstructed .edge-runner,
-  .lcos-reconstructed .lcos-run-pulse,
-  .lcos-reconstructed .selected::before,
-  .lcos-reconstructed .selected::after { animation:none!important; transition:none!important; }
+  .lcos-reconstructed .lcos-run-pulse { animation:none!important; transition:none!important; }
   .lcos-reconstructed .lcos-surface-mount { transform:none!important; opacity:1!important; }
 }
 .lcos-reconstructed .workspace-relation-handle { pointer-events:auto; }
@@ -1547,3 +1515,137 @@
 .lcos-reconstructed .global-composer-advanced > summary::-webkit-details-marker { display:none; }
 .lcos-reconstructed .global-composer-advanced[open] > summary { color:#5d5866; }
 .lcos-reconstructed .global-composer-advanced .global-composer-options { margin-top:5px; }
+
+/* F6B Unified Execution Composer: one CommandDraft surface for Selection + Receiver + explicit ordered References. */
+.lcos-reconstructed .lcos-unified-execution-composer { width:min(470px,calc(100vw - 110px)) !important; gap:6px !important; }
+.lcos-reconstructed .lcos-command-draft-head { display:flex; align-items:center; gap:6px; min-width:0; }
+.lcos-reconstructed .lcos-receiver-select { position:relative; min-width:0; flex:1; height:28px; display:grid; grid-template-columns:16px minmax(0,1fr) 12px; align-items:center; gap:4px; padding:0 7px; border:1px solid var(--lcos-hair); border-radius:9px; background:rgba(247,246,250,.74); color:#676371; }
+.lcos-reconstructed .lcos-receiver-select select { appearance:none; min-width:0; width:100%; border:0; outline:0; background:transparent; color:var(--lcos-ink); font:600 11.5px/1.2 inherit; text-overflow:ellipsis; }
+.lcos-reconstructed .lcos-receiver-select > svg:last-child { pointer-events:none; opacity:.6; }
+.lcos-reconstructed .lcos-reach-summary { flex:none; height:24px; display:flex; align-items:center; padding:0 7px; border-radius:999px; background:rgba(80,72,104,.055); color:#85818c; font:600 9px/1 "JetBrains Mono",monospace; letter-spacing:.02em; }
+.lcos-reconstructed .lcos-result-target { min-width:0; max-width:150px; height:24px; display:flex; align-items:center; padding:0 7px; border:1px solid rgba(93,86,112,.12); border-radius:999px; background:rgba(93,86,112,.035); color:#77727f; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:9.5px; }
+.lcos-reconstructed .lcos-result-target.is-running { border-style:dashed; }
+.lcos-reconstructed .lcos-result-target.is-review { border-color:rgba(93,86,112,.24); color:#595462; }
+.lcos-reconstructed .lcos-reference-tray { display:grid; gap:5px; padding:6px; border:1px solid var(--lcos-hair); border-radius:10px; background:rgba(248,248,251,.54); }
+.lcos-reconstructed .lcos-reference-tray-head { display:flex; align-items:center; gap:6px; min-width:0; color:#77737f; }
+.lcos-reconstructed .lcos-reference-tray-head > span { font:650 8px/1 "JetBrains Mono",monospace; letter-spacing:.07em; text-transform:uppercase; }
+.lcos-reconstructed .lcos-reference-tray-head small { min-width:0; margin-left:auto; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#aaa6b0; font-size:10px; }
+.lcos-reconstructed .lcos-reference-chips { display:flex; flex-wrap:wrap; gap:4px; min-height:24px; align-items:center; }
+.lcos-reconstructed .lcos-reference-chip { max-width:210px; height:28px; display:grid; grid-template-columns:17px 25px minmax(0,1fr) auto; align-items:center; gap:4px; padding:2px 3px 2px 4px; border:1px solid rgba(112,106,124,.14); border-radius:8px; background:rgba(255,255,255,.72); color:#625e69; }
+.lcos-reconstructed .lcos-reference-chip.is-unsupported { border-style:dashed; opacity:.68; }
+.lcos-reconstructed .lcos-reference-chip > b { width:16px; height:16px; display:grid; place-items:center; border-radius:999px; background:rgba(82,75,100,.08); color:#74707c; font:650 8px/1 "JetBrains Mono",monospace; }
+.lcos-reconstructed .lcos-reference-chip > i { height:18px; display:grid; place-items:center; overflow:hidden; border-radius:5px; background:rgba(90,83,107,.055); color:#8a8691; font:650 6.8px/1 "JetBrains Mono",monospace; font-style:normal; letter-spacing:.02em; }
+.lcos-reconstructed .lcos-reference-chip > img { width:25px; height:18px; border-radius:5px; object-fit:cover; }
+.lcos-reconstructed .lcos-reference-chip > span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:10.5px; }
+.lcos-reconstructed .lcos-reference-chip-actions { display:flex; align-items:center; gap:1px; opacity:0; transition:opacity var(--lcos-motion-fast,200ms) ease; }
+.lcos-reconstructed .lcos-reference-chip:hover .lcos-reference-chip-actions,
+.lcos-reconstructed .lcos-reference-chip:focus-within .lcos-reference-chip-actions { opacity:1; }
+.lcos-reconstructed .lcos-reference-chip-actions button { width:18px; height:18px; display:grid; place-items:center; padding:0; border:0; border-radius:5px; background:transparent; color:#8d8994; }
+.lcos-reconstructed .lcos-reference-chip-actions button:hover:not(:disabled) { background:rgba(80,72,104,.07); color:#4a4652; }
+.lcos-reconstructed .lcos-reference-chip-actions button:disabled { opacity:.22; }
+.lcos-reconstructed .lcos-reference-empty { color:#aaa6b0; font-size:10.5px; }
+.lcos-reconstructed .lcos-reference-actions { display:flex; align-items:center; gap:3px; }
+.lcos-reconstructed .lcos-reference-pick,
+.lcos-reconstructed .lcos-reference-add { width:max-content; min-height:23px; display:inline-flex; align-items:center; gap:4px; padding:0 6px; border:0; border-radius:7px; background:transparent; color:#817d88; font-size:10.5px; }
+.lcos-reconstructed .lcos-reference-pick:hover,
+.lcos-reconstructed .lcos-reference-pick.is-active { background:rgba(80,72,104,.07); color:#4f4a58; }
+.lcos-reconstructed .lcos-reference-add { opacity:.34; }
+.lcos-reconstructed .lcos-command-scope-note { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#8b8792; font-size:10.5px; }
+.lcos-reconstructed .canvas-node.reference-picked::after { content:""; position:absolute; inset:-5px; pointer-events:none; border:1px dashed rgba(92,83,122,.32); border-radius:calc(var(--lcos-radius-md,10px) + 3px); }
+.lcos-reconstructed .lcos-reference-pick-badge { position:absolute; z-index:8; left:-8px; top:-8px; width:20px; height:20px; display:grid; place-items:center; border:1px solid rgba(255,255,255,.9); border-radius:999px; background:rgba(54,50,65,.92); color:#fff; box-shadow:var(--lcos-shadow-float); font:650 9px/1 "JetBrains Mono",monospace; pointer-events:none; }
+.lcos-reconstructed .lcos-unified-execution-composer[data-reference-pick="true"] { box-shadow:var(--lcos-shadow-float),0 0 0 1px rgba(85,76,115,.12) !important; }
+@media (prefers-reduced-motion: reduce) {
+  .lcos-reconstructed .lcos-reference-chip-actions { transition:none; }
+}
+
+/* ---------- Conversation Subcanvas · same execution model, denser timeline world ---------- */
+.lcos-reconstructed .lcos-conversation-space {
+  position:relative;
+  height:calc(100vh - var(--lcos-top-h, 44px));
+  overflow:hidden;
+  background:var(--lcos-ground);
+}
+.lcos-reconstructed .lcos-conversation-space-hud {
+  position:absolute;
+  z-index:var(--lcos-z-overlay-ui);
+  top:10px;
+  left:12px;
+  right:12px;
+  height:36px;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  pointer-events:none;
+}
+.lcos-reconstructed .lcos-conversation-space-hud > * { pointer-events:auto; }
+.lcos-reconstructed .lcos-conversation-space-identity {
+  min-width:0;
+  display:flex;
+  align-items:baseline;
+  gap:8px;
+  padding:5px 9px;
+  border-radius:10px;
+  background:rgba(244,244,247,.82);
+  backdrop-filter:var(--lcos-mat-thin-blur, blur(16px));
+  box-shadow:inset 0 0 0 1px var(--lcos-hair);
+}
+.lcos-reconstructed .lcos-conversation-space-identity strong {
+  max-width:min(34vw,360px);
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  color:var(--lcos-ink);
+  font-size:11.5px;
+  font-weight:680;
+}
+.lcos-reconstructed .lcos-conversation-space-identity span { color:var(--lcos-ink-faint); font-size:9.5px; white-space:nowrap; }
+.lcos-reconstructed .lcos-conversation-space-work { margin-left:auto; }
+.lcos-reconstructed .lcos-conversation-spatial-canvas {
+  position:absolute;
+  inset:0;
+  background-image:radial-gradient(circle at 1px 1px, rgba(73,67,93,.075) .66px, transparent .7px);
+  background-size:18px 18px;
+}
+.lcos-reconstructed .lcos-conversation-world { min-width:980px; min-height:1200px; }
+.lcos-reconstructed .lcos-conversation-space-section {
+  position:absolute;
+  left:92px;
+  width:620px;
+  min-height:28px;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  color:var(--lcos-ink-faint);
+  pointer-events:none;
+}
+.lcos-reconstructed .lcos-conversation-space-section-mark { width:18px; height:1px; background:var(--lcos-separator); }
+.lcos-reconstructed .lcos-conversation-space-section h3 { margin:0; color:var(--lcos-ink-soft); font-size:11px; font-weight:640; letter-spacing:-.01em; }
+.lcos-reconstructed .lcos-conversation-space-message {
+  position:absolute;
+  left:132px;
+  width:min(620px,calc(100vw - 360px));
+  padding:9px 10px 12px 0;
+  border:0;
+  border-bottom:1px solid rgba(83,78,96,.08);
+  background:transparent;
+  color:var(--lcos-ink);
+}
+.lcos-reconstructed .lcos-conversation-space-message[data-role="assistant"] { left:184px; width:min(660px,calc(100vw - 390px)); }
+.lcos-reconstructed .lcos-conversation-space-role { display:block; margin-bottom:5px; color:var(--lcos-ink-faint); font:650 8px/1 "JetBrains Mono",monospace; letter-spacing:.06em; text-transform:uppercase; }
+.lcos-reconstructed .lcos-conversation-space-message p { margin:0; white-space:pre-wrap; color:var(--lcos-ink); font-size:12.5px; line-height:1.7; }
+.lcos-reconstructed .lcos-conversation-space-status {
+  position:absolute;
+  left:132px;
+  top:118px;
+  display:flex;
+  align-items:center;
+  gap:7px;
+  color:var(--lcos-ink-faint);
+  font-size:11px;
+}
+.lcos-reconstructed .lcos-conversation-space-status.is-error { color:var(--lcos-danger, #a34f55); }
+.lcos-reconstructed .lcos-conversation-space > .lcos-unified-execution-composer { position:absolute !important; }
+.lcos-reconstructed .lcos-reference-pick:disabled { opacity:.3; cursor:not-allowed; }
+@media (prefers-reduced-motion: reduce) {
+  .lcos-reconstructed .lcos-conversation-space * { scroll-behavior:auto !important; }
+}

@@ -47,6 +47,8 @@ export interface ObjectOrbitAction {
   readonly primary?: boolean
   /** readOnly 卫星只展示真实状态，不伪造可点击动作。 */
   readonly readOnly?: boolean
+  /** Secondary expansion can replace the Orbit with another local layer. Default actions always close. */
+  readonly keepOpen?: boolean
 }
 
 /** 视口坐标锚框（anchorRef 缺席时的虚拟锚，如画布空间坐标） */
@@ -230,7 +232,7 @@ export function ObjectOrbit({ open, onClose, anchorRef, anchorRect, ariaLabel, a
   const handleAction = useCallback(
     (action: ObjectOrbitAction) => {
       action.onClick?.()
-      close()
+      if (!action.keepOpen) close()
     },
     [close],
   )

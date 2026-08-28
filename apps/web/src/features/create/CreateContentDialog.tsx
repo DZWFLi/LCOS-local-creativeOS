@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { FolderPlus, MessageSquareText, X } from 'lucide-react'
+import { Focus, FolderPlus, MessageSquareText, X } from 'lucide-react'
 import { dismissFromBackdrop } from '../ui/dismissibleLayer'
 
 interface Props {
@@ -8,7 +8,7 @@ interface Props {
   leftInset: number
   rightInset: number
   onCancel: () => void
-  onCreate: (kind: 'note' | 'context') => void
+  onCreate: (kind: 'note' | 'context' | 'result-slot') => void
 }
 
 export function CreateContentDialog({ open, leftInset, rightInset, onCancel, onCreate }: Props) {
@@ -59,7 +59,7 @@ export function CreateContentDialog({ open, leftInset, rightInset, onCancel, onC
           <button type="button" aria-label="关闭" onClick={onCancel}><X size={17} /></button>
         </header>
 
-        <p className="canvas-create-intro">这里只创建最基础的文本或集合。文件、链接和 Agent 过程由各自来源自动建立。</p>
+        <p className="canvas-create-intro">这里只建立三种明确的起点：可读文本、内容集合，或一个等待 Agent 返回真实内容的结果位。</p>
 
         <div className="canvas-create-options">
           <button ref={noteRef} type="button" onClick={() => onCreate('note')}>
@@ -69,6 +69,10 @@ export function CreateContentDialog({ open, leftInset, rightInset, onCancel, onC
           <button type="button" onClick={() => onCreate('context')}>
             <span className="canvas-create-icon collection"><FolderPlus size={19} /></span>
             <span><b>建立内容集合</b><small>创建可进入的子画布，用于方向、参考或交付</small></span>
+          </button>
+          <button type="button" onClick={() => onCreate('result-slot')}>
+            <span className="canvas-create-icon result-slot"><Focus size={19} /></span>
+            <span><b>空白结果</b><small>先留一个结果位；最终形态由这次 Conversation Return 决定</small></span>
           </button>
         </div>
 

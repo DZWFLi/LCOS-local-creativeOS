@@ -28,11 +28,16 @@ export function SpatialBeaconLayer({ beacon, camera, onArrivalEnd }: { readonly 
 
   if (!beacon) return null
   const projected = projectSpatialBeacon(beacon.target, camera, viewport)
+  const labelSide = projected.x < viewport.width / 2 ? 'label-inward-right' : 'label-inward-left'
   return <div ref={layerRef} className="lcos-spatial-beacon-layer" aria-hidden="true" data-beacon-phase={beacon.phase} data-beacon-offscreen={projected.offscreen || undefined}>
-    <i
-      className={`lcos-spatial-beacon is-${beacon.phase}${projected.offscreen ? ' is-offscreen' : ''}`}
+    <div
+      className={`lcos-spatial-beacon is-${beacon.phase}${projected.offscreen ? ` is-offscreen ${labelSide}` : ''}`}
+      data-beacon-kind={beacon.target.visualKind ?? 'generic'}
       style={{ left: projected.x, top: projected.y, '--lcos-beacon-angle': `${projected.angleRad}rad` } as CSSProperties}
       onAnimationEnd={() => { if (beacon.phase === 'arrival') onArrivalEnd?.() }}
-    />
+    >
+      <i className="lcos-spatial-beacon-core" />
+      {projected.offscreen && beacon.target.label ? <span className="lcos-spatial-beacon-label">{beacon.target.label}</span> : null}
+    </div>
   </div>
 }

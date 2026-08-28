@@ -5,6 +5,8 @@ import type { ProjectPackage } from '../../model'
 import type { LocalCoreClient } from '../../runtime/localCoreClient'
 import { ProjectGlyphMark } from '../project/ProjectGlyphMark'
 import { CaptureMaterialFlow } from '../capture/CaptureMaterialFlow'
+import { AssemblyProjectWarehouse } from './AssemblyProjectWarehouse'
+import { AssemblySkillSource } from './AssemblySkillSource'
 
 function tintHue(projectId: string): number {
   let hash = 0
@@ -24,6 +26,7 @@ export function AssemblyCaptureWorkspace({ client, projects, onClose, onOpenProj
   const [targetProjectId, setTargetProjectId] = useState<string | null>(projects[0]?.id ?? null)
   const [busy, setBusy] = useState(false)
   const [dropTarget, setDropTarget] = useState<string | null>(null)
+  const [sourceTab, setSourceTab] = useState<'project' | 'capture' | 'sources' | 'skills'>('capture')
 
   const refresh = useCallback(async () => {
     setBusy(true)
@@ -105,16 +108,21 @@ export function AssemblyCaptureWorkspace({ client, projects, onClose, onOpenProj
         </div>
         {targetProject ? <div className="assembly-target-summary">
           <span>当前目标</span><strong>{targetProject.label}</strong><small>Capture 在这里提交后才进入 Project Truth；原始来源仍保留。</small>
-          <button type="button" disabled={!selectedIds.length || busy} onClick={() => void materialize(targetProject.id, selectedIds)}><PackageOpen size={14}/>装配选中 {selectedIds.length || ''}</button>
+          {sourceTab === 'capture' ? <button type="button" disabled={!selectedIds.length || busy} onClick={() => void materialize(targetProject.id, selectedIds)}><PackageOpen size={14}/>装配选中 {selectedIds.length || ''}</button> : <small className="assembly-target-contract-note">当前 Source 先用于浏览；只有 Core 已支持的 Semantic Drop 会进入 Commit。</small>}
         </div> : <div className="assembly-target-empty"><strong>还没有 Project Target</strong><span>先创建或打开一个项目，再把 Capture 材料装配进去。</span></div>}
       </aside>
 
       <section className="assembly-source-bay">
         <div className="assembly-source-head">
-          <div><span>SOURCE BAY</span><strong>Capture</strong></div>
-          <nav aria-label="装配来源"><button type="button" className="is-active">Capture</button></nav>
+          <div><span>SOURCE BAY</span><strong>{sourceTab === 'project' ? 'Project' : sourceTab === 'capture' ? 'Capture' : sourceTab === 'sources' ? 'Sources' : 'Skills'}</strong></div>
+          <nav aria-label="装配来源">
+            {(['project', 'capture', 'sources', 'skills'] as const).map((tab) => <button key={tab} type="button" className={sourceTab === tab ? 'is-active' : ''} onClick={() => setSourceTab(tab)}>{tab === 'project' ? 'Project' : tab === 'capture' ? 'Capture' : tab === 'sources' ? 'Sources' : 'Skills'}</button>)}
+          </nav>
         </div>
-        <CaptureMaterialFlow client={client} items={snapshot?.items ?? []} selectedIds={selectedIds} onSelectedIdsChange={setSelectedIds} busy={busy}/>
+        {sourceTab === 'project' ? <AssemblyProjectWarehouse client={client} projectId={targetProjectId} onNotice={onNotice}/> : null}
+        {sourceTab === 'capture' ? <CaptureMaterialFlow client={client} items={snapshot?.items ?? []} selectedIds={selectedIds} onSelectedIdsChange={setSelectedIds} busy={busy}/> : null}
+        {sourceTab === 'sources' ? <div className="assembly-source-empty is-provider"><strong>还没有连接 Source Provider</strong><span>Sources 将保留 provider-native 浏览与搜索；这里不会拿 Project Resources 假装 Pinterest / Behance / Are.na。</span></div> : null}
+        {sourceTab === 'skills' ? <AssemblySkillSource client={client} projectId={targetProjectId} onNotice={onNotice}/> : null}
       </section>
     </div>
   </main>

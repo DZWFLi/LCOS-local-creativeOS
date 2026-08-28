@@ -10,6 +10,7 @@ import { SpatialNodeLayer } from '../spatial/SpatialNodeLayer'
 import { usePresentationHierarchyState } from '../../state/presentationHierarchyState'
 import { useSpatialSessionCamera } from '../../state/spatialSessionState'
 import { useSpatialFocusRequest, type SpatialFocusRequest } from '../spatial/useSpatialFocusRequest'
+import { miniMapVisualKindForNode } from '../spatial/minimapSemantics'
 import { nodeTypeIcon } from '../canvas/CanvasNodeVisual'
 import { beginSemanticDrop } from '../spatial/semanticDrop'
 import { DropFeedbackLayer } from '../drop/dropFeedbackLayer'
@@ -48,8 +49,8 @@ export function ContextTreeSurface(props: Props) {
   const [dropTarget, setDropTarget] = useState<{ id: string; position: 'before' | 'inside' | 'after' } | null>(null)
   const layout = useMemo(() => layoutMindMap(props.nodes, state, WORLD_WIDTH, WORLD_HEIGHT), [props.nodes, state])
   const byPlaced = useMemo(() => new Map(layout.placements.map((item) => [item.id, item])), [layout.placements])
-  const spatialItems = useMemo(() => layout.placements.map((item) => ({ id:item.node.id, x:item.x, y:item.y, width:item.width, height:item.height })), [layout.placements])
-  useSpatialFocusRequest({ request: props.focusRequest, items: spatialItems, testId: 'context-tree-spatial', setCamera })
+  const spatialItems = useMemo(() => layout.placements.map((item) => ({ id:item.node.id, x:item.x, y:item.y, width:item.width, height:item.height, label:item.node.title, visualKind:miniMapVisualKindForNode(item.node) })), [layout.placements])
+  const spatialFocus = useSpatialFocusRequest({ request: props.focusRequest, items: spatialItems, testId: 'context-tree-spatial', camera, setCamera })
 
   // 放大阅读模式的回画布通道:Esc 回理解现场画布;仅在无模态弹窗、无输入焦点时生效。
   useEffect(() => {
@@ -123,7 +124,7 @@ export function ContextTreeSurface(props: Props) {
       <div className="lcos-context-heading-actions"><small>{layout.placements.length} 项 · 与理解现场 / 演进共用同一份 Context{reparentError ? ` · ${reparentError}` : ' · 拖动手柄可重排 / 重挂'}</small><ContextLensSwitch active="context-tree" onSelect={props.onSurfaceChange}/></div>
     </header>
     {props.source && <div className={`lcos-renderer-source source-${props.source.kind}`}><i/><span>{props.source.label}</span><small>Hierarchy v{state.version}</small></div>}
-    <SpatialCanvas camera={camera} setCamera={setCamera} marqueeItems={spatialItems} minimapItems={spatialItems} minimapLabel="Context Structure" onMarqueeSelect={props.onMarqueeSelect} className="lcos-mind-map-stage lcos-presentation-spatial" worldClassName="lcos-presentation-world lcos-mind-map-world" worldStyle={{width:layout.width,height:layout.height}} testId="context-tree-spatial">
+    <SpatialCanvas camera={camera} setCamera={setCamera} marqueeItems={spatialItems} minimapItems={spatialItems} minimapLabel="Context Structure" beacon={spatialFocus.beacon} onBeaconArrivalEnd={spatialFocus.clearBeacon} onMarqueeSelect={props.onMarqueeSelect} className="lcos-mind-map-stage lcos-presentation-spatial" worldClassName="lcos-presentation-world lcos-mind-map-world" worldStyle={{width:layout.width,height:layout.height}} testId="context-tree-spatial">
       <SpatialEdgeLayer bounds={{ x: 0, y: 0, width: WORLD_WIDTH, height: WORLD_HEIGHT }} className="lcos-mind-map-edges" ariaLabel="思维导图层级关系">
         {layout.placements.map((to) => {
           const from = to.parentId ? byPlaced.get(to.parentId) : layout.rootCenter

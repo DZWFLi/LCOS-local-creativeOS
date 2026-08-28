@@ -127,45 +127,64 @@ describe('RECEIVER-2 ReceiverSwitcher 结构（43B.2）', () => {
     onOpenArchive: noop,
   }
 
-  it('RECEIVER-5 stale：Chip 断开态按 offline 呈现 + label 追加「已断开」+ data-stale 标记', () => {
-    const html = renderToStaticMarkup(<ReceiverChipFace active={conversationFixture()} expanded={false} onToggle={noop} stale />)
-    expect(html).toContain('data-stale="true"')
+  it('RECEIVER-5 disconnected：Chip 断开态按 offline 呈现 + label 追加「已断开」+ data-session-phase 标记', () => {
+    const html = renderToStaticMarkup(<ReceiverChipFace active={conversationFixture()} expanded={false} onToggle={noop} phase="disconnected" />)
+    expect(html).toContain('data-session-phase="disconnected"')
     expect(html).toContain('status-offline')
     expect(html).toContain('已断开')
-    // stale 是断开，不是「未连接对话」——is-idle 只属于 active === null
+    // disconnected 是断开，不是「未连接对话」——is-idle 只属于 active === null
     expect(html).not.toContain('is-idle')
     expect(html).not.toContain('未连接对话')
+    // stale（信息过期旁路）不冒充断开：会话保持连接，仅提示信息可能过期
+    const staleHtml = renderToStaticMarkup(<ReceiverChipFace active={conversationFixture()} expanded={false} onToggle={noop} phase="stale" />)
+    expect(staleHtml).toContain('data-session-phase="stale"')
+    expect(staleHtml).toContain('信息可能过期')
+    expect(staleHtml).not.toContain('已断开')
   })
 
-  it('RECEIVER-5 stale：Switcher 当前承接行带 is-stale + 断开说明 + 重新连接按钮', () => {
+  it('RECEIVER-5 disconnected：Switcher 当前承接行带 is-disconnected + 断开说明 + 重新连接按钮', () => {
     const html = renderToStaticMarkup(<ReceiverSwitcher
       open
       conversations={[conversationFixture()]}
       activeReceiverId="cc-1"
-      activeStale
-      onReconnect={noop}
+      activePhase="disconnected"
+      onRecover={noop}
       {...switcherProps}
     />)
-    expect(html).toContain('is-stale')
+    expect(html).toContain('is-disconnected')
     expect(html).toContain('lcos-receiver-stale-note')
     expect(html).toContain('已断开 · 项目现场不受影响')
     expect(html).toContain('data-testid="lcos-receiver-reconnect"')
     expect(html).toContain('重新连接')
   })
 
-  it('RECEIVER-5 stale：未传 onReconnect 时不渲染重新连接按钮（死交互红线：长得像按钮就要能点）', () => {
+  it('RECEIVER-5 stale：信息过期旁路不冒充断开——is-stale + 过期说明 + 无重连按钮', () => {
     const html = renderToStaticMarkup(<ReceiverSwitcher
       open
       conversations={[conversationFixture()]}
       activeReceiverId="cc-1"
-      activeStale
+      activePhase="stale"
       {...switcherProps}
     />)
     expect(html).toContain('is-stale')
+    expect(html).toContain('信息可能过期 · 会话仍保持连接')
+    expect(html).not.toContain('已断开 · 项目现场不受影响')
     expect(html).not.toContain('lcos-receiver-reconnect')
   })
 
-  it('RECEIVER-5 stale：activeStale=false 时当前承接行保持 is-active，无断开说明', () => {
+  it('RECEIVER-5 disconnected：未传 onRecover 时不渲染重新连接按钮（死交互红线：长得像按钮就要能点）', () => {
+    const html = renderToStaticMarkup(<ReceiverSwitcher
+      open
+      conversations={[conversationFixture()]}
+      activeReceiverId="cc-1"
+      activePhase="disconnected"
+      {...switcherProps}
+    />)
+    expect(html).toContain('is-disconnected')
+    expect(html).not.toContain('lcos-receiver-reconnect')
+  })
+
+  it('RECEIVER-5：未传 activePhase 时当前承接行保持 is-active，无断开说明', () => {
     const html = renderToStaticMarkup(<ReceiverSwitcher
       open
       conversations={[conversationFixture()]}

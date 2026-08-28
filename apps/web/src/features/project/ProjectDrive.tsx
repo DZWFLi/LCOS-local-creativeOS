@@ -1,7 +1,10 @@
-import { useMemo, useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { ArrowDownUp, FolderOpen, HardDrive, Plus, Search, Trash2, Upload } from 'lucide-react'
 import type { ProjectPackage } from '../../model'
+import type { ProjectSummaryV1, ProjectVisualProfileV0 } from '@local-creative-os/contracts'
+import { useLocalCoreClientOrNull } from '../../runtime/LocalCoreClientContext'
 import { ProjectGlyphMark } from './ProjectGlyphMark'
+import { ProjectVisualProfileControl } from './ProjectVisualProfileControl'
 
 interface Props {
   projects: ProjectPackage[]
@@ -32,6 +35,13 @@ function projectHue(projectId: string): number {
   return 205 + (Math.abs(hash) % 115)
 }
 
+const PROJECT_TINT_HUES: Readonly<Record<string, number>> = { default: 225, amber: 42, sage: 126, sky: 205, rose: 344, violet: 272 }
+
+function projectPortalHue(projectId: string, profile?: ProjectVisualProfileV0): number {
+  if (profile && profile.tintToken !== 'default') return PROJECT_TINT_HUES[profile.tintToken] ?? projectHue(projectId)
+  return projectHue(projectId)
+}
+
 function relativeTime(value?: string): string {
   if (!value) return '尚无编辑时间'
   const date = new Date(value)
@@ -45,7 +55,33 @@ function relativeTime(value?: string): string {
 }
 
 export function ProjectDrive({ projects, openProjectIds, onOpen, onCreate, onDelete, onImportLcosproj, onRevealFolder, capturePendingCount = 0, onOpenCaptureSpace }: Props) {
+  const client = useLocalCoreClientOrNull()
   const lcosprojInput = useRef<HTMLInputElement | null>(null)
+  const [summaries, setSummaries] = useState<Record<string, ProjectSummaryV1>>({})
+  const [visualProfiles, setVisualProfiles] = useState<Record<string, ProjectVisualProfileV0 | undefined>>({})
+
+  useEffect(() => {
+    if (client === null || projects.length === 0) { setSummaries({}); setVisualProfiles({}); return }
+    let cancelled = false
+    void Promise.all(projects.map(async (project) => {
+      const [summaryCall, profileCall] = await Promise.all([
+        client.projectSummary(project.id).catch(() => null),
+        client.projectVisualProfile(project.id).catch(() => null),
+      ])
+      return { projectId: project.id, summaryCall, profileCall }
+    })).then((rows) => {
+      if (cancelled) return
+      const nextSummaries: Record<string, ProjectSummaryV1> = {}
+      const nextProfiles: Record<string, ProjectVisualProfileV0 | undefined> = {}
+      for (const row of rows) {
+        if (row.summaryCall?.result.ok) nextSummaries[row.projectId] = row.summaryCall.result.value
+        if (row.profileCall?.result.ok) nextProfiles[row.projectId] = row.profileCall.result.value
+      }
+      setSummaries(nextSummaries)
+      setVisualProfiles(nextProfiles)
+    })
+    return () => { cancelled = true }
+  }, [client, projects])
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<DriveSort>('recent')
   const filtered = useMemo(() => {
@@ -53,7 +89,10 @@ export function ProjectDrive({ projects, openProjectIds, onOpen, onCreate, onDel
     if (!keyword) return projects
     return projects.filter((project) => `${project.label} ${project.localPath}`.toLowerCase().includes(keyword))
   }, [projects, query])
-  const ordered = useMemo(() => sortProjects(filtered, sort), [filtered, sort])
+  const ordered = useMemo(() => {
+    if (sort !== 'updated') return sortProjects(filtered, sort)
+    return [...filtered].sort((a, b) => String(summaries[b.id]?.lastMeaningfulEditedAt ?? b.updatedAt ?? '').localeCompare(String(summaries[a.id]?.lastMeaningfulEditedAt ?? a.updatedAt ?? '')))
+  }, [filtered, sort, summaries])
   const firstRun = projects.length === 0 && query.trim() === ''
 
   return <main className="project-drive project-launcher" data-testid="project-drive">
@@ -82,27 +121,30 @@ export function ProjectDrive({ projects, openProjectIds, onOpen, onCreate, onDel
         <div className="project-portal-grid">
           {ordered.map((project) => {
             const opened = openProjectIds.includes(project.id)
-            const timestamp = project.updatedAt || project.lastOpenedAt
+            const summary = summaries[project.id]
+            const profile = visualProfiles[project.id]
+            const timestamp = summary?.lastMeaningfulEditedAt ?? project.updatedAt ?? project.lastOpenedAt
             return <article className={`project-portal-wrap${opened ? ' is-open' : ''}`} key={project.id}>
               <button
                 type="button"
                 className="project-portal"
-                style={{ '--project-portal-hue': projectHue(project.id) } as CSSProperties}
+                style={{ '--project-portal-hue': projectPortalHue(project.id, profile) } as CSSProperties}
                 onClick={() => onOpen(project.id)}
                 aria-label={`打开项目 ${project.label}`}
               >
                 <span className="project-portal-surface" aria-hidden="true"/>
-                <ProjectGlyphMark label={`${project.label} project mark`} variantSeed={project.id} size={76}/>
+                <ProjectGlyphMark label={`${project.label} project mark`} variantSeed={project.id} shapeId={profile?.glythMarkId} color={profile?.glythMarkColor} scale={profile?.scale} orientation={profile?.orientation} size={76}/>
                 <span className="project-portal-state">{opened ? 'OPEN' : 'PROJECT'}</span>
               </button>
               <div className="project-portal-meta">
                 <strong>{project.label}</strong>
-                <span>{project.objectCount === undefined ? '— 个对象' : `${project.objectCount} 个对象`} · {relativeTime(timestamp)}</span>
+                <span>{summary ? `${summary.objectCount} 个对象` : '— 个对象'} · {relativeTime(timestamp)}</span>
               </div>
-              {(onRevealFolder || onDelete) && <div className="project-portal-actions">
+              <div className="project-portal-actions">
+                {client && <ProjectVisualProfileControl client={client} projectId={project.id} projectLabel={project.label} profile={profile} onProfileChange={(next) => setVisualProfiles((current) => ({ ...current, [project.id]: next }))}/>}
                 {onRevealFolder && <button type="button" aria-label={`打开项目目录 ${project.label}`} title="在资源管理器中打开" onClick={() => onRevealFolder(project.id)}><FolderOpen size={13}/></button>}
                 {onDelete && <button type="button" className="is-destructive" aria-label={`移除项目 ${project.label}`} title="从 LCOS 移除，源文件保留" onClick={() => onDelete(project)}><Trash2 size={13}/></button>}
-              </div>}
+              </div>
             </article>
           })}
 

@@ -454,17 +454,7 @@
 .app-shell.porcelain-studio-v2 .selection-composer-header-actions .workspace-move-action { display:none; }
 .app-shell.porcelain-studio-v2 .vnext-surface-host .edges { z-index: var(--lcos-z-content-chip); /* z-tier: canvas-content */ pointer-events:none; }
 .app-shell.porcelain-studio-v2 .vnext-surface-host .edges .edge-hit { pointer-events:stroke; }
-.app-shell.porcelain-studio-v2 .vnext-surface-host .edges .edge {
-  stroke: rgba(76, 88, 104, .66);
-  stroke-width: 2px;
-  filter: drop-shadow(0 1px 2px rgba(255,255,255,.55));
-}
-.app-shell.porcelain-studio-v2 .vnext-surface-host .edges .edge.reference { stroke: rgba(112, 119, 168, .58); }
-.app-shell.porcelain-studio-v2 .vnext-surface-host .edges .edge.feedback { stroke: rgba(184, 139, 74, .62); }
-.app-shell.porcelain-studio-v2 .vnext-surface-host .edges .edge.generate,
-.app-shell.porcelain-studio-v2 .vnext-surface-host .edges .edge.modify { stroke: rgba(96, 118, 170, .68); }
-.app-shell.porcelain-studio-v2 .vnext-surface-host .edges .edge.focused,
-.app-shell.porcelain-studio-v2 .vnext-surface-host .edges .edge.selected { stroke:#7a5ce0; stroke-width:2.5px; }
+/* Relation visible stroke/state ownership lives in interaction-system.css. */
 .vnext-surface-composer {
   position:absolute;
   z-index: var(--lcos-z-overlay-ui-raised); /* z-tier: overlay-ui */

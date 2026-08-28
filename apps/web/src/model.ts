@@ -90,6 +90,9 @@ export interface CanvasNode {
   parentRunId?: string
   revisionOf?: string
   resultGroupId?: string
+  /** F6B authoritative Blank Result projection. Truth lives in Core ResultSlotV0; this node is only its spatial projection. */
+  resultSlotId?: string
+  resultSlotStatus?: 'empty' | 'running' | 'review' | 'materialized'
   scopeId?: string
   opensScopeId?: string
   /** Stable user-facing aggregate identity; node kind remains a legacy visual family. */

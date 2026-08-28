@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { Command, Play } from 'lucide-react'
-import type { ActiveReceiverIdentityV1, Checkpoint, ConnectedConversationV1, ContextChangeProposalV1, ContextManifestV0, ContinuityResumeSnapshotV1, ConversationSessionV1, ObsidianVaultScanV1, PresentationEntityRefV0, PresentationSpatialRegionV0, RunEvent, RunProposalResult, RunReview, RuntimeProviderStatus, WorkspaceMembership } from '@local-creative-os/contracts'
+import type { ActiveReceiverIdentityV1, Checkpoint, ConnectedConversationV1, ContextChangeProposalV1, ContextManifestV0, ContinuityResumeSnapshotV1, ConversationSessionV1, ObsidianVaultScanV1, OrderedRunReferenceV2, PresentationEntityRefV0, PresentationSpatialRegionV0, ResultSlotV0, RunEvent, RunProposalResult, RunReceiverRefV1, RunReview, RuntimeProviderStatus, WorkspaceMembership } from '@local-creative-os/contracts'
 import { MAX_STRUCTURAL_CONTAINER_DEPTH, type HandoffRecord } from '@local-creative-os/domain'
 import type { ActiveRun, Camera, CanvasNode, CanvasScope, NodeDisplayMode, NodeLayer, PersistedPrototypeState, ProjectPackage, ScopeKind, TargetContextInference, WorkRailPreferences, Workspace } from './model'
 import { nodeMeta, runStatusLabel } from './model'
 import { ProjectCanvas } from './features/canvas/ProjectCanvas'
 import type { ComposerResultPolicy } from './features/canvas/SelectionComposer'
+import { proposalCompatibilityBlockReason, referenceCandidates, resolveComposerReceiver } from './features/execution/commandDraft'
+import { reconcileResultSlotProjections } from './features/execution/resultSlotProjection'
 import { CanvasMiniMap } from './features/canvas/CanvasMiniMap'
 import { WorkRail } from './features/workrail/WorkRail'
 import { RevisionUpgradeDialog, type RevisionUpgradeInput } from './features/workrail/RevisionUpgradeDialog'
@@ -61,13 +63,13 @@ import { createBlankProjectState } from './state/projectState'
 import { createAggregateScopeEntity, removeScopeTree } from './state/canvasScopes'
 import type { ActiveContextProjection } from './runtime/localCoreClient'
 import type { AttentionBucketV0, AttentionRuntimeSnapshotV0, ProjectViewRailOrderV0, Relation } from '@local-creative-os/contracts'
-import { humanizeRuntimeMessage, isReceiverSessionError } from './runtime/messages'
+import { humanizeRuntimeMessage } from './runtime/messages'
 import { AgentContextSurface } from './features/shell/AgentContextSurface'
 import { buildScopePath, createId, decodeTextBuffer, fileNameFromPath, inferFileType, isTextPreviewFile, runtimePresentationStatus } from './features/shell/appShell'
 import { AppShellView } from './features/shell/AppShellView'
 import { LocalCoreClientProvider } from './runtime/LocalCoreClientContext'
 import type { SurfaceContextMenuAction, SurfaceContextMenuItem } from './features/shell/SurfaceContextMenu'
-import type { SurfaceAgentRunState, SurfaceAgentSubmission, SurfaceAgentSubmissionResult } from './features/shell/SurfaceAgentNode'
+import type { SurfaceExecutionSubmission, SurfaceExecutionSubmissionResult } from './features/execution/surfaceExecution'
 import type { DepositHintItem } from './features/shell/BoundaryHints'
 import { parseArtifactRevisions, parseProcessProjection, parseWorkspaceStates, type ArtifactRevisionProvenance, type WorkspaceStateSummary } from './runtime/projectionAdapters'
 import { WorkspaceStatesDialog } from './features/workspace/WorkspaceStatesDialog'
@@ -94,10 +96,12 @@ import { deriveContextGraphAutoNodeIds, mergeContextGraphNodeIds } from './featu
 import { materializeProjectEntityNodes, projectEntityNodeIds, semanticRefsForSourceIds } from './features/entities/projectEntityProjection'
 import { ARRANGE_SURFACE_DROP_TARGET_ID, CONTEXT_GRAPH_SURFACE_DROP_TARGET_ID, CONTEXT_SURFACE_DROP_TARGET_ID, NEW_SCENE_DROP_TARGET_ID, WORKFLOW_GRAPH_SURFACE_DROP_TARGET_ID, WORKFLOW_SURFACE_DROP_TARGET_ID } from './features/spatial/semanticDrop'
 import { ProjectFocusNavigator } from './features/focus/ProjectFocusNavigator'
+import { ArtifactLocationOrbit } from './features/focus/ArtifactLocationOrbit'
 import { resolveProjectFocusLocations, type ProjectFocusLocation, type ProjectFocusLocationCandidate, type ProjectFocusSearchEntry } from './state/projectFocus'
 import type { SpatialFocusRequest } from './features/spatial/useSpatialFocusRequest'
 import { subscribeProjectRealtime } from './runtime/projectRealtime'
 import { getDesktopPort } from './runtime/desktopPort'
+import { esc as escapeTopOverlay } from './features/ui/overlayStack'
 
 const DEFAULT_PROJECT_ID = 'disposable-mvp-sample'
 
@@ -163,6 +167,13 @@ function initialPrototype(projectId: string): PersistedPrototypeState {
   return createBlankProjectState({ id: projectId, label: projectId, localPath: '', updatedAt: '', pendingCount: 0 }, defaultRailWidth())
 }
 
+
+interface RunExecutionEnvelope {
+  readonly receiverRef?: RunReceiverRefV1
+  readonly orderedReferences?: readonly OrderedRunReferenceV2[]
+  readonly resultSlotId?: string
+}
+
 /** 权限门（第一梯队 ⑥）待确认的 Run 请求：card=确认卡内容；args=冻结发起时刻的全部发送入参；resolve=把确认后的 runId（取消时 undefined）还给 await 的调用方。 */
 interface PendingPermissionRun {
   readonly card: { readonly title: string; readonly items: readonly string[] }
@@ -177,6 +188,7 @@ interface PendingPermissionRun {
     readonly targetRevisionIdOverride?: string
     readonly sessionIdOverride?: string
     readonly contextArtifactIdsOverride?: readonly string[]
+    readonly execution?: RunExecutionEnvelope
   }
   readonly resolve: (runId: string | undefined) => void
 }
@@ -228,6 +240,7 @@ export function App() {
   const [excludedContextIds, setExcludedContextIds] = useState<string[]>([])
   const [manualInference, setManualInference] = useState<TargetContextInference | null>(null)
   const [activeRun, setActiveRun] = useState<ActiveRun | null>(null)
+  const [resultSlots, setResultSlots] = useState<readonly ResultSlotV0[]>([])
   const [revisionUpgradeOpen, setRevisionUpgradeOpen] = useState(false)
   const [revisionUpgradeBusy, setRevisionUpgradeBusy] = useState(false)
   const [runReviews, setRunReviews] = useState<readonly RunReview[]>([])
@@ -261,6 +274,11 @@ export function App() {
   const [selectionBaseRevision, setSelectionBaseRevision] = useState<ArtifactRevisionProvenance | null>(null)
   const [selectionIntent, setSelectionIntent] = useState<RunOutputIntent>('analyze')
   const [selectionResultPolicy, setSelectionResultPolicy] = useState<ComposerResultPolicy>('reply_only')
+  const [selectionReferenceIds, setSelectionReferenceIds] = useState<string[]>([])
+  const [selectionReceiverId, setSelectionReceiverId] = useState<string | null>(null)
+  const [selectionReceiverChoices, setSelectionReceiverChoices] = useState<readonly ConnectedConversationV1[]>([])
+  const [selectionReachCount, setSelectionReachCount] = useState(0)
+  const [referencePickActive, setReferencePickActive] = useState(false)
   const [activeSurface, setActiveSurface] = useState<SurfaceId>('arrange')
   // Project-level Presentation membership. Context detail and Workflow reference
   // the same Project View identities; physical Scope location never gates use.
@@ -363,6 +381,8 @@ export function App() {
   const [projectFocusOpen, setProjectFocusOpen] = useState(false)
   const [projectFocusSourceIds, setProjectFocusSourceIds] = useState<string[]>([])
   const [projectFocusSourceLabel, setProjectFocusSourceLabel] = useState('')
+  const [projectFocusAnchor, setProjectFocusAnchor] = useState<Element | null>(null)
+  const [projectFocusListMode, setProjectFocusListMode] = useState(false)
   const [projectFocusRequest, setProjectFocusRequest] = useState<SpatialFocusRequest | undefined>(undefined)
   const [resourceDetailArtifactId, setResourceDetailArtifactId] = useState<string | null>(null)
   const [obsidianScan, setObsidianScan] = useState<ObsidianVaultScanV1 | null>(null)
@@ -669,9 +689,47 @@ export function App() {
     : globalContextScope === 'scope'
       ? `Scope「${activeScope.label}」`
       : activeWorkspace ? `Workspace「${activeWorkspace.label}」` : `Scope「${activeScope.label}」`
+  useEffect(() => {
+    if (bootMode !== 'runtime' || !activeProjectId) { setSelectionReceiverChoices([]); return }
+    const controller = new AbortController()
+    void bridgeRef.current.client.listConnectedConversations(activeProjectId, controller.signal).then((call) => {
+      if (!controller.signal.aborted) setSelectionReceiverChoices(call.result.ok ? call.result.value : [])
+    }).catch(() => { if (!controller.signal.aborted) setSelectionReceiverChoices([]) })
+    return () => controller.abort()
+  }, [activeProjectId, bootMode])
+
   const selectionEditableNodes = useMemo(() => selectedNodes.filter((node) => node.managed === true && node.artifactId && node.revisionId), [selectedNodes])
-  const selectionTargetNode = !selectionCreateAsNewNode && selectionEditableNodes.length === 1 ? selectionEditableNodes[0] ?? null : null
+  const selectionResultSlotNodes = useMemo(() => selectedNodes.filter((node) => node.resultSlotId && node.resultSlotStatus !== 'materialized'), [selectedNodes])
+  const selectionResultSlotNode = selectionResultSlotNodes.length === 1 ? selectionResultSlotNodes[0] ?? null : null
+  const selectionTargetNode = !selectionCreateAsNewNode && selectionResultSlotNode === null && selectionEditableNodes.length === 1 ? selectionEditableNodes[0] ?? null : null
+  const defaultSelectionReceiver = useMemo(() => resolveComposerReceiver(selectedNodes, selectionReceiverChoices, activeReceiverIdentity?.activeReceiverId ?? null), [activeReceiverIdentity?.activeReceiverId, selectedNodes, selectionReceiverChoices])
+  const effectiveSelectionReceiverId = selectionReceiverId ?? defaultSelectionReceiver.receiver?.connectedConversationId ?? null
+  const effectiveSelectionReferenceIds = selectionComposerOpen ? selectionReferenceIds : selectedIds
+  const selectionReferenceCandidates = useMemo(() => referenceCandidates(effectiveSelectionReferenceIds, nodes, effectiveSelectionReceiverId, selectionReceiverChoices), [effectiveSelectionReceiverId, effectiveSelectionReferenceIds, nodes, selectionReceiverChoices])
+  const selectionOrderedReferences = useMemo(() => selectionReferenceCandidates.flatMap((candidate) => candidate.orderedReference ? [candidate.orderedReference] : []), [selectionReferenceCandidates])
+  const selectionExecutionBlockedReason = useMemo(() => {
+    if (bootMode !== 'runtime') return undefined
+    if (selectionResultSlotNodes.length > 1) return '一次 Run 只能写入一个 Blank Result，请只保留一个结果位。'
+    const proposalGap = proposalCompatibilityBlockReason({
+      receiverId: effectiveSelectionReceiverId,
+      activeReceiverId: activeReceiverIdentity?.activeReceiverId ?? null,
+      receivers: selectionReceiverChoices,
+      references: selectionReferenceCandidates,
+    })
+    if (proposalGap) return proposalGap
+    if (selectionResultSlotNode?.resultSlotId) return 'Core Proposal 还未携带 ResultSlot；结果位会显示，但后端补洞前不会绕过 Proposal 直接执行。'
+    return undefined
+  }, [activeReceiverIdentity?.activeReceiverId, bootMode, effectiveSelectionReceiverId, selectionReceiverChoices, selectionReferenceCandidates, selectionResultSlotNode?.resultSlotId, selectionResultSlotNodes.length])
   const runBusy = Boolean(activeRun && ['queued', 'running'].includes(activeRun.status))
+  useEffect(() => {
+    if (!selectionComposerOpen || bootMode !== 'runtime' || !effectiveSelectionReceiverId) { setSelectionReachCount(0); return }
+    const controller = new AbortController()
+    void bridgeRef.current.client.conversationReach(activeProjectId, effectiveSelectionReceiverId, controller.signal).then((call) => {
+      if (!controller.signal.aborted) setSelectionReachCount(call.result.ok ? call.result.value.items.length : 0)
+    }).catch(() => { if (!controller.signal.aborted) setSelectionReachCount(0) })
+    return () => controller.abort()
+  }, [activeProjectId, bootMode, effectiveSelectionReceiverId, selectionComposerOpen])
+
   const capabilities = useMemo(() => capabilitiesFor(dataSource), [dataSource])
   const attentionBucketsByViewId = useMemo<Readonly<Record<string, AttentionBucketV0>>>(() => {
     const snapshot = attentionRuntimeSnapshot
@@ -922,7 +980,7 @@ export function App() {
         setSelectionProvider(draft.provider)
         setSelectionCreateAsNewNode(draft.createAsNewNode)
         restoredDraftContextIdsRef.current = [...draft.contextViewIds]
-        setPinnedContextIds((current) => Array.from(new Set([...current, ...draft.contextViewIds])))
+        setSelectionReferenceIds([...draft.contextViewIds])
       }
       if (globalCall.result.ok && globalCall.result.value) {
         setGlobalComposerText(globalCall.result.value.prompt)
@@ -946,13 +1004,13 @@ export function App() {
       }
       void bridgeRef.current.client.saveCommandDraft(activeProjectId, workspaceId, 'selection', {
         prompt: selectionComposerText,
-        contextViewIds: selectionContextIds,
+        contextViewIds: selectionReferenceIds,
         provider: selectionProvider,
         createAsNewNode: selectionCreateAsNewNode,
       }, controller.signal)
     }, 250)
     return () => { window.clearTimeout(timer); controller.abort() }
-  }, [activeProjectId, bootMode, selectionComposerText, selectionContextIds, selectionCreateAsNewNode, selectionProvider, workspaceId])
+  }, [activeProjectId, bootMode, selectionComposerText, selectionCreateAsNewNode, selectionProvider, selectionReferenceIds, workspaceId])
 
   useEffect(() => {
     if (bootMode !== 'runtime') return
@@ -1172,6 +1230,29 @@ export function App() {
     }).catch(() => { /* Checkpoint projections are optional and never block the Surface. */ })
     return () => controller.abort()
   }, [activeProjectId, bootMode, dataSource])
+
+  const refreshResultSlots = useCallback(async (): Promise<void> => {
+    if (bootMode !== 'runtime' || !activeProjectId) return
+    const call = await bridgeRef.current.client.resultSlots(activeProjectId).catch(() => null)
+    if (!call?.result.ok) return
+    const slots = call.result.value
+    setResultSlots(slots)
+    setNodes((current) => reconcileResultSlotProjections(current, slots))
+  }, [activeProjectId, bootMode, setNodes])
+
+  useEffect(() => {
+    setResultSlots([])
+    if (bootMode !== 'runtime' || !activeProjectId) return
+    let cancelled = false
+    let timer: number | undefined
+    const refresh = async () => {
+      if (cancelled || document.visibilityState === 'hidden') return
+      await refreshResultSlots()
+    }
+    void refresh()
+    timer = window.setInterval(() => { void refresh() }, 4_000)
+    return () => { cancelled = true; if (timer !== undefined) window.clearInterval(timer) }
+  }, [activeProjectId, bootMode, refreshResultSlots])
 
   useEffect(() => {
     if (bootMode !== 'runtime' || (workRail.collapsed && activeSurface !== 'workflow') || !activeProjectId || agentMode) return
@@ -1661,7 +1742,6 @@ export function App() {
     setExcludedContextIds([])
     setManualInference(null)
     setActiveRun(null)
-    setReceiverSessionStale(false) // RECEIVER-5：stale 是 per-project 的 runtime 状态，切项目必须重置
     setSelectionComposerText('')
     setGlobalComposerText('')
     setLayoutPreview(null)
@@ -2954,6 +3034,11 @@ export function App() {
     setProjectFocusSourceIds(unique)
     const titles = unique.map((id) => projectPresentationNodes.find((node) => node.id === id)?.title).filter((title): title is string => Boolean(title))
     setProjectFocusSourceLabel(label?.trim() || (titles.length <= 2 ? titles.join(' + ') : `${titles.slice(0, 2).join(' + ')} 等 ${unique.length} 项`))
+    const anchor = unique.length === 1 && typeof document !== 'undefined'
+      ? document.querySelector(`[data-node-id="${typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(unique[0]!) : unique[0]!.replace(/["\\]/g, '\\$&')}"]`)
+      : null
+    setProjectFocusAnchor(anchor)
+    setProjectFocusListMode(false)
     setProjectFocusOpen(true)
   }, [projectPresentationNodes, selectedIds])
 
@@ -3017,6 +3102,8 @@ export function App() {
       setProjectFocusRequest({ nonce: Date.now(), ids: focusIds, targetTestId: 'workflow-spatial' })
     }
     setProjectFocusOpen(false)
+    setProjectFocusAnchor(null)
+    setProjectFocusListMode(false)
     setNotice(`已定位到「${location.label}」· ${location.matchedCount}/${location.totalCount} 项`)
   }, [activateOverview, nodes, openCollectionWithMotion, openSavedContextView, openSavedWorkflowView, openWorkspaceScene, projectPresentationNodes, rootScope.id, safeInsets, scopes])
 
@@ -4533,17 +4620,47 @@ export function App() {
     return id
   }, [activeProjectId, bootMode, scopeId, setNodes, workspaceId])
 
-  const createContentFromDialog = useCallback((kind: 'note' | 'context') => {
+  const createBlankResultSlotAt = useCallback(async (x: number, y: number): Promise<string | null> => {
+    if (bootMode !== 'runtime') { setNotice('空白结果需要 Runtime Core 保存；原型模式不会伪造本地结果位'); return null }
+    const call = await bridgeRef.current.client.createResultSlot(activeProjectId, {
+      scopeId,
+      ...(workspaceId ? { workspaceId } : {}),
+      x,
+      y,
+      width: 220,
+      height: 128,
+    }).catch(() => null)
+    if (!call?.result.ok) {
+      setNotice(`空白结果创建失败：${call?.result.ok === false ? call.result.error.message : '本地项目服务暂时不可用'}`)
+      return null
+    }
+    const slot = call.result.value
+    setResultSlots((current) => [...current.filter((item) => item.id !== slot.id), slot])
+    setNodes((current) => reconcileResultSlotProjections(current, [slot, ...resultSlots.filter((item) => item.id !== slot.id)]))
+    setSelectedIds([slot.id])
+    return slot.id
+  }, [activeProjectId, bootMode, resultSlots, scopeId, setNodes, workspaceId])
+
+  const createContentFromDialog = useCallback((kind: 'note' | 'context' | 'result-slot') => {
     const viewport = document.querySelector<HTMLElement>('[data-testid="canvas"]')?.getBoundingClientRect()
     const width = viewport?.width ?? 960
     const height = viewport?.height ?? 720
+    if (kind === 'result-slot') {
+      const slotWidth = 220
+      const slotHeight = 128
+      const x = (width / 2 - camera.x) / camera.zoom - slotWidth / 2
+      const y = (height / 2 - camera.y) / camera.zoom - slotHeight / 2
+      setCreateDialogOpen(false)
+      void createBlankResultSlotAt(x, y).then((slotId) => { if (slotId) setNotice('已留下一个空白结果位；选择它和参考材料后交给 Receiver Glyth') })
+      return
+    }
     const dimensions = nodeDimensions(kind, 'standard')
     const x = (width / 2 - camera.x) / camera.zoom - dimensions.width / 2
     const y = (height / 2 - camera.y) / camera.zoom - dimensions.height / 2
     createNodeAt(kind, x, y)
     setCreateDialogOpen(false)
     setNotice(kind === 'note' ? '已在画布中央添加文本' : '已创建内容集合；它会在当前画布原地展开/收起')
-  }, [camera, createNodeAt])
+  }, [camera, createBlankResultSlotAt, createNodeAt])
 
   const createNodeFromAnchor = useCallback((kind: 'note' | 'context', x: number, y: number, from: string) => {
     const id = createNodeAt(kind, x, y)
@@ -5009,9 +5126,6 @@ export function App() {
   }, [activeProjectId, addViewsToWorkspace, obsidianScan, reloadRuntimeProject, scopeId, workspaceId])
 
   const applyRuntimeReview = useCallback((review: RunReview, current: ActiveRun, providerError?: string) => {
-    // RECEIVER-5：在 runtime 错误的汇聚点检测「会话已失效」（用原始错误文本匹配，humanize 前判定）。
-    // 五条路径（dispatch/sync/cancel/answerInput/reconnect）都经过这里，一处检测全覆盖。
-    if (providerError !== undefined && isReceiverSessionError(providerError)) setReceiverSessionStale(true)
     const readableProviderError = providerError === undefined ? undefined : humanizeRuntimeMessage(providerError)
     const pendingReturn = review.returns.find((item) => item.status === 'pending_review')
     const draftRevision = pendingReturn?.draftRevisionId === undefined
@@ -5195,7 +5309,7 @@ export function App() {
   const [pendingPermissionRun, setPendingPermissionRun] = useState<PendingPermissionRun | null>(null)
 
   // 原发送链（改名 executeRunFrom）：内部才 createRuntimeRun / dispatchRuntimeRun；权限门确认后由 startRunFrom 调它。
-  const executeRunFrom = useCallback(async (command: string, targetIds: string[], contextIds: string[], intent: RunOutputIntent = 'revise', requestedProvider = 'auto', resultPolicy: ComposerResultPolicy = intent === 'revise' ? 'draft_revision_per_target' : 'create_artifact', proposalSummary?: string, targetRevisionIdOverride?: string, sessionIdOverride?: string, contextArtifactIdsOverride?: readonly string[]): Promise<string | undefined> => {
+  const executeRunFrom = useCallback(async (command: string, targetIds: string[], contextIds: string[], intent: RunOutputIntent = 'revise', requestedProvider = 'auto', resultPolicy: ComposerResultPolicy = intent === 'revise' ? 'draft_revision_per_target' : 'create_artifact', proposalSummary?: string, targetRevisionIdOverride?: string, sessionIdOverride?: string, contextArtifactIdsOverride?: readonly string[], execution?: RunExecutionEnvelope): Promise<string | undefined> => {
     if (!command.trim()) return undefined
     const target = nodes.find((node) => node.id === targetIds[0])
     const targetRevisionId = targetRevisionIdOverride ?? target?.revisionId
@@ -5250,6 +5364,9 @@ export function App() {
         ...(savedContextIdForRun === undefined ? {} : { savedContextId: savedContextIdForRun }),
         ...(workspaceId === null ? {} : { workspaceId }),
         ...((sessionIdOverride ?? continuitySessionId) === undefined ? {} : { sessionId: sessionIdOverride ?? continuitySessionId }),
+        ...(execution?.receiverRef ? { receiverRef: execution.receiverRef } : {}),
+        ...(execution?.orderedReferences ? { orderedReferences: execution.orderedReferences } : {}),
+        ...(execution?.resultSlotId ? { resultSlotId: execution.resultSlotId } : {}),
       })
       if (!call.result.ok) {
         setNotice(`Run 创建失败：${call.result.error.message}`)
@@ -5349,7 +5466,7 @@ export function App() {
     const pending = pendingPermissionRun
     setPendingPermissionRun(null)
     if (pending === null) return
-    void executeRunFrom(pending.args.command, pending.args.targetIds, pending.args.contextIds, pending.args.intent, pending.args.requestedProvider, pending.args.resultPolicy, pending.args.proposalSummary, pending.args.targetRevisionIdOverride, pending.args.sessionIdOverride, pending.args.contextArtifactIdsOverride)
+    void executeRunFrom(pending.args.command, pending.args.targetIds, pending.args.contextIds, pending.args.intent, pending.args.requestedProvider, pending.args.resultPolicy, pending.args.proposalSummary, pending.args.targetRevisionIdOverride, pending.args.sessionIdOverride, pending.args.contextArtifactIdsOverride, pending.args.execution)
       .then(pending.resolve, () => pending.resolve(undefined))
   }, [executeRunFrom, pendingPermissionRun])
 
@@ -5364,19 +5481,19 @@ export function App() {
 
   // 权限门统一入口：所有发起 Run 的路径（WorkRail / Selection Composer / 技能重放 / ⌘K / 局部 Agent / 反馈升级）都走这里。
   // 读意图（analyze）白名单静默直发——读操作零打扰；写意图先弹确认卡，确认后继续原发送链，取消则不发起。
-  const startRunFrom = useCallback(async (command: string, targetIds: string[], contextIds: string[], intent: RunOutputIntent = 'revise', requestedProvider = 'auto', resultPolicy: ComposerResultPolicy = intent === 'revise' ? 'draft_revision_per_target' : 'create_artifact', proposalSummary?: string, targetRevisionIdOverride?: string, sessionIdOverride?: string, contextArtifactIdsOverride?: readonly string[]): Promise<string | undefined> => {
+  const startRunFrom = useCallback(async (command: string, targetIds: string[], contextIds: string[], intent: RunOutputIntent = 'revise', requestedProvider = 'auto', resultPolicy: ComposerResultPolicy = intent === 'revise' ? 'draft_revision_per_target' : 'create_artifact', proposalSummary?: string, targetRevisionIdOverride?: string, sessionIdOverride?: string, contextArtifactIdsOverride?: readonly string[], execution?: RunExecutionEnvelope): Promise<string | undefined> => {
     if (!command.trim()) return undefined
     // 涉及对象 = 修改目标 + 上下文参考（找不到节点时如实显示 id）。
     const involvedTitles = [...new Set([...targetIds, ...contextIds])].map((id) => nodes.find((node) => node.id === id)?.title ?? id)
     const permission = evaluateRunPermission({ outputIntent: intent, instruction: command, contextTitles: involvedTitles })
     if (permission.kind === 'allow') {
-      return executeRunFrom(command, targetIds, contextIds, intent, requestedProvider, resultPolicy, proposalSummary, targetRevisionIdOverride, sessionIdOverride, contextArtifactIdsOverride)
+      return executeRunFrom(command, targetIds, contextIds, intent, requestedProvider, resultPolicy, proposalSummary, targetRevisionIdOverride, sessionIdOverride, contextArtifactIdsOverride, execution)
     }
     // 写意图：挂起等待用户决定；已有待确认请求时旧的先以 undefined 放行（被新请求取代，不悬挂）。
     return await new Promise<string | undefined>((resolve) => {
       setPendingPermissionRun((current) => {
         current?.resolve(undefined)
-        return { card: permission, args: { command, targetIds, contextIds, intent, requestedProvider, resultPolicy, proposalSummary, targetRevisionIdOverride, sessionIdOverride, contextArtifactIdsOverride }, resolve }
+        return { card: permission, args: { command, targetIds, contextIds, intent, requestedProvider, resultPolicy, proposalSummary, targetRevisionIdOverride, sessionIdOverride, contextArtifactIdsOverride, execution }, resolve }
       })
     })
   }, [executeRunFrom, nodes])
@@ -5662,7 +5779,24 @@ export function App() {
       return document.activeElement === composer
     }
     if (selectedIds.length) {
+      setSelectionReferenceIds([...selectedIds])
+      setReferencePickActive(false)
+      setSelectionReceiverId(null)
       setSelectionComposerOpen(true)
+      if (bootMode === 'runtime') {
+        void bridgeRef.current.client.listConnectedConversations(activeProjectId).then((call) => {
+          if (!call.result.ok) { setSelectionReceiverChoices([]); return }
+          const conversations = call.result.value
+          setSelectionReceiverChoices(conversations)
+          const resolved = resolveComposerReceiver(selectedNodes, conversations, activeReceiverIdentity?.activeReceiverId ?? null)
+          const receiverId = resolved.receiver?.connectedConversationId ?? null
+          setSelectionReceiverId(receiverId)
+          if (receiverId) {
+            const receiverSessionId = conversations.find((item) => item.id === receiverId)?.conversationSessionId ?? null
+            if (receiverSessionId) setSelectionReferenceIds((current) => current.filter((id) => nodes.find((node) => node.id === id)?.conversation?.id !== receiverSessionId))
+          }
+        }).catch(() => setSelectionReceiverChoices([]))
+      }
     } else {
       setGlobalComposerVisible(true)
       setWorkRail((current) => ({ ...current, collapsed: false }))
@@ -5672,7 +5806,7 @@ export function App() {
     window.requestAnimationFrame(() => {
       if (!focusComposer()) window.requestAnimationFrame(focusComposer)
     })
-  }, [selectedIds.length])
+  }, [activeProjectId, activeReceiverIdentity?.activeReceiverId, bootMode, selectedIds, selectedIds.length, selectedNodes])
 
   const requestSelectionRun = useCallback(() => {
     const prompt = selectionComposerText.trim()
@@ -5691,18 +5825,26 @@ export function App() {
     const target = selectionCreateAsNewNode ? null : selectionTargetNode
     const baseRevisionId = target ? (selectionBaseRevision?.id ?? target.revisionId) : undefined
     const requestedIntent = selectionIntent
-    const fallbackIntent: RunOutputIntent = selectionCreateAsNewNode ? (requestedIntent === 'revise' ? 'create' : requestedIntent) : requestedIntent === 'create' ? 'create' : target ? 'revise' : 'analyze'
-    const fallbackPolicy: ComposerResultPolicy = selectionResultPolicy === 'reply_only' && fallbackIntent !== 'analyze' ? (fallbackIntent === 'create' ? 'create_artifact' : 'draft_revision_per_target') : selectionResultPolicy
-    const contextNodes = selectionContextIds
-      .filter((id) => id !== target?.id)
-      .map((id) => nodes.find((node) => node.id === id))
-      .filter((node): node is CanvasNode => Boolean(node?.artifactId && node.revisionId))
+    const fallbackIntent: RunOutputIntent = selectionResultSlotNode ? 'create' : selectionCreateAsNewNode ? (requestedIntent === 'revise' ? 'create' : requestedIntent) : requestedIntent === 'create' ? 'create' : target ? 'revise' : 'analyze'
+    const fallbackPolicy: ComposerResultPolicy = selectionResultSlotNode ? 'create_artifact' : selectionResultPolicy === 'reply_only' && fallbackIntent !== 'analyze' ? (fallbackIntent === 'create' ? 'create_artifact' : 'draft_revision_per_target') : selectionResultPolicy
+    const contextNodes = selectionReferenceCandidates
+      .map((candidate) => candidate.node)
+      .filter((node) => node.id !== target?.id && Boolean(node.artifactId && node.revisionId))
     const targetIds = target ? [target.id] : []
     const contextIds = contextNodes.map((node) => node.id)
 
     if (bootMode !== 'runtime') {
       startRunFrom(prompt, targetIds, contextIds, fallbackIntent, selectionProvider, fallbackPolicy, undefined, baseRevisionId)
       return
+    }
+    if (selectionExecutionBlockedReason || !effectiveSelectionReceiverId) {
+      setNotice(selectionExecutionBlockedReason ?? 'Receiver Glyth 尚未确定')
+      return
+    }
+    const execution: RunExecutionEnvelope = {
+      receiverRef: { connectedConversationId: effectiveSelectionReceiverId },
+      orderedReferences: selectionOrderedReferences,
+      ...(selectionResultSlotNode?.resultSlotId ? { resultSlotId: selectionResultSlotNode.resultSlotId } : {}),
     }
     setNotice('Agent 正在理解要求并确认本次操作…')
     void bridgeRef.current.client.proposeRun(activeProjectId, {
@@ -5732,9 +5874,12 @@ export function App() {
         proposal.proposal.resultPolicy.type,
         proposal.summary,
         baseRevisionId,
+        undefined,
+        undefined,
+        execution,
       )
     })
-  }, [activeProjectId, bootMode, nodes, selectionBaseRevision?.id, selectionComposerText, selectionContextIds, selectionCreateAsNewNode, selectionProvider, selectionTargetNode, selectionEditableNodes.length, selectedIds.length, startRunFrom, runtimeProviders, workspaceId])
+  }, [activeProjectId, bootMode, selectionBaseRevision?.id, selectionComposerText, selectionCreateAsNewNode, selectionEditableNodes.length, selectionExecutionBlockedReason, selectionOrderedReferences, selectionProvider, effectiveSelectionReceiverId, selectionReferenceCandidates, selectionResultPolicy, selectionResultSlotNode, selectionTargetNode, selectedIds.length, startRunFrom, runtimeProviders, workspaceId])
 
   const requestGlobalRun = useCallback(() => {
     const prompt = globalComposerText.trim()
@@ -5770,102 +5915,112 @@ export function App() {
     })
   }, [activeProjectId, activeScope.label, activeWorkspace, bootMode, globalComposerText, globalContextIds, globalCreateAsNewNode, globalProvider, nodes, runtimeProviders, startRunFrom, workspaceId])
 
-  const requestSurfaceAgentRun = useCallback(async (input: SurfaceAgentSubmission): Promise<SurfaceAgentSubmissionResult | void> => {
+  const requestSurfaceAgentRun = useCallback(async (input: SurfaceExecutionSubmission): Promise<SurfaceExecutionSubmissionResult | void> => {
     const promptInput = input.prompt.trim()
     if (!promptInput) return undefined
-    const sourceIds = selectedIds.length > 0
-      ? [...selectedIds]
-      : input.surface === 'workflow'
-        ? [...workflowPresentationIds]
-        : [...contextPresentationIds]
-    const contextNodes = Array.from(new Set(sourceIds))
-      .map((id) => nodes.find((node) => node.id === id))
-      .filter((node): node is CanvasNode => Boolean(node?.artifactId && node.revisionId))
+    const receiver = selectionReceiverChoices.find((item) => item.id === input.receiverId)
+    const candidates = referenceCandidates(input.referenceIds, nodes, input.receiverId, selectionReceiverChoices)
+    const proposalGap = proposalCompatibilityBlockReason({
+      receiverId: input.receiverId,
+      activeReceiverId: activeReceiverIdentity?.activeReceiverId ?? null,
+      receivers: selectionReceiverChoices,
+      references: candidates,
+    })
+    if (proposalGap) { setNotice(proposalGap); return undefined }
+    if (!receiver?.conversationSessionId) { setNotice('Receiver Glyth 尚未 link-session；局部 Surface 不会伪造 Session。'); return undefined }
+    if (input.resultSlotId) { setNotice('Core Proposal 还未携带 ResultSlot；后端补洞前不会绕过 Proposal 直接执行。'); return undefined }
+
+    const orderedReferences = candidates.flatMap((candidate) => candidate.orderedReference ? [candidate.orderedReference] : [])
+    const referenceNodes = candidates.map((candidate) => candidate.node)
+    const editable = referenceNodes.filter((node) => node.managed && node.artifactId && node.revisionId)
+    const target = input.intent === 'revise' && editable.length === 1 ? editable[0] ?? null : null
+    if (input.intent === 'revise' && target === null) {
+      setNotice('修改现有内容需要恰好一个可编辑 Artifact；请调整 References 或改成“只回答 / 创建新内容”。')
+      return undefined
+    }
+    const contextNodes = referenceNodes.filter((node) => node.id !== target?.id && node.artifactId && node.revisionId)
     const contextIds = contextNodes.map((node) => node.id)
-    const summary = `${input.surface === 'workflow' ? '工作流' : '上下文'} · 局部 Agent · ${contextIds.length} 项冻结参考`
+    const targetIds = target ? [target.id] : []
+    const surfaceLabel = input.surface === 'workflow' ? '工作流' : input.surface === 'conversation' ? '对话现场' : '上下文'
+    const summary = `${surfaceLabel} · ${receiver.label?.trim() || receiver.conversationRef} · ${orderedReferences.length} 项显式引用`
     const guardedPrompt = input.surface === 'context'
       ? [
-          '你是 LCOS 当前 Context 内的局部 Agent。只处理这一轮冻结的局部工作现场，不要把它扩成项目级万能对话。',
+          '你正在 LCOS 当前 Context 工作现场内执行这次 Command。当前 Selection/References 是前景材料，Conversation Reach 是背景可达范围。',
           `Project ID: ${activeProjectId}`,
           ...(workspaceId ? [`Workspace ID: ${workspaceId}`] : []),
-          `Local surface session: ${input.sessionId}`,
-          `Frozen selected/context items: ${contextIds.length}`,
+          `Receiver ConnectedConversation: ${input.receiverId}`,
+          `Explicit references: ${orderedReferences.length}`,
           '',
           '如果只是分析、回答、总结，直接完成当前请求。',
-          '如果你判断需要改变当前 Context 的成员或目标：先通过 local-creative-os MCP 读取 get_lcos_active_context；然后只使用 propose_lcos_context_change 创建待审查 Proposal。',
-          '如果用户说“刚导入这一批”“刚导入的文件”或 latest import batch：调用 get_lcos_latest_import_batch 获取持久化批次引用，并只使用返回的 artifact/view IDs；禁止按时间戳猜。',
-          '禁止调用 apply_lcos_context_command 代替用户确认；禁止直接修改 Project Truth；不要自动 Accept Proposal。',
-          '最后用自然语言简短说明你做了什么，以及是否产生了待审查 Proposal。',
+          '如果需要改变 Context 的长期成员或目标，只能通过既有 Proposal / Semantic mutation 链；禁止把一次 Prompt Reference 偷偷变成长期 membership。',
+          '如果用户说“刚导入这一批”或 latest import batch，使用持久化批次引用；禁止按时间戳猜。',
           '',
           `用户请求：${promptInput}`,
         ].join('\n')
-      : [
-          '你是 LCOS 当前 Workflow 内的局部 Agent。当前选择已冻结为这一轮局部上下文。',
-          `Project ID: ${activeProjectId}`,
-          ...(workspaceId ? [`Workspace ID: ${workspaceId}`] : []),
-          `Local surface session: ${input.sessionId}`,
-          `Frozen workflow items: ${contextIds.length}`,
-          '',
-          '围绕当前 Workflow 回答、判断下一步或识别卡点。不要因为一次局部问答自动固化新的 Workflow/Skill，也不要改项目业务状态。',
-          '如果用户说“刚导入这一批”“刚导入的文件”或 latest import batch：调用 get_lcos_latest_import_batch 获取持久化批次引用，并只使用返回的 artifact/view IDs；禁止按时间戳猜。',
-          '如果需要产生真正工作结果，仍然走 LCOS Run / Review 链；不要绕过用户确认。',
-          '',
-          `用户请求：${promptInput}`,
-        ].join('\n')
+      : input.surface === 'workflow'
+        ? [
+            '你正在 LCOS 当前 Workflow 工作现场内执行这次 Command。当前 Selection/References 是前景材料，Workflow 本身不是一个临时聊天 Session。',
+            `Project ID: ${activeProjectId}`,
+            ...(workspaceId ? [`Workspace ID: ${workspaceId}`] : []),
+            `Receiver ConnectedConversation: ${input.receiverId}`,
+            `Explicit references: ${orderedReferences.length}`,
+            '',
+            '围绕当前 Workflow 回答、创建结果或修改明确目标。不要因为一次局部问答自动固化 Workflow/Skill。',
+            '如果需要长期结构变化，仍走 Project mutation / Review；不要绕过用户确认。',
+            '',
+            `用户请求：${promptInput}`,
+          ].join('\n')
+        : [
+            '你正在 LCOS 当前 Conversation Subcanvas 内继续这段项目对话。这个现场投影的是同一段 canonical Conversation，不创建新的 chat/session truth。',
+            `Project ID: ${activeProjectId}`,
+            `Receiver ConnectedConversation: ${input.receiverId}`,
+            `Explicit references: ${orderedReferences.length}`,
+            '',
+            'Conversation Reach 是这只 Glyth 的背景可达范围。当前时间线里的 Message 不是 Project Entity，不得伪造为 Artifact/Reference。',
+            '如果要修改 Project Truth，仍走 Proposal / Gate / Review；一次对话请求不会自动改变长期 membership。',
+            '',
+            `用户请求：${promptInput}`,
+          ].join('\n')
 
-    if (bootMode !== 'runtime') {
-      const runId = await startRunFrom(guardedPrompt, [], contextIds, 'analyze', 'auto', 'reply_only', summary, undefined, input.sessionId)
-      return { ...(runId ? { runId } : {}), sessionId: input.sessionId }
+    const baseRevisionId = target?.revisionId
+    const execution: RunExecutionEnvelope = {
+      receiverRef: { connectedConversationId: input.receiverId },
+      orderedReferences,
+      ...(input.resultSlotId ? { resultSlotId: input.resultSlotId } : {}),
     }
 
-    setNotice('局部 Agent 正在冻结当前位置与选择…')
+    setNotice('Agent 正在理解当前 Surface 的要求并确认操作…')
     try {
       const call = await bridgeRef.current.client.proposeRun(activeProjectId, {
         ...(workspaceId ? { workspaceId } : {}),
         prompt: guardedPrompt,
-        requestedProvider: 'auto',
-        createAsNewNode: false,
+        requestedProvider: input.provider,
+        createAsNewNode: input.intent === 'create',
         contextItems: contextNodes.map((node, order) => ({ artifactId: node.artifactId!, revisionId: node.revisionId!, order })),
-        editTargets: [],
+        editTargets: target && baseRevisionId ? [{ artifactId: target.artifactId!, baseRevisionId }] : [],
       })
-      if (!call.result.ok) {
-        setNotice(`局部 Agent 计划未通过安全校验：${call.result.error.message}`)
-        return undefined
-      }
+      if (!call.result.ok) { setNotice(`Agent 计划未通过安全校验：${call.result.error.message}`); return undefined }
       const proposal = call.result.value
-      if (proposal.ambiguity) {
-        setNotice(proposal.ambiguity.question)
-        return undefined
-      }
+      if (proposal.ambiguity) { setNotice(proposal.ambiguity.question); return undefined }
       const runId = await startRunFrom(
         proposal.proposal.prompt,
-        [],
+        targetIds,
         contextIds,
         proposal.proposal.intent,
         proposal.proposal.requestedProvider,
         proposal.proposal.resultPolicy.type,
         proposal.summary,
+        baseRevisionId,
         undefined,
-        input.sessionId,
+        undefined,
+        execution,
       )
-      return { ...(runId ? { runId } : {}), sessionId: input.sessionId }
+      return { ...(runId ? { runId } : {}) }
     } catch {
-      setNotice('局部 Agent 暂时不可用；当前项目状态未被修改')
+      setNotice('当前 Surface 的 Agent 执行暂时不可用；Project Truth 未被修改')
       return undefined
     }
-  }, [activeProjectId, bootMode, contextPresentationIds, nodes, selectedIds, startRunFrom, workflowPresentationIds, workspaceId])
-
-  const readSurfaceAgentRun = useCallback(async (runId: string): Promise<SurfaceAgentRunState | null> => {
-    if (bootMode !== 'runtime') return null
-    const call = await bridgeRef.current.client.getRunReview(runId)
-    if (!call.result.ok) return { status: 'failed', error: humanizeRuntimeMessage(call.result.error.message) }
-    const review = call.result.value
-    return {
-      status: review.presentationPhase,
-      ...(review.run.resultSummary || review.run.shortSummary ? { summary: review.run.resultSummary ?? review.run.shortSummary } : {}),
-      ...(review.run.errorMessage ? { error: humanizeRuntimeMessage(review.run.errorMessage) } : {}),
-    }
-  }, [bootMode])
+  }, [activeProjectId, activeReceiverIdentity?.activeReceiverId, nodes, selectionReceiverChoices, startRunFrom, workspaceId])
 
   const requestContextProposalModification = useCallback((proposal: ContextChangeProposalV1, instruction: string) => {
     const changeRequest = instruction.trim()
@@ -5881,13 +6036,19 @@ export function App() {
       '',
       '请重新读取当前 ActiveContext。不要直接应用旧 Proposal，也不要修改旧 Proposal；请用 propose_lcos_context_change 生成一条新的待审查 Proposal。旧 Proposal 继续保持 pending，由用户自行保留或撤掉。',
     ].join('\n')
+    const receiverId = activeReceiverIdentity?.activeReceiverId ?? null
+    if (!receiverId) { setNotice('当前没有 Active Receiver Glyth；先选择一只承接对话再修改 Proposal。'); return }
     void requestSurfaceAgentRun({
       surface: 'context',
-      sessionId: `proposal-modify-${proposal.proposalId}-${Date.now()}`,
+      receiverId,
+      referenceIds: [...selectedIds],
+      provider: 'auto',
+      intent: 'analyze',
+      resultPolicy: 'reply_only',
       prompt: proposalSummary,
     })
-    setNotice('已让局部 Agent 重新生成一版 Context Proposal；旧提案不会被覆盖')
-  }, [requestSurfaceAgentRun])
+    setNotice('已让当前 Receiver 重新生成一版 Context Proposal；旧提案不会被覆盖')
+  }, [activeReceiverIdentity?.activeReceiverId, requestSurfaceAgentRun, selectedIds])
 
   const returnArtifact = useCallback((run: ActiveRun) => {
     const target = nodes.find((node) => node.id === run.targetIds[0])
@@ -6281,6 +6442,29 @@ export function App() {
     setNotice('已沿用原指令与上下文重新执行')
   }, [activeRun, applyRuntimeReview, globalComposerText, selectionComposerText, setGraph, startRunFrom])
 
+  const toggleSelectionReference = useCallback((id: string) => {
+    setSelectionReferenceIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id])
+  }, [])
+
+  const moveSelectionReference = useCallback((id: string, delta: -1 | 1) => {
+    setSelectionReferenceIds((current) => {
+      const index = current.indexOf(id)
+      if (index < 0) return current
+      const nextIndex = Math.max(0, Math.min(current.length - 1, index + delta))
+      if (nextIndex === index) return current
+      const next = [...current]
+      const [moved] = next.splice(index, 1)
+      next.splice(nextIndex, 0, moved!)
+      return next
+    })
+  }, [])
+
+  const chooseSelectionReceiver = useCallback((connectedConversationId: string) => {
+    setSelectionReceiverId(connectedConversationId)
+    const sessionId = selectionReceiverChoices.find((item) => item.id === connectedConversationId)?.conversationSessionId ?? null
+    if (sessionId) setSelectionReferenceIds((current) => current.filter((id) => nodes.find((node) => node.id === id)?.conversation?.id !== sessionId))
+  }, [nodes, selectionReceiverChoices])
+
   const toggleContext = useCallback((id: string) => {
     if (selectionContextIds.includes(id)) {
       setExcludedContextIds((current) => Array.from(new Set([...current, id])))
@@ -6530,6 +6714,8 @@ export function App() {
         selectedIds.length ? requestSelectionRun() : requestGlobalRun()
         return
       }
+      if (event.key === 'Escape' && referencePickActive) { event.preventDefault(); setReferencePickActive(false); return }
+      if (event.key === 'Escape' && escapeTopOverlay()) { event.preventDefault(); return }
       if (isText) return
       if (modifier && key === 'f') { event.preventDefault(); setProjectToolsMode('search'); return }
       if (modifier && key === 'a' && canvasActive) {
@@ -6562,7 +6748,7 @@ export function App() {
     const release = (event: KeyboardEvent) => { if (event.code === 'Space') setSpaceHeld(false) }
     window.addEventListener('keydown', handler); window.addEventListener('keyup', release)
     return () => { window.removeEventListener('keydown', handler); window.removeEventListener('keyup', release) }
-  }, [bootMode, clearSelection, confirmProjectDelete, confirmWorkspaceId, conversationSpaceId, copySelection, createDialogOpen, deleteNodes, duplicateSelection, capabilityOpen, immersiveNodeId, layoutMode, nodeInfoId, paletteOpen, workbench, layoutPreview, openNative, openProjectFocus, pasteClipboard, projectCreateOpen, projectFocusOpen, redo, requestComposerFocus, requestGlobalRun, requestSelectionRun, scopeCreateOpen, selectMarquee, selectedEdgeId, selectedId, selectedIds, selectedNodes, setEdges, undo, visibleNodes])
+  }, [bootMode, clearSelection, confirmProjectDelete, confirmWorkspaceId, conversationSpaceId, copySelection, createDialogOpen, deleteNodes, duplicateSelection, capabilityOpen, immersiveNodeId, layoutMode, nodeInfoId, paletteOpen, referencePickActive, workbench, layoutPreview, openNative, openProjectFocus, pasteClipboard, projectCreateOpen, projectFocusOpen, redo, requestComposerFocus, requestGlobalRun, requestSelectionRun, scopeCreateOpen, selectMarquee, selectedEdgeId, selectedId, selectedIds, selectedNodes, setEdges, undo, visibleNodes])
 
 
   const refreshProjectCatalog = useCallback(() => {
@@ -6805,7 +6991,23 @@ export function App() {
       // RECEIVER-3：透传切换现场快照，Switcher 的承接确认小卡据此展示（承接前可见）。
       receiverSlot: <ReceiverChip projectId={activeProjectId} client={bridgeRef.current.client} onOpenArchive={() => setConversationDialogOpen(true)} handoffContext={receiverHandoffContext} onIdentityChanged={setActiveReceiverIdentity} />,
     }}
-    conversationScene={conversationSpaceId ? { projectId: activeProjectId, conversationId: conversationSpaceId, onExit: () => setConversationSpaceId(null) } : null}
+    conversationScene={conversationSpaceId ? {
+      projectId: activeProjectId,
+      conversationId: conversationSpaceId,
+      onExit: () => setConversationSpaceId(null),
+      execution: {
+        receivers: selectionReceiverChoices,
+        activeReceiverId: activeReceiverIdentity?.activeReceiverId ?? null,
+        providers: runtimeProviders,
+        busy: runBusy,
+        onSubmit: requestSurfaceAgentRun,
+        onReadReach: async (connectedConversationId) => {
+          if (bootMode !== 'runtime') return 0
+          const call = await bridgeRef.current.client.conversationReach(activeProjectId, connectedConversationId)
+          return call.result.ok ? call.result.value.items.length : 0
+        },
+      },
+    } : null}
     scene={{
       sceneStyle,
       sceneData: {
@@ -6844,8 +7046,18 @@ export function App() {
       surfaceMenu: {
         items: surfaceContextMenuItems,
         onAction: handleSurfaceContextMenuAction,
-        onAgentPrompt: requestSurfaceAgentRun,
-        onReadAgentRun: readSurfaceAgentRun,
+      },
+      surfaceExecution: {
+        receivers: selectionReceiverChoices,
+        activeReceiverId: activeReceiverIdentity?.activeReceiverId ?? null,
+        providers: runtimeProviders,
+        busy: runBusy,
+        onSubmit: requestSurfaceAgentRun,
+        onReadReach: async (connectedConversationId) => {
+          if (bootMode !== 'runtime') return 0
+          const call = await bridgeRef.current.client.conversationReach(activeProjectId, connectedConversationId)
+          return call.result.ok ? call.result.value.items.length : 0
+        },
       },
       resumeHint: layoutMode === 'desktop' ? resumeHint : null,
       idleHint: layoutMode === 'desktop' ? idleHint : null,
@@ -6892,6 +7104,14 @@ export function App() {
         onFrameBoundsChange: handleFrameBoundsChange,
         selectionComposer: layoutMode === 'desktop' && selectedIds.length && selectionComposerOpen ? {
           contextIds: selectionContextIds,
+          referenceIds: selectionReferenceIds,
+          receivers: selectionReceiverChoices,
+          activeReceiverId: activeReceiverIdentity?.activeReceiverId ?? null,
+          receiverId: effectiveSelectionReceiverId,
+          reachCount: selectionReachCount,
+          referencePickActive,
+          ...(selectionExecutionBlockedReason ? { executionBlockedReason: selectionExecutionBlockedReason } : {}),
+          ...(selectionResultSlotNode?.resultSlotId ? { resultSlot: { id: selectionResultSlotNode.resultSlotId, status: selectionResultSlotNode.resultSlotStatus ?? 'empty', title: selectionResultSlotNode.title } } : {}),
           prompt: selectionComposerText,
           provider: selectionProvider,
           createAsNewNode: selectionCreateAsNewNode,
@@ -6907,9 +7127,15 @@ export function App() {
           onIntentChange: (intent) => { setSelectionIntent(intent); setSelectionCreateAsNewNode(intent === 'create'); setSelectionResultPolicy(intent === 'create' ? 'create_artifact' : intent === 'revise' ? 'draft_revision_per_target' : 'reply_only'); if (intent !== 'revise') setSelectionBaseRevision(null) },
           onResultPolicyChange: setSelectionResultPolicy,
           onToggleContext: toggleContext,
+          onReceiverChange: chooseSelectionReceiver,
+          onRemoveReference: toggleSelectionReference,
+          onMoveReference: moveSelectionReference,
+          onStartReferencePick: () => setReferencePickActive(true),
+          onFinishReferencePick: () => setReferencePickActive(false),
           onSend: requestSelectionRun,
-          onClose: () => setSelectionComposerOpen(false),
+          onClose: () => { setReferencePickActive(false); setSelectionComposerOpen(false); setSelectionReceiverId(null) },
         } : undefined,
+        referencePick: layoutMode === 'desktop' && selectionComposerOpen ? { active: referencePickActive, ids: selectionReferenceIds, onToggle: toggleSelectionReference } : undefined,
         onSelect: selectNode,
         onClearSelection: clearSelection,
         onMarqueeSelect: selectMarquee,
@@ -7225,6 +7451,7 @@ export function App() {
         onLocateContent: locateAndPreviewIslands,
         gridSnapEnabled,
         onGridSnapChange: setGridSnapEnabled,
+        navigationRequest: projectFocusRequest,
       },
       emptyState: bootMode === 'runtime' && nodes.length === 0 ? {
         onImport: () => setImportPanelOpen(true),
@@ -7505,14 +7732,22 @@ export function App() {
           onChoose={(id) => { void confirmControllerLink(id) }}
           onClose={() => { if (!controllerBusy) { setControllerTargetSessionId(null); setControllerChoices([]); setControllerError(null) } }}
         /> : null}
-        <ProjectFocusNavigator
+        {projectFocusOpen && projectFocusSourceIds.length === 1 && projectFocusAnchor !== null && projectFocusLocations.length > 0 && !projectFocusListMode ? <ArtifactLocationOrbit
+          open
+          anchor={projectFocusAnchor}
+          sourceLabel={projectFocusSourceLabel || '当前对象'}
+          locations={projectFocusLocations}
+          onClose={() => { setProjectFocusOpen(false); setProjectFocusAnchor(null) }}
+          onNavigate={navigateProjectFocus}
+          onMore={() => setProjectFocusListMode(true)}
+        /> : <ProjectFocusNavigator
           open={projectFocusOpen}
           sourceLabel={projectFocusSourceLabel || (projectFocusCount ? `${projectFocusCount} 项 Selection` : '')}
           sourceCount={projectFocusCount}
           locations={projectFocusLocations}
-          onClose={() => setProjectFocusOpen(false)}
+          onClose={() => { setProjectFocusOpen(false); setProjectFocusAnchor(null); setProjectFocusListMode(false) }}
           onNavigate={navigateProjectFocus}
-        />
+        />}
         {reorganizeOpen && bootMode === 'runtime' ? <ReorganizePanel
           projectId={activeProjectId}
           scopeId={scopeId}

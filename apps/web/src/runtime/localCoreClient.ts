@@ -10,9 +10,12 @@ import type {
   CaptureSpacePayloadPreviewV1,
   CaptureSpacePresentationV1,
   CaptureSpaceSnapshotV1,
+  CaptureStagingItemV0,
   Checkpoint,
   ContractError,
   CommandDraftV1,
+  ConversationReachResultV0,
+  CreateResultSlotInputV0,
   ContextChangeProposalV1,
   ProviderSessionBindingV1,
   ConnectedConversationV1,
@@ -73,8 +76,8 @@ import type {
   ProjectViewRailRefV0,
   ResourceDescriptorV0,
   Result,
-  SearchResultV0,
-  SearchEntityTypeV0,
+  SearchResultVNext,
+  SearchQueryVNext,
   RetryRunInput,
   RetryRunResult,
   RunEvent,
@@ -85,10 +88,23 @@ import type {
   ReorganizeProposalV0,
   Relation,
   RuntimeProviderStatus,
+  OrderedRunReferenceV2,
+  ResultSlotV0,
+  RunReceiverRefV1,
+  RunRecipeV0,
   SnapshotCompareResultV1,
   ValidatedProjectRoot,
   WorkspaceMembership,
   WorkspaceMembershipSource,
+  AssemblyApplyRequestV1,
+  AssemblyApplyResultV1,
+  ProjectSummaryV1,
+  ProjectVisualProfileV0,
+  SkillCatalogEntryV1,
+  SkillCatalogReadV1,
+  UpsertProjectVisualProfileInputV0,
+  WarehouseQueryV1,
+  WarehouseSnapshotV1,
 } from '@local-creative-os/contracts'
 import { nextMutationOrigin } from './mutationIdentity'
 import { getDesktopPort } from './desktopPort'
@@ -166,6 +182,9 @@ export interface CreateRuntimeRunInput {
   readonly outputIntent: 'create' | 'revise' | 'analyze'
   readonly requestedProvider?: string
   readonly sessionId?: string
+  readonly receiverRef?: RunReceiverRefV1
+  readonly orderedReferences?: readonly OrderedRunReferenceV2[]
+  readonly resultSlotId?: string
   readonly resultPolicy?: {
     readonly type: 'reply_only' | 'create_artifact' | 'create_collection' | 'draft_revision_per_target'
     readonly format?: string
@@ -249,7 +268,7 @@ export interface LocalCoreClient {
   setAttentionIntent(projectId: string, workspaceId: string | null, intent: { readonly type: IntentTypeV0; readonly goal?: string } | null, signal?: AbortSignal): Promise<RuntimeCall<ActiveContextProjection>>
   /** @deprecated S9: internal/debug path; no 0.1 GUI consumer. */
   dismissContinuityCandidate(projectId: string, workspaceId: string | null, key: string, signal?: AbortSignal): Promise<RuntimeCall<ActiveContextProjection>>
-  captureStaging(recentMs?: number, options?: { readonly search?: string; readonly kind?: string; readonly limit?: number }, signal?: AbortSignal): Promise<RuntimeCall<{ readonly items: readonly { readonly id: string; readonly kind: string; readonly payloadRef: string; readonly source?: Record<string, unknown>; readonly capturedAt: string; readonly resolvedProjectId?: string }[]; readonly pendingCount: number }>>
+  captureStaging(recentMs?: number, options?: { readonly search?: string; readonly kind?: string; readonly sourceDomain?: string; readonly limit?: number; readonly cursor?: string }, signal?: AbortSignal): Promise<RuntimeCall<{ readonly items: readonly CaptureStagingItemV0[]; readonly pendingCount: number; readonly nextCursor?: string }>>
   captureSpace(signal?: AbortSignal): Promise<RuntimeCall<CaptureSpaceSnapshotV1>>
   saveCaptureSpacePresentation(input: Omit<CaptureSpacePresentationV1, 'version' | 'updatedAt'>, expectedVersion: number, signal?: AbortSignal): Promise<RuntimeCall<CaptureSpacePresentationV1>>
   organizeCaptureSpace(signal?: AbortSignal): Promise<RuntimeCall<CaptureSpaceOrganizeResultV1>>
@@ -533,7 +552,20 @@ export interface LocalCoreClient {
     readonly managed?: boolean
     readonly currentRevisionId?: string
   }[]>>
-  projectSearch(projectId: string, query: string, input?: { readonly limit?: number; readonly types?: readonly SearchEntityTypeV0[] }, signal?: AbortSignal): Promise<RuntimeCall<SearchResultV0>>
+  projectSearch(projectId: string, query: string, input?: Omit<SearchQueryVNext, 'query'>, signal?: AbortSignal): Promise<RuntimeCall<SearchResultVNext>>
+  warehouse(projectId: string, input?: WarehouseQueryV1, signal?: AbortSignal): Promise<RuntimeCall<WarehouseSnapshotV1>>
+  applyAssembly(projectId: string, input: Omit<AssemblyApplyRequestV1, 'projectId'>, signal?: AbortSignal): Promise<RuntimeCall<AssemblyApplyResultV1>>
+  projectSummary(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<ProjectSummaryV1>>
+  projectVisualProfile(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<ProjectVisualProfileV0 | undefined>>
+  saveProjectVisualProfile(projectId: string, input: UpsertProjectVisualProfileInputV0, signal?: AbortSignal): Promise<RuntimeCall<ProjectVisualProfileV0>>
+  projectSkills(projectId: string, search?: string, signal?: AbortSignal): Promise<RuntimeCall<readonly SkillCatalogEntryV1[]>>
+  projectSkill(projectId: string, skillId: string, signal?: AbortSignal): Promise<RuntimeCall<SkillCatalogReadV1>>
+  conversationReach(projectId: string, connectedConversationId: string, signal?: AbortSignal): Promise<RuntimeCall<ConversationReachResultV0>>
+  createResultSlot(projectId: string, input: Omit<CreateResultSlotInputV0, 'projectId'>, signal?: AbortSignal): Promise<RuntimeCall<ResultSlotV0>>
+  resultSlots(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<readonly ResultSlotV0[]>>
+  resultSlot(resultSlotId: string, signal?: AbortSignal): Promise<RuntimeCall<ResultSlotV0>>
+  deleteResultSlot(resultSlotId: string, signal?: AbortSignal): Promise<RuntimeCall<null>>
+  runRecipe(runId: string, signal?: AbortSignal): Promise<RuntimeCall<RunRecipeV0>>
   artifactDetail(artifactId: string, signal?: AbortSignal): Promise<RuntimeCall<unknown>>
   revisionList(artifactId: string, signal?: AbortSignal): Promise<RuntimeCall<readonly unknown[]>>
   revisionCompare(projectId: string, baseRevisionId: string, headRevisionId: string, signal?: AbortSignal): Promise<RuntimeCall<unknown>>
@@ -915,9 +947,11 @@ export function createLocalCoreClient(): LocalCoreClient {
       if (recentMs !== undefined) params.set('recent', String(recentMs))
       if (options?.search) params.set('search', options.search)
       if (options?.kind) params.set('kind', options.kind)
+      if (options?.sourceDomain) params.set('sourceDomain', options.sourceDomain)
       if (options?.limit !== undefined) params.set('limit', String(options.limit))
+      if (options?.cursor) params.set('cursor', options.cursor)
       const query = params.toString()
-      return request(`/runtime/captures/staging${query ? `?${query}` : ''}`, { signal, decode: decodeResult<{ readonly items: readonly { readonly id: string; readonly kind: string; readonly payloadRef: string; readonly source?: Record<string, unknown>; readonly capturedAt: string; readonly resolvedProjectId?: string }[]; readonly pendingCount: number }> })
+      return request(`/runtime/captures/staging${query ? `?${query}` : ''}`, { signal, decode: decodeResult<{ readonly items: readonly CaptureStagingItemV0[]; readonly pendingCount: number; readonly nextCursor?: string }> })
     },
     captureSpace(signal) {
       return request('/runtime/capture-space', { signal, decode: decodeResult<CaptureSpaceSnapshotV1> })
@@ -1966,11 +2000,79 @@ export function createLocalCoreClient(): LocalCoreClient {
       const params = new URLSearchParams({ q: query })
       if (input.limit !== undefined) params.set('limit', String(input.limit))
       if (input.types?.length) params.set('types', input.types.join(','))
+      if (input.usedHereTarget) params.set('usedHereTarget', `${input.usedHereTarget.kind}:${input.usedHereTarget.id}`)
       return request(`/projects/${encodeURIComponent(projectId)}/search?${params.toString()}`, {
         signal,
         timeoutMs: 30_000,
-        decode: decodeResult<SearchResultV0>,
+        decode: decodeResult<SearchResultVNext>,
       })
+    },
+    warehouse(projectId, input = {}, signal) {
+      const params = new URLSearchParams()
+      if (input.search?.trim()) params.set('search', input.search.trim())
+      if (input.kinds?.length) params.set('kinds', input.kinds.join(','))
+      if (input.provenanceOrigin) params.set('provenance', input.provenanceOrigin)
+      if (input.usedHereTarget) params.set('usedHereTarget', `${input.usedHereTarget.kind}:${input.usedHereTarget.id}`)
+      if (input.limit !== undefined) params.set('limit', String(input.limit))
+      if (input.cursor) params.set('cursor', input.cursor)
+      const query = params.toString()
+      return request(`/projects/${encodeURIComponent(projectId)}/warehouse${query ? `?${query}` : ''}`, {
+        signal,
+        decode: decodeResult<WarehouseSnapshotV1>,
+      })
+    },
+    applyAssembly(projectId, input, signal) {
+      const body: AssemblyApplyRequestV1 = { ...input, projectId }
+      return request(`/projects/${encodeURIComponent(projectId)}/assembly/apply`, {
+        signal,
+        timeoutMs: LOCAL_CORE_WRITE_TIMEOUT_MS,
+        init: { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) },
+        decode: decodeResult<AssemblyApplyResultV1>,
+      })
+    },
+    projectSummary(projectId, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/summary`, { signal, decode: decodeResult<ProjectSummaryV1> })
+    },
+    projectVisualProfile(projectId, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/visual-profile`, { signal, decode: decodeResult<ProjectVisualProfileV0 | undefined> })
+    },
+    saveProjectVisualProfile(projectId, input, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/visual-profile`, {
+        signal,
+        timeoutMs: LOCAL_CORE_WRITE_TIMEOUT_MS,
+        init: { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) },
+        decode: decodeResult<ProjectVisualProfileV0>,
+      })
+    },
+    projectSkills(projectId, search, signal) {
+      const query = search?.trim() ? `?search=${encodeURIComponent(search.trim())}` : ''
+      return request(`/projects/${encodeURIComponent(projectId)}/skills${query}`, { signal, decode: decodeResult<readonly SkillCatalogEntryV1[]> })
+    },
+    projectSkill(projectId, skillId, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/skills/${encodeURIComponent(skillId)}`, { signal, decode: decodeResult<SkillCatalogReadV1> })
+    },
+    conversationReach(projectId, connectedConversationId, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/connected-conversations/${encodeURIComponent(connectedConversationId)}/reach`, { signal, decode: decodeResult<ConversationReachResultV0> })
+    },
+    createResultSlot(projectId, input, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/result-slots`, {
+        signal,
+        timeoutMs: LOCAL_CORE_WRITE_TIMEOUT_MS,
+        init: { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) },
+        decode: decodeResult<ResultSlotV0>,
+      })
+    },
+    resultSlots(projectId, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/result-slots`, { signal, decode: decodeResult<readonly ResultSlotV0[]> })
+    },
+    resultSlot(resultSlotId, signal) {
+      return request(`/result-slots/${encodeURIComponent(resultSlotId)}`, { signal, decode: decodeResult<ResultSlotV0> })
+    },
+    deleteResultSlot(resultSlotId, signal) {
+      return request(`/result-slots/${encodeURIComponent(resultSlotId)}`, { signal, init: { method: 'DELETE' }, decode: decodeResult<null> })
+    },
+    runRecipe(runId, signal) {
+      return request(`/runs/${encodeURIComponent(runId)}/recipe`, { signal, decode: decodeResult<RunRecipeV0> })
     },
     artifactDetail(artifactId, signal) {
       return request(`/artifacts/${encodeURIComponent(artifactId)}`, {

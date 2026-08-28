@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
-import type { AttentionBucketV0, RuntimeProviderStatus } from '@local-creative-os/contracts'
+import type { AttentionBucketV0, ConnectedConversationV1, RuntimeProviderStatus } from '@local-creative-os/contracts'
 import { CheckCircle2, CircleDot, Copy, CopyPlus, Crosshair, Ellipsis, Fence, FolderTree, GripVertical, LayoutGrid, MessageSquare, Pencil, Radio, Trash2 } from 'lucide-react'
 import type { Camera, CanvasEdge, CanvasNode, NodeDisplayMode, RunStatus, WorkspaceFrameVM } from '../../model'
 import { getSelectionBounds, nodeDensity } from './canvasGeometry'
@@ -8,12 +8,13 @@ import { getPendingZoneBounds } from './canvasLayout'
 import type { LayoutPreviewItem } from './scopeLayout'
 import type { SpatialRegionDraft } from '../../state/spatialRegion'
 import { CanvasNodeVisual, detectFileIdentity, displayNodeTitle, nodeVisualFamily } from './CanvasNodeVisual'
-import { SelectionComposer } from './SelectionComposer'
+import { UnifiedExecutionComposer } from '../execution/UnifiedExecutionComposer'
 import type { ArtifactRevisionProvenance } from '../../runtime/projectionAdapters'
 import { SpatialCanvas } from '../spatial/SpatialCanvas'
 import { SpatialEdgeLayer } from '../spatial/SpatialEdgeLayer'
 import { SpatialNodeLayer } from '../spatial/SpatialNodeLayer'
 import { SpatialBeaconLayer } from '../spatial/SpatialBeaconLayer'
+import { miniMapVisualKindForNode } from '../spatial/minimapSemantics'
 import { useSpatialFocusRequest, type SpatialFocusRequest } from '../spatial/useSpatialFocusRequest'
 import { edgeScrollDelta, spatialBoundsForPlacements, spatialScreenToWorld, spatialWorldToScreen } from '../spatial/spatialCamera'
 import { spatialIdsIntersectingScreenRect } from '../spatial/spatialHitTest'
@@ -59,6 +60,14 @@ interface Props {
   selectionComposer?: {
     prompt: string
     contextIds: string[]
+    referenceIds: string[]
+    receivers: readonly ConnectedConversationV1[]
+    activeReceiverId: string | null
+    receiverId: string | null
+    reachCount?: number
+    referencePickActive?: boolean
+    executionBlockedReason?: string
+    resultSlot?: { readonly id: string; readonly status: 'empty' | 'running' | 'review' | 'materialized'; readonly title: string }
     provider: string
     createAsNewNode: boolean
     intent?: 'analyze' | 'create' | 'revise'
@@ -73,9 +82,15 @@ interface Props {
     onIntentChange?: (value: 'analyze' | 'create' | 'revise') => void
     onResultPolicyChange?: (value: 'reply_only' | 'create_artifact' | 'create_collection' | 'draft_revision_per_target') => void
     onToggleContext: (id: string) => void
+    onReceiverChange: (connectedConversationId: string) => void
+    onRemoveReference: (id: string) => void
+    onMoveReference: (id: string, delta: -1 | 1) => void
+    onStartReferencePick: () => void
+    onFinishReferencePick: () => void
     onSend: () => void
     onClose: () => void
   }
+  referencePick?: { readonly active: boolean; readonly ids: readonly string[]; readonly onToggle: (id: string) => void }
   onCreateNodeFromAnchor: (kind: 'note' | 'context', x: number, y: number, from: string) => void; onFilesDropped: (files: File[], x: number, y: number) => void; onExternalTextDrop?: (text: string, x: number, y: number) => void; onMaterialTransferDrop?: (raw: string, x: number, y: number) => void
   /** G-4 导图分支摘取：按住导图分支拖到空白处松手 → 以正常文本节点形态落画布（区别于外部文本拖入）。 */
   onMindmapBranchDrop?: (text: string, x: number, y: number) => void
@@ -125,7 +140,7 @@ function additiveSelection(event: { shiftKey: boolean; ctrlKey: boolean; metaKey
   return event.shiftKey || event.ctrlKey || event.metaKey
 }
 
-export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-space', surfaceMode = 'project', nodes, setNodes, edges, setEdges, camera, setCamera, selectedId, selectedIds, selectedEdgeId, setSelectedEdgeId, pendingId, runId, runStatus, spaceHeld, locked = false, layoutPreview, workspaceFrames = [], workspaceMemberNodes = nodes, activeWorkspaceId = null, onWorkspaceActivate, onWorkspaceProjectionMove, onPresentationInteractionChange, onPresentationCommit, onFrameBoundsChange, selectionComposer, onSelect, onClearSelection, onMarqueeSelect, onSelectEdge, onDoubleClick, onDetails, onFocusSelection, onRenameSelection, onCreateNodeFromAnchor, onFilesDropped, onExternalTextDrop, onMaterialTransferDrop, onMindmapBranchDrop, onArrangeSelection, gridSnapEnabled = true, onSetSelectionDisplayMode, onCopySelection, onDuplicateSelection, onCreateScopeFromSelection, onDeleteSelection, onReorganize, onToggleNoteLayout, onDirectProjectViewDrop, onPointerWorldChange, onSpaceCreate, onLocateNode, focusRequest, onLocateConversationSource, locatePulseId, onOpenConversation, onSetActiveConversation, activeConversationId = null, pendingReviewIds = [], attentionBucketsByViewId = {}, collectionMembersByNodeId = {}, expandedCollectionScopeIds = [], openingCollectionScopeIds = [], closingCollectionScopeIds = [], onToggleCollection, onOpenContextLens, spatialRegions = [], surfaceElements = [], onSurfaceElementsChange, portalTargets = [], onOpenPortalTarget, onCreateRegion, onClearRegion, onRegionBoundsChange, onRegionBoundsCommit, onPromoteRegionToCollection }: Props) {
+export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-space', surfaceMode = 'project', nodes, setNodes, edges, setEdges, camera, setCamera, selectedId, selectedIds, selectedEdgeId, setSelectedEdgeId, pendingId, runId, runStatus, spaceHeld, locked = false, layoutPreview, workspaceFrames = [], workspaceMemberNodes = nodes, activeWorkspaceId = null, onWorkspaceActivate, onWorkspaceProjectionMove, onPresentationInteractionChange, onPresentationCommit, onFrameBoundsChange, selectionComposer, referencePick, onSelect, onClearSelection, onMarqueeSelect, onSelectEdge, onDoubleClick, onDetails, onFocusSelection, onRenameSelection, onCreateNodeFromAnchor, onFilesDropped, onExternalTextDrop, onMaterialTransferDrop, onMindmapBranchDrop, onArrangeSelection, gridSnapEnabled = true, onSetSelectionDisplayMode, onCopySelection, onDuplicateSelection, onCreateScopeFromSelection, onDeleteSelection, onReorganize, onToggleNoteLayout, onDirectProjectViewDrop, onPointerWorldChange, onSpaceCreate, onLocateNode, focusRequest, onLocateConversationSource, locatePulseId, onOpenConversation, onSetActiveConversation, activeConversationId = null, pendingReviewIds = [], attentionBucketsByViewId = {}, collectionMembersByNodeId = {}, expandedCollectionScopeIds = [], openingCollectionScopeIds = [], closingCollectionScopeIds = [], onToggleCollection, onOpenContextLens, spatialRegions = [], surfaceElements = [], onSurfaceElementsChange, portalTargets = [], onOpenPortalTarget, onCreateRegion, onClearRegion, onRegionBoundsChange, onRegionBoundsCommit, onPromoteRegionToCollection }: Props) {
   const canvasRef = useRef<HTMLDivElement | null>(null)
   const dragCandidate = useRef<DragCandidate | null>(null)
   const resizeCandidate = useRef<ResizeCandidate | null>(null)
@@ -152,6 +167,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
   const linkMoved = useRef(false)
   const edgeReconnect = useRef<EdgeReconnectCandidate | null>(null)
   const [linkPoint, setLinkPoint] = useState<{ x: number; y: number } | null>(null)
+  const [relationTargetId, setRelationTargetId] = useState<string | null>(null)
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [alignmentGuide, setAlignmentGuide] = useState<{ readonly x?: number; readonly y?: number } | null>(null)
   const [dragSignal, setDragSignal] = useState({ x: 0, y: 0 })
@@ -211,7 +227,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
     : nodes, [dragPreviewPositions, nodes])
   const mainFocus = useSpatialFocusRequest({
     request: focusRequest,
-    items: spatialNodes.map((node) => ({ id: node.id, x: node.x, y: node.y, width: node.width, height: node.height })),
+    items: spatialNodes.map((node) => ({ id: node.id, x: node.x, y: node.y, width: node.width, height: node.height, label: node.title, visualKind: miniMapVisualKindForNode(node) })),
     testId: 'canvas',
     camera,
     setCamera,
@@ -407,6 +423,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
     link.current = null
     edgeReconnect.current = null
     linkTarget.current = null
+    setRelationTargetId(null)
     linkStart.current = null
     linkMoved.current = false
     lastNodePress.current = null
@@ -539,6 +556,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
     linkStart.current = { x: event.clientX, y: event.clientY }
     linkMoved.current = false
     setLinkPoint(point)
+    setRelationTargetId(null)
     linkPointerId.current = event.pointerId
   }
   const beginEdgeReconnect = (edge: CanvasEdge, endpoint: 'from' | 'to', event: React.PointerEvent<SVGCircleElement>) => {
@@ -548,6 +566,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
     edgeReconnect.current = { edgeId: edge.id, endpoint, fixedId }
     link.current = null
     linkTarget.current = null
+    setRelationTargetId(null)
     linkStart.current = { x: event.clientX, y: event.clientY }
     linkMoved.current = false
     setSelectedEdgeId(edge.id)
@@ -700,6 +719,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
       link.current = null
       edgeReconnect.current = null
       linkTarget.current = null
+      setRelationTargetId(null)
       linkStart.current = null
       linkMoved.current = false
       linkPointerId.current = null
@@ -806,6 +826,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
       }
       edgeReconnect.current = null
       linkTarget.current = null
+      setRelationTargetId(null)
       linkStart.current = null
       linkMoved.current = false
       setLinkPoint(null)
@@ -816,6 +837,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
         connect(source, target)
         link.current = null
         linkTarget.current = null
+        setRelationTargetId(null)
         linkStart.current = null
         linkMoved.current = false
         setLinkPoint(null)
@@ -824,6 +846,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
         setCreateMenu({ from: source, x: point.x, y: point.y, screenX: event.clientX, screenY: event.clientY })
         link.current = null
         linkTarget.current = null
+        setRelationTargetId(null)
         linkStart.current = null
         linkMoved.current = false
         setLinkPoint(null)
@@ -877,7 +900,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
         </div>
       </details>}
     </div>}
-    {selectionComposer && selectionComposerPosition && <SelectionComposer
+    {selectionComposer && selectionComposerPosition && <UnifiedExecutionComposer
       nodes={nodes}
       selectedIds={selectedIds}
       x={selectionComposerPosition.left}
@@ -1038,7 +1061,9 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
         linkMoved.current = true
       }
       setLinkPoint(toWorld(event.clientX, event.clientY, rect))
-      linkTarget.current = relationTargetAt(event.clientX, event.clientY)
+      const nextRelationTarget = relationTargetAt(event.clientX, event.clientY)
+      linkTarget.current = nextRelationTarget
+      setRelationTargetId(nextRelationTarget)
     }
   }} onPointerUp={({ event }) => finishPointer(event)} onPointerCancel={({ event }) => finishPointer(event, true)} onPointerWorldChange={onPointerWorldChange} onFilesDropped={(files, point) => onFilesDropped(files, point.x, point.y)} onExternalDrop={(kind, id, screen) => {
     const rect = canvasRef.current?.getBoundingClientRect()
@@ -1122,7 +1147,10 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
       {selectionBounds && <div data-testid="selection-bounds" className="selection-bounds" style={{ left: selectionBounds.x - 10, top: selectionBounds.y - 10, width: selectionBounds.width + 20, height: selectionBounds.height + 20 }} />}
       {renderNodes.map((node) => {
         const collectionScopeId = node.entityKind === 'collection' ? (node.opensScopeId ?? (node.id.startsWith('scope:') ? node.id.slice('scope:'.length) : null)) : null
-        return <CanvasCard key={node.id} projectId={projectId} node={node} density={nodeDensity(node, lod)} zoom={camera.zoom} showDetails={camera.zoom > .2 && lod !== 'overview'} performanceProxy={(lod === 'aggregate' || lod === 'overview') && !selectedIds.includes(node.id) && pendingId !== node.id} runId={runId} runStatus={runStatus} selected={selectedIds.includes(node.id)} multiSelected={selectedIds.length > 1 && selectedIds.includes(node.id)} pending={pendingId === node.id} reviewPending={pendingReviewIds.includes(node.id)} dragging={draggingId === node.id} dragSignal={draggingId === node.id ? dragSignal : undefined} resizing={resizingId === node.id} workspaceMember={Boolean(activeWorkspaceId && workspaceFrames.find((frame) => frame.workspaceId === activeWorkspaceId)?.memberViewIds.includes(node.id))} locatePulse={locatePulseId === node.id} attentionBucket={attentionBucketsByViewId[node.id]} collectionExpanded={Boolean(collectionScopeId && expandedCollectionScopeIds.includes(collectionScopeId))} collectionMembers={collectionMembersByNodeId[node.id] ?? (collectionScopeId ? collectionMembersByNodeId[`scope:${collectionScopeId}`] ?? [] : [])} collectionMotion={collectionMotionByNodeId.get(node.id)} onOpenContextLens={onOpenContextLens} onCollectionMemberSelect={onSelect} onLocate={onLocateNode} onLocateConversationSource={onLocateConversationSource} onDetails={onDetails} onPointerDown={(event) => {
+        return <CanvasCard key={node.id} projectId={projectId} node={node} density={nodeDensity(node, lod)} zoom={camera.zoom} showDetails={camera.zoom > .2 && lod !== 'overview'} performanceProxy={(lod === 'aggregate' || lod === 'overview') && !selectedIds.includes(node.id) && pendingId !== node.id} runId={runId} runStatus={runStatus} selected={selectedIds.includes(node.id)} multiSelected={selectedIds.length > 1 && selectedIds.includes(node.id)} pending={pendingId === node.id} reviewPending={pendingReviewIds.includes(node.id)} referenceOrder={referencePick?.active ? referencePick.ids.indexOf(node.id) + 1 : 0} dragging={draggingId === node.id} dragSignal={draggingId === node.id ? dragSignal : undefined} resizing={resizingId === node.id} workspaceMember={Boolean(activeWorkspaceId && workspaceFrames.find((frame) => frame.workspaceId === activeWorkspaceId)?.memberViewIds.includes(node.id))} locatePulse={locatePulseId === node.id} attentionBucket={attentionBucketsByViewId[node.id]} collectionExpanded={Boolean(collectionScopeId && expandedCollectionScopeIds.includes(collectionScopeId))} collectionMembers={collectionMembersByNodeId[node.id] ?? (collectionScopeId ? collectionMembersByNodeId[`scope:${collectionScopeId}`] ?? [] : [])} collectionMotion={collectionMotionByNodeId.get(node.id)} onOpenContextLens={onOpenContextLens} onCollectionMemberSelect={onSelect} onLocate={onLocateNode} onLocateConversationSource={onLocateConversationSource} onDetails={onDetails} onPointerDown={(event) => {
+        if (referencePick?.active && event.button === 0) {
+          event.preventDefault(); event.stopPropagation(); suppressClick.current = node.id; referencePick.onToggle(node.id); return
+        }
         const semanticIds = selectedIds.includes(node.id) && selectedIds.length > 1 ? selectedIds : [node.id]
         if (beginCanvasSemanticDrop(semanticIds, event)) return
         if (event.button !== 0) return
@@ -1135,6 +1163,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
           connect(link.current.from, node.id)
           link.current = null
           linkTarget.current = null
+          setRelationTargetId(null)
           linkStart.current = null
           linkMoved.current = false
           setLinkPoint(null)
@@ -1164,7 +1193,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
         onPresentationInteractionChange?.(true)
         setResizingId(node.id)
         try { canvasRef.current?.setPointerCapture(event.pointerId) } catch { /* browser owns capture */ }
-      }} relationsEnabled={surfaceMode === 'project'} onLinkStart={(event) => beginRelation(node.id, event, { x: node.x + node.width, y: node.y + node.height / 2 })} />
+      }} relationTarget={relationTargetId === node.id} relationsEnabled={surfaceMode === 'project'} onLinkStart={(event) => beginRelation(node.id, event, { x: node.x + node.width, y: node.y + node.height / 2 })} />
       })}
     </SpatialNodeLayer>
   </SpatialCanvas>
@@ -1200,14 +1229,14 @@ function EdgePath({ edge, from, to, selected, focused, dimmed, onSelect, onCut, 
   return <>
     <path className="edge-hit" data-edge-id={edge.id} d={d} onPointerDown={select} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation() }} />
     <path className={`edge ${edge.kind} ${edge.active ? 'active' : ''} ${edge.scope ? `edge-scope-${edge.scope}` : ''} ${focused ? 'focused' : ''} ${selected ? 'selected' : ''} ${dimmed ? 'dimmed' : ''}`} data-edge-id={edge.id} data-edge-from={edge.from} data-edge-to={edge.to} d={d} onPointerDown={select} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation() }} />
-    {visibleLabel && !dimmed && <g className={`lcos-edge-label ${selected ? 'is-selected' : ''}`} transform={`translate(${mx} ${my})`} onPointerDown={select}>
+    {visibleLabel && !dimmed && (selected || focused) && <g className={`lcos-edge-label ${selected ? 'is-selected' : ''}`} transform={`translate(${mx} ${my})`} onPointerDown={select}>
       <rect x={-labelWidth / 2} y={-10} width={labelWidth} height={20} rx={8}/>
       <text textAnchor="middle" dominantBaseline="central">{visibleLabel}</text>
     </g>}
-    {edge.active && <circle className="edge-runner" r="2.4"><animateMotion dur="2.4s" repeatCount="indefinite" path={d} /></circle>}
     {selected && <g className="edge-controls" data-testid={`edge-controls-${edge.id}`}>
-      <circle className="edge-control edge-terminal" data-testid={`edge-reconnect-from-${edge.id}`} cx={x1} cy={y1} r="7" onPointerDown={(event) => onReconnectStart('from', event)} />
-      <circle className="edge-control edge-terminal" data-testid={`edge-reconnect-to-${edge.id}`} cx={x2} cy={y2} r="7" onPointerDown={(event) => onReconnectStart('to', event)} />
+      <circle className="edge-control edge-terminal-hit" data-testid={`edge-reconnect-from-${edge.id}`} cx={x1} cy={y1} r="9" onPointerDown={(event) => onReconnectStart('from', event)} />
+      <circle className="edge-control edge-terminal-hit" data-testid={`edge-reconnect-to-${edge.id}`} cx={x2} cy={y2} r="9" onPointerDown={(event) => onReconnectStart('to', event)} />
+      <path className="edge-terminal-mark" d={`M ${x1} ${y1 - 5} L ${x1} ${y1 + 5} M ${x2} ${y2 - 5} L ${x2} ${y2 + 5}`} />
       <circle className="edge-control edge-cut-hit" data-testid={`edge-cut-${edge.id}`} cx={mx} cy={my} r="10" onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); onCut(edge.id) }} />
       <path className="edge-cut-mark" d={`M ${mx - 3} ${my - 3} L ${mx + 3} ${my + 3} M ${mx + 3} ${my - 3} L ${mx - 3} ${my + 3}`} />
     </g>}
@@ -1227,10 +1256,10 @@ function ReconnectTemporaryEdge({ fixed, moving, endpoint }: { fixed: CanvasNode
   return <path className="edge temporary reconnecting" d={`M ${from.x} ${from.y} C ${from.x + 72} ${from.y}, ${to.x - 72} ${to.y}, ${to.x} ${to.y}`} />
 }
 
-function CanvasCard({ projectId, node, density, zoom, showDetails, performanceProxy = false, runId, runStatus, selected, multiSelected, pending, reviewPending, dragging, dragSignal, resizing, workspaceMember, locatePulse, attentionBucket, collectionExpanded, collectionMembers, collectionMotion, onCollectionMemberSelect, onLocate, onLocateConversationSource, onOpenContextLens, onDetails, onPointerDown, onClick, onResizeStart, relationsEnabled, onLinkStart }: {
-  projectId: string; node: CanvasNode; density: NodeDisplayMode; zoom: number; showDetails: boolean; performanceProxy?: boolean; runId: string; runStatus: RunStatus | null; selected: boolean; multiSelected: boolean; pending: boolean; reviewPending: boolean; dragging: boolean; dragSignal?: { x: number; y: number }; resizing: boolean; workspaceMember: boolean; locatePulse: boolean; attentionBucket?: AttentionBucketV0; collectionExpanded: boolean; collectionMembers: readonly CanvasNode[]
+function CanvasCard({ projectId, node, density, zoom, showDetails, performanceProxy = false, runId, runStatus, selected, multiSelected, pending, reviewPending, referenceOrder, dragging, dragSignal, resizing, workspaceMember, locatePulse, attentionBucket, collectionExpanded, collectionMembers, collectionMotion, onCollectionMemberSelect, onLocate, onLocateConversationSource, onOpenContextLens, onDetails, onPointerDown, onClick, onResizeStart, relationTarget, relationsEnabled, onLinkStart }: {
+  projectId: string; node: CanvasNode; density: NodeDisplayMode; zoom: number; showDetails: boolean; performanceProxy?: boolean; runId: string; runStatus: RunStatus | null; selected: boolean; multiSelected: boolean; pending: boolean; reviewPending: boolean; referenceOrder: number; dragging: boolean; dragSignal?: { x: number; y: number }; resizing: boolean; workspaceMember: boolean; locatePulse: boolean; attentionBucket?: AttentionBucketV0; collectionExpanded: boolean; collectionMembers: readonly CanvasNode[]
   collectionMotion?: { phase: 'opening' | 'closing'; dx: number; dy: number }
-  onCollectionMemberSelect: (id: string, additive?: boolean) => void; onLocate?: (id: string) => void; onLocateConversationSource?: (id: string) => void; onOpenContextLens?: (node: CanvasNode, lens: 'space' | 'structure' | 'evolution') => void; onDetails: (id: string) => void; onPointerDown: (event: React.PointerEvent<HTMLDivElement>) => void; onClick: (additive: boolean, anchor: HTMLElement) => void; onResizeStart: (event: React.PointerEvent<HTMLButtonElement>) => void; relationsEnabled: boolean; onLinkStart: (event: React.PointerEvent<HTMLButtonElement>) => void
+  onCollectionMemberSelect: (id: string, additive?: boolean) => void; onLocate?: (id: string) => void; onLocateConversationSource?: (id: string) => void; onOpenContextLens?: (node: CanvasNode, lens: 'space' | 'structure' | 'evolution') => void; onDetails: (id: string) => void; onPointerDown: (event: React.PointerEvent<HTMLDivElement>) => void; onClick: (additive: boolean, anchor: HTMLElement) => void; onResizeStart: (event: React.PointerEvent<HTMLButtonElement>) => void; relationTarget: boolean; relationsEnabled: boolean; onLinkStart: (event: React.PointerEvent<HTMLButtonElement>) => void
 }) {
   const visualFamily = nodeVisualFamily(node)
   const revisionStack = (node.revisionCount ?? 0) > 1
@@ -1244,14 +1273,15 @@ function CanvasCard({ projectId, node, density, zoom, showDetails, performancePr
     runtime: runtimeSignal,
     semantic: reviewPending ? 'waiting review' : pending || node.draft ? 'candidate draft' : undefined,
   })
-  return <div data-node-id={node.id} data-node-kind={node.kind} data-entity-kind={node.entityKind} data-node-visual-family={visualFamily} data-node-current={node.current || undefined} data-node-draft={node.draft || undefined} data-node-historical={node.historical || undefined} data-revision-count={node.revisionCount} data-result-group={node.resultGroupId} data-node-runtime={node.runtimeState} data-run-status={node.runStatus} data-artifact-id={node.artifactId} data-revision-id={node.revisionId} data-file-record-id={node.fileRecordId} data-current-revision={node.followsCurrentRevision || undefined} data-preview-status={node.previewStatus} data-view-of={node.viewOf} data-scope-id={node.scopeId} data-position-locked={node.positionLocked || undefined} data-context-only={node.contextOnly || undefined} data-attention-bucket={attentionBucket} data-collection-motion={collectionMotion?.phase} data-testid={`canvas-node-${node.id}`} role="button" tabIndex={0} aria-disabled={node.disabled || undefined} className={`canvas-node node-family-${node.kind} visual-family-${visualFamily} density-${density} ${node.kind} ${revisionStack ? 'revision-stack' : ''} ${selected ? 'selected' : ''} ${multiSelected ? 'multi-selected' : ''} ${pending ? 'pending' : ''} ${reviewPending ? 'review-pending' : ''} ${dragging ? 'dragging' : ''} ${resizing ? 'resizing' : ''} ${workspaceMember ? 'workspace-active-member' : ''} ${locatePulse ? 'locate-pulse' : ''} ${attentionBucket ? `attention-${attentionBucket}` : ''} ${collectionMotion ? `collection-${collectionMotion.phase}` : ''} ${node.error ? 'error' : ''} ${node.disabled ? 'disabled' : ''} ${node.positionLocked ? 'position-locked' : ''}`} style={{ left: node.x, top: node.y, width: node.width, height: node.height, '--node-ui-scale': String(1 / Math.max(.2, zoom)), '--canvas-zoom': String(zoom), '--lcos-drag-x': String(dragSignal?.x ?? 0), '--lcos-drag-y': String(dragSignal?.y ?? 0), '--lcos-collection-fold-x': `${collectionMotion?.dx ?? 0}px`, '--lcos-collection-fold-y': `${collectionMotion?.dy ?? 0}px` } as React.CSSProperties} onDragStart={(event) => event.preventDefault()} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation() }} onPointerDown={(event) => { if (!node.disabled) onPointerDown(event) }} onClick={(event) => { event.stopPropagation(); if (!node.disabled) onClick(additiveSelection(event), event.currentTarget) }}>
+  return <div data-node-id={node.id} data-node-kind={node.kind} data-entity-kind={node.entityKind} data-node-visual-family={visualFamily} data-node-current={node.current || undefined} data-node-draft={node.draft || undefined} data-node-historical={node.historical || undefined} data-revision-count={node.revisionCount} data-result-group={node.resultGroupId} data-node-runtime={node.runtimeState} data-run-status={node.runStatus} data-artifact-id={node.artifactId} data-revision-id={node.revisionId} data-file-record-id={node.fileRecordId} data-current-revision={node.followsCurrentRevision || undefined} data-preview-status={node.previewStatus} data-view-of={node.viewOf} data-scope-id={node.scopeId} data-position-locked={node.positionLocked || undefined} data-context-only={node.contextOnly || undefined} data-attention-bucket={attentionBucket} data-reference-order={referenceOrder || undefined} data-collection-motion={collectionMotion?.phase} data-testid={`canvas-node-${node.id}`} role="button" tabIndex={0} aria-disabled={node.disabled || undefined} className={`canvas-node node-family-${node.kind} visual-family-${visualFamily} density-${density} ${node.kind} ${revisionStack ? 'revision-stack' : ''} ${selected ? 'selected' : ''} ${multiSelected ? 'multi-selected' : ''} ${pending ? 'pending' : ''} ${reviewPending ? 'review-pending' : ''} ${referenceOrder > 0 ? 'reference-picked' : ''} ${dragging ? 'dragging' : ''} ${resizing ? 'resizing' : ''} ${relationTarget ? 'is-relation-target' : ''} ${workspaceMember ? 'workspace-active-member' : ''} ${locatePulse ? 'locate-pulse' : ''} ${attentionBucket ? `attention-${attentionBucket}` : ''} ${collectionMotion ? `collection-${collectionMotion.phase}` : ''} ${node.error ? 'error' : ''} ${node.disabled ? 'disabled' : ''} ${node.positionLocked ? 'position-locked' : ''}`} style={{ left: node.x, top: node.y, width: node.width, height: node.height, '--node-ui-scale': String(1 / Math.max(.2, zoom)), '--canvas-zoom': String(zoom), '--lcos-drag-x': String(dragSignal?.x ?? 0), '--lcos-drag-y': String(dragSignal?.y ?? 0), '--lcos-collection-fold-x': `${collectionMotion?.dx ?? 0}px`, '--lcos-collection-fold-y': `${collectionMotion?.dy ?? 0}px` } as React.CSSProperties} onDragStart={(event) => event.preventDefault()} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation() }} onPointerDown={(event) => { if (!node.disabled) onPointerDown(event) }} onClick={(event) => { event.stopPropagation(); if (!node.disabled) onClick(additiveSelection(event), event.currentTarget) }}>
+    {referenceOrder > 0 && <span className="lcos-reference-pick-badge" aria-label={`引用顺序 ${referenceOrder}`}>{referenceOrder}</span>}
     <span className="lcos-semantic-drop-handle" data-semantic-drop-handle aria-hidden="true" onClick={(event)=>event.stopPropagation()} title="Semantic Drop：拖到上下文或工作流（右键拖 / Alt+左拖）"><GripVertical size={11}/></span>
     {relationsEnabled && <><button data-testid={`anchor-in-${node.id}`} className="anchor anchor-in" aria-label={`连接到 ${node.title}`} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()} />
     <button data-testid={`anchor-out-${node.id}`} className="anchor anchor-out" aria-label={`从 ${node.title} 建立连接`} onPointerDown={onLinkStart} onClick={(event) => event.stopPropagation()} /></>}
     {selected && !multiSelected && <button data-testid={`resize-${node.id}`} className="resize-handle" aria-label={`调整 ${node.title} 大小`} title="拖动调整卡片大小" onPointerDown={onResizeStart} onClick={(event) => event.stopPropagation()} />}
     {performanceProxy
       ? <div className={`lcos-overview-node-proxy proxy-${detectFileIdentity(node)}`} aria-label={displayNodeTitle(node)}><span>{detectFileIdentity(node).toUpperCase()}</span><strong>{displayNodeTitle(node)}</strong></div>
-      : <CanvasNodeVisual node={node} density={density} runId={runId} runStatus={runStatus} pending={pending} showDetails={showDetails} onDetails={() => onDetails(node.id)} onLocate={onLocate ? (target) => onLocate(target.id) : undefined} collectionExpanded={collectionExpanded} collectionMembers={collectionMembers} onCollectionMemberSelect={onCollectionMemberSelect} selected={selected} onOpenContextLens={onOpenContextLens} />}
+      : <CanvasNodeVisual node={node} density={density} zoom={zoom} runId={runId} runStatus={runStatus} pending={pending} showDetails={showDetails} onDetails={() => onDetails(node.id)} onLocate={onLocate ? (target) => onLocate(target.id) : undefined} collectionExpanded={collectionExpanded} collectionMembers={collectionMembers} onCollectionMemberSelect={onCollectionMemberSelect} selected={selected} onOpenContextLens={onOpenContextLens} />}
     {node.entityKind !== 'conversation' && node.artifactId ? <BirthProvenanceBadge projectId={projectId} artifactId={String(node.artifactId)} onLocateConversationView={onLocateConversationSource} /> : null}
     {(selected || signal.state !== 'stable') && node.width >= 56 && <span className="lcos-node-system-signal" data-spatial-signal={selected && signal.state === 'stable' ? 'focus' : signal.state} aria-hidden="true"><LcosSignalGlyph state={selected && signal.state === 'stable' ? 'focus' : signal.state}/></span>}
   </div>

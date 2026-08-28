@@ -28,7 +28,7 @@ check('Project Launcher uses Portal grid instead of project row list',
 check('Project Launcher does not show local path as primary metadata',
   !drive.includes('<small>{project.localPath}'))
 check('Project object count fails visibly unknown rather than reusing pendingCount',
-  drive.includes("project.objectCount === undefined ? '— 个对象'") && !drive.includes('project.pendingCount'))
+  drive.includes("summary ? `${summary.objectCount} 个对象` : '— 个对象'") && drive.includes('client.projectSummary(project.id)') && !drive.includes('project.pendingCount'))
 check('Project identity mark does not borrow Conversation Glyth runtime',
   !projectMark.includes('LcosGlyth') && !projectMark.includes('ConversationGlyth') && projectMark.includes('iconShapes'))
 check('Capture Inbox is lightweight launcher status, not a Capture project card',

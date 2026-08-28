@@ -192,17 +192,7 @@
 .app-shell.v05 .canvas-node.selected .node-details { opacity: 1; }
 .app-shell.v05 .anchor { width: 14px; height: 14px; border-color: rgba(58,128,242,.76); }
 
-/* Silver lines */
-.app-shell.v05 .edge { stroke: rgba(121,132,143,.34); stroke-width: 1.45px; filter: drop-shadow(0 0 2px rgba(var(--workspace-glow-rgb),.11)); }
-.app-shell.v05 .edge.reference { stroke: rgba(121,132,143,.28); stroke-dasharray: 4 7; }
-.app-shell.v05 .edge.feedback { stroke: rgba(182,145,72,.40); stroke-dasharray: 2 6; }
-.app-shell.v05 .edge.generate,
-.app-shell.v05 .edge.modify { stroke: rgba(148,156,165,.56); }
-.app-shell.v05 .edge.focused,
-.app-shell.v05 .edge.selected { stroke: rgba(177,184,191,.9); filter: drop-shadow(0 0 2px #fff) drop-shadow(0 0 7px rgba(var(--workspace-glow-rgb),.25)); }
-.app-shell.v05 .edge.dimmed { opacity: .16; }
-.app-shell.v05 .edge.generate.focused,
-.app-shell.v05 .edge.modify.focused { stroke-dasharray: 8 11; animation: silver-flow 11s linear infinite; }
+/* Relation visible stroke/state ownership lives in interaction-system.css. */
 
 /* Overlay */
 .v05-node-overlay { width: 310px; padding: 14px; border-radius: 22px; }
@@ -362,10 +352,6 @@
   .artifact-copy strong { font-size: 12.5px; }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .app-shell.v05 .edge.generate.focused,
-  .app-shell.v05 .edge.modify.focused { animation: none; }
-}
 /* Local Creative OS v0.5.1 — Surface Calibration
    Calibrates contrast, node identity, iridescent/chrome materials and the collapsed workspace rail. */
 
@@ -747,12 +733,6 @@
 /* Lines, inspector and controls                                              */
 /* -------------------------------------------------------------------------- */
 
-.app-shell.v051 .edge { stroke: rgba(104, 121, 138, .46); }
-.app-shell.v051 .edge.reference { stroke: rgba(104, 121, 138, .38); }
-.app-shell.v051 .edge.generate,
-.app-shell.v051 .edge.modify { stroke: rgba(118, 130, 143, .67); }
-.app-shell.v051 .edge.feedback { stroke: rgba(184, 132, 36, .56); }
-
 .app-shell.v051 .v05-inspector,
 .app-shell.v051 .command-composer,
 .app-shell.v051 .node-overlay {
@@ -1079,13 +1059,7 @@
 }
 .app-shell.v052 .relation-trigger.active { color: #6840d6; border-color: rgba(104,64,214,.25); background: #f2ecff; }
 
-/* Active result edge gets motion; ordinary lines remain static */
-.app-shell.v052 .edge { stroke: rgba(86,108,129,.48); stroke-width: 1.55; }
-.app-shell.v052 .edge.reference { stroke: rgba(86,108,129,.40); }
-.app-shell.v052 .edge.active,
-.app-shell.v052 .edge.selected { stroke: #7951e1; stroke-width: 2.2; stroke-dasharray: 7 7; animation: v052-edge-flow 9s linear infinite; filter: drop-shadow(0 0 3px rgba(121,81,225,.24)); }
-@keyframes v052-edge-flow { to { stroke-dashoffset: -70; } }
-
+/* Relation runtime motion is owned by interaction-system.css. */
 /* Adaptive inspector and command surfaces */
 .app-shell.v052 .v05-inspector,
 .app-shell.v052 .command-composer {
@@ -1121,10 +1095,6 @@
   .app-shell.v052 .command-composer { max-height: calc(100vh - 74px); }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .app-shell.v052 .edge.active,
-  .app-shell.v052 .edge.selected { animation: none; }
-}
 
 /* Portal surfaces live under document.body, so they cannot inherit the app-shell scope. */
 .node-overlay.v05-node-overlay.more-open {
@@ -1284,10 +1254,6 @@
   color: #9e3e38;
   border-color: rgba(168,65,58,.18);
   background: #fff0ed;
-}
-.app-shell.v053 .edge.selected {
-  stroke: #7142da;
-  stroke-width: 2.45;
 }
 .app-shell.v053 .notice {
   max-width: min(560px, calc(100vw - 40px));
@@ -1693,28 +1659,7 @@ body,
   opacity: .55;
 }
 
-.app-shell.v056 .edge {
-  filter: none !important;
-  transition: stroke 120ms ease, opacity 120ms ease !important;
-}
-
-/* Selection/focus is static. Only an actually active Run may flow. */
-.app-shell.v056 .edge.focused,
-.app-shell.v056 .edge.selected,
-.app-shell.v056 .edge.focused.generate,
-.app-shell.v056 .edge.selected.generate {
-  animation: none !important;
-  stroke-dasharray: none !important;
-}
-
-.app-shell.v056 .edge.active {
-  animation: v056-active-edge 10s linear infinite;
-  stroke-dasharray: 8 10;
-}
-
-@keyframes v056-active-edge {
-  to { stroke-dashoffset: -72; }
-}
+/* Relation visual/motion ownership lives in interaction-system.css. */
 
 .app-shell.v056 .editor-backdrop,
 .app-shell.v056 .confirm-backdrop {
@@ -1741,9 +1686,6 @@ body,
   .app-shell.v056 .prototype-reset { right: 16px; }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .app-shell.v056 .edge.active { animation: none !important; }
-}
 /*
   v0.5.6.1 — Right Rail Hotfix
   ---------------------------------
@@ -2590,6 +2532,12 @@ body,
 .canvas-create-icon.collection {
   color: #2a8f89;
   background: linear-gradient(145deg, #f3fffd, #dff3ef);
+}
+
+.canvas-create-icon.result-slot {
+  color: #625d70;
+  background: radial-gradient(circle at 50% 50%, rgba(98, 93, 112, .08), rgba(98, 93, 112, .025));
+  border: 1px solid rgba(98, 93, 112, .12);
 }
 
 .canvas-create-options > button > span:last-child {
@@ -4053,3 +4001,41 @@ body,
 }
 .project-glyph-mark { color: hsl(var(--project-portal-hue, 250) 24% 34% / .72); }
 .project-glyph-mark-body { fill: currentColor; }
+
+/* F6A2 · Project visual identity editor. This is system chrome, not a new
+   project settings panel: restrained mark/tint/pose choices live in one popover. */
+.project-profile-trigger { width: 26px; height: 26px; display: grid; place-items: center; border: 1px solid rgba(52,48,63,.08); border-radius: 8px; background: rgba(255,255,255,.68); color: var(--lcos-ui-ink-soft); cursor: pointer; -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+.project-profile-trigger:hover,
+.project-profile-trigger[aria-expanded="true"] { color: var(--lcos-ui-ink); background: rgba(255,255,255,.9); }
+.project-profile-popover { display: grid; gap: 14px; padding: 14px; color: var(--lcos-ui-ink); }
+.project-profile-popover > header { display: grid; gap: 4px; }
+.project-profile-popover > header > span { color: var(--lcos-ui-ink-faint); font: 650 8px/1 var(--lcos-font-mono, monospace); letter-spacing: .13em; }
+.project-profile-popover > header > strong { font: 650 15px/1.15 var(--lcos-font-ui, sans-serif); }
+.project-profile-popover > header > small { color: var(--lcos-ui-ink-soft); font: 500 10px/1.45 var(--lcos-font-ui, sans-serif); }
+.project-profile-preview { min-height: 82px; display: grid; place-items: center; border: 1px solid var(--lcos-ui-line); border-radius: var(--lcos-radius-lg, 16px); background: var(--lcos-ui-fill-soft, rgba(255,255,255,.34)); overflow: hidden; }
+.project-profile-preview .project-glyph-mark { color: var(--lcos-ui-ink-soft); }
+.project-profile-popover fieldset { min-width: 0; margin: 0; padding: 0; border: 0; display: grid; gap: 8px; }
+.project-profile-popover legend { padding: 0; color: var(--lcos-ui-ink-faint); font: 620 9px/1 var(--lcos-font-ui, sans-serif); }
+.project-profile-mark-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.project-profile-mark-grid button { min-width: 0; min-height: 52px; display: grid; place-items: center; gap: 3px; border: 1px solid var(--lcos-ui-line); border-radius: var(--lcos-radius-md, 12px); background: transparent; color: var(--lcos-ui-ink-soft); cursor: pointer; }
+.project-profile-mark-grid button:hover { background: var(--lcos-ui-fill-soft); color: var(--lcos-ui-ink); }
+.project-profile-mark-grid button.is-active { border-color: rgba(var(--lcos-ui-signal-rgb), .3); background: rgba(var(--lcos-ui-signal-rgb), .06); color: var(--lcos-ui-ink); }
+.project-profile-mark-grid button span:last-child { font: 520 9px/1 var(--lcos-font-ui, sans-serif); }
+.project-profile-tints { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 5px; }
+.project-profile-tints button { min-width: 0; display: grid; justify-items: center; gap: 5px; padding: 5px 2px; border: 0; background: transparent; color: var(--lcos-ui-ink-faint); cursor: pointer; }
+.project-profile-tints button > span { width: 22px; height: 22px; border-radius: 50%; border: 1px solid rgba(52,48,63,.1); background: hsl(var(--profile-tint-hue, 225) 35% 76%); box-shadow: inset 0 1px 0 rgba(255,255,255,.72); }
+.project-profile-tints button[data-tint="default"] { --profile-tint-hue: 225; }
+.project-profile-tints button[data-tint="amber"] { --profile-tint-hue: 42; }
+.project-profile-tints button[data-tint="sage"] { --profile-tint-hue: 126; }
+.project-profile-tints button[data-tint="sky"] { --profile-tint-hue: 205; }
+.project-profile-tints button[data-tint="rose"] { --profile-tint-hue: 344; }
+.project-profile-tints button[data-tint="violet"] { --profile-tint-hue: 272; }
+.project-profile-tints button.is-active > span { outline: 2px solid rgba(var(--lcos-ui-signal-rgb), .34); outline-offset: 2px; }
+.project-profile-tints small { overflow: hidden; max-width: 100%; text-overflow: ellipsis; white-space: nowrap; font: 500 8px/1 var(--lcos-font-ui, sans-serif); }
+.project-profile-sliders { display: grid; gap: 8px; }
+.project-profile-sliders label { display: grid; grid-template-columns: 36px 1fr; align-items: center; gap: 8px; color: var(--lcos-ui-ink-soft); font: 540 9px/1 var(--lcos-font-ui, sans-serif); }
+.project-profile-sliders input[type="range"] { width: 100%; accent-color: var(--lcos-ui-signal, currentColor); }
+.project-profile-popover > footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-top: 2px; }
+.project-profile-popover > footer > span { min-width: 0; color: var(--lcos-ui-ink-faint); font: 500 9px/1.2 var(--lcos-font-ui, sans-serif); }
+.project-profile-popover > footer > button { min-width: 64px; height: 30px; border: 1px solid var(--lcos-ui-line); border-radius: var(--lcos-radius-sm, 10px); background: var(--lcos-ui-fill-strong, rgba(255,255,255,.72)); color: var(--lcos-ui-ink); cursor: pointer; }
+.project-profile-popover > footer > button:disabled { opacity: .42; cursor: default; }

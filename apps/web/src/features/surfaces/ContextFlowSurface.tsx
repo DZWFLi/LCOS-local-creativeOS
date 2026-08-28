@@ -13,6 +13,7 @@ import { usePresentationDraftPositions } from '../../state/presentationDraftStat
 import { useContextTrackState } from '../../state/presentationTrackState'
 import { useSpatialSessionCamera } from '../../state/spatialSessionState'
 import { useSpatialFocusRequest, type SpatialFocusRequest } from '../spatial/useSpatialFocusRequest'
+import { miniMapVisualKindForNode } from '../spatial/minimapSemantics'
 import { addTrackSegmentMembers, createSegmentsFromStrands, ensureTrackSegmentsCoverMembers, insertTrackSegment, mergeTrackSegments, removeTrackSegmentMember, reorderTrackSegment, splitTrackSegment, toggleTrackSegmentCollapsed, trackSegmentDensity } from '../context/trackSegments'
 import type { ContextSurfaceRuntime } from './surfaceContracts'
 import { ContextLensSwitch } from './ContextLensSwitch'
@@ -164,13 +165,14 @@ export function ContextFlowSurface(props: Props) {
       const col = index % columns
       const fallback = { x: CHILD_X + col * (CHILD_WIDTH + CHILD_GAP_X), y: placement.y + 58 + row * (CHILD_HEIGHT + CHILD_GAP_Y) }
       const point = localPositions[memberId] ?? fallback
-      return { id:memberId, x:point.x, y:point.y, width:CHILD_WIDTH, height:CHILD_HEIGHT }
+      const node = nodeById.get(memberId)
+      return { id:memberId, x:point.x, y:point.y, width:CHILD_WIDTH, height:CHILD_HEIGHT, label:node?.title, visualKind:node ? miniMapVisualKindForNode(node) : 'generic' as const }
     })
-  }), [localPositions, placements])
+  }), [localPositions, nodeById, placements])
   const minimapItems = useMemo(() => [
-    ...placements.map((placement) => ({ id:`segment:${placement.id}`, x:placement.x, y:placement.y, width:placement.width, height:placement.height })),
+    ...placements.map((placement) => ({ id:`segment:${placement.id}`, x:placement.x, y:placement.y, width:placement.width, height:placement.height, label:segmentById.get(placement.id)?.label, visualKind:'context' as const })),
     ...spatialMemberItems,
-  ], [placements, spatialMemberItems])
+  ], [placements, segmentById, spatialMemberItems])
   const selectedSpatialItems = useMemo(() => spatialMemberItems.filter((item) => props.selectedIds.includes(item.id)), [props.selectedIds, spatialMemberItems])
   const focusSelected = () => {
     if (!selectedSpatialItems.length) return
@@ -194,7 +196,7 @@ export function ContextFlowSurface(props: Props) {
   // camera state must never make a populated Signal Track look empty. On each
   // concrete Context entry, verify that at least part of the track is on screen;
   // only repair the camera when the content is completely outside the viewport.
-  useSpatialFocusRequest({ request: props.focusRequest, items: spatialMemberItems, testId: 'context-flow-spatial', setCamera })
+  const spatialFocus = useSpatialFocusRequest({ request: props.focusRequest, items: spatialMemberItems, testId: 'context-flow-spatial', camera, setCamera })
 
   useEffect(() => {
     if (!placements.length) return
@@ -314,7 +316,7 @@ export function ContextFlowSurface(props: Props) {
       <div className="lcos-context-heading-actions"><div className="lcos-signal-summary"><small>{normalizedSegments.length} 段 · {props.nodes.length} 项 · 纵向顺序表达这份理解的演进</small>{unassignedIds.length > 0 && <button type="button" className="lcos-signal-focus-selection" onClick={focusUnassigned} title="选中并定位到未编排对象"><Crosshair size={11}/><span>{unassignedIds.length} 项未编排</span></button>}{selectedSpatialItems.length > 0 && <button type="button" className="lcos-signal-focus-selection" onClick={focusSelected} title="把当前选中对象定位到视区中央"><Crosshair size={11}/><span>定位选中 · {selectedSpatialItems.length}</span></button>}</div><ContextLensSwitch active="context-flow" onSelect={props.onSurfaceChange}/></div>
     </header>
     <div className={`lcos-context-origin-chip source-${props.source.kind}`} title="这只是来源记录，不是操作入口"><i/><span>{props.source.label}</span><small>来源</small></div>
-    <SpatialCanvas ref={canvasRef} camera={camera} setCamera={setCamera} marqueeItems={spatialMemberItems} minimapItems={minimapItems} minimapLabel="Context Evolution" onMarqueeSelect={props.onMarqueeSelect} className="lcos-signal-stage lcos-presentation-spatial" worldClassName="lcos-presentation-world lcos-signal-world" worldStyle={{ width: WORLD_WIDTH, height: worldHeight }} testId="context-flow-spatial" overlays={emptyOverlay} onPointerUp={() => { childDrag.current = endSpatialPointer() }} onPointerCancel={() => { childDrag.current = endSpatialPointer() }}>
+    <SpatialCanvas ref={canvasRef} camera={camera} setCamera={setCamera} marqueeItems={spatialMemberItems} minimapItems={minimapItems} minimapLabel="Context Evolution" beacon={spatialFocus.beacon} onBeaconArrivalEnd={spatialFocus.clearBeacon} onMarqueeSelect={props.onMarqueeSelect} className="lcos-signal-stage lcos-presentation-spatial" worldClassName="lcos-presentation-world lcos-signal-world" worldStyle={{ width: WORLD_WIDTH, height: worldHeight }} testId="context-flow-spatial" overlays={emptyOverlay} onPointerUp={() => { childDrag.current = endSpatialPointer() }} onPointerCancel={() => { childDrag.current = endSpatialPointer() }}>
       <SpatialEdgeLayer bounds={{ x: 0, y: 0, width: WORLD_WIDTH, height: worldHeight }} className="lcos-signal-edges" ariaLabel="Context Signal Track">
         {placements.length > 0 && <path className="lcos-signal-spine" d={`M ${SPINE_X} ${placements[0]!.y + 24} L ${SPINE_X} ${placements.at(-1)!.y + placements.at(-1)!.height - 20}`}/>}
         {placements.map((placement) => {

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Camera } from '../../model'
 import { fitSpatialBounds, spatialBoundsForPlacements } from './spatialCamera'
+import type { MiniMapVisualKind } from './minimapSemantics'
 
 export interface SpatialFocusRequest {
   readonly nonce: number
@@ -15,6 +16,8 @@ export interface SpatialFocusItem {
   readonly y: number
   readonly width: number
   readonly height: number
+  readonly label?: string
+  readonly visualKind?: MiniMapVisualKind
 }
 
 export interface SpatialBeaconState {

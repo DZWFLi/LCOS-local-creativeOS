@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowRightLeft, Unplug, X } from 'lucide-react'
-import type { ConnectedConversationV1 } from '@local-creative-os/contracts'
+import type { ConnectedConversationV1, SessionPhase } from '@local-creative-os/contracts'
 import { projectConnectedConversationStatusV1 } from '@local-creative-os/contracts'
 import type { LocalCoreClient, RuntimeCall } from '../../runtime/localCoreClient'
 import type { ProjectReceiverBindingV1 } from '@local-creative-os/contracts'

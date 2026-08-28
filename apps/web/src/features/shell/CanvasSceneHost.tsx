@@ -11,7 +11,10 @@ import { SurfaceDock, type SurfaceId } from './SurfaceDock'
 import { ProjectionSurface } from '../surfaces/ProjectionSurfaces'
 import { CanvasEmptyState, FirstArtifactGuide } from '../onboarding/CanvasEmptyState'
 import { SurfaceContextMenu, type SurfaceContextMenuAction, type SurfaceContextMenuItem } from './SurfaceContextMenu'
-import { SurfaceAgentNode, type SurfaceAgentRunState, type SurfaceAgentSubmission, type SurfaceAgentSubmissionResult } from './SurfaceAgentNode'
+import { UnifiedExecutionComposer } from '../execution/UnifiedExecutionComposer'
+import { proposalCompatibilityBlockReason, referenceCandidates, resolveComposerReceiver } from '../execution/commandDraft'
+import type { SurfaceExecutionSubmission, SurfaceExecutionSubmissionResult } from '../execution/surfaceExecution'
+import type { ConnectedConversationV1, RuntimeProviderStatus } from '@local-creative-os/contracts'
 import { ProjectResumeHint, SurfaceDepositHint, type DepositHintItem } from './BoundaryHints'
 import { CANVAS_IDLE_HINT_MS, loadBoundaryHintMemory, recordDepositHint, saveBoundaryHintMemory, shouldShowDepositHint, type BoundaryHintMemory } from '../../runtime/boundaryHintState'
 
@@ -37,8 +40,14 @@ export interface CanvasSceneHostProps {
   readonly surfaceMenu?: {
     readonly items: (surface: SurfaceId) => readonly SurfaceContextMenuItem[]
     readonly onAction: (action: SurfaceContextMenuAction) => void
-    readonly onAgentPrompt: (input: SurfaceAgentSubmission) => Promise<SurfaceAgentSubmissionResult | void> | SurfaceAgentSubmissionResult | void
-    readonly onReadAgentRun?: (runId: string) => Promise<SurfaceAgentRunState | null>
+  }
+  readonly surfaceExecution?: {
+    readonly receivers: readonly ConnectedConversationV1[]
+    readonly activeReceiverId: string | null
+    readonly providers: readonly RuntimeProviderStatus[]
+    readonly busy: boolean
+    readonly onSubmit: (input: SurfaceExecutionSubmission) => Promise<SurfaceExecutionSubmissionResult | void> | SurfaceExecutionSubmissionResult | void
+    readonly onReadReach?: (connectedConversationId: string) => Promise<number>
   }
   readonly resumeHint?: { readonly title: string; readonly subtitle?: string; readonly onContinue: () => void; readonly onDismiss: () => void } | null
   readonly idleHint?: { readonly title: string; readonly subtitle?: string } | null
@@ -58,6 +67,14 @@ export interface CanvasSceneHostProps {
 export function CanvasSceneHost(props: CanvasSceneHostProps) {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
   const [agentNode, setAgentNode] = useState<{ x: number; y: number; seedPrompt?: string; contextLabel?: string } | null>(null)
+  const [surfacePrompt, setSurfacePrompt] = useState('')
+  const [surfaceReceiverId, setSurfaceReceiverId] = useState<string | null>(null)
+  const [surfaceReferenceIds, setSurfaceReferenceIds] = useState<string[]>([])
+  const [surfaceProvider, setSurfaceProvider] = useState('auto')
+  const [surfaceIntent, setSurfaceIntent] = useState<'analyze' | 'create' | 'revise'>('analyze')
+  const [surfaceResultPolicy, setSurfaceResultPolicy] = useState<'reply_only' | 'create_artifact' | 'create_collection' | 'draft_revision_per_target'>('reply_only')
+  const [surfaceReferencePickActive, setSurfaceReferencePickActive] = useState(false)
+  const [surfaceReachCount, setSurfaceReachCount] = useState(0)
   const [resumeDismissed, setResumeDismissed] = useState(false)
   const [contextHintVisible, setContextHintVisible] = useState(false)
   const [workflowHintVisible, setWorkflowHintVisible] = useState(false)
@@ -73,6 +90,10 @@ export function CanvasSceneHost(props: CanvasSceneHostProps) {
   useEffect(() => {
     setMenu(null)
     setAgentNode(null)
+    setSurfaceReferencePickActive(false)
+    setSurfaceReferenceIds([])
+    setSurfaceReceiverId(null)
+    setSurfacePrompt('')
     setResumeDismissed(false)
     setContextHintVisible(false)
     setWorkflowHintVisible(false)
@@ -90,6 +111,10 @@ export function CanvasSceneHost(props: CanvasSceneHostProps) {
   useEffect(() => {
     setMenu(null)
     setAgentNode(null)
+    setSurfaceReferencePickActive(false)
+    setSurfaceReferenceIds([])
+    setSurfaceReceiverId(null)
+    setSurfacePrompt('')
   }, [props.surface])
 
   useEffect(() => {
@@ -159,7 +184,7 @@ export function CanvasSceneHost(props: CanvasSceneHostProps) {
   const openSurfaceMenu = (event: ReactMouseEvent<HTMLDivElement>) => {
     if (!props.surfaceMenu) return
     const target = event.target as HTMLElement
-    const interactive = target.closest('button, input, textarea, select, summary, a, [contenteditable="true"], [data-node-id], [data-context-view], .lcos-spatial-placement, .lcos-workflow-node, .lcos-signal-segment, .lcos-context-project-dot, .lcos-context-dot-node, .lcos-workflow-edge-group, .lcos-boundary-hint, .lcos-surface-agent-node')
+    const interactive = target.closest('button, input, textarea, select, summary, a, [contenteditable="true"], [data-node-id], [data-context-view], .lcos-spatial-placement, .lcos-workflow-node, .lcos-signal-segment, .lcos-context-project-dot, .lcos-context-dot-node, .lcos-workflow-edge-group, .lcos-boundary-hint, .lcos-unified-execution-composer')
     if (interactive) return
     event.preventDefault()
     markMeaningfulActivity()
@@ -167,11 +192,23 @@ export function CanvasSceneHost(props: CanvasSceneHostProps) {
     setMenu({ x: Math.max(8, Math.min(event.clientX - rect.left, rect.width - 240)), y: Math.max(8, Math.min(event.clientY - rect.top, rect.height - 280)) })
   }
 
+  const openSurfaceExecution = (input: { readonly x: number; readonly y: number; readonly seedPrompt?: string; readonly contextLabel?: string }) => {
+    if (capabilityKind === 'arrange' || !props.surfaceExecution) return
+    setAgentNode(input)
+    setSurfacePrompt(input.seedPrompt ?? '')
+    setSurfaceReferenceIds([...(props.projection.selectedIds ?? [])])
+    setSurfaceReceiverId(null)
+    setSurfaceProvider('auto')
+    setSurfaceIntent('analyze')
+    setSurfaceResultPolicy('reply_only')
+    setSurfaceReferencePickActive(false)
+  }
+
   const runMenuAction = (action: SurfaceContextMenuAction) => {
     if (action === 'summon-agent') {
       if (capabilityKind === 'arrange') return
       const point = menu ?? { x: 170, y: 120 }
-      setAgentNode({ x: point.x, y: point.y, contextLabel: `${capabilityKind === 'context' ? '上下文' : '工作流'} · ${props.projection.selectedIds?.length ?? 0} 项选择` })
+      openSurfaceExecution({ x: point.x, y: point.y, contextLabel: `${capabilityKind === 'context' ? '上下文' : '工作流'} · ${props.projection.selectedIds?.length ?? 0} 项选择` })
       return
     }
     if (action === 'review-deposits') {
@@ -183,12 +220,67 @@ export function CanvasSceneHost(props: CanvasSceneHostProps) {
   }
 
   const title = capabilityKind === 'arrange' ? '主画布' : capabilityKind === 'context' ? '上下文' : '工作流'
-  const agentContextLabel = `${title} · ${props.projection.selectedIds?.length ?? props.canvas.selectedIds?.length ?? 0} 项选择`
   // B-2 互斥：画布选中集（arrange 画布 + 投影视图并集）。
   // 同一节点同一时刻只显示一个浮层：选中态由 selection-toolbar 负责，详情 Popover 让位。
   const selectedNodeIds = new Set([...(props.canvas.selectedIds ?? []), ...(props.projection.selectedIds ?? [])])
   const contextSeed = '整理最近项目变化、Agent/Chat 对话与材料，提出值得沉淀到 Context 的内容。只做提案，不自动修改项目结构。'
   const workflowSeed = '回看最近项目工作、Agent/Chat 对话和修改记录，提出已经重复出现、值得保存为 Workflow/Skill 的方法。只做提案，不自动固化流程。'
+
+  const surfaceReceivers = props.surfaceExecution?.receivers ?? []
+  const surfaceSelectedNodes = props.projection.selectedIds.map((id) => props.projection.nodes.find((node) => node.id === id)).filter((node): node is NonNullable<typeof node> => Boolean(node))
+  const defaultSurfaceReceiver = resolveComposerReceiver(surfaceSelectedNodes, surfaceReceivers, props.surfaceExecution?.activeReceiverId ?? null)
+  const effectiveSurfaceReceiverId = surfaceReceiverId ?? defaultSurfaceReceiver.receiver?.connectedConversationId ?? null
+  const surfaceReferenceCandidates = referenceCandidates(surfaceReferenceIds, props.projection.nodes, effectiveSurfaceReceiverId, surfaceReceivers)
+  const surfaceResultSlots = surfaceSelectedNodes.filter((node) => node.resultSlotId && node.resultSlotStatus !== 'materialized')
+  const surfaceResultSlot = surfaceResultSlots.length === 1 ? surfaceResultSlots[0] ?? null : null
+  const surfaceExecutionBlockedReason = agentNode && props.surfaceExecution ? (() => {
+    if (surfaceResultSlots.length > 1) return '一次 Run 只能写入一个 Blank Result，请只保留一个结果位。'
+    const proposalGap = proposalCompatibilityBlockReason({
+      receiverId: effectiveSurfaceReceiverId,
+      activeReceiverId: props.surfaceExecution.activeReceiverId,
+      receivers: surfaceReceivers,
+      references: surfaceReferenceCandidates,
+    })
+    if (proposalGap) return proposalGap
+    if (surfaceResultSlot?.resultSlotId) return 'Core Proposal 还未携带 ResultSlot；后端补洞前不会绕过 Proposal 直接执行。'
+    return undefined
+  })() : undefined
+
+  useEffect(() => {
+    if (!agentNode || !props.surfaceExecution?.onReadReach || !effectiveSurfaceReceiverId) { setSurfaceReachCount(0); return }
+    let cancelled = false
+    void props.surfaceExecution.onReadReach(effectiveSurfaceReceiverId).then((count) => { if (!cancelled) setSurfaceReachCount(count) }).catch(() => { if (!cancelled) setSurfaceReachCount(0) })
+    return () => { cancelled = true }
+  }, [agentNode, effectiveSurfaceReceiverId, props.surfaceExecution])
+
+  const toggleSurfaceReference = (id: string) => setSurfaceReferenceIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id])
+  const moveSurfaceReference = (id: string, delta: -1 | 1) => setSurfaceReferenceIds((current) => {
+    const index = current.indexOf(id)
+    const target = index + delta
+    if (index < 0 || target < 0 || target >= current.length) return current
+    const next = [...current]
+    ;[next[index], next[target]] = [next[target]!, next[index]!]
+    return next
+  })
+  const projectionForRender = surfaceReferencePickActive
+    ? { ...props.projection, onSelect: (id: string) => toggleSurfaceReference(id), onDoubleClick: (id: string) => toggleSurfaceReference(id) }
+    : props.projection
+
+  const submitSurfaceExecution = () => {
+    if (!props.surfaceExecution || !agentNode || capabilityKind === 'arrange' || !effectiveSurfaceReceiverId || surfaceExecutionBlockedReason || !surfacePrompt.trim()) return
+    void Promise.resolve(props.surfaceExecution.onSubmit({
+      prompt: surfacePrompt.trim(),
+      surface: capabilityKind,
+      receiverId: effectiveSurfaceReceiverId,
+      referenceIds: surfaceReferenceIds,
+      provider: surfaceProvider,
+      intent: surfaceResultSlot ? 'create' : surfaceIntent,
+      resultPolicy: surfaceResultSlot ? 'create_artifact' : surfaceResultPolicy,
+      ...(surfaceResultSlot?.resultSlotId ? { resultSlotId: surfaceResultSlot.resultSlotId } : {}),
+    })).then((result) => {
+      if (result?.runId) setSurfacePrompt('')
+    })
+  }
 
   return <section className={`scene lcos-scene intent-${props.sceneData.workspaceIntent} ${props.agentSurface ? 'agent-browser-mode' : ''}`} style={props.sceneStyle} data-project-id={props.sceneData.projectId} data-scope-id={props.sceneData.scopeId ?? undefined} data-workspace-id={props.sceneData.workspaceId ?? 'project-overview'} data-workspace-intent={props.sceneData.workspaceIntent}>
     {props.capability && <CapabilityPopover {...props.capability}/>}
@@ -203,11 +295,43 @@ export function CanvasSceneHost(props: CanvasSceneHostProps) {
     </nav>}
     <div className="vnext-surface-host lcos-surface-host" data-surface={props.surface} data-lcos-context-menu-zone="true" onContextMenu={(event) => { event.preventDefault(); openSurfaceMenu(event) }} onPointerDown={() => { setMenu(null); markMeaningfulActivity() }}>
       <div className="lcos-surface-mount" data-surface-mount={props.surface}>
-        {props.surface === 'arrange' ? <ProjectCanvas {...props.canvas}/> : <ProjectionSurface {...props.projection}/>}
+        {props.surface === 'arrange' ? <ProjectCanvas {...props.canvas}/> : <ProjectionSurface {...projectionForRender}/>}
       </div>
       {props.surface === 'arrange' && props.emptyState && <CanvasEmptyState {...props.emptyState}/>}
       {menu && props.surfaceMenu && <SurfaceContextMenu x={menu.x} y={menu.y} title={title} items={props.surfaceMenu.items(props.surface)} onAction={runMenuAction} onClose={() => setMenu(null)}/>}
-      {agentNode && capabilityKind !== 'arrange' && <SurfaceAgentNode x={agentNode.x} y={agentNode.y} contextLabel={agentNode.contextLabel ?? agentContextLabel} seedPrompt={agentNode.seedPrompt} surface={capabilityKind} onSubmit={props.surfaceMenu?.onAgentPrompt ?? (() => undefined)} onReadRun={props.surfaceMenu?.onReadAgentRun} onClose={() => setAgentNode(null)}/>}
+      {agentNode && capabilityKind !== 'arrange' && props.surfaceExecution && <UnifiedExecutionComposer
+        nodes={props.projection.nodes}
+        selectedIds={props.projection.selectedIds}
+        referenceIds={surfaceReferenceIds}
+        receivers={surfaceReceivers}
+        activeReceiverId={props.surfaceExecution.activeReceiverId}
+        receiverId={effectiveSurfaceReceiverId}
+        reachCount={surfaceReachCount}
+        x={agentNode.x}
+        y={agentNode.y}
+        prompt={surfacePrompt}
+        provider={surfaceProvider}
+        createAsNewNode={surfaceIntent === 'create'}
+        intent={surfaceResultSlot ? 'create' : surfaceIntent}
+        resultPolicy={surfaceResultSlot ? 'create_artifact' : surfaceResultPolicy}
+        providers={props.surfaceExecution.providers}
+        busy={props.surfaceExecution.busy}
+        referencePickActive={surfaceReferencePickActive}
+        {...(surfaceExecutionBlockedReason ? { executionBlockedReason: surfaceExecutionBlockedReason } : {})}
+        {...(surfaceResultSlot?.resultSlotId ? { resultSlot: { id: surfaceResultSlot.resultSlotId, status: surfaceResultSlot.resultSlotStatus ?? 'empty', title: surfaceResultSlot.title } } : {})}
+        onPromptChange={setSurfacePrompt}
+        onProviderChange={setSurfaceProvider}
+        onCreateAsNewNodeChange={(value) => { setSurfaceIntent(value ? 'create' : 'analyze'); setSurfaceResultPolicy(value ? 'create_artifact' : 'reply_only') }}
+        onIntentChange={(intent) => { setSurfaceIntent(intent); setSurfaceResultPolicy(intent === 'create' ? 'create_artifact' : intent === 'revise' ? 'draft_revision_per_target' : 'reply_only') }}
+        onResultPolicyChange={setSurfaceResultPolicy}
+        onReceiverChange={setSurfaceReceiverId}
+        onRemoveReference={toggleSurfaceReference}
+        onMoveReference={moveSurfaceReference}
+        onStartReferencePick={() => setSurfaceReferencePickActive(true)}
+        onFinishReferencePick={() => setSurfaceReferencePickActive(false)}
+        onSend={submitSurfaceExecution}
+        onClose={() => { setSurfaceReferencePickActive(false); setAgentNode(null) }}
+      />}
     </div>
     {props.surface === 'arrange' && !props.emptyState && <div className="canvas-hud lcos-canvas-hud" data-testid="canvas-hud" onContextMenu={(event) => event.preventDefault()}><CanvasMiniMap {...props.miniMap}/></div>}
     {props.surface === 'arrange' && props.firstArtifactGuide && <FirstArtifactGuide {...props.firstArtifactGuide}/>}
@@ -215,8 +339,8 @@ export function CanvasSceneHost(props: CanvasSceneHostProps) {
     {props.agentSurface && <AgentContextSurface {...props.agentSurface}/>}
     {props.resumeHint && capabilityKind === 'arrange' && !resumeDismissed && <ProjectResumeHint {...props.resumeHint} onDismiss={() => { setResumeDismissed(true); props.resumeHint?.onDismiss() }}/>}
     {idleHintVisible && props.idleHint && <ProjectResumeHint eyebrow="刚才这段" title={props.idleHint.title} subtitle={props.idleHint.subtitle} onDismiss={() => setIdleEpisodeHintShown(true)}/>}
-    {contextHintVisible && capabilityKind === 'context' && contextItems.length > 0 && <SurfaceDepositHint kind="context" items={contextItems} reflection={contextEvaluatorReason ?? props.depositHints?.contextReflection} onOrganize={() => { setContextHintVisible(false); props.depositHints?.onOrganize('context'); setAgentNode({ x: 180, y: 120, seedPrompt: contextSeed, contextLabel: `上下文 · ${props.projection.selectedIds?.length ?? 0} 项选择` }) }} onDismiss={() => setContextHintVisible(false)}/>}
-    {workflowHintVisible && capabilityKind === 'workflow' && workflowItems.length > 0 && <SurfaceDepositHint kind="workflow" items={workflowItems} reflection={workflowEvaluatorReason ?? props.depositHints?.workflowReflection} onOrganize={() => { setWorkflowHintVisible(false); props.depositHints?.onOrganize('workflow'); setAgentNode({ x: 180, y: 120, seedPrompt: workflowSeed, contextLabel: `工作流 · ${props.projection.selectedIds?.length ?? 0} 项选择` }) }} onDismiss={() => setWorkflowHintVisible(false)}/>}
+    {contextHintVisible && capabilityKind === 'context' && contextItems.length > 0 && <SurfaceDepositHint kind="context" items={contextItems} reflection={contextEvaluatorReason ?? props.depositHints?.contextReflection} onOrganize={() => { setContextHintVisible(false); props.depositHints?.onOrganize('context'); openSurfaceExecution({ x: 180, y: 120, seedPrompt: contextSeed, contextLabel: `上下文 · ${props.projection.selectedIds?.length ?? 0} 项选择` }) }} onDismiss={() => setContextHintVisible(false)}/>}
+    {workflowHintVisible && capabilityKind === 'workflow' && workflowItems.length > 0 && <SurfaceDepositHint kind="workflow" items={workflowItems} reflection={workflowEvaluatorReason ?? props.depositHints?.workflowReflection} onOrganize={() => { setWorkflowHintVisible(false); props.depositHints?.onOrganize('workflow'); openSurfaceExecution({ x: 180, y: 120, seedPrompt: workflowSeed, contextLabel: `工作流 · ${props.projection.selectedIds?.length ?? 0} 项选择` }) }} onDismiss={() => setWorkflowHintVisible(false)}/>}
     {/* B-2：节点已被选中时 selection-toolbar 正在显示，详情 Popover 与其互斥（同节点不叠两个浮层）。 */}
     {props.nodeInfo && !selectedNodeIds.has(props.nodeInfo.node.id) && <NodeInfoPopover {...props.nodeInfo}/>}
     {props.layoutPreview && <div className="layout-preview-banner lcos-layout-preview"><span>预览布局</span><button onClick={props.layoutPreview.onApply}>应用</button><button onClick={props.layoutPreview.onCancel}>取消</button></div>}

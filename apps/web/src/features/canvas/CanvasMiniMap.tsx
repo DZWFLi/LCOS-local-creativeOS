@@ -1,7 +1,9 @@
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Camera, CanvasNode, WorkspaceFrameVM } from '../../model'
 import { Grid3X3, Maximize2, Minus, Plus } from 'lucide-react'
 import { cameraSafeViewportBounds, CANVAS_ZOOM_STEP, fitBoundsForReading, getSelectionBounds, restorationFocusBounds, type SafeInsets, zoomCameraAt } from './canvasGeometry'
+import { miniMapVisualKindForNode } from '../spatial/minimapSemantics'
+import type { SpatialFocusRequest } from '../spatial/useSpatialFocusRequest'
 
 interface Props {
   nodes: CanvasNode[]
@@ -14,6 +16,7 @@ interface Props {
   onLocateContent?: () => void
   gridSnapEnabled?: boolean
   onGridSnapChange?: (enabled: boolean) => void
+  navigationRequest?: SpatialFocusRequest
 }
 
 type MapTransform = {
@@ -55,9 +58,10 @@ function makeTransform(bounds: ReturnType<typeof projectBounds>, mapWidth: numbe
   }
 }
 
-export function CanvasMiniMap({ nodes, workspaceFrames, camera, setCamera, collapsed, onCollapsedChange, safeInsets, onLocateContent, gridSnapEnabled = true, onGridSnapChange }: Props) {
+export function CanvasMiniMap({ nodes, workspaceFrames, camera, setCamera, collapsed, onCollapsedChange, safeInsets, onLocateContent, gridSnapEnabled = true, onGridSnapChange, navigationRequest }: Props) {
   const mapRef = useRef<HTMLDivElement | null>(null)
   const drag = useRef<{ x: number; y: number; camera: Camera; scale: number } | null>(null)
+  const [beaconNonce, setBeaconNonce] = useState<number | null>(null)
   const viewport = typeof document !== 'undefined' ? document.querySelector<HTMLElement>('[data-testid="canvas"]')?.getBoundingClientRect() : undefined
   const viewportWidth = viewport?.width ?? 1400
   const viewportHeight = viewport?.height ?? 900
@@ -83,6 +87,15 @@ export function CanvasMiniMap({ nodes, workspaceFrames, camera, setCamera, colla
   const stepZoom = (delta: number) => setCamera((current) => zoomCameraAt(current, current.zoom + delta, viewportCenter.x, viewportCenter.y))
   const resetZoom = () => setCamera((current) => zoomCameraAt(current, 1, viewportCenter.x, viewportCenter.y))
   const viewWorld = cameraSafeViewportBounds(camera, viewportWidth, viewportHeight, safeInsets)
+
+  useEffect(() => {
+    if (!navigationRequest) { setBeaconNonce(null); return }
+    setBeaconNonce(navigationRequest.nonce)
+    const timer = window.setTimeout(() => setBeaconNonce((current) => current === navigationRequest.nonce ? null : current), 900)
+    return () => window.clearTimeout(timer)
+  }, [navigationRequest?.nonce])
+
+  const activeBeaconIds = beaconNonce === navigationRequest?.nonce ? new Set(navigationRequest?.ids ?? []) : new Set<string>()
 
   if (collapsed) return <section className="minimap minimap-collapsed"><button aria-label="展开小地图" onClick={() => onCollapsedChange(false)}><Maximize2 size={13} /></button></section>
 
@@ -119,7 +132,7 @@ export function CanvasMiniMap({ nodes, workspaceFrames, camera, setCamera, colla
         if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
       }}>
       {workspaceFrames.map((frame) => <span key={frame.workspaceId} data-minimap-workspace-frame={frame.workspaceId} className={frame.active ? 'map-workspace active' : 'map-workspace'} style={{ left: worldToMapX(frame.bounds.x), top: worldToMapY(frame.bounds.y), width: frame.bounds.width * transform.scale, height: frame.bounds.height * transform.scale }} />)}
-      {nodes.map((node) => <i key={node.id} data-testid={`minimap-node-${node.id}`} data-minimap-node-id={node.id} data-minimap-view-id={node.id} data-minimap-artifact-id={node.artifactId ?? ''} data-minimap-scope-id={node.scopeId ?? 'scope-root'} data-minimap-visible="true" title={`${node.id} / ${node.scopeId ?? 'scope-root'}`} style={{ left: worldToMapX(node.x), top: worldToMapY(node.y), width: Math.max(3, node.width * transform.scale), height: Math.max(2, node.height * transform.scale) }} />)}
+      {nodes.map((node) => <i key={node.id} data-testid={`minimap-node-${node.id}`} data-minimap-node-id={node.id} data-minimap-view-id={node.id} data-minimap-artifact-id={node.artifactId ?? ''} data-minimap-scope-id={node.scopeId ?? 'scope-root'} data-minimap-visible="true" data-minimap-kind={miniMapVisualKindForNode(node)} data-minimap-beacon={activeBeaconIds.has(node.id) || undefined} title={node.title} style={{ left: worldToMapX(node.x), top: worldToMapY(node.y), width: Math.max(3, node.width * transform.scale), height: Math.max(2, node.height * transform.scale) }} />)}
       <b data-camera-rect="true" data-testid="minimap-camera-rect" style={{ left: worldToMapX(viewWorld.x), top: worldToMapY(viewWorld.y), width: viewWorld.width * transform.scale, height: viewWorld.height * transform.scale }} />
     </div>
     <div className="map-controls"><button aria-label="缩小画布 5%" onClick={() => stepZoom(-CANVAS_ZOOM_STEP)}><Minus size={13} /></button><button className="map-zoom-value" aria-label="恢复 100% 缩放" title="恢复 100%" onClick={resetZoom}>{Math.round(camera.zoom * 100)}%</button><button aria-label="放大画布 5%" onClick={() => stepZoom(CANVAS_ZOOM_STEP)}><Plus size={13} /></button>{onGridSnapChange && <button className={`map-grid-snap ${gridSnapEnabled ? 'active' : ''}`} aria-pressed={gridSnapEnabled} aria-label={gridSnapEnabled ? '关闭网格吸附' : '开启网格吸附'} title={gridSnapEnabled ? '网格吸附已开启' : '开启网格吸附'} onClick={() => onGridSnapChange(!gridSnapEnabled)}><Grid3X3 size={12} /></button>}<button className="map-fit-content" aria-label="定位内容" title="定位内容" onClick={fitContent}><Maximize2 size={12} /></button></div>

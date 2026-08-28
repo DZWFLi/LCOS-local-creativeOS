@@ -9,6 +9,7 @@ import { SpatialNodeLayer } from '../spatial/SpatialNodeLayer'
 import { fitSpatialBounds, spatialBoundsForPlacements } from '../spatial/spatialCamera'
 import { useSpatialSessionCamera } from '../../state/spatialSessionState'
 import { useSpatialFocusRequest, type SpatialFocusRequest } from '../spatial/useSpatialFocusRequest'
+import { miniMapVisualKindForNode } from '../spatial/minimapSemantics'
 import { beginSemanticDrop } from '../spatial/semanticDrop'
 import { DropFeedbackLayer } from '../drop/dropFeedbackLayer'
 import { useSemanticDropFeedback } from '../drop/useSemanticDropFeedback'
@@ -103,7 +104,15 @@ export function WorkflowGraphSurface(props: Props) {
   }),[placementByEndpoint,props.edges])
   const bounds=useMemo(()=>spatialBoundsForPlacements(allPlacements,70),[allPlacements])
   const worldWidth=Math.max(1280,bounds.x+bounds.width+100),worldHeight=Math.max(760,bounds.y+bounds.height+100)
-  const spatialItems=useMemo(()=>allPlacements.map((item)=>({id:item.id,x:item.x,y:item.y,width:item.width,height:item.height})),[allPlacements])
+  const spatialItems=useMemo(()=>allPlacements.map((item)=>({
+    id:item.id,
+    x:item.x,
+    y:item.y,
+    width:item.width,
+    height:item.height,
+    label:item.node?.title ?? item.workflow?.title,
+    visualKind:item.node ? miniMapVisualKindForNode(item.node) : 'workflow' as const,
+  })),[allPlacements])
 
   useEffect(()=>{
     if(checked.current||!allPlacements.length)return
@@ -111,7 +120,7 @@ export function WorkflowGraphSurface(props: Props) {
     return()=>cancelAnimationFrame(frame)
   },[allPlacements.length,bounds,setCamera])
 
-  useSpatialFocusRequest({request:props.focusRequest,items:spatialItems,testId:'workflow-graph-spatial',setCamera})
+  const spatialFocus=useSpatialFocusRequest({request:props.focusRequest,items:spatialItems,testId:'workflow-graph-spatial',camera,setCamera})
   const workflowRunStatus=(workflow:WorkflowViewSummary):'active'|'failed'|'completed'|'idle'=>{
     const ids=[...workflow.memberViewIds,...(workflow.memberEntityNodeIds??[])]
     if(props.runOverlay?.failedNodeIds.some((id)=>ids.includes(id)))return 'failed'
@@ -146,7 +155,7 @@ export function WorkflowGraphSurface(props: Props) {
   return <>
   <section className="lcos-dedicated-surface lcos-workflow-graph-surface" data-testid="surface-workflow-graph">
     <header className="lcos-surface-heading"><div><strong>工作流</strong><span>Workflow Graph</span></div><small>{workflows.length} 个 Workflow · {sourceNodes.length} 个参与对象 · 单击选中 / 双击进入</small></header>
-    <SpatialCanvas ref={canvasRef} camera={camera} setCamera={setCamera} marqueeItems={spatialItems} minimapItems={spatialItems} minimapLabel="Workflow Graph" onMarqueeSelect={props.onMarqueeSelect} className="lcos-workflow-graph-stage lcos-presentation-spatial" worldClassName="lcos-presentation-world lcos-workflow-graph-world" worldStyle={{width:worldWidth,height:worldHeight}} testId="workflow-graph-spatial" overlays={empty}>
+    <SpatialCanvas ref={canvasRef} camera={camera} setCamera={setCamera} marqueeItems={spatialItems} minimapItems={spatialItems} minimapLabel="Workflow Graph" beacon={spatialFocus.beacon} onBeaconArrivalEnd={spatialFocus.clearBeacon} onMarqueeSelect={props.onMarqueeSelect} className="lcos-workflow-graph-stage lcos-presentation-spatial" worldClassName="lcos-presentation-world lcos-workflow-graph-world" worldStyle={{width:worldWidth,height:worldHeight}} testId="workflow-graph-spatial" overlays={empty}>
       <SpatialEdgeLayer bounds={{x:0,y:0,width:worldWidth,height:worldHeight}} className="lcos-workflow-graph-edges" ariaLabel="Workflow Graph 关系">
         <defs><marker id="lcos-workflow-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M 0 0 L 8 4 L 0 8 z"/></marker></defs>
         {membershipEdges.map(({id,from,to})=>{const sx=from.x+from.width,sy=from.y+from.height/2,tx=to.x,ty=to.y+to.height/2,mx=(sx+tx)/2;return <g key={id} className="membership"><path markerEnd="url(#lcos-workflow-arrow)" d={`M ${sx} ${sy} C ${mx} ${sy}, ${mx} ${ty}, ${tx} ${ty}`}/><text x={mx} y={(sy+ty)/2-5} textAnchor="middle">参与</text></g>})}

@@ -17,6 +17,7 @@ import { visualFamilyFor } from '../presentation/visualFamily'
 import { ConversationGlyth, conversationActivityScore } from '../conversations/ConversationGlyth'
 import { glythStateFromSessionPhase } from '../conversations/conversationLifecycle'
 import { OcrImage } from '../ocr/OcrImage'
+import { documentOutlinePreview, documentSemanticLevel, type DocumentSemanticLevel } from '../spatial/documentSemanticZoom'
 import {
   ArchiveGlyph,
   AudioGlyph,
@@ -47,13 +48,16 @@ export interface Props {
   collectionMembers?: readonly CanvasNode[]
   onCollectionMemberSelect?: (id: string, additive?: boolean) => void
   selected?: boolean
+  /** World camera zoom for document Semantic Zoom. Surface renderers may omit it. */
+  zoom?: number
   onOpenContextLens?: (node: CanvasNode, lens: 'space' | 'structure' | 'evolution') => void
 }
 
-export type NodeVisualFamily = 'reference' | 'document' | 'note' | 'context' | 'process' | 'decision'
+export type NodeVisualFamily = 'reference' | 'document' | 'note' | 'context' | 'process' | 'decision' | 'result-slot'
 export type FileIdentity = 'image' | 'video' | 'audio' | 'pdf' | 'ppt' | 'markdown' | 'link' | 'archive' | 'file'
 
 export function nodeVisualFamily(node: CanvasNode): NodeVisualFamily {
+  if (node.resultSlotId && (node.resultSlotStatus !== 'materialized' || !node.artifactId)) return 'result-slot'
   const visual = visualFamilyFor({
     artifactKind: node.fileType,
     mimeType: node.previewMimeType,
@@ -79,6 +83,7 @@ export function nodeVisualFamily(node: CanvasNode): NodeVisualFamily {
 
 export const CanvasNodeVisual = memo(function CanvasNodeVisual(props: Props) {
   const family = nodeVisualFamily(props.node)
+  if (family === 'result-slot') return <ResultSlotObject {...props} />
   if (family === 'process') return <RunObject {...props} />
   if (family === 'context') {
     // §4.7 卡片 Registry（context 族已全量入表，20260826 做实）：查表即分发；
@@ -101,16 +106,34 @@ export const CanvasNodeVisual = memo(function CanvasNodeVisual(props: Props) {
   && previous.collectionExpanded === next.collectionExpanded
   && previous.collectionMembers === next.collectionMembers
   && previous.selected === next.selected
+  && previous.zoom === next.zoom
   && previous.onOpenContextLens === next.onOpenContextLens
 ))
 
-function ContentObject({ node, density, pending, onDetails, showDetails, showControls = true }: Props) {
+
+function ResultSlotObject({ node }: Props) {
+  const status = node.resultSlotStatus ?? 'empty'
+  const label = status === 'running' ? '生成中' : status === 'review' ? '等待确认' : status === 'materialized' ? '已物化' : '空白结果'
+  return <div className={`lcos-result-slot-body is-${status}`} data-result-slot-id={node.resultSlotId} data-result-slot-status={status}>
+    <span className="lcos-result-slot-corner is-tl" aria-hidden="true"/>
+    <span className="lcos-result-slot-corner is-tr" aria-hidden="true"/>
+    <span className="lcos-result-slot-corner is-bl" aria-hidden="true"/>
+    <span className="lcos-result-slot-corner is-br" aria-hidden="true"/>
+    <div className="lcos-result-slot-center">
+      <i aria-hidden="true"/>
+      <strong>{label}</strong>
+      <small>{status === 'empty' ? '结果类型由接受的 Return 决定' : node.title}</small>
+    </div>
+  </div>
+}
+
+function ContentObject({ node, density, pending, onDetails, showDetails, showControls = true, selected, zoom }: Props) {
   const kind = detectFileIdentity(node)
   if (kind === 'image') return <ImageObject node={node} pending={pending} onDetails={onDetails} showDetails={showDetails} showControls={showControls} />
   if (kind === 'link') return <LinkObject node={node} pending={pending} onDetails={onDetails} showDetails={showDetails} showControls={showControls} />
   if (kind === 'video') return <MediaObject node={node} kind="video" onDetails={onDetails} showDetails={showDetails} showControls={showControls} />
   if (kind === 'audio') return <MediaObject node={node} kind="audio" onDetails={onDetails} showDetails={showDetails} showControls={showControls} />
-  return <DocumentObject node={node} kind={kind} density={density} pending={pending} onDetails={onDetails} showDetails={showDetails} showControls={showControls} />
+  return <DocumentObject node={node} kind={kind} density={density} pending={pending} onDetails={onDetails} showDetails={showDetails} showControls={showControls} selected={selected} zoom={zoom} />
 }
 
 /** 图片加载三态（纯状态机）：loading → ready/error；retry/reset 通过 key 重置重新加载。 */
@@ -152,7 +175,7 @@ function ImageObject({ node, pending, onDetails, showDetails, showControls = tru
   </div>
 }
 
-function DocumentObject({ node, kind, density, pending, onDetails, showDetails, showControls = true }: Pick<Props, 'node' | 'density' | 'pending' | 'onDetails' | 'showDetails' | 'showControls'> & { kind: FileIdentity }) {
+function DocumentObject({ node, kind, density, pending, onDetails, showDetails, showControls = true, selected, zoom }: Pick<Props, 'node' | 'density' | 'pending' | 'onDetails' | 'showDetails' | 'showControls' | 'selected' | 'zoom'> & { kind: FileIdentity }) {
   const tag = kind === 'markdown' ? 'TEXT' : kind === 'ppt' ? 'PPT' : kind === 'pdf' ? 'PDF' : kind === 'archive' ? 'ZIP' : fileExtension(node.title) || 'FILE'
   // 文本类（markdown）统一编辑体系统一：就地编辑保存的 noteBody 优先于服务器 previewText，
   // 富文本（**粗体**/==高光==/# 标题）即刻渲染在卡片上，而不是退回纸片。
@@ -162,18 +185,16 @@ function DocumentObject({ node, kind, density, pending, onDetails, showDetails, 
   const title = displayNodeTitle(node)
   const secondary = nodeSecondaryLine(node)
   const mindmap = kind === 'markdown' && node.noteLayout === 'mindmap'
-  const readableText = kind === 'markdown' && Boolean(preview) && density !== 'compact'
+  const readableText = kind === 'markdown' && Boolean(preview)
+  const semanticLevel = kind === 'markdown' ? documentSemanticLevel({ density, ...(zoom === undefined ? {} : { zoom }), selected }) : null
 
-  return <div className={`lcos-object lcos-document-object lcos-material-face lcos-node-dot-identity file-${kind} ${mindmap || readableText ? 'is-direct-reading' : 'is-collapsed-material'}`} title={node.title}>
+  return <div data-document-semantic-level={semanticLevel ?? undefined} className={`lcos-object lcos-document-object lcos-material-face lcos-node-dot-identity file-${kind} ${mindmap || readableText ? 'is-direct-reading' : 'is-collapsed-material'}`} title={node.title}>
     {mindmap
       ? <MindMapNoteVisual node={node} density={density}/>
       : thumbnail && !preview
         ? <div className="lcos-document-thumbnail lcos-real-document-preview"><OcrImage artifactId={node.artifactId} ocrEnabled={false} src={thumbnail} alt={`${title} 预览`} draggable={false} onDragStart={(event) => event.preventDefault()}/><span>{tag}</span></div>
         : readableText && preview
-          // A-1 双轨 LOD：expanded（用户已展开）→ Crepe 只读真渲染；standard 维持 11 行摘要。
-          ? <div className="lcos-readable-document">{density === 'expanded'
-            ? <CrepeHost className="lcos-md-preview" markdown={preview} />
-            : <TextPreview text={preview} expanded={false} />}</div>
+          ? <DocumentSemanticBody level={semanticLevel ?? 'outline'} title={title} markdown={preview} expanded={density === 'expanded'} />
           : <MaterialIdentityFallback node={node} kind={kind} tag={tag}/>}
     <div className="lcos-object-caption lcos-material-caption lcos-material-body">
       <strong>{title}</strong>
@@ -262,6 +283,22 @@ function MaterialPaperFallback({ node, kind, tag }: { node: CanvasNode; kind: Fi
     <b className="lcos-file-identity-name" title={name}>{firstLine ?? name}</b>
     <small>{documentPreviewStateCopy(node)}</small>
   </div>
+}
+
+function DocumentSemanticBody({ level, title, markdown, expanded, curtain = false }: { level: DocumentSemanticLevel; title: string; markdown: string; expanded: boolean; curtain?: boolean }) {
+  if (level === 'title') return <div className="lcos-document-title-identity"><strong>{title}</strong></div>
+  if (level === 'outline') {
+    const headings = documentOutlinePreview(markdown)
+    return <div className={`lcos-document-outline-preview ${curtain ? 'lcos-text-curtain-sheet' : ''}`}>
+      <strong className="lcos-document-outline-title">{title}</strong>
+      {headings.length > 0
+        ? <ol>{headings.map((heading) => <li key={`${heading.line}:${heading.label}`} data-heading-depth={heading.depth}><span>{heading.label}</span></li>)}</ol>
+        : <TextPreview text={markdown} expanded={false}/>}
+    </div>
+  }
+  return <div className={`lcos-readable-document ${curtain ? 'lcos-text-curtain-sheet' : ''}`}>{expanded
+    ? <CrepeHost className="lcos-md-preview" markdown={markdown}/>
+    : <TextPreview text={markdown} expanded={false}/>}</div>
 }
 
 function CollapsedNotePaper({ node }: { node: CanvasNode }) {
@@ -514,17 +551,16 @@ function DecisionObject({ node, onDetails, showDetails, showControls = true }: P
   return <div className="lcos-object lcos-decision-object lcos-material-face" title={node.title}><DecisionGlyph className="lcos-node-dot-identity lcos-material-accent"/><div className="lcos-material-body"><strong>{title}</strong><small>{node.subtitle}</small></div><InfoButton show={showControls && showDetails} label={`查看 ${title} 信息`} onDetails={onDetails}/></div>
 }
 
-function NoteObject({ node, density, onDetails, showDetails, showControls = true, onLocate }: Props) {
+function NoteObject({ node, density, onDetails, showDetails, showControls = true, onLocate, selected, zoom }: Props) {
   const body = node.noteBody?.trim()
   const title = displayNodeTitle(node)
-  const directRead = density !== 'compact' && Boolean(body)
+  const directRead = Boolean(body)
+  const semanticLevel = documentSemanticLevel({ density, ...(zoom === undefined ? {} : { zoom }), selected })
   const mindmap = node.noteLayout === 'mindmap'
-  return <div className={`lcos-object lcos-note-object lcos-material-face ${mindmap ? 'is-mindmap' : directRead ? 'is-direct-reading' : 'is-collapsed-material'}`} title={node.title}>
+  return <div data-document-semantic-level={mindmap ? undefined : semanticLevel} className={`lcos-object lcos-note-object lcos-material-face ${mindmap ? 'is-mindmap' : directRead ? 'is-direct-reading' : 'is-collapsed-material'}`} title={node.title}>
     {mindmap ? <MindMapNoteVisual node={node} density={density}/> : directRead && body ? <>
-      <span className="lcos-text-curtain-rail" aria-hidden="true"><i/><b/><i/></span>
-      <div className="lcos-readable-document lcos-text-curtain-sheet">{density === 'expanded'
-              ? <CrepeHost className="lcos-md-preview" markdown={body} />
-              : <TextPreview text={body} expanded={false} />}</div>
+      {semanticLevel !== 'title' && <span className="lcos-text-curtain-rail" aria-hidden="true"><i/><b/><i/></span>}
+      <DocumentSemanticBody level={semanticLevel} title={title} markdown={body} expanded={density === 'expanded'} curtain />
     </> : <CollapsedNotePaper node={node}/>}
     <div className={`lcos-material-caption lcos-material-body ${directRead ? 'lcos-text-curtain-caption' : ''}`}><strong>{title}</strong>{nodeSecondaryLine(node) && <small>{nodeSecondaryLine(node)}</small>}</div>
     {showControls && Boolean(node.anchors?.length) && <button className="lcos-note-locate" type="button" aria-label="定位到锚定对象" title="定位到锚定对象" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onLocate?.(node) }}><LocateFixed size={12}/><b>定位</b></button>}

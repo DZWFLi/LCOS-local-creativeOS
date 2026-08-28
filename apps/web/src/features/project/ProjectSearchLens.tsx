@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Boxes, File, FileText, Link2, LoaderCircle, MessageCircle, Search, Workflow, X } from 'lucide-react'
-import type { SearchHitV0 } from '@local-creative-os/contracts'
+import type { SearchHitVNext } from '@local-creative-os/contracts'
 import type { ProjectPackage } from '../../model'
 import type { LocalCoreClient } from '../../runtime/localCoreClient'
 import { searchProjectFocusEntries, type ProjectFocusSearchEntry } from '../../state/projectFocus'
@@ -19,6 +19,9 @@ type SearchLensItem = {
   readonly source?: string
   readonly score?: number
   readonly conversationId?: string
+  readonly matchReason?: SearchHitVNext['matchReason']
+  readonly matchModality?: SearchHitVNext['matchModality']
+  readonly locationCount?: number
 }
 
 function anchorLabel(anchor: string): string {
@@ -43,18 +46,35 @@ function humanKind(kind: string): string {
   return '项目对象'
 }
 
-function resultFromRemote(hit: SearchHitV0): SearchLensItem {
+function resultFromRemote(hit: SearchHitVNext): SearchLensItem {
   return {
     key: `${hit.entityType}:${hit.entityId}`,
     title: hit.title,
     kind: hit.entityType,
-    ...(hit.viewId ? { sourceIds: [hit.viewId] } : {}),
+    ...(hit.entityRef?.viewId || hit.viewId ? { sourceIds: [hit.entityRef?.viewId ?? hit.viewId!] } : {}),
     ...(hit.entityType === 'artifact' ? { artifactId: hit.entityId } : {}),
     ...(hit.entityType === 'conversation' ? { conversationId: hit.entityId } : {}),
     snippet: hit.snippet,
     chunkAnchor: hit.chunkAnchor,
     source: hit.source,
     score: hit.score,
+    matchReason: hit.matchReason,
+    matchModality: hit.matchModality,
+    locationCount: hit.locationCount,
+  }
+}
+
+function matchReasonLabel(item: SearchLensItem): string | undefined {
+  switch (item.matchReason) {
+    case 'title': return '标题命中'
+    case 'body': return '正文命中'
+    case 'ocr': return '图片文字'
+    case 'semantic': return '语义相近'
+    case 'visual': return '视觉相近'
+    case 'source': return '来源命中'
+    case 'relation': return '关系关联'
+    case 'metadata': return '内容命中'
+    default: return undefined
   }
 }
 
@@ -206,7 +226,7 @@ export function ProjectSearchLens({ open, project, client, onClose, onSelectArti
           <SearchIdentity item={item}/>
           <span className="project-search-result-copy">
             <strong>{item.title}</strong>
-            <small><b>{humanKind(item.kind)}</b>{item.chunkAnchor && <em>{anchorLabel(item.chunkAnchor)}</em>}{item.source && <span>{item.source}</span>}</small>
+            <small><b>{humanKind(item.kind)}</b>{matchReasonLabel(item) && <em>{matchReasonLabel(item)}</em>}{item.chunkAnchor && <em>{anchorLabel(item.chunkAnchor)}</em>}{item.locationCount !== undefined && item.locationCount > 0 ? <span>{item.locationCount} 处出现</span> : null}</small>
             {item.snippet && <p>{item.snippet}</p>}
           </span>
         </button>)}
