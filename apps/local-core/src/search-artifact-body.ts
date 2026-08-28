@@ -8,7 +8,10 @@
  *   planPageChunks 约定 → anchor 形如 pdf:p3 / pdf:p3-p5），页数上限保护；
  * - 图片（png/jpg/jpeg/webp/gif/bmp）：正文 = OCR evidence（显式跑过 /runtime/ocr
  *   落库）；没有 evidence 时返回空串——绝不拿 filename 冒充图片语义索引。
- * - 其余类型（docx/pptx 等）：空串（标题块仍可检索），等选型后接入。
+ * - docx/pptx（B6 P1-A）：fflate 解 zip 容器提取正文文本——docx 取 word/document.xml
+ *   的 <w:t> run（段落间 \\n，anchor docx:pN）；pptx 取 ppt/slides/slideN.xml 的
+ *   <a:t> run（页间 \\f，anchor pptx:slideN 与 PDF 页约定同构）；损坏/非标容器返回空串。
+ * - 其余类型：空串（标题块仍可检索）。visual embedding 选型见回传（未启动）。
  */
 import { open, readFile } from 'node:fs/promises'
 
@@ -49,6 +52,59 @@ async function readTextPrefix(observedPath: string | undefined, maxChars: number
  * PDF 页文本提取（pdfjs-dist，node 端与 preview-worker 同一使用模式）。
  * 返回页文本以 \f 连接的单串；无文本层（纯扫描件）返回空串——OCR 是它的正道。
  */
+const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+const PPTX_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+/** OOXML 单部件文本字符上限（docx document.xml / pptx 单 slide）。 */
+const OOXML_PART_CHAR_LIMIT = 60_000
+const PPTX_SLIDE_LIMIT = 200
+
+/**
+ * B6 P1-A：OOXML（docx/pptx）静态正文提取。
+ * fflate 解 zip 容器（pdfjs-dist 内部同款解压库）→ 解析对应 XML 部件的文本 run：
+ * - docx：word/document.xml 的 <w:t>…</w:t>，</w:p> 段落边界 → 段落间 \n（anchor docx:pN）；
+ * - pptx：ppt/slides/slide<N>.xml 的 <a:t>…</a:t>，slide 间 \f（anchor pptx:slideN）。
+ * 损坏/非标容器 → 空串（诚实缺席，标题块仍可检索）。
+ */
+export async function extractOoxmlText(observedPath: string, kind: 'docx' | 'pptx'): Promise<string> {
+  const { unzipSync, strFromU8 } = await import('fflate')
+  const bytes = new Uint8Array(await readFile(observedPath))
+  const entries = unzipSync(bytes, { filter: (file) => kind === 'docx'
+    ? file.name === 'word/document.xml'
+    : file.name.startsWith('ppt/slides/slide') && file.name.endsWith('.xml') })
+  if (kind === 'docx') {
+    const data = entries['word/document.xml']
+    if (data === undefined) return ''
+    const xml = strFromU8(data).slice(0, OOXML_PART_CHAR_LIMIT * 4)
+    // </w:p> = 段落边界 → \n；<w:t> 内为文本 run。
+    return xml
+      .replace(/<w:p[ >]/g, '\n<w:p ')
+      .replace(/<\/w:p>/g, '\n')
+      .replace(/<[^>]+>/g, '')
+      .replace(/[ \t]+/g, ' ')
+      .replace(/\n\s*\n+/g, '\n')
+      .trim()
+      .slice(0, OOXML_PART_CHAR_LIMIT)
+  }
+  const slideNumbers = Object.keys(entries)
+    .map((name) => Number(/^ppt\/slides\/slide(\d+)\.xml$/.exec(name)?.[1] ?? Number.NaN))
+    .filter((n) => Number.isInteger(n))
+    .sort((a, b) => a - b)
+    .slice(0, PPTX_SLIDE_LIMIT)
+  const slides: string[] = []
+  for (const slideNumber of slideNumbers) {
+    const xml = strFromU8(entries[`ppt/slides/slide${slideNumber}.xml`]!).slice(0, OOXML_PART_CHAR_LIMIT * 4)
+    const text = xml
+      .replace(/<\/a:p>/g, '\n')
+      .replace(/<[^>]+>/g, '')
+      .replace(/[ \t]+/g, ' ')
+      .replace(/\n\s*\n+/g, '\n')
+      .trim()
+      .slice(0, OOXML_PART_CHAR_LIMIT)
+    slides.push(text)
+  }
+  return slides.join('\f')
+}
+
 export async function extractPdfPageText(observedPath: string): Promise<string> {
   const { getDocument } = await import('pdfjs-dist')
   const data = new Uint8Array(await readFile(observedPath))
@@ -100,6 +156,13 @@ export async function readArtifactIndexBody(input: {
       return await extractPdfPageText(fileRecord.observedPath)
     } catch {
       return '' // 损坏/加密 PDF：标题块仍可检索，正文诚实缺席
+    }
+  }
+  if (mimeType === DOCX_MIME || mimeType === PPTX_MIME) {
+    try {
+      return await extractOoxmlText(fileRecord.observedPath, mimeType === DOCX_MIME ? 'docx' : 'pptx')
+    } catch {
+      return '' // 损坏/非标容器：标题块仍可检索，正文诚实缺席
     }
   }
   if (mimeType.startsWith(IMAGE_MIME_PREFIX) && input.ocrEvidence !== undefined

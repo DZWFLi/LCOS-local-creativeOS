@@ -637,41 +637,31 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
 
       if (method === 'GET' && pathname === '/runtime/captures/staging') {
         const db = routeRequireMetadata({ metadata, response, helpers: routeHelpers }); if (db === undefined) return
-        if (captureStaging === undefined) {
-          sendJson(response, 503, failure('UNAVAILABLE', 'Capture staging service is not configured.'))
-          return
-        }
-        const recentParam = url.searchParams.get('recent')
-        const recentMs = recentParam === null ? 30 * 60_000 : Number(recentParam)
-        const search = (url.searchParams.get('search') ?? '').trim().toLocaleLowerCase('en-US')
+        // F6 B6（P0-D）：真分页——repository 级 pendingOnly/search/kind/sourceDomain + LIMIT/OFFSET，
+        // 排序 captured_at DESC + id ASC；不再"listRecent 先截 50 再分页"，pending truth 完整可浏览。
+        const search = (url.searchParams.get('search') ?? '').trim()
         const kind = url.searchParams.get('kind') ?? ''
-        const limit = Number(url.searchParams.get('limit'))
-        // F6 P0-C1（20260828）：Capture masonry 素材流 query——search 覆盖 title/payloadRef/source.url/domain；sourceDomain 过滤；cursor 分页。
-        const sourceDomain = (url.searchParams.get('sourceDomain') ?? '').trim().toLocaleLowerCase('en-US')
+        const sourceDomain = (url.searchParams.get('sourceDomain') ?? '').trim()
+        const limitParam = Number(url.searchParams.get('limit'))
+        const pageLimit = Number.isFinite(limitParam) && limitParam > 0 ? Math.min(500, Math.trunc(limitParam)) : 50
         const cursorRaw = url.searchParams.get('cursor') ?? ''
         const cursorOffset = /^offset:(\d+)$/.test(cursorRaw) ? Number(cursorRaw.slice(7)) : 0
-        const domainOf = (item: CaptureStagingItemV0): string => {
-          try {
-            const raw = String((item.source as { url?: string })?.url ?? '')
-            return raw === '' ? '' : new URL(raw).hostname.toLocaleLowerCase('en-US')
-          } catch { return '' }
-        }
-        const filteredAll = captureStaging.listRecent(Number.isFinite(recentMs) && recentMs > 0 ? recentMs : 30 * 60_000)
-          .filter((item) =>
-            (kind === '' || item.kind === kind)
-            && (sourceDomain === '' || domainOf(item) === sourceDomain)
-            && (search === '' || String((item.source as { title?: string })?.title ?? '').toLocaleLowerCase('en-US').includes(search)
-              || item.payloadRef.toLocaleLowerCase('en-US').includes(search)
-              || String((item.source as { url?: string })?.url ?? '').toLocaleLowerCase('en-US').includes(search)
-              || domainOf(item).includes(search)))
-        const pageLimit = Number.isFinite(limit) && limit > 0 ? limit : 50
-        const items = filteredAll.slice(cursorOffset, cursorOffset + pageLimit)
+        // 多取一行探测是否有下一页。
+        const rows = db.queryCaptureStagingItems({
+          pendingOnly: true,
+          ...(search === '' ? {} : { search }),
+          ...(kind === '' ? {} : { kind }),
+          ...(sourceDomain === '' ? {} : { sourceDomain }),
+          cursor: cursorOffset,
+          limit: pageLimit + 1,
+        })
+        const items = rows.slice(0, pageLimit)
         sendJson(response, 200, {
           ok: true,
           value: {
             items,
-            pendingCount: captureStaging.countPending(),
-            ...(cursorOffset + pageLimit < filteredAll.length ? { nextCursor: `offset:${cursorOffset + pageLimit}` } : {}),
+            pendingCount: db.countPendingCaptureStagingItems(),
+            ...(rows.length > pageLimit ? { nextCursor: `offset:${cursorOffset + pageLimit}` } : {}),
           },
         })
         return
@@ -1247,6 +1237,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
         response,
         controller,
         metadata,
+        mutationSafety,
 
         helpers: routeHelpers,
       })) return
@@ -1260,6 +1251,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
         metadata,
         presentation,
         projectMutations,
+        mutationSafety,
         helpers: routeHelpers,
       })) return
       if (await handleWorkflowRoute({
@@ -1447,6 +1439,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
         method,
         pathname,
         metadata,
+        mutationSafety,
         fileObservation,
         previewWorker,
         request,

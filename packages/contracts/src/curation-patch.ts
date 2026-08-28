@@ -1,3 +1,5 @@
+import type { PresentationEntityRefV0 } from './presentations.js'
+
 /**
  * CurationPatch V0 — Phase E. A minimal batch write for the Curator skill:
  * create texts, add relations with provenance, patch one Presentation with CAS.
@@ -42,6 +44,8 @@ export interface CurationPatchPresentationV0 {
    * 纯位置微调仍走前端 presentation save（非 semantic）；此处只用于"新成员的初始投影"。
    */
   readonly setPositions?: Readonly<Record<string, { readonly x: number; readonly y: number }>>
+  /** F6 B6（P0-A aggregate / P0-E note）：无 view 的聚合实体成员（memberEntityRefs 通道）；不递归展开 children。 */
+  readonly addEntityMembers?: readonly PresentationEntityRefV0[]
   readonly setEmphasis?: Readonly<Record<string, 'primary' | 'normal' | 'secondary' | 'muted'>>
   readonly pin?: readonly string[]
   readonly unpin?: readonly string[]
@@ -157,6 +161,33 @@ export type MutationChangeItemV1 =
       readonly viewId: string
       readonly inverse: { readonly type: 'workspace_membership_add'; readonly workspaceId: string; readonly viewId: string }
       readonly forward?: { readonly type: 'workspace_membership_remove'; readonly workspaceId: string; readonly viewId: string }
+      readonly appliedFingerprint: string
+    }
+  | {
+      /** F6 B6（P1-B census）：破坏性删除进 semantic ChangeSet——ArtifactView（snapshot 供 restore）。 */
+      readonly type: 'artifact_view_delete'
+      readonly viewId: string
+      readonly artifactId: string
+      readonly inverse: { readonly type: 'restore_artifact_view'; readonly view: unknown }
+      readonly forward?: { readonly type: 'delete_artifact_view'; readonly viewId: string }
+      readonly appliedFingerprint: string
+    }
+  | {
+      readonly type: 'note_delete'
+      readonly noteId: string
+      readonly inverse: { readonly type: 'restore_note'; readonly note: unknown }
+      readonly forward?: { readonly type: 'delete_note'; readonly noteId: string }
+      readonly appliedFingerprint: string
+    }
+  | {
+      /** F6 B6：ResultSlot materialize 挂 parent Run 的 ChangeSet（accept 时记录；inverse 回 review）。 */
+      readonly type: 'result_slot_materialize'
+      readonly slotId: string
+      readonly runId: string
+      readonly artifactId?: string
+      readonly artifactViewId?: string
+      readonly inverse: { readonly type: 'result_slot_restore'; readonly slotId: string; readonly status: 'review' }
+      readonly forward?: { readonly type: 'result_slot_materialize'; readonly slotId: string; readonly runId: string; readonly artifactId?: string; readonly artifactViewId?: string }
       readonly appliedFingerprint: string
     }
 

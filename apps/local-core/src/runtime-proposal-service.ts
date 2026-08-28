@@ -91,6 +91,10 @@ export function proposeRun(input: ProposeRunInput): RunProposalResult {
     contextItems: input.contextItems,
     editTargets,
     resultPolicy,
+    // F6 B6（P0-F）：Unified Contract 字段原样透传——CommandDraft→Proposal→Run 全链同一 identity。
+    ...(input.receiverRef === undefined ? {} : { receiverRef: input.receiverRef }),
+    ...(input.orderedReferences === undefined ? {} : { orderedReferences: input.orderedReferences }),
+    ...(input.resultSlotId === undefined ? {} : { resultSlotId: input.resultSlotId }),
   }
 
   const summary = oneLineSummary(proposal)

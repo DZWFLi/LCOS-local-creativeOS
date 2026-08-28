@@ -9,6 +9,8 @@ export interface PresentationsRouteContext extends RouteHttpContext {
   readonly helpers: RouteHttpHelpers
   readonly presentation: PresentationApplicationService | undefined
   readonly projectMutations: ProjectMutationCoordinator
+  /** F6 B6（P1-B census）：前端 bridge 的 membership 写入也进 semantic ChangeSet（placement-only 不进）。 */
+  readonly mutationSafety: import('../mutation-safety-service.js').MutationSafetyService | undefined
 }
 
 /**
@@ -17,7 +19,7 @@ export interface PresentationsRouteContext extends RouteHttpContext {
  * PUT never touches project graphVersion.
  */
 export async function handlePresentationsRoute(ctx: PresentationsRouteContext): Promise<boolean> {
-  const { method, pathname, url, request, response, controller, presentation, projectMutations } = ctx
+  const { method, pathname, url, request, response, controller, presentation, projectMutations, mutationSafety } = ctx
   const { sendJson, failure, readJsonBody } = ctx.helpers
 
   const listMatch = /^\/projects\/([^/]+)\/presentations$/.exec(pathname)
@@ -141,6 +143,8 @@ export async function handlePresentationsRoute(ctx: PresentationsRouteContext): 
       }
       try {
         const origin = parseProjectEventOrigin(body.origin)
+        // F6 B6 diff-gate：membership 变化 → semantic ChangeSet（placement-only 保存不记账）。
+        const before = presentation.get(projectId, presentationId)
         const persist = () => presentation.save(projectId, {
           presentationId: contract.id,
           scopeId: contract.scopeId,
@@ -154,6 +158,7 @@ export async function handlePresentationsRoute(ctx: PresentationsRouteContext): 
         const value = origin === undefined
           ? persist()
           : projectMutations.commit({ projectId, origin, persist: () => { const response = persist(); return { response, resultingVersion: response.version } } }).response
+        recordMembershipChangeSet({ projectId, presentationId, before, saved: value, mutationSafety, origin })
         sendJson(response, 200, { ok: true, value })
       } catch (error: unknown) {
         if (error instanceof PresentationConflictError) {
@@ -171,4 +176,53 @@ export async function handlePresentationsRoute(ctx: PresentationsRouteContext): 
     }
   }
   return false
+}
+
+/**
+ * F6 B6（P1-B census）：presentationSave 的 membership diff-gate。
+ * memberViewIds / memberEntityRefs 任一变化 → 记一条 presentation_state ChangeSet
+ * （inverse = before 全量快照；forward = after 快照）；纯 placement / hierarchy /
+ * emphasis 变化不产生 semantic ChangeSet（补充冻结 §7）。save 已 CAS 提交后记账
+ * （与 curation createText 的 record() 模式一致，非复合事务——census 如实标注）。
+ */
+function recordMembershipChangeSet(input: {
+  readonly projectId: string
+  readonly presentationId: string
+  readonly before: PresentationViewV0 | undefined
+  readonly saved: PresentationViewV0
+  readonly mutationSafety: import('../mutation-safety-service.js').MutationSafetyService | undefined
+  readonly origin: ReturnType<typeof parseProjectEventOrigin>
+}): void {
+  const { projectId, presentationId, before, saved, mutationSafety, origin } = input
+  if (mutationSafety === undefined) return
+  const beforeMembers = before?.state.memberViewIds ?? []
+  const afterMembers = saved.state.memberViewIds
+  const beforeEntities = before?.state.memberEntityRefs ?? []
+  const afterEntities = saved.state.memberEntityRefs ?? []
+  const membersChanged = beforeMembers.length !== afterMembers.length || beforeMembers.some((id, index) => id !== afterMembers[index])
+  const entitiesChanged = beforeEntities.length !== afterEntities.length
+    || beforeEntities.some((ref, index) => ref.type !== afterEntities[index]?.type || ref.id !== afterEntities[index]?.id)
+  if (!membersChanged && !entitiesChanged) return
+  const baselineState: PresentationViewV0['state'] = before?.state ?? {
+    memberViewIds: [], hiddenViewIds: [], positions: {},
+    hierarchy: { parentByViewId: {}, orderByParent: {} },
+    presentationEdges: [], pinnedViewIds: [], emphasisByViewId: {},
+  }
+  const touchedKeys = [...(membersChanged ? ['memberViewIds' as const] : []), ...(entitiesChanged ? ['memberEntityRefs' as const] : [])]
+  mutationSafety.record({
+    projectId,
+    operationId: origin?.operationId ?? `presentation-membership-${saved.updatedAt}-${saved.version}`,
+    actorKind: 'web',
+    changes: [{
+      type: 'presentation_state',
+      presentationId,
+      beforeVersion: before?.version ?? 0,
+      afterVersion: saved.version,
+      inverse: { type: 'restore_presentation_state', presentationId, targetVersion: before?.version ?? 0, stateSnapshot: baselineState },
+      forward: { type: 'restore_presentation_state', presentationId, stateSnapshot: saved.state },
+      touchedKeys,
+      appliedFingerprint: `presentation:${saved.version}`,
+    }],
+    ...(origin === undefined ? {} : { origin }),
+  })
 }

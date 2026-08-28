@@ -8,6 +8,7 @@ import type {
   CurationWriteConflictV1,
   MutationChangeItemV1,
   MutationChangeSetV1,
+  PresentationEntityRefV0,
   PresentationStateV0,
 } from '@local-creative-os/contracts'
 import { buildCurationConflictHintV1 } from '@local-creative-os/contracts'
@@ -211,7 +212,12 @@ export class CurationCommandService {
           return fail('validate', `Presentation member not resolvable: ${JSON.stringify(member)}`)
         }
       }
-      for (const edge of patch.presentation.addPresentationEdges ?? []) {
+      // F6 B6：entity 成员（scope/workspace/conversation/note）必须解析到本 project 实体。
+      for (const entityRef of patch.presentation.addEntityMembers ?? []) {
+        if (!this.#entityRefBelongsToProject(projectId, entityRef)) {
+          return fail('validate', `Presentation entity member not resolvable: ${JSON.stringify(entityRef)}`)
+        }
+      }      for (const edge of patch.presentation.addPresentationEdges ?? []) {
         const fromOk = edge.from.clientRef !== undefined ? createRefs.has(edge.from.clientRef) : edge.from.entityId !== undefined && viewExists(edge.from.entityId)
         const toOk = edge.to.clientRef !== undefined ? createRefs.has(edge.to.clientRef) : edge.to.entityId !== undefined && viewExists(edge.to.entityId)
         if (!fromOk || !toOk) {
@@ -294,7 +300,7 @@ export class CurationCommandService {
         afterVersion: current.version + 1,
         inverse: { type: 'restore_presentation_state', presentationId: current.id, targetVersion: current.version, stateSnapshot: current.state },
         forward: { type: 'restore_presentation_state', presentationId: current.id, stateSnapshot: next },
-        touchedKeys: ['memberViewIds', 'hierarchy', 'emphasisByViewId', 'pinnedViewIds', 'presentationEdges', ...(patch.presentation.setPositions === undefined ? [] : ['positions' as const])],
+        touchedKeys: ['memberViewIds', 'hierarchy', 'emphasisByViewId', 'pinnedViewIds', 'presentationEdges', ...(patch.presentation.setPositions === undefined ? [] : ['positions' as const]), ...((patch.presentation.addEntityMembers ?? []).length === 0 ? [] : ['memberEntityRefs' as const])],
         appliedFingerprint: `presentation:${current.version + 1}`,
       })
     }
@@ -349,6 +355,14 @@ export class CurationCommandService {
     return receipt
   }
 
+  /** F6 B6：entity 成员的 project 归属校验（scope/workspace/conversation/note 各查 canonical truth）。 */
+  #entityRefBelongsToProject(projectId: string, ref: PresentationEntityRefV0): boolean {
+    if (ref.type === 'scope') return this.deps.repository.get(projectId)?.scopes.some((scope) => String(scope.id) === ref.id) ?? false
+    if (ref.type === 'workspace') return String(this.deps.repository.getWorkspace(ref.id)?.projectId ?? '') === projectId
+    if (ref.type === 'conversation') return this.deps.repository.getConnectedConversation(projectId, ref.id) !== undefined
+    if (ref.type === 'note') return String(this.deps.repository.getNote(ref.id)?.projectId ?? '') === projectId
+    return false
+  }
   #resolveTarget(projectId: string, target: { readonly clientRef?: string; readonly entityType?: string; readonly entityId?: string }, refToId: Map<string, string>): string {
     if (target.clientRef !== undefined) {
       const mapped = refToId.get(target.clientRef)
@@ -381,6 +395,13 @@ export class CurationCommandService {
     const removed = new Set(patch?.removeMembers ?? [])
     memberViewIds = memberViewIds.filter((id) => !removed.has(id))
     const members = new Set(memberViewIds)
+    // F6 B6（P0-A aggregate / P0-E note）：entity 成员并入 memberEntityRefs（type:id 去重；不递归展开）。
+    const memberEntityRefs = [...(state.memberEntityRefs ?? [])]
+    const entityKeyOf = (ref: PresentationEntityRefV0): string => `${ref.type}:${ref.id}`
+    const entityKeys = new Set(memberEntityRefs.map(entityKeyOf))
+    for (const entityRef of patch?.addEntityMembers ?? []) {
+      if (!entityKeys.has(entityKeyOf(entityRef))) { memberEntityRefs.push(entityRef); entityKeys.add(entityKeyOf(entityRef)) }
+    }
     const hiddenViewIds = state.hiddenViewIds
     const positions = { ...state.positions, ...(patch?.setPositions ?? {}) }
     let hierarchy = state.hierarchy
@@ -406,6 +427,7 @@ export class CurationCommandService {
     return {
       ...state,
       memberViewIds,
+      ...(memberEntityRefs.length > 0 ? { memberEntityRefs } : {}),
       hiddenViewIds,
       positions,
       hierarchy,

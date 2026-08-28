@@ -24,6 +24,7 @@ export type AssemblySourceRefV1 =
   | { readonly kind: 'scene'; readonly id: string }
   | { readonly kind: 'collection'; readonly id: string }
   | { readonly kind: 'skill'; readonly id: string; readonly source: 'system' | 'user' | 'merged'; readonly version?: string }
+  | { readonly kind: 'note'; readonly id: string }
 
 /**
  * Assembly Target Scene 的统一目标引用（P0-B3 + 20260828 补充冻结）：
@@ -41,7 +42,7 @@ export type AssemblyTargetRefV1 =
   | { readonly kind: 'scene'; readonly id: string }
 
 /** Warehouse 条目实体类型（read model 行的分类，非新 truth）。 */
-export type WarehouseEntityKindV1 = 'artifact' | 'note' | 'conversation' | 'resource'
+export type WarehouseEntityKindV1 = 'artifact' | 'note' | 'conversation' | 'resource' | 'context' | 'workflow' | 'scene' | 'collection'
 
 /** Warehouse read model 单行（P0-B2）：Material View 分页/搜索/筛选的最小稳定形状。 */
 export interface WarehouseItemV1 {
@@ -60,6 +61,11 @@ export interface WarehouseItemV1 {
   readonly usedHere?: boolean
   /** relation 邻居提示（Relation View 按需；Material View 可省略）。 */
   readonly relationHint?: { readonly neighborCount: number; readonly topKinds: readonly string[] }
+  /** F6 B6（P0-C）：与 web detectFileIdentity 同一 taxonomy 的稳定视觉家族（Core 从 artifact.kind/mimeType/descriptor 派生）。 */
+  readonly visualFamily?: 'video' | 'audio' | 'pdf' | 'ppt' | 'image' | 'markdown' | 'link' | 'archive' | 'file'
+  readonly mimeType?: string
+  readonly fileName?: string
+  readonly aspectRatio?: number
 }
 
 /** Warehouse 查询参数（P0-B2）：recent/type/source/search/usedHere 四轴 + 分页。 */

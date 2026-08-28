@@ -43,7 +43,8 @@ export type PresentationEmphasisV0 =
  * Wave C-2（批八）：'conversation' 为向后兼容超集成员——对话实体以 Presentation ref
  * 身份参与投影（Web 侧派生；Core 侧持久化留 0.2）。既有三成员语义不变。
  */
-export type PresentationEntityTypeV0 = 'view' | 'scope' | 'workspace' | 'conversation'
+/** F6 B6（P0-E 方案 A）：Note 是无 view 的独立实体，以 entity ref 身份参与投影。 */
+export type PresentationEntityTypeV0 = 'view' | 'scope' | 'workspace' | 'conversation' | 'note'
 
 export interface PresentationEntityRefV0 {
   type: PresentationEntityTypeV0

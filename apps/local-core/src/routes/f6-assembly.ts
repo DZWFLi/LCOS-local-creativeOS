@@ -83,7 +83,7 @@ export async function handleF6AssemblyRoute(ctx: F6AssemblyRouteContext): Promis
     const kinds = kindsRaw === null
       ? undefined
       : kindsRaw.split(',').map((value) => value.trim()).filter((value): value is WarehouseEntityKindV1 =>
-        ['artifact', 'note', 'conversation', 'resource'].includes(value))
+        ['artifact', 'note', 'conversation', 'resource', 'context', 'workflow', 'scene', 'collection'].includes(value))
     const usedHereRaw = url.searchParams.get('usedHereTarget')
     let usedHereTarget: WarehouseQueryV1['usedHereTarget'] | undefined
     if (usedHereRaw !== null && usedHereRaw !== '') {

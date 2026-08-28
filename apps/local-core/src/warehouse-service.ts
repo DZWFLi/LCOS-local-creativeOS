@@ -1,16 +1,23 @@
 /**
- * F6 P0-B2（20260828）：Project Warehouse read model。
+ * F6 P0-B2 + B6 补洞单（20260828）：Project Warehouse read model。
  *
  * Material View / Relation View 共用的分页只读投影——全部从既有 canonical truth
- * （artifacts/views/notes/connected_conversations/resources/workspace memberships/
- * relations/birth_run_id）现算，零新表零第二套 membership。Relation View 的
- * semantic group / 岛坐标不在此层（那是前端 Presentation）。
+ * （artifacts/views/notes/connected_conversations/resources/scopes/workspaces/
+ * workspace memberships/relations/birth_run_id）现算，零新表零第二套 membership。
+ * B6 P0-B：聚合物种（context/workflow/scene/collection）进入 read model——
+ * entityRef 可直接转换为稳定 AssemblySourceRefV1（scene.id 即 workspaceId）。
+ * B6 P0-C：artifact 行带 truthful visualFamily/mimeType/fileName——与 web
+ * detectFileIdentity 同一 taxonomy（video/audio/pdf/ppt/image/markdown/link/archive/file），
+ * 从 canonical artifact.kind + FileRecord.mimeType + ResourceDescriptor.source 派生，
+ * 不建 Warehouse 专属 taxonomy；前端禁止用 title/extension 猜 morphology。
  */
 import type {
+  ResourceDescriptorV0,
   WarehouseItemV1,
   WarehouseQueryV1,
   WarehouseSnapshotV1,
 } from '@local-creative-os/contracts'
+import type { Artifact } from '@local-creative-os/domain'
 import type { SqliteMetadataRepository } from './metadata-repository.js'
 
 const DEFAULT_LIMIT = 50
@@ -28,13 +35,33 @@ interface NeighborEntry {
   kinds: Map<string, number>
 }
 
+/** 与 web detectFileIdentity 同源的视觉家族（顺序即优先级；来源全是 canonical 字段）。 */
+function deriveVisualFamily(input: {
+  readonly artifactKind: Artifact['kind']
+  readonly mimeType?: string
+  readonly descriptor?: ResourceDescriptorV0
+}): { readonly family: NonNullable<WarehouseItemV1['visualFamily']>; readonly fileName?: string } {
+  const mime = (input.mimeType ?? '').toLowerCase()
+  const source = input.descriptor?.source
+  const name = (source?.originalName ?? '').toLowerCase()
+  if (input.artifactKind === 'image' || mime.startsWith('image/')) return { family: 'image', ...(source?.originalName === undefined ? {} : { fileName: source.originalName }) }
+  if (input.artifactKind === 'pdf' || mime.includes('pdf') || name.endsWith('.pdf')) return { family: 'pdf', ...(source?.originalName === undefined ? {} : { fileName: source.originalName }) }
+  if (input.artifactKind === 'presentation' || mime.includes('presentation') || /\.(ppt|pptx|key)$/.test(name)) return { family: 'ppt', ...(source?.originalName === undefined ? {} : { fileName: source.originalName }) }
+  if (mime.startsWith('video/') || /\.(mp4|mov|webm|m4v|avi)$/.test(name)) return { family: 'video', ...(source?.originalName === undefined ? {} : { fileName: source.originalName }) }
+  if (mime.startsWith('audio/') || /\.(mp3|wav|m4a|aac|flac|ogg)$/.test(name)) return { family: 'audio', ...(source?.originalName === undefined ? {} : { fileName: source.originalName }) }
+  if (input.artifactKind === 'markdown' || mime.includes('markdown') || mime.startsWith('text/') || /\.(md|markdown|txt|json)$/.test(name)) return { family: 'markdown', ...(source?.originalName === undefined ? {} : { fileName: source.originalName }) }
+  if (source?.kind === 'url' || source?.normalizedUrl !== undefined) return { family: 'link' }
+  if (mime.includes('zip') || mime.includes('archive') || mime.includes('gzip') || mime.includes('tar') || /\.(zip|rar|7z|tar|gz)$/.test(name)) return { family: 'archive', ...(source?.originalName === undefined ? {} : { fileName: source.originalName }) }
+  return { family: 'file', ...(source?.originalName === undefined ? {} : { fileName: source.originalName }) }
+}
+
 export class WarehouseService {
   constructor(private readonly repository: SqliteMetadataRepository) {}
 
   query(projectId: string, query: WarehouseQueryV1 = {}): WarehouseSnapshotV1 {
     const limit = Math.max(1, Math.min(MAX_LIMIT, query.limit ?? DEFAULT_LIMIT))
     const offset = decodeCursor(query.cursor)
-    const kinds = new Set(query.kinds ?? ['artifact', 'note', 'conversation', 'resource'])
+    const kinds = new Set(query.kinds ?? ['artifact', 'note', 'conversation', 'resource', 'context', 'workflow', 'scene', 'collection'])
     const needle = query.search?.trim().toLocaleLowerCase('en-US') ?? ''
 
     // usage 预投影：viewId → 出现次数（workspace memberships）。
@@ -43,7 +70,7 @@ export class WarehouseService {
       const key = String(membership.artifactViewId)
       usageByView.set(key, (usageByView.get(key) ?? 0) + 1)
     }
-    // relation 邻居预投影：entityId → 邻居计数 + kind 直方图。
+    // relation 邻居预投影：entityId → 邻居计数 + kind 直方图（scope/workspace 端点同样命中）。
     const relations = this.repository.getRelations(projectId)
     const neighborsByEntity = new Map<string, NeighborEntry>()
     for (const relation of relations) {
@@ -67,6 +94,22 @@ export class WarehouseService {
         const usageCount = views.reduce((sum, view) => sum + (usageByView.get(String(view.id)) ?? 0), 0)
         const neighbor = neighborsByEntity.get(String(artifact.id))
         const birthRunId = this.repository.getArtifactBirthRunId(String(artifact.id))
+        // P0-C：canonical mimeType（current revision 的 FileRecord）+ descriptor（resource 源信息）。
+        let mimeType: string | undefined
+        const currentRevision = artifact.currentRevisionId === undefined ? undefined : this.repository.getArtifactRevision(String(artifact.currentRevisionId))
+        if (currentRevision !== undefined) {
+          const fileRecord = this.repository.getFileRecord(String(currentRevision.fileRecordId))
+          mimeType = fileRecord?.mimeType
+        }
+        const descriptor = currentRevision === undefined
+          ? undefined
+          : this.repository.getResourceDescriptorForRevision(String(artifact.id), String(currentRevision.id))
+        const visual = deriveVisualFamily({ artifactKind: artifact.kind, ...(mimeType === undefined ? {} : { mimeType }), ...(descriptor === undefined ? {} : { descriptor }) })
+        let fileName: string | undefined = visual.fileName
+        if (fileName === undefined && currentRevision !== undefined) {
+          const fileRecord = this.repository.getFileRecord(String(currentRevision.fileRecordId))
+          fileName = fileRecord === undefined ? undefined : String(fileRecord.observedPath).split(/[\\/]/).at(-1)
+        }
         items.push({
           schemaVersion: 1,
           entityRef: { type: 'artifact', id: String(artifact.id), ...(viewId === undefined ? {} : { viewId: String(viewId) }) },
@@ -74,6 +117,9 @@ export class WarehouseService {
           title,
           ...(updatedAt === undefined ? {} : { updatedAt }),
           usageCount,
+          visualFamily: visual.family,
+          ...(mimeType === undefined ? {} : { mimeType }),
+          ...(fileName === undefined ? {} : { fileName }),
           ...(birthRunId === undefined ? {} : { provenance: { origin: 'run-return' as const, birthRunId: String(birthRunId) } }),
           ...(neighbor === undefined ? {} : {
             relationHint: {
@@ -124,6 +170,51 @@ export class WarehouseService {
           kind: 'resource',
           title,
           usageCount: 0,
+        })
+      }
+    }
+
+    // ---- B6 P0-B：聚合物种（context/workflow/collection ← scopes；scene ← workspaces）。----
+    if (kinds.has('context') || kinds.has('workflow') || kinds.has('collection')) {
+      for (const scope of this.repository.getScopes(projectId)) {
+        if (scope.kind !== 'context' && scope.kind !== 'workflow' && scope.kind !== 'collection') continue
+        if (!kinds.has(scope.kind)) continue
+        if (needle !== '' && !scope.name.toLocaleLowerCase('en-US').includes(needle)) continue
+        const neighbor = neighborsByEntity.get(String(scope.id))
+        items.push({
+          schemaVersion: 1,
+          entityRef: { type: scope.kind, id: String(scope.id) },
+          kind: scope.kind,
+          title: scope.name,
+          updatedAt: scope.updatedAt,
+          usageCount: 0,
+          ...(neighbor === undefined ? {} : {
+            relationHint: {
+              neighborCount: neighbor.count,
+              topKinds: [...neighbor.kinds.entries()].sort((left, right) => right[1] - left[1]).slice(0, 3).map(([kind]) => kind),
+            },
+          }),
+        })
+      }
+    }
+
+    if (kinds.has('scene')) {
+      for (const workspace of this.repository.getWorkspaces(projectId)) {
+        if (needle !== '' && !workspace.name.toLocaleLowerCase('en-US').includes(needle)) continue
+        const neighbor = neighborsByEntity.get(String(workspace.id))
+        items.push({
+          schemaVersion: 1,
+          entityRef: { type: 'scene', id: String(workspace.id) },
+          kind: 'scene',
+          title: workspace.name,
+          updatedAt: workspace.updatedAt,
+          usageCount: 0,
+          ...(neighbor === undefined ? {} : {
+            relationHint: {
+              neighborCount: neighbor.count,
+              topKinds: [...neighbor.kinds.entries()].sort((left, right) => right[1] - left[1]).slice(0, 3).map(([kind]) => kind),
+            },
+          }),
         })
       }
     }

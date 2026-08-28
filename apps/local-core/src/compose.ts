@@ -230,7 +230,7 @@ export function composeLocalCoreServices(options: LocalCoreServerOptions = {}): 
     matcher: options.resourceMatcher ?? new ResourceMatcher(),
     contextManifest: options.contextManifestService ?? (metadata === undefined ? undefined : new ContextManifestService(metadata)),
     // F6 P0-A2：accept 诞生的 artifact 即索引（第四参可选挂点）。
-    runtimeReview: options.runtimeReviewService ?? (metadata === undefined ? undefined : new RuntimeReviewService(metadata, undefined, undefined, semantic, resultSlots)),
+    runtimeReview: options.runtimeReviewService ?? (metadata === undefined ? undefined : new RuntimeReviewService(metadata, undefined, undefined, semantic, resultSlots, mutationSafety)),
     runtimeApplication: options.runtimeApplicationService,
     sessionLifecycle,
     conversationIdentity,

@@ -4,6 +4,8 @@ import { routeRequireMetadata, routeRequireProject, type RouteHttpContext, type 
 
 export interface WorkspaceStatesRouteContext extends RouteHttpContext {
   readonly helpers: RouteHttpHelpers
+  /** F6 B6（P1-B census）：members 写路径进 ChangeSet（envelope 同事务）。 */
+  readonly mutationSafety: import('../mutation-safety-service.js').MutationSafetyService | undefined
 }
 
 /**
@@ -11,7 +13,7 @@ export interface WorkspaceStatesRouteContext extends RouteHttpContext {
  * 原为 server.ts 分发器内联块，外迁后行为不变。
  */
 export async function handleWorkspaceStatesRoute(ctx: WorkspaceStatesRouteContext): Promise<boolean> {
-  const { method, pathname, request, response, controller, metadata } = ctx
+  const { method, pathname, request, response, controller, metadata, mutationSafety } = ctx
   const { sendJson, failure, readJsonBody, isRecord, isStringArray } = ctx.helpers
 
   const workspaceStatesMatch = /^\/workspaces\/([^/]+)\/states$/.exec(pathname)
@@ -116,14 +118,26 @@ export async function handleWorkspaceStatesRoute(ctx: WorkspaceStatesRouteContex
     const addedBy = ['user', 'agent', 'run', 'import'].includes(String(input.addedBy ?? 'user'))
       ? String(input.addedBy ?? 'user') as 'user' | 'agent' | 'run' | 'import'
       : 'user'
+    if (mutationSafety === undefined) {
+      sendJson(response, 503, failure('UNAVAILABLE', 'Mutation safety service is not configured.'))
+      return true
+    }
+    const workspace = db.getWorkspace(workspaceId)
+    if (workspace === undefined) {
+      sendJson(response, 404, failure('NOT_FOUND', 'Workspace not found.'))
+      return true
+    }
+    const projectId = String(workspace.projectId)
+    // F6 B6：每个 view 一次 envelope（ChangeSet-backed；already-member 幂等跳过）。
+    const changeSetIds: string[] = []
+    for (const viewId of input.viewIds as ArtifactViewId[]) {
+      const changeSet = mutationSafety.addWorkspaceMember({ projectId, workspaceId: String(workspaceId), viewId: String(viewId), addedBy, actorKind: 'web' })
+      if (changeSet !== undefined) changeSetIds.push(changeSet.id)
+    }
     sendJson(response, 200, {
       ok: true,
-      value: db.addWorkspaceMembers(
-        workspaceId,
-        input.viewIds as ArtifactViewId[],
-        addedBy,
-        new Date().toISOString(),
-      ),
+      value: db.listWorkspaceMembers(workspaceId),
+      ...(changeSetIds.length === 0 ? {} : { meta: { changeSetIds } }),
     })
     return true
   }
@@ -137,10 +151,26 @@ export async function handleWorkspaceStatesRoute(ctx: WorkspaceStatesRouteContex
       sendJson(response, 404, failure('NOT_FOUND', 'Workspace not found.'))
       return true
     }
-    sendJson(response, 200, {
-      ok: true,
-      value: db.removeWorkspaceMembers(workspaceId, [viewId]),
-    })
+    if (mutationSafety === undefined) {
+      sendJson(response, 503, failure('UNAVAILABLE', 'Mutation safety service is not configured.'))
+      return true
+    }
+    const workspace = db.getWorkspace(workspaceId)
+    if (workspace === undefined) {
+      sendJson(response, 404, failure('NOT_FOUND', 'Workspace not found.'))
+      return true
+    }
+    try {
+      // F6 B6：移除进 ChangeSet（非成员 = 幂等无变更）。
+      const changeSet = mutationSafety.removeWorkspaceMember({ projectId: String(workspace.projectId), workspaceId: String(workspaceId), viewId: String(viewId), actorKind: 'web' })
+      sendJson(response, 200, {
+        ok: true,
+        value: db.listWorkspaceMembers(workspaceId),
+        ...(changeSet === undefined ? {} : { meta: { changeSetId: changeSet.id } }),
+      })
+    } catch (error: unknown) {
+      sendJson(response, 409, failure('CONFLICT', error instanceof Error ? error.message : 'Membership removal failed.'))
+    }
     return true
   }
 
@@ -154,16 +184,28 @@ export async function handleWorkspaceStatesRoute(ctx: WorkspaceStatesRouteContex
       sendJson(response, 400, failure('INVALID_ARGUMENT', 'Membership move requires toWorkspaceId and viewId.'))
       return true
     }
+    if (mutationSafety === undefined) {
+      sendJson(response, 503, failure('UNAVAILABLE', 'Mutation safety service is not configured.'))
+      return true
+    }
     try {
+      // F6 B6：移动 = remove + add 同一 ChangeSet（一次撤销还原整个 move）。
+      const fromWorkspace = db.getWorkspace(fromWorkspaceId)
+      if (fromWorkspace === undefined) {
+        sendJson(response, 404, failure('NOT_FOUND', 'Workspace not found.'))
+        return true
+      }
+      const changeSet = mutationSafety.moveWorkspaceMember({
+        projectId: String(fromWorkspace.projectId),
+        fromWorkspaceId: String(fromWorkspaceId),
+        toWorkspaceId: String(input.toWorkspaceId),
+        viewId: String(input.viewId),
+        actorKind: 'web',
+      })
       sendJson(response, 200, {
         ok: true,
-        value: db.moveWorkspaceMembers(
-          fromWorkspaceId,
-          input.toWorkspaceId as WorkspaceId,
-          [input.viewId as ArtifactViewId],
-          'user',
-          new Date().toISOString(),
-        ),
+        value: db.listWorkspaceMembers(input.toWorkspaceId as WorkspaceId),
+        meta: { changeSetId: changeSet.id },
       })
     } catch (error: unknown) {
       sendJson(response, 409, failure('CONFLICT', error instanceof Error ? error.message : 'Membership move conflicted.'))

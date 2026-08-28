@@ -339,6 +339,10 @@ export interface CreateRunProposal {
   readonly contextItems: readonly RunProposalContextItem[]
   readonly editTargets: readonly RunProposalEditTarget[]
   readonly resultPolicy: RunResultPolicy
+  /** F6 B6（P0-F）：Proposal 与 Run 同一 Unified Execution Contract——原样保留，不压回 artifact-only。 */
+  readonly receiverRef?: import('./run-assembly.js').RunReceiverRefV1
+  readonly orderedReferences?: readonly import('./run-assembly.js').OrderedRunReferenceV2[]
+  readonly resultSlotId?: string
 }
 
 export interface RunProposalResult {

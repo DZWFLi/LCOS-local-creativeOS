@@ -17,6 +17,8 @@ export class RuntimeReviewService {
   readonly #semantic: import('./semantic-index-service.js').SemanticIndexService | undefined
   /** F6 P0-D5（20260828）：accept 时把产出物化到 Run 关联的 ResultSlot。 */
   readonly #resultSlots: import('./result-slot-service.js').ResultSlotService | undefined
+  /** F6 B6（P1-B census）：ResultSlot materialize 挂 parent Run 的 ChangeSet（accept 记账）。 */
+  readonly #mutationSafety: import('./mutation-safety-service.js').MutationSafetyService | undefined
 
   constructor(
     private readonly repository: SqliteMetadataRepository,
@@ -24,9 +26,11 @@ export class RuntimeReviewService {
     private readonly createId: () => string = randomUUID,
     semantic?: import('./semantic-index-service.js').SemanticIndexService,
     resultSlots?: import('./result-slot-service.js').ResultSlotService,
+    mutationSafety?: import('./mutation-safety-service.js').MutationSafetyService,
   ) {
     this.#semantic = semantic
     this.#resultSlots = resultSlots
+    this.#mutationSafety = mutationSafety
   }
 
   getRunReview(runId: RunId): RunReview {
@@ -75,7 +79,32 @@ export class RuntimeReviewService {
           const views = this.repository.getArtifactViews(String(result.artifactReturn.targetArtifactId))
           const viewId = views[0]?.id
           if (viewId !== undefined) {
-            this.#resultSlots.materialize(slotId, String(result.run.id), String(result.artifactReturn.targetArtifactId), String(viewId))
+            const materialized = this.#resultSlots.materialize(slotId, String(result.run.id), String(result.artifactReturn.targetArtifactId), String(viewId))
+            // F6 B6：materialize 挂 parent Run 的 ChangeSet（undo = 槽位回 review；record 在
+            // accept 事务之后——与 curation createText 的 record() 模式一致，非复合事务）。
+            if (this.#mutationSafety !== undefined) {
+              this.#mutationSafety.record({
+                projectId: String(result.run.projectId),
+                operationId: `run-accept-${String(returnId)}`,
+                actorKind: 'web',
+                changes: [{
+                  type: 'result_slot_materialize',
+                  slotId,
+                  runId: String(result.run.id),
+                  ...(materialized.artifactId === undefined ? {} : { artifactId: String(materialized.artifactId) }),
+                  ...(materialized.artifactViewId === undefined ? {} : { artifactViewId: String(materialized.artifactViewId) }),
+                  inverse: { type: 'result_slot_restore', slotId, status: 'review' },
+                  forward: {
+                    type: 'result_slot_materialize',
+                    slotId,
+                    runId: String(result.run.id),
+                    ...(materialized.artifactId === undefined ? {} : { artifactId: String(materialized.artifactId) }),
+                    ...(materialized.artifactViewId === undefined ? {} : { artifactViewId: String(materialized.artifactViewId) }),
+                  },
+                  appliedFingerprint: `result-slot:${slotId}:materialized:${String(materialized.artifactViewId ?? '')}`,
+                }],
+              })
+            }
           }
         } catch (error: unknown) {
           console.warn(`[result-slot] materialize failed for slot ${slotId}: ${error instanceof Error ? error.message : String(error)}`)

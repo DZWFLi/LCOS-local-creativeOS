@@ -336,7 +336,10 @@ export async function handleRunsRoute(ctx: RunsRouteContext): Promise<boolean> {
       || !Array.isArray(input.editTargets)
       || (input.resultPolicy !== undefined && !isRecord(input.resultPolicy))
       || (input.createAsNewNode !== undefined && typeof input.createAsNewNode !== 'boolean')
-      || Object.keys(input).some((key) => !['workspaceId', 'prompt', 'intent', 'requestedProvider', 'contextItems', 'editTargets', 'resultPolicy', 'createAsNewNode', 'decisionSource'].includes(key))) {
+      || (input.receiverRef !== undefined && (!isRecord(input.receiverRef) || typeof input.receiverRef.connectedConversationId !== 'string'))
+      || (input.orderedReferences !== undefined && !Array.isArray(input.orderedReferences))
+      || (input.resultSlotId !== undefined && typeof input.resultSlotId !== 'string')
+      || Object.keys(input).some((key) => !['workspaceId', 'prompt', 'intent', 'requestedProvider', 'contextItems', 'editTargets', 'resultPolicy', 'createAsNewNode', 'decisionSource', 'receiverRef', 'orderedReferences', 'resultSlotId'].includes(key))) {
       sendJson(response, 400, failure('INVALID_ARGUMENT', 'Run proposal requires prompt, requestedProvider, contextItems and editTargets.'))
       return true
     }
@@ -354,6 +357,17 @@ export async function handleRunsRoute(ctx: RunsRouteContext): Promise<boolean> {
           contextItems: input.contextItems as CreateRunProposal['contextItems'],
           editTargets: input.editTargets as CreateRunProposal['editTargets'],
           ...(isRecord(input.resultPolicy) ? { resultPolicy: input.resultPolicy as unknown as CreateRunProposal['resultPolicy'] } : {}),
+          // F6 B6（P0-F）：Unified Execution Contract 原样保留——Proposal 不压回 artifact-only。
+          ...(isRecord(input.receiverRef) && typeof input.receiverRef.connectedConversationId === 'string' ? { receiverRef: input.receiverRef as unknown as NonNullable<CreateRunProposal['receiverRef']> } : {}),
+          ...(Array.isArray(input.orderedReferences) ? { orderedReferences: input.orderedReferences.flatMap((item) => {
+            if (!isRecord(item) || !isRecord(item.ref)) return []
+            const ref = item.ref as Record<string, unknown>
+            const type = String(ref.type)
+            const idField = type === 'artifact' ? 'artifactId' : type === 'view' ? 'viewId' : type === 'scope' ? 'scopeId' : type === 'workspace' ? 'workspaceId' : type === 'conversation' ? 'conversationSessionId' : type === 'component' ? 'componentId' : type === 'note' ? 'noteId' : ''
+            if (idField === '' || typeof ref[idField] !== 'string') return []
+            return [item as never]
+          }) } : {}),
+          ...(typeof input.resultSlotId === 'string' ? { resultSlotId: input.resultSlotId } : {}),
         }),
       })
     } catch (error: unknown) {

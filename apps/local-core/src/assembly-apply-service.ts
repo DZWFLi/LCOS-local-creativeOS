@@ -1,19 +1,23 @@
 /**
- * F6 P0-B4 + follow-up（20260828 补充冻结）：Semantic Drop 统一 apply 通道。
+ * F6 P0-B4 + follow-up + B6 补洞单（20260828）：Semantic Drop 统一 apply 通道。
  *
  * 本服务不拥有任何 mutation——只做「sourceRef+targetRef → 既有 canonical 服务」的路由：
  * - capture → project/surface    ：CaptureSpaceService.materializeToProject（幂等：同 project
  *   已 resolved 且带产物回链 → 复用既有产物，capture→surface 两步链可安全重试）
  * - artifactView → main/context/workflow ：CurationCommandService.applyPatch——presentation
- *   membership，ChangeSet-backed（presentation_state + restore_presentation_state 全量快照 inverse）。
+ *   membership，ChangeSet-backed（presentation_state + 全量快照 inverse/forward）。
  *   Main = root scope 的 context 投影（presentation:context:<rootId>），不是 active Workspace 的别名。
  *   placement 并入同一 patch（undo 连 membership+投影一起撤，补充冻结 §7）。
+ * - note / context / workflow / collection / scene（aggregate source）→ surface：
+ *   同一 curation patch 的 addEntityMembers——memberEntityRefs 通道（聚合只投影自身，
+ *   不递归展开 children；scene.id 即 workspaceId，以 workspace entity ref 入会）。
+ * - resource → 任意 target ：经 descriptor.artifactId 解析到 canonical view 后走上述通道
+ *   （补洞单 P0-E 方案 B：不建第二套映射，前端零推断）。
  * - artifactView → workspace/scene ：MutationSafetyService.addWorkspaceMember——working-set
  *   membership 进 ChangeSet（workspace_membership_add，原子复合事务）。
- *   scene 与 workspace 同通道（scene.id 即 workspaceId）。
- * - 任意 → conversation          ：conversation_context relation（复用 Relation truth + ChangeSet）。
- * aggregate ref（context/workflow/scene/collection）作为 source 的 presentation 成员
- * （memberEntityRefs 通道）与 skill（只读裁定）明确 unsupported，不猜实现。
+ * - 任意 → conversation          ：conversation_context relation（view/note/scope/workspace
+ *   端点，复用 Relation truth + ChangeSet）。
+ * skill（只读裁定）与 conversation source 明确 unsupported，不猜实现。
  */
 import { randomUUID } from 'node:crypto'
 import type {
@@ -22,6 +26,7 @@ import type {
   AssemblyApplyResultV1,
   AssemblySourceRefV1,
   AssemblyTargetRefV1,
+  PresentationEntityRefV0,
   PresentationStateV0,
 } from '@local-creative-os/contracts'
 import type { Relation, RelationId, ProjectId } from '@local-creative-os/domain'
@@ -32,10 +37,12 @@ import type { CaptureSpaceService } from './capture-space-service.js'
 import type { CurationCommandService } from './curation-command-service.js'
 import type { PresentationApplicationService } from './presentation-application-service.js'
 
-function relationEntityKindFor(ref: AssemblySourceRefV1 | AssemblyTargetRefV1): 'artifact' | 'view' | 'scope' | 'workspace' | undefined {
-  if (ref.kind === 'artifactView') return 'view'
-  if (ref.kind === 'context' || ref.kind === 'workflow' || ref.kind === 'scene' || ref.kind === 'collection') return 'scope'
-  if (ref.kind === 'conversation') return 'artifact' // conversation 的 canonical 端点是 conversationArtifactId
+/** conversation_context relation 的 target 端点 kind（scene = workspace 实体）。 */
+function relationEntityKindFor(ref: AssemblySourceRefV1): 'view' | 'note' | 'scope' | 'workspace' | undefined {
+  if (ref.kind === 'artifactView' || ref.kind === 'resource') return 'view' // resource 先解析为 view 再进入
+  if (ref.kind === 'note') return 'note'
+  if (ref.kind === 'context' || ref.kind === 'workflow' || ref.kind === 'collection') return 'scope'
+  if (ref.kind === 'scene') return 'workspace'
   return undefined
 }
 
@@ -43,6 +50,7 @@ function relationEntityKindFor(ref: AssemblySourceRefV1 | AssemblyTargetRefV1): 
 type Placement = { readonly x: number; readonly y: number }
 
 type ArtifactViewSourceRef = AssemblySourceRefV1 & { readonly kind: 'artifactView' }
+type SurfaceTargetRef = Extract<AssemblyTargetRefV1, { readonly kind: 'main' | 'context' | 'workflow' }>
 
 export class AssemblyApplyService {
   constructor(
@@ -118,30 +126,58 @@ export class AssemblyApplyService {
       return unsupported('Capture sources can only materialize into a project or a project surface.')
     }
 
-    // ---- 通道 2：artifactView → workspace/scene（working-set membership，ChangeSet-backed）----
+    // ---- 通道 2（B6 P0-E 方案 B）：resource source 经 canonical descriptor 解析为 view，再走既有通道 ----
+    if (sourceRef.kind === 'resource') {
+      const descriptor = this.metadata.getResourceDescriptorByResourceId(projectId, sourceRef.id)
+      if (descriptor === undefined) {
+        return { sourceRef, status: 'failed', channel: 'error', message: 'Resource not found in this project.' }
+      }
+      const viewId = this.metadata.getArtifactViews(descriptor.artifactId)[0]?.id
+      if (viewId === undefined) {
+        return { sourceRef, status: 'failed', channel: 'error', message: 'Resource has no canonical artifact view.' }
+      }
+      const memberRef = { kind: 'artifactView', id: String(viewId) } as const
+      if (targetRef.kind === 'conversation') {
+        return { ...this.#applyConversationContext(projectId, memberRef, targetRef), sourceRef }
+      }
+      if (targetRef.kind === 'workspace' || targetRef.kind === 'scene') {
+        return { ...this.#applyWorkspaceMembership(projectId, memberRef, targetRef, placement), sourceRef }
+      }
+      if (targetRef.kind === 'main' || targetRef.kind === 'context' || targetRef.kind === 'workflow') {
+        return { ...(await this.#applySurfaceMembership(projectId, memberRef, targetRef, placement)), sourceRef }
+      }
+      return unsupported('Resource sources resolve through their canonical artifact view; drop onto a surface or conversation.')
+    }
+
+    // ---- 通道 3：artifactView → workspace/scene（working-set membership，ChangeSet-backed）----
     if (sourceRef.kind === 'artifactView' && (targetRef.kind === 'workspace' || targetRef.kind === 'scene')) {
       return this.#applyWorkspaceMembership(projectId, sourceRef, targetRef, placement)
     }
 
-    // ---- 通道 3：artifactView → main/context/workflow（presentation membership，ChangeSet-backed）----
+    // ---- 通道 4：artifactView → main/context/workflow（presentation membership，ChangeSet-backed）----
     if (sourceRef.kind === 'artifactView' && (targetRef.kind === 'main' || targetRef.kind === 'context' || targetRef.kind === 'workflow')) {
       return this.#applySurfaceMembership(projectId, sourceRef, targetRef, placement)
     }
 
-    // ---- 通道 4：conversation target（conversation_context relation，复用 Relation truth）----
+    // ---- 通道 5（B6）：note / aggregate source → surface（entity 成员，memberEntityRefs）----
+    if (sourceRef.kind === 'note' || sourceRef.kind === 'context' || sourceRef.kind === 'workflow' || sourceRef.kind === 'collection' || sourceRef.kind === 'scene') {
+      if (targetRef.kind === 'main' || targetRef.kind === 'context' || targetRef.kind === 'workflow') {
+        return this.#applyEntityMembership(projectId, sourceRef, targetRef)
+      }
+      if (targetRef.kind === 'conversation') {
+        return this.#applyConversationContext(projectId, sourceRef, targetRef)
+      }
+      return unsupported(`Source kind '${sourceRef.kind}' cannot become view-based working-set membership; use a surface or conversation target.`)
+    }
+
+    // ---- 通道 6：conversation target（conversation_context relation，复用 Relation truth）----
     if (targetRef.kind === 'conversation') {
       return this.#applyConversationContext(projectId, sourceRef, targetRef)
     }
 
     // ---- 其余组合：明确 unsupported ----
     if (sourceRef.kind === 'skill') return unsupported('Skills are read-only in v0.15 (usage-binding deferred to 0.2).')
-    if (sourceRef.kind === 'context' || sourceRef.kind === 'workflow' || sourceRef.kind === 'scene' || sourceRef.kind === 'collection') {
-      return unsupported(`Aggregate source '${sourceRef.kind}' presentation membership (memberEntityRefs) is not wired in this batch.`)
-    }
-    if (sourceRef.kind === 'conversation' || sourceRef.kind === 'resource') {
-      if (targetRef.kind === 'workspace' || targetRef.kind === 'project' || targetRef.kind === 'main') return unsupported(`Source kind '${sourceRef.kind}' cannot become canvas membership directly.`)
-      return unsupported(`Source kind '${sourceRef.kind}' to '${targetRef.kind}' is not wired in this batch.`)
-    }
+    if (sourceRef.kind === 'conversation') return unsupported('Conversation sources cannot become canvas membership directly.')
     return unsupported(`Unsupported combination: ${sourceRef.kind} -> ${targetRef.kind}.`)
   }
 
@@ -171,15 +207,48 @@ export class AssemblyApplyService {
     }
   }
 
-  /** main/context/workflow 的 presentation membership：scaffold（缺失时）+ curation patch（ChangeSet）。 */
-  async #applySurfaceMembership(projectId: string, sourceRef: ArtifactViewSourceRef, targetRef: Extract<AssemblyTargetRefV1, { readonly kind: 'main' | 'context' | 'workflow' }>, placement: Placement | undefined): Promise<AssemblyApplyItemResultV1> {
-    if (this.curationCommand === undefined || this.presentations === undefined) {
-      return { sourceRef, status: 'skipped', channel: 'unsupported', message: 'Presentation membership services are not configured.' }
-    }
+  /** artifactView → surface：view 成员（memberViewIds）。 */
+  async #applySurfaceMembership(projectId: string, sourceRef: ArtifactViewSourceRef, targetRef: SurfaceTargetRef, placement: Placement | undefined): Promise<AssemblyApplyItemResultV1> {
     const view = this.metadata.getArtifactView(sourceRef.id)
     if (view === undefined) return { sourceRef, status: 'failed', channel: 'error', message: 'Artifact view not found.' }
     if (String(this.metadata.getArtifact(String(view.artifactId))?.projectId ?? '') !== projectId) {
       return { sourceRef, status: 'failed', channel: 'error', message: 'Artifact view belongs to another project.' }
+    }
+    return this.#applyPresentationMember(projectId, sourceRef, targetRef, { viewId: sourceRef.id }, placement)
+  }
+
+  /** note/aggregate → surface：entity 成员（memberEntityRefs；聚合只投影自身不递归展开）。 */
+  async #applyEntityMembership(projectId: string, sourceRef: AssemblySourceRefV1, targetRef: SurfaceTargetRef): Promise<AssemblyApplyItemResultV1> {
+    let entityRef: PresentationEntityRefV0 | undefined
+    if (sourceRef.kind === 'note') {
+      const note = this.metadata.getNote(sourceRef.id)
+      if (note === undefined) return { sourceRef, status: 'failed', channel: 'error', message: 'Note not found.' }
+      if (String(note.projectId) !== projectId) return { sourceRef, status: 'failed', channel: 'error', message: 'Note belongs to another project.' }
+      entityRef = { type: 'note', id: sourceRef.id }
+    } else if (sourceRef.kind === 'scene') {
+      if (String(this.metadata.getWorkspace(sourceRef.id)?.projectId ?? '') !== projectId) {
+        return { sourceRef, status: 'failed', channel: 'error', message: 'Workspace belongs to another project.' }
+      }
+      entityRef = { type: 'workspace', id: sourceRef.id }
+    } else if (sourceRef.kind === 'context' || sourceRef.kind === 'workflow' || sourceRef.kind === 'collection') {
+      const scope = this.metadata.getScopes(projectId).find((item) => String(item.id) === sourceRef.id)
+      if (scope === undefined) return { sourceRef, status: 'failed', channel: 'error', message: `Source ${sourceRef.kind} scope not found in this project.` }
+      entityRef = { type: 'scope', id: sourceRef.id }
+    }
+    if (entityRef === undefined) return { sourceRef, status: 'skipped', channel: 'unsupported', message: 'Source has no entity member kind.' }
+    return this.#applyPresentationMember(projectId, sourceRef, targetRef, { entityRef }, undefined)
+  }
+
+  /** surface membership 公共实现：scope 解析 + scaffold + already-member + curation patch（ChangeSet）。 */
+  async #applyPresentationMember(
+    projectId: string,
+    sourceRef: AssemblySourceRefV1,
+    targetRef: SurfaceTargetRef,
+    member: { readonly viewId: string } | { readonly entityRef: PresentationEntityRefV0 },
+    placement: Placement | undefined,
+  ): Promise<AssemblyApplyItemResultV1> {
+    if (this.curationCommand === undefined || this.presentations === undefined) {
+      return { sourceRef, status: 'skipped', channel: 'unsupported', message: 'Presentation membership services are not configured.' }
     }
 
     // target scope 解析：main = root scope；context/workflow 按 kind 校验（cross-project fail-close）。
@@ -224,14 +293,23 @@ export class AssemblyApplyService {
       }
     }
 
-    // membership（+ 新成员初始 placement）经 curation patch 提交：ChangeSet + CAS + 幂等 receipt。
+    const isViewMember = 'viewId' in member
+    const memberViewId = isViewMember ? member.viewId : undefined
+    const entityRef = 'entityRef' in member ? member.entityRef : undefined
+    const entityKey = entityRef === undefined ? '' : `${entityRef.type}:${entityRef.id}`
+    const memberLabel = isViewMember ? member.viewId : entityKey
+
+    // membership（+ 新 view 成员初始 placement）经 curation patch 提交：ChangeSet + CAS + 幂等 receipt。
     for (let attempt = 0; attempt < 2; attempt++) {
       const current = this.presentations.get(projectId, presentationId)
       if (current === undefined) return { sourceRef, status: 'failed', channel: 'error', message: 'Presentation disappeared mid-apply.' }
-      // already-member：幂等 skip；带 placement 时纯位置更新（无 semantic ChangeSet，补充冻结 §7）。
-      if (current.state.memberViewIds.includes(sourceRef.id)) {
-        const placementApplied = placement !== undefined && this.#applyPlacementOnly(projectId, presentationId, sourceRef.id, placement)
-        return { sourceRef, status: 'skipped', channel: 'already-member', message: `Already a member of ${targetRef.kind} presentation.`, presentationId, memberViewId: sourceRef.id, ...(placementApplied ? { placementApplied } : {}) }
+      // already-member：幂等 skip；view 成员带 placement 时纯位置更新（无 semantic ChangeSet，补充冻结 §7）。
+      const alreadyMember = isViewMember
+        ? current.state.memberViewIds.includes(member.viewId)
+        : (current.state.memberEntityRefs ?? []).some((ref) => `${ref.type}:${ref.id}` === entityKey)
+      if (alreadyMember) {
+        const placementApplied = isViewMember && placement !== undefined && this.#applyPlacementOnly(projectId, presentationId, member.viewId, placement)
+        return { sourceRef, status: 'skipped', channel: 'already-member', message: `Already a member of ${targetRef.kind} presentation.`, presentationId, ...(memberViewId === undefined ? {} : { memberViewId }), ...(placementApplied ? { placementApplied } : {}) }
       }
       const receipt = await this.curationCommand.applyPatch(projectId, {
         schemaVersion: 0,
@@ -242,18 +320,21 @@ export class AssemblyApplyService {
         presentation: {
           presentationId,
           expectedVersion: current.version,
-          addMembers: [{ entityType: 'view', entityId: sourceRef.id }],
-          ...(placement === undefined ? {} : { setPositions: { [sourceRef.id]: placement } }),
+          ...(isViewMember
+            ? { addMembers: [{ entityType: 'view', entityId: member.viewId }] }
+            : { addEntityMembers: [entityRef!] }),
+          ...(isViewMember && placement !== undefined ? { setPositions: { [member.viewId]: placement } } : {}),
         },
         actorKind: 'web',
       })
       if (receipt.applied) {
         return {
           sourceRef, status: 'applied', channel: 'presentation-membership',
-          message: `Added to ${targetRef.kind} presentation${placement === undefined ? '' : ' (placement committed)'}.`,
-          presentationId, memberViewId: sourceRef.id,
+          message: `Added ${memberLabel} to ${targetRef.kind} presentation${isViewMember && placement !== undefined ? ' (placement committed)' : ''}.`,
+          presentationId,
+          ...(memberViewId === undefined ? {} : { memberViewId }),
           ...(receipt.changeSetId === undefined ? {} : { changeSetId: receipt.changeSetId }),
-          ...(placement !== undefined ? { placementApplied: true } : {}),
+          ...(isViewMember && placement !== undefined ? { placementApplied: true } : {}),
         }
       }
       const error = receipt.failedStep?.error ?? 'unknown'
@@ -286,7 +367,7 @@ export class AssemblyApplyService {
     }
   }
 
-  /** conversation_context relation：source=conversation artifact 端点，target=实体端点（施工单 §13 P0-D4 方向）。 */
+  /** conversation_context relation：source=conversation artifact 端点，target=view/note/scope/workspace 实体端点（施工单 §13 P0-D4 方向）。 */
   #applyConversationContext(projectId: string, sourceRef: AssemblySourceRefV1, targetRef: Extract<AssemblyTargetRefV1, { readonly kind: 'conversation' }>): AssemblyApplyItemResultV1 {
     if (this.mutationSafety === undefined) {
       return { sourceRef, status: 'skipped', channel: 'unsupported', message: 'Relation mutation service is not configured.' }
@@ -304,22 +385,48 @@ export class AssemblyApplyService {
     if (conversationArtifactId === undefined) {
       return { sourceRef, status: 'failed', channel: 'error', message: 'Conversation session has no artifact endpoint.' }
     }
-    // target 实体解析：本方法只处理 view/artifact 型 source（relation 端点）。
-    if (sourceRef.kind !== 'artifactView') {
-      return { sourceRef, status: 'skipped', channel: 'unsupported', message: 'Only artifact-view sources bind to conversations in this batch.' }
+    // target 实体解析（B6 扩展）：view（含 resource 解析产物）/ note / scope / workspace 各查 canonical truth。
+    let targetEntityKind: 'view' | 'note' | 'scope' | 'workspace' | undefined
+    let targetEntityId: string | undefined
+    if (sourceRef.kind === 'artifactView' || sourceRef.kind === 'resource') {
+      const view = this.metadata.getArtifactView(sourceRef.kind === 'resource'
+        ? String(this.metadata.getResourceDescriptorByResourceId(projectId, sourceRef.id)?.artifactId ?? '')
+        : sourceRef.id)
+      // resource 已在上游解析为 view 进入；此处直接处理 artifactView。
+      const viewId = sourceRef.kind === 'artifactView' ? sourceRef.id : undefined
+      if (viewId === undefined) return { sourceRef, status: 'skipped', channel: 'unsupported', message: 'Resource sources must resolve through their canonical view first.' }
+      if (view === undefined) return { sourceRef, status: 'failed', channel: 'error', message: 'Artifact view not found.' }
+      if (String(this.metadata.getArtifact(String(view.artifactId))?.projectId ?? '') !== projectId) {
+        return { sourceRef, status: 'failed', channel: 'error', message: 'Artifact view belongs to another project.' }
+      }
+      targetEntityKind = 'view'
+      targetEntityId = viewId
+    } else if (sourceRef.kind === 'note') {
+      const note = this.metadata.getNote(sourceRef.id)
+      if (note === undefined) return { sourceRef, status: 'failed', channel: 'error', message: 'Note not found.' }
+      if (String(note.projectId) !== projectId) return { sourceRef, status: 'failed', channel: 'error', message: 'Note belongs to another project.' }
+      targetEntityKind = 'note'
+      targetEntityId = sourceRef.id
+    } else if (sourceRef.kind === 'context' || sourceRef.kind === 'workflow' || sourceRef.kind === 'collection') {
+      const scope = this.metadata.getScopes(projectId).find((item) => String(item.id) === sourceRef.id)
+      if (scope === undefined) return { sourceRef, status: 'failed', channel: 'error', message: `Source ${sourceRef.kind} scope not found in this project.` }
+      targetEntityKind = 'scope'
+      targetEntityId = sourceRef.id
+    } else if (sourceRef.kind === 'scene') {
+      if (String(this.metadata.getWorkspace(sourceRef.id)?.projectId ?? '') !== projectId) {
+        return { sourceRef, status: 'failed', channel: 'error', message: 'Workspace belongs to another project.' }
+      }
+      targetEntityKind = 'workspace'
+      targetEntityId = sourceRef.id
     }
-    const view = this.metadata.getArtifactView(sourceRef.id)
-    if (view === undefined) return { sourceRef, status: 'failed', channel: 'error', message: 'Artifact view not found.' }
-    if (String(this.metadata.getArtifact(String(view.artifactId))?.projectId ?? '') !== projectId) {
-      return { sourceRef, status: 'failed', channel: 'error', message: 'Artifact view belongs to another project.' }
+    if (targetEntityKind === undefined || targetEntityId === undefined) {
+      return { sourceRef, status: 'skipped', channel: 'unsupported', message: 'Only artifact-view, note, scope and workspace sources bind to conversations.' }
     }
-    const targetEntityKind = relationEntityKindFor(sourceRef)
-    if (targetEntityKind === undefined) return { sourceRef, status: 'skipped', channel: 'unsupported', message: 'Source has no relation endpoint kind.' }
-    // 幂等：同 conversation→view 的 conversation_context 已存在 = skipped。
+    // 幂等：同 conversation→实体的 conversation_context 已存在 = skipped。
     const existing = this.metadata.getRelations(projectId).find((relation) =>
       relation.kind === 'conversation_context'
       && String(relation.sourceEntityId) === String(conversationArtifactId)
-      && String(relation.targetEntityId) === sourceRef.id)
+      && String(relation.targetEntityId) === targetEntityId)
     if (existing !== undefined) {
       return { sourceRef, status: 'skipped', channel: 'already-member', message: 'conversation_context binding already exists.' }
     }
@@ -330,7 +437,7 @@ export class AssemblyApplyService {
       sourceEntityType: 'artifact',
       sourceEntityId: conversationArtifactId,
       targetEntityType: targetEntityKind,
-      targetEntityId: sourceRef.id,
+      targetEntityId,
       kind: 'conversation_context',
       createdAt: now,
       updatedAt: now,

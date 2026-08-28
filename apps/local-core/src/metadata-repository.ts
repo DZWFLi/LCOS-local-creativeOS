@@ -2467,6 +2467,8 @@ export class SqliteMetadataRepository {
     }
     readonly workspaceMembershipAdds?: readonly { readonly workspaceId: WorkspaceId; readonly viewId: ArtifactViewId; readonly addedBy: 'user' | 'agent' | 'run' | 'import'; readonly addedAt: string }[]
     readonly workspaceMembershipRemoves?: readonly { readonly workspaceId: WorkspaceId; readonly viewId: ArtifactViewId }[]
+    readonly artifactViewDeletes?: readonly ArtifactViewId[]
+    readonly noteDeletes?: readonly NoteId[]
     readonly changeSet?: MutationChangeSetV1
     readonly receipt?: CurationPatchReceiptV0
   }): { readonly presentationUpdated: boolean } {
@@ -2517,6 +2519,8 @@ export class SqliteMetadataRepository {
         this.#database.prepare('DELETE FROM workspace_memberships WHERE workspace_id = ? AND artifact_view_id = ?')
           .run(membership.workspaceId as SQLInputValue, membership.viewId as SQLInputValue)
       }
+      for (const viewId of plan.artifactViewDeletes ?? []) this.#database.prepare('DELETE FROM artifact_views WHERE id = ?').run(viewId as SQLInputValue)
+      for (const noteId of plan.noteDeletes ?? []) this.#database.prepare('DELETE FROM notes WHERE id = ?').run(noteId as SQLInputValue)
       if (plan.changeSet !== undefined) this.createMutationChangeSet(plan.changeSet)
       if (plan.receipt !== undefined) this.saveCurationReceipt(plan.receipt, plan.projectId)
       this.#database.exec('COMMIT;')
@@ -3016,18 +3020,19 @@ export class SqliteMetadataRepository {
 
   updateResultSlot(slotId: string, patch: {
     readonly status?: import('@local-creative-os/contracts').ResultSlotV0['status']
-    readonly artifactId?: string
-    readonly artifactViewId?: string
+    readonly artifactId?: string | undefined
+    readonly artifactViewId?: string | undefined
     readonly runId?: string | undefined
   }): import('@local-creative-os/contracts').ResultSlotV0 {
     const current = this.getResultSlot(slotId)
     if (current === undefined) throw new Error('Result slot not found.')
+    // F6 B6：显式 undefined（'artifactId' in patch）= 清空该列；键缺失 = 保留现值。
     const next = {
       ...current,
       ...(patch.status === undefined ? {} : { status: patch.status }),
-      ...(patch.artifactId === undefined ? {} : { artifactId: patch.artifactId }),
-      ...(patch.artifactViewId === undefined ? {} : { artifactViewId: patch.artifactViewId }),
-      ...(patch.runId === undefined ? {} : { runId: patch.runId }),
+      ...('artifactId' in patch ? { artifactId: patch.artifactId } : {}),
+      ...('artifactViewId' in patch ? { artifactViewId: patch.artifactViewId } : {}),
+      ...('runId' in patch ? { runId: patch.runId } : {}),
       updatedAt: new Date().toISOString(),
     }
     this.#database.prepare(`
@@ -3481,6 +3486,39 @@ export class SqliteMetadataRepository {
   getCaptureStagingItem(id: string): CaptureStagingItemV0 | undefined {
     const row = this.#database.prepare('SELECT * FROM capture_staging_items WHERE id = ?').get(id as SQLInputValue) as Row | undefined
     return row === undefined ? undefined : this.#captureStagingItem(row)
+  }
+
+  /**
+   * F6 B6（P0-D）：Capture staging 真分页——SQL 级 pendingOnly/search/kind/sourceDomain
+   * + LIMIT/OFFSET（排序 captured_at DESC + id ASC 稳定序），不再"先截 50 再分页"。
+   */
+  queryCaptureStagingItems(input: {
+    readonly pendingOnly?: boolean
+    readonly search?: string
+    readonly kind?: string
+    readonly sourceDomain?: string
+    readonly cursor?: number
+    readonly limit?: number
+  }): CaptureStagingItemV0[] {
+    const conditions: string[] = []
+    const params: SQLInputValue[] = []
+    if (input.pendingOnly !== false) { conditions.push('resolved_project_id IS NULL') }
+    if (input.kind !== undefined && input.kind !== '') { conditions.push('kind = ?'); params.push(input.kind) }
+    const like = (needle: string): string => `%${needle}%`
+    if (input.search !== undefined && input.search.trim() !== '') {
+      const needle = input.search.trim()
+      conditions.push('(operation_id LIKE ? OR payload_ref LIKE ? OR source_json LIKE ?)')
+      params.push(like(needle), like(needle), like(needle))
+    }
+    if (input.sourceDomain !== undefined && input.sourceDomain.trim() !== '') {
+      conditions.push('source_json LIKE ?')
+      params.push(like(input.sourceDomain.trim()))
+    }
+    const limit = Math.max(1, Math.min(500, Math.trunc(input.limit ?? 50)))
+    const offset = Math.max(0, Math.trunc(input.cursor ?? 0))
+    const sql = `SELECT * FROM capture_staging_items ${conditions.length === 0 ? '' : 'WHERE ' + conditions.join(' AND ')} ORDER BY captured_at DESC, id ASC LIMIT ? OFFSET ?`
+    const rows = this.#database.prepare(sql).all(...params, limit as SQLInputValue, offset as SQLInputValue) as Row[]
+    return rows.map((row) => this.#captureStagingItem(row as Row))
   }
 
   countPendingCaptureStagingItems(): number {

@@ -30,6 +30,7 @@ export type RunReferenceRefV2 =
   | { readonly type: 'workspace'; readonly workspaceId: string }
   | { readonly type: 'conversation'; readonly conversationSessionId: string }
   | { readonly type: 'component'; readonly componentId: string; readonly presentationId?: string }
+  | { readonly type: 'note'; readonly noteId: string }
 
 export interface OrderedRunReferenceV2 {
   readonly ref: RunReferenceRefV2

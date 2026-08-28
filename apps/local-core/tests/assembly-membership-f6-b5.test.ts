@@ -295,7 +295,7 @@ describe('F6 B5: capture → surface 幂等重试', () => {
 })
 
 describe('F6 B5: 边界（aggregate source / skill）', () => {
-  it('aggregate source（context）→ main 明确 unsupported（memberEntityRefs 通道待前端确认）', async () => {
+  it('aggregate source（context）→ main：B6 已接 memberEntityRefs 通道（升级后的语义）', async () => {
     const s = setup()
     const result = await s.apply.apply({
       schemaVersion: 1,
@@ -303,8 +303,11 @@ describe('F6 B5: 边界（aggregate source / skill）', () => {
       sourceRefs: [{ kind: 'context', id: s.contextScopeId }],
       targetRef: { kind: 'main' },
     })
-    expect(result.results[0]!.status).toBe('skipped')
-    expect(result.results[0]!.channel).toBe('unsupported')
+    // B5 时该组合 unsupported（待冻结）；B6 补洞单 P0-A/P0-E 落地后为 entity 成员入会。
+    expect(result.results[0]!.status).toBe('applied')
+    expect(result.results[0]!.channel).toBe('presentation-membership')
+    const state = s.presentation.get(s.projectId, `presentation:context:${s.rootScopeId}`)!.state
+    expect((state.memberEntityRefs ?? []).some((ref) => ref.type === 'scope' && ref.id === s.contextScopeId)).toBe(true)
   })
 
   it('skill source → main stays unsupported（v0.15 只读裁定）', async () => {

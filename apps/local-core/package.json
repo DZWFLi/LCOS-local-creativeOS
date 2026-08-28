@@ -17,6 +17,7 @@
     "@local-creative-os/contracts": "0.1.0",
     "@local-creative-os/domain": "0.1.0",
     "@napi-rs/canvas": "0.1.100",
+    "fflate": "^0.8.3",
     "pdfjs-dist": "^4.10.38"
   }
 }

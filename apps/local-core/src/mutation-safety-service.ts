@@ -211,6 +211,153 @@ export class MutationSafetyService {
     return changeSet
   }
 
+  /** F6 B6（P1-B census）：working-set membership 移除进 ChangeSet（与 add 对称）。非成员 → undefined。 */
+  removeWorkspaceMember(input: {
+    readonly projectId: string
+    readonly workspaceId: string
+    readonly viewId: string
+    readonly operationId?: string
+    readonly actorKind?: MutationChangeSetV1['actorKind']
+    readonly origin?: ProjectEventOrigin
+  }): MutationChangeSetV1 | undefined {
+    const workspace = this.#metadata.getWorkspace(input.workspaceId)
+    if (workspace === undefined || String(workspace.projectId) !== input.projectId) throw new Error('Workspace not found.')
+    if (!this.#hasWorkspaceMember(input.workspaceId, input.viewId)) return undefined
+    const change: MutationChangeItemV1 = {
+      type: 'workspace_membership_remove',
+      workspaceId: input.workspaceId,
+      viewId: input.viewId,
+      inverse: { type: 'workspace_membership_add', workspaceId: input.workspaceId, viewId: input.viewId },
+      forward: { type: 'workspace_membership_remove', workspaceId: input.workspaceId, viewId: input.viewId },
+      appliedFingerprint: `workspace:${input.workspaceId}:member:${input.viewId}:absent`,
+    }
+    const changeSet = this.#buildChangeSet({
+      projectId: input.projectId,
+      operationId: input.operationId ?? input.origin?.operationId ?? `workspace-membership-${randomUUID()}`,
+      actorKind: input.actorKind ?? 'web',
+      changes: [change],
+    })
+    this.#metadata.runCurationMutation({
+      projectId: input.projectId,
+      workspaceMembershipRemoves: [{ workspaceId: input.workspaceId as never, viewId: input.viewId as never }],
+      changeSet,
+    })
+    this.#publishChangeSet(changeSet, input.origin)
+    return changeSet
+  }
+
+  /** F6 B6：成员移动 = remove + add 同一 ChangeSet（一个语义决策一次撤销）。from 非成员 = fail-close。 */
+  moveWorkspaceMember(input: {
+    readonly projectId: string
+    readonly fromWorkspaceId: string
+    readonly toWorkspaceId: string
+    readonly viewId: string
+    readonly operationId?: string
+    readonly actorKind?: MutationChangeSetV1['actorKind']
+    readonly origin?: ProjectEventOrigin
+  }): MutationChangeSetV1 {
+    for (const workspaceId of [input.fromWorkspaceId, input.toWorkspaceId]) {
+      const workspace = this.#metadata.getWorkspace(workspaceId)
+      if (workspace === undefined || String(workspace.projectId) !== input.projectId) throw new Error('Workspace not found.')
+    }
+    if (!this.#hasWorkspaceMember(input.fromWorkspaceId, input.viewId)) throw new Error('View is not a member of the source workspace.')
+    const changes: MutationChangeItemV1[] = [{
+      type: 'workspace_membership_remove',
+      workspaceId: input.fromWorkspaceId,
+      viewId: input.viewId,
+      inverse: { type: 'workspace_membership_add', workspaceId: input.fromWorkspaceId, viewId: input.viewId },
+      forward: { type: 'workspace_membership_remove', workspaceId: input.fromWorkspaceId, viewId: input.viewId },
+      appliedFingerprint: `workspace:${input.fromWorkspaceId}:member:${input.viewId}:absent`,
+    }]
+    const targetHasMember = this.#hasWorkspaceMember(input.toWorkspaceId, input.viewId)
+    if (!targetHasMember) {
+      changes.push({
+        type: 'workspace_membership_add',
+        workspaceId: input.toWorkspaceId,
+        viewId: input.viewId,
+        inverse: { type: 'workspace_membership_remove', workspaceId: input.toWorkspaceId, viewId: input.viewId },
+        forward: { type: 'workspace_membership_add', workspaceId: input.toWorkspaceId, viewId: input.viewId },
+        appliedFingerprint: `workspace:${input.toWorkspaceId}:member:${input.viewId}:present`,
+      })
+    }
+    const changeSet = this.#buildChangeSet({
+      projectId: input.projectId,
+      operationId: input.operationId ?? input.origin?.operationId ?? `workspace-membership-${randomUUID()}`,
+      actorKind: input.actorKind ?? 'web',
+      changes,
+    })
+    this.#metadata.runCurationMutation({
+      projectId: input.projectId,
+      workspaceMembershipRemoves: [{ workspaceId: input.fromWorkspaceId as never, viewId: input.viewId as never }],
+      // INSERT OR IGNORE：目标已含成员时 add 幂等（changes 已如实省略 add 项）。
+      workspaceMembershipAdds: [{ workspaceId: input.toWorkspaceId as never, viewId: input.viewId as never, addedBy: 'user', addedAt: new Date().toISOString() }],
+      changeSet,
+    })
+    this.#publishChangeSet(changeSet, input.origin)
+    return changeSet
+  }
+
+  /** F6 B6：破坏性删除 ArtifactView 进 ChangeSet（snapshot inverse 可 restore）。 */
+  deleteArtifactView(input: {
+    readonly projectId: string
+    readonly viewId: string
+    readonly operationId?: string
+    readonly actorKind?: MutationChangeSetV1['actorKind']
+    readonly origin?: ProjectEventOrigin
+  }): MutationChangeSetV1 {
+    const view = this.#metadata.getArtifactView(input.viewId)
+    if (view === undefined) throw new Error('Artifact view not found.')
+    if (String(this.#metadata.getArtifact(String(view.artifactId))?.projectId ?? '') !== input.projectId) {
+      throw new Error('Artifact view belongs to another project.')
+    }
+    const change: MutationChangeItemV1 = {
+      type: 'artifact_view_delete',
+      viewId: input.viewId,
+      artifactId: String(view.artifactId),
+      inverse: { type: 'restore_artifact_view', view },
+      forward: { type: 'delete_artifact_view', viewId: input.viewId },
+      appliedFingerprint: `artifact-view:${input.viewId}:absent`,
+    }
+    const changeSet = this.#buildChangeSet({
+      projectId: input.projectId,
+      operationId: input.operationId ?? input.origin?.operationId ?? `artifact-view-delete-${randomUUID()}`,
+      actorKind: input.actorKind ?? 'web',
+      changes: [change],
+    })
+    this.#metadata.runCurationMutation({ projectId: input.projectId, artifactViewDeletes: [input.viewId as never], changeSet })
+    this.#publishChangeSet(changeSet, input.origin)
+    return changeSet
+  }
+
+  /** F6 B6：破坏性删除 Note 进 ChangeSet（snapshot inverse 可 restore）。 */
+  deleteNote(input: {
+    readonly projectId: string
+    readonly noteId: string
+    readonly operationId?: string
+    readonly actorKind?: MutationChangeSetV1['actorKind']
+    readonly origin?: ProjectEventOrigin
+  }): MutationChangeSetV1 {
+    const note = this.#metadata.getNote(input.noteId)
+    if (note === undefined) throw new Error('Note not found.')
+    if (String(note.projectId) !== input.projectId) throw new Error('Note belongs to another project.')
+    const change: MutationChangeItemV1 = {
+      type: 'note_delete',
+      noteId: input.noteId,
+      inverse: { type: 'restore_note', note },
+      forward: { type: 'delete_note', noteId: input.noteId },
+      appliedFingerprint: `note:${input.noteId}:absent`,
+    }
+    const changeSet = this.#buildChangeSet({
+      projectId: input.projectId,
+      operationId: input.operationId ?? input.origin?.operationId ?? `note-delete-${randomUUID()}`,
+      actorKind: input.actorKind ?? 'web',
+      changes: [change],
+    })
+    this.#metadata.runCurationMutation({ projectId: input.projectId, noteDeletes: [input.noteId as never], changeSet })
+    this.#publishChangeSet(changeSet, input.origin)
+    return changeSet
+  }
+
   revert(changeSetId: string, origin?: ProjectEventOrigin): RevertResultV1 {
     const changeSet = this.#metadata.getMutationChangeSet(changeSetId)
     if (changeSet === undefined) throw new Error('Change set not found.')
@@ -258,6 +405,19 @@ export class MutationSafetyService {
         if (this.#hasWorkspaceMember(change.workspaceId, change.viewId)) {
           return { revertable: false, reason: 'TOUCHED_STATE_CHANGED_AFTER_APPLY', changeSetId }
         }
+      } else if (change.type === 'artifact_view_delete') {
+        if (this.#metadata.getArtifactView(change.viewId) !== undefined) {
+          return { revertable: false, reason: 'TOUCHED_STATE_CHANGED_AFTER_APPLY', changeSetId }
+        }
+      } else if (change.type === 'note_delete') {
+        if (this.#metadata.getNote(change.noteId) !== undefined) {
+          return { revertable: false, reason: 'TOUCHED_STATE_CHANGED_AFTER_APPLY', changeSetId }
+        }
+      } else if (change.type === 'result_slot_materialize') {
+        const slot = this.#metadata.getResultSlot(change.slotId)
+        if (slot === undefined || slot.status !== 'materialized' || String(slot.artifactViewId ?? '') !== String(change.artifactViewId ?? '')) {
+          return { revertable: false, reason: 'TOUCHED_STATE_CHANGED_AFTER_APPLY', changeSetId }
+        }
       }
     }
 
@@ -302,6 +462,12 @@ export class MutationSafetyService {
           projectId: changeSet.projectId,
           workspaceMembershipAdds: [{ workspaceId: change.workspaceId as never, viewId: change.viewId as never, addedBy: 'user', addedAt: new Date().toISOString() }],
         })
+      } else if (change.type === 'artifact_view_delete') {
+        this.#metadata.upsertArtifactView(change.inverse.view as never)
+      } else if (change.type === 'note_delete') {
+        this.#metadata.upsertNote(change.inverse.note as never)
+      } else if (change.type === 'result_slot_materialize') {
+        this.#metadata.updateResultSlot(change.slotId, { status: 'review', artifactId: undefined, artifactViewId: undefined })
       }
     }
 
@@ -354,6 +520,19 @@ export class MutationSafetyService {
         if (!this.#hasWorkspaceMember(change.workspaceId, change.viewId)) {
           return { revertable: false, reason: 'TOUCHED_STATE_CHANGED_AFTER_APPLY', changeSetId }
         }
+      } else if (change.type === 'artifact_view_delete') {
+        if (this.#metadata.getArtifactView(change.viewId) === undefined) {
+          return { revertable: false, reason: 'TOUCHED_STATE_CHANGED_AFTER_APPLY', changeSetId }
+        }
+      } else if (change.type === 'note_delete') {
+        if (this.#metadata.getNote(change.noteId) === undefined) {
+          return { revertable: false, reason: 'TOUCHED_STATE_CHANGED_AFTER_APPLY', changeSetId }
+        }
+      } else if (change.type === 'result_slot_materialize') {
+        const slot = this.#metadata.getResultSlot(change.slotId)
+        if (slot === undefined || slot.status !== 'review') {
+          return { revertable: false, reason: 'TOUCHED_STATE_CHANGED_AFTER_APPLY', changeSetId }
+        }
       }
     }
 
@@ -394,6 +573,17 @@ export class MutationSafetyService {
         this.#metadata.runCurationMutation({
           projectId: changeSet.projectId,
           workspaceMembershipRemoves: [{ workspaceId: change.workspaceId as never, viewId: change.viewId as never }],
+        })
+      } else if (change.type === 'artifact_view_delete') {
+        this.#metadata.runCurationMutation({ projectId: changeSet.projectId, artifactViewDeletes: [change.viewId as never] })
+      } else if (change.type === 'note_delete') {
+        this.#metadata.runCurationMutation({ projectId: changeSet.projectId, noteDeletes: [change.noteId as never] })
+      } else if (change.type === 'result_slot_materialize') {
+        this.#metadata.updateResultSlot(change.slotId, {
+          status: 'materialized',
+          ...(change.artifactId === undefined ? {} : { artifactId: change.artifactId }),
+          ...(change.artifactViewId === undefined ? {} : { artifactViewId: change.artifactViewId }),
+          runId: change.runId,
         })
       }
     }

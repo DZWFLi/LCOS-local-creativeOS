@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import type { IncomingMessage } from 'node:http'
-import type { Artifact, ArtifactView, Checkpoint, Note, Relation, Workspace } from '@local-creative-os/contracts'
+import type { Artifact, ArtifactView, Checkpoint, Note, Workspace } from '@local-creative-os/contracts'
 import type { ArtifactRevisionId, FileRecordId, ProjectId } from '@local-creative-os/domain'
 import type { FileObservationService } from '../file-observation-service.js'
 import type { PreviewWorkerService } from '../preview-worker-service.js'
@@ -13,6 +13,8 @@ export interface EntityRouteContext {
   readonly method: string
   readonly pathname: string
   readonly metadata: SqliteMetadataRepository | undefined
+  /** F6 B6（P1-B census）：破坏性 DELETE 走 MutationSafetyService（ChangeSet-backed）。 */
+  readonly mutationSafety: import('../mutation-safety-service.js').MutationSafetyService | undefined
   readonly fileObservation: FileObservationService | undefined
   readonly previewWorker: PreviewWorkerService | undefined
   readonly request: IncomingMessage
@@ -24,32 +26,7 @@ function belongsToProject(value: unknown, projectId: string): value is Record<st
   return isRecord(value) && value.projectId === projectId && !containsForbiddenPathKey(value)
 }
 
-function relationEntityBelongsToProject(
-  metadata: SqliteMetadataRepository,
-  projectId: string,
-  entityType: unknown,
-  entityId: unknown,
-): boolean {
-  if (typeof entityId !== 'string' || entityId.trim() === '') return false
-  if (entityType === 'artifact') return String(metadata.getArtifact(entityId)?.projectId ?? '') === projectId
-  if (entityType === 'note') return String(metadata.getNote(entityId)?.projectId ?? '') === projectId
-  if (entityType === 'scope') return metadata.get(projectId)?.scopes.some((scope) => String(scope.id) === entityId) ?? false
-  if (entityType === 'view') {
-    const view = metadata.getArtifactView(entityId)
-    if (view === undefined) return false
-    return String(metadata.getArtifact(String(view.artifactId))?.projectId ?? '') === projectId
-  }
-  if (entityType === 'workspace') return String(metadata.getWorkspace(entityId)?.projectId ?? '') === projectId
-  return false
-}
-
-function isSafeRelationInput(metadata: SqliteMetadataRepository, projectId: string, value: unknown, relationId: string): value is Relation {
-  if (!belongsToProject(value, projectId) || value.id !== relationId) return false
-  if (typeof value.kind !== 'string' || value.kind.trim() === '' || value.kind.length > 80) return false
-  if (typeof value.createdAt !== 'string' || typeof value.updatedAt !== 'string') return false
-  return relationEntityBelongsToProject(metadata, projectId, value.sourceEntityType, value.sourceEntityId)
-    && relationEntityBelongsToProject(metadata, projectId, value.targetEntityType, value.targetEntityId)
-}
+// Relations 路由已整体迁至 routes/relations.ts（ChangeSet-backed）——校验函数随之移除。
 
 function containsForbiddenPathKey(value: unknown): boolean {
   if (Array.isArray(value)) return value.some(containsForbiddenPathKey)
@@ -58,7 +35,7 @@ function containsForbiddenPathKey(value: unknown): boolean {
 }
 
 export async function handleEntityRoute(ctx: EntityRouteContext): Promise<RouteResult> {
-  const { method, pathname, metadata, fileObservation, previewWorker, request, signal } = ctx
+  const { method, pathname, metadata, mutationSafety, fileObservation, previewWorker, request, signal } = ctx
   const { failure, readJsonBody } = ctx.helpers
   // All entity routes require metadata
   if (metadata === undefined) return undefined
@@ -199,42 +176,18 @@ export async function handleEntityRoute(ctx: EntityRouteContext): Promise<RouteR
       const existing = metadata.getArtifactView(viewId)
       const artifact = existing === undefined ? undefined : metadata.getArtifact(String(existing.artifactId))
       if (existing === undefined || artifact === undefined || String(artifact.projectId) !== projectId) return { status: 404, body: failure('NOT_FOUND', 'ArtifactView not found.') }
-      metadata.deleteArtifactView(viewId)
-      return { status: 200, body: { ok: true, value: null } }
+      if (mutationSafety === undefined) return { status: 503, body: failure('UNAVAILABLE', 'Mutation safety service is not configured.') }
+      try {
+        const changeSet = mutationSafety.deleteArtifactView({ projectId, viewId })
+        return { status: 200, body: { ok: true, value: null, meta: { changeSetId: changeSet.id } } }
+      } catch (error: unknown) {
+        return { status: 409, body: failure('CONFLICT', error instanceof Error ? error.message : 'Artifact view delete failed.') }
+      }
     }
     return undefined
   }
 
-  // --- Relations ---
-  const relListMatch = /^\/projects\/([^/]+)\/relations$/.exec(pathname)
-  const relOneMatch = /^\/projects\/([^/]+)\/relations\/([^/]+)$/.exec(pathname)
-  if (relListMatch !== null && method === 'GET') {
-    const projectId = decodeURIComponent(relListMatch[1] ?? '')
-    return { status: 200, body: { ok: true, value: metadata.getRelations(projectId) } }
-  }
-  if (relOneMatch !== null) {
-    const projectId = decodeURIComponent(relOneMatch[1] ?? '')
-    const relId = decodeURIComponent(relOneMatch[2] ?? '')
-    if (method === 'GET') {
-      const rel = metadata.getRelation(relId)
-      return rel === undefined ? { status: 404, body: failure('NOT_FOUND', 'Relation not found.') } : { status: 200, body: { ok: true, value: rel } }
-    }
-    if (method === 'PUT') {
-      const body = await readJsonBody(request, signal)
-      if (!isSafeRelationInput(metadata, projectId, body, relId)) {
-        return { status: 400, body: failure('INVALID_ARGUMENT', 'Relation identity, endpoints, kind, and route project must be valid.') }
-      }
-      metadata.upsertRelation(body)
-      return { status: 200, body: { ok: true, value: body } }
-    }
-    if (method === 'DELETE') {
-      const existing = metadata.getRelation(relId)
-      if (existing === undefined || String(existing.projectId) !== projectId) return { status: 404, body: failure('NOT_FOUND', 'Relation not found.') }
-      metadata.deleteRelation(relId)
-      return { status: 200, body: { ok: true, value: null } }
-    }
-    return undefined
-  }
+  // --- Relations：已由 routes/relations.ts（ChangeSet-backed）全量接管——本段为不可达死代码，B6 清除。 ---
 
   // --- Notes ---
   const noteListMatch = /^\/projects\/([^/]+)\/notes$/.exec(pathname)
@@ -272,8 +225,13 @@ export async function handleEntityRoute(ctx: EntityRouteContext): Promise<RouteR
     if (method === 'DELETE') {
       const existing = metadata.getNote(noteId)
       if (existing === undefined || String(existing.projectId) !== projectId) return { status: 404, body: failure('NOT_FOUND', 'Note not found.') }
-      metadata.deleteNote(noteId)
-      return { status: 200, body: { ok: true, value: null } }
+      if (mutationSafety === undefined) return { status: 503, body: failure('UNAVAILABLE', 'Mutation safety service is not configured.') }
+      try {
+        const changeSet = mutationSafety.deleteNote({ projectId, noteId })
+        return { status: 200, body: { ok: true, value: null, meta: { changeSetId: changeSet.id } } }
+      } catch (error: unknown) {
+        return { status: 409, body: failure('CONFLICT', error instanceof Error ? error.message : 'Note delete failed.') }
+      }
     }
     return undefined
   }
