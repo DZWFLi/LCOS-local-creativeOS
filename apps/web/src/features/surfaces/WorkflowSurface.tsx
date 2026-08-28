@@ -38,7 +38,7 @@ import { useWorkflowActionState } from '../../state/presentationWorkflowActionSt
 import { useSpatialSessionCamera } from '../../state/spatialSessionState'
 import { useSpatialFocusRequest, type SpatialFocusRequest } from '../spatial/useSpatialFocusRequest'
 import { SurfaceObject } from './SurfaceObject'
-import { GlythAvatar } from '../spatial/visual/CanvasSprite'
+import { LcosSignalGlyph } from '../design/DotGlyph'
 import { boundRegionSemanticForView, resolveSpatialSignal, type SpatialRuntimeSignal } from '../spatial/visual/spatialSignal'
 import { spatialLodForCount, spatialOverviewProjection } from '../spatial/spatialLod'
 import { layoutManualSpatial } from './surfaceLayouts'
@@ -776,7 +776,7 @@ export function WorkflowSurface(props: Props) {
             key={action.id}
             data-workflow-action-id={action.id}
             className={`lcos-workflow-action lcos-spatial-placement ${actionSignal.signalClass} ${selectedActionId === action.id ? 'selected' : ''} ${draggingActionId === action.id ? 'is-dragging' : ''} ${linkTargetId === action.id ? 'is-link-target' : ''} ${link?.from === action.id ? 'is-link-source' : ''}`}
-            data-spatial-signal={actionSignal.glyph}
+            data-spatial-signal={actionSignal.state}
             style={{ left: action.x, top: action.y, width: ACTION_WIDTH, height: ACTION_HEIGHT, '--i': index } as CSSProperties}
             onPointerDown={(event) => beginActionDrag(event, action)}
             onPointerMove={moveActionDrag}
@@ -796,7 +796,7 @@ export function WorkflowSurface(props: Props) {
               <button type="button" title="删除步骤；材料不会被删除" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); removeAction(action.id) }}><Trash2 size={10}/></button>
             </div>
             <button type="button" className="lcos-workflow-port output" aria-label={`从 ${action.label} 连接下一步`} onPointerDown={(event) => beginLink(event, action.id)}><Link2 size={8}/></button>
-            {(selectedActionId === action.id || runtimeSignal !== 'idle') && <span className="lcos-workflow-action-signal" data-spatial-signal={actionSignal.glyph} aria-hidden="true"><GlythAvatar state={actionSignal.glyph} reason={selectedActionId === action.id ? 'selection' : 'running'}/></span>}
+            {(selectedActionId === action.id || runtimeSignal !== 'idle') && <span className="lcos-workflow-action-signal" data-spatial-signal={selectedActionId === action.id && actionSignal.state === 'stable' ? 'focus' : actionSignal.state} aria-hidden="true"><LcosSignalGlyph state={selectedActionId === action.id && actionSignal.state === 'stable' ? 'focus' : actionSignal.state}/></span>}
           </div>
         })}
 

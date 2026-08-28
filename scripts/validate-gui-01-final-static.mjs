@@ -2,14 +2,14 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 const root = process.cwd()
-const read = (file) => fs.readFileSync(path.join(root, file), 'utf8')
+const read = (file) => { const target = path.join(root, file); if (!fs.existsSync(target)) { console.error(`GATE ERROR: stale source target\nmissing: ${file}`); process.exitCode = 1; return '' } return fs.readFileSync(target, 'utf8') }
 const checks = []
 const check = (name, ok) => checks.push([name, Boolean(ok)])
 
 const app = read('apps/web/src/App.tsx')
 const canvas = read('apps/web/src/features/canvas/ProjectCanvas.tsx')
 const visual = read('apps/web/src/features/canvas/CanvasNodeVisual.tsx')
-const signal = read('apps/web/src/features/spatial/visual/LcosGlyph.tsx')
+const signal = read('apps/web/src/features/spatial/visual/spatialSignal.ts')
 const glythMotion = read('apps/web/src/features/spatial/visual/glythMotion.ts')
 const dock = read('apps/web/src/features/shell/SurfaceDock.tsx')
 const surfaceObject = read('apps/web/src/features/surfaces/SurfaceObject.tsx')
@@ -41,8 +41,8 @@ check('Workflow action scene is the capability homepage; old Graph remains a Len
 check('Workflow Step contract is Presentation-only and materials remain references', presentation.includes('WorkflowActionV0') && presentation.includes('attachedViewIds') && workflow.includes('attachSelection'))
 check('Only Workflow actions own primary flow ports', workflow.includes('data-workflow-action-input={action.id}') && workflow.includes('className="lcos-workflow-port output"') && !workflow.includes('data-workflow-input={node.id}'))
 check('Material morphology owns file/content identity', visual.includes('MaterialPaperFallback') && visual.includes('CollapsedNotePaper') && !visual.includes('SystemDotGlyph'))
-check('Glyph Micro owns LCOS action/state only', signal.includes('LcosGlyphState') && glythMotion.includes("export type LcosGlythState = 'stable' | 'working' | 'waiting' | 'error' | 'confirm' | 'absorb' | 'output'"))
-check('System object identity is separate from Glyph Micro signal', surfaceObject.includes('SurfaceIdentityGlyph') && surfaceObject.includes('LcosGlyph'))
+check('Spatial state vocabulary stays explicit while Conversation Glyth keeps seven poses', signal.includes('SpatialRuntimeSignal') && signal.includes('LcosSignalState') && glythMotion.includes("export type LcosGlythState = 'stable' | 'working' | 'waiting' | 'error' | 'confirm' | 'absorb' | 'output'"))
+check('System object identity stays separate from Conversation Glyth', surfaceObject.includes('SurfaceIdentityGlyph') && surfaceObject.includes('LcosSignalGlyph') && !surfaceObject.includes('GlythAvatar') && !surfaceObject.includes('<LcosGlyth'))
 check('Reorganize positions are real Presentation ChangeSet data', reorganizeContract.includes('positionPatch?:') && reorganize.includes('positionPatch: Object.fromEntries') && coreReorganize.includes('proposal.positionPatch'))
 check('Whole-ChangeSet review has real Keep / Revert Core closure', reorganize.includes('acceptReorganize') && reorganize.includes('rollbackReorganize') && coreReorganize.includes('accept(id: string)') && client.includes('acceptReorganize'))
 check('Reorganize fails closed on stale Presentation', coreReorganize.includes('STALE_PRESENTATION'))

@@ -1,4 +1,4 @@
-import type { ContextManifestV0, GraphVersion, PreviewRecord, ProjectGraphSnapshot, Scope, WorkspaceContextPolicy, MutationBatch } from '@local-creative-os/contracts'
+import type { ContextManifestV0, ConversationSessionV1, GraphVersion, PreviewRecord, ProjectGraphSnapshot, Scope, WorkspaceContextPolicy, MutationBatch } from '@local-creative-os/contracts'
 import { recallNotePresentation } from '../state/notePresentationMemory'
 import type {
   CanvasEdge,
@@ -64,11 +64,12 @@ export class RuntimeBridge {
       const snapshot = call.result.value
       const previews = await this.#loadPreviewRecords()
       const previewContents = await this.#loadPreviewContents(previews)
-      const resources = await this.client.resourceList(this.projectId)
-        .then((list) => list.result.ok ? list.result.value : [])
-        .catch(() => [])
+      const [resources, conversations] = await Promise.all([
+        this.client.resourceList(this.projectId).then((list) => list.result.ok ? list.result.value : []).catch(() => []),
+        this.client.conversations(this.projectId).then((list) => list.result.ok ? list.result.value : []).catch(() => []),
+      ])
       this.#lastSavedSnapshot = JSON.stringify(snapshot)
-      const state = mapGraphToState(snapshot, this.projectId, previews, previewContents, resources)
+      const state = mapGraphToState(snapshot, this.projectId, previews, previewContents, resources, conversations)
       this.#graphVersion = Number(snapshot.graphVersion) || 1
       this.#acknowledgedState = cloneState(state)
       return { source: 'runtime', state }
@@ -324,6 +325,7 @@ export function mapGraphToState(
   previewRecords: readonly PreviewRecord[] = [],
   previewContents: ReadonlyMap<string, PreviewContentResult> = new Map(),
   resourceSummaries: readonly { readonly artifactId: string; readonly sourceKind?: string }[] = [],
+  conversationSessions: readonly ConversationSessionV1[] = [],
 ): PersistedPrototypeState {
   const declaredScopeIds = new Set(graph.scopes.map((scope) => String(scope.id)))
   const canonicalRootScopeId = String(graph.scopes.find((scope) => scope.kind === 'root')?.id ?? graph.scopes[0]?.id ?? 'scope-root')
@@ -358,6 +360,7 @@ export function mapGraphToState(
     }
   }
   const sourceKindByArtifact = new Map(resourceSummaries.map((summary) => [String(summary.artifactId), summary.sourceKind]))
+  const conversationByViewId = new Map(conversationSessions.flatMap((session) => session.conversationViewId ? [[String(session.conversationViewId), session] as const] : []))
   const childScopeByContainerViewId = new Map(graph.scopes.filter((scope) => scope.containerViewId !== null).map((scope) => [String(scope.containerViewId), String(scope.id)]))
   const childScopeKindByContainerViewId = new Map(graph.scopes.filter((scope) => scope.containerViewId !== null).map((scope) => [String(scope.containerViewId), scope.kind] as const))
   const referenceArtifactIds = new Set(graph.relations.filter((relation) => relation.kind === 'reference' && relation.sourceEntityType === 'artifact').map((relation) => String(relation.sourceEntityId)))
@@ -384,6 +387,7 @@ export function mapGraphToState(
         : referenceArtifactIds.has(String(artifact.id))
           ? 'reference'
           : undefined
+    const conversation = conversationByViewId.get(String(view.id))
     return {
       id: String(view.id),
       kind: runtimeRole === 'feedback' ? 'note' : artifact ? (KIND_TO_NODE[artifact.kind] ?? 'source') : 'source',
@@ -403,6 +407,19 @@ export function mapGraphToState(
       managed: artifact?.managed ?? false,
       createdAt: revision?.createdAt ?? artifact?.createdAt,
       sourceRunId: revision?.runId === undefined ? undefined : String(revision.runId),
+      ...(conversation ? {
+        entityKind: 'conversation' as const,
+        conversation: {
+          id: String(conversation.id),
+          title: conversation.title,
+          messageCount: conversation.messageCount,
+          updatedAt: conversation.updatedAt,
+          lastOpenedAt: conversation.lastOpenedAt,
+          lastRunAt: conversation.lastRunAt,
+          lastSelectedAsControllerAt: conversation.lastSelectedAsControllerAt,
+          ...(conversation.conversationArtifactId ? { conversationArtifactId: String(conversation.conversationArtifactId) } : {}),
+        },
+      } : {}),
       fileRecordId: revision === undefined ? undefined : String(revision.fileRecordId),
       fileAvailability: fileRecord?.availability,
       contentHash: revision === undefined ? undefined : String(revision.contentHash),

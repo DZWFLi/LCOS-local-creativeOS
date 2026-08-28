@@ -8,7 +8,7 @@ import { layoutMindMap, mindMapEdgePath, type MindMapLayout } from '../../presen
 import { relativeTime } from '../../shell/relativeTime'
 import type { ContextHistoryEntry } from '../../surfaces/surfaceContracts'
 import type { SurfaceBinding } from '../model/surfaceElementTypes'
-import { LcosGlyth } from '../visual/LcosGlyth'
+import { LcosSignalGlyph } from '../../design/DotGlyph'
 import { LightSegment } from '../visual/LightSegment'
 import { SurfaceComponentImmersive } from './SurfaceComponentImmersive'
 import type { SurfaceComponentRenderProps } from './surfaceComponentTypes'
@@ -74,7 +74,7 @@ function Header({ icon, title, hint, selected, onMaximize }: { icon: ReactNode; 
   return <header className="lcos-context-component-header">
     <span className="lcos-context-component-icon">{icon}</span>
     <span><strong>{title}</strong><small>{hint}</small></span>
-    <LightSegment axis="horizontal" length={20} active={selected}/>{selected && <LcosGlyth state="absorb" />}
+    <LightSegment axis="horizontal" length={20} active={selected}/>{selected && <LcosSignalGlyph state="focus"/>}
     {/* G-1 最大化入口：与控制钮同款 20×20 方钮（.lcos-context-maximize）；button 已在 SurfaceFrame 的 INTERACTIVE_SELECTOR 内，不会被拖拽劫持 */}
     {onMaximize ? <button type="button" className="lcos-context-maximize" onClick={(event) => { event.stopPropagation(); onMaximize() }} aria-label={`最大化查看${title}`} title={`最大化查看${title}`}><Maximize2 size={11}/></button> : null}
   </header>

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { Command, Play } from 'lucide-react'
-import type { Checkpoint, ConnectedConversationV1, ContextChangeProposalV1, ContextManifestV0, ContinuityResumeSnapshotV1, ConversationSessionV1, ObsidianVaultScanV1, PresentationEntityRefV0, PresentationSpatialRegionV0, RunEvent, RunProposalResult, RunReview, RuntimeProviderStatus, WorkspaceMembership } from '@local-creative-os/contracts'
+import type { ActiveReceiverIdentityV1, Checkpoint, ConnectedConversationV1, ContextChangeProposalV1, ContextManifestV0, ContinuityResumeSnapshotV1, ConversationSessionV1, ObsidianVaultScanV1, PresentationEntityRefV0, PresentationSpatialRegionV0, RunEvent, RunProposalResult, RunReview, RuntimeProviderStatus, WorkspaceMembership } from '@local-creative-os/contracts'
 import { MAX_STRUCTURAL_CONTAINER_DEPTH, type HandoffRecord } from '@local-creative-os/domain'
 import type { ActiveRun, Camera, CanvasNode, CanvasScope, NodeDisplayMode, NodeLayer, PersistedPrototypeState, ProjectPackage, ScopeKind, TargetContextInference, WorkRailPreferences, Workspace } from './model'
 import { nodeMeta, runStatusLabel } from './model'
@@ -27,6 +27,7 @@ import { UniversalImportPanel, type DirectoryEntryInput } from './features/resou
 import { ResourceDetailDialog } from './features/resources/ResourceDetailDialog'
 import { ObsidianImportDialog } from './features/resources/ObsidianImportDialog'
 import { ConversationContextDialog } from './features/conversations/ConversationContextDialog'
+import { ConversationControllerDialog } from './features/conversations/ConversationControllerDialog'
 import { capabilitiesFor, type LinkReferenceInput, type RunOutputIntent } from './runtime/v07UiContracts'
 import { loadProjectCatalog, loadPrototypeState, saveProjectCatalog, savePrototypeState } from './state/prototypeStorage'
 import { clearProjectNavigationState, loadProjectNavigationState, saveProjectNavigationState } from './state/projectNavigation'
@@ -90,8 +91,7 @@ import { resolveArtifactViewerKind } from './features/viewer/artifactViewerRegis
 import { setOcrClient } from './features/ocr/ocrRuntime'
 import { orderProjectRailViews } from './features/shell/workspaceRailOrder'
 import { deriveContextGraphAutoNodeIds, mergeContextGraphNodeIds } from './features/context/contextGraphPopulation'
-import { materializeProjectEntityNodes, projectEntityNodeId, semanticRefsForSourceIds } from './features/entities/projectEntityProjection'
-import { DROP_FEEDBACK_TOTAL_MS } from './features/drop/useSemanticDropFeedback'
+import { materializeProjectEntityNodes, projectEntityNodeIds, semanticRefsForSourceIds } from './features/entities/projectEntityProjection'
 import { ARRANGE_SURFACE_DROP_TARGET_ID, CONTEXT_GRAPH_SURFACE_DROP_TARGET_ID, CONTEXT_SURFACE_DROP_TARGET_ID, NEW_SCENE_DROP_TARGET_ID, WORKFLOW_GRAPH_SURFACE_DROP_TARGET_ID, WORKFLOW_SURFACE_DROP_TARGET_ID } from './features/spatial/semanticDrop'
 import { ProjectFocusNavigator } from './features/focus/ProjectFocusNavigator'
 import { resolveProjectFocusLocations, type ProjectFocusLocation, type ProjectFocusLocationCandidate, type ProjectFocusSearchEntry } from './state/projectFocus'
@@ -353,10 +353,12 @@ export function App() {
   const [linkDialogOpen, setLinkDialogOpen] = useState(false)
   const [importPanelOpen, setImportPanelOpen] = useState(false)
   const [conversationDialogOpen, setConversationDialogOpen] = useState(false)
-  // RECEIVER-5（43O）：active receiver 会话失效标记。命中 session 失效特征错误时置位，
-  // 只影响 Chip/Switcher 的展示与恢复入口——Project/Surface/Selection 一概不动；
-  // 用户点「重新连接」清除，lease 层在下次 Run 自动恢复替代会话（只建一次）。
-  const [receiverSessionStale, setReceiverSessionStale] = useState(false)
+  const [conversationSpaceId, setConversationSpaceId] = useState<string | null>(null)
+  const [activeReceiverIdentity, setActiveReceiverIdentity] = useState<ActiveReceiverIdentityV1 | null>(null)
+  const [controllerTargetSessionId, setControllerTargetSessionId] = useState<string | null>(null)
+  const [controllerChoices, setControllerChoices] = useState<readonly ConnectedConversationV1[]>([])
+  const [controllerBusy, setControllerBusy] = useState(false)
+  const [controllerError, setControllerError] = useState<string | null>(null)
   const [projectToolsMode, setProjectToolsMode] = useState<'search' | 'full' | null>(null)
   const [projectFocusOpen, setProjectFocusOpen] = useState(false)
   const [projectFocusSourceIds, setProjectFocusSourceIds] = useState<string[]>([])
@@ -703,7 +705,7 @@ export function App() {
       add({ id: `review:${String(review.run.id)}`, label: review.run.instruction || 'Agent 返回结果', source: 'Agent 返回' })
     }
     for (const session of [...conversationSessions].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 3)) {
-      add({ id: `conversation:${session.id}:${session.updatedAt}`, label: session.title, source: `${session.provider || 'Chat'} 对话` })
+      add({ id: `evidence-conversation-session:${session.id}:${session.updatedAt}`, label: session.title, source: `${session.provider || 'Chat'} 对话` })
     }
     for (const handoff of [...coreHandoffs].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 3)) {
       add({ id: `handoff:${handoff.id}`, label: handoff.title, source: 'Agent 交接' })
@@ -726,7 +728,7 @@ export function App() {
       add({ id: `run:${String(review.run.id)}`, label: review.run.instruction || '一次 Agent 执行', source: `执行 · ${review.presentationPhase}` })
     }
     for (const session of [...conversationSessions].filter((item) => item.messageCount >= 4).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 3)) {
-      add({ id: `method-conversation:${session.id}:${session.updatedAt}`, label: session.title, source: `${session.messageCount} 条对话记录` })
+      add({ id: `method-evidence-conversation-session:${session.id}:${session.updatedAt}`, label: session.title, source: `${session.messageCount} 条对话记录` })
     }
     for (const change of [...(activeContextProjection?.recentChanges ?? [])].filter((item) => ['intent', 'harness', 'target'].includes(item.kind)).slice(-4).reverse()) {
       add({ id: `method-change:${change.version}:${change.kind}`, label: change.summary, source: '方法线索' })
@@ -1122,15 +1124,44 @@ export function App() {
   }, [activeProjectId, bootMode, dataSource, runReviews.length])
 
 
+  const refreshConversationIdentity = useCallback(async (): Promise<void> => {
+    if (bootMode !== 'runtime' || !activeProjectId) { setActiveReceiverIdentity(null); return }
+    const call = await bridgeRef.current.client.activeReceiverIdentity(activeProjectId).catch(() => null)
+    if (!call?.result.ok) { setActiveReceiverIdentity(null); return }
+    const identity = call.result.value
+    setActiveReceiverIdentity(identity)
+    const activeViewId = identity.chain?.conversationViewId
+    const phase = identity.chain?.lifecycle?.phase
+    setNodes((current) => current.map((node) => {
+      if (node.entityKind !== 'conversation' || !node.conversation) return node
+      const nextPhase = activeViewId === node.id ? phase : undefined
+      return node.conversation.lifecyclePhase === nextPhase ? node : { ...node, conversation: { ...node.conversation, lifecyclePhase: nextPhase } }
+    }))
+  }, [activeProjectId, bootMode, setNodes])
+
   useEffect(() => {
     setConversationSessions([])
+    setActiveReceiverIdentity(null)
     if (bootMode !== 'runtime' || !activeProjectId) return
     const controller = new AbortController()
-    void bridgeRef.current.client.conversations(activeProjectId, controller.signal).then((call) => {
-      if (!controller.signal.aborted && call.result.ok) setConversationSessions(call.result.value)
-    }).catch(() => { /* Conversation evidence is optional for boundary hints. */ })
+    void Promise.all([
+      bridgeRef.current.client.conversations(activeProjectId, controller.signal),
+      bridgeRef.current.client.activeReceiverIdentity(activeProjectId, controller.signal),
+    ]).then(([conversationsCall, identityCall]) => {
+      if (controller.signal.aborted) return
+      if (conversationsCall.result.ok) setConversationSessions(conversationsCall.result.value)
+      if (identityCall.result.ok) {
+        const identity = identityCall.result.value
+        setActiveReceiverIdentity(identity)
+        const activeViewId = identity.chain?.conversationViewId
+        const phase = identity.chain?.lifecycle?.phase
+        setNodes((current) => current.map((node) => node.entityKind === 'conversation' && node.conversation
+          ? { ...node, conversation: { ...node.conversation, lifecyclePhase: activeViewId === node.id ? phase : undefined } }
+          : node))
+      }
+    }).catch(() => { /* Conversation evidence must not block project opening. */ })
     return () => controller.abort()
-  }, [activeProjectId, bootMode])
+  }, [activeProjectId, bootMode, setNodes])
 
   useEffect(() => {
     setWorkflowCheckpoints([])
@@ -2149,7 +2180,7 @@ export function App() {
         title: scope.label,
         containerViewId: scope.containerNodeId ?? nodes.find((node) => node.opensScopeId === scope.id)?.id,
         memberViewIds,
-        memberEntityNodeIds: (contextEntityRefsById[scope.id] ?? []).map(projectEntityNodeId),
+        memberEntityNodeIds: projectEntityNodeIds(contextEntityRefsById[scope.id] ?? [], nodes),
         memberContentKeys: members.map((node) => node.artifactId ?? node.viewOf ?? node.id),
       }
     }), [canonicalizeContextMemberIds, contextEntityRefsById, contextMembersById, nodes, rootScope.id, scopes])
@@ -2251,7 +2282,7 @@ export function App() {
       title: scope.label,
       containerViewId: scope.containerNodeId ?? nodes.find((node) => node.opensScopeId === scope.id)?.id,
       memberViewIds: workflowMembersById[scope.id] ?? [],
-      memberEntityNodeIds: (workflowEntityRefsById[scope.id] ?? []).map(projectEntityNodeId),
+      memberEntityNodeIds: projectEntityNodeIds(workflowEntityRefsById[scope.id] ?? [], nodes),
     })), [nodes, scopes, workflowEntityRefsById, workflowMembersById])
 
   const relationEntityRefs = useMemo<PresentationEntityRefV0[]>(() => edges.flatMap((edge) => {
@@ -2267,24 +2298,20 @@ export function App() {
     return refs
   }), [edges, nodes])
 
-  // Wave C-2（批八）：对话实体 refs 由 App 内已加载 conversationSessions 派生（Web 侧
-  // 派生投影；不写 Core presentation membership，Core 侧持久化留 0.2）。
-  const conversationEntityRefs = useMemo<PresentationEntityRefV0[]>(() => conversationSessions.map((session) => ({ type: 'conversation' as const, id: session.id })), [conversationSessions])
   const allPresentationEntityRefs = useMemo(() => {
     const refs = [
       ...relationEntityRefs,
       ...contextGraphEntityRefs,
       ...contextPresentationEntityRefs,
       ...workflowPresentationEntityRefs,
-      ...conversationEntityRefs,
       ...Object.values(contextEntityRefsById).flat(),
       ...Object.values(collectionEntityRefsById).flat(),
       ...Object.values(workspaceEntityRefsById).flat(),
       ...Object.values(workflowEntityRefsById).flat(),
     ]
     return [...new Map(refs.map((ref) => [`${ref.type}:${ref.id}`, ref])).values()]
-  }, [collectionEntityRefsById, conversationEntityRefs, contextEntityRefsById, contextGraphEntityRefs, contextPresentationEntityRefs, relationEntityRefs, workflowEntityRefsById, workflowPresentationEntityRefs, workspaceEntityRefsById])
-  const presentationEntityNodes = useMemo(() => materializeProjectEntityNodes(allPresentationEntityRefs, nodes, scopes, workspaces, conversationSessions), [allPresentationEntityRefs, conversationSessions, nodes, scopes, workspaces])
+  }, [collectionEntityRefsById, contextEntityRefsById, contextGraphEntityRefs, contextPresentationEntityRefs, relationEntityRefs, workflowEntityRefsById, workflowPresentationEntityRefs, workspaceEntityRefsById])
+  const presentationEntityNodes = useMemo(() => materializeProjectEntityNodes(allPresentationEntityRefs, nodes, scopes, workspaces), [allPresentationEntityRefs, nodes, scopes, workspaces])
   const projectPresentationNodes = useMemo(() => {
     const existing = new Set(nodes.map((node) => node.id))
     return [...nodes, ...presentationEntityNodes.filter((node) => !existing.has(node.id))]
@@ -2412,8 +2439,7 @@ export function App() {
       const byId = new Map<string, CanvasNode>()
       visibleNodes.filter((node) => !mainSceneMemberIds.has(node.id)).forEach((node) => byId.set(node.id, node))
       mainWorkspaceProjectionNodes.forEach((node) => byId.set(node.id, node))
-      // Wave C-2（批十）：对话实体投影进主场景画布——Conversation Glyth 是画布世界内的对象身体（Grammar §8）。
-      presentationEntityNodes.filter((node) => node.entityKind === 'conversation').forEach((node) => byId.set(node.id, node))
+      // Conversation bodies are already canonical Core artifactViews in `nodes`.
       return withReadableSize([...byId.values()])
     }
     const focused = new Set(workspaceMemberViewIdsById[activeWorkspace.id] ?? activeWorkspace.focusedViewIds)
@@ -2459,12 +2485,12 @@ export function App() {
 
   const contextGraphAutoNodeIds = useMemo(() => deriveContextGraphAutoNodeIds(projectPresentationNodes, scopes, rootScope.id), [projectPresentationNodes, rootScope.id, scopes])
   const contextGraphResolvedIds = useMemo(() => mergeContextGraphNodeIds(
-    [...contextGraphPresentationIds, ...contextGraphEntityRefs.map(projectEntityNodeId)],
+    [...contextGraphPresentationIds, ...projectEntityNodeIds(contextGraphEntityRefs, projectPresentationNodes)],
     contextGraphAutoNodeIds,
     savedContextViews.map((view) => view.containerViewId).filter((id): id is string => Boolean(id)),
-  ), [contextGraphAutoNodeIds, contextGraphEntityRefs, contextGraphPresentationIds, savedContextViews])
-  const contextDetailResolvedIds = useMemo(() => [...new Set([...contextPresentationIds, ...contextPresentationEntityRefs.map(projectEntityNodeId)])], [contextPresentationEntityRefs, contextPresentationIds])
-  const workflowResolvedIds = useMemo(() => [...new Set([...workflowPresentationIds, ...workflowPresentationEntityRefs.map(projectEntityNodeId)])], [workflowPresentationEntityRefs, workflowPresentationIds])
+  ), [contextGraphAutoNodeIds, contextGraphEntityRefs, contextGraphPresentationIds, projectPresentationNodes, savedContextViews])
+  const contextDetailResolvedIds = useMemo(() => [...new Set([...contextPresentationIds, ...projectEntityNodeIds(contextPresentationEntityRefs, projectPresentationNodes)])], [contextPresentationEntityRefs, contextPresentationIds, projectPresentationNodes])
+  const workflowResolvedIds = useMemo(() => [...new Set([...workflowPresentationIds, ...projectEntityNodeIds(workflowPresentationEntityRefs, projectPresentationNodes)])], [projectPresentationNodes, workflowPresentationEntityRefs, workflowPresentationIds])
   const currentSceneSeedIds = useMemo(() => {
     if (activeSurface === 'arrange') return sceneCanvasNodes.map((node) => node.id)
     if (activeSurface === 'context-graph') return contextGraphResolvedIds
@@ -2695,7 +2721,7 @@ export function App() {
     const graphSemantic = semanticRefsForSourceIds(contextGraphResolvedIds, projectPresentationNodes)
     const workflowGraphSemantic = semanticRefsForSourceIds([
       ...workflowPresentationIds,
-      ...workflowPresentationEntityRefs.map(projectEntityNodeId),
+      ...projectEntityNodeIds(workflowPresentationEntityRefs, projectPresentationNodes),
       ...savedWorkflowViews.flatMap((view) => [...view.memberViewIds, ...(view.memberEntityNodeIds ?? []), `scope:${view.id}`]),
     ], projectPresentationNodes)
     const candidates: ProjectFocusLocationCandidate[] = [{
@@ -2941,16 +2967,7 @@ export function App() {
   }, [nodes, openProjectFocus])
 
   const navigateProjectFocus = useCallback((location: ProjectFocusLocation) => {
-    const focusIds = [...new Set([...location.matchedViewIds, ...location.matchedEntityRefs.map(projectEntityNodeId)])]
-    const matchedNodes = projectPresentationNodes.filter((node) => focusIds.includes(node.id))
-    const fitMatchedOnArrange = () => {
-      if (!matchedNodes.length) return
-      const bounds = getSelectionBounds(matchedNodes, matchedNodes.map((node) => node.id))
-      if (!bounds) return
-      const viewport = document.querySelector<HTMLElement>('[data-testid="canvas"]')?.getBoundingClientRect()
-      setCamera(fitBoundsForReading(bounds, viewport?.width ?? 1000, viewport?.height ?? 820, 82, safeInsets))
-    }
-
+    const focusIds = [...new Set([...location.matchedViewIds, ...projectEntityNodeIds(location.matchedEntityRefs, projectPresentationNodes)])]
     if (location.kind === 'canvas') {
       activateOverview()
       const canvasRefIds = location.matchedEntityRefs.flatMap((ref) => {
@@ -2961,12 +2978,10 @@ export function App() {
         }
         return []
       })
-      setSelectedIds([...new Set([...location.matchedViewIds, ...canvasRefIds])])
-      window.requestAnimationFrame(fitMatchedOnArrange)
+      setProjectFocusRequest({ nonce: Date.now(), ids: [...new Set([...location.matchedViewIds, ...canvasRefIds])], targetTestId: 'canvas' })
     } else if (location.kind === 'workspace' && location.ownerId) {
       openWorkspaceScene(location.ownerId)
-      setSelectedIds(focusIds)
-      window.requestAnimationFrame(fitMatchedOnArrange)
+      setProjectFocusRequest({ nonce: Date.now(), ids: focusIds, targetTestId: 'canvas' })
     } else if (location.kind === 'collection' && location.ownerId) {
       const collection = scopes.find((scope) => scope.id === location.ownerId)
       const containerId = collection?.containerNodeId ?? nodes.find((node) => node.opensScopeId === location.ownerId)?.id ?? `scope:${location.ownerId}`
@@ -2978,33 +2993,29 @@ export function App() {
       setActiveSurface('arrange')
       // The locator keeps the known Collection itself highlighted, while its
       // matched member Views remain selected when they are the actual hit.
-      setSelectedIds([...new Set([containerId, ...focusIds])])
       setSelectedEdgeId(null)
-      window.requestAnimationFrame(fitMatchedOnArrange)
+      setProjectFocusRequest({ nonce: Date.now(), ids: [...new Set([containerId, ...focusIds])], targetTestId: 'canvas' })
     } else if (location.kind === 'context-graph') {
       setActiveContextId(null)
       setActiveWorkflowId(null)
       setActiveSurface('context-graph')
       setSelectedIds(focusIds)
-      setProjectFocusRequest({ nonce: Date.now(), ids: focusIds })
+      setProjectFocusRequest({ nonce: Date.now(), ids: focusIds, targetTestId: 'context-graph-spatial' })
     } else if (location.kind === 'context' && location.ownerId) {
       openSavedContextView(location.ownerId)
       setSelectedIds(focusIds)
-      setProjectFocusRequest({ nonce: Date.now(), ids: focusIds })
+      setProjectFocusRequest({ nonce: Date.now(), ids: focusIds, targetTestId: 'context-space-spatial' })
     } else if (location.kind === 'workflow-graph') {
       setActiveContextId(null)
       setActiveWorkflowId(null)
       setActiveSurface('workflow')
       setSelectedIds(focusIds)
-      setProjectFocusRequest({ nonce: Date.now(), ids: focusIds })
+      setProjectFocusRequest({ nonce: Date.now(), ids: focusIds, targetTestId: 'workflow-graph-spatial' })
     } else if (location.kind === 'workflow' && location.ownerId) {
       openSavedWorkflowView(location.ownerId)
       setSelectedIds(focusIds)
-      setProjectFocusRequest({ nonce: Date.now(), ids: focusIds })
+      setProjectFocusRequest({ nonce: Date.now(), ids: focusIds, targetTestId: 'workflow-spatial' })
     }
-    setLocatePulseId(location.matchedViewIds[0] ?? focusIds[0] ?? null)
-    if (locatePulseTimer.current) clearTimeout(locatePulseTimer.current)
-    locatePulseTimer.current = setTimeout(() => setLocatePulseId(null), 1800)
     setProjectFocusOpen(false)
     setNotice(`已定位到「${location.label}」· ${location.matchedCount}/${location.totalCount} 项`)
   }, [activateOverview, nodes, openCollectionWithMotion, openSavedContextView, openSavedWorkflowView, openWorkspaceScene, projectPresentationNodes, rootScope.id, safeInsets, scopes])
@@ -3434,9 +3445,7 @@ export function App() {
 
   const directDropToProjectRailView = useCallback((targetViewId: string, sourceIds: readonly string[]) => {
     if (targetViewId === NEW_SCENE_DROP_TARGET_ID) {
-      // 批十一：drop 命中会切换视图（setActiveSurface），主画布连五阶段反馈层一起被卸载——
-      // 先让反馈播完（accept→commit→settle），再带用户过去（Grammar S15：世界先说完话）。
-      window.setTimeout(() => { createWorkspaceSceneFromDropPayload(sourceIds) }, DROP_FEEDBACK_TOTAL_MS)
+      createWorkspaceSceneFromDropPayload(sourceIds)
       return
     }
     const { viewIds, entityRefs } = semanticRefsForSourceIds(sourceIds, nodes)
@@ -3444,7 +3453,7 @@ export function App() {
 
     if (targetViewId === ARRANGE_SURFACE_DROP_TARGET_ID) {
       if (!workspaceId) {
-        setSelectedIds([...viewIds, ...entityRefs.map(projectEntityNodeId)])
+        setSelectedIds([...viewIds, ...projectEntityNodeIds(entityRefs, nodes)])
         setNotice(`已在整理中定位 ${viewIds.length + entityRefs.length} 个项目对象；没有复制或展开成员`)
         return
       }
@@ -3501,13 +3510,11 @@ export function App() {
     }
 
     if (targetViewId === 'capability:context' || targetViewId === 'generate:context') {
-      // 同上：新建 Context 后 openCreatedContext 会立即切走主画布，延迟到反馈结束。
-      window.setTimeout(() => { createContextFromMembersDirect(viewIds, undefined, entityRefs) }, DROP_FEEDBACK_TOTAL_MS)
+      createContextFromMembersDirect(viewIds, undefined, entityRefs)
       return
     }
     if (targetViewId === 'capability:workflow' || targetViewId === 'generate:workflow') {
-      // 同上：新建 Workflow 会立即切走主画布，延迟到反馈结束。
-      window.setTimeout(() => { createWorkflowFromMembersDirect(viewIds, undefined, entityRefs) }, DROP_FEEDBACK_TOTAL_MS)
+      createWorkflowFromMembersDirect(viewIds, undefined, entityRefs)
       return
     }
 
@@ -5207,8 +5214,8 @@ export function App() {
       let handoffPrefix: string | null = null
       let handoffConsume: (() => Promise<void>) | null = null
       try {
-        const bindingCall = await bridgeRef.current.client.getProjectReceiverBinding(activeProjectId)
-        const activeReceiverId = bindingCall.result.ok ? bindingCall.result.value.activeReceiverId : null
+        const identityCall = await bridgeRef.current.client.activeReceiverIdentity(activeProjectId)
+        const activeReceiverId = identityCall.result.ok ? identityCall.result.value.activeReceiverId : null
         if (activeReceiverId !== null) {
           const pendingCall = await bridgeRef.current.client.getPendingReceiverHandoff(activeProjectId, activeReceiverId)
           const pending = pendingCall.result.ok ? pendingCall.result.value : null
@@ -5471,11 +5478,11 @@ export function App() {
     let cancelled = false
     void Promise.all([
       bridgeRef.current.client.listConnectedConversations(activeProjectId),
-      bridgeRef.current.client.getProjectReceiverBinding(activeProjectId),
-    ]).then(([listCall, bindingCall]) => {
+      bridgeRef.current.client.activeReceiverIdentity(activeProjectId),
+    ]).then(([listCall, identityCall]) => {
       if (cancelled) return
       if (listCall.result.ok) setPaletteConversations(listCall.result.value)
-      if (bindingCall.result.ok) setPaletteActiveReceiverId(bindingCall.result.value.activeReceiverId)
+      if (identityCall.result.ok) setPaletteActiveReceiverId(identityCall.result.value.activeReceiverId)
     }).catch(() => { /* 拉取失败保持上一次列表；下次打开重试 */ })
     return () => { cancelled = true }
   }, [activeProjectId, bootMode, paletteOpen])
@@ -5500,18 +5507,63 @@ export function App() {
     setImmersiveNodeId(node.id)
   }, [nodes, selectNode])
 
-  // C-3/C-14「查看对话」：进入沉浸阅读（Esc 宪法第 3 层 Viewer/子现场）——对话转写是
-  // markdown artifact，走与文件材料同一条 Reader 链（投影节点不在 nodes 状态里，
-  // 从 presentationEntityNodes 派生集找）；档案弹窗（ConversationContextDialog）
-  // 仍留给顶栏「对话」入口做管理/检索。
-  const openConversationReading = useCallback((conversationId: string) => {
-    const nodeId = `conversation:${conversationId}`
-    const node = nodes.find((item) => item.id === nodeId) ?? presentationEntityNodes.find((item) => item.id === nodeId)
-    if (node === undefined || node.artifactId === undefined) { setNotice('这份对话还没有可读正文'); return }
+  const locateBirthConversationSource = useCallback((conversationViewId: string) => {
+    // Provenance navigation is read-only: return to Main and Beacon the canonical source View.
+    // It deliberately does not alter Selection or enter the Conversation subcanvas.
+    setConversationSpaceId(null)
+    activateOverview()
+    setProjectFocusRequest({ nonce: Date.now(), ids: [conversationViewId], targetTestId: 'canvas' })
+    setNotice('正在定位生成这份材料的对话')
+  }, [activateOverview])
+
+  const requestSetActiveConversation = useCallback(async (conversationSessionId: string): Promise<void> => {
+    if (bootMode !== 'runtime') { setNotice('原型模式不能设置承接对话'); return }
+    const session = conversationSessions.find((item) => item.id === conversationSessionId)
+    if (!session) { setNotice('ConversationSession 不存在'); return }
+    setControllerError(null)
+    const listCall = await bridgeRef.current.client.listConnectedConversations(activeProjectId).catch(() => null)
+    if (!listCall?.result.ok) { setNotice('无法读取 ConnectedConversation'); return }
+    const linked = listCall.result.value.find((item) => item.conversationSessionId === conversationSessionId)
+    if (linked) {
+      const activeCall = await bridgeRef.current.client.setActiveReceiver(activeProjectId, linked.id).catch(() => null)
+      if (!activeCall?.result.ok) { setNotice('设置当前承接失败'); return }
+      await refreshConversationIdentity()
+      setNotice(`已由「${linked.label}」承接`)
+      return
+    }
+    // Explicit > inferred: even one candidate is not auto-selected.
+    setControllerTargetSessionId(conversationSessionId)
+    setControllerChoices(listCall.result.value)
+  }, [activeProjectId, bootMode, conversationSessions, refreshConversationIdentity])
+
+  const confirmControllerLink = useCallback(async (connectedConversationId: string): Promise<void> => {
+    const sessionId = controllerTargetSessionId
+    if (!sessionId || controllerBusy) return
+    setControllerBusy(true); setControllerError(null)
+    try {
+      const linked = await bridgeRef.current.client.linkConnectedConversationSession(activeProjectId, connectedConversationId, sessionId)
+      if (!linked.result.ok) throw new Error(linked.result.error.message)
+      const activated = await bridgeRef.current.client.setActiveReceiver(activeProjectId, connectedConversationId)
+      if (!activated.result.ok) throw new Error(activated.result.error.message)
+      await refreshConversationIdentity()
+      setControllerTargetSessionId(null); setControllerChoices([])
+      setNotice('已建立显式会话身份桥并设为当前承接')
+    } catch (error: unknown) {
+      setControllerError(error instanceof Error ? error.message : '建立会话身份桥失败')
+    } finally { setControllerBusy(false) }
+  }, [activeProjectId, controllerBusy, controllerTargetSessionId, refreshConversationIdentity])
+
+  const enterConversationSurface = useCallback((conversationId: string) => {
+    const session = conversationSessions.find((item) => item.id === conversationId)
+    if (!session?.conversationViewId) { setNotice('这份对话还没有 canonical 画布入口'); return }
+    const node = nodes.find((item) => item.id === String(session.conversationViewId) && item.entityKind === 'conversation')
+    if (!node) { setNotice('对话入口尚未投影到当前 Project Truth'); return }
     setNodeInfoId(null)
     setWorkbench(null)
-    setImmersiveNodeId(node.id)
-  }, [nodes, presentationEntityNodes])
+    setImmersiveNodeId(null)
+    setConversationSpaceId(conversationId)
+  }, [conversationSessions, nodes])
+
   // 沉淀池「定位编辑」：技能 artifact 或其材料 → 相机定位（与 ⌘K 节点跳转同一 focus 链）。
   const locateWorkflowSkill = useCallback((skill: WorkflowSkillSummary) => {
     locateCanvasNode(skill.viewId)
@@ -5541,12 +5593,13 @@ export function App() {
 
   const switchPaletteReceiver = useCallback((conversationId: string) => {
     if (bootMode !== 'runtime') { setNotice('原型模式不能切换承接会话'); return }
-    void bridgeRef.current.client.setActiveReceiver(activeProjectId, conversationId).then((call) => {
+    void bridgeRef.current.client.setActiveReceiver(activeProjectId, conversationId).then(async (call) => {
       if (!call.result.ok) { setNotice(`切换承接失败：${call.result.error.message}`); return }
       setPaletteActiveReceiverId(call.result.value.activeReceiverId)
+      await refreshConversationIdentity()
       setNotice('已切换项目承接会话')
     })
-  }, [activeProjectId, bootMode])
+  }, [activeProjectId, bootMode, refreshConversationIdentity])
 
   const replayPaletteSkill = useCallback((artifactId: string) => {
     const skill = workflowSkills.find((item) => item.artifactId === artifactId)
@@ -6384,9 +6437,8 @@ export function App() {
     const node = nodes.find((item) => item.id === id) ?? presentationEntityNodes.find((item) => item.id === id)
     if (!node) return
     selectNode(id)
-    // C-3/C-14：对话实体双击 = 进入沉浸阅读（转写 markdown artifact；Esc 宪法第 3 层 Viewer/子现场）。
-    if (node.entityKind === 'conversation') {
-      if (node.artifactId !== undefined) { setNodeInfoId(null); setWorkbench(null); setImmersiveNodeId(id) }
+    if (node.entityKind === 'conversation' && node.conversation) {
+      enterConversationSurface(node.conversation.id)
       return
     }
     // Text nodes open the inline editor (mubu-style canvas writing), not the Reader.
@@ -6423,7 +6475,7 @@ export function App() {
       setWorkbench(null)
       setImmersiveNodeId(id)
     }
-  }, [bootMode, enterScope, nodes, openSavedContextView, openSavedWorkflowView, openWorkspaceScene, presentationEntityNodes, scopes, selectNode])
+  }, [bootMode, enterConversationSurface, enterScope, nodes, openSavedContextView, openSavedWorkflowView, openWorkspaceScene, presentationEntityNodes, scopes, selectNode])
 
   const showNodeDetails = useCallback((id: string) => {
     setNodeInfoId(id)
@@ -6498,7 +6550,7 @@ export function App() {
       if (modifier && event.shiftKey && key === 'l') { event.preventDefault(); if (bootMode === 'runtime') setReorganizeOpen(true); else setNotice('智能体整理只在 Runtime 项目中可用'); return }
       if (modifier && key === 'o' && selectedNodes.length === 1) { event.preventDefault(); openNative(selectedNodes[0]); return }
       if (event.code === 'Space') { event.preventDefault(); setSpaceHeld(true); return }
-      if (event.key === 'Escape') { if (paletteOpen) { setPaletteOpen(false); return } if (projectFocusOpen) setProjectFocusOpen(false); else if (confirmProjectDelete) setConfirmProjectDelete(null); else if (confirmWorkspaceId) setConfirmWorkspaceId(null); else if (immersiveNodeId) setImmersiveNodeId(null); else if (workbench) setWorkbench(null); else if (capabilityOpen) setCapabilityOpen(false); else if (nodeInfoId) setNodeInfoId(null); else if (layoutPreview) { setLayoutPreview(null); setLayoutPreviewFocusIds(null) } else clearSelection(); return }
+      if (event.key === 'Escape') { if (paletteOpen) { setPaletteOpen(false); return } if (projectFocusOpen) setProjectFocusOpen(false); else if (confirmProjectDelete) setConfirmProjectDelete(null); else if (confirmWorkspaceId) setConfirmWorkspaceId(null); else if (conversationSpaceId) setConversationSpaceId(null); else if (immersiveNodeId) setImmersiveNodeId(null); else if (workbench) setWorkbench(null); else if (capabilityOpen) setCapabilityOpen(false); else if (nodeInfoId) setNodeInfoId(null); else if (layoutPreview) { setLayoutPreview(null); setLayoutPreviewFocusIds(null) } else clearSelection(); return }
       if (key === 'f' && selectedIds.length === 1) { event.preventDefault(); openProjectFocus(); return }
       if (key === 'c') { event.preventDefault(); if (layoutMode === 'sidecar') { setNotice('侧边协作模式不提供 LCOS 输入框'); return } requestComposerFocus(); return }
       if (event.key === 'F2' && selectedIds.length === 1 && selectedNodes.length === 1) { event.preventDefault(); setRenameNodeId(selectedNodes[0]!.id); return }
@@ -6510,7 +6562,7 @@ export function App() {
     const release = (event: KeyboardEvent) => { if (event.code === 'Space') setSpaceHeld(false) }
     window.addEventListener('keydown', handler); window.addEventListener('keyup', release)
     return () => { window.removeEventListener('keydown', handler); window.removeEventListener('keyup', release) }
-  }, [bootMode, clearSelection, confirmProjectDelete, confirmWorkspaceId, copySelection, createDialogOpen, deleteNodes, duplicateSelection, capabilityOpen, immersiveNodeId, layoutMode, nodeInfoId, paletteOpen, workbench, layoutPreview, openNative, openProjectFocus, pasteClipboard, projectCreateOpen, projectFocusOpen, redo, requestComposerFocus, requestGlobalRun, requestSelectionRun, scopeCreateOpen, selectMarquee, selectedEdgeId, selectedId, selectedIds, selectedNodes, setEdges, undo, visibleNodes])
+  }, [bootMode, clearSelection, confirmProjectDelete, confirmWorkspaceId, conversationSpaceId, copySelection, createDialogOpen, deleteNodes, duplicateSelection, capabilityOpen, immersiveNodeId, layoutMode, nodeInfoId, paletteOpen, workbench, layoutPreview, openNative, openProjectFocus, pasteClipboard, projectCreateOpen, projectFocusOpen, redo, requestComposerFocus, requestGlobalRun, requestSelectionRun, scopeCreateOpen, selectMarquee, selectedEdgeId, selectedId, selectedIds, selectedNodes, setEdges, undo, visibleNodes])
 
 
   const refreshProjectCatalog = useCallback(() => {
@@ -6751,8 +6803,9 @@ export function App() {
       onRevealFolder: () => revealProjectFolder(activeProjectId),
       // RECEIVER-1：项目级会话承接 Chip（Work Identity 常驻顶条；历史对话入口复用现有 ConversationContextDialog）
       // RECEIVER-3：透传切换现场快照，Switcher 的承接确认小卡据此展示（承接前可见）。
-      receiverSlot: <ReceiverChip projectId={activeProjectId} client={bridgeRef.current.client} onOpenArchive={() => setConversationDialogOpen(true)} handoffContext={receiverHandoffContext} stale={receiverSessionStale} onStaleCleared={() => setReceiverSessionStale(false)} />,
+      receiverSlot: <ReceiverChip projectId={activeProjectId} client={bridgeRef.current.client} onOpenArchive={() => setConversationDialogOpen(true)} handoffContext={receiverHandoffContext} onIdentityChanged={setActiveReceiverIdentity} />,
     }}
+    conversationScene={conversationSpaceId ? { projectId: activeProjectId, conversationId: conversationSpaceId, onExit: () => setConversationSpaceId(null) } : null}
     scene={{
       sceneStyle,
       sceneData: {
@@ -6863,8 +6916,9 @@ export function App() {
         onSelectEdge: selectEdge,
         onDoubleClick: handleDoubleClick,
         onDetails: showNodeDetails,
-        // C-3 Glyth Orbit：查看对话走既有 ConversationContextDialog 打开链。
-        onOpenConversation: openConversationReading,
+        onOpenConversation: enterConversationSurface,
+        onSetActiveConversation: (conversationId) => { void requestSetActiveConversation(conversationId) },
+        activeConversationId: activeReceiverIdentity?.chain?.conversationSession?.id ?? null,
         onFocusSelection: selectedIds.length === 1 ? () => openProjectFocus() : undefined,
         onRenameSelection: selectedIds.length === 1 && selectedNodes.length === 1 ? () => setRenameNodeId(selectedNodes[0]!.id) : undefined,
         onToggleNoteLayout: toggleNoteLayout,
@@ -7007,7 +7061,7 @@ export function App() {
             setContextPresentationIds(members)
             setContextPresentationEntityRefs(refs)
           })
-          return [...semantic.viewIds, ...semantic.entityRefs.map(projectEntityNodeId)]
+          return [...semantic.viewIds, ...projectEntityNodeIds(semantic.entityRefs, projectPresentationNodes)]
         },
         onRemoveProjectViewFromContext: (memberViewId) => {
           const ownerId = activeContextId ?? rootScope.id
@@ -7039,7 +7093,7 @@ export function App() {
               setWorkflowEntityRefsById((current) => ({ ...current, [ownerId]: refs }))
             }
           })
-          return [...semantic.viewIds, ...semantic.entityRefs.map(projectEntityNodeId)]
+          return [...semantic.viewIds, ...projectEntityNodeIds(semantic.entityRefs, projectPresentationNodes)]
         },
         onCreateWorkflowOperatorNode: createWorkflowOperatorNode,
         onCreateDomainRelation: async (fromViewId, toViewId, kind) => {
@@ -7443,6 +7497,14 @@ export function App() {
           const stateWorkspace = workspaces.find((workspace) => workspace.id === workspaceStatesWorkspaceId)
           return stateWorkspace ? <WorkspaceStatesDialog workspace={stateWorkspace} states={workspaceStates} loading={workspaceStatesLoading} saving={workspaceStateSaving} restoringId={workspaceStateRestoringId} error={workspaceStatesError} onClose={() => setWorkspaceStatesOpen(false)} onRefresh={() => loadWorkspaceStates(workspaceStatesWorkspaceId)} onSave={(name) => saveCurrentWorkspaceState(workspaceStatesWorkspaceId, name)} onRestore={restoreSavedWorkspaceState} /> : null
         })() : null}
+        {controllerTargetSessionId ? <ConversationControllerDialog
+          sessionTitle={conversationSessions.find((item) => item.id === controllerTargetSessionId)?.title ?? 'Conversation'}
+          conversations={controllerChoices}
+          busy={controllerBusy}
+          error={controllerError}
+          onChoose={(id) => { void confirmControllerLink(id) }}
+          onClose={() => { if (!controllerBusy) { setControllerTargetSessionId(null); setControllerChoices([]); setControllerError(null) } }}
+        /> : null}
         <ProjectFocusNavigator
           open={projectFocusOpen}
           sourceLabel={projectFocusSourceLabel || (projectFocusCount ? `${projectFocusCount} 项 Selection` : '')}
@@ -7474,6 +7536,7 @@ export function App() {
     }}
     immersive={immersiveNodeId ? (() => {
       const immersiveNode = nodes.find((node) => node.id === immersiveNodeId) ?? presentationEntityNodes.find((node) => node.id === immersiveNodeId)
+      if (immersiveNode?.entityKind === 'conversation') return null
       return immersiveNode ? { node: immersiveNode, projectId: activeProjectId, onClose: () => setImmersiveNodeId(null) } : null
     })() : null}
     />

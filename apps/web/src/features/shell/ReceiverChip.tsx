@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { ConnectedConversationV1, ProjectReceiverBindingV1 } from '@local-creative-os/contracts'
+import type { ActiveReceiverIdentityV1, ConnectedConversationV1, SessionPhase } from '@local-creative-os/contracts'
 import { projectConnectedConversationStatusV1 } from '@local-creative-os/contracts'
 import type { LocalCoreClient } from '../../runtime/localCoreClient'
 import { ReceiverSwitcher, receiverProviderLabel } from './ReceiverSwitcher'
@@ -12,33 +12,32 @@ interface Props {
   readonly onOpenArchive: () => void
   /** RECEIVER-3 切换现场快照（当前视图 + 当前选中 + 待确认数），透传给 Switcher 的承接确认小卡。 */
   readonly handoffContext?: ReceiverHandoffContext | null
-  /** RECEIVER-5（43O）：active receiver 的会话被判定失效（Run 的 providerError 命中 session 失效特征）。
-   *  stale 只影响展示与恢复入口，Project/Surface/Selection 一概不动。 */
-  readonly stale?: boolean
-  /** RECEIVER-5「重新连接」动作：清除 stale 标记（lease 层在下次 Run 自动恢复替代会话，只建一次）。 */
-  readonly onStaleCleared?: () => void
+  /** Mirrors the refreshed canonical identity to the scene owner (App). */
+  readonly onIdentityChanged?: (identity: ActiveReceiverIdentityV1 | null) => void
 }
 
 /** Chip 纯展示面（43B.1）：极简一行「● Codex · GUI 收口」——状态圆点 + provider 名 + label；
  *  只显示四态（working/waiting/ready/offline），不显示 token/queue/session UUID/port/model。
  *  0.5 波 GUI 收口：补 loading/error 两态——列表拉取失败或加载中不再静默冒充「未连接对话」。
  *  RECEIVER-5：stale（会话失效）→ 按 offline 呈现（43O「已断开」），label 追加断开说明。 */
-export function ReceiverChipFace({ active, expanded, onToggle, loading = false, error = false, stale = false }: {
+export function ReceiverChipFace({ active, expanded, onToggle, loading = false, error = false, phase }: {
   readonly active: ConnectedConversationV1 | null
   readonly expanded: boolean
   readonly onToggle: () => void
   readonly loading?: boolean
   readonly error?: boolean
-  readonly stale?: boolean
+  readonly phase?: SessionPhase
 }) {
-  const status = loading ? 'loading' : error ? 'error' : active === null ? 'offline' : stale ? 'offline' : projectConnectedConversationStatusV1(active)
-  const label = loading ? '连接中…' : error ? '承接状态获取失败' : active === null ? '未连接对话' : stale ? `${receiverProviderLabel(active.provider)} · ${active.label} · 已断开` : `${receiverProviderLabel(active.provider)} · ${active.label}`
-  const title = loading ? '正在获取承接状态' : error ? '承接状态获取失败：点击打开会话承接并重试' : active === null ? '未连接对话：点击选择谁来继续这个项目' : stale ? '当前承接的会话已断开：点击打开会话承接，重新连接或新开对话接着做（项目现场不受影响）' : `当前承接：${active.label}（${receiverProviderLabel(active.provider)}）`
+  const lifecycleStatus = phase === 'disconnected' ? 'offline' : phase === 'waiting_input' ? 'waiting' : phase === 'busy' || phase === 'connecting' ? 'working' : active === null ? 'offline' : projectConnectedConversationStatusV1(active)
+  const status = loading ? 'loading' : error ? 'error' : lifecycleStatus
+  const phaseSuffix = phase === 'disconnected' ? ' · 已断开' : phase === 'stale' ? ' · 信息可能过期' : phase === 'waiting_input' ? ' · 等待输入' : phase === 'busy' ? ' · 工作中' : ''
+  const label = loading ? '连接中…' : error ? '承接状态获取失败' : active === null ? '未连接对话' : `${receiverProviderLabel(active.provider)} · ${active.label}${phaseSuffix}`
+  const title = loading ? '正在获取承接状态' : error ? '承接状态获取失败：点击打开会话承接并重试' : active === null ? '未连接对话：点击选择谁来继续这个项目' : `当前承接：${active.label}（${receiverProviderLabel(active.provider)}）${phaseSuffix}`
   return <button
     type="button"
     className={`lcos-receiver-chip${active === null ? ' is-idle' : ''}`}
     data-testid="lcos-receiver-chip"
-    data-stale={stale && active !== null ? 'true' : undefined}
+    data-session-phase={phase}
     aria-haspopup="dialog"
     aria-expanded={expanded}
     title={title}
@@ -51,53 +50,53 @@ export function ReceiverChipFace({ active, expanded, onToggle, loading = false, 
 
 /** RECEIVER-1 项目级会话承接 Chip：常驻 Project Strip 顶条。
  *  数据模式照 ProjectToolsDialog：挂载（含项目切换）拉一次 + 动作后主动刷新，0.1 不做轮询。 */
-export function ReceiverChip({ projectId, client, onOpenArchive, handoffContext, stale = false, onStaleCleared }: Props) {
+export function ReceiverChip({ projectId, client, onOpenArchive, handoffContext, onIdentityChanged }: Props) {
   const [conversations, setConversations] = useState<readonly ConnectedConversationV1[]>([])
-  const [binding, setBinding] = useState<ProjectReceiverBindingV1 | null>(null)
+  const [identity, setIdentity] = useState<ActiveReceiverIdentityV1 | null>(null)
   const [switcherOpen, setSwitcherOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
 
   const refresh = useCallback(async (): Promise<void> => {
     setLoading(true); setError(false)
-    const [listCall, bindingCall] = await Promise.all([
+    const [listCall, identityCall] = await Promise.all([
       client.listConnectedConversations(projectId),
-      client.getProjectReceiverBinding(projectId),
+      client.activeReceiverIdentity(projectId),
     ])
     if (listCall.result.ok) setConversations(listCall.result.value)
-    if (bindingCall.result.ok) setBinding(bindingCall.result.value)
-    // 内容真实性（0.5 波 GUI 收口）：任一拉取失败都如实进入 error 态，不静默降级成「未连接对话」。
-    setError(!listCall.result.ok || !bindingCall.result.ok)
+    if (identityCall.result.ok) {
+      setIdentity(identityCall.result.value)
+      onIdentityChanged?.(identityCall.result.value)
+    }
+    setError(!listCall.result.ok || !identityCall.result.ok)
     setLoading(false)
-  }, [client, projectId])
+  }, [client, onIdentityChanged, projectId])
 
   useEffect(() => { void refresh() }, [refresh])
 
-  const active = binding?.activeReceiverId == null
-    ? null
-    : conversations.find((conversation) => conversation.id === binding.activeReceiverId) ?? null
+  const active = identity?.chain?.connectedConversation ?? (identity?.activeReceiverId == null ? null : conversations.find((conversation) => conversation.id === identity.activeReceiverId) ?? null)
+  const phase = identity?.chain?.lifecycle?.phase
 
   // 关闭回调稳定化：Switcher 的外点/Esc 监听依赖它，避免每次渲染重挂监听。
   const closeSwitcher = useCallback(() => setSwitcherOpen(false), [])
 
   return <>
-    <ReceiverChipFace active={active} expanded={switcherOpen} onToggle={() => setSwitcherOpen((open) => !open)} loading={loading} error={error} stale={stale} />
+    <ReceiverChipFace active={active} expanded={switcherOpen} onToggle={() => setSwitcherOpen((open) => !open)} loading={loading} error={error} phase={phase} />
     <ReceiverSwitcher
       open={switcherOpen}
       projectId={projectId}
       client={client}
       conversations={conversations}
-      activeReceiverId={binding?.activeReceiverId ?? null}
+      activeReceiverId={identity?.activeReceiverId ?? null}
       onClose={closeSwitcher}
-      // 承接关系变化（切换/新建/断开）意味着 stale 标记描述的旧会话已不是 active receiver，一并清除。
-      onChanged={() => { void refresh(); onStaleCleared?.() }}
+      onChanged={() => { void refresh() }}
       onOpenArchive={onOpenArchive}
       handoffContext={handoffContext ?? null}
       loading={loading}
       error={error}
       onRetry={() => { void refresh() }}
-      activeStale={stale && active !== null}
-      onReconnect={() => onStaleCleared?.()}
+      activePhase={phase}
+      onRecover={active && phase === 'disconnected' ? () => { void client.recoverSessionLifecycle(projectId, active.provider).then(() => refresh()) } : undefined}
     />
   </>
 }

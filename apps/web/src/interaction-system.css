@@ -4088,3 +4088,12 @@
   white-space: nowrap;
   pointer-events: none;
 }
+
+/* C7 Spatial Beacon structural feedback. Native visual polish is intentionally deferred to the reviewed GUI tranche. */
+.lcos-reconstructed .lcos-spatial-beacon-layer { position:absolute; inset:0; z-index:var(--lcos-z-overlay-ui); pointer-events:none; overflow:hidden; }
+.lcos-reconstructed .lcos-spatial-beacon { position:absolute; width:28px; height:28px; margin:-14px 0 0 -14px; border-radius:50%; border:1px solid color-mix(in srgb, currentColor 26%, transparent); transform:scale(.72); opacity:.28; }
+.lcos-reconstructed .lcos-spatial-beacon.is-approach { opacity:.22; }
+.lcos-reconstructed .lcos-spatial-beacon.is-offscreen::after { content:''; position:absolute; left:50%; top:50%; width:9px; height:1px; border-radius:999px; background:currentColor; transform-origin:0 50%; transform:rotate(var(--lcos-beacon-angle)) translateX(12px); opacity:.52; }
+.lcos-reconstructed .lcos-spatial-beacon.is-arrival { animation:lcos-beacon-arrive 350ms var(--lcos-ui-ease-out) both; }
+@keyframes lcos-beacon-arrive { 0% { transform:scale(.58); opacity:.45; } 70% { transform:scale(1.18); opacity:.24; } 100% { transform:scale(1.42); opacity:0; } }
+@media (prefers-reduced-motion: reduce) { .lcos-reconstructed .lcos-spatial-beacon.is-arrival { animation-duration:80ms; } }

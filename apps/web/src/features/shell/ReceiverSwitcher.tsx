@@ -37,10 +37,9 @@ interface Props {
   readonly loading?: boolean
   readonly error?: boolean
   readonly onRetry?: () => void
-  /** RECEIVER-5（43O）：active receiver 会话已断开——当前承接区出 offline 提示与「重新连接」。 */
-  readonly activeStale?: boolean
-  /** RECEIVER-5「重新连接」：清除 stale 标记（lease 层下次 Run 自动恢复替代会话，只建一次）。 */
-  readonly onReconnect?: () => void
+  /** Canonical SessionLifecycle state for the active receiver. */
+  readonly activePhase?: SessionPhase
+  readonly onRecover?: () => void
 }
 
 /** 43C 切换承接（RECEIVER-3 升级）：零副作用——只改 receiver binding + 准备 Handoff 快照，绝不触发任何 send/run。
@@ -214,17 +213,19 @@ export function ReceiverSwitcher(props: Props) {
       <section className="lcos-receiver-section">
         <h4>当前承接</h4>
         {active !== null
-          ? <div className={`lcos-receiver-row${props.activeStale === true ? ' is-stale' : ' is-active'}`} aria-current="true" data-conversation-id={active.id}>
-            <span className={`lcos-receiver-dot status-${props.activeStale === true ? 'offline' : projectConnectedConversationStatusV1(active)}`} aria-hidden="true" />
+          ? <div className={`lcos-receiver-row${props.activePhase === 'stale' ? ' is-stale' : props.activePhase === 'disconnected' ? ' is-disconnected' : ' is-active'}`} aria-current="true" data-conversation-id={active.id}>
+            <span className={`lcos-receiver-dot status-${props.activePhase === 'disconnected' ? 'offline' : props.activePhase === 'waiting_input' ? 'waiting' : props.activePhase === 'busy' || props.activePhase === 'connecting' ? 'working' : projectConnectedConversationStatusV1(active)}`} aria-hidden="true" />
             <span className="lcos-receiver-row-main">
               <strong>{active.label}</strong>
-              {props.activeStale === true
-                ? <small className="lcos-receiver-stale-note" data-testid="lcos-receiver-stale-note">已断开 · 项目现场不受影响</small>
-                : <time dateTime={active.lastActiveAt}>{relativeTime(Date.parse(active.lastActiveAt), Date.now())}</time>}
+              {props.activePhase === 'disconnected'
+                ? <small className="lcos-receiver-stale-note">已断开 · 项目现场不受影响</small>
+                : props.activePhase === 'stale'
+                  ? <small className="lcos-receiver-stale-note">信息可能过期 · 会话仍保持连接</small>
+                  : <time dateTime={active.lastActiveAt}>{relativeTime(Date.parse(active.lastActiveAt), Date.now())}</time>}
             </span>
             <span className="lcos-receiver-provider">{receiverProviderLabel(active.provider)}</span>
-            {props.activeStale === true && props.onReconnect !== undefined
-              ? <button type="button" className="lcos-receiver-reconnect" data-testid="lcos-receiver-reconnect" disabled={busy} title="清除断开标记；下次发送任务时本地服务会自动恢复（只会新建一次替代会话）" onClick={() => props.onReconnect?.()}>重新连接</button>
+            {props.activePhase === 'disconnected' && props.onRecover !== undefined
+              ? <button type="button" className="lcos-receiver-reconnect" data-testid="lcos-receiver-reconnect" disabled={busy} title="通过 SessionLifecycle 恢复连接" onClick={() => props.onRecover?.()}>重新连接</button>
               : <button type="button" className="lcos-receiver-unlink" aria-label={`断开当前承接 ${active.label}`} title="断开（需确认）" disabled={busy} onClick={() => setConfirmDisconnectId(active.id)}><Unplug size={12} /></button>}
           </div>
           : <p className="lcos-receiver-hint">还没有指定承接对话；点选下面的对话，或新开一个接着做。</p>}

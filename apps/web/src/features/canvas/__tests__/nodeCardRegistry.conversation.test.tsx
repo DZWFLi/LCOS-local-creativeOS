@@ -12,7 +12,7 @@ import { NODE_CARD_REGISTRY, nodeCardKey, resolveNodeCard } from '../nodeCardReg
  */
 
 const CONVERSATION_NODE: CanvasNode = {
-  id: 'conversation:conv-1',
+  id: 'view-conversation-1',
   kind: 'context',
   entityKind: 'conversation',
   title: '需求讨论·第三轮',
@@ -26,6 +26,7 @@ const CONVERSATION_NODE: CanvasNode = {
     title: '需求讨论·第三轮',
     messageCount: 7,
     lastRunAt: new Date(Date.now() - 5 * 60_000).toISOString(),
+    lifecyclePhase: 'online',
   },
 }
 
@@ -61,9 +62,10 @@ describe('ConversationGlythObject 卡片渲染（node 环境 renderToStaticMarku
     expect(html).toContain('data-conversation-id="conv-1"')
   })
 
-  it('活动度字段接线：lastRunAt 近期 → data-glyth-state="working"', () => {
+  it('活动度只控制 decay；online lifecycle 仍是 stable，不冒充 working', () => {
     const html = renderCard()
-    expect(html).toContain('data-glyth-state="working"')
+    expect(html).toContain('data-glyth-state="stable"')
+    expect(html).not.toContain('data-glyth-state="working"')
   })
 
   it('去卡片化（Grammar S1/S2.1）：对象本身就是身体——无通用卡壳，Glyth + 极简标注', () => {

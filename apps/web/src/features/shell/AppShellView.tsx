@@ -8,6 +8,7 @@ import { CanvasSceneHost, type CanvasSceneHostProps } from './CanvasSceneHost'
 import { WorkRailHost } from './WorkRailHost'
 import { LcosToaster } from '../ui/LcosToaster'
 import { CaptureSpace } from '../capture/CaptureSpace'
+import { ConversationSpaceSurface } from '../surfaces/ConversationSpaceSurface'
 import type { WorkRail } from '../workrail/WorkRail'
 
 export interface AppShellViewProps {
@@ -38,6 +39,8 @@ export interface AppShellViewProps {
   }
   readonly strip: ComponentProps<typeof ProjectStripVNext>
   readonly scene: CanvasSceneHostProps
+  /** Project-local deeper scene. It is not persisted as a fourth top-level Surface. */
+  readonly conversationScene?: ComponentProps<typeof ConversationSpaceSurface> | null
   readonly rail: ComponentProps<typeof WorkRail>
   readonly dialogs: DialogsHostProps
   readonly immersive: { readonly node: CanvasNode; readonly projectId: string; readonly onClose: () => void } | null
@@ -63,8 +66,8 @@ export function AppShellView(props: AppShellViewProps) {
   return <main className="app-shell lcos-reconstructed" style={props.layoutStyle} data-testid="creative-os-app" data-layout-density={props.layoutDensity} data-layout-mode={props.layoutMode} data-collaboration-mode={props.narrowCollaboration ? "narrow" : "normal"}>
     <LcosToaster notice={props.notice} />
     <ProjectStripVNext {...props.strip} />
-    <CanvasSceneHost {...props.scene} />
-    {props.layoutMode === 'desktop' ? <WorkRailHost rail={props.rail} /> : null}
+    {props.conversationScene ? <ConversationSpaceSurface {...props.conversationScene} /> : <CanvasSceneHost {...props.scene} />}
+    {!props.conversationScene && props.layoutMode === 'desktop' ? <WorkRailHost rail={props.rail} /> : null}
     <DialogsHost {...props.dialogs} />
     {props.immersive && <ImmersiveViewer node={props.immersive.node} projectId={props.immersive.projectId} onClose={props.immersive.onClose} />}
   </main>

@@ -1,6 +1,6 @@
 import { ArrowUp, Grip, Loader2, X } from 'lucide-react'
 import { SessionGlyph } from '../design/LcosGlyphs'
-import { LcosGlyth, type LcosGlythState } from '../spatial/visual/LcosGlyth'
+import { LcosSignalGlyph, type LcosSignalState } from '../design/DotGlyph'
 import { useEffect, useRef, useState } from 'react'
 
 interface Point { x: number; y: number }
@@ -87,12 +87,12 @@ export function SurfaceAgentNode({ x, y, contextLabel, seedPrompt, surface, onSu
             : runState
               ? 'Agent 工作中'
               : '局部会话'
-  const glyphState: LcosGlythState = runState?.status === 'failed'
-    ? 'error'
+  const signalState: LcosSignalState = runState?.status === 'failed'
+    ? 'failed'
     : runState?.status === 'completed'
-      ? 'confirm'
+      ? 'kept'
       : runState?.status === 'waiting_input' || runState?.status === 'review'
-        ? 'waiting'
+        ? 'pending'
         : runState && !['completed', 'cancelled'].includes(runState.status)
           ? 'working'
           : 'stable'
@@ -115,7 +115,7 @@ export function SurfaceAgentNode({ x, y, contextLabel, seedPrompt, surface, onSu
       }}
       onPointerCancel={() => { drag.current = null }}
     >
-      <span className="lcos-agent-node-identity"><Grip size={11}/><i className="lcos-agent-node-signal" aria-label="局部 Agent 状态"><SessionGlyph/><LcosGlyth state={glyphState}/></i><strong>Agent</strong></span><button type="button" onClick={onClose} aria-label="关闭 Agent"><X size={13}/></button>
+      <span className="lcos-agent-node-identity"><Grip size={11}/><i className="lcos-agent-node-signal" aria-label="局部 Agent 状态"><SessionGlyph/><LcosSignalGlyph state={signalState}/></i><strong>Agent</strong></span><button type="button" onClick={onClose} aria-label="关闭 Agent"><X size={13}/></button>
     </header>
     <small>{contextLabel} · {statusLabel}</small>
     <textarea ref={ref} value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="针对这里直接说要做什么" rows={2} onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') { event.preventDefault(); void submit() } }}/>

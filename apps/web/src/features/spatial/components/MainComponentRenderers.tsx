@@ -1,8 +1,8 @@
 import type { CSSProperties } from 'react'
 import type { SurfaceComponentRenderProps } from './surfaceComponentTypes'
-import { LcosGlyth } from '../visual/LcosGlyth'
+import { LcosSignalGlyph } from '../../design/DotGlyph'
 import { LightSegment } from '../visual/LightSegment'
-import { resolveSpatialSignal, shouldShowGlyth } from '../visual/spatialSignal'
+import { resolveSpatialSignal, shouldShowSignal } from '../visual/spatialSignal'
 
 function boundNodes(element: SurfaceComponentRenderProps['element'], context: SurfaceComponentRenderProps['context']) {
   const ids = new Set([
@@ -25,7 +25,7 @@ export function StackComponent({ element, selected, context }: SurfaceComponentR
     <header>
       <strong>堆叠</strong>
       <small>{members.length ? `${members.length} 个真实对象` : '拖入对象成堆'}</small>
-      {shouldShowGlyth(signal) && <LcosGlyth state={signal.glyph}/>}
+      {shouldShowSignal(signal) && <LcosSignalGlyph state={signal.state}/>}
     </header>
     {members.length === 0
       ? <div className="lcos-stack-empty">把对象拖到这里；堆叠只保存稳定引用。</div>
@@ -56,7 +56,7 @@ export function CompareComponent({ element, selected, context }: SurfaceComponen
     <header>
       <strong>对比</strong>
       <small>{members.length === 2 ? '两个真实对象' : members.length === 1 ? '还差一侧' : '每侧拖入一个对象'}</small>
-      {shouldShowGlyth(signal) && <LcosGlyth state={signal.glyph}/>}
+      {shouldShowSignal(signal) && <LcosSignalGlyph state={signal.state}/>}
     </header>
     <div className="lcos-compare-panels">
       <section onClick={left ? () => context?.onSelectNode?.(left.id) : undefined}>
@@ -82,7 +82,7 @@ export function ActivePathComponent({ element, selected, context }: SurfaceCompo
     <header>
       <strong>活动路径</strong>
       <small>{members.length ? `${members.length} 步 · 灯条流向即顺序` : '拖入步骤对象连成路径'}</small>
-      {shouldShowGlyth(signal) && <LcosGlyth state={signal.glyph}/>}
+      {shouldShowSignal(signal) && <LcosSignalGlyph state={signal.state}/>}
     </header>
     {members.length === 0
       ? <div className="lcos-active-path-empty">把步骤或对象拖进来，按顺序连成行动路径。</div>

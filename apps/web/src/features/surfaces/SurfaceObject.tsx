@@ -6,7 +6,7 @@ import { beginSemanticDrop } from '../spatial/semanticDrop'
 import { DropFeedbackLayer } from '../drop/dropFeedbackLayer'
 import { useSemanticDropFeedback } from '../drop/useSemanticDropFeedback'
 import { ArchiveGlyph, AudioGlyph, BenchGlyph, CollectionGlyph, ContextGlyph, DocumentGlyph, ImageGlyph, LinkGlyph, NoteGlyph, RunGlyph, SessionGlyph, VideoGlyph, WorkflowGlyph, WorkGlyph } from '../design/LcosGlyphs'
-import { GlythAvatar } from '../spatial/visual/CanvasSprite'
+import { LcosSignalGlyph } from '../design/DotGlyph'
 import { resolveSpatialSignal, type SpatialRuntimeSignal } from '../spatial/visual/spatialSignal'
 import { nodeRole } from './surfaceModel'
 import type { SurfaceAttentionBucket } from './surfaceContracts'
@@ -127,7 +127,7 @@ export function SurfaceObject({
             showControls={false}
           />}
       {usageHint && <span className="lcos-surface-usage-hint">{usageHint}</span>}
-      {(selected || signal.glyph !== 'stable') && <span className="lcos-surface-system-signal" data-spatial-signal={signal.glyph} aria-hidden="true"><GlythAvatar state={selected && signal.glyph === 'stable' ? 'absorb' : signal.glyph} reason={selected ? 'selection' : runtimeSignal === 'processing' ? 'running' : 'review'}/></span>}
+      {(selected || signal.state !== 'stable') && <span className="lcos-surface-system-signal" data-spatial-signal={selected && signal.state === 'stable' ? 'focus' : signal.state} aria-hidden="true"><LcosSignalGlyph state={selected && signal.state === 'stable' ? 'focus' : signal.state}/></span>}
     </button>
     <DropFeedbackLayer phase={dropFeedback.phase} hitElement={dropFeedback.hitElement} />
   </>

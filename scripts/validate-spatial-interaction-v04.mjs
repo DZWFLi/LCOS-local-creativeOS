@@ -16,7 +16,7 @@ const checks = [
   ['Main primary drag commits directly to an explicit external Surface target', canvas.includes('externalProjectViewTargetAt') && canvas.includes('onDirectProjectViewDrop(directMoveHit.target.id')],
   ['Normal Main movement keeps raw free-position coordinates', canvas.includes('dragPoint.current = rawPoint') && !canvas.includes('snapNodePositionToGrid(anchorNode')],
   ['Alignment guides are feedback-only', canvas.includes('alignmentGuideFor') && layer.includes('previewAlignment') && css.includes('Alignment is feedback only')],
-  ['Surface component pointercancel restores preview without commit', frame.includes('latestBounds.current = interaction.bounds') && frame.includes('onBoundsPreview?.(null, kind)')],
+  ['Surface component pointercancel restores preview without commit', (() => { const body = frame.match(/const cancel = \(pointer: PointerEvent\) => \{([\s\S]*?)\n\s*\}/)?.[1] ?? ''; return /latestBounds\.current\s*=\s*(?:session|interaction)\.bounds/.test(body) && body.includes('onBoundsPreview?.(null') && !body.includes('onBoundsCommit') && frame.includes("window.addEventListener('pointercancel', cancel)") })()],
   ['Non-main entity primary drag can become direct Semantic Drop only on an external target', drop.includes("'direct-primary'") && drop.includes('rawHit.element !== sourceSurface')],
 ]
 

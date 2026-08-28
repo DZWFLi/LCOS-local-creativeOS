@@ -10,9 +10,9 @@ import { PortalComponent } from '../src/features/spatial/components/PortalCompon
 import { CheckpointComponent, ReviewComponent, WorkbenchFrameComponent } from '../src/features/spatial/components/WorkflowComponentRenderers'
 import { ActivePathComponent, CompareComponent, StackComponent } from '../src/features/spatial/components/MainComponentRenderers'
 import { LcosGlyth } from '../src/features/spatial/visual/LcosGlyth'
-import { GlythAvatar } from '../src/features/spatial/visual/CanvasSprite'
+import { LcosSignalGlyph } from '../src/features/design/DotGlyph'
 import { SourceChainComponent } from '../src/features/spatial/components/SourceChainComponent'
-import { boundRegionSemanticForView, resolveSpatialSignal, shouldShowGlyth } from '../src/features/spatial/visual/spatialSignal'
+import { boundRegionSemanticForView, resolveSpatialSignal, shouldShowSignal } from '../src/features/spatial/visual/spatialSignal'
 import { surfaceComponentRegistry } from '../src/features/spatial/components/surfaceComponentRegistry'
 import { surfaceComponentContract, surfaceComponentsFor } from '../src/features/spatial/model/surfaceComponentCatalog'
 import { applySurfaceOp, applySurfaceOps, validateSurfaceOp, validateSurfaceOps } from '../src/features/spatial/model/surfaceOps'
@@ -199,29 +199,25 @@ describe('Spatial Component Foundation integrity', () => {
     }
   })
 
-  it('renders avatar plates whose placement is owned by host container CSS, not a corner prop', () => {
-    // A-9（20260826 做实）：corner 参数已删——它生成的类在 CSS 中无任何规则，
-    // 真实位置由宿主容器拥有（node/surface 左上、workflow-action 右下）。
-    const html = renderToStaticMarkup(createElement(GlythAvatar, { state: 'absorb', reason: 'selection' }))
-    expect(html).toContain('lcos-glyth-avatar')
-    expect(html).toContain('lcos-glyth-avatar-plate')
-    expect(html).toContain('reason-selection')
-    expect(html).toContain('data-glyth-reason="selection"')
-    expect(html).not.toContain('corner-')
+  it('uses the 16×16 system signal for ordinary object state instead of a Glyth avatar', () => {
+    const html = renderToStaticMarkup(createElement(LcosSignalGlyph, { state: 'focus' }))
+    expect(html).toContain('lcos-signal-glyph')
+    expect(html).toContain('data-signal-state="focus"')
+    expect(html).not.toContain('lcos-glyth')
   })
 
   it('resolves one Presentation signal across Glyph, Segment and Matrix without inventing truth', () => {
     // Selection is a transient input: it lights the skeleton, never a persistent pose.
-    expect(resolveSpatialSignal({ selected: true })).toMatchObject({ glyph: 'stable', matrixActive: false, segmentActive: true })
-    expect(resolveSpatialSignal({ semantic: '待客户确认' })).toMatchObject({ glyph: 'waiting', matrixActive: false })
-    expect(resolveSpatialSignal({ semantic: '已冻结 不要动' })).toMatchObject({ glyph: 'stable', matrixActive: false })
-    expect(resolveSpatialSignal({ runtime: 'processing' })).toMatchObject({ glyph: 'working', matrixActive: true })
-    expect(resolveSpatialSignal({ selected: true, semantic: '冲突', runtime: 'processing' })).toMatchObject({ glyph: 'error', matrixActive: false })
-    expect(resolveSpatialSignal({ semantic: '正在接收材料' })).toMatchObject({ glyph: 'absorb', matrixActive: true })
-    expect(resolveSpatialSignal({ semantic: '输出结果' })).toMatchObject({ glyph: 'output', matrixActive: true })
-    expect(resolveSpatialSignal({ runtime: 'complete' })).toMatchObject({ glyph: 'confirm', matrixActive: false })
-    expect(shouldShowGlyth(resolveSpatialSignal({ selected: true }))).toBe(false)
-    expect(shouldShowGlyth(resolveSpatialSignal({ semantic: '冲突' }))).toBe(true)
+    expect(resolveSpatialSignal({ selected: true })).toMatchObject({ state: 'stable', matrixActive: false, segmentActive: true })
+    expect(resolveSpatialSignal({ semantic: '待客户确认' })).toMatchObject({ state: 'pending', matrixActive: false })
+    expect(resolveSpatialSignal({ semantic: '已冻结 不要动' })).toMatchObject({ state: 'stable', matrixActive: false })
+    expect(resolveSpatialSignal({ runtime: 'processing' })).toMatchObject({ state: 'working', matrixActive: true })
+    expect(resolveSpatialSignal({ selected: true, semantic: '冲突', runtime: 'processing' })).toMatchObject({ state: 'failed', matrixActive: false })
+    expect(resolveSpatialSignal({ semantic: '正在接收材料' })).toMatchObject({ state: 'receiving', matrixActive: true })
+    expect(resolveSpatialSignal({ semantic: '输出结果' })).toMatchObject({ state: 'sending', matrixActive: true })
+    expect(resolveSpatialSignal({ runtime: 'complete' })).toMatchObject({ state: 'kept', matrixActive: false })
+    expect(shouldShowSignal(resolveSpatialSignal({ selected: true }))).toBe(false)
+    expect(shouldShowSignal(resolveSpatialSignal({ semantic: '冲突' }))).toBe(true)
   })
 
   it('inherits Region semantics only through explicit Project View bindings', () => {

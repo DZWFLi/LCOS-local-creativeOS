@@ -1,3 +1,4 @@
+import type { SessionPhase } from '@local-creative-os/contracts'
 // DEPRECATED_BEHAVIORAL_HINT (Phase A): NodeKind carries legacy visual/heuristic
 // semantics (process/decision/note). New Presentation/Curation code must not
 // treat these kinds as business truth; use Artifact kind + Relation + Metadata.
@@ -35,6 +36,8 @@ export interface CanvasNodeConversation {
   lastSelectedAsControllerAt?: string
   /** 批十四：对话转写 artifact（导入时由 Core 生成，markdown）——沉浸阅读链取数用。 */
   conversationArtifactId?: string
+  /** Runtime lifecycle truth. Activity timestamps never infer this field. */
+  lifecyclePhase?: SessionPhase
 }
 
 export interface CanvasNode {

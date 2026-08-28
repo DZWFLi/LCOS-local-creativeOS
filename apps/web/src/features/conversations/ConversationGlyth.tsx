@@ -43,10 +43,9 @@ export interface ConversationGlythInput {
 
 export type { BotFrame } from '../spatial/visual/bloub/engine'
 
-/** 由最近活跃时间派生默认 Glyth 态（可被外部 state prop 覆盖）。 */
-export function conversationGlythStateFromRecent(conversation: ConversationGlythInput, now = Date.now()): LcosGlythState {
-  const recentRunMs = conversation.lastRunAt ? now - new Date(conversation.lastRunAt).getTime() : Number.POSITIVE_INFINITY
-  return recentRunMs < 60 * 60 * 1000 ? 'working' : 'stable'
+/** @deprecated Activity recency is presentation decay only; it never means working. */
+export function conversationGlythStateFromRecent(_conversation: ConversationGlythInput, _now = Date.now()): LcosGlythState {
+  return 'stable'
 }
 
 /**

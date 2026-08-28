@@ -16,6 +16,10 @@ import type {
   ContextChangeProposalV1,
   ProviderSessionBindingV1,
   ConnectedConversationV1,
+  ActiveReceiverIdentityV1,
+  ArtifactBirthProvenanceV1,
+  ConversationIdentityChainV1,
+  SessionPhase,
   ProjectHandoffPackV1,
   ProjectReceiverBindingV1,
   ContextManifestV0,
@@ -219,6 +223,15 @@ export interface ActiveContextProjection {
     readonly kind: string
     readonly revisionId?: string
   }[]
+}
+
+export interface SessionLifecycleRecordProjectionV1 {
+  readonly projectId: string
+  readonly provider: 'codex' | 'workbuddy' | string
+  readonly phase: SessionPhase
+  readonly staleFrom?: Exclude<SessionPhase, 'stale'>
+  readonly lastTransitionReason?: string
+  readonly updatedAt: string
 }
 
 export interface LocalCoreClient {
@@ -487,6 +500,12 @@ export interface LocalCoreClient {
   disconnectConversation(projectId: string, connectedConversationId: string, signal?: AbortSignal): Promise<RuntimeCall<{ readonly deleted: boolean }>>
   getProjectReceiverBinding(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<ProjectReceiverBindingV1>>
   setActiveReceiver(projectId: string, connectedConversationId: string, signal?: AbortSignal): Promise<RuntimeCall<ProjectReceiverBindingV1>>
+  activeReceiverIdentity(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<ActiveReceiverIdentityV1>>
+  connectedConversationIdentity(projectId: string, connectedConversationId: string, signal?: AbortSignal): Promise<RuntimeCall<ConversationIdentityChainV1>>
+  linkConnectedConversationSession(projectId: string, connectedConversationId: string, conversationSessionId: string, signal?: AbortSignal): Promise<RuntimeCall<ConversationIdentityChainV1>>
+  artifactBirth(projectId: string, artifactId: string, signal?: AbortSignal): Promise<RuntimeCall<ArtifactBirthProvenanceV1>>
+  sessionLifecycle(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<{ readonly states: readonly SessionLifecycleRecordProjectionV1[] }>>
+  recoverSessionLifecycle(projectId: string, provider: string, signal?: AbortSignal): Promise<RuntimeCall<{ readonly state: SessionLifecycleRecordProjectionV1 }>>
   // RECEIVER-3 会话承接 Handoff（切换时 prepare；发送前读 pending + 注入 + consume）
   prepareReceiverHandoff(projectId: string, input: {
     readonly fromConversationId: string | null
@@ -1856,6 +1875,28 @@ export function createLocalCoreClient(): LocalCoreClient {
         init: { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ connectedConversationId }) },
         decode: decodeResult<ProjectReceiverBindingV1>,
       })
+    },
+    activeReceiverIdentity(projectId, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/active-receiver-identity`, { signal, decode: decodeResult<ActiveReceiverIdentityV1> })
+    },
+    connectedConversationIdentity(projectId, connectedConversationId, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/connected-conversations/${encodeURIComponent(connectedConversationId)}/identity`, { signal, decode: decodeResult<ConversationIdentityChainV1> })
+    },
+    linkConnectedConversationSession(projectId, connectedConversationId, conversationSessionId, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/connected-conversations/${encodeURIComponent(connectedConversationId)}/link-session`, {
+        signal,
+        init: { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ conversationSessionId }) },
+        decode: decodeResult<ConversationIdentityChainV1>,
+      })
+    },
+    artifactBirth(projectId, artifactId, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/artifacts/${encodeURIComponent(artifactId)}/birth`, { signal, decode: decodeResult<ArtifactBirthProvenanceV1> })
+    },
+    sessionLifecycle(projectId, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/session-lifecycle`, { signal, decode: decodeResult<{ readonly states: readonly SessionLifecycleRecordProjectionV1[] }> })
+    },
+    recoverSessionLifecycle(projectId, provider, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/session-lifecycle/${encodeURIComponent(provider)}/recover`, { signal, init: { method: 'POST' }, decode: decodeResult<{ readonly state: SessionLifecycleRecordProjectionV1 }> })
     },
     prepareReceiverHandoff(projectId, input, signal) {
       return request(`/projects/${encodeURIComponent(projectId)}/receiver-handoff`, {

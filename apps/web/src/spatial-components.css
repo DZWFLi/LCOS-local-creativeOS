@@ -9,7 +9,7 @@
 :root {
   --lcos-ink: rgba(52, 46, 66, .82);
   --lcos-signal: rgb(92, 74, 143);
-  --lcos-signal-error: rgb(180, 76, 73);
+  --lcos-signal-failed: rgb(180, 76, 73);
   --lcos-matrix-dot: rgba(101, 80, 157, .34);
   --lcos-segment-off: rgba(92, 74, 143, .26);
   --lcos-segment-on: rgba(103, 82, 158, .8);
@@ -26,7 +26,7 @@
 [data-lcos-theme='dark'] {
   --lcos-ink: rgba(222, 216, 238, .86);
   --lcos-signal: rgb(158, 141, 208);
-  --lcos-signal-error: rgb(228, 116, 110);
+  --lcos-signal-failed: rgb(228, 116, 110);
   --lcos-matrix-dot: rgba(176, 156, 226, .4);
   --lcos-segment-off: rgba(158, 141, 208, .32);
   --lcos-segment-on: rgba(186, 166, 234, .88);
@@ -44,7 +44,7 @@
   :root:not([data-lcos-theme='light']) {
     --lcos-ink: rgba(222, 216, 238, .86);
     --lcos-signal: rgb(158, 141, 208);
-    --lcos-signal-error: rgb(228, 116, 110);
+    --lcos-signal-failed: rgb(228, 116, 110);
     --lcos-matrix-dot: rgba(176, 156, 226, .4);
     --lcos-segment-off: rgba(158, 141, 208, .32);
     --lcos-segment-on: rgba(186, 166, 234, .88);
@@ -234,7 +234,7 @@ button.lcos-context-maximize:hover { border-color: var(--lcos-signal); color: #f
 .lcos-light-segment i.is-lit { background: var(--lcos-segment-on); }
 .lcos-light-segment.is-active { opacity: .94; }
 .lcos-light-segment.is-active i.is-lit { box-shadow: 0 0 12px var(--lcos-segment-glow); }
-.lcos-light-segment.is-semantic-error i.is-lit { background: var(--lcos-signal-error); box-shadow: 0 0 12px rgba(180, 76, 73, .24); }
+.lcos-light-segment.is-semantic-error i.is-lit { background: var(--lcos-signal-failed); box-shadow: 0 0 12px rgba(180, 76, 73, .24); }
 .lcos-light-segment.mode-flow i.is-lit { animation: lcos-segment-flow 1.4s ease-in-out infinite; animation-delay: calc(var(--segment-index) * 90ms); }
 @keyframes lcos-segment-flow {
   0%, 100% { opacity: .68; }
@@ -269,82 +269,8 @@ button.lcos-context-maximize:hover { border-color: var(--lcos-signal); color: #f
 .lcos-glyth.state-absorb { color: var(--lcos-glyth-absorb); }
 .lcos-glyth.state-output { color: var(--lcos-glyth-output); }
 
-/* Canvas sprite — the one resident liquid-capsule presence per surface (screen space),
-   draggable; parks anywhere and remembers its position per surface. */
-.lcos-canvas-sprite {
-  position: absolute;
-  right: 58px;
-  top: 14px;
-  z-index: var(--lcos-z-overlay-ui); /* z-tier: overlay-ui */
-  display: grid;
-  place-items: center;
-  width: 72px;
-  height: 72px;
-  pointer-events: auto;
-  cursor: grab;
-  touch-action: none;
-}
-.lcos-canvas-sprite.is-dragging, .lcos-canvas-sprite:active { cursor: grabbing; }
-.lcos-canvas-sprite-plate {
-  width: 64px;
-  height: 64px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, .55);
-  box-shadow: 0 10px 30px rgba(42, 36, 58, .12), 0 0 0 1px rgba(76, 69, 94, .06);
-  display: grid;
-  place-items: center;
-  backdrop-filter: blur(8px);
-  transition: transform 180ms cubic-bezier(.2, .9, .3, 1.2);
-}
-[data-lcos-theme='dark'] .lcos-canvas-sprite-plate { background: rgba(24, 22, 34, .55); box-shadow: 0 10px 30px rgba(0, 0, 0, .4), 0 0 0 1px rgba(176, 156, 226, .14); }
-[data-lcos-theme='dark'] .lcos-canvas-sprite-hint { background: rgba(24, 22, 34, .92); color: rgba(222, 216, 238, .8); }
-.lcos-canvas-sprite:hover .lcos-canvas-sprite-plate { transform: scale(1.04); }
-.lcos-canvas-sprite .lcos-glyth { filter: none; }
-.lcos-canvas-sprite-hint {
-  position: absolute;
-  top: calc(100% - 4px);
-  padding: 3px 9px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, .95);
-  box-shadow: 0 4px 14px rgba(42, 37, 55, .12);
-  color: rgba(57, 52, 68, .68);
-  font-size: 10px;
-  /* 受限宽度下截断，避免 nowrap 长文在窄画布上横向溢出成遮挡条 */
-  max-width: 160px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  opacity: 0;
-  transform: translateY(-3px);
-  transition: opacity 140ms ease, transform 140ms ease;
-  pointer-events: none;
-}
-.lcos-canvas-sprite.is-hovered .lcos-canvas-sprite-hint { opacity: 1; transform: none; }
-.lcos-canvas-sprite.mood-alert .lcos-canvas-sprite-plate { animation: lcos-sprite-alert 1.1s ease-in-out infinite; }
-@keyframes lcos-sprite-alert { 25% { transform: translateX(-1.5px) rotate(-1.2deg); } 75% { transform: translateX(1.5px) rotate(1.2deg); } }
-
-/* Glyth avatar —— avatar-slot 语义（LCOS_Glaze_ 材料方案 Demo 裁定规格）：
-   信号容器即 34px 槽，负偏移"粘"在对象边框外面左上角（corner-tl：left:-10px / top:-11px），
-   分身绝不进对象内部；槽内 plate 以 inset:2px 成 30px 圆板，glyth 26px。
-   定位职责全部在信号容器（system-signal）上，avatar 本体只负责填充槽位。 */
-.lcos-glyth-avatar {
-  position: absolute;
-  inset: 0;
-  z-index: var(--lcos-z-content-raised); /* z-tier: canvas-content */
-  display: grid;
-  place-items: center;
-  pointer-events: none;
-}
-.lcos-glyth-avatar-plate {
-  position: absolute;
-  inset: 2px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, .92);
-  box-shadow: 0 3px 10px rgba(42, 36, 58, .14);
-  display: grid;
-  place-items: center;
-}
-[data-lcos-theme='dark'] .lcos-glyth-avatar-plate { background: rgba(24, 22, 34, .92); box-shadow: 0 3px 10px rgba(0, 0, 0, .38), 0 0 0 1px rgba(176, 156, 226, .12); }
+/* Native system-signal slots. Ordinary objects/components use the 16×16 LCOS signal seed;
+   Conversation Glyth never appears in these slots. */
 .lcos-reconstructed .lcos-node-system-signal,
 .lcos-reconstructed .lcos-surface-system-signal,
 .lcos-reconstructed .lcos-workflow-action-signal {
@@ -356,18 +282,17 @@ button.lcos-context-maximize:hover { border-color: var(--lcos-signal); color: #f
   transition: opacity 140ms ease, transform 180ms var(--lcos-ui-ease-out);
   pointer-events: none;
 }
-/* avatar-slot 槽位：node / surface 挂左上角（corner-tl 规格 34px 槽），
-   workflow 动作卡保持右下角语义但同样负偏移挂外，统一不遮挡对象内部。 */
+/* Signal slots sit outside object bodies so state feedback never becomes morphology. */
 .lcos-reconstructed .lcos-node-system-signal { left: -10px; top: -11px; width: 34px; height: 34px; }
 .lcos-reconstructed .lcos-surface-system-signal { left: -10px; top: -11px; width: 34px; height: 34px; }
 .lcos-reconstructed .lcos-workflow-action-signal { right: -10px; bottom: -11px; width: 34px; height: 34px; }
-.lcos-surface-fence-body.signal-waiting, .lcos-surface-region-body.signal-waiting { border-right-color: transparent; }
-.lcos-surface-fence-body.signal-error, .lcos-surface-region-body.signal-error { border-color: rgba(177, 78, 75, .24); }
+.lcos-surface-fence-body.signal-pending, .lcos-surface-region-body.signal-pending { border-right-color: transparent; }
+.lcos-surface-fence-body.signal-failed, .lcos-surface-region-body.signal-failed { border-color: rgba(177, 78, 75, .24); }
 .lcos-surface-region-body.signal-working { border-color: rgba(70, 125, 164, .20); background: linear-gradient(145deg, rgba(70, 125, 164, .055), rgba(119, 98, 163, .025)); }
-.lcos-surface-region-body.signal-absorb { border-color: rgba(70, 125, 150, .2); }
-.lcos-surface-region-body.signal-output { border-color: rgba(122, 86, 175, .22); }
+.lcos-surface-region-body.signal-receiving { border-color: rgba(70, 125, 150, .2); }
+.lcos-surface-region-body.signal-sending { border-color: rgba(122, 86, 175, .22); }
 .lcos-workflow-action.signal-working { border-color: rgba(70, 125, 164, .30); }
-.lcos-workflow-action.signal-error { border-color: rgba(177, 78, 75, .32); }
+.lcos-workflow-action.signal-failed { border-color: rgba(177, 78, 75, .32); }
 
 /* Source is a movable Context object. It is never a fixed, click-through strip. */
 .lcos-source-chain {
@@ -448,7 +373,7 @@ button.lcos-context-maximize:hover { border-color: var(--lcos-signal); color: #f
   background: var(--lcos-matrix-dot);
   box-shadow: 0 0 3px var(--lcos-segment-glow);
 }
-.lcos-matrix-activity.is-semantic-error i { background: var(--lcos-signal-error); }
+.lcos-matrix-activity.is-semantic-error i { background: var(--lcos-signal-failed); }
 .lcos-matrix-activity.verb-gather i { animation: lcos-mx-gather 1.6s ease-in-out infinite; animation-delay: calc(var(--matrix-index) * 60ms); }
 .lcos-matrix-activity.verb-spread i { animation: lcos-mx-spread 1.6s ease-in-out infinite; animation-delay: calc(var(--matrix-index) * 60ms); }
 .lcos-matrix-activity.verb-gap i { animation: lcos-mx-cell 1.8s ease-in-out infinite; animation-delay: calc(var(--matrix-index) * 70ms); }
@@ -1104,7 +1029,7 @@ button.lcos-context-expand:hover { background: rgba(111,87,177,.07); }
 .lcos-receiver-dot.status-offline { background: #9ca3af; }
 /* 0.5 波 GUI 收口：Chip 三态补 loading/error（复用既有视觉 token，不新造语义）。 */
 .lcos-receiver-chip-dot.status-loading { background: var(--lcos-glyth-waiting); }
-.lcos-receiver-chip-dot.status-error { background: var(--lcos-signal-error); }
+.lcos-receiver-chip-dot.status-error { background: var(--lcos-signal-failed); }
 
 /* Switcher：Chip 下展开的轻量浮层（宽 300px，非抽屉）；默认锚位仅作无 JS 定位兜底。 */
 .lcos-receiver-switcher {
@@ -1125,7 +1050,7 @@ button.lcos-context-expand:hover { background: rgba(111,87,177,.07); }
 .lcos-receiver-switcher header h3 { margin: 1px 0 0; font-size: 13px; font-weight: 660; color: var(--lcos-ink); }
 .lcos-receiver-close { display: grid; place-items: center; width: 22px; height: 22px; border: 0; border-radius: 6px; background: transparent; color: rgba(52, 46, 66, .5); cursor: pointer; }
 .lcos-receiver-close:hover { color: var(--lcos-ink); background: rgba(92, 74, 143, .08); }
-.lcos-receiver-error { margin: 0 0 8px; font-size: 10.5px; color: var(--lcos-signal-error); }
+.lcos-receiver-error { margin: 0 0 8px; font-size: 10.5px; color: var(--lcos-signal-failed); }
 .lcos-receiver-retry { margin-left: 6px; padding: 1px 6px; border: 1px solid rgba(92, 74, 143, .28); border-radius: 6px; background: transparent; color: var(--lcos-ink); font: 600 10.5px/1.4 var(--lcos-font-mono, monospace); cursor: pointer; vertical-align: baseline; }
 .lcos-receiver-retry:hover { background: rgba(92, 74, 143, .08); }
 .lcos-receiver-section { margin-bottom: 10px; }
@@ -1147,7 +1072,7 @@ button.lcos-context-expand:hover { background: rgba(111,87,177,.07); }
 .lcos-receiver-row-main time { font: 500 9.5px/1.4 var(--lcos-font-mono, monospace); color: rgba(52, 46, 66, .48); }
 .lcos-receiver-provider { flex: none; padding: 1.5px 6px; border: 1px solid rgba(92, 74, 143, .2); border-radius: 999px; font: 650 8.5px/1.4 var(--lcos-font-mono, monospace); letter-spacing: .04em; color: rgba(52, 46, 66, .6); }
 .lcos-receiver-unlink { display: grid; place-items: center; flex: none; width: 20px; height: 20px; border: 0; border-radius: 5px; background: transparent; color: rgba(52, 46, 66, .4); cursor: pointer; }
-.lcos-receiver-unlink:hover { color: var(--lcos-signal-error); background: rgba(180, 76, 73, .08); }
+.lcos-receiver-unlink:hover { color: var(--lcos-signal-failed); background: rgba(180, 76, 73, .08); }
 .lcos-receiver-unlink:disabled { opacity: .4; cursor: default; }
 .lcos-receiver-create { width: 100%; display: flex; align-items: center; justify-content: center; gap: 5px; padding: 7px 8px; border: 1px dashed rgba(92, 74, 143, .3); border-radius: 4px; background: transparent; font-size: 11px; font-weight: 620; color: var(--lcos-signal); cursor: pointer; }
 .lcos-receiver-create:hover { background: rgba(92, 74, 143, .06); border-color: rgba(92, 74, 143, .5); }
@@ -1159,7 +1084,7 @@ button.lcos-context-expand:hover { background: rgba(111,87,177,.07); }
 /* RECEIVER-5 会话失效（43O）：Chip 断开态 = 虚线边框 + 灰点；当前承接行 = 语义红弱化底（警示但非错误，与 site-mismatch 同色族）。 */
 .lcos-receiver-chip[data-stale='true'] { border-style: dashed; border-color: rgba(180, 76, 73, .38); color: rgba(52, 46, 66, .62); }
 .lcos-receiver-row.is-stale { padding: 7px 6px; border: 1px dashed rgba(180, 76, 73, .34); background: rgba(180, 76, 73, .05); }
-.lcos-receiver-stale-note { display: block; margin-top: 1px; font-size: 10px; line-height: 1.5; color: var(--lcos-signal-error); }
+.lcos-receiver-stale-note { display: block; margin-top: 1px; font-size: 10px; line-height: 1.5; color: var(--lcos-signal-failed); }
 .lcos-receiver-reconnect { flex: none; margin-left: auto; padding: 3.5px 9px; border: 1px solid rgba(180, 76, 73, .32); border-radius: 4px; background: transparent; font: 620 10.5px/1.4 var(--lcos-font-mono, monospace); color: var(--lcos-ink); cursor: pointer; }
 .lcos-receiver-reconnect:hover { background: rgba(180, 76, 73, .08); border-color: rgba(180, 76, 73, .5); }
 .lcos-receiver-reconnect:disabled { opacity: .5; cursor: default; }
@@ -1184,9 +1109,9 @@ button.lcos-context-expand:hover { background: rgba(111,87,177,.07); }
 .lcos-receiver-handoff-route > strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 660; color: var(--lcos-ink); }
 .lcos-receiver-handoff-facts { list-style: none; margin: 0 0 8px; padding: 6px 8px; border: 1px solid rgba(92, 74, 143, .14); border-radius: 4px; background: rgba(92, 74, 143, .04); display: grid; gap: 3px; }
 .lcos-receiver-handoff-facts li { font-size: 10.5px; line-height: 1.5; color: rgba(52, 46, 66, .68); }
-.lcos-receiver-handoff-facts li.is-pending { color: var(--lcos-signal-error); }
+.lcos-receiver-handoff-facts li.is-pending { color: var(--lcos-signal-failed); }
 /* RECEIVER-6 施工现场差异提醒（43I.2）：警示但非错误——语义红弱化底 + 等宽现场标识。 */
-.lcos-receiver-handoff-facts li.is-site-mismatch { color: var(--lcos-signal-error); background: rgba(196, 64, 64, .06); border-radius: 3px; padding: 2px 5px; margin: 1px -5px 0; font-family: var(--lcos-font-mono, monospace); font-size: 10px; }
+.lcos-receiver-handoff-facts li.is-site-mismatch { color: var(--lcos-signal-failed); background: rgba(196, 64, 64, .06); border-radius: 3px; padding: 2px 5px; margin: 1px -5px 0; font-family: var(--lcos-font-mono, monospace); font-size: 10px; }
 .lcos-receiver-handoff-hint { margin: 0 0 10px; font-size: 10px; line-height: 1.6; color: rgba(52, 46, 66, .5); }
 .lcos-receiver-handoff-confirm footer { display: flex; gap: 8px; justify-content: flex-end; }
 
@@ -1995,7 +1920,7 @@ button.lcos-context-expand:hover { background: rgba(111,87,177,.07); }
 .lcos-workbench-frame-header-side { display: inline-flex; flex: none; align-items: center; gap: 8px; }
 .lcos-workbench-frame-header-action { display: inline-flex; align-items: center; gap: 6px; }
 
-/* Run 状态徽标：小浮岛胶囊 + Matrix 方点；非终态点亮（segment-on+glow），终态熄灭（segment-off），失败红（signal-error） */
+/* Run 状态徽标：小浮岛胶囊 + Matrix 方点；非终态点亮（segment-on+glow），终态熄灭（segment-off），失败红（signal-failed） */
 .lcos-workbench-frame-run-badge {
   display: inline-flex;
   align-items: center;
@@ -2012,7 +1937,7 @@ button.lcos-context-expand:hover { background: rgba(111,87,177,.07); }
 .lcos-workbench-frame-run-badge.is-running i,
 .lcos-workbench-frame-run-badge.is-waiting_input i,
 .lcos-workbench-frame-run-badge.is-review i { background: var(--lcos-segment-on); box-shadow: 0 0 8px var(--lcos-segment-glow); }
-.lcos-workbench-frame-run-badge.is-failed i { background: var(--lcos-signal-error); box-shadow: 0 0 8px rgba(180, 76, 73, .24); }
+.lcos-workbench-frame-run-badge.is-failed i { background: var(--lcos-signal-failed); box-shadow: 0 0 8px rgba(180, 76, 73, .24); }
 
 /* 四区主体：左（大纲）/ 中（内容）/ 右（工具结果卡）；侧区只给弹性宽度区间，插槽缺省不渲染空壳 */
 .lcos-workbench-frame-body { display: flex; flex: 1; min-height: 0; }

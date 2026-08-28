@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ArrowUpRight, GitBranchPlus, Link2, Maximize2, Unlink2 } from 'lucide-react'
-import { LcosGlyth } from '../visual/LcosGlyth'
+import { LcosSignalGlyph } from '../../design/DotGlyph'
 import { SurfaceComponentImmersive } from './SurfaceComponentImmersive'
 import type { SurfaceComponentRenderProps } from './surfaceComponentTypes'
 
@@ -46,7 +46,7 @@ export function SourceChainComponent({ element, selected, context, onSourceChain
       <small>{sources.length} 个真实来源</small>
       {/* G-1 最大化入口：与组件卡同款 20×20 方钮；button 在 SurfaceFrame 的 INTERACTIVE_SELECTOR 内，不被拖拽劫持 */}
       <button type="button" className="lcos-context-maximize" onClick={(event) => { event.stopPropagation(); setMaximized(true) }} aria-label="最大化查看来源链" title="最大化查看来源链"><Maximize2 size={11}/></button>
-      {selected && <LcosGlyth state="absorb" size={22}/>}
+      {selected && <LcosSignalGlyph state="focus"/>}
     </header>
     {renderFlow(false)}
     {/* G-1 最大化：沉浸版全量来源脉络（换行铺开、无截断），关闭只卸载浮层、画布 state 不变 */}

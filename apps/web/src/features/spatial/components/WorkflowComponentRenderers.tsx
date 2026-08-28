@@ -1,9 +1,9 @@
 import { CheckCircle2, History, Play, SquareStack } from 'lucide-react'
 import type { ReactNode } from 'react'
 import type { SurfaceComponentRenderProps } from './surfaceComponentTypes'
-import { LcosGlyth } from '../visual/LcosGlyth'
+import { LcosSignalGlyph } from '../../design/DotGlyph'
 import { LightSegment } from '../visual/LightSegment'
-import { resolveSpatialSignal, shouldShowGlyth, type SpatialRuntimeSignal } from '../visual/spatialSignal'
+import { resolveSpatialSignal, shouldShowSignal, type SpatialRuntimeSignal } from '../visual/spatialSignal'
 import { WebWorkbench } from '../../workbench/WebWorkbench'
 
 function bindingLabel(element: SurfaceComponentRenderProps['element']) {
@@ -17,7 +17,7 @@ function bindingLabel(element: SurfaceComponentRenderProps['element']) {
 
 function Header({ icon, title, hint, selected, semantic, runtime = 'idle', lightMode = 'static', lightProgress, lightCheckpoint }: { icon: ReactNode; title: string; hint: string; selected?: boolean; semantic?: string; runtime?: SpatialRuntimeSignal; lightMode?: 'static' | 'progress' | 'checkpoint' | 'flow'; lightProgress?: number; lightCheckpoint?: number }) {
   const signal = resolveSpatialSignal({ selected, semantic, runtime })
-  return <header className="lcos-workflow-component-header" data-spatial-signal={signal.glyph}><span className="lcos-workflow-component-icon">{icon}</span><span><strong>{title}</strong><small>{hint}</small></span><LightSegment axis="horizontal" length={26} mode={lightMode} progress={lightProgress} checkpointIndex={lightCheckpoint} active={signal.segmentActive}/>{shouldShowGlyth(signal) && <LcosGlyth state={signal.glyph}/>}</header>
+  return <header className="lcos-workflow-component-header" data-spatial-signal={signal.state}><span className="lcos-workflow-component-icon">{icon}</span><span><strong>{title}</strong><small>{hint}</small></span><LightSegment axis="horizontal" length={26} mode={lightMode} progress={lightProgress} checkpointIndex={lightCheckpoint} active={signal.segmentActive}/>{shouldShowSignal(signal) && <LcosSignalGlyph state={signal.state}/>}</header>
 }
 
 export function WorkflowStepComponent({ element, selected }: SurfaceComponentRenderProps) {

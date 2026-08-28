@@ -14,7 +14,8 @@ import { MindMapNoteVisual } from './MindMapNoteVisual'
 import { CrepeHost } from './markdownPreview'
 import { registerNodeCard, resolveNodeCard } from './nodeCardRegistry'
 import { visualFamilyFor } from '../presentation/visualFamily'
-import { ConversationGlyth, conversationActivityScore, conversationGlythStateFromRecent } from '../conversations/ConversationGlyth'
+import { ConversationGlyth, conversationActivityScore } from '../conversations/ConversationGlyth'
+import { glythStateFromSessionPhase } from '../conversations/conversationLifecycle'
 import { OcrImage } from '../ocr/OcrImage'
 import {
   ArchiveGlyph,
@@ -585,8 +586,8 @@ export const nodeTypeIcon = (node: CanvasNode) => {
 
 /**
  * Wave C-2（批八）：Conversation Glyth 身体卡——对话实体的画布投影身体（Grammar §8）。
- * Glyth 不是 avatar/icon/badge，而是可被选中、观察状态的角色身体：state 由 lastRunAt
- * 派生（conversationGlythStateFromRecent）、activityScore 由 conversationActivityScore
+ * Glyth 不是 avatar/icon/badge，而是可被选中、观察状态的角色身体：state 只来自 SessionLifecycle，
+ * activityScore 由 conversationActivityScore
  * 计算（§8.3 Activity Decay：dormant → 低饱和安静）。选中/拖拽/详情复用 registry 卡
  * 既有外壳（宿主 CanvasCard + .lcos-object 壳），不造第二套交互链路；conversation
  * 元数据缺失时回落 CollectionObject（与查表未命中同兜底语义，非错误路径）。
@@ -600,7 +601,7 @@ function ConversationGlythObject(props: Props) {
   // 不套通用卡壳（无 tab/heading/背景容器）；标题以极简标注悬在身体下方（L1 层）。
   // 选中/拖拽/详情仍复用宿主 CanvasCard 交互链路，不造第二套。
   return <div className="lcos-conversation-glyth-body" title={node.title}>
-    <ConversationGlyth conversation={conversation} state={conversationGlythStateFromRecent(conversation)} activityScore={conversationActivityScore(conversation)} size={72} label={title} />
+    <ConversationGlyth conversation={conversation} state={glythStateFromSessionPhase(conversation.lifecyclePhase)} activityScore={conversationActivityScore(conversation)} size={72} label={title} />
     <span className="lcos-conversation-glyth-caption">{title}</span>
     <InfoButton show={showControls && showDetails} label={`查看 ${title} 信息`} onDetails={onDetails}/>
   </div>

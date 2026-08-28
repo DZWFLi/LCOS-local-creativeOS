@@ -60,18 +60,10 @@ describe('conversationActivityScore（§8.3 Activity Decay，公式按实现冻�
   })
 })
 
-describe('conversationGlythStateFromRecent（最近活动 → 默认 Glyth 态）', () => {
-  it('lastRunAt < 1h → working（正在工作）', () => {
-    expect(conversationGlythStateFromRecent({ ...BASE, lastRunAt: isoAgo(1 / 60) }, NOW)).toBe('working')
-    expect(conversationGlythStateFromRecent({ ...BASE, lastRunAt: isoAgo(0.99) }, NOW)).toBe('working')
-  })
-
-  it('lastRunAt ≥ 1h → stable（1h 窗口外回落；判定是严格小于，恰好 1h 也回落）', () => {
-    expect(conversationGlythStateFromRecent({ ...BASE, lastRunAt: isoAgo(1) }, NOW)).toBe('stable')
-    expect(conversationGlythStateFromRecent({ ...BASE, lastRunAt: isoAgo(2) }, NOW)).toBe('stable')
-  })
-
-  it('无 lastRunAt → stable（不虚构工作态）', () => {
+describe('conversationGlythStateFromRecent（Activity 不能推断 Lifecycle）', () => {
+  it('无论 lastRunAt 多近都保持 stable；working 只能来自 SessionLifecycle', () => {
+    expect(conversationGlythStateFromRecent({ ...BASE, lastRunAt: isoAgo(1 / 60) }, NOW)).toBe('stable')
+    expect(conversationGlythStateFromRecent({ ...BASE, lastRunAt: isoAgo(48) }, NOW)).toBe('stable')
     expect(conversationGlythStateFromRecent(BASE, NOW)).toBe('stable')
   })
 })
@@ -100,12 +92,13 @@ describe('ConversationGlyth 组件渲染（node 环境 renderToStaticMarkup 先�
     expect(html).not.toContain('is-dormant')
   })
 
-  it('lastRunAt 近期 → state-working（Expression/Motion 通道如实反映当前活动）', () => {
-    const html = renderToStaticMarkup(
+  it('lastRunAt 近期仍保持 stable；显式 state 才能表达 working lifecycle', () => {
+    const recent = renderToStaticMarkup(
       <ConversationGlyth conversation={{ ...BASE, lastRunAt: new Date(Date.now() - 5 * 60_000).toISOString() }} />,
     )
-    expect(html).toContain('state-working')
-    expect(html).toContain('data-glyth-state="working"')
+    expect(recent).toContain('data-glyth-state="stable"')
+    const busy = renderToStaticMarkup(<ConversationGlyth conversation={BASE} state="working" />)
+    expect(busy).toContain('data-glyth-state="working"')
   })
 
   it('长期 dormant（updatedAt 24h 前，score ≈ 0.368 < 0.5）→ is-dormant 低饱和安静态', () => {

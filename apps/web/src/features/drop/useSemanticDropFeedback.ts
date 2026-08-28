@@ -18,13 +18,6 @@ export const DROP_COMMIT_HOLD_MS = 250 + 30
  */
 export const DROP_SETTLE_OUT_MS = 260
 
-/**
- * 五阶段反馈全长（accept 停留 + commit 停留 + settle 淡出）。
- * drop 命中后若动作会切换视图（如 capability:context 新建 Context），调用方应延迟到
- * 该时点再切换——否则主画布连反馈层一起被卸载，五阶段零呈现（Grammar S15：世界先说完话）。
- */
-export const DROP_FEEDBACK_TOTAL_MS = DROP_ACCEPT_HOLD_MS + DROP_COMMIT_HOLD_MS + DROP_SETTLE_OUT_MS
-
 /** 时间线推进用 proximity 输入：松手后空间判定不再参与（§15 短收尾由世界自己说话）。 */
 const NO_PROXIMITY: DropProximityInput = { hitTarget: false, nearLegalTarget: false }
 

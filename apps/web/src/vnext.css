@@ -667,7 +667,7 @@
 .vnext-immersive-content .media-viewer { display: grid; place-items: center; align-content: center; gap: 12px; padding: 24px; }
 .vnext-immersive-content .media-viewer video { width: min(100%, 1280px); max-height: calc(100vh - 110px); background: #111; border-radius: 12px; }
 .vnext-immersive-content .media-viewer audio { width: min(680px, 90%); }
-/* 批十四：对话时间线阅读器（ConversationViewer）——纯阅读面，排版即层级（S10）；
+/* 批十四：对话时间线阅读器（legacy transcript reader，已退役）——纯阅读面，排版即层级（S10）；
    颜色全走冻结语义 token（带缺省回落），无新增玻璃/阴影。 */
 .vnext-immersive-content .lcos-conversation-reader {
   width: min(720px, 100%);

@@ -1,6 +1,6 @@
 import { LightSegment } from '../visual/LightSegment'
 import { MatrixActivity } from '../visual/MatrixActivity'
-import { LcosGlyth } from '../visual/LcosGlyth'
+import { LcosSignalGlyph } from '../../design/DotGlyph'
 import { surfaceComponentContract } from '../model/surfaceComponentCatalog'
 import type { SurfaceComponentRenderProps } from './surfaceComponentTypes'
 import { resolveSpatialSignal } from '../visual/spatialSignal'
@@ -12,8 +12,8 @@ export function SurfacePanelComponent({ element, selected = false }: SurfaceComp
   const bindingText = binding
     ? Object.entries(binding).map(([kind, id]) => `${kind.replace(/Id$/, '')}: ${id}`).join(' · ')
     : '等待绑定真实项目对象'
-  return <div className={`lcos-surface-panel-body panel-${element.type} ${selected ? 'is-selected' : ''} ${signal.signalClass}`} data-surface-panel={element.type} data-spatial-signal={signal.glyph}>
-    <header><LcosGlyth state={signal.glyph}/><span><strong>{contract.label}</strong><small>{contract.description}</small></span><LightSegment axis="horizontal" active={signal.segmentActive} length={44}/></header>
+  return <div className={`lcos-surface-panel-body panel-${element.type} ${selected ? 'is-selected' : ''} ${signal.signalClass}`} data-surface-panel={element.type} data-spatial-signal={signal.state}>
+    <header><LcosSignalGlyph state={signal.state}/><span><strong>{contract.label}</strong><small>{contract.description}</small></span><LightSegment axis="horizontal" active={signal.segmentActive} length={44}/></header>
     <div className="lcos-surface-panel-content">
       <p>{bindingText}</p>
       <span>{element.presentation?.variant ?? (contract.capabilities.lens ? 'Lens · 可替换当前内部表达' : 'Presentation component')}</span>
