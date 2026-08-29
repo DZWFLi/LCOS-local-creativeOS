@@ -86,6 +86,8 @@ export type { ExecutionItemState, ExecutionItemAction, ExecutionItemTargetRef, E
 export { EXECUTION_ITEM_ACTION_STATES, deriveAvailableActions, executionItemNeedsAttention } from './execution-item.js'
 export type { SkillPackageOriginV1, SkillPackageProvenanceV1, SkillPackageV1, CreateSkillPackageInputV1, UpdateSkillPackageInputV1, RenameSkillPackageInputV1, SkillPackageValidationV1 } from './skill-package.js'
 export { isValidSkillPackageId, validateSkillPackageContent } from './skill-package.js'
+export type { SkillSubskillRefV1, SkillCompositionV1, SkillCompositionValidationV1, SkillDependencyNodeV1 } from './skill-composition.js'
+export { validateSkillComposition, resolveSkillDependencyOrder, SkillDependencyCycleError } from './skill-composition.js'
 export type { SkillProposalStatusV1, SkillProposalSourceV1, SkillProposalDraftV1, SkillProposalV1, SkillProposalAcceptResultV1 } from './skill-proposal.js'
 export { skillIdFromPrompt } from './skill-proposal.js'
 export type { CompanionPendingReturnV1, CompanionReceiverV1, CompanionRuntimeStatusV1, CompanionProjectionV1 } from './companion-projection.js'

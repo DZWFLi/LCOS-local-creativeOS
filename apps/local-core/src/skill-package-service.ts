@@ -15,7 +15,11 @@ import { dirname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   isValidSkillPackageId,
+  resolveSkillDependencyOrder,
+  validateSkillComposition,
   validateSkillPackageContent,
+  type SkillCompositionV1,
+  type SkillDependencyNodeV1,
   type SkillPackageProvenanceV1,
   type SkillPackageV1,
 } from '@local-creative-os/contracts'
@@ -50,6 +54,7 @@ interface SkillLayersModule {
 
 const PROVENANCE_FILE = '.provenance.json'
 const DISABLED_FILE = '.disabled'
+const COMPOSITION_FILE = 'references/lcos-skill-composition.json'
 
 export class SkillPackageService {
   #layers: SkillLayersModule | undefined
@@ -88,6 +93,7 @@ export class SkillPackageService {
       const { meta } = layers.parseFrontmatter(read.content)
       const userDir = safeResolveWithin(userRoot, id)
       const disabled = existsSync(join(userDir, DISABLED_FILE))
+      const composition = await this.#readComposition(userDir)
       out.push({
         schemaVersion: 1,
         id,
@@ -95,11 +101,12 @@ export class SkillPackageService {
         description: meta.description ?? '',
         version: meta.version ?? null,
         role: meta.role ?? null,
-        requiredCapabilities: [],
-        optionalCapabilities: [],
+        requiredCapabilities: composition?.requiredCapabilities ?? [],
+        optionalCapabilities: composition?.optionalCapabilities ?? [],
         source: source as SkillPackageV1['source'],
         disabled,
         provenance: await this.#readProvenance(userDir),
+        composition,
       })
     }
     return out
@@ -113,6 +120,22 @@ export class SkillPackageService {
     }
   }
 
+  async #readComposition(userDir: string): Promise<SkillCompositionV1 | null> {
+    try {
+      const parsed = JSON.parse(await readFile(join(userDir, COMPOSITION_FILE), 'utf8'))
+      return validateSkillComposition(parsed).valid ? (parsed as SkillCompositionV1) : null
+    } catch {
+      return null
+    }
+  }
+
+  async #writeComposition(userDir: string, composition: SkillCompositionV1 | undefined): Promise<void> {
+    if (composition === undefined) return
+    const target = join(userDir, COMPOSITION_FILE)
+    await mkdir(dirname(target), { recursive: true })
+    await writeFile(target, JSON.stringify(composition, null, 2) + '\n', 'utf8')
+  }
+
   async #writeProvenance(userDir: string, provenance: SkillPackageProvenanceV1): Promise<void> {
     await writeFile(join(userDir, PROVENANCE_FILE), JSON.stringify(provenance, null, 2) + '\n', 'utf8')
   }
@@ -123,26 +146,37 @@ export class SkillPackageService {
     return validateSkillPackageContent(content)
   }
 
+  validateComposition(input: unknown) {
+    return validateSkillComposition(input)
+  }
+
   // ---------- 写（全部物理限定 userRoot） ----------
 
-  async create(projectId: string, id: string, content: string): Promise<SkillPackageV1> {
+  async create(projectId: string, id: string, content: string, options: { composition?: SkillCompositionV1 } = {}): Promise<SkillPackageV1> {
     const validation = validateSkillPackageContent(content)
     if (!validation.valid) throw new Error(`SKILL.md invalid: ${validation.errors.join('; ')}`)
     const { userRoot, dir } = await this.#skillDir(projectId, id)
     if (existsSync(dir)) throw new Error(`Skill already exists: ${id}`)
     await mkdir(dir, { recursive: true })
     await writeFile(join(dir, 'SKILL.md'), content, 'utf8')
+    await this.#writeComposition(dir, options.composition)
     const now = new Date().toISOString()
     await this.#writeProvenance(dir, { origin: 'user', createdAt: now, updatedAt: now, versionHistory: [] })
     return (await this.list(projectId)).find((item) => item.id === id)!
   }
 
-  async update(projectId: string, id: string, content: string): Promise<SkillPackageV1> {
+  async update(projectId: string, id: string, content: string, options: { expectedVersion?: string | null; composition?: SkillCompositionV1 | null } = {}): Promise<SkillPackageV1> {
     const validation = validateSkillPackageContent(content)
     if (!validation.valid) throw new Error(`SKILL.md invalid: ${validation.errors.join('; ')}`)
     const { dir } = await this.#skillDir(projectId, id)
-    if (!existsSync(join(dir, 'SKILL.md'))) throw new Error(`Skill not found: ${id}`)
-    await writeFile(join(dir, 'SKILL.md'), content, 'utf8')
+    const skillMdPath = join(dir, 'SKILL.md')
+    if (!existsSync(skillMdPath)) throw new Error(`Skill not found: ${id}`)
+    if ('expectedVersion' in options) {
+      const current = await this.#readVersion(skillMdPath)
+      if (current !== options.expectedVersion) throw new Error(`Version conflict: expected ${options.expectedVersion ?? 'null'}, got ${current ?? 'null'}`)
+    }
+    await writeFile(skillMdPath, content, 'utf8')
+    if (options.composition !== undefined && options.composition !== null) await this.#writeComposition(dir, options.composition)
     await this.#touchProvenance(dir)
     return (await this.list(projectId)).find((item) => item.id === id)!
   }
@@ -209,6 +243,31 @@ export class SkillPackageService {
   async #touchProvenance(dir: string): Promise<void> {
     const provenance = (await this.#readProvenance(dir)) ?? { origin: 'user' as const, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), versionHistory: [] }
     await this.#writeProvenance(dir, { ...provenance, updatedAt: new Date().toISOString() })
+  }
+
+  async #readVersion(skillMdPath: string): Promise<string | null> {
+    const raw = await readFile(skillMdPath, 'utf8')
+    const match = /^version:\s*(.+)$/m.exec(raw)
+    return match === null ? null : match[1]!.trim()
+  }
+
+  /** 递归解析 composition 依赖（拓扑序 + 环检测）。A→B→A 抛 SkillDependencyCycleError。 */
+  async resolveCompositionDependencies(projectId: string, rootSkillId: string): Promise<readonly string[]> {
+    if (!isValidSkillPackageId(rootSkillId)) throw new SkillPathEscapeError(rootSkillId)
+    void (await this.#skillDir(projectId, rootSkillId))
+    const nodes: SkillDependencyNodeV1[] = []
+    const visited = new Set<string>()
+    const collect = async (id: string): Promise<void> => {
+      if (visited.has(id)) return
+      visited.add(id)
+      const { dir } = await this.#skillDir(projectId, id)
+      const composition = await this.#readComposition(dir)
+      const dependencies = composition?.subskills.map((s) => s.skillId) ?? []
+      await Promise.all(dependencies.map((dep) => collect(dep)))
+      nodes.push({ id, dependencies })
+    }
+    await collect(rootSkillId)
+    return resolveSkillDependencyOrder(nodes)
   }
 
   /** 列 user 层全部 skill id（gate/测试用）。 */

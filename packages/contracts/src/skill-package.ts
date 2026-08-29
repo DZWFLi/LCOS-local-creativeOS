@@ -1,3 +1,5 @@
+import type { SkillCompositionV1 } from './skill-composition.js'
+
 /**
  * SkillPackageV1 — Skill 一等对象 CRUD 契约（S2，审计 P0-3）。
  *
@@ -41,6 +43,8 @@ export interface SkillPackageV1 {
   readonly source: 'system' | 'user' | 'merged'
   readonly disabled: boolean
   readonly provenance: SkillPackageProvenanceV1 | null
+  /** Root/Subskill composition（S8；无则为 null，S2 兼容）。 */
+  readonly composition: SkillCompositionV1 | null
 }
 
 /** 创建输入：content 为完整 SKILL.md（frontmatter + 正文）。 */

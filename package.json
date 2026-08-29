@@ -103,7 +103,8 @@
     "check:v015-s1": "node scripts/validate-execution-item.mjs",
     "check:v015-s2": "node scripts/validate-skill-package.mjs",
     "check:v015-s3": "node scripts/validate-skill-proposal.mjs",
-    "check:v015-s4": "node scripts/validate-companion-projection.mjs"
+    "check:v015-s4": "node scripts/validate-companion-projection.mjs",
+    "check:v015-s8": "node scripts/validate-skill-composition.mjs"
   },
   "dependencies": {
     "lucide-react": "^1.24.0",
