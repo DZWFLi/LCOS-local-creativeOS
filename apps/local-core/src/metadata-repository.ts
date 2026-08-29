@@ -57,6 +57,7 @@ import type {
   CommandDraftV1,
   ConnectedConversationV1,
   ContextChangeProposalV1,
+  SkillProposalV1,
   DerivedWriteGuardV0,
   DerivedWriteStatusV0,
   ProviderSessionBindingV1,
@@ -284,7 +285,8 @@ export class SqliteMetadataRepository {
     if (current === 46) { this.#migrate_047_from_v46(); current = 47 }
     if (current === 47) { this.#migrate_048_from_v47(); current = 48 }
     if (current === 48) { this.#migrate_049_from_v48(); current = 49 }
-    if (current !== 49) throw new Error(`Unsupported metadata schema version ${current}.`)
+    if (current === 49) { this.#migrate_050_from_v49(); current = 50 }
+    if (current !== 50) throw new Error(`Unsupported metadata schema version ${current}.`)
   }
 
   #migrate_037_from_v36(): void {
@@ -494,6 +496,27 @@ export class SqliteMetadataRepository {
       ALTER TABLE command_drafts ADD COLUMN intent TEXT NOT NULL DEFAULT 'analyze' CHECK(intent IN ('analyze','create','revise'));
       ALTER TABLE command_drafts ADD COLUMN result_policy TEXT NOT NULL DEFAULT 'reply_only' CHECK(result_policy IN ('reply_only','create_artifact','create_collection','draft_revision_per_target'));
       PRAGMA user_version = 49;
+      COMMIT;
+    `)
+  }
+
+  #migrate_050_from_v49(): void {
+    // S3：RunRecipe → Skill Proposal seam。与 context_proposals 同款提案表模式
+    // （proposal_id PK + status 四态 CHECK + proposal_json 快照 + 时间戳 upsert）——
+    // 状态机/审批通道复用现有 proposal 机制，accept 后经 S2 Skill Builder 落盘。
+    this.#database.exec(`
+      BEGIN;
+      CREATE TABLE IF NOT EXISTS skill_proposals (
+        proposal_id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        status TEXT NOT NULL CHECK(status IN ('pending','accepted','rejected','stale')),
+        proposal_json TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_skill_proposals_project_status
+        ON skill_proposals(project_id, status, created_at);
+      PRAGMA user_version = 50;
       COMMIT;
     `)
   }
@@ -5809,6 +5832,26 @@ export class SqliteMetadataRepository {
       ? this.#database.prepare(`SELECT proposal_json FROM context_proposals WHERE project_id = ? ORDER BY created_at DESC`).all(projectId) as Row[]
       : this.#database.prepare(`SELECT proposal_json FROM context_proposals WHERE project_id = ? AND workspace_key = ? ORDER BY created_at DESC`).all(projectId, metadataWorkspaceKey(workspaceId)) as Row[]
     return rows.map((row) => json<ContextChangeProposalV1>(row.proposal_json as SQLInputValue))
+  }
+
+  // S3：RunRecipe → Skill Proposal seam（skill_proposals 表，v50）
+  saveSkillProposal(value: SkillProposalV1): void {
+    const now = new Date().toISOString()
+    this.#database.prepare(`
+      INSERT INTO skill_proposals(proposal_id, project_id, status, proposal_json, created_at, updated_at)
+      VALUES(?, ?, ?, ?, ?, ?)
+      ON CONFLICT(proposal_id) DO UPDATE SET status = excluded.status, proposal_json = excluded.proposal_json, updated_at = excluded.updated_at
+    `).run(value.proposalId, value.projectId, value.status, JSON.stringify(value), value.createdAt, now)
+  }
+
+  getSkillProposal(projectId: string, proposalId: string): SkillProposalV1 | undefined {
+    const row = this.#database.prepare(`SELECT proposal_json FROM skill_proposals WHERE project_id = ? AND proposal_id = ?`).get(projectId, proposalId) as Row | undefined
+    return row === undefined ? undefined : json<SkillProposalV1>(row.proposal_json as SQLInputValue)
+  }
+
+  listSkillProposals(projectId: string): readonly SkillProposalV1[] {
+    const rows = this.#database.prepare(`SELECT proposal_json FROM skill_proposals WHERE project_id = ? ORDER BY created_at DESC`).all(projectId) as Row[]
+    return rows.map((row) => json<SkillProposalV1>(row.proposal_json as SQLInputValue))
   }
 
   saveImportBatch(value: ImportBatchRefV1): void {

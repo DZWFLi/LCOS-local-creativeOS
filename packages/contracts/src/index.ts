@@ -85,6 +85,8 @@ export type { ExecutionItemState, ExecutionItemAction, ExecutionItemTargetRef, E
 export { EXECUTION_ITEM_ACTION_STATES, deriveAvailableActions, executionItemNeedsAttention } from './execution-item.js'
 export type { SkillPackageOriginV1, SkillPackageProvenanceV1, SkillPackageV1, CreateSkillPackageInputV1, UpdateSkillPackageInputV1, RenameSkillPackageInputV1, SkillPackageValidationV1 } from './skill-package.js'
 export { isValidSkillPackageId, validateSkillPackageContent } from './skill-package.js'
+export type { SkillProposalStatusV1, SkillProposalSourceV1, SkillProposalDraftV1, SkillProposalV1, SkillProposalAcceptResultV1 } from './skill-proposal.js'
+export { skillIdFromPrompt } from './skill-proposal.js'
 export { AGENTLET_SCHEMA_V1 } from './agentlet.js'
 export type { AgentletSummaryV1, AgentletRunV1, AgentletRunStatusV1 } from './agentlet.js'
 export type { SurfaceSelectionV0 } from './selection.js'

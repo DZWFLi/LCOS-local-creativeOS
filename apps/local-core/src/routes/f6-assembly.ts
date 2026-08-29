@@ -27,6 +27,7 @@ import type { AssemblyApplyService } from '../assembly-apply-service.js'
 import type { ProjectSummaryService } from '../project-summary-service.js'
 import type { SkillCatalogService } from '../skill-catalog-service.js'
 import type { SkillPackageService } from '../skill-package-service.js'
+import type { SkillProposalService } from '../skill-proposal-service.js'
 import type { SqliteMetadataRepository } from '../metadata-repository.js'
 import { routeRequireProject, type RouteHttpContext, type RouteHttpHelpers } from './route-context.js'
 
@@ -39,11 +40,12 @@ export interface F6AssemblyRouteContext extends RouteHttpContext {
   readonly projectSummary: ProjectSummaryService | undefined
   readonly skillCatalog: SkillCatalogService | undefined
   readonly skillPackages: SkillPackageService | undefined
+  readonly skillProposals: SkillProposalService | undefined
   readonly metadata: SqliteMetadataRepository
 }
 
 export async function handleF6AssemblyRoute(ctx: F6AssemblyRouteContext): Promise<boolean> {
-  const { method, pathname, url, request, response, controller, metadata, warehouse, resultSlots, conversationIdentity, assemblyApply, projectSummary, skillCatalog, skillPackages } = ctx
+  const { method, pathname, url, request, response, controller, metadata, warehouse, resultSlots, conversationIdentity, assemblyApply, projectSummary, skillCatalog, skillPackages, skillProposals } = ctx
   const { sendJson, failure, readJsonBody, isRecord } = ctx.helpers
 
   // ---------- P0-B4：Semantic Drop 统一 apply ----------
@@ -440,6 +442,62 @@ export async function handleF6AssemblyRoute(ctx: F6AssemblyRouteContext): Promis
     }
     if (action === 'install') return respondMutation(packages.install(projectId, skillId))
     return respondMutation(packages.setDisabled(projectId, skillId, action === 'disable'))
+  }
+
+  // ---------- S3：RunRecipe → Skill Proposal seam（审批通道复用现有 proposal 流）----------
+  const requireSkillProposals = (): SkillProposalService | undefined => {
+    if (skillProposals === undefined) {
+      sendJson(response, 503, failure('UNAVAILABLE', 'Skill proposal service is not configured.'))
+      return undefined
+    }
+    return skillProposals
+  }
+
+  // Completed Run → Skill Proposal（pending，进现有 proposal 审批位）
+  const runSkillProposalMatch = /^\/runs\/([^/]+)\/skill-proposal$/.exec(pathname)
+  if (method === 'POST' && runSkillProposalMatch !== null) {
+    const proposals = requireSkillProposals(); if (proposals === undefined) return true
+    const runId = decodeURIComponent(runSkillProposalMatch[1] ?? '') as RunId
+    const run = metadata.getRun(runId)
+    if (run === undefined) {
+      sendJson(response, 404, failure('NOT_FOUND', 'Run not found.'))
+      return true
+    }
+    if (routeRequireProject(String(run.projectId), { metadata, response, helpers: ctx.helpers }) === undefined) return true
+    try {
+      const value = await proposals.proposeFromRun(runId)
+      sendJson(response, 200, { ok: true, value })
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Skill proposal creation failed.'
+      sendJson(response, message.includes('RUN_NOT_COMPLETED') ? 409 : 400, failure('INVALID_ARGUMENT', message))
+    }
+    return true
+  }
+
+  const skillProposalsListMatch = /^\/projects\/([^/]+)\/skill-proposals$/.exec(pathname)
+  if (method === 'GET' && skillProposalsListMatch !== null) {
+    const proposals = requireSkillProposals(); if (proposals === undefined) return true
+    const projectId = decodeURIComponent(skillProposalsListMatch[1] ?? '')
+    if (routeRequireProject(projectId, { metadata, response, helpers: ctx.helpers }) === undefined) return true
+    sendJson(response, 200, { ok: true, value: proposals.list(projectId) })
+    return true
+  }
+
+  const skillProposalActionMatch = /^\/projects\/([^/]+)\/skill-proposals\/([^/]+)\/(accept|reject)$/.exec(pathname)
+  if (method === 'POST' && skillProposalActionMatch !== null) {
+    const proposals = requireSkillProposals(); if (proposals === undefined) return true
+    const projectId = decodeURIComponent(skillProposalActionMatch[1] ?? '')
+    const proposalId = decodeURIComponent(skillProposalActionMatch[2] ?? '')
+    const action = skillProposalActionMatch[3] ?? 'accept'
+    if (routeRequireProject(projectId, { metadata, response, helpers: ctx.helpers }) === undefined) return true
+    try {
+      const value = action === 'accept' ? await proposals.accept(projectId, proposalId) : proposals.reject(projectId, proposalId)
+      sendJson(response, 200, { ok: true, value })
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Skill proposal action failed.'
+      sendJson(response, 409, failure('CONFLICT', message))
+    }
+    return true
   }
 
   return false
