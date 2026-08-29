@@ -3,6 +3,7 @@ import type {
   ArtifactId,
   ArtifactReturn,
   ArtifactReturnId,
+  ArtifactReturnAction,
   ArtifactReturnStatus,
   ArtifactRevision,
   ArtifactRevisionId,
@@ -87,6 +88,8 @@ export type { SkillPackageOriginV1, SkillPackageProvenanceV1, SkillPackageV1, Cr
 export { isValidSkillPackageId, validateSkillPackageContent } from './skill-package.js'
 export type { SkillProposalStatusV1, SkillProposalSourceV1, SkillProposalDraftV1, SkillProposalV1, SkillProposalAcceptResultV1 } from './skill-proposal.js'
 export { skillIdFromPrompt } from './skill-proposal.js'
+export type { CompanionPendingReturnV1, CompanionReceiverV1, CompanionRuntimeStatusV1, CompanionProjectionV1 } from './companion-projection.js'
+export { COMPANION_ACTION_ORDER, deriveCompanionAvailableActions } from './companion-projection.js'
 export { AGENTLET_SCHEMA_V1 } from './agentlet.js'
 export type { AgentletSummaryV1, AgentletRunV1, AgentletRunStatusV1 } from './agentlet.js'
 export type { SurfaceSelectionV0 } from './selection.js'
@@ -786,6 +789,7 @@ export type {
   Artifact,
   ArtifactRevision,
   ArtifactReturnStatus,
+  ArtifactReturnAction,
   ArtifactView,
   Checkpoint,
   FileRecord,

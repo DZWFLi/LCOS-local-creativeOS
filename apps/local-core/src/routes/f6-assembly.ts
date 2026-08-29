@@ -19,7 +19,7 @@ import type {
   UpsertProjectVisualProfileInputV0,
 } from '@local-creative-os/contracts'
 import { PROJECT_GLYPH_MARK_REPERTOIRE, PROJECT_TINT_TOKENS } from '@local-creative-os/contracts'
-import type { RunId } from '@local-creative-os/domain'
+import type { ProjectId, RunId } from '@local-creative-os/domain'
 import type { ConversationIdentityService } from '../conversation-identity-service.js'
 import type { ResultSlotService } from '../result-slot-service.js'
 import type { WarehouseService } from '../warehouse-service.js'
@@ -28,6 +28,7 @@ import type { ProjectSummaryService } from '../project-summary-service.js'
 import type { SkillCatalogService } from '../skill-catalog-service.js'
 import type { SkillPackageService } from '../skill-package-service.js'
 import type { SkillProposalService } from '../skill-proposal-service.js'
+import type { CompanionProjectionService } from '../companion-projection-service.js'
 import type { SqliteMetadataRepository } from '../metadata-repository.js'
 import { routeRequireProject, type RouteHttpContext, type RouteHttpHelpers } from './route-context.js'
 
@@ -41,11 +42,12 @@ export interface F6AssemblyRouteContext extends RouteHttpContext {
   readonly skillCatalog: SkillCatalogService | undefined
   readonly skillPackages: SkillPackageService | undefined
   readonly skillProposals: SkillProposalService | undefined
+  readonly companionProjections: CompanionProjectionService | undefined
   readonly metadata: SqliteMetadataRepository
 }
 
 export async function handleF6AssemblyRoute(ctx: F6AssemblyRouteContext): Promise<boolean> {
-  const { method, pathname, url, request, response, controller, metadata, warehouse, resultSlots, conversationIdentity, assemblyApply, projectSummary, skillCatalog, skillPackages, skillProposals } = ctx
+  const { method, pathname, url, request, response, controller, metadata, warehouse, resultSlots, conversationIdentity, assemblyApply, projectSummary, skillCatalog, skillPackages, skillProposals, companionProjections } = ctx
   const { sendJson, failure, readJsonBody, isRecord } = ctx.helpers
 
   // ---------- P0-B4：Semantic Drop 统一 apply ----------
@@ -500,5 +502,22 @@ export async function handleF6AssemblyRoute(ctx: F6AssemblyRouteContext): Promis
     return true
   }
 
+  // ---------- S4：Companion Runtime Projection（桌面统一只读投影 owner）----------
+  const companionMatch = /^\/projects\/([^/]+)\/companion$/.exec(pathname)
+  if (method === 'GET' && companionMatch !== null) {
+    if (companionProjections === undefined) {
+      sendJson(response, 503, failure('UNAVAILABLE', 'Companion projection service is not configured.'))
+      return true
+    }
+    const projectId = decodeURIComponent(companionMatch[1] ?? '')
+    if (routeRequireProject(projectId, { metadata, response, helpers: ctx.helpers }) === undefined) return true
+    try {
+      const value = await companionProjections.project(projectId as ProjectId)
+      sendJson(response, 200, { ok: true, value })
+    } catch (error: unknown) {
+      sendJson(response, 400, failure('INVALID_ARGUMENT', error instanceof Error ? error.message : 'Companion projection failed.'))
+    }
+    return true
+  }
   return false
 }

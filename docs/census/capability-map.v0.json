@@ -41,16 +41,16 @@
       "apps/local-core/src/routes/workspace-states.ts",
       "apps/local-core/src/server.ts"
     ],
-    "total": 203,
+    "total": 204,
     "byMethod": {
-      "GET": 92,
+      "GET": 93,
       "POST": 95,
       "PUT": 9,
       "PATCH": 1,
       "DELETE": 6
     },
     "byMutationClass": {
-      "read": 92,
+      "read": 93,
       "mutation": 99,
       "mutation-proposal": 6,
       "delete": 6
@@ -608,7 +608,7 @@
         "pathPattern": "^\\/projects\\/([^/]+)\\/assembly\\/apply$",
         "mutationClass": "mutation",
         "file": "apps/local-core/src/routes/f6-assembly.ts",
-        "line": 53
+        "line": 55
       },
       {
         "method": "GET",
@@ -616,7 +616,7 @@
         "pathPattern": "^\\/projects\\/([^/]+)\\/warehouse$",
         "mutationClass": "read",
         "file": "apps/local-core/src/routes/f6-assembly.ts",
-        "line": 79
+        "line": 81
       },
       {
         "method": "GET",
@@ -624,7 +624,7 @@
         "pathPattern": "^\\/projects\\/([^/]+)\\/connected-conversations\\/([^/]+)\\/reach$",
         "mutationClass": "read",
         "file": "apps/local-core/src/routes/f6-assembly.ts",
-        "line": 120
+        "line": 122
       },
       {
         "method": "GET",
@@ -632,7 +632,7 @@
         "pathPattern": "^\\/projects\\/([^/]+)\\/result-slots$",
         "mutationClass": "read",
         "file": "apps/local-core/src/routes/f6-assembly.ts",
-        "line": 139
+        "line": 141
       },
       {
         "method": "POST",
@@ -640,7 +640,7 @@
         "pathPattern": "^\\/projects\\/([^/]+)\\/result-slots$",
         "mutationClass": "mutation",
         "file": "apps/local-core/src/routes/f6-assembly.ts",
-        "line": 149
+        "line": 151
       },
       {
         "method": "GET",
@@ -648,7 +648,7 @@
         "pathPattern": "^\\/result-slots\\/([^/]+)$",
         "mutationClass": "read",
         "file": "apps/local-core/src/routes/f6-assembly.ts",
-        "line": 189
+        "line": 191
       },
       {
         "method": "DELETE",
@@ -656,7 +656,7 @@
         "pathPattern": "^\\/result-slots\\/([^/]+)$",
         "mutationClass": "delete",
         "file": "apps/local-core/src/routes/f6-assembly.ts",
-        "line": 202
+        "line": 204
       },
       {
         "method": "GET",
@@ -664,7 +664,7 @@
         "pathPattern": "^\\/runs\\/([^/]+)\\/recipe$",
         "mutationClass": "read",
         "file": "apps/local-core/src/routes/f6-assembly.ts",
-        "line": 218
+        "line": 220
       },
       {
         "method": "GET",
@@ -672,7 +672,7 @@
         "pathPattern": "^\\/projects\\/([^/]+)\\/summary$",
         "mutationClass": "read",
         "file": "apps/local-core/src/routes/f6-assembly.ts",
-        "line": 257
+        "line": 259
       },
       {
         "method": "GET",
@@ -680,7 +680,7 @@
         "pathPattern": "^\\/projects\\/([^/]+)\\/visual-profile$",
         "mutationClass": "read",
         "file": "apps/local-core/src/routes/f6-assembly.ts",
-        "line": 274
+        "line": 276
       },
       {
         "method": "PUT",
@@ -688,7 +688,7 @@
         "pathPattern": "^\\/projects\\/([^/]+)\\/visual-profile$",
         "mutationClass": "mutation",
         "file": "apps/local-core/src/routes/f6-assembly.ts",
-        "line": 281
+        "line": 283
       },
       {
         "method": "GET",
@@ -696,7 +696,7 @@
         "pathPattern": "^\\/projects\\/([^/]+)\\/skills$",
         "mutationClass": "read",
         "file": "apps/local-core/src/routes/f6-assembly.ts",
-        "line": 325
+        "line": 327
       },
       {
         "method": "GET",
@@ -704,7 +704,7 @@
         "pathPattern": "^\\/projects\\/([^/]+)\\/skills\\/([^/]+)$",
         "mutationClass": "read",
         "file": "apps/local-core/src/routes/f6-assembly.ts",
-        "line": 338
+        "line": 340
       },
       {
         "method": "POST",
@@ -712,7 +712,7 @@
         "pathPattern": "^\\/projects\\/([^/]+)\\/skills\\/validate$",
         "mutationClass": "mutation",
         "file": "apps/local-core/src/routes/f6-assembly.ts",
-        "line": 386
+        "line": 388
       },
       {
         "method": "POST",
@@ -720,7 +720,7 @@
         "pathPattern": "^\\/projects\\/([^/]+)\\/skills$",
         "mutationClass": "mutation",
         "file": "apps/local-core/src/routes/f6-assembly.ts",
-        "line": 400
+        "line": 402
       },
       {
         "method": "POST",
@@ -728,7 +728,7 @@
         "pathPattern": "^\\/projects\\/([^/]+)\\/skills\\/([^/]+)\\/(update|version-bump|rename|install|disable|enable)$",
         "mutationClass": "mutation",
         "file": "apps/local-core/src/routes/f6-assembly.ts",
-        "line": 413
+        "line": 415
       },
       {
         "method": "POST",
@@ -736,7 +736,7 @@
         "pathPattern": "^\\/runs\\/([^/]+)\\/skill-proposal$",
         "mutationClass": "mutation-proposal",
         "file": "apps/local-core/src/routes/f6-assembly.ts",
-        "line": 458
+        "line": 460
       },
       {
         "method": "GET",
@@ -744,7 +744,7 @@
         "pathPattern": "^\\/projects\\/([^/]+)\\/skill-proposals$",
         "mutationClass": "read",
         "file": "apps/local-core/src/routes/f6-assembly.ts",
-        "line": 478
+        "line": 480
       },
       {
         "method": "POST",
@@ -752,7 +752,15 @@
         "pathPattern": "^\\/projects\\/([^/]+)\\/skill-proposals\\/([^/]+)\\/(accept|reject)$",
         "mutationClass": "mutation-proposal",
         "file": "apps/local-core/src/routes/f6-assembly.ts",
-        "line": 487
+        "line": 489
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/companion",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/companion$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/f6-assembly.ts",
+        "line": 507
       },
       {
         "method": "GET",

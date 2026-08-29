@@ -49,6 +49,7 @@ import { ProjectSummaryService } from './project-summary-service.js'
 import { SkillCatalogService } from './skill-catalog-service.js'
 import { SkillPackageService } from './skill-package-service.js'
 import { SkillProposalService } from './skill-proposal-service.js'
+import { CompanionProjectionService } from './companion-projection-service.js'
 import { ResultSlotService } from './result-slot-service.js'
 import { SessionReadSet } from './session-read-set.js'
 import { SpaceSandboxService } from './space-sandbox-service.js'
@@ -119,6 +120,7 @@ export interface LocalCoreServices {
   readonly skillCatalog: SkillCatalogService | undefined
   readonly skillPackages: SkillPackageService | undefined
   readonly skillProposals: SkillProposalService | undefined
+  readonly companionProjections: CompanionProjectionService | undefined
 }
 
 /** 服务装配：把 options 解析成 createLocalCoreServer 需要的一组服务。 */
@@ -227,6 +229,10 @@ export function composeLocalCoreServices(options: LocalCoreServerOptions = {}): 
     ? undefined
     : new AssemblyApplyService(metadata, captureSpace, mutationSafety, conversations, curationCommandService, presentation)
 
+  const companionProjections = metadata === undefined || receiverRuntime === undefined
+    || captureStaging === undefined || options.runtimeApplicationService === undefined
+    ? undefined
+    : new CompanionProjectionService(metadata, receiverRuntime, activeContext, captureStaging, options.runtimeApplicationService)
   return {
     catalog: options.catalog ?? new ExplicitProjectCatalog([]),
     metadata,
@@ -295,5 +301,6 @@ export function composeLocalCoreServices(options: LocalCoreServerOptions = {}): 
     skillCatalog,
     skillPackages,
     skillProposals,
+    companionProjections,
   }
 }
