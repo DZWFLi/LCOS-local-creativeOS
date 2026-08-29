@@ -97,7 +97,9 @@
     "check:v015-r2a": "node scripts/validate-v015-r2a-marker-core-bridge.mjs",
     "check:v015-r2b": "node scripts/validate-v015-r2b-glyth-semantic-lod.mjs",
     "check:v015-r2d": "node scripts/validate-v015-r2d-interaction-grammar.mjs",
-    "check:v015-r3a": "node scripts/validate-v015-r3a-colony-catalog.mjs"
+    "check:v015-r3a": "node scripts/validate-v015-r3a-colony-catalog.mjs",
+    "census": "node scripts/census-capability-map.mjs",
+    "check:census": "node scripts/validate-census.mjs"
   },
   "dependencies": {
     "lucide-react": "^1.24.0",

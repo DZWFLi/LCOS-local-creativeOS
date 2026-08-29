@@ -1,0 +1,3690 @@
+{
+  "schemaVersion": "0.1",
+  "generator": "scripts/census-capability-map.mjs",
+  "routes": {
+    "source": [
+      "apps/local-core/src/routes/agentlets.ts",
+      "apps/local-core/src/routes/artifacts.ts",
+      "apps/local-core/src/routes/attention.ts",
+      "apps/local-core/src/routes/canvas.ts",
+      "apps/local-core/src/routes/change-sets.ts",
+      "apps/local-core/src/routes/connectors.ts",
+      "apps/local-core/src/routes/context-proposals.ts",
+      "apps/local-core/src/routes/context-snapshots.ts",
+      "apps/local-core/src/routes/continuity.ts",
+      "apps/local-core/src/routes/conversation-identity.ts",
+      "apps/local-core/src/routes/conversations.ts",
+      "apps/local-core/src/routes/curation.ts",
+      "apps/local-core/src/routes/entity.ts",
+      "apps/local-core/src/routes/executor.ts",
+      "apps/local-core/src/routes/f6-assembly.ts",
+      "apps/local-core/src/routes/handoffs.ts",
+      "apps/local-core/src/routes/imports.ts",
+      "apps/local-core/src/routes/lcosproj.ts",
+      "apps/local-core/src/routes/multipart.ts",
+      "apps/local-core/src/routes/navigation-markers.ts",
+      "apps/local-core/src/routes/presentations.ts",
+      "apps/local-core/src/routes/project-events.ts",
+      "apps/local-core/src/routes/projects.ts",
+      "apps/local-core/src/routes/receiver.ts",
+      "apps/local-core/src/routes/relations.ts",
+      "apps/local-core/src/routes/resources.ts",
+      "apps/local-core/src/routes/retrieval.ts",
+      "apps/local-core/src/routes/revision-workflows.ts",
+      "apps/local-core/src/routes/route-context.ts",
+      "apps/local-core/src/routes/runs.ts",
+      "apps/local-core/src/routes/runtime-reviews.ts",
+      "apps/local-core/src/routes/runtime.ts",
+      "apps/local-core/src/routes/space.ts",
+      "apps/local-core/src/routes/workbench.ts",
+      "apps/local-core/src/routes/workflow.ts",
+      "apps/local-core/src/routes/workspace-states.ts",
+      "apps/local-core/src/server.ts"
+    ],
+    "total": 196,
+    "byMethod": {
+      "GET": 90,
+      "POST": 90,
+      "PUT": 9,
+      "PATCH": 1,
+      "DELETE": 6
+    },
+    "byMutationClass": {
+      "read": 90,
+      "mutation": 96,
+      "mutation-proposal": 4,
+      "delete": 6
+    },
+    "items": [
+      {
+        "method": "GET",
+        "path": "/agentlets",
+        "pathPattern": "^\\/agentlets$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/agentlets.ts",
+        "line": 44
+      },
+      {
+        "method": "GET",
+        "path": "/agentlets/runs",
+        "pathPattern": "^\\/agentlets\\/runs$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/agentlets.ts",
+        "line": 49
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/agentlets/:id/launch",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/agentlets\\/([^/]+)\\/launch$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/agentlets.ts",
+        "line": 55
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/artifacts/search",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/artifacts\\/search$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/artifacts.ts",
+        "line": 90
+      },
+      {
+        "method": "GET",
+        "path": "/artifacts/:id",
+        "pathPattern": "^\\/artifacts\\/([^/]+)$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/artifacts.ts",
+        "line": 102
+      },
+      {
+        "method": "GET",
+        "path": "/artifacts/:id/revisions",
+        "pathPattern": "^\\/artifacts\\/([^/]+)\\/revisions$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/artifacts.ts",
+        "line": 138
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/revisions/compare",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/revisions\\/compare$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/artifacts.ts",
+        "line": 146
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/process-projection",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/process-projection$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/artifacts.ts",
+        "line": 166
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/attention/boundary-evaluate",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/attention\\/boundary-evaluate$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/attention.ts",
+        "line": 22
+      },
+      {
+        "method": "PUT",
+        "path": "/projects/:id/attention/intent",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/attention\\/intent$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/attention.ts",
+        "line": 115
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/attention/candidates/:id/dismiss",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/attention\\/candidates\\/([^/]+)\\/dismiss$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/attention.ts",
+        "line": 146
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/canvas-observation",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/canvas-observation$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/canvas.ts",
+        "line": 63
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/active-context/events",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/active-context\\/events$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/canvas.ts",
+        "line": 98
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/active-context",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/active-context$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/canvas.ts",
+        "line": 180
+      },
+      {
+        "method": "PUT",
+        "path": "/projects/:id/active-context",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/active-context$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/canvas.ts",
+        "line": 180
+      },
+      {
+        "method": "POST",
+        "path": "/system/select-directory",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/connectors.ts",
+        "line": 27
+      },
+      {
+        "method": "GET",
+        "path": "/connectors",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/connectors.ts",
+        "line": 37
+      },
+      {
+        "method": "POST",
+        "path": "/connectors/obsidian/select-and-scan",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/connectors.ts",
+        "line": 42
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/connectors/obsidian/import",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/connectors\\/obsidian\\/import$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/connectors.ts",
+        "line": 58
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/context-proposals",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/context-proposals$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/context-proposals.ts",
+        "line": 20
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/context-proposals",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/context-proposals$",
+        "mutationClass": "mutation-proposal",
+        "file": "apps/local-core/src/routes/context-proposals.ts",
+        "line": 20
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/context-proposals/:id/{accept|reject}",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/context-proposals\\/([^/]+)\\/(accept|reject)$",
+        "mutationClass": "mutation-proposal",
+        "file": "apps/local-core/src/routes/context-proposals.ts",
+        "line": 62
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/context-snapshots",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/context-snapshots$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/context-snapshots.ts",
+        "line": 20
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/context-snapshots",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/context-snapshots$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/context-snapshots.ts",
+        "line": 20
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/context-snapshots/:id/compare",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/context-snapshots\\/([^/]+)\\/compare$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/context-snapshots.ts",
+        "line": 52
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/context-snapshots/:id/branch",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/context-snapshots\\/([^/]+)\\/branch$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/context-snapshots.ts",
+        "line": 74
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/active-receiver-identity",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/active-receiver-identity$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/conversation-identity.ts",
+        "line": 48
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/connected-conversations/:id/identity",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/connected-conversations\\/([^/]+)\\/identity$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/conversation-identity.ts",
+        "line": 53
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/connected-conversations/:id/link-session",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/connected-conversations\\/([^/]+)\\/link-session$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/conversation-identity.ts",
+        "line": 64
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/artifacts/:id/birth",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/artifacts\\/([^/]+)\\/birth$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/conversation-identity.ts",
+        "line": 89
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/conversation-import-sessions",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/conversation-import-sessions$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/conversations.ts",
+        "line": 66
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/conversation-import-sessions/:id",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/conversation-import-sessions\\/([^/]+)$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/conversations.ts",
+        "line": 74
+      },
+      {
+        "method": "PUT",
+        "path": "/projects/:id/conversation-import-sessions/:id/chunks/(\\d+)",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/conversation-import-sessions\\/([^/]+)\\/chunks\\/(\\d+)$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/conversations.ts",
+        "line": 81
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/conversation-import-sessions/:id/complete",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/conversation-import-sessions\\/([^/]+)\\/complete$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/conversations.ts",
+        "line": 91
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/conversations/import-manual",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/conversations\\/import-manual$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/conversations.ts",
+        "line": 99
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/conversations",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/conversations$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/conversations.ts",
+        "line": 107
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/conversations/search",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/conversations\\/search$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/conversations.ts",
+        "line": 112
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/conversations/:id/export",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/conversations\\/([^/]+)\\/export$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/conversations.ts",
+        "line": 134
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/conversations/:id",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/conversations\\/([^/]+)$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/conversations.ts",
+        "line": 141
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/conversations/:id/messages",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/conversations\\/([^/]+)\\/messages$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/conversations.ts",
+        "line": 147
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/conversations/:id/sections/refresh",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/conversations\\/([^/]+)\\/sections\\/refresh$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/conversations.ts",
+        "line": 154
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/conversations/:id/sections/:id",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/conversations\\/([^/]+)\\/sections\\/([^/]+)$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/conversations.ts",
+        "line": 172
+      },
+      {
+        "method": "PATCH",
+        "path": "/projects/:id/conversations/:id/sections/:id",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/conversations\\/([^/]+)\\/sections\\/([^/]+)$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/conversations.ts",
+        "line": 172
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/conversations/:id/sections/:id/source",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/conversations\\/([^/]+)\\/sections\\/([^/]+)\\/source$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/conversations.ts",
+        "line": 182
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/conversations/:id/sections/:id/annotation",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/conversations\\/([^/]+)\\/sections\\/([^/]+)\\/annotation$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/conversations.ts",
+        "line": 191
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/conversations/:id/messages/:id/pin",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/conversations\\/([^/]+)\\/messages\\/([^/]+)\\/pin$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/conversations.ts",
+        "line": 198
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/curation/read",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/curation\\/read$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/curation.ts",
+        "line": 45
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/related",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/related$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/curation.ts",
+        "line": 81
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/search",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/search$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/curation.ts",
+        "line": 110
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/curation/apply",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/curation\\/apply$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/curation.ts",
+        "line": 143
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/curation/text",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/curation\\/text$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/curation.ts",
+        "line": 163
+      },
+      {
+        "method": "PUT",
+        "path": "/projects/:id/curation/text",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/curation\\/text$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/curation.ts",
+        "line": 163
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/artifacts",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/artifacts$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/entity.ts",
+        "line": 89
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/file-records",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/file-records$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/entity.ts",
+        "line": 114
+      },
+      {
+        "method": "GET",
+        "path": "/file-records/:id",
+        "pathPattern": "^\\/file-records\\/([^/]+)$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/entity.ts",
+        "line": 118
+      },
+      {
+        "method": "POST",
+        "path": "/file-records/:id/refresh",
+        "pathPattern": "^\\/file-records\\/([^/]+)\\/refresh$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/entity.ts",
+        "line": 125
+      },
+      {
+        "method": "POST",
+        "path": "/file-records/:id/adopt",
+        "pathPattern": "^\\/file-records\\/([^/]+)\\/adopt$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/entity.ts",
+        "line": 136
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/artifact-views",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/artifact-views$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/entity.ts",
+        "line": 152
+      },
+      {
+        "method": "GET",
+        "path": "/artifacts/:id/revisions",
+        "pathPattern": "^\\/artifacts\\/([^/]+)\\/revisions$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/entity.ts",
+        "line": 242
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/preview-records",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/preview-records$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/entity.ts",
+        "line": 257
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/preview-records/:id/content",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/preview-records\\/([^/]+)\\/content$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/entity.ts",
+        "line": 262
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/previews",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/previews$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/entity.ts",
+        "line": 292
+      },
+      {
+        "method": "GET",
+        "path": "/executor/health",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/executor.ts",
+        "line": 16
+      },
+      {
+        "method": "GET",
+        "path": "/executor/capabilities",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/executor.ts",
+        "line": 20
+      },
+      {
+        "method": "POST",
+        "path": "/executor/tasks/claim-next",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/executor.ts",
+        "line": 24
+      },
+      {
+        "method": "GET",
+        "path": "/executor/tasks/:id",
+        "pathPattern": "^\\/executor\\/tasks\\/([^/]+)$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/executor.ts",
+        "line": 32
+      },
+      {
+        "method": "GET",
+        "path": "/executor/runs/:id/task",
+        "pathPattern": "^\\/executor\\/runs\\/([^/]+)\\/task$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/executor.ts",
+        "line": 36
+      },
+      {
+        "method": "POST",
+        "path": "/executor/tasks/:id/{claim|running|heartbeat|result|cancel}",
+        "pathPattern": "^\\/executor\\/tasks\\/([^/]+)\\/(claim|running|heartbeat|result|cancel)$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/executor.ts",
+        "line": 40
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/assembly/apply",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/assembly\\/apply$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/f6-assembly.ts",
+        "line": 49
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/warehouse",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/warehouse$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/f6-assembly.ts",
+        "line": 75
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/connected-conversations/:id/reach",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/connected-conversations\\/([^/]+)\\/reach$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/f6-assembly.ts",
+        "line": 116
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/result-slots",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/result-slots$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/f6-assembly.ts",
+        "line": 135
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/result-slots",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/result-slots$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/f6-assembly.ts",
+        "line": 145
+      },
+      {
+        "method": "GET",
+        "path": "/result-slots/:id",
+        "pathPattern": "^\\/result-slots\\/([^/]+)$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/f6-assembly.ts",
+        "line": 185
+      },
+      {
+        "method": "DELETE",
+        "path": "/result-slots/:id",
+        "pathPattern": "^\\/result-slots\\/([^/]+)$",
+        "mutationClass": "delete",
+        "file": "apps/local-core/src/routes/f6-assembly.ts",
+        "line": 198
+      },
+      {
+        "method": "GET",
+        "path": "/runs/:id/recipe",
+        "pathPattern": "^\\/runs\\/([^/]+)\\/recipe$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/f6-assembly.ts",
+        "line": 214
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/summary",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/summary$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/f6-assembly.ts",
+        "line": 253
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/visual-profile",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/visual-profile$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/f6-assembly.ts",
+        "line": 270
+      },
+      {
+        "method": "PUT",
+        "path": "/projects/:id/visual-profile",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/visual-profile$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/f6-assembly.ts",
+        "line": 277
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/skills",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/skills$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/f6-assembly.ts",
+        "line": 321
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/skills/:id",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/skills\\/([^/]+)$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/f6-assembly.ts",
+        "line": 334
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/handoffs",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/handoffs$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/handoffs.ts",
+        "line": 18
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/handoffs",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/handoffs$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/handoffs.ts",
+        "line": 18
+      },
+      {
+        "method": "DELETE",
+        "path": "/projects/:id/handoffs/:id",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/handoffs\\/([^/]+)$",
+        "mutationClass": "delete",
+        "file": "apps/local-core/src/routes/handoffs.ts",
+        "line": 72
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/sources",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/sources$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/imports.ts",
+        "line": 30
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/import-batches/latest",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/import-batches\\/latest$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/imports.ts",
+        "line": 62
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/import-batches/:id",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/import-batches\\/([^/]+)$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/imports.ts",
+        "line": 71
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/import-batches",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/import-batches$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/imports.ts",
+        "line": 82
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/import-batches",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/import-batches$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/imports.ts",
+        "line": 89
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/imports",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/imports$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/imports.ts",
+        "line": 131
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/export-lcosproj-file",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/export-lcosproj-file$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/lcosproj.ts",
+        "line": 23
+      },
+      {
+        "method": "POST",
+        "path": "/lcosproj/open-upload",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/lcosproj.ts",
+        "line": 42
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/export-lcosproj",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/export-lcosproj$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/lcosproj.ts",
+        "line": 65
+      },
+      {
+        "method": "POST",
+        "path": "/lcosproj/open",
+        "pathPattern": "^\\/lcosproj\\/open$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/lcosproj.ts",
+        "line": 86
+      },
+      {
+        "method": "GET",
+        "path": "/lcosproj/inspect",
+        "pathPattern": "^\\/lcosproj\\/inspect$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/lcosproj.ts",
+        "line": 110
+      },
+      {
+        "method": "POST",
+        "path": "/lcosproj/export-all",
+        "pathPattern": "^\\/lcosproj\\/export-all$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/lcosproj.ts",
+        "line": 126
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/spatial-markers",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/spatial-markers$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/navigation-markers.ts",
+        "line": 29
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/spatial-markers",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/spatial-markers$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/navigation-markers.ts",
+        "line": 38
+      },
+      {
+        "method": "DELETE",
+        "path": "/projects/:id/spatial-markers/:id",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/spatial-markers\\/([^/]+)$",
+        "mutationClass": "delete",
+        "file": "apps/local-core/src/routes/navigation-markers.ts",
+        "line": 87
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/navigation/resolve",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/navigation\\/resolve$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/navigation-markers.ts",
+        "line": 106
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/presentations",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/presentations$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/presentations.ts",
+        "line": 35
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/presentations/stream",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/presentations\\/stream$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/presentations.ts",
+        "line": 41
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/presentations/:id/stream",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/presentations\\/([^/]+)\\/stream$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/presentations.ts",
+        "line": 72
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/mutations/:id",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/mutations\\/([^/]+)$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/project-events.ts",
+        "line": 30
+      },
+      {
+        "method": "GET",
+        "path": "/projects",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/projects.ts",
+        "line": 39
+      },
+      {
+        "method": "GET",
+        "path": "/metadata/status",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/projects.ts",
+        "line": 52
+      },
+      {
+        "method": "POST",
+        "path": "/project-roots/validate",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/projects.ts",
+        "line": 61
+      },
+      {
+        "method": "POST",
+        "path": "/project-roots/inspect",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/projects.ts",
+        "line": 82
+      },
+      {
+        "method": "POST",
+        "path": "/projects",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/projects.ts",
+        "line": 105
+      },
+      {
+        "method": "DELETE",
+        "path": "/projects/:id",
+        "pathPattern": "^\\/projects\\/([^/]+)$",
+        "mutationClass": "delete",
+        "file": "apps/local-core/src/routes/projects.ts",
+        "line": 164
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/view-rail-order",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/view-rail-order$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/projects.ts",
+        "line": 182
+      },
+      {
+        "method": "PUT",
+        "path": "/projects/:id/view-rail-order",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/view-rail-order$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/projects.ts",
+        "line": 201
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/graph",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/graph$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/projects.ts",
+        "line": 236
+      },
+      {
+        "method": "PUT",
+        "path": "/projects/:id/graph",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/graph$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/projects.ts",
+        "line": 244
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/graph",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/graph$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/projects.ts",
+        "line": 269
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/file-records/:id/content",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/file-records\\/([^/]+)\\/content$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/projects.ts",
+        "line": 298
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/resource-upload-sessions",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/resource-upload-sessions$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/resources.ts",
+        "line": 51
+      },
+      {
+        "method": "PUT",
+        "path": "/projects/:id/resource-upload-sessions/:id/files",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/resource-upload-sessions\\/([^/]+)\\/files$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/resources.ts",
+        "line": 62
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/resource-upload-sessions/:id/complete",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/resource-upload-sessions\\/([^/]+)\\/complete$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/resources.ts",
+        "line": 72
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/resources/import-directory",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/resources\\/import-directory$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/resources.ts",
+        "line": 82
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/resources/import-archive",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/resources\\/import-archive$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/resources.ts",
+        "line": 86
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/resources/import-url",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/resources\\/import-url$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/resources.ts",
+        "line": 117
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/resources/match",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/resources\\/match$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/resources.ts",
+        "line": 187
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/resources",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/resources$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/resources.ts",
+        "line": 247
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/resources/:id/descriptor",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/resources\\/([^/]+)\\/descriptor$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/resources.ts",
+        "line": 264
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/resources/:id/content",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/resources\\/([^/]+)\\/content$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/resources.ts",
+        "line": 276
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/resources/:id/reanalyze",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/resources\\/([^/]+)\\/reanalyze$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/resources.ts",
+        "line": 310
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/resources/:id",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/resources\\/([^/]+)$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/resources.ts",
+        "line": 322
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/handoff-zip",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/handoff-zip$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/runs.ts",
+        "line": 33
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/context-manifests/v0",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/context-manifests\\/v0$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/runs.ts",
+        "line": 64
+      },
+      {
+        "method": "GET",
+        "path": "/runs/:id/review",
+        "pathPattern": "^\\/runs\\/([^/]+)\\/review$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/runs.ts",
+        "line": 94
+      },
+      {
+        "method": "GET",
+        "path": "/runs/:id/context-prompt",
+        "pathPattern": "^\\/runs\\/([^/]+)\\/context-prompt$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/runs.ts",
+        "line": 111
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/runs",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/runs$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/runs.ts",
+        "line": 128
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/runs",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/runs$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/runs.ts",
+        "line": 141
+      },
+      {
+        "method": "POST",
+        "path": "/runs/:id/{dispatch|recover|sync}",
+        "pathPattern": "^\\/runs\\/([^/]+)\\/(dispatch|recover|sync)$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/runs.ts",
+        "line": 192
+      },
+      {
+        "method": "POST",
+        "path": "/runs/:id/cancel",
+        "pathPattern": "^\\/runs\\/([^/]+)\\/cancel$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/runs.ts",
+        "line": 213
+      },
+      {
+        "method": "GET",
+        "path": "/runs/:id/input-request",
+        "pathPattern": "^\\/runs\\/([^/]+)\\/input-request$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/runs.ts",
+        "line": 231
+      },
+      {
+        "method": "POST",
+        "path": "/runs/:id/input-request",
+        "pathPattern": "^\\/runs\\/([^/]+)\\/input-request$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/runs.ts",
+        "line": 242
+      },
+      {
+        "method": "GET",
+        "path": "/runs/:id/events",
+        "pathPattern": "^\\/runs\\/([^/]+)\\/events$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/runs.ts",
+        "line": 273
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/context-manifests/v0/:id",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/context-manifests\\/v0\\/([^/]+)$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/runs.ts",
+        "line": 287
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/runs/validate-plan",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/runs\\/validate-plan$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/runs.ts",
+        "line": 301
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/runs/propose",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/runs\\/propose$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/runs.ts",
+        "line": 332
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/text-artifacts",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/text-artifacts$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/runs.ts",
+        "line": 383
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/session-lifecycle",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/session-lifecycle$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/runtime.ts",
+        "line": 29
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/session-lifecycle/:id/recover",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/session-lifecycle\\/([^/]+)\\/recover$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/runtime.ts",
+        "line": 39
+      },
+      {
+        "method": "GET",
+        "path": "/runtime/providers",
+        "pathPattern": "^\\/runtime\\/providers$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/runtime.ts",
+        "line": 61
+      },
+      {
+        "method": "POST",
+        "path": "/runtime/ocr",
+        "pathPattern": "^\\/runtime\\/ocr$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/runtime.ts",
+        "line": 75
+      },
+      {
+        "method": "POST",
+        "path": "/runtime/codex-dispatch-plan",
+        "pathPattern": "^\\/runtime\\/codex-dispatch-plan$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/runtime.ts",
+        "line": 129
+      },
+      {
+        "method": "POST",
+        "path": "/runs/:id/finalize",
+        "pathPattern": "^\\/runs\\/([^/]+)\\/finalize$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/runtime.ts",
+        "line": 188
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/space/ls",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/space\\/ls$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/space.ts",
+        "line": 47
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/space/read",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/space\\/read$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/space.ts",
+        "line": 57
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/space/search",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/space\\/search$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/space.ts",
+        "line": 81
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/workflow/export",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/workflow\\/export$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/workflow.ts",
+        "line": 25
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/workflow/import",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/workflow\\/import$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/workflow.ts",
+        "line": 41
+      },
+      {
+        "method": "GET",
+        "path": "/workspaces/:id/states",
+        "pathPattern": "^\\/workspaces\\/([^/]+)\\/states$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/workspace-states.ts",
+        "line": 20
+      },
+      {
+        "method": "POST",
+        "path": "/workspaces/:id/states",
+        "pathPattern": "^\\/workspaces\\/([^/]+)\\/states$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/workspace-states.ts",
+        "line": 20
+      },
+      {
+        "method": "POST",
+        "path": "/workspaces/:id/states/:id/restore",
+        "pathPattern": "^\\/workspaces\\/([^/]+)\\/states\\/([^/]+)\\/restore$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/workspace-states.ts",
+        "line": 43
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/session-summaries",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/session-summaries$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/workspace-states.ts",
+        "line": 58
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/session-summaries",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/session-summaries$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/workspace-states.ts",
+        "line": 58
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/workspace-memberships",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/workspace-memberships$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/workspace-states.ts",
+        "line": 91
+      },
+      {
+        "method": "GET",
+        "path": "/workspaces/:id/entity-members",
+        "pathPattern": "^\\/workspaces\\/([^/]+)\\/entity-members$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/workspace-states.ts",
+        "line": 101
+      },
+      {
+        "method": "POST",
+        "path": "/workspaces/:id/members",
+        "pathPattern": "^\\/workspaces\\/([^/]+)\\/members$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/workspace-states.ts",
+        "line": 112
+      },
+      {
+        "method": "GET",
+        "path": "/workspaces/:id/members",
+        "pathPattern": "^\\/workspaces\\/([^/]+)\\/members$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/workspace-states.ts",
+        "line": 112
+      },
+      {
+        "method": "DELETE",
+        "path": "/workspaces/:id/members/:id",
+        "pathPattern": "^\\/workspaces\\/([^/]+)\\/members\\/([^/]+)$",
+        "mutationClass": "delete",
+        "file": "apps/local-core/src/routes/workspace-states.ts",
+        "line": 158
+      },
+      {
+        "method": "POST",
+        "path": "/workspaces/:id/members/move",
+        "pathPattern": "^\\/workspaces\\/([^/]+)\\/members\\/move$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/routes/workspace-states.ts",
+        "line": 190
+      },
+      {
+        "method": "GET",
+        "path": "/health",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/server.ts",
+        "line": 402
+      },
+      {
+        "method": "POST",
+        "path": "/capture/v1",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/server.ts",
+        "line": 408
+      },
+      {
+        "method": "POST",
+        "path": "/runtime/extension-token",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/server.ts",
+        "line": 448
+      },
+      {
+        "method": "POST",
+        "path": "/runtime/projects/:id/focus",
+        "pathPattern": "^\\/runtime\\/projects\\/([^/]+)\\/focus$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/server.ts",
+        "line": 513
+      },
+      {
+        "method": "GET",
+        "path": "/runtime/registry",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/server.ts",
+        "line": 528
+      },
+      {
+        "method": "POST",
+        "path": "/runtime/registry/capture-target",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/server.ts",
+        "line": 533
+      },
+      {
+        "method": "GET",
+        "path": "/runtime/intelligence",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/server.ts",
+        "line": 553
+      },
+      {
+        "method": "POST",
+        "path": "/capture",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/server.ts",
+        "line": 563
+      },
+      {
+        "method": "POST",
+        "path": "/runtime/affinity/resolve",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/server.ts",
+        "line": 586
+      },
+      {
+        "method": "POST",
+        "path": "/runtime/captures/staging",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/server.ts",
+        "line": 607
+      },
+      {
+        "method": "GET",
+        "path": "/runtime/captures/staging",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/server.ts",
+        "line": 639
+      },
+      {
+        "method": "POST",
+        "path": "/runtime/capture-space/enqueue",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/server.ts",
+        "line": 672
+      },
+      {
+        "method": "GET",
+        "path": "/runtime/capture-space",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/server.ts",
+        "line": 710
+      },
+      {
+        "method": "PUT",
+        "path": "/runtime/capture-space/presentation",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/server.ts",
+        "line": 721
+      },
+      {
+        "method": "GET",
+        "path": "/runtime/capture-space/items/:id/preview",
+        "pathPattern": "^\\/runtime\\/capture-space\\/items\\/([^/]+)\\/preview$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/server.ts",
+        "line": 749
+      },
+      {
+        "method": "POST",
+        "path": "/runtime/capture-space/organize",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/server.ts",
+        "line": 763
+      },
+      {
+        "method": "POST",
+        "path": "/runtime/capture-space/materialize",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/server.ts",
+        "line": 777
+      },
+      {
+        "method": "POST",
+        "path": "/runtime/captures/create-project",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/server.ts",
+        "line": 801
+      },
+      {
+        "method": "POST",
+        "path": "/runtime/captures/:id/resolve",
+        "pathPattern": "^\\/runtime\\/captures\\/([^/]+)\\/resolve$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/server.ts",
+        "line": 837
+      },
+      {
+        "method": "POST",
+        "path": "/runtime/registry/browser-tab",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/server.ts",
+        "line": 866
+      },
+      {
+        "method": "GET",
+        "path": "/runtime/capture-watch/rules",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/server.ts",
+        "line": 882
+      },
+      {
+        "method": "POST",
+        "path": "/runtime/capture-watch/rules",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/server.ts",
+        "line": 882
+      },
+      {
+        "method": "DELETE",
+        "path": "/runtime/capture-watch/rules",
+        "mutationClass": "delete",
+        "file": "apps/local-core/src/server.ts",
+        "line": 882
+      },
+      {
+        "method": "POST",
+        "path": "/runtime/sessions/:id/bind",
+        "pathPattern": "^\\/runtime\\/sessions\\/([^/]+)\\/bind$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/server.ts",
+        "line": 924
+      },
+      {
+        "method": "GET",
+        "path": "/runtime/sessions/:id/context",
+        "pathPattern": "^\\/runtime\\/sessions\\/([^/]+)\\/context$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/server.ts",
+        "line": 954
+      },
+      {
+        "method": "POST",
+        "path": "/runtime/sessions/:id/close",
+        "pathPattern": "^\\/runtime\\/sessions\\/([^/]+)\\/close$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/server.ts",
+        "line": 967
+      },
+      {
+        "method": "GET",
+        "path": "/runtime/sessions/contexts",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/server.ts",
+        "line": 980
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/reorganize/proposals",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/reorganize\\/proposals$",
+        "mutationClass": "mutation-proposal",
+        "file": "apps/local-core/src/server.ts",
+        "line": 992
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/reorganize/proposals/:id/{preview|apply|accept|rollback|reject}",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/reorganize\\/proposals\\/([^/]+)\\/(preview|apply|accept|rollback|reject)$",
+        "mutationClass": "mutation-proposal",
+        "file": "apps/local-core/src/server.ts",
+        "line": 1028
+      },
+      {
+        "method": "POST",
+        "path": "/projects/:id/reveal",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/reveal$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/server.ts",
+        "line": 1066
+      },
+      {
+        "method": "POST",
+        "path": "/entities/{project|workspace|artifact|scope}/:id/title",
+        "pathPattern": "^\\/entities\\/(project|workspace|artifact|scope)\\/([^/]+)\\/title$",
+        "mutationClass": "mutation",
+        "file": "apps/local-core/src/server.ts",
+        "line": 1088
+      }
+    ]
+  },
+  "cli": {
+    "source": [
+      "tools/lcos-agent/cli.mjs",
+      "tools/lcos-agent/commands/curation-command.mjs",
+      "tools/lcos-agent/commands/curation-query.mjs",
+      "tools/lcos-agent/commands/presentation.mjs",
+      "tools/lcos-agent/commands/search.mjs",
+      "tools/lcos-agent/commands/skill-layers.mjs",
+      "tools/lcos-agent/commands/skill.mjs"
+    ],
+    "total": 129,
+    "groups": {
+      "affinity": 1,
+      "artifact": 1,
+      "canvas": 3,
+      "capabilities": 1,
+      "capture": 3,
+      "connector": 3,
+      "context": 15,
+      "continuity": 5,
+      "conversation": 14,
+      "curation": 1,
+      "doctor": 1,
+      "local-ai": 3,
+      "manifest": 1,
+      "node": 3,
+      "open": 1,
+      "presentation": 2,
+      "preview": 1,
+      "process": 1,
+      "project": 13,
+      "provider-session": 3,
+      "providers": 1,
+      "relation": 1,
+      "resource": 6,
+      "retrieval": 1,
+      "revision": 2,
+      "run": 18,
+      "runtime": 1,
+      "search": 1,
+      "selection": 2,
+      "session": 6,
+      "skill": 5,
+      "target": 2,
+      "task": 1,
+      "workspace": 6
+    },
+    "delegations": [
+      {
+        "groups": [
+          "search"
+        ],
+        "actionGuards": [],
+        "module": "tools/lcos-agent/commands/search.mjs"
+      },
+      {
+        "groups": [
+          "skill"
+        ],
+        "actionGuards": [],
+        "module": "tools/lcos-agent/commands/skill.mjs"
+      },
+      {
+        "groups": [
+          "presentation"
+        ],
+        "actionGuards": [
+          "patch"
+        ],
+        "module": "tools/lcos-agent/commands/presentation.mjs"
+      },
+      {
+        "groups": [
+          "node"
+        ],
+        "actionGuards": [
+          "create-text",
+          "update-text"
+        ],
+        "module": "tools/lcos-agent/commands/curation-command.mjs"
+      },
+      {
+        "groups": [
+          "curation"
+        ],
+        "actionGuards": [],
+        "module": "tools/lcos-agent/commands/curation-command.mjs"
+      },
+      {
+        "groups": [
+          "node",
+          "selection",
+          "presentation"
+        ],
+        "actionGuards": [],
+        "module": "tools/lcos-agent/commands/curation-query.mjs"
+      }
+    ],
+    "items": [
+      {
+        "group": "affinity",
+        "action": "resolve",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 796
+      },
+      {
+        "group": "artifact",
+        "action": "inspect",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 289
+      },
+      {
+        "group": "canvas",
+        "action": "move",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 417
+      },
+      {
+        "group": "canvas",
+        "action": "observe",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 447
+      },
+      {
+        "group": "canvas",
+        "action": "viewport",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 431
+      },
+      {
+        "group": "capabilities",
+        "action": null,
+        "actionSemantics": "no-subcommand",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 68
+      },
+      {
+        "group": "capture",
+        "action": "pending",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 807
+      },
+      {
+        "group": "capture",
+        "action": "resolve",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 811
+      },
+      {
+        "group": "capture",
+        "action": "send",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 815
+      },
+      {
+        "group": "connector",
+        "action": "list",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 588
+      },
+      {
+        "group": "connector",
+        "action": "obsidian-import",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 674
+      },
+      {
+        "group": "connector",
+        "action": "obsidian-scan",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 672
+      },
+      {
+        "group": "context",
+        "action": "accept",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 522
+      },
+      {
+        "group": "context",
+        "action": "add",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 260
+      },
+      {
+        "group": "context",
+        "action": "focus",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 409
+      },
+      {
+        "group": "context",
+        "action": "get",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 226
+      },
+      {
+        "group": "context",
+        "action": "proposals",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 555
+      },
+      {
+        "group": "context",
+        "action": "propose",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 508
+      },
+      {
+        "group": "context",
+        "action": "reject",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 526
+      },
+      {
+        "group": "context",
+        "action": "remove",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 272
+      },
+      {
+        "group": "context",
+        "action": "search",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 230
+      },
+      {
+        "group": "context",
+        "action": "select",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 400
+      },
+      {
+        "group": "context",
+        "action": "snapshot-branch",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 548
+      },
+      {
+        "group": "context",
+        "action": "snapshot-compare",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 541
+      },
+      {
+        "group": "context",
+        "action": "snapshot-create",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 535
+      },
+      {
+        "group": "context",
+        "action": "snapshot-list",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 530
+      },
+      {
+        "group": "context",
+        "action": "watch",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 505
+      },
+      {
+        "group": "continuity",
+        "action": "attach",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 202
+      },
+      {
+        "group": "continuity",
+        "action": "bind",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 211
+      },
+      {
+        "group": "continuity",
+        "action": "resolve",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 185
+      },
+      {
+        "group": "continuity",
+        "action": "resume",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 194
+      },
+      {
+        "group": "continuity",
+        "action": "return",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 219
+      },
+      {
+        "group": "conversation",
+        "action": "annotate",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 649
+      },
+      {
+        "group": "conversation",
+        "action": "export",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 635
+      },
+      {
+        "group": "conversation",
+        "action": "import",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 590
+      },
+      {
+        "group": "conversation",
+        "action": "import-manual",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 621
+      },
+      {
+        "group": "conversation",
+        "action": "index-build",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 670
+      },
+      {
+        "group": "conversation",
+        "action": "index-status",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 668
+      },
+      {
+        "group": "conversation",
+        "action": "list",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 625
+      },
+      {
+        "group": "conversation",
+        "action": "messages",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 629
+      },
+      {
+        "group": "conversation",
+        "action": "pin",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 666
+      },
+      {
+        "group": "conversation",
+        "action": "search",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 632
+      },
+      {
+        "group": "conversation",
+        "action": "section-rename",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 647
+      },
+      {
+        "group": "conversation",
+        "action": "section-source",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 664
+      },
+      {
+        "group": "conversation",
+        "action": "sections",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 643
+      },
+      {
+        "group": "conversation",
+        "action": "show",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 627
+      },
+      {
+        "group": "curation",
+        "action": "apply",
+        "file": "tools/lcos-agent/commands/curation-command.mjs",
+        "line": 56
+      },
+      {
+        "group": "doctor",
+        "action": null,
+        "actionSemantics": "no-subcommand",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 46
+      },
+      {
+        "group": "local-ai",
+        "action": "embed-smoke",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 846
+      },
+      {
+        "group": "local-ai",
+        "action": "models",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 843
+      },
+      {
+        "group": "local-ai",
+        "action": "status",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 841
+      },
+      {
+        "group": "manifest",
+        "action": "build",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 345
+      },
+      {
+        "group": "node",
+        "action": "create-text",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 888
+      },
+      {
+        "group": "node",
+        "action": "read",
+        "file": "tools/lcos-agent/commands/curation-query.mjs",
+        "line": 36
+      },
+      {
+        "group": "node",
+        "action": "update-text",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 888
+      },
+      {
+        "group": "open",
+        "action": null,
+        "actionSemantics": "no-subcommand",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 782
+      },
+      {
+        "group": "presentation",
+        "action": "patch",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 885
+      },
+      {
+        "group": "presentation",
+        "action": "show",
+        "file": "tools/lcos-agent/commands/curation-query.mjs",
+        "line": 31
+      },
+      {
+        "group": "preview",
+        "action": "open",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 477
+      },
+      {
+        "group": "process",
+        "action": "projection",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 298
+      },
+      {
+        "group": "project",
+        "action": "create",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 86
+      },
+      {
+        "group": "project",
+        "action": "current",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 95
+      },
+      {
+        "group": "project",
+        "action": "export",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 109
+      },
+      {
+        "group": "project",
+        "action": "export-all",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 116
+      },
+      {
+        "group": "project",
+        "action": "inspect",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 92
+      },
+      {
+        "group": "project",
+        "action": "inspect-file",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 134
+      },
+      {
+        "group": "project",
+        "action": "list",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 76
+      },
+      {
+        "group": "project",
+        "action": "open",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 78
+      },
+      {
+        "group": "project",
+        "action": "open-file",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 125
+      },
+      {
+        "group": "project",
+        "action": "pin-capture",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 877
+      },
+      {
+        "group": "project",
+        "action": "reveal",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 882
+      },
+      {
+        "group": "project",
+        "action": "show",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 90
+      },
+      {
+        "group": "project",
+        "action": "unpin-capture",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 880
+      },
+      {
+        "group": "provider-session",
+        "action": "clear",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 328
+      },
+      {
+        "group": "provider-session",
+        "action": "get",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 310
+      },
+      {
+        "group": "provider-session",
+        "action": "set",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 314
+      },
+      {
+        "group": "providers",
+        "action": null,
+        "actionSemantics": "no-subcommand",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 224
+      },
+      {
+        "group": "relation",
+        "action": "create",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 452
+      },
+      {
+        "group": "resource",
+        "action": "import",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 723
+      },
+      {
+        "group": "resource",
+        "action": "list",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 696
+      },
+      {
+        "group": "resource",
+        "action": "match",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 712
+      },
+      {
+        "group": "resource",
+        "action": "read",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 700
+      },
+      {
+        "group": "resource",
+        "action": "reanalyze",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 710
+      },
+      {
+        "group": "resource",
+        "action": "show",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 698
+      },
+      {
+        "group": "retrieval",
+        "action": "spatial",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 788
+      },
+      {
+        "group": "revision",
+        "action": "compare",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 293
+      },
+      {
+        "group": "revision",
+        "action": "list",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 291
+      },
+      {
+        "group": "run",
+        "action": "accept",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 575
+      },
+      {
+        "group": "run",
+        "action": "answer",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 559
+      },
+      {
+        "group": "run",
+        "action": "cancel",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 569
+      },
+      {
+        "group": "run",
+        "action": "context",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 396
+      },
+      {
+        "group": "run",
+        "action": "create",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 364
+      },
+      {
+        "group": "run",
+        "action": "dispatch",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 383
+      },
+      {
+        "group": "run",
+        "action": "events",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 571
+      },
+      {
+        "group": "run",
+        "action": "finalize",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 387
+      },
+      {
+        "group": "run",
+        "action": "input",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 557
+      },
+      {
+        "group": "run",
+        "action": "list",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 356
+      },
+      {
+        "group": "run",
+        "action": "pending",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 358
+      },
+      {
+        "group": "run",
+        "action": "propose",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 158
+      },
+      {
+        "group": "run",
+        "action": "recover",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 385
+      },
+      {
+        "group": "run",
+        "action": "reject",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 581
+      },
+      {
+        "group": "run",
+        "action": "retry",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 583
+      },
+      {
+        "group": "run",
+        "action": "show",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 392
+      },
+      {
+        "group": "run",
+        "action": "sync",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 394
+      },
+      {
+        "group": "run",
+        "action": "validate-plan",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 177
+      },
+      {
+        "group": "runtime",
+        "action": "extension-token",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 835
+      },
+      {
+        "group": "search",
+        "action": null,
+        "actionSemantics": "free-text-query",
+        "file": "tools/lcos-agent/commands/search.mjs",
+        "line": null
+      },
+      {
+        "group": "selection",
+        "action": "get",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 228
+      },
+      {
+        "group": "selection",
+        "action": "read",
+        "file": "tools/lcos-agent/commands/curation-query.mjs",
+        "line": 48
+      },
+      {
+        "group": "session",
+        "action": "bind",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 860
+      },
+      {
+        "group": "session",
+        "action": "close",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 870
+      },
+      {
+        "group": "session",
+        "action": "context",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 867
+      },
+      {
+        "group": "session",
+        "action": "list",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 343
+      },
+      {
+        "group": "session",
+        "action": "sources",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 873
+      },
+      {
+        "group": "session",
+        "action": "summarize",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 332
+      },
+      {
+        "group": "skill",
+        "action": "list",
+        "file": "tools/lcos-agent/commands/skill.mjs",
+        "line": 114
+      },
+      {
+        "group": "skill",
+        "action": "read",
+        "file": "tools/lcos-agent/commands/skill.mjs",
+        "line": 119
+      },
+      {
+        "group": "skill",
+        "action": "resolve",
+        "file": "tools/lcos-agent/commands/skill.mjs",
+        "line": 90
+      },
+      {
+        "group": "skill",
+        "action": "review",
+        "file": "tools/lcos-agent/commands/skill.mjs",
+        "line": 149
+      },
+      {
+        "group": "skill",
+        "action": "trace",
+        "file": "tools/lcos-agent/commands/skill.mjs",
+        "line": 133
+      },
+      {
+        "group": "target",
+        "action": "clear",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 244
+      },
+      {
+        "group": "target",
+        "action": "set",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 233
+      },
+      {
+        "group": "task",
+        "action": "show",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 780
+      },
+      {
+        "group": "workspace",
+        "action": "add",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 138
+      },
+      {
+        "group": "workspace",
+        "action": "list",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 136
+      },
+      {
+        "group": "workspace",
+        "action": "move",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 150
+      },
+      {
+        "group": "workspace",
+        "action": "remove",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 146
+      },
+      {
+        "group": "workspace",
+        "action": "restore-state",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 306
+      },
+      {
+        "group": "workspace",
+        "action": "save-state",
+        "file": "tools/lcos-agent/cli.mjs",
+        "line": 300
+      }
+    ]
+  },
+  "mcp": {
+    "source": [
+      "tools/lcos-agent/mcp-server.mjs",
+      "tools/lcos-agent/executor-tools.mjs",
+      "tools/lcos-agent/mcp-executor-server.mjs"
+    ],
+    "entryNote": "mcp-executor-server.mjs 复用 mcp-server.mjs（LCOS_MCP_ROLE=executor），无独立工具注册",
+    "serverName": [
+      "lcos-executor",
+      "local-creative-os",
+      "0.5.0"
+    ],
+    "totalTools": 47,
+    "registeredToolCalls": {
+      "mcp-server.mjs": 39,
+      "executor-tools.mjs": 9
+    },
+    "domains": {
+      "context": 5,
+      "run": 11,
+      "conversation": 9,
+      "project": 4,
+      "executor": 7,
+      "canvas": 5,
+      "resource": 6
+    },
+    "deadDomains": [
+      "provider"
+    ],
+    "roleExposure": {
+      "agent": 39,
+      "executor": 9
+    },
+    "domainRules": [
+      {
+        "kind": "regex",
+        "pattern": "/^(open_lcos|bind_lcos_project|list_lcos_projects|get_lcos_project|get_lcos_project_summary|open_lcos_preview)$/",
+        "domain": "project"
+      },
+      {
+        "kind": "regex",
+        "pattern": "/^(get_lcos_active_context|watch_lcos_active_context|focus_lcos_views|select_lcos_views|set_lcos_viewport|move_lcos_view|get_lcos_canvas_observation|create_lcos_relation|.*workspace_member)/",
+        "domain": "canvas"
+      },
+      {
+        "kind": "regex",
+        "pattern": "/^(propose_lcos_context_change|apply_lcos_context_command|accept_lcos_context_proposal|reject_lcos_context_proposal|list_lcos_context_proposals|build_lcos_context_manifest)/",
+        "domain": "context"
+      },
+      {
+        "kind": "regex",
+        "pattern": "/^(create_lcos_run|propose_lcos_run|validate_lcos_agent_plan|dispatch_lcos_run|cancel_lcos_run|get_lcos_run|list_lcos_runs|list_lcos_pending_runs|get_lcos_run_input_request|answer_lcos_run_input|sync_lcos_run|recover_lcos_run|finalize_lcos_run|accept_lcos_return|reject_lcos_return|retry_lcos_return)/",
+        "domain": "run"
+      },
+      {
+        "kind": "regex",
+        "pattern": "/^(get_lcos_provider_session|set_lcos_provider_session|clear_lcos_provider_session|list_lcos_runtime_providers)/",
+        "domain": "provider"
+      },
+      {
+        "kind": "regex",
+        "pattern": "/^(lcos_resource_|get_lcos_latest_import_batch|get_lcos_import_batch|list_lcos_connectors|scan_lcos_obsidian_vault|import_lcos_obsidian_notes)/",
+        "domain": "resource"
+      },
+      {
+        "kind": "regex",
+        "pattern": "/^(import_lcos_conversation|import_lcos_manual_conversation|export_lcos_conversation|list_lcos_conversations|get_lcos_conversation|search_lcos_conversations|read_lcos_conversation_messages|list_lcos_conversation_sections|refresh_lcos_conversation_sections|rename_lcos_conversation_section|read_lcos_conversation_section|annotate_lcos_conversation_section|pin_lcos_conversation_message|get_lcos_conversation_semantic_index|build_lcos_conversation_semantic_index)/",
+        "domain": "conversation"
+      },
+      {
+        "kind": "set-has",
+        "set": "EXECUTOR_TOOL_NAMES",
+        "domain": "executor"
+      }
+    ],
+    "items": [
+      {
+        "name": "accept_lcos_context_proposal",
+        "domain": "context",
+        "roles": [
+          "agent"
+        ],
+        "requiredParams": [
+          "projectId",
+          "proposalId"
+        ],
+        "file": "tools/lcos-agent/mcp-server.mjs"
+      },
+      {
+        "name": "accept_lcos_return",
+        "domain": "run",
+        "roles": [
+          "agent"
+        ],
+        "requiredParams": [
+          "returnId",
+          "expectedBaseRevisionId"
+        ],
+        "file": "tools/lcos-agent/mcp-server.mjs"
+      },
+      {
+        "name": "annotate_lcos_conversation_section",
+        "domain": "conversation",
+        "roles": [
+          "agent"
+        ],
+        "requiredParams": [
+          "projectId",
+          "conversationId",
+          "sectionId",
+          "sourceHash",
+          "title"
+        ],
+        "file": "tools/lcos-agent/mcp-server.mjs"
+      },
+      {
+        "name": "answer_lcos_run_input",
+        "domain": "run",
+        "roles": [
+          "agent"
+        ],
+        "requiredParams": [
+          "runId",
+          "requestId"
+        ],
+        "file": "tools/lcos-agent/mcp-server.mjs"
+      },
+      {
+        "name": "apply_lcos_context_command",
+        "domain": "context",
+        "roles": [
+          "agent"
+        ],
+        "requiredParams": [
+          "projectId",
+          "expectedVersion"
+        ],
+        "file": "tools/lcos-agent/mcp-server.mjs"
+      },
+      {
+        "name": "bind_lcos_project",
+        "domain": "project",
+        "roles": [
+          "agent"
+        ],
+        "requiredParams": [
+          "projectId"
+        ],
+        "file": "tools/lcos-agent/mcp-server.mjs"
+      },
+      {
+        "name": "cancel_lcos_run",
+        "domain": "run",
+        "roles": [
+          "agent"
+        ],
+        "requiredParams": [
+          "runId"
+        ],
+        "file": "tools/lcos-agent/mcp-server.mjs"
+      },
+      {
+        "name": "claim_lcos_run",
+        "domain": "executor",
+        "roles": [
+          "executor"
+        ],
+        "requiredParams": [
+          "runId",
+          "workerId"
+        ],
+        "file": "tools/lcos-agent/executor-tools.mjs"
+      },
+      {
+        "name": "create_lcos_relation",
+        "domain": "canvas",
+        "roles": [
+          "agent"
+        ],
+        "requiredParams": [
+          "projectId",
+          "sourceViewId",
+          "targetViewId",
+          "kind"
+        ],
+        "file": "tools/lcos-agent/mcp-server.mjs"
+      },
+      {
+        "name": "create_lcos_run",
+        "domain": "run",
+        "roles": [
+          "agent"
+        ],
+        "requiredParams": [
+          "projectId",
+          "instruction",
+          "outputIntent"
+        ],
+        "file": "tools/lcos-agent/mcp-server.mjs"
+      },
+      {
+        "name": "dispatch_lcos_run",
+        "domain": "run",
+        "roles": [
+          "agent"
+        ],
+        "requiredParams": [
+          "runId"
+        ],
+        "file": "tools/lcos-agent/mcp-server.mjs"
+      },
+      {
+        "name": "fail_lcos_run",
+        "domain": "executor",
+        "roles": [
+          "executor"
+        ],
+        "requiredParams": [
+          "runId",
+          "summary"
+        ],
+        "file": "tools/lcos-agent/executor-tools.mjs"
+      },
+      {
+        "name": "focus_lcos_views",
+        "domain": "canvas",
+        "roles": [
+          "agent"
+        ],
+        "requiredParams": [
+          "projectId",
+          "viewId"
+        ],
+        "file": "tools/lcos-agent/mcp-server.mjs"
+      },
+      {
+        "name": "get_lcos_active_context",
+        "domain": "canvas",
+        "roles": [
+          "agent"
+        ],
+        "requiredParams": [
+          "projectId"
+        ],
+        "file": "tools/lcos-agent/mcp-server.mjs"
+      },
+      {
+        "name": "get_lcos_conversation",
+        "domain": "conversation",
+        "roles": [
+          "agent"
+        ],
+        "requiredParams": [
+          "projectId",
+          "conversationId"
+        ],
+        "file": "tools/lcos-agent/mcp-server.mjs"
+      },
+      {
+        "name": "get_lcos_import_batch",
+        "domain": "resource",
+        "roles": [
+          "agent"
+        ],
+        "requiredParams": [
+          "projectId",
+          "batchId"
+        ],
+        "file": "tools/lcos-agent/mcp-server.mjs"
+      },
+      {
+        "name": "get_lcos_latest_import_batch",
+        "domain": "resource",
+        "roles": [
+          "agent"
+        ],
+        "requiredParams": [
+          "projectId"
+        ],
+        "file": "tools/lcos-agent/mcp-server.mjs"
+      },
+      {
+        "name": "get_lcos_project_summary",
+        "domain": "project",
+        "roles": [
+          "agent"
+        ],
+        "requiredParams": [
+          "projectId"
+        ],
+        "file": "tools/lcos-agent/mcp-server.mjs"
+      },
+      {
+        "name": "get_lcos_run",
+        "domain": "run",
+        "roles": [
+          "agent"
+        ],
+        "requiredParams": [
+          "runId"
+        ],
+        "file": "tools/lcos-agent/mcp-server.mjs"
+      },
+      {
+        "name": "get_lcos_run_context",
+        "domain": "run",
+        "roles": [
+          "executor"
+        ],
+        "requiredParams": [
+          "runId"
+        ],
+        "file": "tools/lcos-agent/executor-tools.mjs"
+      },
+      {
+        "name": "get_lcos_run_input_request",
+        "domain": "run",
+        "roles": [
+          "agent"
+        ],
+        "requiredParams": [
+          "runId"
+        ],
+        "file": "tools/lcos-agent/mcp-server.mjs"
+      },
+      {
+        "name": "get_lcos_task",
+        "domain": "executor",
+        "roles": [
+          "executor"
+        ],
+        "requiredParams": [
+          "task_id"
+        ],
+        "file": "tools/lcos-agent/executor-tools.mjs"
+      },
+      {
+        "name": "heartbeat_lcos_run",
+        "domain": "executor",
+        "roles": [
+          "executor"
+        ],
+        "requiredParams": [
+          "runId",
+          "workerId"
+        ],
+        "file": "tools/lcos-agent/executor-tools.mjs"
+      },
+      {
+        "name": "import_lcos_conversation",
+        "domain": "conversation",
+        "roles": [
+          "agent"
+        ],
+        "requiredParams": [
+          "projectId",
+          "filePath",
+          "scopeId"
+        ],
+        "file": "tools/lcos-agent/mcp-server.mjs"
+      },
+      {
+        "name": "import_lcos_obsidian_notes",
+        "domain": "resource",
+        "roles": [
+          "agent"
+        ],
+        "requiredParams": [
+          "projectId",
+          "scanId",
+          "relativePaths",
+          "scopeId"
+        ],
+        "file": "tools/lcos-agent/mcp-server.mjs"
+      },
+      {
+        "name": "lcos_resource_match",
+        "domain": "resource",
+        "roles": [
+          "agent"
+        ],
+        "requiredParams": [
+          "projectId",
+          "instruction"
+        ],
+        "file": "tools/lcos-agent/mcp-server.mjs"
+      },
+      {
+        "name": "lcos_resource_read",
+        "domain": "resource",
+        "roles": [
+          "agent"
+        ],
+        "requiredParams": [
+          "projectId",
+          "resourceId"
+        ],
+        "file": "tools/lcos-agent/mcp-server.mjs"
+      },
+      {
+        "name": "list_lcos_context_proposals",
+        "domain": "context",
+        "roles": [
+          "agent"
+        ],
+        "requiredParams": [
+          "projectId"
+        ],
+        "file": "tools/lcos-agent/mcp-server.mjs"
+      },
+      {
+        "name": "list_lcos_conversation_sections",
+        "domain": "conversation",
+        "roles": [
+          "agent"
+        ],
+        "requiredParams": [
+          "projectId",
+          "conversationId"
+        ],
+        "file": "tools/lcos-agent/mcp-server.mjs"
+      },
+      {
+        "name": "list_lcos_conversations",
+        "domain": "conversation",
+        "roles": [
+          "agent"
+        ],
+        "requiredParams": [
+          "projectId"
+        ],
+        "file": "tools/lcos-agent/mcp-server.mjs"
+      },
+      {
+        "name": "list_lcos_projects",
+        "domain": "project",
+        "roles": [
+          "agent"
+        ],
+        "requiredParams": [],
+        "file": "tools/lcos-agent/mcp-server.mjs"
+      },
+      {
+        "name": "open_lcos_preview",
+        "domain": "project",
+        "roles": [
+          "agent"
+        ],
+        "requiredParams": [
+          "projectId",
+          "viewId"
+        ],
+        "file": "tools/lcos-agent/mcp-server.mjs"
+      },
+      {
+        "name": "pin_lcos_conversation_message",
+        "domain": "conversation",
+        "roles": [
+          "agent"
+        ],
+        "requiredParams": [
+          "projectId",
+          "conversationId",
+          "messageId",
+          "scopeId"
+        ],
+        "file": "tools/lcos-agent/mcp-server.mjs"
+      },
+      {
+        "name": "propose_lcos_context_change",
+        "domain": "context",
+        "roles": [
+          "agent",
+          "executor"
+        ],
+        "requiredParams": [
+          "projectId",
+          "baseContextVersion",
+          "addViewIds",
+          "removeViewIds",
+          "reason"
+        ],
+        "file": "tools/lcos-agent/executor-tools.mjs"
+      },
+      {
+        "name": "read_lcos_conversation_messages",
+        "domain": "conversation",
+        "roles": [
+          "agent"
+        ],
+        "requiredParams": [
+          "projectId",
+          "conversationId"
+        ],
+        "file": "tools/lcos-agent/mcp-server.mjs"
+      },
+      {
+        "name": "read_lcos_conversation_section",
+        "domain": "conversation",
+        "roles": [
+          "agent"
+        ],
+        "requiredParams": [
+          "projectId",
+          "conversationId",
+          "sectionId"
+        ],
+        "file": "tools/lcos-agent/mcp-server.mjs"
+      },
+      {
+        "name": "reject_lcos_context_proposal",
+        "domain": "context",
+        "roles": [
+          "agent"
+        ],
+        "requiredParams": [
+          "projectId",
+          "proposalId"
+        ],
+        "file": "tools/lcos-agent/mcp-server.mjs"
+      },
+      {
+        "name": "reject_lcos_return",
+        "domain": "run",
+        "roles": [
+          "agent"
+        ],
+        "requiredParams": [
+          "returnId"
+        ],
+        "file": "tools/lcos-agent/mcp-server.mjs"
+      },
+      {
+        "name": "request_lcos_user_input",
+        "domain": "executor",
+        "roles": [
+          "executor"
+        ],
+        "requiredParams": [
+          "runId",
+          "requestId",
+          "question"
+        ],
+        "file": "tools/lcos-agent/executor-tools.mjs"
+      },
+      {
+        "name": "retry_lcos_return",
+        "domain": "run",
+        "roles": [
+          "agent"
+        ],
+        "requiredParams": [
+          "returnId"
+        ],
+        "file": "tools/lcos-agent/mcp-server.mjs"
+      },
+      {
+        "name": "scan_lcos_obsidian_vault",
+        "domain": "resource",
+        "roles": [
+          "agent"
+        ],
+        "requiredParams": [],
+        "file": "tools/lcos-agent/mcp-server.mjs"
+      },
+      {
+        "name": "search_lcos_conversations",
+        "domain": "conversation",
+        "roles": [
+          "agent"
+        ],
+        "requiredParams": [
+          "projectId",
+          "query"
+        ],
+        "file": "tools/lcos-agent/mcp-server.mjs"
+      },
+      {
+        "name": "select_lcos_views",
+        "domain": "canvas",
+        "roles": [
+          "agent"
+        ],
+        "requiredParams": [
+          "projectId",
+          "viewIds"
+        ],
+        "file": "tools/lcos-agent/mcp-server.mjs"
+      },
+      {
+        "name": "start_lcos_run",
+        "domain": "executor",
+        "roles": [
+          "executor"
+        ],
+        "requiredParams": [
+          "runId",
+          "workerId"
+        ],
+        "file": "tools/lcos-agent/executor-tools.mjs"
+      },
+      {
+        "name": "submit_lcos_result",
+        "domain": "executor",
+        "roles": [
+          "executor"
+        ],
+        "requiredParams": [
+          "task_id",
+          "result"
+        ],
+        "file": "tools/lcos-agent/executor-tools.mjs"
+      },
+      {
+        "name": "validate_lcos_agent_plan",
+        "domain": "run",
+        "roles": [
+          "agent"
+        ],
+        "requiredParams": [
+          "projectId",
+          "plan"
+        ],
+        "file": "tools/lcos-agent/mcp-server.mjs"
+      },
+      {
+        "name": "watch_lcos_active_context",
+        "domain": "canvas",
+        "roles": [
+          "agent"
+        ],
+        "requiredParams": [
+          "projectId",
+          "afterVersion"
+        ],
+        "file": "tools/lcos-agent/mcp-server.mjs"
+      }
+    ]
+  },
+  "skills": {
+    "source": "packages/skills/*/SKILL.md",
+    "total": 17,
+    "declaredRequiredCapabilities": 0,
+    "items": [
+      {
+        "package": "lcos-active-path",
+        "name": "lcos-active-path",
+        "version": null,
+        "role": null,
+        "estimatedTokens": null,
+        "requiredCapabilities": [],
+        "requiredCapabilitiesDeclared": false,
+        "file": "packages/skills/lcos-active-path/SKILL.md"
+      },
+      {
+        "package": "lcos-browser-bridge",
+        "name": "lcos-browser-bridge",
+        "version": null,
+        "role": null,
+        "estimatedTokens": null,
+        "requiredCapabilities": [],
+        "requiredCapabilitiesDeclared": false,
+        "file": "packages/skills/lcos-browser-bridge/SKILL.md"
+      },
+      {
+        "package": "lcos-context-pack",
+        "name": "lcos-context-pack",
+        "version": null,
+        "role": null,
+        "estimatedTokens": null,
+        "requiredCapabilities": [],
+        "requiredCapabilitiesDeclared": false,
+        "file": "packages/skills/lcos-context-pack/SKILL.md"
+      },
+      {
+        "package": "lcos-evolution",
+        "name": "lcos-evolution",
+        "version": null,
+        "role": null,
+        "estimatedTokens": null,
+        "requiredCapabilities": [],
+        "requiredCapabilitiesDeclared": false,
+        "file": "packages/skills/lcos-evolution/SKILL.md"
+      },
+      {
+        "package": "lcos-executor-run",
+        "name": "lcos-executor-run",
+        "version": "1.0.0",
+        "role": "executor",
+        "estimatedTokens": 650,
+        "requiredCapabilities": [],
+        "requiredCapabilitiesDeclared": false,
+        "file": "packages/skills/lcos-executor-run/SKILL.md"
+      },
+      {
+        "package": "lcos-glaze-materials",
+        "name": "lcos-glaze-materials",
+        "version": null,
+        "role": null,
+        "estimatedTokens": null,
+        "requiredCapabilities": [],
+        "requiredCapabilitiesDeclared": false,
+        "file": "packages/skills/lcos-glaze-materials/SKILL.md"
+      },
+      {
+        "package": "lcos-project-context",
+        "name": "lcos-project-context",
+        "version": "1.2.0",
+        "role": "agent",
+        "estimatedTokens": 800,
+        "requiredCapabilities": [],
+        "requiredCapabilitiesDeclared": false,
+        "file": "packages/skills/lcos-project-context/SKILL.md"
+      },
+      {
+        "package": "lcos-project-curator",
+        "name": "lcos-project-curator",
+        "version": "2.1.0",
+        "role": "agent",
+        "estimatedTokens": 900,
+        "requiredCapabilities": [],
+        "requiredCapabilitiesDeclared": false,
+        "file": "packages/skills/lcos-project-curator/SKILL.md"
+      },
+      {
+        "package": "lcos-relationship-field",
+        "name": "lcos-relationship-field",
+        "version": null,
+        "role": null,
+        "estimatedTokens": null,
+        "requiredCapabilities": [],
+        "requiredCapabilitiesDeclared": false,
+        "file": "packages/skills/lcos-relationship-field/SKILL.md"
+      },
+      {
+        "package": "lcos-review-workflow",
+        "name": "lcos-review-workflow",
+        "version": null,
+        "role": null,
+        "estimatedTokens": null,
+        "requiredCapabilities": [],
+        "requiredCapabilitiesDeclared": false,
+        "file": "packages/skills/lcos-review-workflow/SKILL.md"
+      },
+      {
+        "package": "lcos-skill-author",
+        "name": "lcos-skill-author",
+        "version": "1.1.0",
+        "role": "agent",
+        "estimatedTokens": 1000,
+        "requiredCapabilities": [],
+        "requiredCapabilitiesDeclared": false,
+        "file": "packages/skills/lcos-skill-author/SKILL.md"
+      },
+      {
+        "package": "lcos-structure-map",
+        "name": "lcos-structure-map",
+        "version": null,
+        "role": null,
+        "estimatedTokens": null,
+        "requiredCapabilities": [],
+        "requiredCapabilitiesDeclared": false,
+        "file": "packages/skills/lcos-structure-map/SKILL.md"
+      },
+      {
+        "package": "lcos-workflow-step",
+        "name": "lcos-workflow-step",
+        "version": null,
+        "role": null,
+        "estimatedTokens": null,
+        "requiredCapabilities": [],
+        "requiredCapabilitiesDeclared": false,
+        "file": "packages/skills/lcos-workflow-step/SKILL.md"
+      },
+      {
+        "package": "lcos-workspace-steward",
+        "name": "lcos-workspace-steward",
+        "version": "0.1.0",
+        "role": "agent",
+        "estimatedTokens": 520,
+        "requiredCapabilities": [],
+        "requiredCapabilitiesDeclared": false,
+        "file": "packages/skills/lcos-workspace-steward/SKILL.md"
+      },
+      {
+        "package": "local-creative-os-backend-flow",
+        "name": "local-creative-os-backend-flow",
+        "version": "2.0.0",
+        "role": "dev-backend",
+        "estimatedTokens": 1050,
+        "requiredCapabilities": [],
+        "requiredCapabilitiesDeclared": false,
+        "file": "packages/skills/local-creative-os-backend-flow/SKILL.md"
+      },
+      {
+        "package": "local-creative-os-frontend-loop",
+        "name": "local-creative-os-frontend-loop",
+        "version": "2.0.0",
+        "role": "dev-frontend",
+        "estimatedTokens": 980,
+        "requiredCapabilities": [],
+        "requiredCapabilitiesDeclared": false,
+        "file": "packages/skills/local-creative-os-frontend-loop/SKILL.md"
+      },
+      {
+        "package": "workbuddy-orchestrator",
+        "name": "workbuddy-orchestrator",
+        "version": "2.0.0",
+        "role": "orchestrator",
+        "estimatedTokens": 920,
+        "requiredCapabilities": [],
+        "requiredCapabilitiesDeclared": false,
+        "file": "packages/skills/workbuddy-orchestrator/SKILL.md"
+      }
+    ]
+  },
+  "runtime": {
+    "source": {
+      "statusChecks": "apps/local-core/src/metadata-repository.ts",
+      "sessionPhases": "packages/contracts/src/session-lifecycle.ts",
+      "providerAvailability": "packages/contracts/src/index.ts",
+      "providerStatus": "apps/local-core/src/runtime-adapter.ts",
+      "controlOperations": "census-routes（run/task 域路径）+ census-mcp（工具名）"
+    },
+    "runStates": [
+      "created",
+      "queued",
+      "running",
+      "waiting_input",
+      "completed",
+      "failed",
+      "cancelled"
+    ],
+    "tableStatusTaxonomy": {
+      "result_slots": [
+        "empty",
+        "running",
+        "review",
+        "materialized"
+      ],
+      "resource_descriptors": [
+        "pending",
+        "ready",
+        "partial",
+        "failed"
+      ],
+      "resource_analysis_jobs": [
+        "pending",
+        "running",
+        "retryable",
+        "failed",
+        "completed"
+      ],
+      "runs": [
+        "created",
+        "queued",
+        "running",
+        "waiting_input",
+        "completed",
+        "failed",
+        "cancelled"
+      ],
+      "runtime_dispatches": [
+        "planned",
+        "dispatching",
+        "bound",
+        "failed",
+        "recovery_required"
+      ],
+      "artifact_returns": [
+        "pending_review",
+        "adopted",
+        "rejected"
+      ],
+      "context_proposals": [
+        "pending",
+        "accepted",
+        "rejected",
+        "stale"
+      ],
+      "provider_session_bindings": [
+        "active",
+        "stale",
+        "closed"
+      ],
+      "run_input_requests": [
+        "pending",
+        "answered",
+        "cancelled"
+      ],
+      "conversation_import_sessions": [
+        "receiving",
+        "parsing",
+        "ready",
+        "failed"
+      ],
+      "conversation_sessions": [
+        "receiving",
+        "parsing",
+        "ready",
+        "failed"
+      ],
+      "conversation_section_annotations": [
+        "none",
+        "ready",
+        "failed"
+      ],
+      "conversation_embedding_jobs": [
+        "pending",
+        "running",
+        "ready",
+        "partial",
+        "failed"
+      ]
+    },
+    "sessionPhases": [
+      "dormant",
+      "connecting",
+      "online",
+      "busy",
+      "waiting_input",
+      "disconnected",
+      "stale"
+    ],
+    "providerAvailability": [
+      "ready",
+      "busy",
+      "offline",
+      "manual"
+    ],
+    "providerStatus": [
+      "review",
+      "waiting_input",
+      "failed",
+      "cancelled",
+      "timeout"
+    ],
+    "runtimeActionRoutes": [
+      {
+        "method": "POST",
+        "path": "/runs/:id/{dispatch|recover|sync}",
+        "file": "apps/local-core/src/routes/runs.ts"
+      }
+    ],
+    "controlOperations": [
+      {
+        "operation": "pause",
+        "supported": false,
+        "anchors": []
+      },
+      {
+        "operation": "resume",
+        "supported": false,
+        "anchors": []
+      },
+      {
+        "operation": "cancel",
+        "supported": true,
+        "anchors": [
+          {
+            "kind": "route",
+            "evidence": "POST /runs/:id/cancel",
+            "file": "apps/local-core/src/routes/runs.ts"
+          },
+          {
+            "kind": "mcp-tool",
+            "evidence": "cancel_lcos_run"
+          }
+        ]
+      },
+      {
+        "operation": "retry",
+        "supported": true,
+        "anchors": [
+          {
+            "kind": "mcp-tool",
+            "evidence": "retry_lcos_return"
+          }
+        ]
+      },
+      {
+        "operation": "answer_input",
+        "supported": true,
+        "anchors": [
+          {
+            "kind": "route",
+            "evidence": "GET /runs/:id/input-request",
+            "file": "apps/local-core/src/routes/runs.ts"
+          },
+          {
+            "kind": "route",
+            "evidence": "POST /runs/:id/input-request",
+            "file": "apps/local-core/src/routes/runs.ts"
+          },
+          {
+            "kind": "mcp-tool",
+            "evidence": "answer_lcos_run_input"
+          },
+          {
+            "kind": "mcp-tool",
+            "evidence": "request_lcos_user_input"
+          }
+        ]
+      }
+    ]
+  },
+  "search": {
+    "source": {
+      "entityTypes": "packages/contracts/src/search.ts",
+      "analyzers": "apps/local-core/src/resources/analyzers/*-analyzer.ts",
+      "tables": "apps/local-core/src/**/*.ts (CREATE VIRTUAL TABLE scan)",
+      "embeddingProvider": "apps/local-core/src/semantic-index-service.ts",
+      "fileFormats": "apps/local-core/src/file-format-registry.ts",
+      "ocr": "apps/local-core/src/ocr-service.ts"
+    },
+    "entityTypes": [
+      "artifact",
+      "note",
+      "conversation",
+      "resource",
+      "file"
+    ],
+    "lexicalIndex": {
+      "engine": "fts5",
+      "tables": [
+        {
+          "table": "search_documents_fts",
+          "file": "apps/local-core/src/metadata-repository.ts"
+        },
+        {
+          "table": "conversation_messages_fts",
+          "file": "apps/local-core/src/metadata-repository.ts"
+        }
+      ]
+    },
+    "vectorIndex": {
+      "engine": "vec0 (sqlite-vec)",
+      "stores": [
+        {
+          "table": "${table}",
+          "file": "apps/local-core/src/conversation-import-service.ts"
+        },
+        {
+          "table": "${table}",
+          "file": "apps/local-core/src/metadata-repository.ts"
+        },
+        {
+          "table": "${table}",
+          "file": "apps/local-core/src/metadata-repository.ts"
+        }
+      ]
+    },
+    "embeddingProvider": {
+      "providerEvidence": {
+        "envVarModel": "LCOS_OLLAMA_EMBED_MODEL",
+        "defaultModel": "nomic-embed-text",
+        "envVarUrl": "LCOS_OLLAMA_URL",
+        "defaultUrl": "http://127.0.0.1:11434"
+      },
+      "note": "embedding 绑定单一本地 provider（Ollama 默认配置）；S9 Provider 化缺口由该事实登记"
+    },
+    "analyzers": [
+      {
+        "file": "apps/local-core/src/resources/analyzers/fallback-analyzer.ts",
+        "id": "fallback",
+        "version": "fallback-v0"
+      },
+      {
+        "file": "apps/local-core/src/resources/analyzers/json-analyzer.ts",
+        "id": "json",
+        "version": "json-v0"
+      },
+      {
+        "file": "apps/local-core/src/resources/analyzers/link-analyzer.ts",
+        "id": "link",
+        "version": "link-v0"
+      },
+      {
+        "file": "apps/local-core/src/resources/analyzers/markdown-analyzer.ts",
+        "id": "markdown",
+        "version": "markdown-v0"
+      },
+      {
+        "file": "apps/local-core/src/resources/analyzers/skill-package-analyzer.ts",
+        "id": "skill-package",
+        "version": "skill-package-v0"
+      },
+      {
+        "file": "apps/local-core/src/resources/analyzers/text-analyzer.ts",
+        "id": "text",
+        "version": "text-v0"
+      },
+      {
+        "file": "apps/local-core/src/resources/analyzers/yaml-analyzer.ts",
+        "id": "yaml",
+        "version": "yaml-v0"
+      }
+    ],
+    "fileFormats": {
+      "knownExtensions": [
+        ".md",
+        ".txt",
+        ".csv",
+        ".json",
+        ".yaml",
+        ".yml",
+        ".xml",
+        ".html",
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".webp",
+        ".gif",
+        ".bmp",
+        ".tif",
+        ".tiff",
+        ".svg",
+        ".pdf",
+        ".doc",
+        ".docx",
+        ".ppt",
+        ".pptx",
+        ".xls",
+        ".xlsx",
+        ".zip",
+        ".mp3",
+        ".wav",
+        ".m4a",
+        ".mp4",
+        ".mov",
+        ".webm",
+        ".psd",
+        ".ai"
+      ],
+      "artifactKindBranchExtensions": [
+        ".pdf",
+        ".ppt",
+        ".pptx"
+      ],
+      "registry": "apps/local-core/src/file-format-registry.ts"
+    },
+    "ocr": {
+      "present": true,
+      "referencedBy": [
+        "apps/local-core/src/routes/runtime.ts",
+        "apps/local-core/src/server.ts"
+      ]
+    }
+  },
+  "desktop": {
+    "source": {
+      "main": "apps/desktop/src/main.mjs",
+      "preload": "apps/desktop/src/preload.mjs",
+      "runtimeSupervisor": "apps/desktop/src/runtime-supervisor.mjs"
+    },
+    "windows": {
+      "browserWindowCreationSites": [
+        {
+          "creationSite": "createSplashWindow"
+        },
+        {
+          "creationSite": "createMainWindow"
+        },
+        {
+          "creationSite": "createCaptureWindow"
+        }
+      ],
+      "trayPresent": true
+    },
+    "ipc": {
+      "mainHandleChannels": [
+        "desktop:boot-open-logs",
+        "desktop:boot-quit",
+        "desktop:capture-drop",
+        "desktop:get-app-info",
+        "desktop:get-runtime-status",
+        "desktop:hide-capture-float",
+        "desktop:install-codex-integration",
+        "desktop:open-capture-space",
+        "desktop:restart-runtime",
+        "desktop:select-directory",
+        "desktop:show-capture-float",
+        "desktop:show-item-in-folder"
+      ],
+      "preloadInvokeChannels": [
+        "desktop:boot-open-logs",
+        "desktop:boot-quit",
+        "desktop:capture-drop",
+        "desktop:get-app-info",
+        "desktop:get-runtime-status",
+        "desktop:hide-capture-float",
+        "desktop:install-codex-integration",
+        "desktop:open-capture-space",
+        "desktop:restart-runtime",
+        "desktop:select-directory",
+        "desktop:show-capture-float",
+        "desktop:show-item-in-folder"
+      ],
+      "mainPushEvents": [
+        "desktop:boot-status",
+        "desktop:capture-error",
+        "desktop:capture-received",
+        "desktop:open-capture-space",
+        "desktop:runtime-status"
+      ]
+    },
+    "runtimeSupervisor": {
+      "present": true
+    },
+    "companionRuntimeProjection": {
+      "contractFiles": [],
+      "note": "desktop 无独立 Runtime Projection 契约文件——S4 Companion Runtime Projection 缺口如实登记"
+    }
+  }
+}
