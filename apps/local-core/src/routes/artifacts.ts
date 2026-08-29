@@ -2,6 +2,7 @@ import type { ProjectId } from '@local-creative-os/domain'
 import { isAbsolute } from 'node:path'
 import { existsSync } from 'node:fs'
 import { openRegisteredPath, revealRegisteredFile, resolveShortcutTarget } from '../os-integration.js'
+import { ExecutionItemService } from '../execution-item-service.js'
 import { ProcessProjectionService } from '../process-projection-service.js'
 import { RuntimeRevisionCompareService } from '../runtime-revision-compare-service.js'
 import { routeRequireMetadata, type RouteHttpContext, type RouteHttpHelpers } from './route-context.js'
@@ -169,6 +170,18 @@ export async function handleArtifactsRoute(ctx: ArtifactsRouteContext): Promise<
     sendJson(response, 200, {
       ok: true,
       value: new ProcessProjectionService(db).project(projectId),
+    })
+    return true
+  }
+
+  // S1: ExecutionItemV1 统一执行读模型（availableActions 由 capability × state 推导，单一来源 Core）
+  const executionItemsMatch = /^\/projects\/([^/]+)\/execution-items$/.exec(pathname)
+  if (method === 'GET' && executionItemsMatch !== null) {
+    const db = routeRequireMetadata(ctx); if (db === undefined) return true
+    const projectId = decodeURIComponent(executionItemsMatch[1] ?? '') as ProjectId
+    sendJson(response, 200, {
+      ok: true,
+      value: new ExecutionItemService(db).project(projectId),
     })
     return true
   }

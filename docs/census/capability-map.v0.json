@@ -41,16 +41,16 @@
       "apps/local-core/src/routes/workspace-states.ts",
       "apps/local-core/src/server.ts"
     ],
-    "total": 196,
+    "total": 197,
     "byMethod": {
-      "GET": 90,
+      "GET": 91,
       "POST": 90,
       "PUT": 9,
       "PATCH": 1,
       "DELETE": 6
     },
     "byMutationClass": {
-      "read": 90,
+      "read": 91,
       "mutation": 96,
       "mutation-proposal": 4,
       "delete": 6
@@ -86,7 +86,7 @@
         "pathPattern": "^\\/projects\\/([^/]+)\\/artifacts\\/search$",
         "mutationClass": "read",
         "file": "apps/local-core/src/routes/artifacts.ts",
-        "line": 90
+        "line": 91
       },
       {
         "method": "GET",
@@ -94,7 +94,7 @@
         "pathPattern": "^\\/artifacts\\/([^/]+)$",
         "mutationClass": "read",
         "file": "apps/local-core/src/routes/artifacts.ts",
-        "line": 102
+        "line": 103
       },
       {
         "method": "GET",
@@ -102,7 +102,7 @@
         "pathPattern": "^\\/artifacts\\/([^/]+)\\/revisions$",
         "mutationClass": "read",
         "file": "apps/local-core/src/routes/artifacts.ts",
-        "line": 138
+        "line": 139
       },
       {
         "method": "GET",
@@ -110,7 +110,7 @@
         "pathPattern": "^\\/projects\\/([^/]+)\\/revisions\\/compare$",
         "mutationClass": "read",
         "file": "apps/local-core/src/routes/artifacts.ts",
-        "line": 146
+        "line": 147
       },
       {
         "method": "GET",
@@ -118,7 +118,15 @@
         "pathPattern": "^\\/projects\\/([^/]+)\\/process-projection$",
         "mutationClass": "read",
         "file": "apps/local-core/src/routes/artifacts.ts",
-        "line": 166
+        "line": 167
+      },
+      {
+        "method": "GET",
+        "path": "/projects/:id/execution-items",
+        "pathPattern": "^\\/projects\\/([^/]+)\\/execution-items$",
+        "mutationClass": "read",
+        "file": "apps/local-core/src/routes/artifacts.ts",
+        "line": 179
       },
       {
         "method": "POST",

@@ -81,6 +81,8 @@ export type { SpatialMarkerIntentV0, SpatialMarkerTargetRefV0, SpatialMarkerScop
 export { SESSION_PHASE_TRANSITIONS, RUN_STATUS_TO_SESSION_PHASE, isSessionTransitionAllowed, markSessionStale, markSessionFresh } from './session-lifecycle.js'
 export type { MutationRisk, PermissionScope, GateActorRole, OperationScope, ExecutionGateInput, GateDecision } from './execution-gate.js'
 export { evaluateExecutionGate, OPERATION_RISK, riskOfOperation } from './execution-gate.js'
+export type { ExecutionItemState, ExecutionItemAction, ExecutionItemTargetRef, ExecutionItemV1, ExecutionItemCapabilities } from './execution-item.js'
+export { EXECUTION_ITEM_ACTION_STATES, deriveAvailableActions, executionItemNeedsAttention } from './execution-item.js'
 export { AGENTLET_SCHEMA_V1 } from './agentlet.js'
 export type { AgentletSummaryV1, AgentletRunV1, AgentletRunStatusV1 } from './agentlet.js'
 export type { SurfaceSelectionV0 } from './selection.js'

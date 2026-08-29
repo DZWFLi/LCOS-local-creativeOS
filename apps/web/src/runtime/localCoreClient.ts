@@ -60,6 +60,7 @@ import type {
   ProjectEventReconnectV1,
   ProjectEventSnapshotV1,
   ProcessProjectionV1Item,
+  ExecutionItemV1,
   PreviewRecord,
   PrepareRevisionRequestV1,
   PreparedRevisionWorkflowV1,
@@ -587,6 +588,8 @@ export interface LocalCoreClient {
   relinkArtifactSource(artifactId: string, path: string, signal?: AbortSignal): Promise<RuntimeCall<{ readonly relinked: boolean; readonly path: string }>>
   resolveArtifactShortcut(artifactId: string, signal?: AbortSignal): Promise<RuntimeCall<{ readonly shortcutPath: string; readonly resolvedTarget: string | null; readonly targetKind: string; readonly targetExists: boolean }>>
   processProjection(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<readonly ProcessProjectionV1Item[]>>
+  /** S1: ExecutionItemV1 统一执行读模型（availableActions 由 Core 推导，前端不拼状态） */
+  executionItems(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<readonly ExecutionItemV1[]>>
   saveWorkspaceState(workspaceId: string, name: string, signal?: AbortSignal): Promise<RuntimeCall<unknown>>
   listWorkspaceStates(workspaceId: string, signal?: AbortSignal): Promise<RuntimeCall<readonly unknown[]>>
   restoreWorkspaceState(workspaceId: string, stateId: string, signal?: AbortSignal): Promise<RuntimeCall<unknown>>
@@ -2152,6 +2155,12 @@ export function createLocalCoreClient(): LocalCoreClient {
       return request(`/projects/${encodeURIComponent(projectId)}/process-projection`, {
         signal,
         decode: decodeResult<readonly ProcessProjectionV1Item[]>,
+      })
+    },
+    executionItems(projectId, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/execution-items`, {
+        signal,
+        decode: decodeResult<readonly ExecutionItemV1[]>,
       })
     },
     saveWorkspaceState(workspaceId, name, signal) {
