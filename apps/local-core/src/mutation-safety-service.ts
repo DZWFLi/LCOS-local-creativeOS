@@ -748,7 +748,7 @@ export class MutationSafetyService {
     readonly projectId: string
     readonly targetRef: SpatialMarkerIntentV0['targetRef']
     readonly scope: SpatialMarkerIntentV0['scope']
-    readonly sourceSurfaceRef?: string
+    readonly sourceSurfaceRef?: SpatialMarkerIntentV0['sourceSurfaceRef']
     readonly operationId?: string
     readonly actorKind?: MutationChangeSetV1['actorKind']
     readonly origin?: ProjectEventOrigin

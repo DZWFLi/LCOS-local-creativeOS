@@ -1,7 +1,7 @@
 import { GripVertical, LoaderCircle } from 'lucide-react'
 import { motion } from 'motion/react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { DragEvent as ReactDragEvent, RefObject } from 'react'
+import type { DragEvent as ReactDragEvent, ReactNode, RefObject } from 'react'
 import { Document, Page, pdfjs } from 'react-pdf'
 import 'react-pdf/dist/Page/AnnotationLayer.css'
 import 'react-pdf/dist/Page/TextLayer.css'
@@ -26,15 +26,18 @@ export interface PdfViewerProps {
   fileName?: string
   /** LCOS 材料溯源工厂：提供后启用「拖一页到画布 / 选中文字放入」能力。 */
   materialSource?: (locator?: MaterialSourceV1['locator']) => MaterialSourceV1
+  /** Reload-safe logical source anchor opens the referenced PDF page directly. */
+  initialPage?: number
+  errorFallback?: (message: string) => ReactNode
 }
 
 /**
  * 真渲染的 PDF 查看器（react-pdf v10 封装）。
  * 三态纪律：加载中「正在渲染 PDF…」/ 错误「无法渲染此文件」+错误详情 / 成功才渲染页面。
  */
-export function PdfViewer({ url, fileName, materialSource }: PdfViewerProps) {
+export function PdfViewer({ url, fileName, materialSource, initialPage, errorFallback }: PdfViewerProps) {
   const [numPages, setNumPages] = useState(0)
-  const [pageNumber, setPageNumber] = useState(1)
+  const [pageNumber, setPageNumber] = useState(() => Math.max(1, initialPage ?? 1))
   const [stageWidth, setStageWidth] = useState(0)
   const [pageScale, setPageScale] = useState(1)
   const [pdfError, setPdfError] = useState('')
@@ -44,6 +47,10 @@ export function PdfViewer({ url, fileName, materialSource }: PdfViewerProps) {
   const file = useMemo(() => (typeof url === 'string' ? url : { data: url }), [url])
   // 宽度自适应：页面宽度 = 容器宽 - 32（缩放系数另乘），并夹在可读范围内。
   const pageWidth = stageWidth > 0 ? Math.max(320, Math.min(1600, (stageWidth - 32) * pageScale)) : 720
+
+  useEffect(() => {
+    if (initialPage !== undefined) setPageNumber(Math.max(1, initialPage))
+  }, [initialPage])
 
   useEffect(() => {
     const stage = stageRef.current
@@ -80,9 +87,11 @@ export function PdfViewer({ url, fileName, materialSource }: PdfViewerProps) {
     event.currentTarget.dataset.dragging = 'true'
   }, [materialSource])
 
+  const selectionMaterialSource = useCallback((_selection: Selection) => materialSource?.({ kind: 'page', pageNumber, label: `第 ${pageNumber} 页选区` }) as MaterialSourceV1, [materialSource, pageNumber])
+
   // 三态之一：错误态显式渲染，不吞错误详情。
   if (pdfError) {
-    return <div className="viewer-body viewer-error"><strong>无法渲染此文件</strong><span>{pdfError}</span></div>
+    return errorFallback?.(pdfError) ?? <div className="viewer-body viewer-error"><strong>无法渲染此文件</strong><span>{pdfError}</span></div>
   }
 
   return <div className="viewer-body lcos-pdf-material-viewer" data-file-name={fileName}>
@@ -129,7 +138,7 @@ export function PdfViewer({ url, fileName, materialSource }: PdfViewerProps) {
           {/* 三态之三：Document onLoadSuccess 后 numPages>0 才走到这里（成功态）。 */}
           <Page pageNumber={pageNumber} width={pageWidth} renderTextLayer renderAnnotationLayer />
         </motion.div>
-        {materialSource && <SelectionDropHandle containerRef={stageRef} source={() => materialSource({ kind: 'page', pageNumber, label: `第 ${pageNumber} 页选区` })} />}
+        {materialSource && <SelectionDropHandle containerRef={stageRef} source={selectionMaterialSource} />}
       </main>
     </Document>
   </div>
@@ -138,9 +147,9 @@ export function PdfViewer({ url, fileName, materialSource }: PdfViewerProps) {
 /** 文本选区 → 材料浮钮：选中即出现，点击放入 LCOS，拖拽可放置到画布。 */
 export function SelectionDropHandle({ containerRef, source }: {
   containerRef: RefObject<HTMLElement | null>
-  source: () => MaterialSourceV1
+  source: (selection: Selection) => MaterialSourceV1
 }) {
-  const [selection, setSelection] = useState<{ text: string; left: number; top: number } | null>(null)
+  const [selection, setSelection] = useState<{ text: string; left: number; top: number; source: MaterialSourceV1 } | null>(null)
 
   useEffect(() => {
     const update = () => {
@@ -167,6 +176,7 @@ export function SelectionDropHandle({ containerRef, source }: {
         text,
         left: Math.min(window.innerWidth - 42, Math.max(8, rect.right + 7)),
         top: Math.min(window.innerHeight - 42, Math.max(8, rect.bottom + 6)),
+        source: source(current),
       })
     }
     document.addEventListener('selectionchange', update)
@@ -175,14 +185,14 @@ export function SelectionDropHandle({ containerRef, source }: {
       document.removeEventListener('selectionchange', update)
       window.removeEventListener('resize', update)
     }
-  }, [containerRef])
+  }, [containerRef, source])
 
   if (!selection) return null
   const payload = (): MaterialTransferPayloadV1 => ({
     schemaVersion: 1,
     kind: 'material-transfer',
     capturedAt: new Date().toISOString(),
-    source: source(),
+    source: selection.source,
     content: { kind: 'text', text: selection.text },
   })
 

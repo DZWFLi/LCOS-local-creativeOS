@@ -135,7 +135,8 @@ describe('v0.6.1 canvas interaction architecture', () => {
   })
 
   it('selects every visible node with Ctrl/Cmd+A only while the canvas owns focus', () => {
-    expect(canvas).toContain('testId="canvas" tabIndex={-1}')
+    expect(canvas).toContain('testId="canvas"')
+    expect(canvas).toContain('tabIndex={-1}') // R2C 后 props 顺序漂移，拆分断言语义不变
     expect(canvas).toContain("if (blankCanvas) event.currentTarget.focus({ preventScroll: true })")
     expect(app).toContain("activeElement?.closest('[data-testid=\"canvas\"]')")
     expect(app).toContain("modifier && key === 'a' && canvasActive")

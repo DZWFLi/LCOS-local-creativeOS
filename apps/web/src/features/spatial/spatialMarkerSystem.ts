@@ -1,70 +1,40 @@
 import type { Camera } from '../../model'
+import type {
+  NavigationResolutionV0,
+  NavigationSurfaceKindV0,
+  SpatialMarkerIntentV0,
+  SpatialMarkerScopeV0,
+  SpatialMarkerTargetRefV0,
+} from '@local-creative-os/contracts'
 import { SPATIAL_LABEL_PRIORITY } from './SpatialLabelSystem'
 import { EDGE_PIN_EDGE_INSET, edgePinEdgeForPlacement, edgePinForWorldBounds, type EdgePinEdge } from './edgePinGeometry'
 import type { SpatialBounds, SpatialSize } from './spatialTypes'
 
 /**
  * Spatial Marker is the single navigation intent presented as a world pin,
- * offscreen edge cursor, or density cluster. Pin/cursor/cluster are projections,
- * never separate persisted truths.
+ * offscreen edge cursor, or density cluster. Durable intent types come directly
+ * from Core contracts; pin/cursor/cluster remain Presentation-only projections.
  */
-export type SpatialMarkerScope = 'local' | 'cross-surface'
-export type SpatialMarkerSurfaceKind = 'main' | 'context' | 'workflow' | 'scene' | 'conversation' | 'assembly' | 'collection'
+export type SpatialMarkerScope = SpatialMarkerScopeV0
+export type SpatialMarkerSurfaceKind = NavigationSurfaceKindV0
 export type SpatialMarkerMorphology = 'main' | 'context' | 'workflow' | 'neutral'
 export type SpatialMarkerAttention = 'normal' | 'selected' | 'focus' | 'search' | 'beacon'
 export type SpatialMarkerProjectionKind = 'world-pin' | 'edge-cursor'
 
-export interface SpatialMarkerTargetRefV0 {
-  readonly projectId: string
-  readonly kind: 'view' | 'entity' | 'surface'
-  readonly id: string
-}
-
-/**
- * Frontend seam for the future Core contract.
- * IMPORTANT: until Core exposes marker persistence, do not persist this shape in
- * localStorage/prototype state and do not treat it as canonical Project Truth.
- */
-export interface SpatialMarkerIntentV0 {
-  readonly id: string
-  readonly projectId: string
-  readonly targetRef: SpatialMarkerTargetRefV0
-  readonly scope: SpatialMarkerScope
-  readonly sourceSurfaceRef?: string
-}
-
-export interface ResolvedSpatialNavigationTargetV0 {
-  readonly projectId: string
-  readonly surfaceRef: string
-  readonly surfaceKind: SpatialMarkerSurfaceKind
-  readonly projectionRef?: string
-  readonly anchorRef?: string
-  readonly worldPoint?: Readonly<{ x: number; y: number }>
-  readonly path?: readonly string[]
-}
-
 export interface SpatialNavigationTargetResolverV0 {
-  readonly resolve: (targetRef: SpatialMarkerTargetRefV0) => Promise<ResolvedSpatialNavigationTargetV0 | null>
+  readonly resolve: (targetRef: SpatialMarkerTargetRefV0) => Promise<NavigationResolutionV0>
 }
-
-export type SpatialMarkerNavigationResolution =
-  | { readonly status: 'resolved'; readonly target: ResolvedSpatialNavigationTargetV0 }
-  | { readonly status: 'unresolved' }
-  | { readonly status: 'blocked'; readonly reason: 'cross-project' }
 
 /** No fuzzy title/provider/time rebinding. A missing target stays unresolved. */
 export async function resolveSpatialMarkerNavigation(
   intent: SpatialMarkerIntentV0,
   currentProjectId: string,
   resolver: SpatialNavigationTargetResolverV0,
-): Promise<SpatialMarkerNavigationResolution> {
+): Promise<NavigationResolutionV0> {
   if (intent.projectId !== currentProjectId || intent.targetRef.projectId !== currentProjectId) {
-    return { status: 'blocked', reason: 'cross-project' }
+    return { status: 'unresolved', reason: 'cross-project' }
   }
-  const target = await resolver.resolve(intent.targetRef)
-  if (!target) return { status: 'unresolved' }
-  if (target.projectId !== currentProjectId) return { status: 'blocked', reason: 'cross-project' }
-  return { status: 'resolved', target }
+  return resolver.resolve(intent.targetRef)
 }
 
 export interface SpatialMarkerItem {

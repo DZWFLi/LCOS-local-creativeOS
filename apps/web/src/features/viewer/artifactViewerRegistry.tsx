@@ -1,6 +1,6 @@
 import { parse as parsePptx } from '@pagus-kit/core'
 import { renderSlide } from '@pagus-kit/renderer'
-import { ExternalLink, FileText, Link2, LoaderCircle, Music, Video } from 'lucide-react'
+import { ExternalLink, FileText, FolderOpen, Link2, LoaderCircle, Music, Video } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'motion/react'
 import type { DragEvent as ReactDragEvent, ReactNode } from 'react'
@@ -10,7 +10,7 @@ import { LOCAL_CORE_API_PREFIX } from '../../runtime/localCoreClient'
 import { decodeTextBuffer } from '../shell/appShell'
 import { OcrImage } from '../ocr/OcrImage'
 import { LCOS_FRAGMENT_CLIPBOARD_MIME, serializeFragmentClipboard, type LcosFragmentClipboardV0 } from '../../state/fragmentClipboard'
-import { LCOS_MATERIAL_TRANSFER_MIME, serializeMaterialTransfer, writeMaterialTransfer, type MaterialSourceV1, type MaterialTransferPayloadV1 } from '../../state/materialTransfer'
+import { LCOS_MATERIAL_TRANSFER_MIME, parseMaterialSourceAnchor, serializeMaterialTransfer, writeMaterialTransfer, type MaterialSourceV1, type MaterialTransferPayloadV1 } from '../../state/materialTransfer'
 import { PdfViewer, SelectionDropHandle } from './PdfViewer'
 
 /**
@@ -69,21 +69,41 @@ export function canPreviewArtifact(node: CanvasNode): boolean {
   return resolveArtifactViewerKind(node) !== 'fallback'
 }
 
-export function ArtifactViewerHost({ node, projectId }: { node: CanvasNode; projectId: string }) {
+export interface ArtifactViewerSourceActions {
+  readonly onOpenSource?: (node: CanvasNode) => void
+  readonly onRevealSource?: (node: CanvasNode) => void
+  readonly onRelinkSource?: (node: CanvasNode, path: string) => void
+}
+
+export function ArtifactViewerHost({ node, projectId, sourceAnchor, sourceRevisionId, sourceActions }: { node: CanvasNode; projectId: string; sourceAnchor?: string; sourceRevisionId?: string; sourceActions?: ArtifactViewerSourceActions }) {
   const kind = resolveArtifactViewerKind(node)
   switch (kind) {
-    case 'image': return <ImageViewer node={node} projectId={projectId} />
-    case 'text': return <TextViewer node={node} projectId={projectId} />
+    case 'image': return <ImageViewer node={node} projectId={projectId} sourceActions={sourceActions} />
+    case 'text': return <TextViewer node={node} projectId={projectId} sourceAnchor={sourceAnchor} sourceRevisionId={sourceRevisionId} sourceActions={sourceActions} />
     case 'pdf':
-    case 'presentation': return <DocumentViewer node={node} projectId={projectId} />
-    case 'audio': return <MediaViewer node={node} projectId={projectId} media="audio" />
-    case 'video': return <MediaViewer node={node} projectId={projectId} media="video" />
+    case 'presentation': return <DocumentViewer node={node} projectId={projectId} sourceAnchor={sourceAnchor} sourceRevisionId={sourceRevisionId} sourceActions={sourceActions} />
+    case 'audio': return <MediaViewer node={node} projectId={projectId} media="audio" sourceActions={sourceActions} />
+    case 'video': return <MediaViewer node={node} projectId={projectId} media="video" sourceActions={sourceActions} />
     case 'link': return <LinkViewer node={node} />
-    default: return <FallbackViewer node={node} />
+    default: return <FallbackViewer node={node} sourceActions={sourceActions} />
   }
 }
 
-function ImageViewer({ node, projectId }: { node: CanvasNode; projectId: string }) {
+function ViewerRecoveryActions({ node, sourceActions }: { node: CanvasNode; sourceActions?: ArtifactViewerSourceActions }) {
+  const [path, setPath] = useState('')
+  if (!node.artifactId || !sourceActions) return null
+  return <div className="lcos-viewer-recovery-actions">
+    {sourceActions.onOpenSource && <button type="button" onClick={() => sourceActions.onOpenSource?.(node)}><ExternalLink size={13}/>用系统应用打开</button>}
+    {sourceActions.onRevealSource && <button type="button" onClick={() => sourceActions.onRevealSource?.(node)}><FolderOpen size={13}/>在文件夹中显示</button>}
+    {sourceActions.onRelinkSource && <label><span>重新找到文件</span><input value={path} placeholder="新的文件路径" onChange={(event) => setPath(event.target.value)}/><button type="button" disabled={!path.trim()} onClick={() => sourceActions.onRelinkSource?.(node, path.trim())}>重新链接</button></label>}
+  </div>
+}
+
+function ViewerFailure({ node, message, sourceActions }: { node: CanvasNode; message: string; sourceActions?: ArtifactViewerSourceActions }) {
+  return <div className="viewer-body viewer-error"><strong>无法预览</strong><span>{message}</span><ViewerRecoveryActions node={node} sourceActions={sourceActions}/></div>
+}
+
+function ImageViewer({ node, projectId, sourceActions }: { node: CanvasNode; projectId: string; sourceActions?: ArtifactViewerSourceActions }) {
   const [url, setUrl] = useState<string | null>(node.previewDataUrl ?? null)
   const [error, setError] = useState('')
 
@@ -119,7 +139,7 @@ function ImageViewer({ node, projectId }: { node: CanvasNode; projectId: string 
     return () => { controller.abort(); if (objectUrl !== undefined) URL.revokeObjectURL(objectUrl) }
   }, [node.fileRecordId, node.previewDataUrl, projectId])
 
-  if (error) return <div className="viewer-body viewer-error"><strong>无法预览</strong><span>{error}</span></div>
+  if (error) return <ViewerFailure node={node} message={error} sourceActions={sourceActions}/>
   if (url === null) return <div className="viewer-body viewer-loading"><LoaderCircle size={20} />正在载入图片…</div>
   return <div className="viewer-body image-viewer"><ImageZoomStage artifactId={node.artifactId} src={url} alt={node.title} /></div>
 }
@@ -249,42 +269,62 @@ function ImageZoomStage({ artifactId, src, alt }: { artifactId?: string | null; 
   )
 }
 
-function materialSourceForNode(node: CanvasNode, projectId: string, locator?: MaterialSourceV1['locator']): MaterialSourceV1 {
+function materialSourceForNode(node: CanvasNode, projectId: string, locator?: MaterialSourceV1['locator'], revisionId: string | undefined = node.revisionId): MaterialSourceV1 {
   return {
     projectId,
     viewId: node.id,
     title: node.title,
     ...(node.artifactId ? { artifactId: node.artifactId } : {}),
-    ...(node.revisionId ? { revisionId: node.revisionId } : {}),
+    ...(revisionId ? { revisionId } : {}),
     ...(node.fileRecordId ? { fileRecordId: node.fileRecordId } : {}),
     ...(node.sourceKind ? { sourceKind: node.sourceKind } : {}),
     ...(locator ? { locator } : {}),
   }
 }
 
-function TextViewer({ node, projectId }: { node: CanvasNode; projectId: string }) {
-  const [text, setText] = useState<string | null>(node.previewText && node.previewText.trim().length > 0 ? node.previewText : null)
+function textSelectionLocator(selection: Selection, headings: readonly { readonly index: number; readonly label: string }[]): MaterialSourceV1['locator'] {
+  const lineForNode = (value: Node | null): number | null => {
+    if (!value) return null
+    const element = value.nodeType === Node.ELEMENT_NODE ? value as Element : value.parentElement
+    const row = element?.closest<HTMLElement>('[data-line]')
+    const parsed = row?.dataset.line === undefined ? Number.NaN : Number(row.dataset.line)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  const start = lineForNode(selection.anchorNode)
+  const end = lineForNode(selection.focusNode)
+  if (start === null || end === null) return { kind: 'selection' }
+  const lineStart = Math.min(start, end)
+  const lineEnd = Math.max(start, end)
+  const nearestHeading = [...headings].reverse().find((heading) => heading.index <= lineStart)?.label
+  return { kind: 'lines', start: lineStart, end: lineEnd, ...(nearestHeading ? { label: nearestHeading } : {}) }
+}
+
+function TextViewer({ node, projectId, sourceAnchor, sourceRevisionId, sourceActions }: { node: CanvasNode; projectId: string; sourceAnchor?: string; sourceRevisionId?: string; sourceActions?: ArtifactViewerSourceActions }) {
+  const [text, setText] = useState<string | null>(!sourceRevisionId && node.previewText && node.previewText.trim().length > 0 ? node.previewText : null)
   const [error, setError] = useState('')
   const [query, setQuery] = useState('')
   const documentRef = useRef<HTMLElement | null>(null)
+  const effectiveRevisionId = sourceRevisionId ?? node.revisionId
 
   useEffect(() => {
-    if (node.previewText && node.previewText.trim().length > 0) {
+    const inlinePreviewMatchesRevision = !sourceRevisionId || sourceRevisionId === node.revisionId
+    if (inlinePreviewMatchesRevision && node.previewText && node.previewText.trim().length > 0) {
       setText(node.previewText)
       return
     }
+    setText(null)
     const controller = new AbortController()
     const load = async () => {
       try {
         // managed artifact（如对话转写 markdown）：投影节点只带 artifactId 时，
         // 经 artifact revision 表解析 fileRecordId 再读正文（批十四「查看对话」阅读链）。
-        let fileRecordId = node.fileRecordId
-        if (fileRecordId === undefined && node.artifactId !== undefined) {
+        let fileRecordId = sourceRevisionId && sourceRevisionId !== node.revisionId ? undefined : node.fileRecordId
+        if ((fileRecordId === undefined || sourceRevisionId !== undefined) && node.artifactId !== undefined) {
           const revResponse = await fetch(`${LOCAL_CORE_API_PREFIX}/artifacts/${encodeURIComponent(String(node.artifactId))}/revisions`, { signal: controller.signal })
           if (!revResponse.ok) throw new Error(`版本列表请求失败 (${revResponse.status})`)
-          const payload = await revResponse.json() as { ok?: boolean; value?: readonly { fileRecordId?: string; status?: string }[] }
-          const current = payload.value?.find((entry) => entry.status === 'current') ?? payload.value?.[0]
-          fileRecordId = current?.fileRecordId
+          const payload = await revResponse.json() as { ok?: boolean; value?: readonly { id?: string; fileRecordId?: string; status?: string }[] }
+          const selected = sourceRevisionId ? payload.value?.find((entry) => String(entry.id) === sourceRevisionId) : payload.value?.find((entry) => entry.status === 'current') ?? payload.value?.[0]
+          fileRecordId = selected?.fileRecordId
         }
         if (fileRecordId === undefined) {
           setError('该节点没有可读取的文件记录。')
@@ -303,20 +343,33 @@ function TextViewer({ node, projectId }: { node: CanvasNode; projectId: string }
     }
     void load()
     return () => controller.abort()
-  }, [node.artifactId, node.fileRecordId, node.previewText, projectId])
+  }, [node.artifactId, node.fileRecordId, node.previewText, node.revisionId, projectId, sourceRevisionId])
 
   const lines = useMemo(() => text?.replace(/\r/g, '').split('\n') ?? [], [text])
   const headings = useMemo(() => lines.flatMap((line, index) => {
     const match = line.match(/^(#{1,3})\s+(.+)$/)
     return match ? [{ index, depth: match[1].length, label: match[2].trim() }] : []
   }), [lines])
+  const sourceTarget = useMemo(() => parseMaterialSourceAnchor(sourceAnchor), [sourceAnchor])
+  const selectionMaterialSource = useCallback((selection: Selection) => materialSourceForNode(node, projectId, textSelectionLocator(selection, headings), effectiveRevisionId), [effectiveRevisionId, headings, node, projectId])
+  useEffect(() => {
+    if (text === null || !sourceTarget) return
+    const lineIndex = sourceTarget.kind === 'lines'
+      ? sourceTarget.start
+      : sourceTarget.kind === 'section'
+        ? headings.find((heading) => heading.label === sourceTarget.label)?.index
+        : undefined
+    if (lineIndex === undefined) return
+    const frame = window.requestAnimationFrame(() => document.getElementById(`text-line-${lineIndex}`)?.scrollIntoView({ block: 'center' }))
+    return () => window.cancelAnimationFrame(frame)
+  }, [headings, sourceTarget, text])
   const matchCount = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase()
     if (!needle) return 0
     return lines.reduce((total, line) => total + (line.toLocaleLowerCase().includes(needle) ? 1 : 0), 0)
   }, [lines, query])
 
-  if (error) return <div className="viewer-body viewer-error"><strong>无法预览</strong><span>{error}</span></div>
+  if (error) return <ViewerFailure node={node} message={error} sourceActions={sourceActions}/>
   if (text === null) return <div className="viewer-body viewer-loading"><LoaderCircle size={20} />正在载入文本…</div>
   return <div className="viewer-body text-viewer lcos-text-reader">
     <aside className="lcos-text-reader-nav">
@@ -356,7 +409,7 @@ function TextViewer({ node, projectId }: { node: CanvasNode; projectId: string }
             viewId: node.id,
             title: node.title,
             ...(node.artifactId ? { artifactId: node.artifactId } : {}),
-            ...(node.revisionId ? { revisionId: node.revisionId } : {}),
+            ...(effectiveRevisionId ? { revisionId: effectiveRevisionId } : {}),
             ...(node.fileRecordId ? { fileRecordId: node.fileRecordId } : {}),
             ...(node.sourceKind ? { sourceKind: node.sourceKind } : {}),
             ...(lineStart === null || lineEnd === null ? {} : { locator: { kind: 'lines' as const, start: lineStart, end: lineEnd, ...(nearestHeading ? { label: nearestHeading } : {}) } }),
@@ -366,7 +419,7 @@ function TextViewer({ node, projectId }: { node: CanvasNode; projectId: string }
           schemaVersion: 1,
           kind: 'material-transfer',
           capturedAt: payload.copiedAt,
-          source: materialSourceForNode(node, projectId, lineStart === null || lineEnd === null ? { kind: 'selection' } : { kind: 'lines', start: lineStart, end: lineEnd, ...(nearestHeading ? { label: nearestHeading } : {}) }),
+          source: materialSourceForNode(node, projectId, lineStart === null || lineEnd === null ? { kind: 'selection' } : { kind: 'lines', start: lineStart, end: lineEnd, ...(nearestHeading ? { label: nearestHeading } : {}) }, effectiveRevisionId),
           content: { kind: 'text', text: selectedText },
         }
         event.preventDefault()
@@ -378,7 +431,7 @@ function TextViewer({ node, projectId }: { node: CanvasNode; projectId: string }
     >
       {lines.map((line, index) => <TextReaderLine key={index} line={line} index={index} query={query}/>) }
     </article>
-    <SelectionDropHandle containerRef={documentRef} source={() => materialSourceForNode(node, projectId, { kind: 'selection' })}/>
+    <SelectionDropHandle containerRef={documentRef} source={selectionMaterialSource}/>
   </div>
 }
 
@@ -419,14 +472,15 @@ function highlightReaderMatch(text: string, query: string) {
   return parts
 }
 
-function DocumentViewer({ node, projectId }: { node: CanvasNode; projectId: string }) {
+function DocumentViewer({ node, projectId, sourceAnchor, sourceRevisionId, sourceActions }: { node: CanvasNode; projectId: string; sourceAnchor?: string; sourceRevisionId?: string; sourceActions?: ArtifactViewerSourceActions }) {
   const isPdf = resolveArtifactViewerKind(node) === 'pdf'
+  const sourceTarget = useMemo(() => parseMaterialSourceAnchor(sourceAnchor), [sourceAnchor])
   const [buffer, setBuffer] = useState<ArrayBuffer | null>(null)
   const [error, setError] = useState('')
   // 字节视图保持引用稳定，避免 <Document> 因 file prop 变化无谓重载。
   const pdfData = useMemo(() => (buffer === null ? null : new Uint8Array(buffer)), [buffer])
   // PDF 材料溯源工厂：页拖拽 / 选区提取时随 PdfViewer 一起带上节点出处。
-  const pdfMaterialSource = useCallback((locator?: MaterialSourceV1['locator']) => materialSourceForNode(node, projectId, locator), [node, projectId])
+  const pdfMaterialSource = useCallback((locator?: MaterialSourceV1['locator']) => materialSourceForNode(node, projectId, locator, sourceRevisionId ?? node.revisionId), [node, projectId, sourceRevisionId])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -434,13 +488,13 @@ function DocumentViewer({ node, projectId }: { node: CanvasNode; projectId: stri
       try {
         // managed artifact（如对话转写 markdown）：投影节点只带 artifactId 时，
         // 经 artifact revision 表解析 fileRecordId 再读正文（批十四「查看对话」阅读链）。
-        let fileRecordId = node.fileRecordId
-        if (fileRecordId === undefined && node.artifactId !== undefined) {
+        let fileRecordId = sourceRevisionId && sourceRevisionId !== node.revisionId ? undefined : node.fileRecordId
+        if ((fileRecordId === undefined || sourceRevisionId !== undefined) && node.artifactId !== undefined) {
           const revResponse = await fetch(`${LOCAL_CORE_API_PREFIX}/artifacts/${encodeURIComponent(String(node.artifactId))}/revisions`, { signal: controller.signal })
           if (!revResponse.ok) throw new Error(`版本列表请求失败 (${revResponse.status})`)
-          const payload = await revResponse.json() as { ok?: boolean; value?: readonly { fileRecordId?: string; status?: string }[] }
-          const current = payload.value?.find((entry) => entry.status === 'current') ?? payload.value?.[0]
-          fileRecordId = current?.fileRecordId
+          const payload = await revResponse.json() as { ok?: boolean; value?: readonly { id?: string; fileRecordId?: string; status?: string }[] }
+          const selected = sourceRevisionId ? payload.value?.find((entry) => String(entry.id) === sourceRevisionId) : payload.value?.find((entry) => entry.status === 'current') ?? payload.value?.[0]
+          fileRecordId = selected?.fileRecordId
         }
         if (fileRecordId === undefined) {
           setError('该节点没有可读取的文件记录。')
@@ -458,20 +512,24 @@ function DocumentViewer({ node, projectId }: { node: CanvasNode; projectId: stri
     }
     void load()
     return () => controller.abort()
-  }, [node.fileRecordId, projectId])
+  }, [node.artifactId, node.fileRecordId, node.revisionId, projectId, sourceRevisionId])
 
-  if (error) return <div className="viewer-body viewer-error"><strong>无法预览</strong><span>{error}</span></div>
+  if (error) return <ViewerFailure node={node} message={error} sourceActions={sourceActions}/>
   if (!buffer || pdfData === null) return <div className="viewer-body viewer-loading"><LoaderCircle size={20} />正在载入{isPdf ? ' PDF' : ' PPTX'}…</div>
   return isPdf
-    ? <PdfViewer url={pdfData} fileName={node.title} materialSource={pdfMaterialSource} />
-    : <PptMaterialViewer node={node} projectId={projectId} buffer={buffer} />
+    ? <PdfViewer url={pdfData} fileName={node.title} materialSource={pdfMaterialSource} initialPage={sourceTarget?.kind === 'page' ? sourceTarget.pageNumber : undefined} errorFallback={(message) => <ViewerFailure node={node} message={message} sourceActions={sourceActions}/>} />
+    : <PptMaterialViewer node={node} projectId={projectId} buffer={buffer} sourceRevisionId={sourceRevisionId} sourceActions={sourceActions} initialSlide={sourceTarget?.kind === 'slide' ? sourceTarget.slideNumber : undefined} />
 }
 
-function PptMaterialViewer({ node, projectId, buffer }: { node: CanvasNode; projectId: string; buffer: ArrayBuffer }) {
+function PptMaterialViewer({ node, projectId, buffer, sourceRevisionId, sourceActions, initialSlide }: { node: CanvasNode; projectId: string; buffer: ArrayBuffer; sourceRevisionId?: string; sourceActions?: ArtifactViewerSourceActions; initialSlide?: number }) {
   const [slides, setSlides] = useState<string[]>([])
-  const [slideNumber, setSlideNumber] = useState(1)
+  const [slideNumber, setSlideNumber] = useState(() => Math.max(1, initialSlide ?? 1))
   const [error, setError] = useState('')
   const stageRef = useRef<HTMLElement | null>(null)
+
+  useEffect(() => {
+    if (initialSlide !== undefined) setSlideNumber(Math.max(1, initialSlide))
+  }, [initialSlide])
 
   useEffect(() => {
     let cancelled = false
@@ -490,18 +548,20 @@ function PptMaterialViewer({ node, projectId, buffer }: { node: CanvasNode; proj
     return () => { cancelled = true }
   }, [buffer])
 
+  const selectionMaterialSource = useCallback((_selection: Selection) => materialSourceForNode(node, projectId, { kind: 'slide', slideNumber, label: `第 ${slideNumber} 页选区` }, sourceRevisionId ?? node.revisionId), [node, projectId, slideNumber, sourceRevisionId])
+
   const startSlideDrag = useCallback((event: ReactDragEvent<HTMLElement>, page: number, svg: string) => {
     const payload: MaterialTransferPayloadV1 = {
       schemaVersion: 1,
       kind: 'material-transfer',
       capturedAt: new Date().toISOString(),
-      source: materialSourceForNode(node, projectId, { kind: 'slide', slideNumber: page, label: `第 ${page} 页` }),
+      source: materialSourceForNode(node, projectId, { kind: 'slide', slideNumber: page, label: `第 ${page} 页` }, sourceRevisionId ?? node.revisionId),
       content: { kind: 'presentation-slide', slideNumber: page, svg },
     }
     writeMaterialTransfer(event.dataTransfer, payload)
-  }, [node, projectId])
+  }, [node, projectId, sourceRevisionId])
 
-  if (error) return <div className="viewer-body viewer-error"><strong>PPTX 解析失败</strong><span>{error}</span></div>
+  if (error) return <ViewerFailure node={node} message={`PPTX 解析失败：${error}`} sourceActions={sourceActions}/>
   if (!slides.length) return <div className="viewer-body viewer-loading"><LoaderCircle size={20}/>正在解析 PPTX…</div>
   const currentSvg = slides[slideNumber - 1] ?? slides[0]
 
@@ -527,12 +587,12 @@ function PptMaterialViewer({ node, projectId, buffer }: { node: CanvasNode; proj
     <main ref={stageRef} className="lcos-page-stage">
       <div className="lcos-page-stage-toolbar"><span>第 {slideNumber} / {slides.length} 页</span><small>页面文字可直接选择；缩略页可拖出</small></div>
       <motion.div key={slideNumber} className="lcos-page-sheet lcos-slide-sheet" initial={{ opacity: .65, y: 4 }} animate={{ opacity: 1, y: 0 }} dangerouslySetInnerHTML={{ __html: currentSvg }}/>
-      <SelectionDropHandle containerRef={stageRef} source={() => materialSourceForNode(node, projectId, { kind: 'slide', slideNumber, label: `第 ${slideNumber} 页选区` })}/>
+      <SelectionDropHandle containerRef={stageRef} source={selectionMaterialSource}/>
     </main>
   </div>
 }
 
-function MediaViewer({ node, projectId, media }: { node: CanvasNode; projectId: string; media: 'audio' | 'video' }) {
+function MediaViewer({ node, projectId, media, sourceActions }: { node: CanvasNode; projectId: string; media: 'audio' | 'video'; sourceActions?: ArtifactViewerSourceActions }) {
   const [url, setUrl] = useState<string | null>(null)
   const [error, setError] = useState('')
 
@@ -553,7 +613,7 @@ function MediaViewer({ node, projectId, media }: { node: CanvasNode; projectId: 
     return () => { controller.abort(); if (objectUrl) URL.revokeObjectURL(objectUrl) }
   }, [node.fileRecordId, projectId])
 
-  if (error) return <div className="viewer-body viewer-error"><strong>无法预览</strong><span>{error}</span></div>
+  if (error) return <ViewerFailure node={node} message={error} sourceActions={sourceActions}/>
   if (!url) return <div className="viewer-body viewer-loading"><LoaderCircle size={20} />正在载入{media === 'audio' ? '音频' : '视频'}…</div>
   const Icon = media === 'audio' ? Music : Video
   return <div className="viewer-body media-viewer"><Icon size={18} />{media === 'audio' ? <audio controls src={url} /> : <video controls src={url} />}</div>
@@ -569,7 +629,7 @@ function LinkViewer({ node }: { node: CanvasNode }) {
   </div>
 }
 
-function FallbackViewer({ node, note }: { node: CanvasNode; note?: string }) {
+function FallbackViewer({ node, note, sourceActions }: { node: CanvasNode; note?: string; sourceActions?: ArtifactViewerSourceActions }) {
   // docx 预览缺口裁定（0.1 收口）：Word/Excel 只读预览不进 0.1（mammoth 未安装，收尾不新增依赖），
   // fallback 保持诚实告知——对 Office 文档点名说明「预览未接入但文件完整可用」，其余未知格式沿用通用文案。
   const isOfficeDoc = /\.(docx?|xlsx?)$/i.test(node.title) || /(wordprocessingml|spreadsheetml)/i.test(node.fileType ?? '')
@@ -585,6 +645,7 @@ function FallbackViewer({ node, note }: { node: CanvasNode; note?: string }) {
     <small>{note ?? (isOfficeDoc
       ? 'Word/Excel 文档预览暂未接入（列入后续版本）；文件已完整导入，仍可参与分析和执行。'
       : '该格式只读预览未接入；文件仍可导入、分析并参与执行。')}</small>
+    <ViewerRecoveryActions node={node} sourceActions={sourceActions}/>
   </div>
 }
 

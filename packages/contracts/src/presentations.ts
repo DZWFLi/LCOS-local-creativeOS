@@ -112,10 +112,23 @@ export interface WorkflowActionEdgeV0 {
   label?: string
 }
 
+/**
+ * Canonical spatial Colony. A Colony is Presentation organization truth:
+ * sticky membership + a soft spatial contour. It is not Collection containment
+ * and membership is never recomputed merely because an object crosses a line.
+ */
+export interface PresentationColonyV0 {
+  id: string
+  label?: string
+  surface: 'main' | 'context' | 'workflow'
+  memberIds: string[]
+  contour: { points: Array<{ x: number; y: number }> }
+}
+
+/** @deprecated v0.15 compatibility input only. Migrate to PresentationColonyV0. */
 export interface PresentationSpatialRegionV0 {
   id: string
   label?: string
-  /** Presentation-space bounds. Membership is derived live from geometry. */
   bounds: { x: number; y: number; width: number; height: number }
 }
 
@@ -196,7 +209,9 @@ export interface PresentationStateV0 {
   presentationEdges: PresentationEdgeV0[]
   pinnedViewIds: string[]
   emphasisByViewId: Record<string, PresentationEmphasisV0>
-  /** Main-canvas fences are durable Presentation geometry, never frozen member snapshots. */
+  /** Canonical sticky spatial organization primitive shared by all Surfaces. */
+  colonies?: PresentationColonyV0[]
+  /** @deprecated read-only compatibility input for pre-R3-A fence/region state. */
   spatialRegions?: PresentationSpatialRegionV0[]
   /** Trusted spatial components. They store Presentation geometry + identity-only binding. */
   surfaceElements?: SurfaceElementV0[]

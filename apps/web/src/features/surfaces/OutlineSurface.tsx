@@ -13,6 +13,7 @@ import {
 } from '../presentation/presentationHierarchy'
 import { usePresentationHierarchyState } from '../../state/presentationHierarchyState'
 import { nodeTypeIcon } from '../canvas/CanvasNodeVisual'
+import { additiveSelectionModifier } from '../spatial/pointerInteractionLanguage'
 
 interface Props {
   projectId: string
@@ -72,7 +73,7 @@ export function OutlineSurface(props: Props) {
           <span className="lcos-outline-guides" aria-hidden="true">{Array.from({ length: row.depth }, (_, level) => <i key={level} className={level === row.depth - 1 ? 'current' : ''} style={{ left: `${level * 22 + 6}px` }}/>)}</span>
           <span className="lcos-outline-grip" aria-hidden="true"><GripVertical size={11}/></span>
           <button className="lcos-outline-fold" type="button" disabled={!row.hasChildren} aria-label={collapsed ? '展开' : '折叠'} onClick={() => toggleCollapse(row.node.id)}>{row.hasChildren ? (collapsed ? <ChevronRight size={12}/> : <ChevronDown size={12}/>) : null}</button>
-          <button type="button" className="lcos-outline-main" onKeyDown={(event) => onKey(event, row)} onClick={(event) => props.onSelect(row.node.id, event.shiftKey || event.metaKey || event.ctrlKey)} onDoubleClick={() => props.onDoubleClick(row.node.id)}>
+          <button type="button" className="lcos-outline-main" onKeyDown={(event) => onKey(event, row)} onClick={(event) => props.onSelect(row.node.id, additiveSelectionModifier(event))} onDoubleClick={() => props.onDoubleClick(row.node.id)}>
             <Icon/><strong>{row.node.title}</strong><small>{row.node.revisionLabel || row.node.subtitle}</small>
           </button>
           {(row.node.current || row.node.draft) && <span className={`lcos-outline-status ${row.node.draft ? 'draft' : 'current'}`}>{row.node.draft ? 'Draft' : 'Current'}</span>}

@@ -34,8 +34,8 @@ describe('GUI R8-R11 closeout contracts', () => {
 
   it('uses one temporary Reader entry for all readable material while keeping Workbench for versions/details', () => {
     expect(app).toContain('One temporary Reader for every readable material')
-    expect(app).toContain('setImmersiveNodeId(id)')
-    expect(app).toContain('setImmersiveNodeId(node.id)')
+    expect(app).toContain('openImmersive(id)') // R1D：Reader 入口带 sourceAnchor/revision 封装
+    expect(app).toContain('openImmersive(node.id)') // R1D：Reader 入口封装
   })
 
   it('keeps the existing Dock shell but exposes Main / Context / Workflow as the top-level work scenes', () => {

@@ -72,6 +72,14 @@ export interface CanvasNode {
   fileRecordId?: string
   /** GUI-2：机械来源标识（resource descriptor source.kind：file/url/external…）。 */
   sourceKind?: string
+  /** R1-D: material fragments keep a reload-safe logical back-reference to their source. */
+  materialSource?: {
+    artifactId: string
+    viewId?: string
+    revisionId?: string
+    sourceAnchor?: string
+    title?: string
+  }
   fileAvailability?: 'current' | 'stale' | 'missing' | 'unreadable'
   contentHash?: string
   observedPath?: string
@@ -239,6 +247,8 @@ export interface PersistedPrototypeState {
   activeWorkspaceId: string | null
   activeScopeId: string
   workRail: WorkRailPreferences
+  colonies?: import('@local-creative-os/contracts').PresentationColonyV0[]
+  /** @deprecated compatibility input for pre-R3-A projects. */
   spatialRegions?: import('@local-creative-os/contracts').PresentationSpatialRegionV0[]
 }
 

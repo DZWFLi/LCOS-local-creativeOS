@@ -79,7 +79,7 @@ describe('R3.1-A Project-node presentation foundation', () => {
   it('keeps Right-button drag as the canvas cross-space Drop gesture', () => {
     expect(canvas).toContain('if (semanticDropTriggerFromPointer(event))')
     expect(canvas).toContain('beginCanvasSemanticDrop(')
-    expect(canvas).toContain('onDirectProjectViewDrop(hit.target.id, item.ids)')
+    expect(canvas).toContain('commitProjectViewTarget(hit.target.id, item.ids)') // R2D：统一提交分发器
     expect(contextHome).toContain('data-project-view-drop-target={viewId}')
     expect(contextHome).toContain('data-project-view-drop-kind="context"')
   })

@@ -12,6 +12,7 @@ import { useSpatialSessionCamera } from '../../state/spatialSessionState'
 import { useSpatialFocusRequest, type SpatialFocusRequest } from '../spatial/useSpatialFocusRequest'
 import { miniMapVisualKindForNode } from '../spatial/minimapSemantics'
 import { beginSemanticDrop } from '../spatial/semanticDrop'
+import { additiveSelectionModifier } from '../spatial/pointerInteractionLanguage'
 import { DropFeedbackLayer } from '../drop/dropFeedbackLayer'
 import { useSemanticDropFeedback } from '../drop/useSemanticDropFeedback'
 import { loadPresentationLayoutEngines } from '../layout/layoutEngines'
@@ -216,7 +217,7 @@ export function ContextRelationshipHomeSurface(props: Props) {
       <div><strong>上下文</strong><span>Context Graph</span></div>
       <small>{views.length} 个 Context · {projectNodes.length} 个项目节点 · 关系越重要，节点可以越大</small>
     </header>
-    <SpatialCanvas ref={canvasRef} camera={camera} setCamera={setCamera} marqueeItems={spatialItems} minimapItems={spatialItems} minimapLabel="Context Graph" beacon={spatialFocus.beacon} onBeaconArrivalEnd={spatialFocus.clearBeacon} onMarqueeSelect={props.onMarqueeSelect} className="lcos-context-home-stage lcos-presentation-spatial" worldClassName="lcos-presentation-world lcos-context-dot-world" worldStyle={{ width: WORLD_WIDTH, height: WORLD_HEIGHT }} testId="context-graph-spatial" overlays={empty} onExternalDrop={(kind, raw) => { if (kind === 'project-view') importProjectViewMembers(raw) }}>
+    <SpatialCanvas ref={canvasRef} surfaceRef={`scope:${props.scopeId}`} camera={camera} setCamera={setCamera} marqueeItems={spatialItems} minimapItems={spatialItems} minimapLabel="Context Graph" beacon={spatialFocus.beacon} onBeaconArrivalEnd={spatialFocus.clearBeacon} onMarqueeSelect={props.onMarqueeSelect} className="lcos-context-home-stage lcos-presentation-spatial" worldClassName="lcos-presentation-world lcos-context-dot-world" worldStyle={{ width: WORLD_WIDTH, height: WORLD_HEIGHT }} testId="context-graph-spatial" overlays={empty} onExternalDrop={(kind, raw) => { if (kind === 'project-view') importProjectViewMembers(raw) }}>
       <SpatialEdgeLayer bounds={{ x:0, y:0, width:WORLD_WIDTH, height:WORLD_HEIGHT }} className="lcos-context-home-edges lcos-context-dot-edges" ariaLabel="Context Graph 关系">
         {projectEdges.map(({ edge, from, to }) => {
           const a=centerOf(from), b=centerOf(to)
@@ -228,7 +229,7 @@ export function ContextRelationshipHomeSurface(props: Props) {
         })}
       </SpatialEdgeLayer>
       <SpatialNodeLayer>
-        {projectPlacements.map((placement) => <button key={placement.node.id} type="button" className={`lcos-context-project-dot ${props.selectedIds.includes(placement.node.id)?'is-selected':''} ${props.attentionBucketsByViewId?.[placement.node.id] ? `attention-${props.attentionBucketsByViewId[placement.node.id]}` : ''}`} data-attention-bucket={props.attentionBucketsByViewId?.[placement.node.id]} style={{ left:placement.x, top:placement.y, width:placement.width, height:placement.height } as CSSProperties} title={placement.node.title} onPointerDown={(event)=>beginSemanticDrop(event,props.selectedIds.includes(placement.node.id)&&props.selectedIds.length?props.selectedIds:[placement.node.id],props.onDirectProjectViewDrop,dropFeedback.onPhase)} onClick={(event)=>props.onSelect(placement.node.id,event.metaKey||event.ctrlKey||event.shiftKey)} onDoubleClick={()=>props.onDoubleClick(placement.node.id)}>
+        {projectPlacements.map((placement) => <button key={placement.node.id} type="button" className={`lcos-context-project-dot ${props.selectedIds.includes(placement.node.id)?'is-selected':''} ${props.attentionBucketsByViewId?.[placement.node.id] ? `attention-${props.attentionBucketsByViewId[placement.node.id]}` : ''}`} data-attention-bucket={props.attentionBucketsByViewId?.[placement.node.id]} style={{ left:placement.x, top:placement.y, width:placement.width, height:placement.height } as CSSProperties} title={placement.node.title} onPointerDown={(event)=>beginSemanticDrop(event,props.selectedIds.includes(placement.node.id)&&props.selectedIds.length?props.selectedIds:[placement.node.id],props.onDirectProjectViewDrop,dropFeedback.onPhase)} onClick={(event)=>props.onSelect(placement.node.id,additiveSelectionModifier(event))} onDoubleClick={()=>props.onDoubleClick(placement.node.id)}>
           <span className="lcos-context-project-signal"><SurfaceIdentityGlyph node={placement.node}/></span>
           <span className="lcos-context-project-copy"><strong>{placement.node.title}</strong><small>{placement.node.entityKind ?? placement.node.fileType ?? placement.node.kind}</small></span>
         </button>)}
@@ -249,7 +250,7 @@ export function ContextRelationshipHomeSurface(props: Props) {
               if(!raw||!props.onAddMembersToContext)return
               try { const payload=JSON.parse(raw) as {memberViewIds?:unknown}; const members=Array.isArray(payload.memberViewIds)?payload.memberViewIds.filter((item):item is string=>typeof item==='string'):[]; if(members.length)props.onAddMembersToContext(placement.view.id,members) } catch { /* ignore */ }
             }}>
-            <button type="button" className="lcos-context-dot-core" onPointerDown={(event)=>beginSemanticDrop(event,[viewId],props.onDirectProjectViewDrop,dropFeedback.onPhase)} onClick={(event)=>props.onSelect(viewId,event.metaKey||event.ctrlKey||event.shiftKey)} onDoubleClick={(event)=>{event.stopPropagation();props.onOpenContextView?.(placement.view.id)}} aria-label={`选择 ${placement.view.title}`} title="单击选中 · 双击进入 Context">
+            <button type="button" className="lcos-context-dot-core" onPointerDown={(event)=>beginSemanticDrop(event,[viewId],props.onDirectProjectViewDrop,dropFeedback.onPhase)} onClick={(event)=>props.onSelect(viewId,additiveSelectionModifier(event))} onDoubleClick={(event)=>{event.stopPropagation();props.onOpenContextView?.(placement.view.id)}} aria-label={`选择 ${placement.view.title}`} title="单击选中 · 双击进入 Context">
               <span className="lcos-semantic-drop-handle" data-semantic-drop-handle aria-hidden="true" onClick={(event)=>event.stopPropagation()} title="Semantic Drop：拖到其它上下文或工作流（右键拖 / Alt+左拖）"><GripVertical size={11}/></span>
               <span className="lcos-context-core-signal"><ContextGlyph/></span>
               <span className="lcos-context-core-copy"><strong>{placement.view.title}</strong><small>{memberCount} 项 · 双击进入</small></span>

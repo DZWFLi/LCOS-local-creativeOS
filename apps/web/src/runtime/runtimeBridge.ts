@@ -365,6 +365,22 @@ export function mapGraphToState(
   const childScopeKindByContainerViewId = new Map(graph.scopes.filter((scope) => scope.containerViewId !== null).map((scope) => [String(scope.containerViewId), scope.kind] as const))
   const referenceArtifactIds = new Set(graph.relations.filter((relation) => relation.kind === 'reference' && relation.sourceEntityType === 'artifact').map((relation) => String(relation.sourceEntityId)))
   const feedbackArtifactIds = new Set(graph.relations.filter((relation) => relation.kind === 'feedback' && relation.sourceEntityType === 'artifact').map((relation) => String(relation.sourceEntityId)))
+  const artifactByStringId = new Map(graph.artifacts.map((artifact) => [String(artifact.id), artifact] as const))
+  const materialSourceByArtifactId = new Map<string, NonNullable<CanvasNode['materialSource']>>()
+  for (const relation of graph.relations) {
+    if (relation.kind !== 'reference' || relation.createdBy !== 'material-transfer' || relation.sourceEntityType !== 'artifact' || relation.targetEntityType !== 'artifact') continue
+    const sourceArtifactId = String(relation.sourceEntityId)
+    const targetArtifactId = String(relation.targetEntityId)
+    const evidence = relation.evidenceRefs?.find((item) => item.kind === 'artifact' && String(item.id) === targetArtifactId)
+    const sourceArtifact = artifactByStringId.get(targetArtifactId)
+    materialSourceByArtifactId.set(sourceArtifactId, {
+      artifactId: targetArtifactId,
+      ...(primaryViewByArtifactId.get(targetArtifactId) ? { viewId: primaryViewByArtifactId.get(targetArtifactId) } : {}),
+      ...(evidence?.revisionId ? { revisionId: evidence.revisionId } : {}),
+      ...(evidence?.sourceAnchor ? { sourceAnchor: evidence.sourceAnchor } : {}),
+      ...(evidence?.label || sourceArtifact?.title ? { title: evidence?.label || sourceArtifact?.title } : {}),
+    })
+  }
 
   const nodes: CanvasNode[] = graph.artifactViews.map((view) => {
     const artifact = artifactById.get(view.artifactId)
@@ -388,6 +404,7 @@ export function mapGraphToState(
           ? 'reference'
           : undefined
     const conversation = conversationByViewId.get(String(view.id))
+    const materialSource = artifact === undefined ? undefined : materialSourceByArtifactId.get(String(artifact.id))
     return {
       id: String(view.id),
       kind: runtimeRole === 'feedback' ? 'note' : artifact ? (KIND_TO_NODE[artifact.kind] ?? 'source') : 'source',
@@ -425,6 +442,7 @@ export function mapGraphToState(
       contentHash: revision === undefined ? undefined : String(revision.contentHash),
       observedPath: fileRecord?.observedPath,
       sourceKind: artifact === undefined ? undefined : sourceKindByArtifact.get(String(artifact.id)),
+      ...(materialSource ? { materialSource } : {}),
       followsCurrentRevision: artifact?.currentRevisionId !== undefined && revisionId === artifact.currentRevisionId,
       previewStatus: preview?.status ?? 'not-generated',
       previewProfile: preview?.previewProfile,

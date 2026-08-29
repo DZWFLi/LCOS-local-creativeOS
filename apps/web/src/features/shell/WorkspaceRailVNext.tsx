@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
-import { Crosshair, GitBranch, Pencil, Plus } from 'lucide-react'
+import { Crosshair, GitBranch, MapPin, Pencil, Plus } from 'lucide-react'
 import { CollectionGlyph, ContextGlyph, RootGlyph, WorkflowGlyph } from '../design/LcosGlyphs'
 import type { RunStatus } from '../../model'
 import { LightCurtain } from '../drop/LightCurtain'
 import { NEW_SCENE_DROP_TARGET_ID, semanticDropTriggerFromPointer, type SemanticDropTrigger } from '../spatial/semanticDrop'
+import { useProjectSpatialMarkersOrNull } from '../spatial/ProjectSpatialMarkerContext'
+import { markerForNavigationTarget, stableRailSurfaceRef } from '../spatial/spatialNavigationFamily'
 
 export type ProjectRailViewKind = 'scene' | 'collection' | 'context' | 'workflow'
 
@@ -271,6 +273,28 @@ export function WorkspaceRailVNext({ views, runStatus, onOverview, onActivateVie
   const semanticDrop = useRef<RailSemanticDropSession | null>(null)
   const suppressClickRef = useRef(false)
   const previewCloseTimer = useRef<number | null>(null)
+  const markerRuntime = useProjectSpatialMarkersOrNull()
+  const markerRecordsForSurface = (surfaceRef: string) => markerRuntime?.records.filter((record) => record.resolution?.status === 'resolved' && record.resolution.target.surfaceRef === surfaceRef) ?? []
+  const railMarkerForView = (view: ProjectRailViewItem) => {
+    if (!markerRuntime) return null
+    const surfaceRef = stableRailSurfaceRef(view)
+    if (!surfaceRef) return null
+    return markerForNavigationTarget(markerRuntime.records, { projectId: markerRuntime.projectId, kind: 'surface', id: surfaceRef })
+  }
+  const railMarkerCount = (view: ProjectRailViewItem) => {
+    const surfaceRef = stableRailSurfaceRef(view)
+    return surfaceRef ? markerRecordsForSurface(surfaceRef).length : 0
+  }
+  const mainMarkerCount = markerRecordsForSurface('main').length
+  const toggleRailLandmark = (view: ProjectRailViewItem) => {
+    if (!markerRuntime) return
+    const surfaceRef = stableRailSurfaceRef(view)
+    if (!surfaceRef) return
+    const targetRef = { projectId: markerRuntime.projectId, kind: 'surface' as const, id: surfaceRef }
+    const marker = markerForNavigationTarget(markerRuntime.records, targetRef)
+    if (marker) void markerRuntime.deleteMarker(marker.id)
+    else void markerRuntime.createMarker({ targetRef, scope: 'cross-surface' })
+  }
 
   const twoColumn = columnOverride === 'two' || (columnOverride === null && autoTwoColumn)
   const effectiveTwoColumn = columnDrag ? columnDrag.preview === 'two' : twoColumn
@@ -579,7 +603,7 @@ export function WorkspaceRailVNext({ views, runStatus, onOverview, onActivateVie
 
   return <aside ref={railRef} className={`vnext-workspace-rail lcos-workspace-rail lcos-project-view-rail ${effectiveTwoColumn ? 'is-two-column' : ''} ${columnDrag ? 'is-resizing' : ''}`} data-testid="workspace-dock" aria-label="项目视图" onContextMenu={(event) => event.preventDefault()}>
     <div className="lcos-rail-primary">
-      <button type="button" data-rail-kind="main" className={views.every((view) => !view.active) ? 'vnext-rail-button active' : 'vnext-rail-button'} title="主画布（固定入口）" aria-label="主画布" onClick={() => { setPreviewId(null); onOverview() }}><RootGlyph/></button>
+      <button type="button" data-rail-kind="main" className={views.every((view) => !view.active) ? 'vnext-rail-button active' : 'vnext-rail-button'} title={mainMarkerCount ? `主画布 · ${mainMarkerCount} 个导航重点` : '主画布（固定入口）'} aria-label={mainMarkerCount ? `主画布，${mainMarkerCount} 个导航重点` : '主画布'} onClick={() => { setPreviewId(null); onOverview() }}><RootGlyph/>{mainMarkerCount > 0 && <span className="lcos-rail-landmark is-count" aria-hidden="true"><MapPin size={9}/><b>{mainMarkerCount}</b></span>}</button>
       <div className="vnext-rail-divider"/>
       <div ref={stackRef} className={`vnext-workspace-stack lcos-project-view-stack ${leftDrag?.mode === 'delete' ? 'is-deleting' : ''} ${leftDrag ? 'is-dragging' : ''}`} role="list">
         {views.map((view, index) => {
@@ -610,6 +634,7 @@ export function WorkspaceRailVNext({ views, runStatus, onOverview, onActivateVie
             onPointerLeave={() => { if (leftDrag) return; schedulePreviewClose(view.id) }}>
             <button type="button" role="listitem" className={view.active ? 'vnext-workspace-mini lcos-project-view-button active' : 'vnext-workspace-mini lcos-project-view-button'} aria-label={`${view.active ? '当前' : '进入'}${previewLabel(view.kind)}：${view.title}`} onFocus={() => setPreviewId(view.id)} onClick={(event) => { if (suppressClickRef.current) { event.preventDefault(); event.stopPropagation(); return } onActivateView(view); setPreviewId(null) }}>
               <ViewPreview view={view}/>
+              {railMarkerCount(view) > 0 && <span className="lcos-rail-landmark is-count" title={`${railMarkerCount(view)} 个导航重点`} aria-hidden="true"><MapPin size={9}/><b>{railMarkerCount(view)}</b></span>}
               {attention && <span className={`vnext-workspace-attention status-${runStatus}`}/>}
             </button>
           </div>
@@ -656,6 +681,7 @@ export function WorkspaceRailVNext({ views, runStatus, onOverview, onActivateVie
           : <strong data-renameable={canRename(preview) ? '' : undefined} title={canRename(preview) ? '点击重命名' : undefined} onClick={(event) => { if (!canRename(preview)) return; event.stopPropagation(); beginRename(preview) }}>{preview.title}</strong>}
         <span>{memberSummaryLine(preview)}</span></div>
       {preview.workspaceId && onLocateWorkspace && <button type="button" aria-label={`仅定位 ${preview.title}`} title="定位到这个现场" onClick={(event) => { event.stopPropagation(); onLocateWorkspace(preview.workspaceId!); setPreviewId(null) }}><Crosshair size={13}/></button>}
+      {markerRuntime && stableRailSurfaceRef(preview) && <button type="button" className={railMarkerForView(preview) ? 'is-landmark' : undefined} aria-label={railMarkerForView(preview) ? `取消导航地标 ${preview.title}` : `固定到导航 ${preview.title}`} title={railMarkerForView(preview) ? '取消导航地标' : '固定到导航'} onClick={(event) => { event.stopPropagation(); toggleRailLandmark(preview) }}><MapPin size={13}/></button>}
       {canRename(preview) && <button type="button" aria-label={`重命名 ${preview.title}`} title="重命名" onClick={(event) => { event.stopPropagation(); beginRename(preview) }}><Pencil size={13}/></button>}
       <span className="lcos-project-view-preview-footer"><GitBranch size={11}/>{preview.kind === 'scene' ? '保存的工作现场 · 激活后回到这里' : preview.kind === 'context' ? '进入理解现场 · 可切换结构 / 演进' : preview.kind === 'workflow' ? '进入自由工作流画布' : '同一项目的另一个空间视图'}</span>
     </div>}

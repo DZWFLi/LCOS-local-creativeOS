@@ -92,7 +92,12 @@
     "windows:finalize:0.1": "powershell -ExecutionPolicy Bypass -File scripts/windows-finalize-lcos-01.ps1",
     "check:spatial-components": "node scripts/validate-spatial-component-foundation.mjs",
     "check:v015-user-language": "node scripts/validate-v015-user-language.mjs",
-    "check:v015-r1c": "node scripts/validate-v015-r1c-unified-command-state.mjs"
+    "check:v015-r1c": "node scripts/validate-v015-r1c-unified-command-state.mjs",
+    "check:v015-r1d": "node scripts/validate-v015-r1d-preview-fragment.mjs",
+    "check:v015-r2a": "node scripts/validate-v015-r2a-marker-core-bridge.mjs",
+    "check:v015-r2b": "node scripts/validate-v015-r2b-glyth-semantic-lod.mjs",
+    "check:v015-r2d": "node scripts/validate-v015-r2d-interaction-grammar.mjs",
+    "check:v015-r3a": "node scripts/validate-v015-r3a-colony-catalog.mjs"
   },
   "dependencies": {
     "lucide-react": "^1.24.0",

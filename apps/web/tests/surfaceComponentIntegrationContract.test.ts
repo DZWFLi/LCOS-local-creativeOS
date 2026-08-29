@@ -10,11 +10,11 @@ const canvas = source('features/canvas/ProjectCanvas.tsx')
 const draft = source('state/presentationDraftState.ts')
 
  describe('v0.4 Surface Component integration contract', () => {
-  it('renders Main Fence through the trusted registry while keeping legacy durable bounds as adapter state', () => {
-    expect(canvas).toContain("resolveSurfaceComponent('fence')")
-    expect(canvas).toContain("type: 'fence'")
-    expect(canvas).toContain('onRegionBoundsCommit?.(region.id, next)')
-    expect(canvas).toContain('onClearRegion?.(region.id)')
+  it('renders Main Colony organic contour instead of the retired Fence shell (R3-A)', () => {
+    expect(canvas).toContain('colonyPathData')
+    expect(canvas).toContain('pointInPolygon')
+    expect(canvas).toContain('圈成 Colony')
+    expect(canvas).not.toContain("resolveSurfaceComponent('fence')") // R3-A：Fence 渲染退役
   })
 
   it('persists Context/Workflow SurfaceElements through the existing Presentation bridge', () => {

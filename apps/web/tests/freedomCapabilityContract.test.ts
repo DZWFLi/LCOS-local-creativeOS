@@ -65,7 +65,7 @@ describe('VNext.3 capability frame / project semantics contract', () => {
     expect(spatialCamera).toContain('export function edgeScrollDelta')
     expect(canvas).toContain('restoreDraggedOriginals')
     expect(canvas).toContain("closest<HTMLElement>('[data-project-view-drop-target]')")
-    expect(canvas).toContain('onDirectProjectViewDrop(hit.target.id, item.ids)')
+    expect(canvas).toContain('commitProjectViewTarget(hit.target.id, item.ids)') // R2D：统一提交分发器
     expect(canvas).not.toContain('dropIntentMachine')
     expect(canvas).not.toContain('onStageTransfer')
     expect(canvas).not.toContain('setDropCue')

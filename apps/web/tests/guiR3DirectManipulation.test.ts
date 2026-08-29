@@ -16,7 +16,7 @@ describe('GUI R3 direct manipulation contract', () => {
   it('makes Left Rail a direct drop destination for ordinary node pointer drag', () => {
     expect(rail).toContain('data-project-view-drop-target={view.id}')
     expect(canvas).toContain("closest<HTMLElement>('[data-project-view-drop-target]')")
-    expect(canvas).toContain('onDirectProjectViewDrop(hit.target.id, item.ids)')
+    expect(canvas).toContain('commitProjectViewTarget(hit.target.id, item.ids)') // R2D：统一提交分发器
     expect(app).toContain('directDropToProjectRailView')
     expect(app).toContain('Project Rail is deliberately project-wide')
     expect(app).toContain("title: 'Workflow'")
@@ -39,7 +39,7 @@ describe('GUI R3 direct manipulation contract', () => {
     expect(contextHome).toContain('onAddMembersToContext')
     expect(contextHome).toContain('onAddMembersToGraph')
     expect(contextHome).toContain('把项目节点拖到这里')
-    expect(contextHome).toContain('onClick={(event)=>props.onSelect(viewId,event.metaKey||event.ctrlKey||event.shiftKey)}')
+    expect(contextHome).toContain('onClick={(event)=>props.onSelect(viewId,additiveSelectionModifier(event))}') // R2D：Shift 唯一增量
     expect(contextHome).toContain('onDoubleClick={(event)=>{event.stopPropagation();props.onOpenContextView?.(placement.view.id)}}')
     expect(contextHome).toContain('单击选中 · 双击进入 Context')
   })
@@ -64,7 +64,7 @@ describe('GUI R3 direct manipulation contract', () => {
     expect(canvas).toContain('if (semanticDropTriggerFromPointer(event))')
     expect(canvas).toContain('beginCanvasSemanticDrop(')
     expect(canvas).toContain('const cancelSemanticDrop = () =>')
-    expect(canvas).toContain('onDirectProjectViewDrop(hit.target.id, item.ids)')
+    expect(canvas).toContain('commitProjectViewTarget(hit.target.id, item.ids)') // R2D：统一提交分发器
     // Semantic Drop 是交互本身；右键只是最快触发，另有 Alt+左拖 / 拖拽把手
     expect(canvas).toContain('data-semantic-drop-handle')
     expect(canvas).not.toContain('onDirectProjectViewDrop?.(directDrop.id')

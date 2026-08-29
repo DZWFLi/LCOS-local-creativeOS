@@ -4712,3 +4712,170 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* R2-B · Conversation Glyth Semantic LOD.
+   Camera zoom only changes Presentation. No Marker intent or Core state is written here. */
+.lcos-reconstructed .canvas-node[data-entity-kind="conversation"] {
+  border-color: transparent !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+.lcos-reconstructed .canvas-node[data-entity-kind="conversation"]::before,
+.lcos-reconstructed .canvas-node[data-entity-kind="conversation"]::after { display: none !important; }
+
+.lcos-reconstructed .lcos-conversation-glyth-body.is-mid .lcos-conversation-glyth.is-semantic-mid .lcos-glyth-dots,
+.lcos-reconstructed .lcos-conversation-glyth-body.is-mid .lcos-conversation-glyth.is-semantic-mid .lcos-glyth-arc-back,
+.lcos-reconstructed .lcos-conversation-glyth-body.is-mid .lcos-conversation-glyth.is-semantic-mid .lcos-glyth-arc-front {
+  opacity: 0 !important;
+}
+.lcos-reconstructed .lcos-conversation-glyth-body.is-mid .lcos-conversation-glyth-caption { opacity: .82; }
+
+.lcos-reconstructed .lcos-conversation-glyth-body.is-far,
+.lcos-reconstructed .lcos-conversation-glyth-body.is-extreme-far {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 104px;
+  min-height: 58px;
+  padding: 0;
+  gap: 3px;
+  transform: translate(-50%, -50%) scale(var(--glyth-ui-scale));
+  transform-origin: center;
+  pointer-events: none;
+}
+.lcos-reconstructed .lcos-conversation-glyth-body.is-far .lcos-conversation-glyth-caption,
+.lcos-reconstructed .lcos-conversation-glyth-body.is-extreme-far .lcos-conversation-glyth-caption {
+  max-width: 96px;
+  font-size: 9px;
+  opacity: .72;
+}
+.lcos-reconstructed .lcos-conversation-glyth-body.is-extreme-far:not(.is-critical) .lcos-conversation-glyth-caption { display: none; }
+
+.lcos-reconstructed .lcos-glyth-identity-pin {
+  position: relative;
+  width: 42px;
+  height: 46px;
+  display: grid;
+  place-items: start center;
+  filter: drop-shadow(0 5px 9px rgba(38,34,48,.12));
+}
+.lcos-reconstructed .lcos-glyth-pin-face {
+  position: relative;
+  z-index: 1;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 58% 42% 55% 45% / 46% 56% 44% 54%;
+  background: color-mix(in srgb, var(--lcos-surface-raised, #fff) 88%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 11%, transparent);
+  -webkit-backdrop-filter: blur(10px) saturate(1.05);
+  backdrop-filter: blur(10px) saturate(1.05);
+}
+.lcos-reconstructed .lcos-glyth-pin-stem {
+  position: absolute;
+  left: 50%;
+  bottom: 1px;
+  width: 10px;
+  height: 15px;
+  border-radius: 2px 2px 8px 8px;
+  background: color-mix(in srgb, currentColor 16%, var(--lcos-surface-raised, #fff));
+  transform: translateX(-50%) rotate(45deg);
+  transform-origin: 50% 20%;
+  opacity: .72;
+}
+.lcos-reconstructed .lcos-conversation-glyth-body.is-critical .lcos-glyth-pin-face {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 18%, transparent), 0 0 0 3px color-mix(in srgb, currentColor 7%, transparent);
+}
+
+.lcos-reconstructed .lcos-glyth-semantic-cluster {
+  position: absolute;
+  z-index: var(--lcos-z-canvas-content, 2);
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 1px;
+  border-radius: 54% 46% 52% 48% / 45% 55% 45% 55%;
+  background: color-mix(in srgb, var(--lcos-surface-raised, #fff) 86%, transparent);
+  box-shadow: inset 0 0 0 1px rgba(73,67,88,.11), 0 5px 14px rgba(41,36,52,.08);
+  transform: translate(-50%, -50%) scale(var(--glyth-ui-scale));
+  transform-origin: center;
+  pointer-events: none;
+  color: var(--lcos-label-secondary, rgba(60,60,67,.62));
+}
+.lcos-reconstructed .lcos-glyth-semantic-cluster > span { font: 650 12px/1 var(--lcos-font-ui, sans-serif); }
+.lcos-reconstructed .lcos-glyth-semantic-cluster > small { font: 540 7px/1 var(--lcos-font-ui, sans-serif); opacity: .66; }
+
+/* R2-D · Pointer / Cursor semantic language. One intent, one local affordance. */
+.lcos-reconstructed .canvas.is-reference-pick { cursor: copy; }
+.lcos-reconstructed .canvas.is-reference-pick .canvas-node:not([data-entity-kind="conversation"]) { cursor: copy; }
+.lcos-reconstructed .canvas-node.is-reference-receptive {
+  box-shadow: var(--porcelain-shadow-hover), 0 0 0 2px rgba(var(--lcos-ui-signal-rgb), .10), 0 0 18px rgba(var(--lcos-ui-signal-rgb), .08);
+}
+.lcos-reconstructed .canvas-node.reference-picked:not(.selected) {
+  box-shadow: var(--porcelain-shadow), 0 0 0 1px rgba(var(--lcos-ui-signal-rgb), .20), 0 0 14px rgba(var(--lcos-ui-signal-rgb), .06);
+}
+
+/* Relation is born from a boundary light notch, never from permanent in/out ports. */
+.lcos-reconstructed .lcos-relation-notch {
+  position:absolute;
+  z-index:var(--lcos-z-content-control);
+  right:-7px;
+  top:calc(50% - 13px);
+  width:12px;
+  height:26px;
+  padding:0;
+  border:0;
+  background:transparent;
+  opacity:0;
+  cursor:crosshair;
+  transform:scale(calc(.86 / var(--canvas-zoom, 1)));
+  transform-origin:center;
+  transition:opacity 120ms ease, transform 150ms cubic-bezier(.22,1,.36,1);
+}
+.lcos-reconstructed .lcos-relation-notch > span {
+  display:block;
+  width:3px;
+  height:18px;
+  margin:auto;
+  border-radius:999px;
+  background:rgba(var(--lcos-ui-signal-rgb), .48);
+  box-shadow:0 0 10px rgba(var(--lcos-ui-signal-rgb), .18);
+}
+.lcos-reconstructed .canvas-node:hover > .lcos-relation-notch,
+.lcos-reconstructed .canvas-node.selected > .lcos-relation-notch,
+.lcos-reconstructed .workspace-frame:hover > .lcos-relation-notch,
+.lcos-reconstructed .canvas.is-relation-dragging .lcos-relation-notch { opacity:.72; }
+.lcos-reconstructed .lcos-relation-notch:hover { opacity:1 !important; transform:scale(calc(1 / var(--canvas-zoom, 1))); }
+.lcos-reconstructed .canvas.is-reference-pick .lcos-relation-notch { opacity:0 !important; pointer-events:none; }
+.lcos-reconstructed .canvas.is-relation-dragging { cursor:crosshair; }
+.lcos-reconstructed .canvas-node.is-relation-target::after,
+.lcos-reconstructed .workspace-frame.is-relation-target::after {
+  content:"";
+  position:absolute;
+  right:-4px;
+  top:calc(50% - 10px);
+  width:3px;
+  height:20px;
+  border-radius:999px;
+  background:rgba(var(--lcos-ui-active-rgb, 92, 75, 155), .72);
+  box-shadow:0 0 14px rgba(var(--lcos-ui-active-rgb, 92, 75, 155), .26);
+  pointer-events:none;
+}
+
+/* Empty spatial background reads as Camera territory; nodes keep object semantics. */
+.lcos-reconstructed .lcos-spatial-canvas[data-pointer-state="pan-open-hand"] { cursor:grab; }
+.lcos-reconstructed .lcos-spatial-canvas[data-pointer-state="pan-closed-hand"],
+.lcos-reconstructed .lcos-spatial-canvas[data-pointer-state="pan-closed-hand"] * { cursor:grabbing !important; }
+
+/* Context / Workflow share the same physical Reference Pick muscle memory. */
+.lcos-reconstructed .lcos-surface-host.is-reference-pick { cursor: copy; }
+.lcos-reconstructed .lcos-surface-host.is-reference-pick :is(.lcos-surface-object, [data-node-id], [data-mind-topic], .lcos-context-project-dot, .lcos-context-dot-core) {
+  cursor: copy;
+}
+.lcos-reconstructed .lcos-surface-host.is-reference-pick :is(.lcos-surface-object, [data-mind-topic], .lcos-context-project-dot, .lcos-context-dot-core):hover {
+  box-shadow: 0 0 0 2px rgba(var(--lcos-ui-signal-rgb), .10), 0 0 16px rgba(var(--lcos-ui-signal-rgb), .07);
+}

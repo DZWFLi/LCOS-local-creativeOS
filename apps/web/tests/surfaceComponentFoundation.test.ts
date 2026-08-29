@@ -40,22 +40,22 @@ describe('Spatial Component Foundation integrity', () => {
     expect(surfaceComponentContract('review').createMode).toBe('adapter-only')
     expect(surfaceComponentContract('checkpoint').createMode).toBe('adapter-only')
     expect(surfaceComponentContract('portal').createMode).toBe('adapter-only')
-    // Fence rejoined the shelf (2026-08-24 catalog widening): Main can build it again.
-    expect(surfaceComponentContract('fence').showInShelf).not.toBe(false)
+    // R3-A（20260829）：Fence 退役为隐藏兼容适配器，空间组织由 Colony 表达。
+    expect(surfaceComponentContract('fence').showInShelf).toBe(false)
     expect(surfaceComponentContract('stack').createMode).toBe('presentation')
     expect(surfaceComponentContract('stack').surfaces).toEqual(['main', 'context'])
-    expect(surfaceComponentContract('compare').createMode).toBe('presentation')
+    expect(surfaceComponentContract('compare').createMode).toBe('adapter-only') // R3-A：Compare 退役为临时动作
     expect(surfaceComponentContract('active-path').createMode).toBe('presentation')
     expect(surfaceComponentsFor('main', true).map((item) => item.type)).toContain('stack')
-    expect(surfaceComponentsFor('main', true).map((item) => item.type)).toContain('compare')
-    expect(surfaceComponentsFor('main', true).map((item) => item.type)).toContain('fence')
+    expect(surfaceComponentsFor('main', true).map((item) => item.type)).not.toContain('compare') // R3-A：不再可创建
+    expect(surfaceComponentsFor('main', true).map((item) => item.type)).not.toContain('fence') // R3-A：不再可创建
     expect(surfaceComponentsFor('workflow', true).map((item) => item.type)).toContain('active-path')
     expect(surfaceComponentContract('context-pack').surfaces).toEqual(['context'])
     expect(surfaceComponentsFor('workflow', true).map((item) => item.type)).not.toContain('workflow-step')
     expect(surfaceComponentsFor('workflow', true).map((item) => item.type)).not.toContain('context-pack')
-    expect(surfaceComponentsFor('workflow', true).map((item) => item.type)).toContain('workbench')
+    expect(surfaceComponentsFor('workflow', true).map((item) => item.type)).not.toContain('workbench') // R3-A：不再允许创建万能工作台
     expect(surfaceComponentsFor('workflow', true).map((item) => item.type)).not.toEqual(expect.arrayContaining(['review', 'checkpoint']))
-    expect(surfaceComponentsFor('context', true).map((item) => item.type)).toEqual(expect.arrayContaining(['structure-map', 'evolution', 'relationship-field', 'context-pack', 'stack', 'compare']))
+    expect(surfaceComponentsFor('context', true).map((item) => item.type)).toEqual(expect.arrayContaining(['structure-map', 'evolution', 'relationship-field', 'stack'])) // R3-A：context-pack/compare 退役
   })
 
   it('renders movable source chains from stable Project View identities', () => {
@@ -295,35 +295,27 @@ describe('Spatial Component Foundation integrity', () => {
       viewportOrigin: { x: 100, y: 100 },
       createId: (type) => `fixture:${type}`,
     })
-    expect(ops).toHaveLength(1)
-    expect(ops[0]).toMatchObject({ type: 'create-component', component: {
-      id: 'fixture:region', type: 'region', surface: 'context',
-      binding: { projectViewIds: ['view-a', 'view-b'] },
-    } })
+    // R3-A（20260829）：focus-region 意图 fail-closed；空间范围由用户手动圈选 Colony 表达。
+    expect(ops).toEqual([])
   })
 
-  it('creates reviewable Workbench proposals while unsupported runtime intents stay fail-closed', () => {
+  it('retired Workbench creation intents stay fail-closed alongside unsupported runtime intents (R3-A)', () => {
     const ops = resolveSurfaceIntent({ kind: 'place-quick-note-near-page', targetIds: ['page-a'] }, {
       projectId: 'project-a', surface: 'workflow', existing: [],
       viewportOrigin: { x: 0, y: 0 }, createId: (type) => `fixture:${type}`,
     })
-    expect(ops).toMatchObject([{ type: 'create-component', component: {
-      id: 'fixture:workbench', type: 'workbench', binding: { projectViewIds: ['page-a'] },
-      presentation: { variant: 'quick-note' },
-    } }])
+    expect(ops).toEqual([]) // R3-A：workbench 仅兼容既有，不再新建
     expect(resolveSurfaceIntent({ kind: 'restore-routine', targetIds: ['page-a'] }, {
       projectId: 'project-a', surface: 'workflow', existing: [], viewportOrigin: { x: 0, y: 0 },
     })).toEqual([])
   })
 
-  it('uses the same intent and Catalog contract on Main without mutating selected objects', () => {
+  it('prepare-workbench fails closed on Main without mutating selected objects (R3-A)', () => {
     const ops = resolveSurfaceIntent({ kind: 'prepare-workbench', targetIds: ['view-a', 'view-b'] }, {
       projectId: 'project-a', surface: 'main', existing: [],
       selectionBounds: { x: 80, y: 90, w: 420, h: 220 }, viewportOrigin: { x: 0, y: 0 },
       createId: (type) => `fixture:${type}`,
     })
-    expect(ops).toMatchObject([{ type: 'create-component', component: {
-      id: 'fixture:workbench', surface: 'main', type: 'workbench', binding: { projectViewIds: ['view-a', 'view-b'] },
-    } }])
+    expect(ops).toEqual([]) // R3-A：workbench 仅兼容既有独立工作空间
   })
 })

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { Command, Play } from 'lucide-react'
-import type { ActiveReceiverIdentityV1, Checkpoint, ConnectedConversationV1, ContextChangeProposalV1, ContextManifestV0, ContinuityResumeSnapshotV1, ConversationSessionV1, ObsidianVaultScanV1, OrderedRunReferenceV2, PresentationEntityRefV0, PresentationSpatialRegionV0, ResultSlotV0, RunEvent, RunProposalResult, RunReceiverRefV1, RunReview, RuntimeProviderStatus, WarehouseItemV1, WorkspaceMembership } from '@local-creative-os/contracts'
-import { MAX_STRUCTURAL_CONTAINER_DEPTH, type HandoffRecord } from '@local-creative-os/domain'
+import type { AssemblySourceRefV1 } from '@local-creative-os/contracts'
+import type { ActiveReceiverIdentityV1, Checkpoint, ConnectedConversationV1, ContextChangeProposalV1, ContextManifestV0, ContinuityResumeSnapshotV1, ConversationSessionV1, ObsidianVaultScanV1, OrderedRunReferenceV2, PresentationEntityRefV0, ResultSlotV0, RunEvent, RunProposalResult, RunReceiverRefV1, RunReview, RuntimeProviderStatus, WarehouseItemV1, WorkspaceMembership } from '@local-creative-os/contracts'
+import { MAX_STRUCTURAL_CONTAINER_DEPTH, type HandoffRecord, type ProjectId, type RelationId } from '@local-creative-os/domain'
 import type { ActiveRun, Camera, CanvasNode, CanvasScope, NodeDisplayMode, NodeLayer, PersistedPrototypeState, ProjectPackage, ScopeKind, TargetContextInference, WorkRailPreferences, Workspace } from './model'
 import { nodeMeta, runStatusLabel } from './model'
 import { ProjectCanvas } from './features/canvas/ProjectCanvas'
@@ -37,7 +38,7 @@ import { isRuntimeProjectMode } from './runtime/projectMode'
 import { emptyPresentationState, usePresentationMembership, usePresentationViewBridge } from './state/presentationViewState'
 import { usePresentationSurfaceElements } from './state/presentationDraftState'
 import { rememberNotePresentation } from './state/notePresentationMemory'
-import { spatialRegionFromSelection, type SpatialRegionDraft } from './state/spatialRegion'
+import { addMembersToColony, colonyFromSelection, migrateLegacySpatialRegion, reconcileColonyAfterMove, rescopeColony, type SpatialColonyDraft } from './state/spatialColony'
 import { appendProjectPresentationEntityRefs, appendProjectPresentationMembers, loadProjectPresentationMembers, removeProjectPresentationEntityRefs, removeProjectPresentationMembers } from './state/projectPresentationMembership'
 import { loadPresentationLayoutEngines } from './features/layout/layoutEngines'
 import { buildWorkspaceFrames } from './state/workspaceFrames'
@@ -56,7 +57,7 @@ import { ArtifactWorkbench, type WorkbenchFocus } from './features/workbench/Art
 import { canPreviewArtifact } from './features/viewer/artifactViewerRegistry'
 import { copyCanvasSelection, pasteCanvasNodes, pasteRelationTemplate, type CanvasClipboardPayload } from './state/canvasClipboard'
 import { inferFragmentLabel, LCOS_FRAGMENT_CLIPBOARD_MIME, parseFragmentClipboard } from './state/fragmentClipboard'
-import { dataUrlToFile, LCOS_MATERIAL_CAPTURE_EVENT, LCOS_MATERIAL_CAPTURE_MESSAGE, LCOS_MATERIAL_TRANSFER_MIME, materialTransferArtifactTitle, materialTransferFromLegacyFragment, materialTransferLabel, parseMaterialTransfer, svgToFile, type MaterialTransferPayloadV1 } from './state/materialTransfer'
+import { dataUrlToFile, LCOS_MATERIAL_CAPTURE_EVENT, LCOS_MATERIAL_CAPTURE_MESSAGE, LCOS_MATERIAL_TRANSFER_MIME, materialLocatorToSourceAnchor, materialTransferArtifactTitle, materialTransferFromLegacyFragment, materialTransferLabel, parseMaterialTransfer, svgToFile, type MaterialTransferPayloadV1 } from './state/materialTransfer'
 import { useCanvasHistory } from './state/useCanvasHistory'
 import { inferTargetContext, moveBetweenTargetAndContext, setPrimaryTarget } from './state/workContext'
 import { createBlankProjectState } from './state/projectState'
@@ -68,6 +69,7 @@ import { AgentContextSurface } from './features/shell/AgentContextSurface'
 import { buildScopePath, createId, decodeTextBuffer, fileNameFromPath, inferFileType, isTextPreviewFile, runtimePresentationStatus } from './features/shell/appShell'
 import { AppShellView } from './features/shell/AppShellView'
 import { LocalCoreClientProvider } from './runtime/LocalCoreClientContext'
+import { ProjectSpatialMarkerProvider } from './features/spatial/ProjectSpatialMarkerContext'
 import type { SurfaceContextMenuAction, SurfaceContextMenuItem } from './features/shell/SurfaceContextMenu'
 import type { SharedComposerCommandState, SurfaceExecutionSubmission, SurfaceExecutionSubmissionResult } from './features/execution/surfaceExecution'
 import type { DepositHintItem } from './features/shell/BoundaryHints'
@@ -260,7 +262,7 @@ export function App() {
   const [viewportHeight, setViewportHeight] = useState(() => typeof window === 'undefined' ? 900 : window.innerHeight)
   const [miniMapCollapsed, setMiniMapCollapsed] = useState(false)
   const [gridSnapEnabled, setGridSnapEnabled] = useState(() => typeof window === 'undefined' ? true : window.localStorage.getItem('lcos.main.grid-snap') !== 'off')
-  const [spatialRegions, setSpatialRegions] = useState<SpatialRegionDraft[]>(() => (initial.spatialRegions ?? []).map((region) => ({ ...region, memberViewIds: [] })))
+  const [colonies, setColonies] = useState<SpatialColonyDraft[]>(() => initial.colonies ?? (initial.spatialRegions ?? []).flatMap((region) => { const colony = migrateLegacySpatialRegion(region, initial.nodes); return colony ? [colony] : [] }))
   const [globalComposerText, setGlobalComposerText] = useState('')
   const [globalComposerVisible, setGlobalComposerVisible] = useState(false)
   const [globalProvider, setGlobalProvider] = useState('auto')
@@ -310,6 +312,10 @@ export function App() {
   const [workflowMembersById, setWorkflowMembersById] = useState<Record<string, string[]>>({})
   const [workflowEntityRefsById, setWorkflowEntityRefsById] = useState<Record<string, PresentationEntityRefV0[]>>({})
   const [immersiveNodeId, setImmersiveNodeId] = useState<string | null>(null)
+  const [immersiveSourceAnchor, setImmersiveSourceAnchor] = useState<string | null>(null)
+  const [immersiveRevisionId, setImmersiveRevisionId] = useState<string | null>(null)
+  const closeImmersive = useCallback(() => { setImmersiveNodeId(null); setImmersiveSourceAnchor(null); setImmersiveRevisionId(null) }, [])
+  const openImmersive = useCallback((nodeId: string, sourceAnchor?: string, revisionId?: string) => { setImmersiveSourceAnchor(sourceAnchor ?? null); setImmersiveRevisionId(revisionId ?? null); setImmersiveNodeId(nodeId) }, [])
   const [runtimeProviders, setRuntimeProviders] = useState<readonly RuntimeProviderStatus[]>([])
   const runtimeProvidersRef = useRef(runtimeProviders)
   runtimeProvidersRef.current = runtimeProviders
@@ -446,18 +452,22 @@ export function App() {
     renderer: 'main-canvas',
     seedState: () => ({
       ...emptyPresentationState(),
-      spatialRegions: spatialRegions.map(({ memberViewIds: _memberViewIds, ...region }) => region),
+      colonies,
     }),
   })
-  const persistedMainCanvasRegions = mainCanvasPresentation.state?.spatialRegions ?? null
+  const persistedMainCanvasColonies = mainCanvasPresentation.state?.colonies ?? null
+  const persistedLegacySpatialRegions = mainCanvasPresentation.state?.spatialRegions ?? null
   const [mainSurfaceElements, setMainSurfaceElements] = usePresentationSurfaceElements(activeProjectId, rootScope.id, 'arrange')
   useEffect(() => {
-    if (!mainCanvasPresentation.ready || persistedMainCanvasRegions === null) return
-    setSpatialRegions((current) => persistedMainCanvasRegions.map((region) => ({
-      ...region,
-      memberViewIds: current.find((item) => item.id === region.id)?.memberViewIds ?? [],
-    })))
-  }, [activeProjectId, mainCanvasPresentation.ready, persistedMainCanvasRegions])
+    if (!mainCanvasPresentation.ready) return
+    if (persistedMainCanvasColonies !== null) { setColonies(persistedMainCanvasColonies); return }
+    const legacy = persistedLegacySpatialRegions ?? []
+    const migrated = legacy.flatMap((region) => { const colony = migrateLegacySpatialRegion(region, nodes); return colony ? [colony] : [] })
+    if (!legacy.length) return
+    setColonies(migrated)
+    mainCanvasPresentation.patch((state) => ({ ...state, colonies: migrated, spatialRegions: [] }))
+    mainCanvasPresentation.flushSoon()
+  }, [activeProjectId, mainCanvasPresentation.ready, nodes, persistedLegacySpatialRegions, persistedMainCanvasColonies])
   useEffect(() => {
     setOcrClient(isRuntimeProjectMode(bootMode) ? bridgeRef.current.client : null)
   }, [bootMode])
@@ -1629,7 +1639,7 @@ export function App() {
     setSaveStatus('saving')
     const timer = window.setTimeout(() => {
       const rootScopeId = scopes.find((scope) => scope.kind === 'root')?.id ?? scopes[0]?.id ?? 'scope-root'
-      const snapshot: PersistedPrototypeState = { version: 10, projectId: activeProjectId, nodes, edges, workspaces, scopes, activeWorkspaceId: null, activeScopeId: rootScopeId, workRail, spatialRegions: spatialRegions.map(({ memberViewIds: _memberViewIds, ...region }) => region) }
+      const snapshot: PersistedPrototypeState = { version: 10, projectId: activeProjectId, nodes, edges, workspaces, scopes, activeWorkspaceId: null, activeScopeId: rootScopeId, workRail, colonies }
       projectStateCacheRef.current.set(activeProjectId, snapshot)
       if (isRuntimeProjectMode(bootMode)) {
         const bridge = bridgeRef.current
@@ -1655,7 +1665,7 @@ export function App() {
       setSaveStatus('saved')
     }, 280)
     return () => window.clearTimeout(timer)
-  }, [activeProjectId, bootMode, edges, nodes, presentationCommit, projects, scopes, spatialRegions, workRail, workspaces])
+  }, [activeProjectId, bootMode, edges, nodes, presentationCommit, projects, scopes, colonies, workRail, workspaces])
 
   useEffect(() => { cameraRef.current = camera }, [camera])
   useEffect(() => { activeProjectIdRef.current = activeProjectId }, [activeProjectId])
@@ -1751,8 +1761,8 @@ export function App() {
     activeWorkspaceId: null,
     activeScopeId: scopes.find((scope) => scope.kind === 'root')?.id ?? scopes[0]?.id ?? scopeId,
     workRail,
-    spatialRegions: spatialRegions.map(({ memberViewIds: _memberViewIds, ...region }) => region),
-  }), [activeProjectId, edges, nodes, scopeId, scopes, spatialRegions, workRail, workspaces])
+    colonies,
+  }), [activeProjectId, edges, nodes, scopeId, scopes, colonies, workRail, workspaces])
 
   const applyProjectState = useCallback((projectId: string, state: PersistedPrototypeState) => {
     resetGraph({ nodes: state.nodes, edges: state.edges })
@@ -1763,7 +1773,7 @@ export function App() {
     setScopeId(rootScope.id)
     setCamera(loadProjectNavigationState(projectId)?.camera ?? rootScope.camera)
     setWorkRail(normalizeRailPreferences(state.workRail))
-    setSpatialRegions((state.spatialRegions ?? []).map((region) => ({ ...region, memberViewIds: [] })))
+    setColonies(state.colonies ?? (state.spatialRegions ?? []).flatMap((region) => { const colony = migrateLegacySpatialRegion(region, state.nodes); return colony ? [colony] : [] }))
     setActiveProjectId(projectId)
     setSelectedIds([])
     setSelectedEdgeId(null)
@@ -2563,31 +2573,6 @@ export function App() {
     const ids = new Set(sceneCanvasNodes.map((node) => node.id))
     return edges.filter((edge) => ids.has(edge.from) && ids.has(edge.to))
   }, [activeWorkspace, edges, sceneCanvasNodes, visibleEdges])
-  const spatialRegionBoundsKey = useMemo(() => spatialRegions
-    .map((region) => `${region.id}:${region.bounds.x}:${region.bounds.y}:${region.bounds.width}:${region.bounds.height}`)
-    .join('|'), [spatialRegions])
-  useEffect(() => {
-    if (!spatialRegions.length) return
-    setSpatialRegions((current) => {
-      let changed = false
-      const next = current.map((region) => {
-        const ids = sceneCanvasNodes.flatMap((node) => {
-          const body = nodeVisualBounds(node)
-          const centerX = body.x + body.width / 2
-          const centerY = body.y + body.height / 2
-          const inside = centerX >= region.bounds.x && centerX <= region.bounds.x + region.bounds.width
-            && centerY >= region.bounds.y && centerY <= region.bounds.y + region.bounds.height
-          return inside ? [node.id] : []
-        })
-        const same = ids.length === region.memberViewIds.length && ids.every((id, index) => id === region.memberViewIds[index])
-        if (same) return region
-        changed = true
-        return { ...region, memberViewIds: ids }
-      })
-      return changed ? next : current
-    })
-  }, [sceneCanvasNodes, spatialRegionBoundsKey])
-
   // 2026-08-17 P0: the main canvas is always manual/freeform.
   // Legacy grid Presentation state is intentionally ignored here so restoring an
   // old project can never retake ownership of user positions. Deterministic
@@ -3560,6 +3545,46 @@ export function App() {
     return true
   }, [appendExactPresentationEntityRefs, bootMode, buildWorkspaceScene, clearSelection, nodes, setNodes])
 
+  const mapCanvasObjectsToConversation = useCallback((conversationSessionId: string, sourceIds: readonly string[]) => {
+    if (!isRuntimeProjectMode(bootMode)) { setNotice('真实项目中才能把材料长期交给对话'); return }
+    const receiver = selectionReceiverChoices.find((item) => item.conversationSessionId === conversationSessionId)
+    if (!receiver) { setNotice('这段对话还没有完成连接；先连接后才能长期使用这些材料'); return }
+    const semantic = semanticRefsForSourceIds(sourceIds, nodes)
+    const sourceRefs: AssemblySourceRefV1[] = semantic.viewIds.map((id) => ({ kind: 'artifactView', id }))
+    const unresolved: PresentationEntityRefV0[] = []
+    for (const ref of semantic.entityRefs) {
+      if (ref.type === 'workspace') { sourceRefs.push({ kind: 'scene', id: ref.id }); continue }
+      if (ref.type === 'conversation') {
+        const linked = selectionReceiverChoices.find((item) => item.conversationSessionId === ref.id)
+        if (linked) sourceRefs.push({ kind: 'conversation', id: linked.id })
+        else unresolved.push(ref)
+        continue
+      }
+      if (ref.type === 'scope') {
+        const owner = nodes.find((node) => node.opensScopeId === ref.id || node.id === `scope:${ref.id}`)
+        if (owner?.entityKind === 'context') sourceRefs.push({ kind: 'context', id: ref.id })
+        else if (owner?.entityKind === 'workflow') sourceRefs.push({ kind: 'workflow', id: ref.id })
+        else if (owner?.entityKind === 'collection') sourceRefs.push({ kind: 'collection', id: ref.id })
+        else unresolved.push(ref)
+        continue
+      }
+      if (ref.type === 'note') { sourceRefs.push({ kind: 'note', id: ref.id }); continue }
+      unresolved.push(ref)
+    }
+    const unique = [...new Map(sourceRefs.map((ref) => [`${ref.kind}:${ref.id}`, ref])).values()]
+    if (!unique.length) { setNotice('这些对象目前还没有可安全写入对话的来源身份'); return }
+    void bridgeRef.current.client.applyAssembly(activeProjectId, {
+      schemaVersion: 1,
+      sourceRefs: unique,
+      targetRef: { kind: 'conversation', id: receiver.id },
+    }).then((call) => {
+      if (!call.result.ok) { setNotice(`给这段对话失败：${humanizeRuntimeMessage(call.result.error.message)}`); return }
+      const applied = call.result.value.results.filter((item) => item.status === 'applied' || item.status === 'skipped').length
+      const failed = call.result.value.results.length - applied + unresolved.length
+      setNotice(failed ? `已给这段对话 ${applied} 项；另有 ${failed} 项没有猜测身份` : `已给这段对话 ${applied} 项`)
+    }).catch((error: unknown) => setNotice(`给这段对话失败：${humanizeRuntimeMessage(error instanceof Error ? error.message : String(error))}`))
+  }, [activeProjectId, bootMode, nodes, selectionReceiverChoices])
+
   const directDropToProjectRailView = useCallback((targetViewId: string, sourceIds: readonly string[]) => {
     if (targetViewId === NEW_SCENE_DROP_TARGET_ID) {
       createWorkspaceSceneFromDropPayload(sourceIds)
@@ -4264,15 +4289,21 @@ export function App() {
     const sourceArtifactId = payload.source.artifactId
     if (!sourceArtifactId || payload.source.projectId !== activeProjectId || sourceArtifactId === newArtifactId) return
     const now = new Date().toISOString()
-    const relation = {
-      id: createId('relation'),
-      projectId: activeProjectId,
+    const sourceAnchor = materialLocatorToSourceAnchor(payload.source.locator)
+    const relation: Relation = {
+      id: createId('relation') as RelationId,
+      projectId: activeProjectId as ProjectId,
       sourceEntityType: 'artifact', sourceEntityId: newArtifactId,
       targetEntityType: 'artifact', targetEntityId: sourceArtifactId,
       kind: 'reference',
       origin: 'user', createdBy: 'material-transfer', confidence: 1,
+      evidenceRefs: [{
+        kind: 'artifact', id: sourceArtifactId, label: payload.source.title,
+        ...(payload.source.revisionId ? { revisionId: payload.source.revisionId } : {}),
+        ...(sourceAnchor ? { sourceAnchor } : {}),
+      }],
       createdAt: now, updatedAt: now,
-    } as Relation
+    }
     await bridgeRef.current.client.saveRelation(activeProjectId, relation).catch(() => undefined)
   }, [activeProjectId])
 
@@ -4794,50 +4825,93 @@ export function App() {
   }, [activeProjectId, appendExactPresentationEntityRefs, bootMode, createContextFromMembersDirect, createWorkflowFromMembersDirect, edges, nodes, projectPresentationNodes, savedContextViews.length, savedWorkflowViews.length, scopeId, scopes, selectedIds, setGraph, workRail, workspaces, workspaceId])
 
 
-  const commitSpatialRegions = useCallback((next: SpatialRegionDraft[]) => {
-    setSpatialRegions(next)
+  const commitColonies = useCallback((next: SpatialColonyDraft[]) => {
+    setColonies(next)
     if (!mainCanvasPresentation.ready) return
-    mainCanvasPresentation.patch((state) => ({
-      ...state,
-      spatialRegions: next.map(({ memberViewIds: _memberViewIds, ...region }) => region),
-    }))
+    mainCanvasPresentation.patch((state) => ({ ...state, colonies: next, spatialRegions: [] }))
     mainCanvasPresentation.flushSoon()
   }, [mainCanvasPresentation])
 
-  const createRegionFromCurrentSelection = useCallback(() => {
-    if (selectedIds.length < 2) { setNotice('至少选择 2 个对象后才能建立围栏'); return }
-    const region = spatialRegionFromSelection(createId('region'), selectedIds, sceneCanvasNodes)
-    if (!region) { setNotice('当前 Selection 无法建立围栏'); return }
-    commitSpatialRegions([...spatialRegions, region])
-    setNotice(`已建立围栏 · 当前包含 ${region.memberViewIds.length} 项；拖入/拖出会自动更新成员`)
-  }, [commitSpatialRegions, sceneCanvasNodes, selectedIds, spatialRegions])
+  const createColonyFromCurrentSelection = useCallback(() => {
+    if (selectedIds.length < 2) { setNotice('至少选择 2 个对象后才能圈成 Colony'); return }
+    const colony = colonyFromSelection(createId('colony'), selectedIds, sceneCanvasNodes)
+    if (!colony) { setNotice('当前 Selection 无法建立 Colony'); return }
+    commitColonies([...colonies, colony])
+    setNotice(`已圈成 Colony · ${colony.memberIds.length} 项；成员关系不会因为位置变化自动丢失`)
+  }, [colonies, commitColonies, sceneCanvasNodes, selectedIds])
 
-  const updateSpatialRegionBounds = useCallback((regionId: string, bounds: PresentationSpatialRegionV0['bounds']) => {
-    // Resize is local interaction preview. Persist once on pointer-up; otherwise
-    // a large Main canvas would enqueue Presentation writes every pointer frame.
-    setSpatialRegions((current) => current.map((region) => region.id === regionId ? { ...region, bounds } : region))
-  }, [])
+  const createColonyFromLasso = useCallback((memberIds: readonly string[], contourPoints: readonly { x: number; y: number }[]) => {
+    const ids = [...new Set(memberIds)].filter((id) => sceneCanvasNodes.some((node) => node.id === id))
+    if (ids.length < 2 || contourPoints.length < 3) { setNotice('至少圈住 2 个对象才能建立 Colony'); return }
+    const colony: SpatialColonyDraft = { id: createId('colony'), surface: 'main', memberIds: ids, contour: { points: contourPoints.map((point) => ({ ...point })) } }
+    commitColonies([...colonies, colony])
+    setNotice(`已建立 Colony · ${ids.length} 项`)
+  }, [colonies, commitColonies, sceneCanvasNodes])
 
-  const commitSpatialRegionBounds = useCallback((regionId: string, bounds: PresentationSpatialRegionV0['bounds']) => {
-    setSpatialRegions((current) => current.map((region) => region.id === regionId ? { ...region, bounds } : region))
-    if (!mainCanvasPresentation.ready) return
-    mainCanvasPresentation.patch((state) => ({
-      ...state,
-      spatialRegions: (state.spatialRegions ?? []).map((region) => region.id === regionId ? { ...region, bounds } : region),
-    }))
-    mainCanvasPresentation.flushSoon()
-  }, [mainCanvasPresentation])
+  const addToColony = useCallback((colonyId: string, memberIds: readonly string[], placements?: Readonly<Record<string, { x: number; y: number }>>) => {
+    let added = 0
+    const next = colonies.map((colony) => {
+      if (colony.id !== colonyId) return colony
+      const before = colony.memberIds.length
+      const projectedNodes = placements ? sceneCanvasNodes.map((node) => placements[node.id] ? { ...node, ...placements[node.id] } : node) : sceneCanvasNodes
+      const updated = addMembersToColony(colony, memberIds, projectedNodes)
+      added = updated.memberIds.length - before
+      return updated
+    })
+    if (!added) return
+    commitColonies(next)
+    setNotice(`已加入 Colony · +${added}`)
+  }, [colonies, commitColonies, sceneCanvasNodes])
 
-  const clearSpatialRegion = useCallback((regionId: string) => {
-    commitSpatialRegions(spatialRegions.filter((region) => region.id !== regionId))
-  }, [commitSpatialRegions, spatialRegions])
+  const rescopeCurrentColony = useCallback((colonyId: string, points: readonly { x: number; y: number }[]) => {
+    const current = colonies.find((item) => item.id === colonyId)
+    if (!current) return
+    const next = rescopeColony(current, points, sceneCanvasNodes)
+    if (!next) { setNotice('重新圈定至少需要包含 2 个对象'); return }
+    commitColonies(colonies.map((item) => item.id === colonyId ? next : item))
+    setNotice(`已重新圈定 Colony · ${next.memberIds.length} 项`)
+  }, [colonies, commitColonies, sceneCanvasNodes])
 
-  const promoteCurrentRegionToCollection = useCallback((regionId: string) => {
-    const region = spatialRegions.find((item) => item.id === regionId)
-    if (!region) return
-    createScopeFromSelection({ label: region.label ?? '', kind: 'collection', memberIds: region.memberViewIds })
-    clearSpatialRegion(regionId)
-  }, [clearSpatialRegion, createScopeFromSelection, spatialRegions])
+  const settleColonyMemberMove = useCallback((movedIds: readonly string[], placements: Readonly<Record<string, { x: number; y: number }>>) => {
+    if (!movedIds.length || !colonies.length) return
+    const projectedNodes = sceneCanvasNodes.map((node) => placements[node.id] ? { ...node, ...placements[node.id] } : node)
+    let peeled = 0
+    let touched = false
+    const next = colonies.map((colony) => {
+      if (!colony.memberIds.some((id) => movedIds.includes(id))) return colony
+      touched = true
+      const reconciled = reconcileColonyAfterMove(colony, movedIds, projectedNodes)
+      peeled += reconciled.peeledIds.length
+      return reconciled.colony
+    })
+    if (!touched) return
+    commitColonies(next)
+    if (peeled) setNotice(`已从 Colony 剥离 ${peeled} 项`)
+  }, [colonies, commitColonies, sceneCanvasNodes])
+
+  const dissolveColony = useCallback((colonyId: string) => {
+    const colony = colonies.find((item) => item.id === colonyId)
+    if (!colony) return
+    commitColonies(colonies.filter((item) => item.id !== colonyId))
+    setNotice(`已解散 Colony · ${colony.memberIds.length} 个对象保留原位`)
+  }, [colonies, commitColonies])
+
+  useEffect(() => {
+    const legacy = mainSurfaceElements.filter((element) => (element.type === 'fence' || element.type === 'region') && (element.binding?.projectViewIds?.length ?? 0) >= 2)
+    if (!legacy.length) return
+    const migratedElementIds = new Set<string>()
+    const additions: SpatialColonyDraft[] = []
+    for (const element of legacy) {
+      const colonyId = `legacy-colony:${element.id}`
+      if (colonies.some((colony) => colony.id === colonyId)) { migratedElementIds.add(element.id); continue }
+      const colony = colonyFromSelection(colonyId, element.binding?.projectViewIds ?? [], sceneCanvasNodes, element.presentation?.variant)
+      if (!colony) continue
+      migratedElementIds.add(element.id)
+      additions.push(colony)
+    }
+    if (additions.length) commitColonies([...colonies, ...additions])
+    if (migratedElementIds.size) setMainSurfaceElements(mainSurfaceElements.filter((element) => !migratedElementIds.has(element.id)))
+  }, [colonies, commitColonies, mainSurfaceElements, sceneCanvasNodes, setMainSurfaceElements])
 
   const togglePositionLock = useCallback((nodeId: string) => {
     setNodes((current) => current.map((node) => node.id === nodeId ? { ...node, positionLocked: !node.positionLocked } : node))
@@ -5698,9 +5772,9 @@ export function App() {
     if (!node) { setNotice('这份对话还没有出现在当前项目画布里'); return }
     setNodeInfoId(null)
     setWorkbench(null)
-    setImmersiveNodeId(null)
+    closeImmersive()
     setConversationSpaceId(conversationId)
-  }, [conversationSessions, nodes])
+  }, [closeImmersive, conversationSessions, nodes])
 
   // 沉淀池「定位编辑」：技能 artifact 或其材料 → 相机定位（与 ⌘K 节点跳转同一 focus 链）。
   const locateWorkflowSkill = useCallback((skill: WorkflowSkillSummary) => {
@@ -6631,6 +6705,18 @@ export function App() {
     })
   }, [bootMode, setNodes])
 
+  const openMaterialSource = useCallback((node: CanvasNode) => {
+    const source = node.materialSource
+    if (!source) return
+    const sourceNode = (source.viewId ? nodes.find((item) => item.id === source.viewId) : undefined)
+      ?? nodes.find((item) => item.artifactId === source.artifactId)
+    if (!sourceNode) { setNotice('来源仍在项目里，但当前没有可打开的画布视图'); return }
+    setNodeInfoId(null)
+    setWorkbench(null)
+    openImmersive(sourceNode.id, source.sourceAnchor, source.revisionId)
+    setNotice(source.sourceAnchor ? `已回到来源 · ${source.title ?? sourceNode.title}` : `已打开来源 · ${source.title ?? sourceNode.title}`)
+  }, [nodes, openImmersive])
+
   const openHandoff = useCallback(async () => {
     if (dataSource !== 'runtime') {
       setNotice('交接内容只能从当前已加载的真实项目状态生成')
@@ -6710,7 +6796,7 @@ export function App() {
     // 统一文本体系：note 与 markdown 文本 artifact 双击都直接就地编辑。
     if (node.kind === 'note' || node.fileType === 'markdown') {
       setNodeInfoId(null)
-      setImmersiveNodeId(null)
+      closeImmersive()
       // 投影/本体冲突：runtime 实体投影的正文属于本体（text-revision API 未落地，
       // 本地改写只会造成投影分叉）。双击不直接编辑，提示复制一个引用副本节点来改。
       if (bootMode === 'runtime' && node.artifactId && !originTextIdsRef.current.has(node.id)) {
@@ -6738,9 +6824,9 @@ export function App() {
       // metadata/version surface instead of silently becoming a second reader.
       setNodeInfoId(null)
       setWorkbench(null)
-      setImmersiveNodeId(id)
+      openImmersive(id)
     }
-  }, [bootMode, enterConversationSurface, enterScope, nodes, openSavedContextView, openSavedWorkflowView, openWorkspaceScene, presentationEntityNodes, scopes, selectNode])
+  }, [bootMode, closeImmersive, enterConversationSurface, enterScope, nodes, openImmersive, openSavedContextView, openSavedWorkflowView, openWorkspaceScene, presentationEntityNodes, scopes, selectNode])
 
   const showNodeDetails = useCallback((id: string) => {
     setNodeInfoId(id)
@@ -6817,7 +6903,7 @@ export function App() {
       if (modifier && event.shiftKey && key === 'l') { event.preventDefault(); if (bootMode === 'runtime') setReorganizeOpen(true); else setNotice('智能体整理只在真实项目中可用'); return }
       if (modifier && key === 'o' && selectedNodes.length === 1) { event.preventDefault(); openNative(selectedNodes[0]); return }
       if (event.code === 'Space') { event.preventDefault(); setSpaceHeld(true); return }
-      if (event.key === 'Escape') { if (paletteOpen) { setPaletteOpen(false); return } if (projectFocusOpen) setProjectFocusOpen(false); else if (confirmProjectDelete) setConfirmProjectDelete(null); else if (confirmWorkspaceId) setConfirmWorkspaceId(null); else if (conversationSpaceId) setConversationSpaceId(null); else if (immersiveNodeId) setImmersiveNodeId(null); else if (workbench) setWorkbench(null); else if (capabilityOpen) setCapabilityOpen(false); else if (nodeInfoId) setNodeInfoId(null); else if (layoutPreview) { setLayoutPreview(null); setLayoutPreviewFocusIds(null) } else clearSelection(); return }
+      if (event.key === 'Escape') { if (paletteOpen) { setPaletteOpen(false); return } if (projectFocusOpen) setProjectFocusOpen(false); else if (confirmProjectDelete) setConfirmProjectDelete(null); else if (confirmWorkspaceId) setConfirmWorkspaceId(null); else if (conversationSpaceId) setConversationSpaceId(null); else if (immersiveNodeId) closeImmersive(); else if (workbench) setWorkbench(null); else if (capabilityOpen) setCapabilityOpen(false); else if (nodeInfoId) setNodeInfoId(null); else if (layoutPreview) { setLayoutPreview(null); setLayoutPreviewFocusIds(null) } else clearSelection(); return }
       if (key === 'f' && selectedIds.length === 1) { event.preventDefault(); openProjectFocus(); return }
       if (key === 'c') { event.preventDefault(); if (layoutMode === 'sidecar') { setNotice('侧边协作模式不提供 LCOS 输入框'); return } requestComposerFocus(); return }
       if (event.key === 'F2' && selectedIds.length === 1 && selectedNodes.length === 1) { event.preventDefault(); setRenameNodeId(selectedNodes[0]!.id); return }
@@ -6829,7 +6915,7 @@ export function App() {
     const release = (event: KeyboardEvent) => { if (event.code === 'Space') setSpaceHeld(false) }
     window.addEventListener('keydown', handler); window.addEventListener('keyup', release)
     return () => { window.removeEventListener('keydown', handler); window.removeEventListener('keyup', release) }
-  }, [bootMode, clearSelection, confirmProjectDelete, confirmWorkspaceId, conversationSpaceId, copySelection, createDialogOpen, deleteNodes, duplicateSelection, capabilityOpen, immersiveNodeId, layoutMode, nodeInfoId, paletteOpen, referencePickActive, workbench, layoutPreview, openNative, openProjectFocus, pasteClipboard, projectCreateOpen, projectFocusOpen, redo, requestComposerFocus, requestGlobalRun, requestSelectionRun, scopeCreateOpen, selectMarquee, selectedEdgeId, selectedId, selectedIds, selectedNodes, setEdges, undo, visibleNodes])
+  }, [bootMode, clearSelection, closeImmersive, confirmProjectDelete, confirmWorkspaceId, conversationSpaceId, copySelection, createDialogOpen, deleteNodes, duplicateSelection, capabilityOpen, immersiveNodeId, layoutMode, nodeInfoId, paletteOpen, referencePickActive, workbench, layoutPreview, openNative, openProjectFocus, pasteClipboard, projectCreateOpen, projectFocusOpen, redo, requestComposerFocus, requestGlobalRun, requestSelectionRun, scopeCreateOpen, selectMarquee, selectedEdgeId, selectedId, selectedIds, selectedNodes, setEdges, undo, visibleNodes])
 
 
   const refreshProjectCatalog = useCallback(() => {
@@ -7028,6 +7114,7 @@ export function App() {
   const noteToEdit = noteEditorId ? nodes.find((node) => node.id === noteEditorId) : undefined
   const scopePath = buildScopePath(scopes, activeScope)
   return <LocalCoreClientProvider value={bridgeRef.current.client}>
+    <ProjectSpatialMarkerProvider key={activeProjectId} projectId={activeProjectId}>
     <AppShellView
     layoutDensity={layoutDensity}
     layoutMode={layoutMode}
@@ -7224,7 +7311,7 @@ export function App() {
           onSend: requestSelectionRun,
           onClose: () => { setReferencePickActive(false); setSelectionComposerOpen(false) },
         } : undefined,
-        referencePick: layoutMode === 'desktop' && selectionComposerOpen ? { active: referencePickActive, ids: selectionReferenceIds, onToggle: toggleSelectionReference } : undefined,
+        referencePick: layoutMode === 'desktop' ? { active: referencePickActive, ids: selectionReferenceIds, onToggle: toggleSelectionReference } : undefined,
         onSelect: selectNode,
         onClearSelection: clearSelection,
         onMarqueeSelect: selectMarquee,
@@ -7233,6 +7320,7 @@ export function App() {
         onDetails: showNodeDetails,
         onOpenConversation: enterConversationSurface,
         onSetActiveConversation: (conversationId) => { void requestSetActiveConversation(conversationId) },
+        onMapToConversation: mapCanvasObjectsToConversation,
         activeConversationId: activeReceiverIdentity?.chain?.conversationSession?.id ?? null,
         onFocusSelection: selectedIds.length === 1 ? () => openProjectFocus() : undefined,
         onRenameSelection: selectedIds.length === 1 && selectedNodes.length === 1 ? () => setRenameNodeId(selectedNodes[0]!.id) : undefined,
@@ -7274,16 +7362,17 @@ export function App() {
         closingCollectionScopeIds,
         onToggleCollection: toggleCollectionScope,
         onOpenContextLens: openContextProjectionLens,
-        spatialRegions,
+        colonies,
         surfaceElements: mainSurfaceElements,
         onSurfaceElementsChange: setMainSurfaceElements,
         portalTargets: projectRailViews.filter((view) => view.kind === 'scene' || view.kind === 'context' || view.kind === 'workflow').map((view) => ({ id: view.id, label: view.title, kind: view.kind })),
         onOpenPortalTarget: (targetId) => { const target = projectRailViews.find((view) => view.id === targetId); if (target) activateProjectRailView(target) },
-        onCreateRegion: createRegionFromCurrentSelection,
-        onClearRegion: clearSpatialRegion,
-        onRegionBoundsChange: updateSpatialRegionBounds,
-        onRegionBoundsCommit: commitSpatialRegionBounds,
-        onPromoteRegionToCollection: promoteCurrentRegionToCollection,
+        onCreateColonyFromSelection: createColonyFromCurrentSelection,
+        onCreateColonyFromLasso: createColonyFromLasso,
+        onAddToColony: addToColony,
+        onRescopeColony: rescopeCurrentColony,
+        onDissolveColony: dissolveColony,
+        onColonyMemberMoveSettled: settleColonyMemberMove,
       },
       projection: {
         projectId: activeProjectId,
@@ -7571,7 +7660,8 @@ export function App() {
         relationCount: nodeInfoRelationCount,
         onClose: () => setNodeInfoId(null),
         onRelations: () => { selectNode(nodeInfoNode.id); setNodeInfoId(null); setNotice(`${nodeInfoRelationCount} 个关联已在画布中高亮`) },
-        onPreview: (node) => { setNodeInfoId(null); setWorkbench(null); setImmersiveNodeId(node.id) },
+        onPreview: (node) => { setNodeInfoId(null); setWorkbench(null); openImmersive(node.id) },
+        onOpenMaterialSource: openMaterialSource,
         onShowResource: (node) => { setNodeInfoId(null); setResourceDetailArtifactId(String(node.artifactId)) },
         onRevisions: (node) => { setNodeInfoId(null); setWorkbench({ nodeId: node.id, focus: 'revisions' }) },
         onOpenSource: openNative,
@@ -7862,7 +7952,7 @@ export function App() {
     immersive={immersiveNodeId ? (() => {
       const immersiveNode = nodes.find((node) => node.id === immersiveNodeId) ?? presentationEntityNodes.find((node) => node.id === immersiveNodeId)
       if (immersiveNode?.entityKind === 'conversation') return null
-      return immersiveNode ? { node: immersiveNode, projectId: activeProjectId, onClose: () => setImmersiveNodeId(null) } : null
+      return immersiveNode ? { node: immersiveNode, projectId: activeProjectId, ...(immersiveSourceAnchor ? { sourceAnchor: immersiveSourceAnchor } : {}), ...(immersiveRevisionId ? { sourceRevisionId: immersiveRevisionId } : {}), onClose: closeImmersive, onOpenSource: openNative, onRevealSource: revealSource, onRelinkSource: relinkSource, onOpenMaterialSource: openMaterialSource } : null
     })() : null}
     />
     {/* ⌘K 命令面板：portal 到 body 的全局顶层浮层；providers 纯查询、actions 全部为现有函数。 */}
@@ -7873,5 +7963,6 @@ export function App() {
       actions={paletteAssembly.actions}
       onSearchProject={(query) => { setPaletteOpen(false); setProjectSearchInitialQuery(query); setProjectToolsMode('search') }}
     />
+    </ProjectSpatialMarkerProvider>
     </LocalCoreClientProvider>
   }

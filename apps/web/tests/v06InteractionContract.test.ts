@@ -28,8 +28,8 @@ describe('Gate F desktop interaction contract', () => {
     expect(app).toContain('参考快照、指令和执行记录已自动保存')
   })
 
-  it('uses Ctrl/Cmd or Shift as additive desktop selection modifiers', () => {
-    expect(canvas).toContain('event.shiftKey || event.ctrlKey || event.metaKey')
+  it('uses Shift as the only additive desktop selection modifier (R2D)', () => {
+    expect(canvas).toContain('additiveSelectionModifier(event)') // R2D：Ctrl/Cmd 退役为引用拾取，Shift 唯一增量
     expect(canvas).toContain('additiveSelection(event)')
     expect(canvas).toContain('onCreateScopeFromSelection')
     expect(app).toContain('if (node.opensScopeId) {')

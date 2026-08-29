@@ -3816,6 +3816,15 @@ body,
 .viewer-loading, .viewer-error { display: grid; place-content: center; justify-items: center; gap: 10px; min-height: 220px; color: #596a79; font-size: 12px; }
 .viewer-loading svg { animation: handoff-spin .9s linear infinite; }
 .viewer-error strong { color: #a34e47; }
+
+/* R1-D · Preview / Fragment fallback: quiet exit routes, not another toolbar. */
+.lcos-viewer-recovery-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 7px; max-width: 460px; margin-top: 4px; }
+.lcos-viewer-recovery-actions > button, .lcos-viewer-recovery-actions label button, .vnext-immersive-source { display: inline-flex; align-items: center; gap: 5px; min-height: 28px; padding: 5px 9px; border: 1px solid rgba(76, 91, 105, .16); border-radius: 9px; background: rgba(255, 255, 255, .72); color: #43566a; font: inherit; cursor: pointer; }
+.lcos-viewer-recovery-actions label { flex-basis: 100%; display: grid; grid-template-columns: auto minmax(140px, 1fr) auto; align-items: center; gap: 7px; margin-top: 2px; }
+.lcos-viewer-recovery-actions label span { color: #6e7c89; }
+.lcos-viewer-recovery-actions input { min-width: 0; height: 28px; padding: 0 8px; border: 1px solid rgba(76, 91, 105, .16); border-radius: 8px; background: rgba(255, 255, 255, .86); color: #2f4050; }
+.lcos-viewer-recovery-actions button:disabled { opacity: .42; cursor: default; }
+.vnext-immersive-source { white-space: nowrap; }
 .workbench-overview { padding: 14px; display: grid; gap: 12px; }
 .workbench-meta { margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .workbench-meta div { padding: 8px 10px; border-radius: 10px; background: #fff; border: 1px solid rgba(53, 72, 91, .1); }

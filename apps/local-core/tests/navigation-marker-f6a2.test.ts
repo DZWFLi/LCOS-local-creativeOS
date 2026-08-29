@@ -265,8 +265,33 @@ describe('HTTP 路由（/projects/:id/spatial-markers + /navigation/resolve）',
 
     const crossResponse = await fetch(`${s.baseUrl}/projects/${s.projectId}/spatial-markers`, {
       method: 'POST', headers,
-      body: JSON.stringify({ targetRef: { projectId: 'other-project', kind: 'view', id: 'view-x' }, scope: 'local' }),
+      body: JSON.stringify({ targetRef: { projectId: 'other-project', kind: 'view', id: 'view-x' }, scope: 'local', sourceSurfaceRef: 'main' }),
     })
     expect(crossResponse.status).toBe(422)
+
+    const localWithoutSurface = await fetch(`${s.baseUrl}/projects/${s.projectId}/spatial-markers`, {
+      method: 'POST', headers,
+      body: JSON.stringify({ targetRef: { projectId: s.projectId, kind: 'view', id: String(s.viewInCtx.id) }, scope: 'local' }),
+    })
+    expect(localWithoutSurface.status).toBe(400)
+
+    const fakeUiSurface = await fetch(`${s.baseUrl}/projects/${s.projectId}/spatial-markers`, {
+      method: 'POST', headers,
+      body: JSON.stringify({ targetRef: { projectId: s.projectId, kind: 'view', id: String(s.viewInCtx.id) }, scope: 'local', sourceSurfaceRef: 'context-graph-spatial' }),
+    })
+    expect(fakeUiSurface.status).toBe(400)
+
+    const missingStableSurface = await fetch(`${s.baseUrl}/projects/${s.projectId}/spatial-markers`, {
+      method: 'POST', headers,
+      body: JSON.stringify({ targetRef: { projectId: s.projectId, kind: 'view', id: String(s.viewInCtx.id) }, scope: 'local', sourceSurfaceRef: 'scope:missing' }),
+    })
+    expect(missingStableSurface.status).toBe(422)
+
+    // Stable-looking aliases must resolve to the exact same canonical surface ref; root scope is `main`, not `scope:<root>`.
+    const rootScopeAlias = await fetch(`${s.baseUrl}/projects/${s.projectId}/spatial-markers`, {
+      method: 'POST', headers,
+      body: JSON.stringify({ targetRef: { projectId: s.projectId, kind: 'view', id: String(s.viewInCtx.id) }, scope: 'local', sourceSurfaceRef: `scope:${s.rootScopeId}` }),
+    })
+    expect(rootScopeAlias.status).toBe(422)
   })
 })

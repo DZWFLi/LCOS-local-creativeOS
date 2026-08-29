@@ -17,7 +17,7 @@ const gates = [
   ['no hard 20-marker threshold', !marker.match(/(?:length|count)\s*[>=]+\s*20/) && !layer.match(/(?:length|count)\s*[>=]+\s*20/)],
   ['density clustering uses screen distance', marker.includes('markerClusterRadius') && marker.includes('Math.hypot')],
   ['priority breakout protects focus/search/beacon', marker.includes("case 'beacon'") && marker.includes("case 'focus'") && marker.includes("case 'search'") && marker.includes('breakout(marker)')],
-  ['local and cross-surface scopes exist', marker.includes("'local' | 'cross-surface'") && marker.includes('spatialMarkerVisibleOnSurface')],
+  ['local and cross-surface scopes exist', marker.includes('SpatialMarkerScopeV0') && marker.includes('export type SpatialMarkerScope = SpatialMarkerScopeV0') && marker.includes('spatialMarkerVisibleOnSurface')],
   ['cross-project navigation fails closed', marker.includes("reason: 'cross-project'") && marker.includes("status: 'unresolved'")],
   ['no fuzzy rebinding fields in resolver', (() => {
     const start = marker.indexOf('export async function resolveSpatialMarkerNavigation')

@@ -4588,7 +4588,7 @@ export class SqliteMetadataRepository {
       projectId: String(row.project_id),
       targetRef: { projectId: String(row.project_id), kind: String(row.target_kind) as SpatialMarkerIntentV0['targetRef']['kind'], id: String(row.target_id) },
       scope: String(row.scope) as SpatialMarkerIntentV0['scope'],
-      ...(row.source_surface_ref === null || row.source_surface_ref === undefined ? {} : { sourceSurfaceRef: String(row.source_surface_ref) }),
+      ...(row.source_surface_ref === null || row.source_surface_ref === undefined ? {} : { sourceSurfaceRef: String(row.source_surface_ref) as NonNullable<SpatialMarkerIntentV0['sourceSurfaceRef']> }),
       createdAt: String(row.created_at),
       updatedAt: String(row.updated_at),
     }

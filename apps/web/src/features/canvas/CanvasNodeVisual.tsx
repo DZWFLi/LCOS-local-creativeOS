@@ -7,15 +7,17 @@ import {
   Network,
 } from 'lucide-react'
 import { memo, useEffect, useState } from 'react'
-import type { MouseEvent as ReactMouseEvent } from 'react'
+import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react'
 import type { CanvasNode, NodeDisplayMode, RunStatus } from '../../model'
 import { runStatusLabel } from '../../model'
 import { MindMapNoteVisual } from './MindMapNoteVisual'
 import { CrepeHost } from './markdownPreview'
 import { registerNodeCard, resolveNodeCard } from './nodeCardRegistry'
 import { visualFamilyFor } from '../presentation/visualFamily'
-import { ConversationGlyth, conversationActivityScore } from '../conversations/ConversationGlyth'
+import { ConversationGlyth, ConversationGlythIdentityPin, conversationActivityScore } from '../conversations/ConversationGlyth'
+import { glythSemanticLodForZoom, type GlythSemanticLod } from '../spatial/glythSemanticLod'
 import { glythStateFromSessionPhase } from '../conversations/conversationLifecycle'
+import { additiveSelectionModifier } from '../spatial/pointerInteractionLanguage'
 import { OcrImage } from '../ocr/OcrImage'
 import { documentOutlinePreview, documentSemanticLevel, type DocumentSemanticLevel } from '../spatial/documentSemanticZoom'
 import {
@@ -51,6 +53,10 @@ export interface Props {
   /** World camera zoom for document Semantic Zoom. Surface renderers may omit it. */
   zoom?: number
   onOpenContextLens?: (node: CanvasNode, lens: 'space' | 'structure' | 'evolution') => void
+  /** R2-B: camera-driven Conversation presentation only; never Core truth. */
+  glythLod?: GlythSemanticLod
+  /** selected / active / Focus/Search target stays independent at extreme-far. */
+  glythCritical?: boolean
 }
 
 export type NodeVisualFamily = 'reference' | 'document' | 'note' | 'context' | 'process' | 'decision' | 'result-slot'
@@ -82,6 +88,10 @@ export function nodeVisualFamily(node: CanvasNode): NodeVisualFamily {
 }
 
 export const CanvasNodeVisual = memo(function CanvasNodeVisual(props: Props) {
+  if (props.node.entityKind === 'conversation') {
+    const ConversationCard = resolveNodeCard(props.node)
+    if (ConversationCard) return <ConversationCard {...props} />
+  }
   const family = nodeVisualFamily(props.node)
   if (family === 'result-slot') return <ResultSlotObject {...props} />
   if (family === 'process') return <RunObject {...props} />
@@ -108,6 +118,8 @@ export const CanvasNodeVisual = memo(function CanvasNodeVisual(props: Props) {
   && previous.selected === next.selected
   && previous.zoom === next.zoom
   && previous.onOpenContextLens === next.onOpenContextLens
+  && previous.glythLod === next.glythLod
+  && previous.glythCritical === next.glythCritical
 ))
 
 
@@ -501,7 +513,7 @@ function CollectionObject({ node, density, onDetails, showDetails, showControls 
       {collectionExpanded && inlineEntityMembers.length > 0 && showControls && <div className="lcos-collection-inline" data-testid={`collection-inline-${node.id}`} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()}>
         {inlineEntityMembers.map((member) => {
           const MemberIcon = nodeTypeIcon(member)
-          return <button key={member.id} type="button" className="lcos-collection-member" data-member-id={member.id} title={member.title} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onCollectionMemberSelect?.(member.id, event.shiftKey || event.ctrlKey || event.metaKey) }}><MemberIcon/><span>{displayNodeTitle(member)}</span></button>
+          return <button key={member.id} type="button" className="lcos-collection-member" data-member-id={member.id} title={member.title} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onCollectionMemberSelect?.(member.id, additiveSelectionModifier(event)) }}><MemberIcon/><span>{displayNodeTitle(member)}</span></button>
         })}
       </div>}
       {showControls && versions > 1 && <button className="lcos-version-beads lcos-collection-version-beads" type="button" aria-label={`查看 ${title} 的 ${versions} 个上下文版本`} title="查看集合版本" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onDetails() }}>{Array.from({ length: Math.min(3, versions) }, (_, i) => <i key={i}/>)}</button>}
@@ -514,7 +526,7 @@ function CollectionObject({ node, density, onDetails, showDetails, showControls 
     {isCollection && collectionExpanded && inlineEntityMembers.length > 0 && showControls && <div className="lcos-collection-inline" data-testid={`collection-inline-${node.id}`} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()}>
       {inlineEntityMembers.map((member) => {
         const MemberIcon = nodeTypeIcon(member)
-        return <button key={member.id} type="button" className="lcos-collection-member" data-member-id={member.id} title={member.title} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onCollectionMemberSelect?.(member.id, event.shiftKey || event.ctrlKey || event.metaKey) }}><MemberIcon/><span>{displayNodeTitle(member)}</span></button>
+        return <button key={member.id} type="button" className="lcos-collection-member" data-member-id={member.id} title={member.title} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onCollectionMemberSelect?.(member.id, additiveSelectionModifier(event)) }}><MemberIcon/><span>{displayNodeTitle(member)}</span></button>
       })}
     </div>}
     <footer><span>{isCollection ? `${collectionMembers.length} refs${collectionExpanded ? ' · 已展开' : ''}` : nodeSecondaryLine(node) || `${node.contextCount ?? node.workspaceIds?.length ?? 0} refs`}</span>{showControls && versions > 1 && <button className="lcos-version-beads" type="button" aria-label={`查看 ${title} 的 ${versions} 个上下文版本`} title="查看上下文版本" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onDetails() }}>{Array.from({ length: Math.min(3, versions) }, (_, i) => <i key={i}/>)}</button>}</footer>
@@ -675,15 +687,23 @@ export const nodeTypeIcon = (node: CanvasNode) => {
  * 元数据缺失时回落 CollectionObject（与查表未命中同兜底语义，非错误路径）。
  */
 function ConversationGlythObject(props: Props) {
-  const { node, onDetails, showDetails, showControls = true } = props
+  const { node, onDetails, showDetails, showControls = true, glythCritical = false } = props
+  const glythLod = props.glythLod ?? glythSemanticLodForZoom(props.zoom ?? 1)
   const conversation = node.conversation
   const title = displayNodeTitle(node)
   if (!conversation) return <CollectionObject {...props} />
-  // 去卡片化（Grammar S1/S2.1）：对话实体是 Object——Glyth 身体本身就是画布对象，
-  // 不套通用卡壳（无 tab/heading/背景容器）；标题以极简标注悬在身体下方（L1 层）。
-  // 选中/拖拽/详情仍复用宿主 CanvasCard 交互链路，不造第二套。
-  return <div className="lcos-conversation-glyth-body" title={node.title}>
-    <ConversationGlyth conversation={conversation} state={glythStateFromSessionPhase(conversation.lifecyclePhase)} activityScore={conversationActivityScore(conversation)} size={72} label={title} />
+  const state = glythStateFromSessionPhase(conversation.lifecyclePhase)
+  const activityScore = conversationActivityScore(conversation)
+  if (glythLod === 'far' || glythLod === 'extreme-far') {
+    return <div className={`lcos-conversation-glyth-body is-${glythLod}${glythCritical ? ' is-critical' : ''}`} data-glyth-lod={glythLod} data-glyth-critical={glythCritical || undefined} style={{ '--glyth-ui-scale': String(1 / Math.max(.02, props.zoom ?? 1)) } as CSSProperties} title={node.title}>
+      <ConversationGlythIdentityPin conversation={conversation} state={state} activityScore={activityScore} label={title} />
+      <span className="lcos-conversation-glyth-caption">{title}</span>
+      <InfoButton show={showControls && showDetails} label={`查看 ${title} 信息`} onDetails={onDetails}/>
+    </div>
+  }
+  // 去卡片化（Grammar S1/S2.1）：对话实体是 Object——Glyth 身体本身就是画布对象。
+  return <div className={`lcos-conversation-glyth-body is-${glythLod}`} data-glyth-lod={glythLod} title={node.title}>
+    <ConversationGlyth conversation={conversation} state={state} activityScore={activityScore} size={glythLod === 'mid' ? 60 : 72} label={title} className={glythLod === 'mid' ? 'is-semantic-mid' : ''} />
     <span className="lcos-conversation-glyth-caption">{title}</span>
     <InfoButton show={showControls && showDetails} label={`查看 ${title} 信息`} onDetails={onDetails}/>
   </div>

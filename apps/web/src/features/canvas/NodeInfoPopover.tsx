@@ -13,6 +13,7 @@ interface Props {
   onRelations: () => void
   onShowResource?: (node: CanvasNode) => void
   onPreview?: (node: CanvasNode) => void
+  onOpenMaterialSource?: (node: CanvasNode) => void
   onRevisions?: (node: CanvasNode) => void
   onOpenSource?: (node: CanvasNode) => void
   onRevealSource?: (node: CanvasNode) => void
@@ -24,7 +25,7 @@ interface Props {
   shortcutResolution?: { resolvedTarget: string | null; targetKind: string; targetExists: boolean } | null
 }
 
-export function NodeInfoPopover({ node, camera, relationCount, onClose, onRelations, onShowResource, onPreview, onRevisions, onOpenSource, onRevealSource, onCopyPath, onCopyImage, onCopyLink, onCopyText, onRelinkSource, shortcutResolution }: Props) {
+export function NodeInfoPopover({ node, camera, relationCount, onClose, onRelations, onShowResource, onPreview, onOpenMaterialSource, onRevisions, onOpenSource, onRevealSource, onCopyPath, onCopyImage, onCopyLink, onCopyText, onRelinkSource, shortcutResolution }: Props) {
   const popoverRef = useRef<HTMLElement | null>(null)
   const [relinkPath, setRelinkPath] = useState('')
   useEffect(() => {
@@ -102,7 +103,7 @@ export function NodeInfoPopover({ node, camera, relationCount, onClose, onRelati
       </ol>
       <p>恢复旧版会创建新 Draft，不覆盖 Current。</p>
     </section>}
-    <div className="node-info-actions"><button className="pressable" onClick={onRelations}><GitBranch size={13} />查看关联 <span>{relationCount}</span></button>{node.artifactId && onRevisions && <button className="pressable" onClick={() => onRevisions(node)}><FileStack size={13} />版本与来源</button>}{hasReadOnlyPreview && onPreview && <button className="pressable" onClick={() => onPreview(node)}><ExternalLink size={13} />只读预览</button>}{node.artifactId && onShowResource && <button className="pressable" onClick={() => onShowResource(node)}><FileText size={13} />详情</button>}{localFile && onOpenSource && <button className="pressable" onClick={() => onOpenSource(node)}><ExternalLink size={13} />打开</button>}{localFile && onRevealSource && <button className="pressable" onClick={() => onRevealSource(node)}><FolderOpen size={13} />定位</button>}{localFile && onCopyPath && <button className="pressable" onClick={() => onCopyPath(node)}><Copy size={13} />复制路径</button>}{canCopyImage && <button className="pressable" onClick={() => onCopyImage!(node)}><Copy size={13} />复制图片</button>}{canCopyLink && <button className="pressable" onClick={() => onCopyLink!(node)}><Link2 size={13} />复制链接</button>}{canCopyText && <button className="pressable" onClick={() => onCopyText!(node)}><Copy size={13} />复制文本</button>}{url && <button className="pressable" onClick={() => window.open(url, '_blank', 'noopener,noreferrer')}><ExternalLink size={13} />浏览器打开</button>}</div>
+    <div className="node-info-actions"><button className="pressable" onClick={onRelations}><GitBranch size={13} />查看关联 <span>{relationCount}</span></button>{node.materialSource && onOpenMaterialSource && <button className="pressable" onClick={() => onOpenMaterialSource(node)}><Link2 size={13} />回到来源</button>}{node.artifactId && onRevisions && <button className="pressable" onClick={() => onRevisions(node)}><FileStack size={13} />版本与来源</button>}{hasReadOnlyPreview && onPreview && <button className="pressable" onClick={() => onPreview(node)}><ExternalLink size={13} />只读预览</button>}{node.artifactId && onShowResource && <button className="pressable" onClick={() => onShowResource(node)}><FileText size={13} />详情</button>}{localFile && onOpenSource && <button className="pressable" onClick={() => onOpenSource(node)}><ExternalLink size={13} />打开</button>}{localFile && onRevealSource && <button className="pressable" onClick={() => onRevealSource(node)}><FolderOpen size={13} />定位</button>}{localFile && onCopyPath && <button className="pressable" onClick={() => onCopyPath(node)}><Copy size={13} />复制路径</button>}{canCopyImage && <button className="pressable" onClick={() => onCopyImage!(node)}><Copy size={13} />复制图片</button>}{canCopyLink && <button className="pressable" onClick={() => onCopyLink!(node)}><Link2 size={13} />复制链接</button>}{canCopyText && <button className="pressable" onClick={() => onCopyText!(node)}><Copy size={13} />复制文本</button>}{url && <button className="pressable" onClick={() => window.open(url, '_blank', 'noopener,noreferrer')}><ExternalLink size={13} />浏览器打开</button>}</div>
     {(node.revisionId || node.fileRecordId || node.contentHash) && <details className="node-info-developer">
       <summary>Developer / 工程字段</summary>
       <dl>

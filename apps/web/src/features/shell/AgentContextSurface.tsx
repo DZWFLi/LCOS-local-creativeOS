@@ -1,9 +1,11 @@
-import { ChevronUp, CircleDot, PackageOpen, Pin } from 'lucide-react'
+import { ChevronUp, CircleDot, MapPin, PackageOpen, Pin } from 'lucide-react'
 import { useState } from 'react'
 import type { ContextChangeProposalV1, RunReview } from '@local-creative-os/contracts'
 import type { ActiveContextProjection } from '../../runtime/localCoreClient'
 import { humanizeRuntimeMessage } from '../../runtime/messages'
 import type { CanvasNode } from '../../model'
+import { useProjectSpatialMarkersOrNull } from '../spatial/ProjectSpatialMarkerContext'
+import { agentProposalMarkerTargets, markerForNavigationTarget } from '../spatial/spatialNavigationFamily'
 
 export function AgentContextSurface({
   projectLabel,
@@ -49,6 +51,16 @@ export function AgentContextSurface({
   const [collapsed, setCollapsed] = useState(detailsOpen !== true)
   const [modifyingProposalId, setModifyingProposalId] = useState<string | null>(null)
   const [modifyInstruction, setModifyInstruction] = useState('')
+  const markerRuntime = useProjectSpatialMarkersOrNull()
+  const toggleProposalLandmarks = (proposal: ContextChangeProposalV1) => {
+    if (!markerRuntime) return
+    const targets = agentProposalMarkerTargets(markerRuntime.projectId, proposal)
+    if (!targets.length) return
+    const markers = targets.map((target) => markerForNavigationTarget(markerRuntime.records, target))
+    const allMarked = markers.every(Boolean)
+    if (allMarked) { void Promise.all(markers.map((marker) => marker ? markerRuntime.deleteMarker(marker.id) : Promise.resolve(false))); return }
+    void Promise.all(targets.map((target, index) => markers[index] ? Promise.resolve(markers[index]) : markerRuntime.createMarker({ targetRef: target, scope: 'cross-surface' })))
+  }
   const syncLabel = syncState === 'conflict'
     ? '检测到真正冲突'
     : syncState === 'syncing'
@@ -115,6 +127,11 @@ export function AgentContextSurface({
             <button type="button" className="quiet pressable" onClick={() => { setModifyingProposalId(proposal.proposalId); setModifyInstruction('') }}>修改</button>
             <button type="button" className="quiet pressable" onClick={() => onRejectProposal(proposal.proposalId)}>撤掉</button>
           </div>
+          {markerRuntime && agentProposalMarkerTargets(markerRuntime.projectId, proposal).length > 0 && (() => {
+            const targets = agentProposalMarkerTargets(markerRuntime.projectId, proposal)
+            const allMarked = targets.every((target) => Boolean(markerForNavigationTarget(markerRuntime.records, target)))
+            return <button type="button" className={`agent-proposal-landmark quiet pressable${allMarked ? ' is-landmark' : ''}`} onClick={() => toggleProposalLandmarks(proposal)}><MapPin size={11}/>{allMarked ? '取消导航重点' : targets.length > 1 ? `固定 ${targets.length} 项重点` : '固定为导航重点'}</button>
+          })()}
           {modifyingProposalId === proposal.proposalId && <div className="agent-proposal-modify">
             <input value={modifyInstruction} onChange={(event) => setModifyInstruction(event.target.value)} placeholder="告诉 Agent 这一版要怎么改" autoFocus onKeyDown={(event) => {
               if (event.key === 'Escape') { setModifyingProposalId(null); setModifyInstruction('') }

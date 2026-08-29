@@ -17,6 +17,7 @@ import type { SharedComposerCommandState, SurfaceExecutionSubmission, SurfaceExe
 import type { ConnectedConversationV1, RuntimeProviderStatus } from '@local-creative-os/contracts'
 import { ProjectResumeHint, SurfaceDepositHint, type DepositHintItem } from './BoundaryHints'
 import { CANVAS_IDLE_HINT_MS, loadBoundaryHintMemory, recordDepositHint, saveBoundaryHintMemory, shouldShowDepositHint, type BoundaryHintMemory } from '../../runtime/boundaryHintState'
+import { referencePickModifier } from '../spatial/pointerInteractionLanguage'
 
 export interface CanvasSceneHostProps {
   readonly sceneStyle: CSSProperties
@@ -69,6 +70,7 @@ export function CanvasSceneHost(props: CanvasSceneHostProps) {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
   const [agentNode, setAgentNode] = useState<{ x: number; y: number; seedPrompt?: string; contextLabel?: string } | null>(null)
   const [surfaceReachCount, setSurfaceReachCount] = useState(0)
+  const [referenceModifierHeld, setReferenceModifierHeld] = useState(false)
   const [resumeDismissed, setResumeDismissed] = useState(false)
   const [contextHintVisible, setContextHintVisible] = useState(false)
   const [workflowHintVisible, setWorkflowHintVisible] = useState(false)
@@ -104,6 +106,19 @@ export function CanvasSceneHost(props: CanvasSceneHostProps) {
     setAgentNode(null)
     props.surfaceExecution?.command.onFinishReferencePick()
   }, [props.surface])
+
+  useEffect(() => {
+    const syncReferenceModifier = (event: KeyboardEvent) => setReferenceModifierHeld(referencePickModifier(event))
+    const clearReferenceModifier = () => setReferenceModifierHeld(false)
+    window.addEventListener('keydown', syncReferenceModifier, true)
+    window.addEventListener('keyup', syncReferenceModifier, true)
+    window.addEventListener('blur', clearReferenceModifier)
+    return () => {
+      window.removeEventListener('keydown', syncReferenceModifier, true)
+      window.removeEventListener('keyup', syncReferenceModifier, true)
+      window.removeEventListener('blur', clearReferenceModifier)
+    }
+  }, [])
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 15_000)
@@ -238,8 +253,19 @@ export function CanvasSceneHost(props: CanvasSceneHostProps) {
     return () => { cancelled = true }
   }, [agentNode, effectiveSurfaceReceiverId, props.surfaceExecution])
 
-  const projectionForRender = command?.referencePickActive
-    ? { ...props.projection, onSelect: (id: string) => command.onToggleReference(id), onDoubleClick: (id: string) => command.onToggleReference(id) }
+  const surfaceReferencePickIntent = Boolean(command && (command.referencePickActive || referenceModifierHeld))
+  const pickSurfaceReference = (id: string) => {
+    if (!command) return
+    const node = (command.nodes ?? props.projection.nodes).find((candidate) => candidate.id === id)
+    if (node?.entityKind === 'conversation' && node.conversation) {
+      const receiver = surfaceReceivers.find((candidate) => candidate.conversationSessionId === node.conversation?.id)
+      if (receiver) command.onReceiverChange(receiver.id)
+      return
+    }
+    command.onToggleReference(id)
+  }
+  const projectionForRender = surfaceReferencePickIntent
+    ? { ...props.projection, onSelect: (id: string) => pickSurfaceReference(id), onDoubleClick: (id: string) => pickSurfaceReference(id) }
     : props.projection
 
   const submitSurfaceExecution = () => {
@@ -270,7 +296,7 @@ export function CanvasSceneHost(props: CanvasSceneHostProps) {
       {props.shortcutHintVisible && <small className="canvas-context-hint">双击打开 · C 创建 · Ctrl+A 全选</small>}
       {props.runPill && <button type="button" className={`canvas-run-pill status-${props.runPill.status}`} onClick={props.runPill.onClick}><i/>{props.runPill.label}</button>}
     </nav>}
-    <div className="vnext-surface-host lcos-surface-host" data-surface={props.surface} data-lcos-context-menu-zone="true" onContextMenu={(event) => { event.preventDefault(); openSurfaceMenu(event) }} onPointerDown={() => { setMenu(null); markMeaningfulActivity() }}>
+    <div className={`vnext-surface-host lcos-surface-host ${surfaceReferencePickIntent ? 'is-reference-pick' : ''}`} data-pointer-state={surfaceReferencePickIntent ? 'reference-pick' : 'normal'} data-surface={props.surface} data-lcos-context-menu-zone="true" onContextMenu={(event) => { event.preventDefault(); openSurfaceMenu(event) }} onPointerDown={() => { setMenu(null); markMeaningfulActivity() }}>
       <div className="lcos-surface-mount" data-surface-mount={props.surface}>
         {props.surface === 'arrange' ? <ProjectCanvas {...props.canvas}/> : <ProjectionSurface {...projectionForRender}/>}
       </div>

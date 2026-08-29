@@ -56,7 +56,7 @@ export interface SpatialMarkerIntentV0 {
   readonly targetRef: SpatialMarkerTargetRefV0
   readonly scope: SpatialMarkerScopeV0
   /** 仅 local marker 需要（明确所属现场）；cross-surface marker 不依赖它。 */
-  readonly sourceSurfaceRef?: string
+  readonly sourceSurfaceRef?: StableSurfaceRefV0
   readonly createdAt: string
   readonly updatedAt: string
 }

@@ -21,7 +21,7 @@ describe('Phase 1 — Shell / Left Rail cleanup contract', () => {
 
   it('keeps the Left Rail flat with a fixed Main entry first', () => {
     expect(rail).toContain('data-rail-kind="main"')
-    expect(rail).toContain('aria-label="主画布"')
+    expect(rail).toContain("aria-label={mainMarkerCount ? `主画布，${mainMarkerCount} 个导航重点` : '主画布'}") // R2C：主画布入口带导航重点计数
     // F6 truth：rail 仍是 flat 单列视图栈（main 固定首项 + views 列表），无文件夹树导航层级。
     // 「folder」允许作为 collection 成员预览的 CSS 词汇（lcos-rail-folder-members，真 mini 布局），
     // 禁止的是旧 folder 树/嵌套导航心智的复活。
@@ -39,7 +39,7 @@ describe('Phase 1 — Shell / Left Rail cleanup contract', () => {
 
   it('routes a rail drop directly to the destination without duplicating artifacts (R3)', () => {
     const dropSite = canvas.slice(canvas.indexOf('onExternalDrop'), canvas.indexOf('overlays={spatialOverlays}'))
-    expect(canvas).toContain('onDirectProjectViewDrop(hit.target.id, item.ids)')
+    expect(canvas).toContain('commitProjectViewTarget(hit.target.id, item.ids)') // R2D：统一提交分发器
     expect(canvas).not.toContain('onStageTransfer')
     expect(canvas).toContain('projectViewTargetAt(event.clientX, event.clientY)')
   })

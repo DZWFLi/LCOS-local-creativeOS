@@ -2240,3 +2240,71 @@ button.lcos-context-expand:hover { background: rgba(111,87,177,.07); }
 .lcos-result-slot-body.is-review .lcos-result-slot-corner { opacity:.86; }
 @keyframes lcos-result-slot-spin { to { transform:rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .lcos-result-slot-body.is-running .lcos-result-slot-center > i { animation:none; opacity:.72; } }
+
+/* R3-A · Colony is a spatial field primitive, not a rectangular component frame. */
+.lcos-colony-overlay { position: absolute; inset: 0; width: 1px; height: 1px; pointer-events: none; z-index: var(--lcos-z-canvas-underlay, 1); }
+.lcos-colony-contour-svg,
+.lcos-colony-lasso-svg { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+.lcos-colony-contour {
+  fill: color-mix(in srgb, var(--lcos-accent, #6e61a8) 8%, transparent);
+  stroke: color-mix(in srgb, var(--lcos-accent, #6e61a8) 56%, rgba(63,58,78,.42));
+  stroke-width: 1.65px;
+  vector-effect: non-scaling-stroke;
+  pointer-events: visiblePainted;
+  cursor: pointer;
+  transition: fill 150ms ease, stroke 150ms ease, filter 150ms ease;
+}
+.lcos-colony-overlay.is-selected .lcos-colony-contour {
+  fill: color-mix(in srgb, var(--lcos-accent, #6e61a8) 12%, transparent);
+  stroke: color-mix(in srgb, var(--lcos-accent, #6e61a8) 76%, rgba(54,49,68,.58));
+  filter: drop-shadow(0 0 4px rgba(105, 91, 159, .12));
+}
+.lcos-colony-label {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 22px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(250,249,252,.76);
+  backdrop-filter: blur(9px) saturate(.94);
+  color: rgba(54,50,66,.72);
+  white-space: nowrap;
+  pointer-events: auto;
+}
+.lcos-colony-label strong { font-size: 11px; font-weight: 660; }
+.lcos-colony-label small { font-size: 10px; color: rgba(54,50,66,.44); }
+.lcos-colony-actions { display: inline-flex; gap: 3px; margin-left: 3px; }
+.lcos-colony-actions button {
+  display: inline-flex; align-items: center; gap: 3px; min-height: 19px; padding: 0 5px;
+  border: 0; border-radius: 7px; background: rgba(91,78,133,.07); color: rgba(66,56,94,.62);
+  font-size: 9.5px; cursor: pointer;
+}
+.lcos-colony-actions button:hover { background: rgba(91,78,133,.13); color: rgba(66,56,94,.86); }
+.lcos-colony-lasso-svg path {
+  fill: rgba(103, 87, 158, .055);
+  stroke: rgba(103, 87, 158, .72);
+  stroke-width: 1.4px;
+  stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke;
+}
+.canvas-node.is-colony-candidate {
+  outline: 1px solid rgba(104, 88, 159, .34);
+  outline-offset: 5px;
+}
+.lcos-colony-lasso-entry {
+  position: absolute;
+  left: 14px;
+  bottom: 16px;
+  z-index: var(--lcos-z-floating-control, 80);
+  pointer-events: auto;
+}
+.lcos-colony-lasso-entry button {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 0 10px;
+  border: 1px solid rgba(74,66,98,.10); border-radius: 999px;
+  background: rgba(250,249,252,.82); backdrop-filter: blur(12px) saturate(.96);
+  color: rgba(58,52,73,.66); font-size: 11px; cursor: pointer;
+}
+.lcos-colony-lasso-entry.is-active button { background: rgba(102,88,154,.11); color: rgba(69,57,108,.86); border-color: rgba(102,88,154,.20); }
+[data-lcos-theme='dark'] .lcos-colony-label,
+[data-lcos-theme='dark'] .lcos-colony-lasso-entry button { background: rgba(33,34,43,.76); color: rgba(221,218,232,.72); }

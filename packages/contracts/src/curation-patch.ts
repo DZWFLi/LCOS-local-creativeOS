@@ -27,7 +27,7 @@ export interface CurationPatchRelationV0 {
   readonly kind?: string
   readonly origin?: 'user' | 'agent' | 'system'
   readonly createdBy?: string
-  readonly evidenceRefs?: readonly { readonly kind: 'artifact' | 'resource' | 'conversation' | 'file'; readonly id: string; readonly label?: string }[]
+  readonly evidenceRefs?: readonly { readonly kind: 'artifact' | 'resource' | 'conversation' | 'file'; readonly id: string; readonly label?: string; readonly revisionId?: string; readonly sourceAnchor?: string }[]
   readonly confidence?: number
 }
 
@@ -93,7 +93,7 @@ export interface MutationRelationSnapshotV1 {
   readonly kind: string
   readonly origin?: string
   readonly createdBy?: string
-  readonly evidenceRefs?: readonly { readonly kind: 'artifact' | 'resource' | 'conversation' | 'file'; readonly id: string; readonly label?: string }[]
+  readonly evidenceRefs?: readonly { readonly kind: 'artifact' | 'resource' | 'conversation' | 'file'; readonly id: string; readonly label?: string; readonly revisionId?: string; readonly sourceAnchor?: string }[]
   readonly confidence?: number
 }
 

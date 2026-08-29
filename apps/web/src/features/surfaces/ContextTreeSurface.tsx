@@ -13,6 +13,7 @@ import { useSpatialFocusRequest, type SpatialFocusRequest } from '../spatial/use
 import { miniMapVisualKindForNode } from '../spatial/minimapSemantics'
 import { nodeTypeIcon } from '../canvas/CanvasNodeVisual'
 import { beginSemanticDrop } from '../spatial/semanticDrop'
+import { additiveSelectionModifier } from '../spatial/pointerInteractionLanguage'
 import { DropFeedbackLayer } from '../drop/dropFeedbackLayer'
 import { useSemanticDropFeedback } from '../drop/useSemanticDropFeedback'
 import { ContextHistoryRail } from './ContextHistoryRail'
@@ -124,7 +125,7 @@ export function ContextTreeSurface(props: Props) {
       <div className="lcos-context-heading-actions"><small>{layout.placements.length} 项 · 与理解现场 / 演进共用同一份 Context{reparentError ? ` · ${reparentError}` : ' · 拖动手柄可重排 / 重挂'}</small><ContextLensSwitch active="context-tree" onSelect={props.onSurfaceChange}/></div>
     </header>
     {props.source && <div className={`lcos-renderer-source source-${props.source.kind}`}><i/><span>{props.source.label}</span><small>Hierarchy v{state.version}</small></div>}
-    <SpatialCanvas camera={camera} setCamera={setCamera} marqueeItems={spatialItems} minimapItems={spatialItems} minimapLabel="Context Structure" beacon={spatialFocus.beacon} onBeaconArrivalEnd={spatialFocus.clearBeacon} onMarqueeSelect={props.onMarqueeSelect} className="lcos-mind-map-stage lcos-presentation-spatial" worldClassName="lcos-presentation-world lcos-mind-map-world" worldStyle={{width:layout.width,height:layout.height}} testId="context-tree-spatial">
+    <SpatialCanvas surfaceRef={`scope:${props.scopeId}`} camera={camera} setCamera={setCamera} marqueeItems={spatialItems} minimapItems={spatialItems} minimapLabel="Context Structure" beacon={spatialFocus.beacon} onBeaconArrivalEnd={spatialFocus.clearBeacon} onMarqueeSelect={props.onMarqueeSelect} className="lcos-mind-map-stage lcos-presentation-spatial" worldClassName="lcos-presentation-world lcos-mind-map-world" worldStyle={{width:layout.width,height:layout.height}} testId="context-tree-spatial">
       <SpatialEdgeLayer bounds={{ x: 0, y: 0, width: WORLD_WIDTH, height: WORLD_HEIGHT }} className="lcos-mind-map-edges" ariaLabel="思维导图层级关系">
         {layout.placements.map((to) => {
           const from = to.parentId ? byPlaced.get(to.parentId) : layout.rootCenter
@@ -144,7 +145,7 @@ export function ContextTreeSurface(props: Props) {
             <span className="lcos-mind-drop-zone before" data-drop-position="before" onDragOver={(event) => { if (event.dataTransfer.types.includes('text/plain')) { event.preventDefault(); setDropTarget({ id: item.node.id, position: 'before' }) } }} onDrop={(event) => { event.preventDefault(); dropRelative(event.dataTransfer.getData('text/plain'), item.node.id, 'before') }}/>
             <div className="lcos-mind-drop-body" onDragOver={(event) => { if (event.dataTransfer.types.includes('text/plain')) { event.preventDefault(); setDropTarget({ id: item.node.id, position: 'inside' }) } }} onDrop={(event) => { event.preventDefault(); dropRelative(event.dataTransfer.getData('text/plain'), item.node.id, 'inside') }}>
               <span className="lcos-mind-drag-handle" aria-hidden="true" title="拖动重排或重挂"><GripVertical size={11}/></span>
-              <button type="button" data-mind-topic={item.node.id} className={`lcos-mind-topic ${props.selectedIds.includes(item.node.id) ? 'selected' : ''}`} onPointerDown={(event)=>beginSemanticDrop(event,props.selectedIds.includes(item.node.id)&&props.selectedIds.length?props.selectedIds:[item.node.id],props.onDirectProjectViewDrop,dropFeedback.onPhase)} onClick={(event) => props.onSelect(item.node.id, event.shiftKey || event.metaKey || event.ctrlKey)} onDoubleClick={() => props.onDoubleClick(item.node.id)} onKeyDown={(event) => navigate(event, index)}>
+              <button type="button" data-mind-topic={item.node.id} className={`lcos-mind-topic ${props.selectedIds.includes(item.node.id) ? 'selected' : ''}`} onPointerDown={(event)=>beginSemanticDrop(event,props.selectedIds.includes(item.node.id)&&props.selectedIds.length?props.selectedIds:[item.node.id],props.onDirectProjectViewDrop,dropFeedback.onPhase)} onClick={(event) => props.onSelect(item.node.id, additiveSelectionModifier(event))} onDoubleClick={() => props.onDoubleClick(item.node.id)} onKeyDown={(event) => navigate(event, index)}>
                 <Icon/><span><strong>{item.node.title}</strong>{item.node.subtitle && <small>{item.node.subtitle}</small>}</span>
               </button>
             </div>

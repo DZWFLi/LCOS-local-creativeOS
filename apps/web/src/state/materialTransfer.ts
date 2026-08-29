@@ -13,6 +13,41 @@ export type MaterialLocatorV1 =
   | { readonly kind: 'slide'; readonly slideNumber: number; readonly label?: string }
   | { readonly kind: 'selection'; readonly label?: string }
 
+/** Stable logical locator persisted with material provenance. Physical file paths never belong here. */
+export function materialLocatorToSourceAnchor(locator?: MaterialLocatorV1): string | undefined {
+  if (!locator) return undefined
+  if (locator.kind === 'page') return `pdf:p${Math.max(1, Math.trunc(locator.pageNumber))}`
+  if (locator.kind === 'slide') return `pptx:s${Math.max(1, Math.trunc(locator.slideNumber))}`
+  if (locator.kind === 'lines') {
+    const start = Math.max(0, Math.trunc(locator.start)) + 1
+    const end = Math.max(start, Math.trunc(locator.end) + 1)
+    return start === end ? `text:l${start}` : `text:l${start}-l${end}`
+  }
+  return undefined
+}
+
+export type MaterialSourceAnchorV1 =
+  | { readonly kind: 'page'; readonly pageNumber: number }
+  | { readonly kind: 'slide'; readonly slideNumber: number }
+  | { readonly kind: 'lines'; readonly start: number; readonly end: number }
+  | { readonly kind: 'section'; readonly label: string }
+
+export function parseMaterialSourceAnchor(anchor?: string): MaterialSourceAnchorV1 | undefined {
+  if (!anchor) return undefined
+  const pdf = /^pdf:p(\d+)(?:-p\d+)?$/.exec(anchor)
+  if (pdf) return { kind: 'page', pageNumber: Math.max(1, Number(pdf[1])) }
+  const slide = /^pptx?:s(\d+)$/.exec(anchor)
+  if (slide) return { kind: 'slide', slideNumber: Math.max(1, Number(slide[1])) }
+  const lines = /^text:l(\d+)(?:-l(\d+))?$/.exec(anchor)
+  if (lines) {
+    const start = Math.max(0, Number(lines[1]) - 1)
+    const end = Math.max(start, Number(lines[2] ?? lines[1]) - 1)
+    return { kind: 'lines', start, end }
+  }
+  if (anchor.startsWith('section:') && anchor.slice('section:'.length).trim()) return { kind: 'section', label: anchor.slice('section:'.length).trim() }
+  return undefined
+}
+
 export interface MaterialSourceV1 {
   readonly projectId?: string
   readonly viewId?: string

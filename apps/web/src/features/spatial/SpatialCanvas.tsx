@@ -1,13 +1,16 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { Maximize2, Minimize2 } from 'lucide-react'
 import type { CSSProperties, DragEvent, PointerEvent as ReactPointerEvent, ReactNode, WheelEvent } from 'react'
+import type { StableSurfaceRefV0 } from '@local-creative-os/contracts'
 import type { Camera } from '../../model'
 import { applySpatialWheelGesture, spatialScreenToWorld } from './spatialCamera'
 import { spatialDensityForSize } from './spatialLod'
 import { advanceSpatialPan, beginSpatialPan, endSpatialPointer } from './spatialInteractionMachine'
 import { CanvasEdgePinLayer, type CanvasEdgePinItem } from './CanvasEdgePinLayer'
 import { SpatialBeaconLayer } from './SpatialBeaconLayer'
-import { spatialMarkerSurfaceForCanvas } from './spatialMarkerSystem'
+import { spatialMarkerSurfaceForCanvas, type SpatialMarkerItem } from './spatialMarkerSystem'
+import { SpatialMarkerLayer } from './SpatialMarkerLayer'
+import { useProjectSpatialMarkersOrNull } from './ProjectSpatialMarkerContext'
 import { SpatialOverlayLayer } from './SpatialOverlayLayer'
 import { SpatialViewport } from './SpatialViewport'
 import { IDLE_SPATIAL_POINTER, type SpatialCameraSetter, type SpatialPoint, type SpatialPointerSession } from './spatialTypes'
@@ -68,11 +71,18 @@ interface Props {
   marqueeItems?: readonly SpatialCanvasItem[]
   onMarqueeSelect?: (ids: string[], additive: boolean) => void
   minimapItems?: readonly SpatialCanvasItem[]
+  /** Live Presentation bounds/labels used only to project durable Marker targets. */
+  markerAnchorItems?: readonly SpatialCanvasItem[]
+  /** Ephemeral navigation candidates (semantic regions etc). Never persisted by SpatialCanvas. */
+  navigationMarkerItems?: readonly SpatialMarkerItem[]
+  onNavigationMarkerLocate?: (id: string) => void
   minimapLabel?: string
   beacon?: SpatialBeaconState | null
   onBeaconArrivalEnd?: () => void
   onPanningChange?: (active: boolean) => void
   semanticDropTarget?: { readonly id: string; readonly label: string }
+  /** Canonical durable surface identity. Never use route/test ids for persisted Marker ownership. */
+  surfaceRef?: StableSurfaceRefV0
   /** §4.13 边缘气泡标点:只传「被标点」对象(pinned/选中/被圈,调用方过滤);不传则不出气泡层 */
   edgePinItems?: readonly CanvasEdgePinItem[]
   /** 边缘气泡点击回调:复用调用方既有 focus 链把相机滑过去(本组件不新写跳转) */
@@ -110,11 +120,15 @@ export const SpatialCanvas = forwardRef<HTMLDivElement, Props>(function SpatialC
   marqueeItems,
   onMarqueeSelect,
   minimapItems,
+  markerAnchorItems,
+  navigationMarkerItems = [],
+  onNavigationMarkerLocate,
   minimapLabel = '视图地图',
   beacon,
   onBeaconArrivalEnd,
   onPanningChange,
   semanticDropTarget,
+  surfaceRef,
   edgePinItems,
   onEdgePinLocate,
 }, forwardedRef) {
@@ -129,6 +143,53 @@ export const SpatialCanvas = forwardRef<HTMLDivElement, Props>(function SpatialC
   const [size, setSize] = useState({ width: 1440, height: 900 })
   const [marqueeRect, setMarqueeRect] = useState<{ left: number; top: number; width: number; height: number } | null>(null)
   const [materialReceiving, setMaterialReceiving] = useState(false)
+  const markerRuntime = useProjectSpatialMarkersOrNull()
+  const effectiveSurfaceRef: StableSurfaceRefV0 | undefined = surfaceRef ?? (testId === 'canvas' ? 'main' : undefined)
+  const markerSourceItems = markerAnchorItems ?? marqueeItems ?? minimapItems ?? []
+  const durableMarkerItems = useMemo<readonly SpatialMarkerItem[]>(() => {
+    if (!markerRuntime || !effectiveSurfaceRef) return []
+    const localById = new Map(markerSourceItems.map((item) => [item.id, item] as const))
+    return markerRuntime.records.flatMap(({ intent, resolution }) => {
+      if (!resolution || resolution.status !== 'resolved' || resolution.target.surfaceRef !== effectiveSurfaceRef) return []
+      const local = resolution.target.anchorRef ? localById.get(resolution.target.anchorRef) : undefined
+      const point = resolution.target.worldPosition
+      if (!local && !point) return []
+      const bounds = local
+        ? { x: local.x, y: local.y, width: local.width, height: local.height }
+        : { x: point!.x - 8, y: point!.y - 8, width: 16, height: 16 }
+      return [{
+        id: intent.id,
+        label: local?.label ?? '空间标记',
+        bounds,
+        surface: resolution.target.surfaceKind,
+        scope: intent.scope,
+        sourceSurfaceRef: intent.sourceSurfaceRef,
+        targetSurfaceRef: resolution.target.surfaceRef,
+        groupKey: 'durable-marker',
+        groupLabel: '空间标记',
+      } satisfies SpatialMarkerItem]
+    })
+  }, [effectiveSurfaceRef, markerRuntime, markerSourceItems])
+
+  const locateDurableMarker = (markerId: string) => {
+    if (!markerRuntime || !effectiveSurfaceRef) return
+    void markerRuntime.resolveMarker(markerId).then((resolution) => {
+      if (!resolution || resolution.status !== 'resolved' || resolution.target.surfaceRef !== effectiveSurfaceRef) return
+      const local = resolution.target.anchorRef ? markerSourceItems.find((item) => item.id === resolution.target.anchorRef) : undefined
+      const point = local
+        ? { x: local.x + local.width / 2, y: local.y + local.height / 2 }
+        : resolution.target.worldPosition
+      if (!point) return
+      setCamera((current) => ({ ...current, x: size.width / 2 - point.x * current.zoom, y: size.height / 2 - point.y * current.zoom }))
+    })
+  }
+
+  const navigationMarkerIds = useMemo(() => new Set(navigationMarkerItems.map((item) => item.id)), [navigationMarkerItems])
+  const unifiedMarkerItems = useMemo<readonly SpatialMarkerItem[]>(() => [...durableMarkerItems, ...navigationMarkerItems], [durableMarkerItems, navigationMarkerItems])
+  const locateUnifiedMarker = (markerId: string) => {
+    if (navigationMarkerIds.has(markerId)) { onNavigationMarkerLocate?.(markerId); return }
+    locateDurableMarker(markerId)
+  }
 
   useImperativeHandle(forwardedRef, () => rootRef.current as HTMLDivElement)
 
@@ -192,7 +253,7 @@ export const SpatialCanvas = forwardRef<HTMLDivElement, Props>(function SpatialC
       if (!interactive) {
         const context = contextFor(event)
         const screen = { x: event.clientX - context.rect.left, y: event.clientY - context.rect.top }
-        marqueeSession.current = { pointerId: event.pointerId, startScreen: screen, currentScreen: screen, startWorld: context.world, currentWorld: context.world, moved: false, additive: event.shiftKey || event.ctrlKey || event.metaKey }
+        marqueeSession.current = { pointerId: event.pointerId, startScreen: screen, currentScreen: screen, startWorld: context.world, currentWorld: context.world, moved: false, additive: event.shiftKey }
         setMarqueeRect({ left: screen.x, top: screen.y, width: 0, height: 0 })
         event.currentTarget.setPointerCapture(event.pointerId)
         return
@@ -335,6 +396,7 @@ export const SpatialCanvas = forwardRef<HTMLDivElement, Props>(function SpatialC
     data-project-view-drop-label={resolvedSemanticDropTarget?.label}
     data-spatial-canvas="true"
     data-spatial-density={density}
+    data-pointer-state={panning ? 'pan-closed-hand' : 'pan-open-hand'}
     data-camera-x={camera.x}
     data-camera-y={camera.y}
     data-camera-zoom={camera.zoom}
@@ -369,13 +431,14 @@ export const SpatialCanvas = forwardRef<HTMLDivElement, Props>(function SpatialC
     onDrop={handleDrop}
   >
     <SpatialViewport camera={camera} className={worldClassName} testId={worldTestId} style={worldStyle}>{children}</SpatialViewport>
-    {(overlays !== undefined || marqueeRect || beacon || (minimapItems && minimapItems.length > 0) || (edgePinItems && edgePinItems.length > 0 && onEdgePinLocate)) && <SpatialOverlayLayer>
+    {(overlays !== undefined || marqueeRect || beacon || unifiedMarkerItems.length > 0 || (minimapItems && minimapItems.length > 0) || (edgePinItems && edgePinItems.length > 0 && onEdgePinLocate)) && <SpatialOverlayLayer>
       {overlays}
       {marqueeRect && <div className="lcos-spatial-marquee" style={{ left: marqueeRect.left, top: marqueeRect.top, width: marqueeRect.width, height: marqueeRect.height }} />}
       {minimapItems && minimapItems.length > 0 && <SpatialMiniMap items={minimapItems} camera={camera} setCamera={setCamera} viewportSize={size} label={minimapLabel} beacon={beacon}/>}
-      {beacon && <SpatialBeaconLayer beacon={beacon} camera={camera} onArrivalEnd={onBeaconArrivalEnd} surface={spatialMarkerSurfaceForCanvas(testId)} sourceSurfaceRef={semanticDropTarget?.id ?? testId}/>}
+      {beacon && <SpatialBeaconLayer beacon={beacon} camera={camera} onArrivalEnd={onBeaconArrivalEnd} surface={spatialMarkerSurfaceForCanvas(testId)} sourceSurfaceRef={effectiveSurfaceRef}/>}
       {/* §4.13 边缘气泡标点:不跟随相机 transform 的固定屏幕层(minimap 同层),viewportSize 复用容器 ResizeObserver 实测值 */}
-      {edgePinItems && edgePinItems.length > 0 && onEdgePinLocate && <CanvasEdgePinLayer camera={camera} viewportSize={size} items={edgePinItems} currentSurfaceRef={semanticDropTarget?.id ?? testId} defaultSurface={spatialMarkerSurfaceForCanvas(testId)} onLocate={onEdgePinLocate}/>}
+      {unifiedMarkerItems.length > 0 && <SpatialMarkerLayer items={unifiedMarkerItems} camera={camera} viewportSize={size} currentSurfaceRef={effectiveSurfaceRef} onLocate={locateUnifiedMarker}/>}
+      {edgePinItems && edgePinItems.length > 0 && onEdgePinLocate && <CanvasEdgePinLayer camera={camera} viewportSize={size} items={edgePinItems} currentSurfaceRef={effectiveSurfaceRef} defaultSurface={spatialMarkerSurfaceForCanvas(testId)} onLocate={onEdgePinLocate}/>}
     </SpatialOverlayLayer>}
   </div>
 })

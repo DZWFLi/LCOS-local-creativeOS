@@ -1,5 +1,5 @@
 import type { ProjectId } from '@local-creative-os/domain'
-import type { SpatialMarkerIntentV0 } from '@local-creative-os/contracts'
+import type { SpatialMarkerIntentV0, StableSurfaceRefV0 } from '@local-creative-os/contracts'
 import { NavigationMarkerService } from '../navigation-marker-service.js'
 import { routeRequireMetadata, routeRequireProject, type RouteHttpContext, type RouteHttpHelpers } from './route-context.js'
 
@@ -7,6 +7,11 @@ export interface NavigationMarkersRouteContext extends RouteHttpContext {
   readonly helpers: RouteHttpHelpers
   /** Marker 增删走 ChangeSet 纪律（用户持久 Project intent）。 */
   readonly mutationSafety: import('../mutation-safety-service.js').MutationSafetyService | undefined
+}
+
+function isStableSurfaceRef(value: string): value is StableSurfaceRefV0 {
+  if (value === 'main' || value === 'assembly') return true
+  return ['scope:', 'workspace:', 'conversation:'].some((prefix) => value.startsWith(prefix) && value.length > prefix.length)
 }
 
 /**
@@ -40,7 +45,8 @@ export async function handleNavigationMarkersRoute(ctx: NavigationMarkersRouteCo
       || typeof input.targetRef.id !== 'string' || input.targetRef.id.length === 0
       || typeof input.targetRef.projectId !== 'string'
       || !['local', 'cross-surface'].includes(String(input.scope))
-      || (input.sourceSurfaceRef !== undefined && typeof input.sourceSurfaceRef !== 'string')
+      || (String(input.scope) === 'local' && typeof input.sourceSurfaceRef !== 'string')
+      || (input.sourceSurfaceRef !== undefined && (typeof input.sourceSurfaceRef !== 'string' || !isStableSurfaceRef(input.sourceSurfaceRef)))
       || Object.keys(input).some((key) => !['targetRef', 'scope', 'sourceSurfaceRef'].includes(key))
       || Object.keys(input.targetRef).some((key) => !['projectId', 'kind', 'id'].includes(key))) {
       sendJson(response, 400, failure('INVALID_ARGUMENT', 'Spatial marker requires targetRef {projectId, kind, id} and scope.'))
@@ -50,6 +56,13 @@ export async function handleNavigationMarkersRoute(ctx: NavigationMarkersRouteCo
     if (String(input.targetRef.projectId) !== String(projectId)) {
       sendJson(response, 422, failure('INVALID_ARGUMENT', 'Spatial marker target must belong to the same project. Cross-project marker is fail-close.'))
       return true
+    }
+    if (typeof input.sourceSurfaceRef === 'string') {
+      const sourceResolution = new NavigationMarkerService(db).resolveNavigationTarget(String(projectId), { projectId: String(projectId), kind: 'surface', id: input.sourceSurfaceRef })
+      if (sourceResolution.status !== 'resolved' || sourceResolution.target.surfaceRef !== input.sourceSurfaceRef) {
+        sendJson(response, 422, failure('INVALID_ARGUMENT', 'Spatial marker sourceSurfaceRef must resolve to a stable surface in this project.'))
+        return true
+      }
     }
     if (mutationSafety === undefined) {
       sendJson(response, 503, failure('UNAVAILABLE', 'Mutation safety service is not configured.'))
@@ -63,7 +76,7 @@ export async function handleNavigationMarkersRoute(ctx: NavigationMarkersRouteCo
         id: String(input.targetRef.id),
       },
       scope: String(input.scope) as SpatialMarkerIntentV0['scope'],
-      ...(input.sourceSurfaceRef === undefined ? {} : { sourceSurfaceRef: String(input.sourceSurfaceRef) }),
+      ...(input.sourceSurfaceRef === undefined ? {} : { sourceSurfaceRef: input.sourceSurfaceRef as StableSurfaceRefV0 }),
       actorKind: 'web',
     })
     sendJson(response, 201, { ok: true, value: marker, meta: { changeSetId: changeSet.id } })

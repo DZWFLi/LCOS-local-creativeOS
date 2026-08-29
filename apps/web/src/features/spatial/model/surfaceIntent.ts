@@ -1,6 +1,6 @@
 import type { SurfaceBinding, SurfaceComponentType, SurfaceElement, SurfaceKind } from './surfaceElementTypes'
 import { surfaceComponentContract, surfaceSupportsComponent } from './surfaceComponentCatalog'
-import { placeSurfaceComponent, regionBoundsForSelection } from './surfaceGeometry'
+import { placeSurfaceComponent } from './surfaceGeometry'
 import type { SurfaceBounds } from './surfaceElementTypes'
 import type { SurfaceOp } from './surfaceOps'
 
@@ -40,7 +40,7 @@ function componentForIntent(surface: SurfaceKind, intent: SurfaceIntent): Surfac
   if (intent.kind === 'compare-selection') return surfaceSupportsComponent(surface, 'compare') ? 'compare' : null
   if (intent.kind === 'trace-active-path') return surfaceSupportsComponent(surface, 'active-path') ? 'active-path' : null
   if (intent.kind === 'prepare-workbench' || intent.kind === 'place-quick-note-near-page' || intent.kind === 'prepare-agent-tool' || intent.kind === 'collapse-inactive-pages') return surfaceSupportsComponent(surface, 'workbench') ? 'workbench' : null
-  if (intent.kind === 'focus-region' || intent.kind === 'organize') return 'region'
+  if (intent.kind === 'focus-region' || intent.kind === 'organize') return null
   return null
 }
 
@@ -57,14 +57,12 @@ export function resolveSurfaceIntent(intent: SurfaceIntent, context: SurfaceInte
   if (!surfaceSupportsComponent(context.surface, type) || contract.createMode !== 'presentation') return []
   const binding = bindingForTargets(intent.targetIds)
   const createId = context.createId ?? ((componentType) => `surface:${componentType}:${Date.now().toString(36)}`)
-  const bounds = type === 'region' && context.selectionBounds
-    ? regionBoundsForSelection(context.selectionBounds, contract.minSize)
-    : placeSurfaceComponent({
-        size: contract.minSize,
-        selection: context.selectionBounds,
-        viewportOrigin: context.viewportOrigin,
-        existing: context.existing,
-      })
+  const bounds = placeSurfaceComponent({
+    size: contract.minSize,
+    selection: context.selectionBounds,
+    viewportOrigin: context.viewportOrigin,
+    existing: context.existing,
+  })
   const variant = intent.kind === 'organize' ? intent.hint
     : intent.kind === 'prepare-workbench' ? intent.workbenchKind
       : intent.kind === 'place-quick-note-near-page' ? 'quick-note'

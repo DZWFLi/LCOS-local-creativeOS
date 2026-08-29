@@ -75,7 +75,7 @@ describe('Presentation persistence (Phase B)', () => {
     expect(loaded?.state.memberViewIds).toEqual([memberViewId])
   })
 
-  it('persists durable fence geometry without freezing membership', () => {
+  it('accepts legacy spatial region geometry for one-time migration', () => {
     const { repository, snapshot } = freshDb()
     const scopeId = String(snapshot.scopes.find((scope) => scope.kind === 'root')!.id)
     const projectId = String(snapshot.project.id)
@@ -106,6 +106,45 @@ describe('Presentation persistence (Phase B)', () => {
       expectedVersion: 0,
       updatedBy: 'web',
     })).toThrow(/bounds must be positive/)
+  })
+
+  it('persists canonical Colony sticky membership and contour', () => {
+    const { repository, snapshot } = freshDb()
+    const scopeId = String(snapshot.scopes.find((scope) => scope.kind === 'root')!.id)
+    const projectId = String(snapshot.project.id)
+    const service = new PresentationApplicationService(repository, repository)
+    const state: PresentationStateV0 = {
+      ...stateFor([]),
+      colonies: [{
+        id: 'colony-main-1',
+        label: '参考资料',
+        surface: 'main',
+        memberIds: ['node-a', 'node-b'],
+        contour: { points: [{ x: 80, y: 60 }, { x: 760, y: 80 }, { x: 720, y: 520 }, { x: 100, y: 500 }] },
+      }],
+    }
+
+    const saved = service.save(projectId, {
+      presentationId: 'presentation:arrange:scope-colony',
+      scopeId,
+      capability: 'arrange',
+      renderer: 'main-canvas',
+      state,
+      expectedVersion: 0,
+      updatedBy: 'web',
+    })
+
+    expect(saved.state.colonies).toEqual(state.colonies)
+    expect(saved.state.memberViewIds).toEqual([])
+    expect(() => service.save(projectId, {
+      presentationId: 'presentation:arrange:scope-colony-invalid',
+      scopeId,
+      capability: 'arrange',
+      renderer: 'main-canvas',
+      state: { ...state, colonies: [{ ...state.colonies![0]!, contour: { points: [{ x: 0, y: 0 }, { x: 10, y: 10 }] } }] },
+      expectedVersion: 0,
+      updatedBy: 'web',
+    })).toThrow(/requires a closed contour/)
   })
 
   it('persists trusted SurfaceElements and validates geometry/project identity', () => {

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, ty
 import type { SurfaceBounds, SurfaceElement } from '../model/surfaceElementTypes'
 import type { SurfaceComponentDefinition } from './surfaceComponentRegistry'
 import { useReducedSpatialMotion } from '../visual/useReducedSpatialMotion'
+import { additiveSelectionModifier } from '../pointerInteractionLanguage'
 
 interface Props {
   readonly element: SurfaceElement
@@ -12,7 +13,7 @@ interface Props {
   readonly overlap?: boolean
   /** lens 聚焦反馈:lens 三键定位/创建该组件时的短暂高亮脉冲(交互反馈,复用紫 accent)。 */
   readonly lensFocus?: boolean
-  /** G-2:点选回调携带 additive(Shift/Ctrl 加选);点在内部交互控件上恒为 false(单选宿主)。 */
+  /** G-2:点选回调携带 additive（仅 Shift 加选）;点在内部交互控件上恒为 false(单选宿主)。 */
   readonly onSelect: (additive: boolean) => void
   readonly onBoundsCommit: (bounds: SurfaceBounds, kind: 'move' | 'resize') => void
   readonly onBoundsPreview?: (bounds: SurfaceBounds | null, kind: 'move' | 'resize') => void
@@ -37,7 +38,7 @@ const INTERACTIVE_SELECTOR = 'button, a, input, textarea, select, [contenteditab
 
 /** G-2 统一键位:组件点选的加选判定与主画布/节点点选同款(Shift/Ctrl/Cmd 任一)。 */
 const additiveSelection = (event: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean }): boolean =>
-  event.shiftKey || event.ctrlKey || event.metaKey
+  additiveSelectionModifier(event)
 
 /**
  * Direct manipulation: the component body is its own handle, edges resize.

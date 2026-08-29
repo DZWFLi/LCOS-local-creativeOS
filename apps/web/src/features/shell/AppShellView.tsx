@@ -44,7 +44,7 @@ export interface AppShellViewProps {
   readonly conversationScene?: ComponentProps<typeof ConversationSpaceSurface> | null
   readonly rail: ComponentProps<typeof WorkRail>
   readonly dialogs: DialogsHostProps
-  readonly immersive: { readonly node: CanvasNode; readonly projectId: string; readonly onClose: () => void } | null
+  readonly immersive: { readonly node: CanvasNode; readonly projectId: string; readonly sourceAnchor?: string; readonly sourceRevisionId?: string; readonly onClose: () => void; readonly onOpenSource?: (node: CanvasNode) => void; readonly onRevealSource?: (node: CanvasNode) => void; readonly onRelinkSource?: (node: CanvasNode, path: string) => void; readonly onOpenMaterialSource?: (node: CanvasNode) => void } | null
 }
 
 /** App Shell 纯展示层：把 Drive / Strip / Scene / WorkRail / Dialogs 组装成最终布局。 */
@@ -70,6 +70,6 @@ export function AppShellView(props: AppShellViewProps) {
     {props.conversationScene ? <ConversationSpaceSurface {...props.conversationScene} /> : <CanvasSceneHost {...props.scene} />}
     {!props.conversationScene && props.layoutMode === 'desktop' ? <WorkRailHost rail={props.rail} /> : null}
     <DialogsHost {...props.dialogs} />
-    {props.immersive && <ImmersiveViewer node={props.immersive.node} projectId={props.immersive.projectId} onClose={props.immersive.onClose} />}
+    {props.immersive && <ImmersiveViewer {...props.immersive} />}
   </main>
 }

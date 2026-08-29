@@ -1,12 +1,12 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import type { AttentionBucketV0, ConnectedConversationV1, RuntimeProviderStatus } from '@local-creative-os/contracts'
-import { CheckCircle2, CircleDot, Copy, CopyPlus, Crosshair, Ellipsis, Fence, FolderTree, GripVertical, LayoutGrid, MessageSquare, Pencil, Radio, Trash2 } from 'lucide-react'
+import { CheckCircle2, CircleDot, Copy, CopyPlus, Crosshair, Ellipsis, FolderTree, GripVertical, LayoutGrid, LassoSelect, MapPin, MessageSquare, Pencil, Radio, RotateCcw, Trash2, X } from 'lucide-react'
 import type { Camera, CanvasEdge, CanvasNode, NodeDisplayMode, RunStatus, WorkspaceFrameVM } from '../../model'
 import { getSelectionBounds, nodeDensity } from './canvasGeometry'
 import { getVisualSelectionBounds, MAIN_CANVAS_GRID_STEP, nodeVisualBounds, nodeVisualInsets } from './canvasVisualGeometry'
 import { getPendingZoneBounds } from './canvasLayout'
 import type { LayoutPreviewItem } from './scopeLayout'
-import type { SpatialRegionDraft } from '../../state/spatialRegion'
+import { colonyBounds, colonyPathData, pointInPolygon, type SpatialColonyDraft } from '../../state/spatialColony'
 import { CanvasNodeVisual, detectFileIdentity, displayNodeTitle, nodeVisualFamily } from './CanvasNodeVisual'
 import { UnifiedExecutionComposer } from '../execution/UnifiedExecutionComposer'
 import type { ArtifactRevisionProvenance } from '../../runtime/projectionAdapters'
@@ -19,6 +19,11 @@ import { useSpatialFocusRequest, type SpatialFocusRequest } from '../spatial/use
 import { edgeScrollDelta, spatialBoundsForPlacements, spatialScreenToWorld, spatialWorldToScreen } from '../spatial/spatialCamera'
 import { spatialIdsIntersectingScreenRect } from '../spatial/spatialHitTest'
 import { spatialLodForCount, spatialOverviewProjection } from '../spatial/spatialLod'
+import { clusterExtremeFarGlyths, glythSemanticLodForZoom, isCriticalGlyth } from '../spatial/glythSemanticLod'
+import { useProjectSpatialMarkersOrNull } from '../spatial/ProjectSpatialMarkerContext'
+import { markerForNavigationTarget, semanticNavigationRegionOverviews } from '../spatial/spatialNavigationFamily'
+import { additiveSelectionModifier, conversationGlythDropTarget, conversationSessionFromDropTarget, referencePickModifier } from '../spatial/pointerInteractionLanguage'
+import type { SpatialMarkerItem } from '../spatial/spatialMarkerSystem'
 import { advanceSpatialMarquee, beginSpatialMarquee, endSpatialPointer, spatialMarqueeRect } from '../spatial/spatialInteractionMachine'
 import { IDLE_SPATIAL_POINTER, type SpatialPointerSession } from '../spatial/spatialTypes'
 import { LightCurtain } from '../drop/LightCurtain'
@@ -27,8 +32,6 @@ import { LCOS_MINDMAP_BRANCH_EXTRACT_EVENT } from './MindMapNoteVisual'
 import { LcosSignalGlyph } from '../design/DotGlyph'
 import { resolveSpatialSignal, type SpatialRuntimeSignal } from '../spatial/visual/spatialSignal'
 import type { SurfaceElement } from '../spatial/model/surfaceElementTypes'
-import { resolveSurfaceComponent } from '../spatial/components/surfaceComponentRegistry'
-import { SurfaceFrame } from '../spatial/components/SurfaceFrame'
 import { SurfaceComponentLayer } from '../spatial/components/SurfaceComponentLayer'
 import { SurfaceComponentShelf } from '../spatial/components/SurfaceComponentShelf'
 import { surfaceViewportOrigin } from '../spatial/model/surfaceGeometry'
@@ -99,6 +102,8 @@ interface Props {
   /** 文本节点：切换 文本块 ⇄ 大纲思维导图 呈现（仅 Presentation）。 */
   onToggleNoteLayout?: (id: string, layout: 'text' | 'mindmap') => void
   onDirectProjectViewDrop?: (targetViewId: string, ids: readonly string[]) => void
+  /** R2-D: explicit body-drop onto a Glyth creates canonical Conversation Context Mapping via host/Core. */
+  onMapToConversation?: (conversationSessionId: string, ids: readonly string[]) => void
   /** GUI-6：锚定备注定位（宿主把相机移到锚点目标并脉冲高亮）。 */
   onLocateNode?: (id: string) => void
   focusRequest?: SpatialFocusRequest
@@ -116,16 +121,17 @@ interface Props {
   closingCollectionScopeIds?: readonly string[]
   onToggleCollection?: (collectionScopeId: string) => void
   onOpenContextLens?: (node: CanvasNode, lens: 'space' | 'structure' | 'evolution') => void
-  spatialRegions?: readonly SpatialRegionDraft[]
+  colonies?: readonly SpatialColonyDraft[]
   surfaceElements?: readonly SurfaceElement[]
   onSurfaceElementsChange?: (elements: SurfaceElement[]) => void
   portalTargets?: readonly { readonly id: string; readonly label: string; readonly kind: string }[]
   onOpenPortalTarget?: (projectViewId: string) => void
-  onCreateRegion?: () => void
-  onClearRegion?: (regionId: string) => void
-  onRegionBoundsChange?: (regionId: string, bounds: SpatialRegionDraft['bounds']) => void
-  onRegionBoundsCommit?: (regionId: string, bounds: SpatialRegionDraft['bounds']) => void
-  onPromoteRegionToCollection?: (regionId: string) => void
+  onCreateColonyFromSelection?: () => void
+  onCreateColonyFromLasso?: (memberIds: readonly string[], points: readonly { x: number; y: number }[]) => void
+  onAddToColony?: (colonyId: string, memberIds: readonly string[], placements?: Readonly<Record<string, { x: number; y: number }>>) => void
+  onRescopeColony?: (colonyId: string, points: readonly { x: number; y: number }[]) => void
+  onDissolveColony?: (colonyId: string) => void
+  onColonyMemberMoveSettled?: (memberIds: readonly string[], placements: Readonly<Record<string, { x: number; y: number }>>) => void
 }
 
 type DragCandidate = { id: string; startX: number; startY: number; offsetX: number; offsetY: number; group: Array<{ id: string; dx: number; dy: number }>; originals: Array<{ id: string; x: number; y: number }> }
@@ -137,10 +143,10 @@ const EDGE_SCROLL_BAND = 96
 const EDGE_SCROLL_MAX_PX_PER_FRAME = 18
 
 function additiveSelection(event: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean }): boolean {
-  return event.shiftKey || event.ctrlKey || event.metaKey
+  return additiveSelectionModifier(event)
 }
 
-export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-space', surfaceMode = 'project', nodes, setNodes, edges, setEdges, camera, setCamera, selectedId, selectedIds, selectedEdgeId, setSelectedEdgeId, pendingId, runId, runStatus, spaceHeld, locked = false, layoutPreview, workspaceFrames = [], workspaceMemberNodes = nodes, activeWorkspaceId = null, onWorkspaceActivate, onWorkspaceProjectionMove, onPresentationInteractionChange, onPresentationCommit, onFrameBoundsChange, selectionComposer, referencePick, onSelect, onClearSelection, onMarqueeSelect, onSelectEdge, onDoubleClick, onDetails, onFocusSelection, onRenameSelection, onCreateNodeFromAnchor, onFilesDropped, onExternalTextDrop, onMaterialTransferDrop, onMindmapBranchDrop, onArrangeSelection, gridSnapEnabled = true, onSetSelectionDisplayMode, onCopySelection, onDuplicateSelection, onCreateScopeFromSelection, onDeleteSelection, onReorganize, onToggleNoteLayout, onDirectProjectViewDrop, onPointerWorldChange, onSpaceCreate, onLocateNode, focusRequest, onLocateConversationSource, locatePulseId, onOpenConversation, onSetActiveConversation, activeConversationId = null, pendingReviewIds = [], attentionBucketsByViewId = {}, collectionMembersByNodeId = {}, expandedCollectionScopeIds = [], openingCollectionScopeIds = [], closingCollectionScopeIds = [], onToggleCollection, onOpenContextLens, spatialRegions = [], surfaceElements = [], onSurfaceElementsChange, portalTargets = [], onOpenPortalTarget, onCreateRegion, onClearRegion, onRegionBoundsChange, onRegionBoundsCommit, onPromoteRegionToCollection }: Props) {
+export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-space', surfaceMode = 'project', nodes, setNodes, edges, setEdges, camera, setCamera, selectedId, selectedIds, selectedEdgeId, setSelectedEdgeId, pendingId, runId, runStatus, spaceHeld, locked = false, layoutPreview, workspaceFrames = [], workspaceMemberNodes = nodes, activeWorkspaceId = null, onWorkspaceActivate, onWorkspaceProjectionMove, onPresentationInteractionChange, onPresentationCommit, onFrameBoundsChange, selectionComposer, referencePick, onSelect, onClearSelection, onMarqueeSelect, onSelectEdge, onDoubleClick, onDetails, onFocusSelection, onRenameSelection, onCreateNodeFromAnchor, onFilesDropped, onExternalTextDrop, onMaterialTransferDrop, onMindmapBranchDrop, onArrangeSelection, gridSnapEnabled = true, onSetSelectionDisplayMode, onCopySelection, onDuplicateSelection, onCreateScopeFromSelection, onDeleteSelection, onReorganize, onToggleNoteLayout, onDirectProjectViewDrop, onMapToConversation, onPointerWorldChange, onSpaceCreate, onLocateNode, focusRequest, onLocateConversationSource, locatePulseId, onOpenConversation, onSetActiveConversation, activeConversationId = null, pendingReviewIds = [], attentionBucketsByViewId = {}, collectionMembersByNodeId = {}, expandedCollectionScopeIds = [], openingCollectionScopeIds = [], closingCollectionScopeIds = [], onToggleCollection, onOpenContextLens, colonies = [], surfaceElements = [], onSurfaceElementsChange, portalTargets = [], onOpenPortalTarget, onCreateColonyFromSelection, onCreateColonyFromLasso, onAddToColony, onRescopeColony, onDissolveColony, onColonyMemberMoveSettled }: Props) {
   const canvasRef = useRef<HTMLDivElement | null>(null)
   const dragCandidate = useRef<DragCandidate | null>(null)
   const resizeCandidate = useRef<ResizeCandidate | null>(null)
@@ -168,9 +174,25 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
   const edgeReconnect = useRef<EdgeReconnectCandidate | null>(null)
   const [linkPoint, setLinkPoint] = useState<{ x: number; y: number } | null>(null)
   const [relationTargetId, setRelationTargetId] = useState<string | null>(null)
+  const [referenceModifierHeld, setReferenceModifierHeld] = useState(false)
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [alignmentGuide, setAlignmentGuide] = useState<{ readonly x?: number; readonly y?: number } | null>(null)
   const [dragSignal, setDragSignal] = useState({ x: 0, y: 0 })
+  useEffect(() => {
+    const syncReferenceModifier = (event: KeyboardEvent) => setReferenceModifierHeld(referencePickModifier(event))
+    const clearReferenceModifier = () => setReferenceModifierHeld(false)
+    window.addEventListener('keydown', syncReferenceModifier, true)
+    window.addEventListener('keyup', syncReferenceModifier, true)
+    window.addEventListener('blur', clearReferenceModifier)
+    return () => {
+      window.removeEventListener('keydown', syncReferenceModifier, true)
+      window.removeEventListener('keyup', syncReferenceModifier, true)
+      window.removeEventListener('blur', clearReferenceModifier)
+    }
+  }, [])
+
+  const referencePickIntent = Boolean(referencePick && (referencePick.active || referenceModifierHeld))
+
   const collectionMotionByNodeId = useMemo(() => {
     const result = new Map<string, { phase: 'opening' | 'closing'; dx: number; dy: number }>()
     const opening = new Set(openingCollectionScopeIds)
@@ -206,13 +228,36 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
   const [dropLight, setDropLight] = useState<{ hot: boolean; label?: string } | null>(null)
   const marquee = useRef<SpatialPointerSession>(IDLE_SPATIAL_POINTER)
   const [marqueeRect, setMarqueeRect] = useState<{ left: number; top: number; width: number; height: number } | null>(null)
-  const [selectedRegionId, setSelectedRegionId] = useState<string | null>(null)
+  const [selectedColonyId, setSelectedColonyId] = useState<string | null>(null)
+  const [colonyLassoMode, setColonyLassoMode] = useState<{ readonly kind: 'create' | 'rescope'; readonly colonyId?: string } | null>(null)
+  const colonyLassoSession = useRef<{ pointerId: number; points: Array<{ x: number; y: number }> } | null>(null)
+  const [colonyLassoPoints, setColonyLassoPoints] = useState<readonly { x: number; y: number }[]>([])
+  const [colonyCandidateIds, setColonyCandidateIds] = useState<readonly string[]>([])
   const [componentProposalOps, setComponentProposalOps] = useState<readonly SurfaceOp[]>([])
   const [createMenu, setCreateMenu] = useState<{ from: string; x: number; y: number; screenX: number; screenY: number } | null>(null)
   // C-3 Glyth Orbit（Grammar §11 单击 = Select + Orbit 并存）：只对 single active 的
   // conversation 实体出现。anchor 存被点对象 DOM；conversationId 是 canonical ConversationSession id。
   // 物理对象 id 始终是 Core conversationViewId，不再派生第二套会话节点。
   const [conversationOrbit, setConversationOrbit] = useState<{ anchor: Element; nodeId: string; conversationId: string; title: string; statusLabel: string } | null>(null)
+  const markerRuntime = useProjectSpatialMarkersOrNull()
+  const clearColonyLasso = () => {
+    const active = colonyLassoSession.current
+    if (active && canvasRef.current?.hasPointerCapture(active.pointerId)) {
+      try { canvasRef.current.releasePointerCapture(active.pointerId) } catch { /* pointer already released */ }
+    }
+    colonyLassoSession.current = null
+    setColonyLassoPoints([])
+    setColonyCandidateIds([])
+    setColonyLassoMode(null)
+  }
+  useEffect(() => {
+    if (!colonyLassoMode) return
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') clearColonyLasso() }
+    window.addEventListener('keydown', onKeyDown, true)
+    return () => window.removeEventListener('keydown', onKeyDown, true)
+  }, [colonyLassoMode])
+  const localNavigationNonce = useRef(1_000_000)
+  const [localNavigationRequest, setLocalNavigationRequest] = useState<SpatialFocusRequest | undefined>()
   // §13「只对 single active object 出现」：换选/清选/框选后该会话节点不再被选中即收起
   // （空白点击与 Esc / outside click 由 ObjectOrbit 行为层统一收口，不在此重复）。
   useEffect(() => {
@@ -220,14 +265,25 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
     if (!selectedIds.includes(conversationOrbit.nodeId)) setConversationOrbit(null)
   }, [conversationOrbit, selectedIds])
   const toWorld = (clientX: number, clientY: number, rect: DOMRect) => spatialScreenToWorld(clientX, clientY, rect, camera)
+  const colonyCandidatesForPoints = (points: readonly { x: number; y: number }[]) => points.length < 3 ? [] : nodes
+    .filter((node) => pointInPolygon({ x: node.x + node.width / 2, y: node.y + node.height / 2 }, points))
+    .map((node) => node.id)
   // P0 2026-08-17: there is no persistent client-owned arrange mode.
   // Spatial positions in `nodes` are always the user's current presentation.
   const spatialNodes = useMemo(() => dragPreviewPositions
     ? nodes.map((node) => dragPreviewPositions[node.id] ? { ...node, ...dragPreviewPositions[node.id] } : node)
     : nodes, [dragPreviewPositions, nodes])
+  const spatialCanvasItems = useMemo(() => spatialNodes.map((node) => ({ id: node.id, x: node.x, y: node.y, width: node.width, height: node.height, label: node.title, visualKind: miniMapVisualKindForNode(node) })), [spatialNodes])
+  useEffect(() => { if (focusRequest) setLocalNavigationRequest(undefined) }, [focusRequest?.nonce, focusRequest?.targetTestId])
+  const navigateSpatialIds = (ids: readonly string[]) => {
+    if (!ids.length) return
+    localNavigationNonce.current += 1
+    setLocalNavigationRequest({ nonce: localNavigationNonce.current, ids: [...new Set(ids)], targetTestId: 'canvas' })
+  }
+  const effectiveFocusRequest = localNavigationRequest ?? focusRequest
   const mainFocus = useSpatialFocusRequest({
-    request: focusRequest,
-    items: spatialNodes.map((node) => ({ id: node.id, x: node.x, y: node.y, width: node.width, height: node.height, label: node.title, visualKind: miniMapVisualKindForNode(node) })),
+    request: effectiveFocusRequest,
+    items: spatialCanvasItems,
     testId: 'canvas',
     camera,
     setCamera,
@@ -243,6 +299,42 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
     })
   }, [spatialNodes, selectedIds, pendingId, camera])
   const renderIds = useMemo(() => new Set(renderNodes.map((node) => node.id)), [renderNodes])
+  const glythLod = glythSemanticLodForZoom(camera.zoom)
+  const focusGlythIds = useMemo(() => new Set(
+    !effectiveFocusRequest || (effectiveFocusRequest.targetTestId && effectiveFocusRequest.targetTestId !== 'canvas') ? [] : effectiveFocusRequest.ids,
+  ), [effectiveFocusRequest])
+  const selectedGlythIds = useMemo(() => new Set(selectedIds), [selectedIds])
+  const criticalGlythIds = useMemo(() => new Set(renderNodes.filter((node) => isCriticalGlyth(node, { selectedIds: selectedGlythIds, activeConversationId, focusIds: focusGlythIds })).map((node) => node.id)), [activeConversationId, focusGlythIds, renderNodes, selectedGlythIds])
+  const extremeFarGlythClusters = useMemo(() => glythLod === 'extreme-far' ? clusterExtremeFarGlyths(renderNodes, camera, criticalGlythIds) : [], [camera, criticalGlythIds, glythLod, renderNodes])
+  const clusteredGlythIds = useMemo(() => new Set(extremeFarGlythClusters.flatMap((cluster) => cluster.memberIds)), [extremeFarGlythClusters])
+  const semanticRegionSources = useMemo(() => [
+    ...colonies.filter((colony) => colony.surface === 'main').map((colony) => ({
+      id: `colony:${colony.id}`,
+      label: colony.label ?? 'Colony',
+      memberViewIds: colony.memberIds,
+      bounds: colonyBounds(colony),
+    })),
+    ...surfaceElements.filter((element) => (element.type === 'fence' || element.type === 'region') && (element.binding?.projectViewIds?.length ?? 0) >= 2).map((element) => ({
+      id: `legacy-region:${element.id}`,
+      label: '旧空间范围',
+      memberViewIds: element.binding!.projectViewIds!,
+      bounds: { x: element.bounds.x, y: element.bounds.y, width: element.bounds.w, height: element.bounds.h },
+    })),
+  ], [colonies, surfaceElements])
+  const semanticRegionOverviews = useMemo(() => semanticNavigationRegionOverviews(semanticRegionSources, camera.zoom), [camera.zoom, semanticRegionSources])
+  const semanticRegionMarkerItems = useMemo<readonly SpatialMarkerItem[]>(() => semanticRegionOverviews.map((region) => ({
+    id: region.markerId,
+    label: region.label?.trim() || `${region.memberViewIds.length} 项区域`,
+    bounds: region.bounds,
+    surface: 'main',
+    scope: 'local',
+    sourceSurfaceRef: 'main',
+    targetSurfaceRef: 'main',
+    attention: 'focus',
+    groupKey: 'semantic-region-overview',
+    groupLabel: '区域',
+  })), [semanticRegionOverviews])
+  const semanticRegionMembersByMarker = useMemo(() => new Map(semanticRegionOverviews.map((region) => [region.markerId, region.memberViewIds] as const)), [semanticRegionOverviews])
   const zoomBandForEdges = camera.zoom < 0.35 ? 'far' as const : camera.zoom < 0.65 ? 'mid' as const : 'near' as const
   const focusEdgeIds = useMemo(() => {
     if (selectedIds.length === 0) return new Set<string>()
@@ -634,6 +726,21 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
     return hit
   }
 
+  const colonyTargetAt = (clientX: number, clientY: number) => {
+    const element = document.elementFromPoint(clientX, clientY)?.closest<HTMLElement>('[data-colony-id]') ?? null
+    const colonyId = element?.dataset.colonyId
+    return element && colonyId ? { element, colonyId } : null
+  }
+
+  const commitProjectViewTarget = (targetId: string, ids: readonly string[]) => {
+    const conversationSessionId = conversationSessionFromDropTarget(targetId)
+    if (conversationSessionId) {
+      onMapToConversation?.(conversationSessionId, ids)
+      return
+    }
+    onDirectProjectViewDrop?.(targetId, ids)
+  }
+
   const setDirectProjectViewHover = (hit: ReturnType<typeof projectViewTargetAt>) => {
     if (!hit) {
       clearDirectProjectViewTarget()
@@ -654,16 +761,30 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
       if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
       return
     }
+    if (colonyLassoSession.current && colonyLassoSession.current.pointerId === event.pointerId) {
+      const points = colonyLassoSession.current.points
+      const candidates = colonyCandidatesForPoints(points)
+      if (!cancelled && points.length >= 3 && candidates.length >= 2) {
+        if (colonyLassoMode?.kind === 'rescope' && colonyLassoMode.colonyId) onRescopeColony?.(colonyLassoMode.colonyId, points)
+        else onCreateColonyFromLasso?.(candidates, points)
+      }
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
+      clearColonyLasso()
+      return
+    }
     if (semanticDropSession.current && event.pointerId === semanticDropSession.current.pointerId) {
       const item = semanticDropSession.current
-      const hit = !cancelled && onDirectProjectViewDrop && semanticDropMoved.current ? projectViewTargetAt(event.clientX, event.clientY) : null
+      const colonyHit = !cancelled && semanticDropMoved.current ? colonyTargetAt(event.clientX, event.clientY) : null
+      const hit = !colonyHit && !cancelled && onDirectProjectViewDrop && semanticDropMoved.current ? projectViewTargetAt(event.clientX, event.clientY) : null
       setDirectProjectViewHover(hit ?? null)
-      if (hit && onDirectProjectViewDrop) onDirectProjectViewDrop(hit.target.id, item.ids)
+      if (colonyHit) onAddToColony?.(colonyHit.colonyId, item.ids)
+      else if (hit) commitProjectViewTarget(hit.target.id, item.ids)
       if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
       cancelSemanticDrop()
       return
     }
-    const directMoveHit = !cancelled && dragging.current && dragCandidate.current && onDirectProjectViewDrop
+    const colonyMoveHit = !cancelled && dragging.current && dragCandidate.current ? colonyTargetAt(event.clientX, event.clientY) : null
+    const directMoveHit = !colonyMoveHit && !cancelled && dragging.current && dragCandidate.current && onDirectProjectViewDrop
       ? externalProjectViewTargetAt(event.clientX, event.clientY)
       : null
     if (directMoveHit && dragCandidate.current && onDirectProjectViewDrop) {
@@ -673,7 +794,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
       restoreDraggedOriginals(candidate)
       setDragPreviewPositions(null)
       onPresentationInteractionChange?.(false)
-      onDirectProjectViewDrop(directMoveHit.target.id, candidate.group.map((item) => item.id))
+      commitProjectViewTarget(directMoveHit.target.id, candidate.group.map((item) => item.id))
       suppressClick.current = candidate.id
       dragCandidate.current = null
       dragPoint.current = null
@@ -757,6 +878,9 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
         const placement = placements.get(node.id)
         return placement ? { ...node, ...placement, positionLocked: true } : node
       }))
+      const placementRecord = Object.fromEntries(placements)
+      if (colonyMoveHit) onAddToColony?.(colonyMoveHit.colonyId, [...placements.keys()], placementRecord)
+      onColonyMemberMoveSettled?.([...placements.keys()], placementRecord)
       for (const [id, placement] of placements) {
         if (id.startsWith('workspace:')) onWorkspaceProjectionMove?.(id.slice('workspace:'.length), placement.x, placement.y)
       }
@@ -874,6 +998,12 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
       <small>{dropGhost.label ?? '移动'}</small>
     </div>}
     {dropLight && <LightCurtain tone="drop" anchors={['left', 'bottom']} hot={dropLight.hot} label={dropLight.label} count={dropGhost?.count}/>}
+    {surfaceMode === 'project' && onCreateColonyFromLasso && <div className={`lcos-colony-lasso-entry ${colonyLassoMode ? 'is-active' : ''}`} onPointerDown={(event) => event.stopPropagation()}>
+      <button type="button" aria-pressed={Boolean(colonyLassoMode)} title="手画一圈建立 Colony" onClick={() => {
+        if (colonyLassoMode) clearColonyLasso()
+        else { setSelectedColonyId(null); setColonyLassoMode({ kind: 'create' }); setColonyLassoPoints([]); setColonyCandidateIds([]) }
+      }}><LassoSelect size={13}/>{colonyLassoMode?.kind === 'rescope' ? '重新圈定中' : colonyLassoMode ? '圈定中 · Esc 取消' : '圈一片'}</button>
+    </div>}
     {/* B-5 Selection 轻量化（Grammar §11 禁止常驻横向工具条）：条收窄为最小占位——只留「在哪」与主动作「整理这些」，
         其余动作全部收进 More 菜单；B-6 Orbit 就绪后整条退役（动作进 object-local Orbit）。 */}
     {selectionToolbarPosition && <div data-testid="selection-toolbar" className="selection-toolbar lcos-selection-strip" style={selectionToolbarPosition} onPointerDown={(event) => event.stopPropagation()} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation() }}>
@@ -883,7 +1013,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
         <summary aria-label="更多操作" title="更多操作"><Ellipsis size={15}/></summary>
         <div>
           {onRenameSelection && <button type="button" onClick={(event) => { event.stopPropagation(); onRenameSelection() }}><Pencil size={12}/>重命名</button>}
-          {selectedIds.length > 1 && onCreateRegion && <button type="button" onClick={(event) => { event.stopPropagation(); onCreateRegion() }}><Fence size={12}/>围栏</button>}
+          {selectedIds.length > 1 && onCreateColonyFromSelection && <button type="button" onClick={(event) => { event.stopPropagation(); onCreateColonyFromSelection() }}><LassoSelect size={12}/>圈成 Colony</button>}
           {selectedIds.length > 1 && <>
             <button type="button" onClick={() => alignSelection('left')}>左对齐</button><button type="button" onClick={() => alignSelection('center-x')}>水平居中</button><button type="button" onClick={() => alignSelection('right')}>右对齐</button>
             <button type="button" onClick={() => alignSelection('top')}>上对齐</button><button type="button" onClick={() => alignSelection('center-y')}>垂直居中</button><button type="button" onClick={() => alignSelection('bottom')}>下对齐</button>
@@ -911,7 +1041,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
     {marqueeRect && (() => { const rect = canvasRef.current?.getBoundingClientRect(); return <div data-testid="selection-marquee" className="marquee" style={{ left: marqueeRect.left - (rect?.left ?? 0), top: marqueeRect.top - (rect?.top ?? 0), width: marqueeRect.width, height: marqueeRect.height }} /> })()}
   </>
 
-  return <><SpatialCanvas ref={canvasRef} testId="canvas" tabIndex={-1} camera={camera} setCamera={setCamera} disabled={locked} ariaBusy={locked} locked={locked} nodeCount={nodes.length} edgeCount={edges.length} className={`canvas lod-${lod} zoom-band-${zoomBand} layout-mode-freeform ${gridSnapEnabled ? 'grid-snap-enabled' : ''} ${selectedId ? 'has-focus' : ''} ${locked ? 'is-locked' : ''}`} worldClassName="canvas-world" worldTestId="canvas-world" style={{ '--canvas-zoom': String(camera.zoom), '--lcos-main-grid-size': `${MAIN_CANVAS_GRID_STEP * camera.zoom}px`, '--lcos-main-grid-x': `${camera.x % (MAIN_CANVAS_GRID_STEP * camera.zoom)}px`, '--lcos-main-grid-y': `${camera.y % (MAIN_CANVAS_GRID_STEP * camera.zoom)}px` } as React.CSSProperties} onPointerDown={({ event }) => {
+  return <><SpatialCanvas ref={canvasRef} testId="canvas" surfaceRef={surfaceMode === 'project' ? 'main' : undefined} markerAnchorItems={surfaceMode === 'project' ? spatialCanvasItems : undefined} navigationMarkerItems={surfaceMode === 'project' ? semanticRegionMarkerItems : undefined} onNavigationMarkerLocate={(markerId) => navigateSpatialIds(semanticRegionMembersByMarker.get(markerId) ?? [])} tabIndex={-1} camera={camera} setCamera={setCamera} disabled={locked} ariaBusy={locked} locked={locked} nodeCount={nodes.length} edgeCount={edges.length} className={`canvas ${referencePickIntent ? 'is-reference-pick' : ''} ${link.current ? 'is-relation-dragging' : ''} lod-${lod} zoom-band-${zoomBand} layout-mode-freeform ${gridSnapEnabled ? 'grid-snap-enabled' : ''} ${selectedId ? 'has-focus' : ''} ${locked ? 'is-locked' : ''}`} worldClassName="canvas-world" worldTestId="canvas-world" style={{ '--canvas-zoom': String(camera.zoom), '--lcos-main-grid-size': `${MAIN_CANVAS_GRID_STEP * camera.zoom}px`, '--lcos-main-grid-x': `${camera.x % (MAIN_CANVAS_GRID_STEP * camera.zoom)}px`, '--lcos-main-grid-y': `${camera.y % (MAIN_CANVAS_GRID_STEP * camera.zoom)}px` } as React.CSSProperties} onPointerDown={({ event }) => {
     const target = event.target as HTMLElement
     // Workspace-level Semantic Drop fallback. Node-level Semantic Drop starts in
     // CanvasCard before ordinary node movement so a primary grab-handle drag cannot
@@ -920,9 +1050,19 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
       const workspaceTarget = target.closest<HTMLElement>('[data-workspace-frame]')
       if (workspaceTarget?.dataset.workspaceFrame && beginCanvasSemanticDrop([`workspace:${workspaceTarget.dataset.workspaceFrame}`], event)) return
     }
-    const blankCanvas = !target.closest('[data-node-id], [data-workspace-frame], button, .edge, .edge-control')
+    const blankCanvas = !target.closest('[data-node-id], [data-workspace-frame], [data-colony-id], button, .edge, .edge-control')
     if (blankCanvas) event.currentTarget.focus({ preventScroll: true })
     if (createMenu && !target.closest('.anchor-create-menu')) setCreateMenu(null)
+    if (event.button === 0 && blankCanvas && colonyLassoMode) {
+      event.preventDefault()
+      const rect = event.currentTarget.getBoundingClientRect()
+      const point = toWorld(event.clientX, event.clientY, rect)
+      colonyLassoSession.current = { pointerId: event.pointerId, points: [point] }
+      setColonyLassoPoints([point])
+      setColonyCandidateIds([])
+      try { event.currentTarget.setPointerCapture(event.pointerId) } catch { /* browser owns capture */ }
+      return
+    }
     if (event.button === 0 && blankCanvas && spaceHeld) {
       event.preventDefault()
       const rect = event.currentTarget.getBoundingClientRect()
@@ -937,6 +1077,19 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
       marquee.current = beginSpatialMarquee(event.pointerId, { x: event.clientX, y: event.clientY })
     }
   }} onPointerMove={({ event, rect }) => {
+    if (colonyLassoSession.current && colonyLassoSession.current.pointerId === event.pointerId) {
+      if (event.pointerType === 'mouse' && ((event.buttons ?? 1) & 1) === 0) { finishPointer(event, true); return }
+      const point = toWorld(event.clientX, event.clientY, rect)
+      const points = colonyLassoSession.current.points
+      const previous = points[points.length - 1]
+      if (!previous || Math.hypot(point.x - previous.x, point.y - previous.y) >= 6 / Math.max(.2, camera.zoom)) {
+        points.push(point)
+        const snapshot = [...points]
+        setColonyLassoPoints(snapshot)
+        setColonyCandidateIds(colonyCandidatesForPoints(snapshot))
+      }
+      return
+    }
     // 丢失 pointerup 后的安全阀：没有按住主键时不允许任何进行中的拖拽/缩放继续
     // 移动节点（否则一次未完成的按下 + 之后随意移动鼠标会静默拖动节点并写进 graph）。
     if ((dragCandidate.current || resizeCandidate.current || workspaceDrag.current || frameResize.current)
@@ -952,11 +1105,13 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
       }
       if (!semanticDropMoved.current && Math.hypot(event.clientX - item.startX, event.clientY - item.startY) > 4) semanticDropMoved.current = true
       if (semanticDropMoved.current) {
-        const hit = onDirectProjectViewDrop ? projectViewTargetAt(event.clientX, event.clientY) : null
+        const colonyHit = colonyTargetAt(event.clientX, event.clientY)
+        const hit = !colonyHit && onDirectProjectViewDrop ? projectViewTargetAt(event.clientX, event.clientY) : null
         setDirectProjectViewHover(hit)
-        if (hit) setDropGhost({ x: event.clientX, y: event.clientY, count: item.ids.length, label: `加入 ${hit.target.label}` })
+        const label = colonyHit ? '加入 Colony' : hit ? `加入 ${hit.target.label}` : undefined
+        if (label) setDropGhost({ x: event.clientX, y: event.clientY, count: item.ids.length, label })
         else setDropGhost({ x: event.clientX, y: event.clientY, count: item.ids.length })
-        setDropLight({ hot: Boolean(hit), label: hit ? `加入 ${hit.target.label}` : undefined })
+        setDropLight({ hot: Boolean(colonyHit || hit), label })
       }
       return
     }
@@ -1021,12 +1176,14 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
       if (dragging.current) {
         const pointer = { x: event.clientX, y: event.clientY }
         autoPanPointer.current = pointer
-        const directHit = onDirectProjectViewDrop ? externalProjectViewTargetAt(event.clientX, event.clientY) : null
+        const colonyHit = colonyTargetAt(event.clientX, event.clientY)
+        const directHit = !colonyHit && onDirectProjectViewDrop ? externalProjectViewTargetAt(event.clientX, event.clientY) : null
         setDirectProjectViewHover(directHit)
-        if (directHit) {
+        if (colonyHit || directHit) {
           stopAutoPan()
-          setDropGhost({ x: event.clientX, y: event.clientY, count: candidate.group.length, label: `加入 ${directHit.target.label}` })
-          setDropLight({ hot: true, label: `加入 ${directHit.target.label}` })
+          const label = colonyHit ? '加入 Colony' : `加入 ${directHit!.target.label}`
+          setDropGhost({ x: event.clientX, y: event.clientY, count: candidate.group.length, label })
+          setDropLight({ hot: true, label })
           setAlignmentGuide(null)
           return
         }
@@ -1079,38 +1236,29 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
     <SpatialNodeLayer className="lcos-arrange-structure-layer">
       {alignmentGuide?.x !== undefined && <i className="lcos-alignment-guide axis-x" style={{ left: alignmentGuide.x }}/>} {/* x guide */}
       {alignmentGuide?.y !== undefined && <i className="lcos-alignment-guide axis-y" style={{ top: alignmentGuide.y }}/>} {/* y guide */}
-      {spatialRegions.map((region) => {
-        const definition = resolveSurfaceComponent('fence')
-        const Renderer = definition.renderer
-        const element: SurfaceElement = {
-          id: `main-fence:${region.id}`,
-          projectId,
-          surface: 'main',
-          type: 'fence',
-          bounds: { x: region.bounds.x, y: region.bounds.y, w: region.bounds.width, h: region.bounds.height },
-          presentation: { zIndex: 1 },
-        }
-        return <SurfaceFrame
-          key={region.id}
-          element={element}
-          definition={definition}
-          zoom={camera.zoom}
-          selected={selectedRegionId === region.id}
-          onSelect={() => setSelectedRegionId(region.id)}
-          onBoundsCommit={(bounds) => {
-            const next = { x: bounds.x, y: bounds.y, width: bounds.w, height: bounds.h }
-            onRegionBoundsChange?.(region.id, next)
-            onRegionBoundsCommit?.(region.id, next)
-          }}
-          onPresentationChange={() => undefined}
-          onRemove={() => onClearRegion?.(region.id)}
-          showPin={false}
-        >
-          <Renderer element={element} selected={selectedRegionId === region.id} meta={`${region.memberViewIds.length} 项 · Presentation-only`}/>
-          <button type="button" className="lcos-main-fence-promote" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); onPromoteRegionToCollection?.(region.id) }}>转 Collection</button>
-        </SurfaceFrame>
+      {colonies.filter((colony) => colony.surface === 'main').map((colony) => {
+        const bounds = colonyBounds(colony)
+        const selected = selectedColonyId === colony.id
+        return <div key={colony.id} className={`lcos-colony-overlay ${selected ? 'is-selected' : ''}`} data-colony-overlay={colony.id}>
+          <svg className="lcos-colony-contour-svg" width="1" height="1" aria-hidden="true">
+            <path data-colony-id={colony.id} className="lcos-colony-contour" d={colonyPathData(colony)} onPointerDown={(event) => {
+              if (event.button !== 0 || colonyLassoMode) return
+              event.preventDefault(); event.stopPropagation()
+              setSelectedColonyId(colony.id)
+              onMarqueeSelect([...colony.memberIds], false)
+            }}/>
+          </svg>
+          <div className="lcos-colony-label" style={{ left: bounds.x + 12, top: bounds.y + 8 }} data-colony-id={colony.id} onPointerDown={(event) => event.stopPropagation()}>
+            <strong>{colony.label?.trim() || 'Colony'}</strong><small>{colony.memberIds.length} 项</small>
+            {selected && <span className="lcos-colony-actions">
+              <button type="button" title="重新画一圈定义成员" onClick={() => { setColonyLassoMode({ kind: 'rescope', colonyId: colony.id }); setColonyLassoPoints([]); setColonyCandidateIds([]) }}><RotateCcw size={11}/>重新圈定</button>
+              <button type="button" title="解散 Colony；对象保留原位" onClick={() => { setSelectedColonyId(null); onDissolveColony?.(colony.id) }}><X size={11}/>解散</button>
+            </span>}
+          </div>
+        </div>
       })}
-      {effectiveWorkspaceFrames.map((frame) => <div key={frame.workspaceId} data-testid={`workspace-frame-${frame.workspaceId}`} data-workspace-frame={frame.workspaceId} data-member-count={frame.memberViewIds.length} className={`workspace-frame ${frame.active ? 'active' : ''} ${draggingWorkspaceId === frame.workspaceId ? 'dragging' : ''}`} style={{ left: frame.bounds.x, top: frame.bounds.y, width: frame.bounds.width, height: frame.bounds.height }}>
+      {colonyLassoPoints.length > 1 && <svg className="lcos-colony-lasso-svg" width="1" height="1" aria-hidden="true"><path d={`M ${colonyLassoPoints.map((point) => `${point.x} ${point.y}`).join(' L ')}${colonyLassoPoints.length > 2 ? ' Z' : ''}`}/></svg>}
+      {effectiveWorkspaceFrames.map((frame) => <div key={frame.workspaceId} data-testid={`workspace-frame-${frame.workspaceId}`} data-workspace-frame={frame.workspaceId} data-relation-target={`workspace:${frame.workspaceId}`} data-member-count={frame.memberViewIds.length} className={`workspace-frame ${frame.active ? 'active' : ''} ${draggingWorkspaceId === frame.workspaceId ? 'dragging' : ''} ${relationTargetId === `workspace:${frame.workspaceId}` ? 'is-relation-target' : ''}`} style={{ left: frame.bounds.x, top: frame.bounds.y, width: frame.bounds.width, height: frame.bounds.height }}>
         <button data-testid={`workspace-frame-header-${frame.workspaceId}`} className="workspace-frame-header" type="button" onClick={(event) => { event.stopPropagation(); onWorkspaceActivate?.(frame.workspaceId) }} onPointerDown={(event) => {
           if (locked || event.button !== 0) return
           event.preventDefault(); event.stopPropagation()
@@ -1124,8 +1272,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
         }}>
           <span>{frame.label}</span><b>{frame.active ? '当前 · ' : ''}{frame.memberViewIds.length} 项</b>
         </button>
-        {surfaceMode === 'project' && <><button data-testid={`workspace-relation-in-${frame.workspaceId}`} data-relation-target={`workspace:${frame.workspaceId}`} className="workspace-relation-handle workspace-relation-in" type="button" aria-label={`连接到 Workspace ${frame.label}`} onPointerDown={(event) => event.stopPropagation()} />
-        <button data-testid={`workspace-relation-out-${frame.workspaceId}`} data-relation-target={`workspace:${frame.workspaceId}`} className="workspace-relation-handle workspace-relation-out" type="button" aria-label={`从 Workspace ${frame.label} 建立关系`} onPointerDown={(event) => beginRelation(`workspace:${frame.workspaceId}`, event, { x: frame.bounds.x + frame.bounds.width, y: frame.bounds.y + frame.bounds.height / 2 })} /></>}
+        {surfaceMode === 'project' && <button data-testid={`workspace-relation-notch-${frame.workspaceId}`} className="lcos-relation-notch workspace-relation-notch" type="button" aria-label={`从 Workspace ${frame.label} 建立明确关系`} title="拖动边缘建立关系" onPointerDown={(event) => beginRelation(`workspace:${frame.workspaceId}`, event, { x: frame.bounds.x + frame.bounds.width, y: frame.bounds.y + frame.bounds.height / 2 })}><span aria-hidden="true" /></button>}
         <button data-testid={`workspace-frame-resize-${frame.workspaceId}`} className="workspace-frame-resize" type="button" aria-label={`调整 ${frame.label} 框体大小`} title="拖动调整框体范围（不影响成员位置）" onPointerDown={(event) => {
           if (locked || event.button !== 0) return
           event.preventDefault(); event.stopPropagation()
@@ -1145,11 +1292,19 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
     </SpatialEdgeLayer>
     <SpatialNodeLayer className="lcos-arrange-node-layer">
       {selectionBounds && <div data-testid="selection-bounds" className="selection-bounds" style={{ left: selectionBounds.x - 10, top: selectionBounds.y - 10, width: selectionBounds.width + 20, height: selectionBounds.height + 20 }} />}
+      {extremeFarGlythClusters.map((cluster) => <button type="button" key={cluster.id} className="lcos-glyth-semantic-cluster" data-glyth-cluster={cluster.count} data-glyth-cluster-members={cluster.memberIds.join(',')} style={{ left: cluster.x, top: cluster.y, '--glyth-ui-scale': String(1 / Math.max(.02, camera.zoom)) } as React.CSSProperties} aria-label={`靠近 ${cluster.count} 段对话`} title="靠近这片对话" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); navigateSpatialIds(cluster.memberIds) }}><span aria-hidden="true">{cluster.count}</span><small>对话</small></button>)}
       {renderNodes.map((node) => {
+        if (clusteredGlythIds.has(node.id)) return null
         const collectionScopeId = node.entityKind === 'collection' ? (node.opensScopeId ?? (node.id.startsWith('scope:') ? node.id.slice('scope:'.length) : null)) : null
-        return <CanvasCard key={node.id} projectId={projectId} node={node} density={nodeDensity(node, lod)} zoom={camera.zoom} showDetails={camera.zoom > .2 && lod !== 'overview'} performanceProxy={(lod === 'aggregate' || lod === 'overview') && !selectedIds.includes(node.id) && pendingId !== node.id} runId={runId} runStatus={runStatus} selected={selectedIds.includes(node.id)} multiSelected={selectedIds.length > 1 && selectedIds.includes(node.id)} pending={pendingId === node.id} reviewPending={pendingReviewIds.includes(node.id)} referenceOrder={referencePick?.active ? referencePick.ids.indexOf(node.id) + 1 : 0} dragging={draggingId === node.id} dragSignal={draggingId === node.id ? dragSignal : undefined} resizing={resizingId === node.id} workspaceMember={Boolean(activeWorkspaceId && workspaceFrames.find((frame) => frame.workspaceId === activeWorkspaceId)?.memberViewIds.includes(node.id))} locatePulse={locatePulseId === node.id} attentionBucket={attentionBucketsByViewId[node.id]} collectionExpanded={Boolean(collectionScopeId && expandedCollectionScopeIds.includes(collectionScopeId))} collectionMembers={collectionMembersByNodeId[node.id] ?? (collectionScopeId ? collectionMembersByNodeId[`scope:${collectionScopeId}`] ?? [] : [])} collectionMotion={collectionMotionByNodeId.get(node.id)} onOpenContextLens={onOpenContextLens} onCollectionMemberSelect={onSelect} onLocate={onLocateNode} onLocateConversationSource={onLocateConversationSource} onDetails={onDetails} onPointerDown={(event) => {
-        if (referencePick?.active && event.button === 0) {
-          event.preventDefault(); event.stopPropagation(); suppressClick.current = node.id; referencePick.onToggle(node.id); return
+        return <CanvasCard key={node.id} projectId={projectId} node={node} density={nodeDensity(node, lod)} zoom={camera.zoom} showDetails={camera.zoom > .2 && lod !== 'overview'} performanceProxy={node.entityKind !== 'conversation' && (lod === 'aggregate' || lod === 'overview') && !selectedIds.includes(node.id) && pendingId !== node.id} glythCritical={criticalGlythIds.has(node.id)} runId={runId} runStatus={runStatus} selected={selectedIds.includes(node.id)} multiSelected={selectedIds.length > 1 && selectedIds.includes(node.id)} pending={pendingId === node.id} reviewPending={pendingReviewIds.includes(node.id)} referenceOrder={referencePick ? referencePick.ids.indexOf(node.id) + 1 : 0} dragging={draggingId === node.id} dragSignal={draggingId === node.id ? dragSignal : undefined} resizing={resizingId === node.id} workspaceMember={Boolean(activeWorkspaceId && workspaceFrames.find((frame) => frame.workspaceId === activeWorkspaceId)?.memberViewIds.includes(node.id))} locatePulse={locatePulseId === node.id} attentionBucket={attentionBucketsByViewId[node.id]} collectionExpanded={Boolean(collectionScopeId && expandedCollectionScopeIds.includes(collectionScopeId))} collectionMembers={collectionMembersByNodeId[node.id] ?? (collectionScopeId ? collectionMembersByNodeId[`scope:${collectionScopeId}`] ?? [] : [])} collectionMotion={collectionMotionByNodeId.get(node.id)} onOpenContextLens={onOpenContextLens} onCollectionMemberSelect={onSelect} onLocate={onLocateNode} onLocateConversationSource={onLocateConversationSource} onDetails={onDetails} referenceReceptive={referencePickIntent && node.entityKind !== 'conversation'} colonyCandidate={colonyCandidateIds.includes(node.id)} onPointerDown={(event) => {
+        if (event.button === 0 && referencePick && (referencePick.active || referencePickModifier(event))) {
+          event.preventDefault(); event.stopPropagation(); suppressClick.current = node.id
+          if (node.entityKind === 'conversation' && node.conversation) {
+            onSetActiveConversation?.(node.conversation.id)
+          } else {
+            referencePick.onToggle(node.id)
+          }
+          return
         }
         const semanticIds = selectedIds.includes(node.id) && selectedIds.length > 1 ? selectedIds : [node.id]
         if (beginCanvasSemanticDrop(semanticIds, event)) return
@@ -1210,6 +1365,13 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
         activeConversationId === conversationOrbit.conversationId
           ? { id: 'conversation-active', label: '当前承接', icon: CheckCircle2, readOnly: true }
           : { id: 'conversation-activate', label: '设为当前', icon: Radio, onClick: () => onSetActiveConversation?.(conversationOrbit.conversationId) },
+        markerRuntime ? (() => {
+          const targetRef = { projectId: markerRuntime.projectId, kind: 'view' as const, id: conversationOrbit.nodeId }
+          const marker = markerForNavigationTarget(markerRuntime.records, targetRef)
+          return marker
+            ? { id: 'conversation-marker', label: '取消导航地标', icon: MapPin, onClick: () => { void markerRuntime.deleteMarker(marker.id) } }
+            : { id: 'conversation-marker', label: '固定到导航', icon: MapPin, onClick: () => { void markerRuntime.createMarker({ targetRef, scope: 'cross-surface' }) } }
+        })() : { id: 'conversation-marker', label: '固定到导航', icon: MapPin, readOnly: true },
         { id: 'conversation-status', label: conversationOrbit.statusLabel, icon: CircleDot, readOnly: true },
       ]}
     />
@@ -1256,10 +1418,10 @@ function ReconnectTemporaryEdge({ fixed, moving, endpoint }: { fixed: CanvasNode
   return <path className="edge temporary reconnecting" d={`M ${from.x} ${from.y} C ${from.x + 72} ${from.y}, ${to.x - 72} ${to.y}, ${to.x} ${to.y}`} />
 }
 
-function CanvasCard({ projectId, node, density, zoom, showDetails, performanceProxy = false, runId, runStatus, selected, multiSelected, pending, reviewPending, referenceOrder, dragging, dragSignal, resizing, workspaceMember, locatePulse, attentionBucket, collectionExpanded, collectionMembers, collectionMotion, onCollectionMemberSelect, onLocate, onLocateConversationSource, onOpenContextLens, onDetails, onPointerDown, onClick, onResizeStart, relationTarget, relationsEnabled, onLinkStart }: {
-  projectId: string; node: CanvasNode; density: NodeDisplayMode; zoom: number; showDetails: boolean; performanceProxy?: boolean; runId: string; runStatus: RunStatus | null; selected: boolean; multiSelected: boolean; pending: boolean; reviewPending: boolean; referenceOrder: number; dragging: boolean; dragSignal?: { x: number; y: number }; resizing: boolean; workspaceMember: boolean; locatePulse: boolean; attentionBucket?: AttentionBucketV0; collectionExpanded: boolean; collectionMembers: readonly CanvasNode[]
+function CanvasCard({ projectId, node, density, zoom, showDetails, performanceProxy = false, glythCritical = false, runId, runStatus, selected, multiSelected, pending, reviewPending, referenceOrder, dragging, dragSignal, resizing, workspaceMember, locatePulse, attentionBucket, collectionExpanded, collectionMembers, collectionMotion, onCollectionMemberSelect, onLocate, onLocateConversationSource, onOpenContextLens, onDetails, onPointerDown, onClick, onResizeStart, relationTarget, relationsEnabled, referenceReceptive, colonyCandidate, onLinkStart }: {
+  projectId: string; node: CanvasNode; density: NodeDisplayMode; zoom: number; showDetails: boolean; performanceProxy?: boolean; glythCritical?: boolean; runId: string; runStatus: RunStatus | null; selected: boolean; multiSelected: boolean; pending: boolean; reviewPending: boolean; referenceOrder: number; dragging: boolean; dragSignal?: { x: number; y: number }; resizing: boolean; workspaceMember: boolean; locatePulse: boolean; attentionBucket?: AttentionBucketV0; collectionExpanded: boolean; collectionMembers: readonly CanvasNode[]
   collectionMotion?: { phase: 'opening' | 'closing'; dx: number; dy: number }
-  onCollectionMemberSelect: (id: string, additive?: boolean) => void; onLocate?: (id: string) => void; onLocateConversationSource?: (id: string) => void; onOpenContextLens?: (node: CanvasNode, lens: 'space' | 'structure' | 'evolution') => void; onDetails: (id: string) => void; onPointerDown: (event: React.PointerEvent<HTMLDivElement>) => void; onClick: (additive: boolean, anchor: HTMLElement) => void; onResizeStart: (event: React.PointerEvent<HTMLButtonElement>) => void; relationTarget: boolean; relationsEnabled: boolean; onLinkStart: (event: React.PointerEvent<HTMLButtonElement>) => void
+  onCollectionMemberSelect: (id: string, additive?: boolean) => void; onLocate?: (id: string) => void; onLocateConversationSource?: (id: string) => void; onOpenContextLens?: (node: CanvasNode, lens: 'space' | 'structure' | 'evolution') => void; onDetails: (id: string) => void; onPointerDown: (event: React.PointerEvent<HTMLDivElement>) => void; onClick: (additive: boolean, anchor: HTMLElement) => void; onResizeStart: (event: React.PointerEvent<HTMLButtonElement>) => void; relationTarget: boolean; relationsEnabled: boolean; referenceReceptive: boolean; colonyCandidate: boolean; onLinkStart: (event: React.PointerEvent<HTMLButtonElement>) => void
 }) {
   const visualFamily = nodeVisualFamily(node)
   const revisionStack = (node.revisionCount ?? 0) > 1
@@ -1273,15 +1435,14 @@ function CanvasCard({ projectId, node, density, zoom, showDetails, performancePr
     runtime: runtimeSignal,
     semantic: reviewPending ? 'waiting review' : pending || node.draft ? 'candidate draft' : undefined,
   })
-  return <div data-node-id={node.id} data-node-kind={node.kind} data-entity-kind={node.entityKind} data-node-visual-family={visualFamily} data-node-current={node.current || undefined} data-node-draft={node.draft || undefined} data-node-historical={node.historical || undefined} data-revision-count={node.revisionCount} data-result-group={node.resultGroupId} data-node-runtime={node.runtimeState} data-run-status={node.runStatus} data-artifact-id={node.artifactId} data-revision-id={node.revisionId} data-file-record-id={node.fileRecordId} data-current-revision={node.followsCurrentRevision || undefined} data-preview-status={node.previewStatus} data-view-of={node.viewOf} data-scope-id={node.scopeId} data-position-locked={node.positionLocked || undefined} data-context-only={node.contextOnly || undefined} data-attention-bucket={attentionBucket} data-reference-order={referenceOrder || undefined} data-collection-motion={collectionMotion?.phase} data-testid={`canvas-node-${node.id}`} role="button" tabIndex={0} aria-disabled={node.disabled || undefined} className={`canvas-node node-family-${node.kind} visual-family-${visualFamily} density-${density} ${node.kind} ${revisionStack ? 'revision-stack' : ''} ${selected ? 'selected' : ''} ${multiSelected ? 'multi-selected' : ''} ${pending ? 'pending' : ''} ${reviewPending ? 'review-pending' : ''} ${referenceOrder > 0 ? 'reference-picked' : ''} ${dragging ? 'dragging' : ''} ${resizing ? 'resizing' : ''} ${relationTarget ? 'is-relation-target' : ''} ${workspaceMember ? 'workspace-active-member' : ''} ${locatePulse ? 'locate-pulse' : ''} ${attentionBucket ? `attention-${attentionBucket}` : ''} ${collectionMotion ? `collection-${collectionMotion.phase}` : ''} ${node.error ? 'error' : ''} ${node.disabled ? 'disabled' : ''} ${node.positionLocked ? 'position-locked' : ''}`} style={{ left: node.x, top: node.y, width: node.width, height: node.height, '--node-ui-scale': String(1 / Math.max(.2, zoom)), '--canvas-zoom': String(zoom), '--lcos-drag-x': String(dragSignal?.x ?? 0), '--lcos-drag-y': String(dragSignal?.y ?? 0), '--lcos-collection-fold-x': `${collectionMotion?.dx ?? 0}px`, '--lcos-collection-fold-y': `${collectionMotion?.dy ?? 0}px` } as React.CSSProperties} onDragStart={(event) => event.preventDefault()} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation() }} onPointerDown={(event) => { if (!node.disabled) onPointerDown(event) }} onClick={(event) => { event.stopPropagation(); if (!node.disabled) onClick(additiveSelection(event), event.currentTarget) }}>
+  return <div data-node-id={node.id} data-project-view-drop-target={node.entityKind === 'conversation' && node.conversation ? conversationGlythDropTarget(node.conversation.id) : undefined} data-project-view-drop-label={node.entityKind === 'conversation' ? '给这段对话' : undefined} data-node-kind={node.kind} data-entity-kind={node.entityKind} data-node-visual-family={visualFamily} data-node-current={node.current || undefined} data-node-draft={node.draft || undefined} data-node-historical={node.historical || undefined} data-revision-count={node.revisionCount} data-result-group={node.resultGroupId} data-node-runtime={node.runtimeState} data-run-status={node.runStatus} data-artifact-id={node.artifactId} data-revision-id={node.revisionId} data-file-record-id={node.fileRecordId} data-current-revision={node.followsCurrentRevision || undefined} data-preview-status={node.previewStatus} data-view-of={node.viewOf} data-scope-id={node.scopeId} data-position-locked={node.positionLocked || undefined} data-context-only={node.contextOnly || undefined} data-attention-bucket={attentionBucket} data-reference-order={referenceOrder || undefined} data-collection-motion={collectionMotion?.phase} data-testid={`canvas-node-${node.id}`} role="button" tabIndex={0} aria-disabled={node.disabled || undefined} className={`canvas-node node-family-${node.kind} visual-family-${visualFamily} density-${density} ${node.kind} ${revisionStack ? 'revision-stack' : ''} ${selected ? 'selected' : ''} ${multiSelected ? 'multi-selected' : ''} ${pending ? 'pending' : ''} ${reviewPending ? 'review-pending' : ''} ${referenceOrder > 0 ? 'reference-picked' : ''} ${referenceReceptive ? 'is-reference-receptive' : ''} ${colonyCandidate ? 'is-colony-candidate' : ''} ${dragging ? 'dragging' : ''} ${resizing ? 'resizing' : ''} ${relationTarget ? 'is-relation-target' : ''} ${workspaceMember ? 'workspace-active-member' : ''} ${locatePulse ? 'locate-pulse' : ''} ${attentionBucket ? `attention-${attentionBucket}` : ''} ${collectionMotion ? `collection-${collectionMotion.phase}` : ''} ${node.error ? 'error' : ''} ${node.disabled ? 'disabled' : ''} ${node.positionLocked ? 'position-locked' : ''}`} style={{ left: node.x, top: node.y, width: node.width, height: node.height, '--node-ui-scale': String(1 / Math.max(.2, zoom)), '--glyth-ui-scale': String(1 / Math.max(.02, zoom)), '--canvas-zoom': String(zoom), '--lcos-drag-x': String(dragSignal?.x ?? 0), '--lcos-drag-y': String(dragSignal?.y ?? 0), '--lcos-collection-fold-x': `${collectionMotion?.dx ?? 0}px`, '--lcos-collection-fold-y': `${collectionMotion?.dy ?? 0}px` } as React.CSSProperties} onDragStart={(event) => event.preventDefault()} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation() }} onPointerDown={(event) => { if (!node.disabled) onPointerDown(event) }} onClick={(event) => { event.stopPropagation(); if (!node.disabled) onClick(additiveSelection(event), event.currentTarget) }}>
     {referenceOrder > 0 && <span className="lcos-reference-pick-badge" aria-label={`引用顺序 ${referenceOrder}`}>{referenceOrder}</span>}
     <span className="lcos-semantic-drop-handle" data-semantic-drop-handle aria-hidden="true" onClick={(event)=>event.stopPropagation()} title="Semantic Drop：拖到上下文或工作流（右键拖 / Alt+左拖）"><GripVertical size={11}/></span>
-    {relationsEnabled && <><button data-testid={`anchor-in-${node.id}`} className="anchor anchor-in" aria-label={`连接到 ${node.title}`} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()} />
-    <button data-testid={`anchor-out-${node.id}`} className="anchor anchor-out" aria-label={`从 ${node.title} 建立连接`} onPointerDown={onLinkStart} onClick={(event) => event.stopPropagation()} /></>}
+    {relationsEnabled && <button data-testid={`relation-notch-${node.id}`} className="lcos-relation-notch" aria-label={`从 ${node.title} 建立明确关系`} title="拖动边缘建立关系" onPointerDown={onLinkStart} onClick={(event) => event.stopPropagation()}><span aria-hidden="true" /></button>}
     {selected && !multiSelected && <button data-testid={`resize-${node.id}`} className="resize-handle" aria-label={`调整 ${node.title} 大小`} title="拖动调整卡片大小" onPointerDown={onResizeStart} onClick={(event) => event.stopPropagation()} />}
     {performanceProxy
       ? <div className={`lcos-overview-node-proxy proxy-${detectFileIdentity(node)}`} aria-label={displayNodeTitle(node)}><span>{detectFileIdentity(node).toUpperCase()}</span><strong>{displayNodeTitle(node)}</strong></div>
-      : <CanvasNodeVisual node={node} density={density} zoom={zoom} runId={runId} runStatus={runStatus} pending={pending} showDetails={showDetails} onDetails={() => onDetails(node.id)} onLocate={onLocate ? (target) => onLocate(target.id) : undefined} collectionExpanded={collectionExpanded} collectionMembers={collectionMembers} onCollectionMemberSelect={onCollectionMemberSelect} selected={selected} onOpenContextLens={onOpenContextLens} />}
+      : <CanvasNodeVisual node={node} density={density} zoom={zoom} glythCritical={glythCritical} runId={runId} runStatus={runStatus} pending={pending} showDetails={showDetails} onDetails={() => onDetails(node.id)} onLocate={onLocate ? (target) => onLocate(target.id) : undefined} collectionExpanded={collectionExpanded} collectionMembers={collectionMembers} onCollectionMemberSelect={onCollectionMemberSelect} selected={selected} onOpenContextLens={onOpenContextLens} />}
     {node.entityKind !== 'conversation' && node.artifactId ? <BirthProvenanceBadge projectId={projectId} artifactId={String(node.artifactId)} onLocateConversationView={onLocateConversationSource} /> : null}
     {(selected || signal.state !== 'stable') && node.width >= 56 && <span className="lcos-node-system-signal" data-spatial-signal={selected && signal.state === 'stable' ? 'focus' : signal.state} aria-hidden="true"><LcosSignalGlyph state={selected && signal.state === 'stable' ? 'focus' : signal.state}/></span>}
   </div>

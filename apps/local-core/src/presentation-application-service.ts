@@ -180,6 +180,21 @@ export class PresentationApplicationService {
       if (!members.has(edge.fromViewId)) throw new Error(`Presentation edge ${edge.id} references non-member ${edge.fromViewId}.`)
       if (!members.has(edge.toViewId)) throw new Error(`Presentation edge ${edge.id} references non-member ${edge.toViewId}.`)
     }
+    const colonyIds = new Set<string>()
+    for (const colony of state.colonies ?? []) {
+      if (!colony.id.trim()) throw new Error('Spatial Colony requires id.')
+      if (colonyIds.has(colony.id)) throw new Error(`Spatial Colony id ${colony.id} is duplicated.`)
+      colonyIds.add(colony.id)
+      if (!['main', 'context', 'workflow'].includes(colony.surface)) throw new Error(`Spatial Colony ${colony.id} has invalid Surface.`)
+      if (!Array.isArray(colony.memberIds) || colony.memberIds.length === 0 || colony.memberIds.some((id) => typeof id !== 'string' || !id.trim()) || new Set(colony.memberIds).size !== colony.memberIds.length) {
+        throw new Error(`Spatial Colony ${colony.id} member ids must be non-empty unique strings.`)
+      }
+      if (!Array.isArray(colony.contour?.points) || colony.contour.points.length < 3) throw new Error(`Spatial Colony ${colony.id} requires a closed contour.`)
+      for (const point of colony.contour.points) {
+        if (![point.x, point.y].every(Number.isFinite)) throw new Error(`Spatial Colony ${colony.id} contour must be finite.`)
+      }
+    }
+    // Compatibility validation for pre-R3-A Presentation state. New writes use colonies.
     const spatialRegionIds = new Set<string>()
     for (const region of state.spatialRegions ?? []) {
       if (!region.id.trim()) throw new Error('Spatial region requires id.')

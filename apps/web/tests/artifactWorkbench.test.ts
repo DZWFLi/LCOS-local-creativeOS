@@ -24,7 +24,7 @@ describe('Slice E: Artifact Workbench + Viewer Registry', () => {
   it('opens the immersive reader on double-click and keeps Workbench for metadata and revisions', () => {
     const appSrc = readFileSync(join(webRoot, 'App.tsx'), 'utf8')
     const dialogs = readFileSync(join(webRoot, 'features', 'shell', 'DialogsHost.tsx'), 'utf8')
-    expect(appSrc).toContain('setImmersiveNodeId(id)')
+    expect(appSrc).toContain('openImmersive(id)') // R1D：Reader 入口封装
     expect(appSrc).toContain('Workbench remains a')
     expect(appSrc).toContain('if (node.opensScopeId)')
     expect(appSrc).not.toContain('DocumentPreviewDialog')

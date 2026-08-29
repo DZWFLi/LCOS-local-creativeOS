@@ -9,7 +9,7 @@ const checks=[
  ['Surface execution uses canonical ConnectedConversation receiver',surface.includes('receiverId: string')&&app.includes("receiverRef: { connectedConversationId: input.receiverId }")],
  ['Surface execution carries ordered Selection + explicit References',surface.includes('selectionIds: readonly string[]')&&surface.includes('referenceIds: readonly string[]')&&app.includes('mergeExecutionReferenceIds(input.selectionIds, input.referenceIds')],
  ['Surface execution never invents a local session id',!app.includes('surface-agent-')&&!host.includes('surface-agent-')],
- ['Reference Pick is shared command state and does not replace primary Selection',host.includes('command?.referencePickActive')&&host.includes('command.onToggleReference')&&!host.includes('surfaceReferenceIds')],
+ ['Reference Pick is shared command state and does not replace primary Selection',host.includes('command.referencePickActive')&&host.includes('command.onToggleReference')&&!host.includes('surfaceReferenceIds')],
  ['Conversation Reach is read through canonical Core projection',host.includes('onReadReach')&&app.includes('conversationReach(activeProjectId, connectedConversationId)')],
  ['Surface ResultSlot is a destination carried through Proposal and Run',host.includes('surfaceResultSlot')&&app.includes('resultSlotId: execution.resultSlotId')&&!app.includes('这个结果位目前可以显示，但还不能直接写入')],
  ['Legacy SurfaceAgentNode implementation is removed',!oldSurfaceAgentExists],

@@ -172,7 +172,7 @@ export function ConversationSpaceSurface({ projectId, conversationId, onExit, ex
       <div className="lcos-conversation-space-identity"><strong>{title}</strong><span>{projection ? `${projection.session.messageCount} 条消息 · ${projection.sections.length} 个章节` : 'Conversation Subcanvas'}</span></div>
       <LcosButton variant="ghost" size="sm" className="lcos-conversation-space-work" disabled={!execution} aria-expanded={composerOpen} onClick={() => setComposerOpen((value) => !value)} title={currentReceiver ? '用这段 Conversation 的 Glyth 工作' : '这段 Conversation 尚未显式 link-session；打开后只会显示真实不可用状态'}><Sparkles size={14} aria-hidden="true" />Work</LcosButton>
     </div>
-    <SpatialCanvas camera={camera} setCamera={setCamera} className="lcos-conversation-spatial-canvas" worldClassName="lcos-conversation-world" nodeCount={messages.length} edgeCount={0}>
+    <SpatialCanvas surfaceRef={conversationId ? `conversation:${conversationId}` : undefined} camera={camera} setCamera={setCamera} className="lcos-conversation-spatial-canvas" worldClassName="lcos-conversation-world" nodeCount={messages.length} edgeCount={0}>
       {loading && <div className="lcos-conversation-space-status"><LoaderCircle size={18} aria-hidden="true" />正在读取真实时间线…</div>}
       {!loading && error && <div className="lcos-conversation-space-status is-error">{error}</div>}
       {!loading && !error && laidOut.map((group) => <section key={group.id} className="lcos-conversation-space-section" style={{ top: group.sectionY }} data-conversation-section={group.id}><span className="lcos-conversation-space-section-mark" aria-hidden="true" />{group.showTitle && <h3>{group.title}</h3>}</section>)}

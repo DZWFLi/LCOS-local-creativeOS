@@ -33,7 +33,7 @@ describe('Rail direct manipulation — reorder / drag-delete / rename / two-colu
 
   it('restores the drop gradient light curtain on canvas and rail right-button drop', () => {
     expect(canvas).toContain('<LightCurtain tone="drop"')
-    expect(canvas).toContain('setDropLight({ hot: Boolean(hit)')
+    expect(canvas).toContain('setDropLight({ hot: Boolean(colonyHit || hit)') // R3A：Colony 命中也点亮投递光幕
     expect(rail).toContain('<LightCurtain tone="drop"')
     expect(css).toContain('.lcos-light-curtain-edge.anchor-left')
     expect(css).toContain('.lcos-light-curtain-edge.anchor-bottom')

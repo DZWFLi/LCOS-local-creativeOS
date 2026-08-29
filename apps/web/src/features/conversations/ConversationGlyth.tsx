@@ -138,3 +138,18 @@ export function ConversationGlyth({ conversation, state, activityScore, size = 4
     </g>
   </svg>
 }
+
+/** R2-B far semantic projection: map-pin shell + the Conversation's own living silhouette. */
+export function ConversationGlythIdentityPin({ conversation, state, activityScore, label }: {
+  readonly conversation: ConversationGlythInput
+  readonly state?: LcosGlythState
+  readonly activityScore?: number
+  readonly label?: string
+}) {
+  return <span className="lcos-glyth-identity-pin" data-conversation-id={conversation.id} aria-label={label} role={label ? 'img' : undefined}>
+    <span className="lcos-glyth-pin-stem" aria-hidden="true"/>
+    <span className="lcos-glyth-pin-face" aria-hidden="true">
+      <ConversationGlyth conversation={conversation} state={state} activityScore={activityScore} size={30} animated={false}/>
+    </span>
+  </span>
+}

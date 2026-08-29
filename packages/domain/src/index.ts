@@ -262,7 +262,7 @@ export interface Relation {
   /** Phase E: provenance — user / agent / system. */
   readonly origin?: 'user' | 'agent' | 'system'
   readonly createdBy?: string
-  readonly evidenceRefs?: readonly { readonly kind: 'artifact' | 'resource' | 'conversation' | 'file'; readonly id: string; readonly label?: string }[]
+  readonly evidenceRefs?: readonly { readonly kind: 'artifact' | 'resource' | 'conversation' | 'file'; readonly id: string; readonly label?: string; readonly revisionId?: string; readonly sourceAnchor?: string }[]
   readonly confidence?: number
   readonly createdAt: IsoDateTime
   readonly updatedAt: IsoDateTime

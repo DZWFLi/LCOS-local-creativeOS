@@ -3,6 +3,7 @@ import { GripVertical } from 'lucide-react'
 import type { CanvasNode, NodeDisplayMode } from '../../model'
 import { CanvasNodeVisual, detectFileIdentity, displayNodeTitle } from '../canvas/CanvasNodeVisual'
 import { beginSemanticDrop } from '../spatial/semanticDrop'
+import { additiveSelectionModifier } from '../spatial/pointerInteractionLanguage'
 import { DropFeedbackLayer } from '../drop/dropFeedbackLayer'
 import { useSemanticDropFeedback } from '../drop/useSemanticDropFeedback'
 import { ArchiveGlyph, AudioGlyph, BenchGlyph, CollectionGlyph, ContextGlyph, DocumentGlyph, ImageGlyph, LinkGlyph, NoteGlyph, RunGlyph, SessionGlyph, VideoGlyph, WorkflowGlyph, WorkGlyph } from '../design/LcosGlyphs'
@@ -35,6 +36,8 @@ interface Props {
   selected: boolean
   compact?: boolean
   performanceProxy?: boolean
+  /** Shared camera zoom so Conversation Glyth can use the same semantic LOD on spatial Surfaces. */
+  zoom?: number
   /** Tiny relationship maps can still request a pure signal, but normal surfaces must reuse the material face. */
   glyph?: boolean
   dim?: boolean
@@ -54,6 +57,7 @@ export function SurfaceObject({
   selected,
   compact = false,
   performanceProxy = false,
+  zoom = 1,
   glyph = false,
   dim = false,
   attentionBucket,
@@ -91,7 +95,7 @@ export function SurfaceObject({
         className={`lcos-surface-glyph role-${role} ${selected ? 'selected' : ''} ${attentionBucket ? `attention-${attentionBucket}` : ''} ${dim ? 'dim' : ''}`}
         aria-label={displayNodeTitle(node)}
         onPointerDown={onPointerDown}
-        onClick={(event) => onSelect(node.id, event.shiftKey || event.metaKey || event.ctrlKey)}
+        onClick={(event) => onSelect(node.id, additiveSelectionModifier(event))}
         onDoubleClick={() => onDoubleClick(node.id)}
       >
         <span className="lcos-semantic-drop-handle" data-semantic-drop-handle aria-hidden="true" onClick={(event)=>event.stopPropagation()} title="Semantic Drop：拖到上下文或工作流（右键拖 / Alt+左拖）"><GripVertical size={11}/></span>
@@ -112,11 +116,11 @@ export function SurfaceObject({
       className={`lcos-surface-object lcos-surface-material role-${role} ${selected ? 'selected' : ''} ${attentionBucket ? `attention-${attentionBucket}` : ''} ${compact ? 'compact' : ''} ${dim ? 'dim' : ''}`}
       aria-label={displayNodeTitle(node)}
       onPointerDown={onPointerDown}
-      onClick={(event) => onSelect(node.id, event.shiftKey || event.metaKey || event.ctrlKey)}
+      onClick={(event) => onSelect(node.id, additiveSelectionModifier(event))}
       onDoubleClick={() => onDoubleClick(node.id)}
     >
       <span className="lcos-semantic-drop-handle" data-semantic-drop-handle aria-hidden="true" onClick={(event)=>event.stopPropagation()} title="Semantic Drop：拖到上下文或工作流（右键拖 / Alt+左拖）"><GripVertical size={11}/></span>
-      {performanceProxy
+      {performanceProxy && node.entityKind !== 'conversation'
         ? <div className={`lcos-overview-node-proxy proxy-${detectFileIdentity(node)}`} aria-label={displayNodeTitle(node)}><span>{detectFileIdentity(node).toUpperCase()}</span><strong>{displayNodeTitle(node)}</strong></div>
         : <CanvasNodeVisual
             node={node}

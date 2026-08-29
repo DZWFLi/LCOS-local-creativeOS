@@ -105,6 +105,11 @@ import type {
   UpsertProjectVisualProfileInputV0,
   WarehouseQueryV1,
   WarehouseSnapshotV1,
+  NavigationResolutionV0,
+  SpatialMarkerIntentV0,
+  SpatialMarkerScopeV0,
+  SpatialMarkerTargetRefV0,
+  StableSurfaceRefV0,
 } from '@local-creative-os/contracts'
 import { nextMutationOrigin } from './mutationIdentity'
 import { getDesktopPort } from './desktopPort'
@@ -329,6 +334,10 @@ export interface LocalCoreClient {
     readonly format: string
     readonly data: string
   }>>
+  listSpatialMarkers(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<readonly SpatialMarkerIntentV0[]>>
+  createSpatialMarker(projectId: string, input: { readonly targetRef: SpatialMarkerTargetRefV0; readonly scope: SpatialMarkerScopeV0; readonly sourceSurfaceRef?: StableSurfaceRefV0 }, signal?: AbortSignal): Promise<RuntimeCall<SpatialMarkerIntentV0>>
+  deleteSpatialMarker(projectId: string, markerId: string, signal?: AbortSignal): Promise<RuntimeCall<{ readonly deleted: true; readonly markerId: string }>>
+  resolveNavigationTarget(projectId: string, targetRef: SpatialMarkerTargetRefV0, signal?: AbortSignal): Promise<RuntimeCall<NavigationResolutionV0>>
   importResourceDirectory(projectId: string, input: {
     readonly importRequestId: string
     readonly rootName: string
@@ -1378,6 +1387,35 @@ export function createLocalCoreClient(): LocalCoreClient {
           readonly format: string
           readonly data: string
         }>,
+      })
+    },
+    listSpatialMarkers(projectId, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/spatial-markers`, {
+        signal,
+        decode: decodeResult<readonly SpatialMarkerIntentV0[]>,
+      })
+    },
+    createSpatialMarker(projectId, input, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/spatial-markers`, {
+        signal,
+        timeoutMs: LOCAL_CORE_WRITE_TIMEOUT_MS,
+        init: { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) },
+        decode: decodeResult<SpatialMarkerIntentV0>,
+      })
+    },
+    deleteSpatialMarker(projectId, markerId, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/spatial-markers/${encodeURIComponent(markerId)}`, {
+        signal,
+        timeoutMs: LOCAL_CORE_WRITE_TIMEOUT_MS,
+        init: { method: 'DELETE' },
+        decode: decodeResult<{ readonly deleted: true; readonly markerId: string }>,
+      })
+    },
+    resolveNavigationTarget(projectId, targetRef, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/navigation/resolve`, {
+        signal,
+        init: { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ targetRef }) },
+        decode: decodeResult<NavigationResolutionV0>,
       })
     },
     async importResourceDirectory(projectId, input, signal) {

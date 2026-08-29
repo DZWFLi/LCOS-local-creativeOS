@@ -130,11 +130,13 @@ describe('Spatial Marker System F6A2', () => {
       projectId: 'p1',
       targetRef: { projectId: 'p1', kind: 'entity' as const, id: 'n1' },
       scope: 'cross-surface' as const,
+      createdAt: '2026-08-29T00:00:00.000Z',
+      updatedAt: '2026-08-29T00:00:00.000Z',
     }
-    const missing = await resolveSpatialMarkerNavigation(intent, 'p1', { resolve: async () => null })
-    expect(missing).toEqual({ status: 'unresolved' })
+    const missing = await resolveSpatialMarkerNavigation(intent, 'p1', { resolve: async () => ({ status: 'unresolved', reason: 'target-missing' }) })
+    expect(missing).toEqual({ status: 'unresolved', reason: 'target-missing' })
 
-    const blocked = await resolveSpatialMarkerNavigation({ ...intent, targetRef: { ...intent.targetRef, projectId: 'p2' } }, 'p1', { resolve: async () => null })
-    expect(blocked).toEqual({ status: 'blocked', reason: 'cross-project' })
+    const blocked = await resolveSpatialMarkerNavigation({ ...intent, targetRef: { ...intent.targetRef, projectId: 'p2' } }, 'p1', { resolve: async () => ({ status: 'unresolved', reason: 'target-missing' }) })
+    expect(blocked).toEqual({ status: 'unresolved', reason: 'cross-project' })
   })
 })

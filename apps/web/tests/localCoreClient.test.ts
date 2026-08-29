@@ -377,4 +377,28 @@ describe('Local Core browser client', () => {
     expect(form.get('importRequestId')).toBe('zip-1')
     expect(form.get('note')).toBe('Keep the package isolated.')
   })
+  it('bridges canonical Spatial Marker list/create/delete/resolve routes without a browser-side store', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (url.endsWith('/spatial-markers') && init?.method === 'POST') return jsonResponse({ ok: true, value: {
+        id: 'marker-1', projectId: 'project-1', targetRef: { projectId: 'project-1', kind: 'view', id: 'view-1' }, scope: 'local', sourceSurfaceRef: 'main', createdAt: '2026-08-29T00:00:00.000Z', updatedAt: '2026-08-29T00:00:00.000Z',
+      } }, 201)
+      if (url.endsWith('/spatial-markers/marker-1') && init?.method === 'DELETE') return jsonResponse({ ok: true, value: { deleted: true, markerId: 'marker-1' } })
+      if (url.endsWith('/navigation/resolve') && init?.method === 'POST') return jsonResponse({ ok: true, value: { status: 'resolved', target: { projectId: 'project-1', surfaceRef: 'main', surfaceKind: 'main', anchorRef: 'view-1', worldPosition: { x: 120, y: 80 } } } })
+      return jsonResponse({ ok: true, value: [{
+        id: 'marker-1', projectId: 'project-1', targetRef: { projectId: 'project-1', kind: 'view', id: 'view-1' }, scope: 'local', sourceSurfaceRef: 'main', createdAt: '2026-08-29T00:00:00.000Z', updatedAt: '2026-08-29T00:00:00.000Z',
+      }] })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const client = createLocalCoreClient()
+
+    await expect(client.listSpatialMarkers('project-1')).resolves.toMatchObject({ result: { ok: true, value: [{ id: 'marker-1' }] } })
+    await expect(client.createSpatialMarker('project-1', { targetRef: { projectId: 'project-1', kind: 'view', id: 'view-1' }, scope: 'local', sourceSurfaceRef: 'main' })).resolves.toMatchObject({ result: { ok: true, value: { id: 'marker-1' } } })
+    await expect(client.resolveNavigationTarget('project-1', { projectId: 'project-1', kind: 'view', id: 'view-1' })).resolves.toMatchObject({ result: { ok: true, value: { status: 'resolved', target: { surfaceRef: 'main' } } } })
+    await expect(client.deleteSpatialMarker('project-1', 'marker-1')).resolves.toMatchObject({ result: { ok: true, value: { deleted: true, markerId: 'marker-1' } } })
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/local-core/v1/projects/project-1/spatial-markers', expect.any(Object))
+    expect(fetchMock).toHaveBeenCalledWith('/api/local-core/v1/projects/project-1/navigation/resolve', expect.objectContaining({ method: 'POST', body: JSON.stringify({ targetRef: { projectId: 'project-1', kind: 'view', id: 'view-1' } }) }))
+  })
+
 })
