@@ -83,6 +83,8 @@ export type { MutationRisk, PermissionScope, GateActorRole, OperationScope, Exec
 export { evaluateExecutionGate, OPERATION_RISK, riskOfOperation } from './execution-gate.js'
 export type { ExecutionItemState, ExecutionItemAction, ExecutionItemTargetRef, ExecutionItemV1, ExecutionItemCapabilities } from './execution-item.js'
 export { EXECUTION_ITEM_ACTION_STATES, deriveAvailableActions, executionItemNeedsAttention } from './execution-item.js'
+export type { SkillPackageOriginV1, SkillPackageProvenanceV1, SkillPackageV1, CreateSkillPackageInputV1, UpdateSkillPackageInputV1, RenameSkillPackageInputV1, SkillPackageValidationV1 } from './skill-package.js'
+export { isValidSkillPackageId, validateSkillPackageContent } from './skill-package.js'
 export { AGENTLET_SCHEMA_V1 } from './agentlet.js'
 export type { AgentletSummaryV1, AgentletRunV1, AgentletRunStatusV1 } from './agentlet.js'
 export type { SurfaceSelectionV0 } from './selection.js'

@@ -26,6 +26,7 @@ import type { WarehouseService } from '../warehouse-service.js'
 import type { AssemblyApplyService } from '../assembly-apply-service.js'
 import type { ProjectSummaryService } from '../project-summary-service.js'
 import type { SkillCatalogService } from '../skill-catalog-service.js'
+import type { SkillPackageService } from '../skill-package-service.js'
 import type { SqliteMetadataRepository } from '../metadata-repository.js'
 import { routeRequireProject, type RouteHttpContext, type RouteHttpHelpers } from './route-context.js'
 
@@ -37,11 +38,12 @@ export interface F6AssemblyRouteContext extends RouteHttpContext {
   readonly assemblyApply: AssemblyApplyService | undefined
   readonly projectSummary: ProjectSummaryService | undefined
   readonly skillCatalog: SkillCatalogService | undefined
+  readonly skillPackages: SkillPackageService | undefined
   readonly metadata: SqliteMetadataRepository
 }
 
 export async function handleF6AssemblyRoute(ctx: F6AssemblyRouteContext): Promise<boolean> {
-  const { method, pathname, url, request, response, controller, metadata, warehouse, resultSlots, conversationIdentity, assemblyApply, projectSummary, skillCatalog } = ctx
+  const { method, pathname, url, request, response, controller, metadata, warehouse, resultSlots, conversationIdentity, assemblyApply, projectSummary, skillCatalog, skillPackages } = ctx
   const { sendJson, failure, readJsonBody, isRecord } = ctx.helpers
 
   // ---------- P0-B4：Semantic Drop 统一 apply ----------
@@ -350,6 +352,94 @@ export async function handleF6AssemblyRoute(ctx: F6AssemblyRouteContext): Promis
       sendJson(response, 400, failure('INVALID_ARGUMENT', error instanceof Error ? error.message : 'Skill read failed.'))
     }
     return true
+  }
+
+  // ---------- S2：Skill 一等对象 CRUD（写操作物理限定 user 层；system 层写保护）----------
+  const requireSkillPackages = (): SkillPackageService | undefined => {
+    if (skillPackages === undefined) {
+      sendJson(response, 503, failure('UNAVAILABLE', 'Skill package service is not configured.'))
+      return undefined
+    }
+    return skillPackages
+  }
+  const readBody = async (): Promise<Record<string, unknown> | undefined> => {
+    try {
+      const input = await readJsonBody(request, controller.signal)
+      return isRecord(input) ? input : undefined
+    } catch {
+      sendJson(response, 400, failure('INVALID_ARGUMENT', 'Request body must be valid JSON.'))
+      return undefined
+    }
+  }
+  const respondMutation = (promise: Promise<unknown>): boolean => {
+    void promise.then(
+      (value) => sendJson(response, 200, { ok: true, value }),
+      (error: unknown) => sendJson(response, 400, failure('INVALID_ARGUMENT', error instanceof Error ? error.message : 'Skill operation failed.')),
+    )
+    return true
+  }
+
+  // 结构校验（不落盘）
+  const skillValidateMatch = /^\/projects\/([^/]+)\/skills\/validate$/.exec(pathname)
+  if (method === 'POST' && skillValidateMatch !== null) {
+    const packages = requireSkillPackages(); if (packages === undefined) return true
+    const projectId = decodeURIComponent(skillValidateMatch[1] ?? '')
+    if (routeRequireProject(projectId, { metadata, response, helpers: ctx.helpers }) === undefined) return true
+    const body = await readBody(); if (body === undefined) return true
+    if (typeof body.content !== 'string') {
+      sendJson(response, 400, failure('INVALID_ARGUMENT', 'validate requires content (SKILL.md text).'))
+      return true
+    }
+    sendJson(response, 200, { ok: true, value: packages.validate(body.content) })
+    return true
+  }
+
+  // create
+  if (method === 'POST' && skillsListMatch !== null) {
+    const packages = requireSkillPackages(); if (packages === undefined) return true
+    const projectId = decodeURIComponent(skillsListMatch[1] ?? '')
+    if (routeRequireProject(projectId, { metadata, response, helpers: ctx.helpers }) === undefined) return true
+    const body = await readBody(); if (body === undefined) return true
+    if (typeof body.id !== 'string' || typeof body.content !== 'string') {
+      sendJson(response, 400, failure('INVALID_ARGUMENT', 'create requires id and content.'))
+      return true
+    }
+    return respondMutation(packages.create(projectId, body.id, body.content))
+  }
+
+  const skillActionMatch = /^\/projects\/([^/]+)\/skills\/([^/]+)\/(update|version-bump|rename|install|disable|enable)$/.exec(pathname)
+  if (method === 'POST' && skillActionMatch !== null) {
+    const packages = requireSkillPackages(); if (packages === undefined) return true
+    const projectId = decodeURIComponent(skillActionMatch[1] ?? '')
+    const skillId = decodeURIComponent(skillActionMatch[2] ?? '')
+    const action = skillActionMatch[3] ?? ''
+    if (routeRequireProject(projectId, { metadata, response, helpers: ctx.helpers }) === undefined) return true
+    if (action === 'update') {
+      const body = await readBody(); if (body === undefined) return true
+      if (typeof body.content !== 'string') {
+        sendJson(response, 400, failure('INVALID_ARGUMENT', 'update requires content.'))
+        return true
+      }
+      return respondMutation(packages.update(projectId, skillId, body.content))
+    }
+    if (action === 'version-bump') {
+      const body = await readBody(); if (body === undefined) return true
+      if (typeof body.version !== 'string') {
+        sendJson(response, 400, failure('INVALID_ARGUMENT', 'version-bump requires version (semver).'))
+        return true
+      }
+      return respondMutation(packages.versionBump(projectId, skillId, body.version))
+    }
+    if (action === 'rename') {
+      const body = await readBody(); if (body === undefined) return true
+      if (typeof body.newId !== 'string') {
+        sendJson(response, 400, failure('INVALID_ARGUMENT', 'rename requires newId.'))
+        return true
+      }
+      return respondMutation(packages.rename(projectId, skillId, body.newId))
+    }
+    if (action === 'install') return respondMutation(packages.install(projectId, skillId))
+    return respondMutation(packages.setDisabled(projectId, skillId, action === 'disable'))
   }
 
   return false

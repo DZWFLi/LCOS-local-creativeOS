@@ -47,6 +47,7 @@ import { WarehouseService } from './warehouse-service.js'
 import { AssemblyApplyService } from './assembly-apply-service.js'
 import { ProjectSummaryService } from './project-summary-service.js'
 import { SkillCatalogService } from './skill-catalog-service.js'
+import { SkillPackageService } from './skill-package-service.js'
 import { ResultSlotService } from './result-slot-service.js'
 import { SessionReadSet } from './session-read-set.js'
 import { SpaceSandboxService } from './space-sandbox-service.js'
@@ -115,6 +116,7 @@ export interface LocalCoreServices {
   readonly assemblyApply: AssemblyApplyService | undefined
   readonly projectSummary: ProjectSummaryService | undefined
   readonly skillCatalog: SkillCatalogService | undefined
+  readonly skillPackages: SkillPackageService | undefined
 }
 
 /** 服务装配：把 options 解析成 createLocalCoreServer 需要的一组服务。 */
@@ -193,6 +195,8 @@ export function composeLocalCoreServices(options: LocalCoreServerOptions = {}): 
   // F6 P1（20260828）：Launcher summary + Skill Catalog 只读。
   const projectSummary = metadata === undefined ? undefined : new ProjectSummaryService(metadata)
   const skillCatalog = metadata === undefined ? undefined : new SkillCatalogService(metadata)
+  // S2：Skill 一等对象 CRUD（写操作物理限定 user 层目录；system 层写保护）
+  const skillPackages = metadata === undefined ? undefined : new SkillPackageService(metadata)
   const conversationIdentity = metadata === undefined || conversations === undefined
     ? undefined
     : new ConversationIdentityService(metadata, conversations, sessionLifecycle, projectEvents)
@@ -283,5 +287,6 @@ export function composeLocalCoreServices(options: LocalCoreServerOptions = {}): 
     assemblyApply,
     projectSummary,
     skillCatalog,
+    skillPackages,
   }
 }

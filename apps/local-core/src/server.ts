@@ -342,7 +342,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
     catalog, metadata, fileRegistry, fileObservation, importCopy, resources, packages, uploads,
     resourceReader, matcher, contextManifest, runtimeReview, runtimeApplication, activeContext,
     contextProposals, runEventListeners, obsidian, obsidianSessions, connectorRegistry,
-    ownsConversationService, conversations, previewWorker, presentation, curation, search, curationCommand, semantic, warehouse, resultSlots, assemblyApply, projectSummary, skillCatalog,
+    ownsConversationService, conversations, previewWorker, presentation, curation, search, curationCommand, semantic, warehouse, resultSlots, assemblyApply, projectSummary, skillCatalog, skillPackages,
     runtimeRegistry, intelligence, captureStaging, resolveProjectAffinity, captureApplication, captureWatch, captureSpace, reorganize, sessionReadSet, spaceSandbox, agentletRuntime, spatialRetrieval, attentionRuntime, boundaryEvaluator, projectEvents, projectMutations, mutationSafety, feedbackRevision, continuityRuntime, receiverRuntime, sessionLifecycle, conversationIdentity,
   } = services
   metadata?.setRunEventSink?.((event) => {
@@ -1328,6 +1328,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
         assemblyApply,
         projectSummary,
         skillCatalog,
+        skillPackages,
         conversationIdentity,
         helpers: routeHelpers,
       })) return

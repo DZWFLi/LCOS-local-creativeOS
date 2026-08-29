@@ -100,7 +100,8 @@
     "check:v015-r3a": "node scripts/validate-v015-r3a-colony-catalog.mjs",
     "census": "node scripts/census-capability-map.mjs",
     "check:census": "node scripts/validate-census.mjs",
-    "check:v015-s1": "node scripts/validate-execution-item.mjs"
+    "check:v015-s1": "node scripts/validate-execution-item.mjs",
+    "check:v015-s2": "node scripts/validate-skill-package.mjs"
   },
   "dependencies": {
     "lucide-react": "^1.24.0",

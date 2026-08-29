@@ -7,7 +7,7 @@
 
 | 域 | 能力数 | 源 |
 |---|---|---|
-| HTTP Routes | 197 | apps/local-core/src/routes/*.ts + server.ts |
+| HTTP Routes | 200 | apps/local-core/src/routes/*.ts + server.ts |
 | CLI 命令 | 129 | tools/lcos-agent/cli.mjs + commands/*.mjs |
 | MCP 工具 | 47（agent 39 / executor 9） | tools/lcos-agent/mcp-server.mjs + executor-tools.mjs |
 | Skills | 17 | packages/skills/*/SKILL.md |
@@ -17,12 +17,12 @@
 | method | 数量 |
 |---|---|
 | GET | 91 |
-| POST | 90 |
+| POST | 93 |
 | PUT | 9 |
 | PATCH | 1 |
 | DELETE | 6 |
 
-mutationClass 分布：read=91、mutation=96、mutation-proposal=4、delete=6
+mutationClass 分布：read=91、mutation=99、mutation-proposal=4、delete=6
 
 ## MCP 工具 × 域 × 角色
 

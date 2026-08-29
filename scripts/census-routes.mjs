@@ -14,7 +14,7 @@ function regexToTemplate(regexSource) {
     .replace(/\$$/, '')
     .replaceAll('\\/', '/')
     .replace(/\(\[\^\/\]\+\)/g, ':id')
-    .replace(/\((\w+(?:\|\w+)+)\)/g, '{$1}')
+    .replace(/\(([\w-]+(?:\|[\w-]+)+)\)/g, '{$1}')
 }
 
 export function censusRoutes() {
