@@ -10,6 +10,7 @@ import { ProjectSearchLens } from './ProjectSearchLens'
 interface Props {
   open: boolean
   searchOnly?: boolean
+  initialSearchQuery?: string
   project: ProjectPackage
   projects: readonly ProjectPackage[]
   client: LocalCoreClient
@@ -151,6 +152,7 @@ export function ProjectToolsDialog(props: Props) {
   if (props.searchOnly) {
     return <ProjectSearchLens
       open={props.open}
+      initialQuery={props.initialSearchQuery}
       project={props.project}
       client={props.client}
       onClose={props.onClose}

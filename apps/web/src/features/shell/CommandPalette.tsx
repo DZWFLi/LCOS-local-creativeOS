@@ -1,12 +1,7 @@
 /**
- * CommandPalette（Wave A-4：grok-bot A3 架构内化——provider 化数据流 + AsyncSnapshot 六态）。
- * ⌘K / Ctrl+K 全局命令面板：输入过滤（provider 查询）→ ↑↓ 循环移动高亮 → Enter 执行 →
- * Esc 关闭（keyboard-first；键位语义纯函数见 readPaletteKey / movePaletteHighlight）。
- * 数据流：query → 全 providers 并发 search → 合并各 snapshot（loading / ready / empty /
- * failed / unavailable / cancelled 六态渲染，契约见 features/ui/asyncState.ts）。
- * 执行动作全部来自 App 注入的 actions 表（action injection；面板只查表调用）。
- * 结构参考 grok-bot CommandPalette（单输入 + listbox + 高亮行），不抄其 8 Tab /
- * 嵌套步骤 / 行号快捷键。
+ * Ctrl/Cmd+K Action Launcher.
+ * Keeps the donor provider/async/keyboard mechanics, but searches actions only.
+ * Project content belongs to Search (Ctrl/Cmd+F); Focus (F) locates selected objects.
  */
 
 import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
@@ -31,6 +26,8 @@ export interface CommandPaletteProps {
   readonly providers: readonly PaletteProviderInput[]
   /** item.id → 执行回调；面板只查表调用，动作本体全部在 App.tsx。 */
   readonly actions: Readonly<Record<string, () => void>>
+  /** If no action matches a non-empty query, offer one explicit handoff to Project Search. */
+  readonly onSearchProject?: (query: string) => void
 }
 
 /** 键位语义（纯函数）：keydown 的 key → 面板行为；其余键返回 null。 */
@@ -82,7 +79,7 @@ interface RenderSection {
   readonly states: readonly ProviderStateRow[]
 }
 
-export function CommandPalette({ open, onClose, providers, actions }: CommandPaletteProps) {
+export function CommandPalette({ open, onClose, providers, actions, onSearchProject }: CommandPaletteProps) {
   const [query, setQuery] = useState('')
   const [highlight, setHighlight] = useState(0)
   const inputRef = useRef<HTMLInputElement | null>(null)
@@ -138,10 +135,14 @@ export function CommandPalette({ open, onClose, providers, actions }: CommandPal
   )
 
   // 合并：仅 ready 态供数据（isUsable）→ 跨 provider 按 id 去重（首见优先）→ 五组 IA 分节。
-  const items = useMemo(
+  const providerItems = useMemo(
     () => mergePaletteEntries(outcomes.flatMap((outcome) => (isUsable(outcome.snapshot) ? [outcome.snapshot.data] : []))),
     [outcomes],
   )
+  const searchHandoff = query.trim().length > 0 && providerItems.length === 0 && onSearchProject !== undefined
+    ? [{ id: 'cmd:search-project', title: `在项目里搜索“${query.trim()}”`, hint: '查找文件、对话和项目内容', group: '操作' as const }]
+    : []
+  const items = useMemo(() => mergePaletteEntries([providerItems, searchHandoff]), [providerItems, searchHandoff])
   const sections = useMemo(() => groupPaletteEntries(items), [items])
 
   // 六态渲染分流：loading / failed / unavailable → 状态行；empty → 组不显示（现行为）；cancelled → 丢弃。
@@ -198,6 +199,7 @@ export function CommandPalette({ open, onClose, providers, actions }: CommandPal
     const item = items[index]
     if (item === undefined) return
     onClose()
+    if (item.id === 'cmd:search-project') { onSearchProject?.(query.trim()); return }
     actions[item.id]?.()
   }
 
@@ -217,7 +219,7 @@ export function CommandPalette({ open, onClose, providers, actions }: CommandPal
     <div className="lcos-command-palette-layer" data-testid="lcos-command-palette-layer">
       <div aria-hidden="true" className="lcos-command-palette-backdrop" onMouseDown={onClose} />
       <section
-        aria-label="命令面板"
+        aria-label="操作"
         aria-modal="true"
         className="lcos-command-palette"
         data-testid="lcos-command-palette"
@@ -225,17 +227,17 @@ export function CommandPalette({ open, onClose, providers, actions }: CommandPal
         role="dialog"
       >
         <input
-          aria-label="搜索命令、节点、文件、会话与技能"
+          aria-label="查找操作"
           className="lcos-command-palette-input"
           onChange={(event) => { setQuery(event.currentTarget.value); setHighlight(0) }}
-          placeholder="输入命令、节点、文件、会话或技能…"
+          placeholder="你想做什么？"
           ref={inputRef}
           spellCheck={false}
           type="text"
           value={query}
         />
         {renderSections.length === 0 ? (
-          <p className="lcos-command-palette-empty">{query.trim().length > 0 ? '没有匹配的结果' : '没有可用的条目'}</p>
+          <p className="lcos-command-palette-empty">{query.trim().length > 0 ? '没有找到这个操作' : '没有可用的操作'}</p>
         ) : (
           <div aria-label="结果" className="lcos-command-palette-list" role="listbox">
             {sectionRows.map(({ section, start }) => (
@@ -270,7 +272,7 @@ export function CommandPalette({ open, onClose, providers, actions }: CommandPal
                       </Fragment>
                     )
                   }
-                  const stateTitle = state.status === 'failed' ? `${state.provider.label} 源读取失败` : `${state.provider.label} 源不可用`
+                  const stateTitle = state.status === 'failed' ? '现在没法读取这些操作' : '这些操作现在不可用'
                   return (
                     <div className="lcos-command-palette-row" key={`${state.provider.id}:${state.status}`}>
                       <span className="lcos-command-palette-row-title">{stateTitle}</span>

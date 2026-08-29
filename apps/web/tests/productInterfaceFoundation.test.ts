@@ -106,7 +106,10 @@ describe('LCOS product interface foundation', () => {
     expect(interfaceCss).not.toContain('--lcos-sidecar-panel-h')
     expect(strip).toContain('showWorkRailActions')
     expect(app).toContain("showWorkRailActions: layoutMode === 'desktop'")
-    expect(app).toContain("onSearch: () => setProjectToolsMode('search')")
+    // R1-A（20260829）三分离：Search 入口（Ctrl+F / strip）显式重置 initial query
+    // （Ctrl+K 的「在项目里搜索 X」走 onSearchProject 带 query 转入，见 search-action-launcher 测试）。
+    expect(app).toContain("onSearch: () => { setProjectSearchInitialQuery(''); setProjectToolsMode('search') }")
+    expect(app).toContain("modifier && key === 'f'")
     expect(app).toContain("onProjectTools: () => { setCapabilityOpen(false); setProjectToolsMode('full') }")
     expect(interfaceCss).toContain('grid-template-rows: 46px 46px')
     expect(interfaceCss).toContain('.lcos-reconstructed[data-layout-mode="sidecar"] .capability-popover')

@@ -75,7 +75,6 @@ import { parseArtifactRevisions, parseProcessProjection, parseWorkspaceStates, t
 import { WorkspaceStatesDialog } from './features/workspace/WorkspaceStatesDialog'
 import { ProjectStripVNext } from './features/shell/ProjectStripVNext'
 import { ReceiverChip } from './features/shell/ReceiverChip'
-import { receiverProviderLabel } from './features/shell/ReceiverSwitcher'
 import { applyHandoffPrefixToInstruction, handoffSurfaceKindFromSurfaceId, resolveHandoffPrefix, type ReceiverHandoffContext } from './features/shell/receiverHandoff'
 import { CommandPalette } from './features/shell/CommandPalette'
 import { createCommandPaletteProviders } from './features/shell/commandPaletteProviders'
@@ -378,6 +377,7 @@ export function App() {
   const [controllerBusy, setControllerBusy] = useState(false)
   const [controllerError, setControllerError] = useState<string | null>(null)
   const [projectToolsMode, setProjectToolsMode] = useState<'search' | 'full' | null>(null)
+  const [projectSearchInitialQuery, setProjectSearchInitialQuery] = useState('')
   const [projectFocusOpen, setProjectFocusOpen] = useState(false)
   const [projectFocusSourceIds, setProjectFocusSourceIds] = useState<string[]>([])
   const [projectFocusSourceLabel, setProjectFocusSourceLabel] = useState('')
@@ -5615,15 +5615,6 @@ export function App() {
     setNotice(`已定位「${node.title}」`)
   }, [nodes, safeInsets, scopeId, selectNode])
 
-  // 文件类节点 → 选中 + 沉浸式预览（与 NodeInfoPopover 的 onPreview 同一路径）。
-  const openNodePreview = useCallback((nodeId: string) => {
-    const node = nodes.find((item) => item.id === nodeId)
-    if (node === undefined) { setNotice('节点不存在或已被移除'); return }
-    selectNode(node.id)
-    setWorkbench(null)
-    setImmersiveNodeId(node.id)
-  }, [nodes, selectNode])
-
   const locateBirthConversationSource = useCallback((conversationViewId: string) => {
     // Provenance navigation is read-only: return to Main and Beacon the canonical source View.
     // It deliberately does not alter Selection or enter the Conversation subcanvas.
@@ -5724,7 +5715,7 @@ export function App() {
     handleReplayWorkflowSkill(skill)
   }, [handleReplayWorkflowSkill, workflowSkills])
 
-  // providers 纯查询 + actions 执行表：全部由 App 现有函数装配，只引用不新造逻辑。
+  // Ctrl/Cmd+K 只装配动作；项目内容统一交给 Ctrl/Cmd+F Search。
   const paletteAssembly = useMemo(() => createCommandPaletteProviders({
     commands: {
       switchToMainView: () => selectSurface('arrange'),
@@ -5736,16 +5727,13 @@ export function App() {
       switchReceiver: switchPaletteReceiver,
       replaySkill: replayPaletteSkill,
     },
-    navigation: { locateNode: locateCanvasNode, openFile: openNodePreview },
-    nodes: nodes.map((node) => ({ id: node.id, title: node.title, ...(node.fileType === undefined ? {} : { fileType: node.fileType }) })),
     conversations: paletteConversations.map((conversation) => ({
       id: conversation.id,
       label: conversation.label,
-      provider: receiverProviderLabel(conversation.provider),
       active: conversation.id === paletteActiveReceiverId,
     })),
-    skills: workflowSkills.map((skill) => ({ artifactId: skill.artifactId, name: skill.name, description: skill.description, stepCount: skill.stepCount })),
-  }), [createNodeAt, expandSelectionMindmap, exportProjectLcosproj, locateCanvasNode, nodes, openNodePreview, paletteActiveReceiverId, paletteConversations, replayPaletteSkill, selectSurface, workflowSkills])
+    skills: workflowSkills.map((skill) => ({ artifactId: skill.artifactId, name: skill.name, description: skill.description })),
+  }), [createNodeAt, expandSelectionMindmap, exportProjectLcosproj, paletteActiveReceiverId, paletteConversations, replayPaletteSkill, selectSurface, workflowSkills])
 
   const requestConversationSectionAnnotation = useCallback((input: { readonly conversationId: string; readonly sectionId: string; readonly sectionTitle: string }) => {
     const prompt = [
@@ -6717,7 +6705,7 @@ export function App() {
       if (event.key === 'Escape' && referencePickActive) { event.preventDefault(); setReferencePickActive(false); return }
       if (event.key === 'Escape' && escapeTopOverlay()) { event.preventDefault(); return }
       if (isText) return
-      if (modifier && key === 'f') { event.preventDefault(); setProjectToolsMode('search'); return }
+      if (modifier && key === 'f') { event.preventDefault(); setProjectSearchInitialQuery(''); setProjectToolsMode('search'); return }
       if (modifier && key === 'a' && canvasActive) {
         event.preventDefault()
         setSelectionComposerOpen(false)
@@ -6981,7 +6969,7 @@ export function App() {
       showWorkRailActions: layoutMode === 'desktop',
       onOpenProjectDrive: () => setProjectOpen(false),
       onImport: () => setImportPanelOpen(true),
-      onSearch: () => setProjectToolsMode('search'),
+      onSearch: () => { setProjectSearchInitialQuery(''); setProjectToolsMode('search') },
       pendingCount: pendingReviews.length,
       onPending: () => { setWorkRail((current) => ({ ...current, collapsed: false })); if (pendingReviews[0]) openRunReview(pendingReviews[0]); setNotice(pendingReviews.length ? `${pendingReviews.length} 项待确认，已在右侧执行列表中定位` : '当前没有待确认的返回结果') },
       onHistory: () => { setConversationDialogOpen(true); setNotice('打开已导入对话；历史导航只属于每条对话本身') },
@@ -7576,10 +7564,11 @@ export function App() {
       projectTools: projectToolsMode ? {
         open: true,
         searchOnly: projectToolsMode === 'search',
+        initialSearchQuery: projectSearchInitialQuery,
         project: activeProject,
         projects,
         client: bridgeRef.current.client,
-        onClose: () => setProjectToolsMode(null),
+        onClose: () => { setProjectToolsMode(null); setProjectSearchInitialQuery('') },
         onProjectOpened: refreshProjectCatalog,
         onSelectArtifact: (artifactId) => focusArtifactFromSearch(artifactId, nodes.find((node) => String(node.artifactId) === String(artifactId))?.title ?? '项目内容'),
         onSelectSourceIds: (sourceIds, title) => openProjectFocus(sourceIds, title),
@@ -7781,6 +7770,7 @@ export function App() {
       onClose={() => setPaletteOpen(false)}
       providers={paletteAssembly.providers}
       actions={paletteAssembly.actions}
+      onSearchProject={(query) => { setPaletteOpen(false); setProjectSearchInitialQuery(query); setProjectToolsMode('search') }}
     />
     </LocalCoreClientProvider>
   }

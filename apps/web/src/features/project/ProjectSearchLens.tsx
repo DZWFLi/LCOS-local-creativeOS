@@ -37,9 +37,9 @@ function anchorLabel(anchor: string): string {
 }
 
 function humanKind(kind: string): string {
-  if (/conversation/i.test(kind)) return 'Conversation'
-  if (/context/i.test(kind)) return 'Context'
-  if (/workflow/i.test(kind)) return 'Workflow'
+  if (/conversation/i.test(kind)) return '对话'
+  if (/context/i.test(kind)) return '上下文'
+  if (/workflow/i.test(kind)) return '工作流'
   if (/resource|link|web/i.test(kind)) return '来源'
   if (/note|markdown|text/i.test(kind)) return '文本'
   if (/file/i.test(kind)) return '文件'
@@ -66,16 +66,25 @@ function resultFromRemote(hit: SearchHitVNext): SearchLensItem {
 
 function matchReasonLabel(item: SearchLensItem): string | undefined {
   switch (item.matchReason) {
-    case 'title': return '标题命中'
-    case 'body': return '正文命中'
-    case 'ocr': return '图片文字'
-    case 'semantic': return '语义相近'
-    case 'visual': return '视觉相近'
-    case 'source': return '来源命中'
-    case 'relation': return '关系关联'
-    case 'metadata': return '内容命中'
+    case 'title': return '名字最接近你输入的内容'
+    case 'body': return item.chunkAnchor ? `在${anchorLabel(item.chunkAnchor)}找到了相关内容` : '正文里找到了相关内容'
+    case 'ocr': return '这张图上有相关文字'
+    case 'semantic': return '内容意思很接近'
+    case 'visual': return '画面内容很接近'
+    case 'source': return '它来自你输入的来源'
+    case 'relation': return '它和一个直接命中的内容关系很近'
+    case 'metadata': return '名称或已有描述很接近'
     default: return undefined
   }
+}
+
+function hasClearBestMatch(results: readonly SearchLensItem[]): boolean {
+  const first = results[0]?.score
+  if (first === undefined) return false
+  const second = results[1]?.score
+  if (second === undefined) return true
+  if (first <= second) return false
+  return first >= second * 1.15 || first - second >= 0.15
 }
 
 function SearchIdentity({ item }: { readonly item: SearchLensItem }) {
@@ -90,8 +99,9 @@ function SearchIdentity({ item }: { readonly item: SearchLensItem }) {
   return <span className="project-search-identity"><LcosIcon shape="pebble" icon={FileText} size={34} tone="identity"/></span>
 }
 
-export function ProjectSearchLens({ open, project, client, onClose, onSelectArtifact, onSelectSourceIds, searchEntries = [], onNotice }: {
+export function ProjectSearchLens({ open, initialQuery = '', project, client, onClose, onSelectArtifact, onSelectSourceIds, searchEntries = [], onNotice }: {
   readonly open: boolean
+  readonly initialQuery?: string
   readonly project: ProjectPackage
   readonly client: LocalCoreClient
   readonly onClose: () => void
@@ -109,11 +119,11 @@ export function ProjectSearchLens({ open, project, client, onClose, onSelectArti
 
   useEffect(() => {
     if (!open) return
-    setQuery('')
+    setQuery(initialQuery)
     setRemote([])
     setError(null)
     setActiveIndex(0)
-  }, [open, project.id])
+  }, [initialQuery, open, project.id])
 
   useEffect(() => {
     if (!open) return
@@ -173,6 +183,8 @@ export function ProjectSearchLens({ open, project, client, onClose, onSelectArti
 
   useEffect(() => { setActiveIndex((current) => Math.max(0, Math.min(current, Math.max(0, results.length - 1)))) }, [results.length])
 
+  const clearBestMatch = hasClearBestMatch(results)
+
   if (!open) return null
 
   const openResult = (item: SearchLensItem) => {
@@ -189,8 +201,8 @@ export function ProjectSearchLens({ open, project, client, onClose, onSelectArti
       return
     }
     onNotice(item.chunkAnchor
-      ? `已找到「${item.title}」· ${anchorLabel(item.chunkAnchor)}，但 Core 还没有返回可定位投影。`
-      : `已找到「${item.title}」，但 Core 还没有返回可定位投影。`)
+      ? `找到了「${item.title}」· ${anchorLabel(item.chunkAnchor)}，它现在还没放在画布上。`
+      : `找到了「${item.title}」，它现在还没放在画布上。`)
   }
 
   return <div className="project-search-lens-backdrop" role="presentation" onPointerDown={(event) => dismissFromBackdrop(event, onClose, false)}>
@@ -201,7 +213,7 @@ export function ProjectSearchLens({ open, project, client, onClose, onSelectArti
           autoFocus
           value={query}
           onChange={(event) => { setQuery(event.target.value); setActiveIndex(0) }}
-          placeholder={`搜索 ${project.label}`}
+          placeholder="找项目里的任何东西"
           aria-label="搜索当前项目"
           onKeyDown={(event) => {
             if (event.key === 'ArrowDown') { event.preventDefault(); setActiveIndex((index) => Math.max(0, Math.min(results.length - 1, index + 1))) }
@@ -213,7 +225,7 @@ export function ProjectSearchLens({ open, project, client, onClose, onSelectArti
       </div>
 
       <div className="project-search-results" role="listbox" aria-label="搜索结果">
-        {!query.trim() && <div className="project-search-idle"><MessageCircle size={18}/><strong>直接输入你记得的内容</strong><span>标题、正文、Conversation 与项目对象会汇到同一个结果面。底层检索方式不会让你选。</span></div>}
+        {!query.trim() && <div className="project-search-idle"><MessageCircle size={18}/><strong>找项目里的任何东西</strong><span>记得一句话、一个名字、某段对话，直接输入就行。</span></div>}
         {query.trim() && results.map((item, index) => <button
           type="button"
           key={item.key}
@@ -225,13 +237,14 @@ export function ProjectSearchLens({ open, project, client, onClose, onSelectArti
         >
           <SearchIdentity item={item}/>
           <span className="project-search-result-copy">
+            {index === 0 && clearBestMatch ? <small><em>最可能是这个</em></small> : null}
             <strong>{item.title}</strong>
-            <small><b>{humanKind(item.kind)}</b>{matchReasonLabel(item) && <em>{matchReasonLabel(item)}</em>}{item.chunkAnchor && <em>{anchorLabel(item.chunkAnchor)}</em>}{item.locationCount !== undefined && item.locationCount > 0 ? <span>{item.locationCount} 处出现</span> : null}</small>
+            <small><b>{humanKind(item.kind)}</b>{matchReasonLabel(item) && <em>{matchReasonLabel(item)}</em>}{item.chunkAnchor && item.matchReason !== 'body' && <em>{anchorLabel(item.chunkAnchor)}</em>}{item.locationCount !== undefined && item.locationCount > 0 ? <span>在 {item.locationCount} 个地方用过</span> : null}</small>
             {item.snippet && <p>{item.snippet}</p>}
           </span>
         </button>)}
-        {query.trim() && !loading && results.length === 0 && !error && <div className="project-search-empty"><strong>没有找到匹配内容</strong><span>换一种描述。Search 会自己融合项目里的可检索来源。</span></div>}
-        {error && <div className="project-search-error"><strong>搜索暂不可用</strong><span>{error}</span></div>}
+        {query.trim() && !loading && results.length === 0 && !error && <div className="project-search-empty"><strong>没找到</strong><span>换一种说法试试。</span></div>}
+        {error && <div className="project-search-error"><strong>现在没法搜索</strong><span>项目内容没有丢，重新试一次就行。</span></div>}
       </div>
     </section>
   </div>
