@@ -283,7 +283,8 @@ export class SqliteMetadataRepository {
     if (current === 45) { this.#migrate_046_from_v45(); current = 46 }
     if (current === 46) { this.#migrate_047_from_v46(); current = 47 }
     if (current === 47) { this.#migrate_048_from_v47(); current = 48 }
-    if (current !== 48) throw new Error(`Unsupported metadata schema version ${current}.`)
+    if (current === 48) { this.#migrate_049_from_v48(); current = 49 }
+    if (current !== 49) throw new Error(`Unsupported metadata schema version ${current}.`)
   }
 
   #migrate_037_from_v36(): void {
@@ -476,6 +477,23 @@ export class SqliteMetadataRepository {
         updated_at TEXT NOT NULL
       );
       PRAGMA user_version = 48;
+      COMMIT;
+    `)
+  }
+
+  #migrate_049_from_v48(): void {
+    // R1-C：CommandDraft 从“Main 输入框草稿”升级为跨 Surface 的共享 Command State。
+    // Selection 与 Reference Set 分列；Receiver / Surface / Intent 一并持久化，避免
+    // Conversation / Assembly / Canvas / Composer 切换后互相失忆。
+    this.#database.exec(`
+      BEGIN;
+      ALTER TABLE command_drafts ADD COLUMN surface_kind TEXT NOT NULL DEFAULT 'main' CHECK(surface_kind IN ('main','context','workflow','conversation'));
+      ALTER TABLE command_drafts ADD COLUMN surface_id TEXT;
+      ALTER TABLE command_drafts ADD COLUMN selection_view_ids_json TEXT NOT NULL DEFAULT '[]';
+      ALTER TABLE command_drafts ADD COLUMN receiver_id TEXT;
+      ALTER TABLE command_drafts ADD COLUMN intent TEXT NOT NULL DEFAULT 'analyze' CHECK(intent IN ('analyze','create','revise'));
+      ALTER TABLE command_drafts ADD COLUMN result_policy TEXT NOT NULL DEFAULT 'reply_only' CHECK(result_policy IN ('reply_only','create_artifact','create_collection','draft_revision_per_target'));
+      PRAGMA user_version = 49;
       COMMIT;
     `)
   }
@@ -5735,25 +5753,37 @@ export class SqliteMetadataRepository {
       projectId,
       workspaceId,
       composerAnchor,
+      surfaceKind: String(row.surface_kind) as CommandDraftV1['surfaceKind'],
+      surfaceId: row.surface_id === null ? null : String(row.surface_id),
       prompt: String(row.prompt),
       contextViewIds: json<readonly string[]>(row.context_view_ids_json as SQLInputValue),
+      selectionViewIds: json<readonly string[]>(row.selection_view_ids_json as SQLInputValue),
+      receiverId: row.receiver_id === null ? null : String(row.receiver_id),
       provider: String(row.provider),
       createAsNewNode: Number(row.create_as_new_node) === 1,
+      intent: String(row.intent) as CommandDraftV1['intent'],
+      resultPolicy: String(row.result_policy) as CommandDraftV1['resultPolicy'],
       updatedAt: String(row.updated_at),
     }
   }
 
   saveCommandDraft(value: CommandDraftV1): void {
     this.#database.prepare(`
-      INSERT INTO command_drafts(project_id, workspace_key, composer_anchor, prompt, context_view_ids_json, provider, create_as_new_node, updated_at)
-      VALUES(?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO command_drafts(project_id, workspace_key, composer_anchor, surface_kind, surface_id, prompt, context_view_ids_json, selection_view_ids_json, receiver_id, provider, create_as_new_node, intent, result_policy, updated_at)
+      VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(project_id, workspace_key, composer_anchor) DO UPDATE SET
+        surface_kind = excluded.surface_kind,
+        surface_id = excluded.surface_id,
         prompt = excluded.prompt,
         context_view_ids_json = excluded.context_view_ids_json,
+        selection_view_ids_json = excluded.selection_view_ids_json,
+        receiver_id = excluded.receiver_id,
         provider = excluded.provider,
         create_as_new_node = excluded.create_as_new_node,
+        intent = excluded.intent,
+        result_policy = excluded.result_policy,
         updated_at = excluded.updated_at
-    `).run(value.projectId, metadataWorkspaceKey(value.workspaceId), value.composerAnchor, value.prompt, JSON.stringify(value.contextViewIds), value.provider, value.createAsNewNode ? 1 : 0, value.updatedAt)
+    `).run(value.projectId, metadataWorkspaceKey(value.workspaceId), value.composerAnchor, value.surfaceKind, value.surfaceId, value.prompt, JSON.stringify(value.contextViewIds), JSON.stringify(value.selectionViewIds), value.receiverId, value.provider, value.createAsNewNode ? 1 : 0, value.intent, value.resultPolicy, value.updatedAt)
   }
 
   deleteCommandDraft(projectId: string, workspaceId: string | null, composerAnchor: string): void {

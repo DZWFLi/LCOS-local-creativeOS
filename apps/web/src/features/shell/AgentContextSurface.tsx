@@ -84,7 +84,7 @@ export function AgentContextSurface({
     </header>
     <div className={`agent-sync-badge ${syncState}`}><span>{syncLabel}</span><button type="button" className="icon-only pressable" onClick={onRefresh} title="刷新上下文">⟳</button></div>
     <section className="agent-receiver-chip" data-receiver-status={receiver?.status ?? 'unavailable'}>
-      <span><i/><strong>{receiver ? `${receiver.provider} · ${receiver.status === 'active' ? '当前接收端' : '最近接收端'}` : '未连接 Receiver'}</strong><small>{receiver ? receiver.externalSessionId : '当前 Runtime 没有可切换的 Provider Session'}</small></span>
+      <span><i/><strong>{receiver ? `${receiver.provider} · ${receiver.status === 'active' ? '当前承接对话' : '最近承接对话'}` : '未连接对话'}</strong><small>{receiver ? '已连接，可继续承接当前工作' : '当前没有可切换的已连接对话'}</small></span>
       <button type="button" className="quiet pressable" onClick={onHandoff}><PackageOpen size={12}/>一次性交接</button>
     </section>
     {runLocked && <div className="agent-run-lock" title={runLocked.id}>当前任务已锁定 {runLocked.contextCount} 项参考；之后的选择只影响下一次任务。</div>}

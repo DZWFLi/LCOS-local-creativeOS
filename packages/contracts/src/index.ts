@@ -529,10 +529,17 @@ export interface CommandDraftV1 {
   readonly projectId: string
   readonly workspaceId: string | null
   readonly composerAnchor: string
+  readonly surfaceKind: 'main' | 'context' | 'workflow' | 'conversation'
+  readonly surfaceId: string | null
   readonly prompt: string
+  /** Ordered explicit Reference Set. Legacy field name retained for wire/storage compatibility. */
   readonly contextViewIds: readonly string[]
+  readonly selectionViewIds: readonly string[]
+  readonly receiverId: string | null
   readonly provider: string
   readonly createAsNewNode: boolean
+  readonly intent: 'analyze' | 'create' | 'revise'
+  readonly resultPolicy: 'reply_only' | 'create_artifact' | 'create_collection' | 'draft_revision_per_target'
   readonly updatedAt: string
 }
 

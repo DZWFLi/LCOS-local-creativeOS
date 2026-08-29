@@ -17,7 +17,7 @@ import type { MutationRisk } from '@local-creative-os/contracts'
 /** GUI 确认卡用的风险标签（与 contracts RISK_LABEL 同义，前端文案层）。 */
 const RISK_LABEL: Readonly<Record<MutationRisk, string>> = {
   safe: '只读',
-  reversible: '可逆写 · ChangeSet 记账可回退',
+  reversible: '可撤销 · 会记录这次修改，可随时退回',
   structural: '结构性变更',
   destructive: '破坏性操作',
   protected: '受保护对象',

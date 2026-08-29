@@ -32,14 +32,14 @@ export function WorkFreeSurface(props:Props){
   },[props.edges,props.nodes])
   const runs=props.nodes.filter((node)=>node.kind==='process').length
   return <section className="lcos-dedicated-surface lcos-work-free" data-testid="surface-work-free">
-    <header className="lcos-surface-heading"><div><strong>运行</strong><span>自由图</span></div><small>{runs} runs · {props.nodes.length} objects</small></header>
+    <header className="lcos-surface-heading"><div><strong>执行</strong><span>自由图</span></div><small>{runs} 次执行 · {props.nodes.length} 个对象</small></header>
     <div className="lcos-workfree-stage">
       <svg className="lcos-workfree-edges" aria-hidden="true">{layout.edges.map(({edge,x1,y1,x2,y2})=><line key={edge.id} x1={`${x1}%`} y1={`${y1}%`} x2={`${x2}%`} y2={`${y2}%`} className={edge.active?'active':''}/>)}</svg>
       {layout.items.map(({node,left,top,width},index)=><div key={node.id} className={`lcos-workfree-node ${node.kind==='process'?'is-run':''}`} style={{left:`${left}%`,top:`${top}%`,width:`${width}%`,'--i':index} as CSSProperties}>
         <SurfaceObject node={node} compact={node.kind!=='process'} selected={props.selectedIds.includes(node.id)} onSelect={props.onSelect} onDoubleClick={props.onDoubleClick}/>
-        {node.kind==='process'&&<span className={`lcos-run-badge status-${node.runStatus??'idle'}`} title={node.runStatus?runStatusLabel[node.runStatus]:'执行记录'}><Play size={9} fill="currentColor"/>{node.runStatus?runStatusLabel[node.runStatus]:'Run'}</span>}
+        {node.kind==='process'&&<span className={`lcos-run-badge status-${node.runStatus??'idle'}`} title={node.runStatus?runStatusLabel[node.runStatus]:'执行记录'}><Play size={9} fill="currentColor"/>{node.runStatus?runStatusLabel[node.runStatus]:'执行'}</span>}
       </div>)}
-      {!layout.items.length&&<div className="lcos-work-empty"><Play size={18}/><strong>还没有 Run</strong><span>任意 Surface 的 Selection 都可以直接开始。</span></div>}
+      {!layout.items.length&&<div className="lcos-work-empty"><Play size={18}/><strong>还没有执行记录</strong><span>在任意工作现场选中内容后，都可以直接开始。</span></div>}
     </div>
   </section>
 }

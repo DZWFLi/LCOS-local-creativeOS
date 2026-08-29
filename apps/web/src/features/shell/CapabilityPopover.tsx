@@ -47,11 +47,11 @@ export function CapabilityPopover(props: Props) {
       <section>
         <h3>快速添加</h3>
         <div className="capability-grid">
-          <button className="capability-card pressable" disabled={!props.capabilities.importCopy.enabled} title={props.capabilities.importCopy.reason} onClick={() => input.current?.click()}><Upload size={15} /><span><b>Import Copy</b><small>复制进项目</small></span></button>
+          <button className="capability-card pressable" disabled={!props.capabilities.importCopy.enabled} title={props.capabilities.importCopy.reason} onClick={() => input.current?.click()}><Upload size={15} /><span><b>复制导入</b><small>复制进项目</small></span></button>
           <button className="capability-card pressable" onClick={props.onCreateObject}><FilePlus2 size={15} /><span><b>新建内容</b><small>文本 / 内容集合</small></span></button>
           <button className="capability-card pressable" disabled={!props.capabilities.linkReference.enabled} title={props.capabilities.linkReference.reason} onClick={props.onAddLink}><Link2 size={15} /><span><b>链接参考</b><small>网页与在线资料</small></span></button>
           <button className="capability-card pressable" onClick={props.onUniversalImport}><FolderInput size={15} /><span><b>通用导入</b><small>文件 / 文件夹 / ZIP</small></span></button>
-          <button className="capability-card pressable" disabled={!props.capabilities.contextManifest.enabled} title={props.capabilities.contextManifest.reason} onClick={props.onHandoff}><PackageOpen size={15} /><span><b>交接当前上下文</b><small>下载或复制 Context Pack</small></span></button>
+          <button className="capability-card pressable" disabled={!props.capabilities.contextManifest.enabled} title={props.capabilities.contextManifest.reason} onClick={props.onHandoff}><PackageOpen size={15} /><span><b>交接当前上下文</b><small>下载或复制交接材料</small></span></button>
           <button className="capability-card pressable" onClick={props.onProjectTools}><Wrench size={15} /><span><b>项目工具</b><small>搜索、备份、工程文件</small></span></button>
         </div>
         <input ref={input} hidden multiple type="file" onChange={(event) => { const files = [...(event.currentTarget.files ?? [])]; if (files.length) props.onImport(files); event.currentTarget.value = '' }} />

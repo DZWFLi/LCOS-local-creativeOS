@@ -312,7 +312,10 @@ export async function handleRunsRoute(ctx: RunsRouteContext): Promise<boolean> {
       || typeof input.humanSummary !== 'string'
       || !isStringArray(input.risks)
       || typeof input.requiresConfirmation !== 'boolean'
-      || Object.keys(input).some((key) => !['schemaVersion', 'workspaceId', 'prompt', 'intent', 'requestedProvider', 'contextItems', 'editTargets', 'resultPolicy', 'humanSummary', 'risks', 'requiresConfirmation'].includes(key))) {
+      || (input.receiverRef !== undefined && (!isRecord(input.receiverRef) || typeof input.receiverRef.connectedConversationId !== 'string'))
+      || (input.orderedReferences !== undefined && !Array.isArray(input.orderedReferences))
+      || (input.resultSlotId !== undefined && typeof input.resultSlotId !== 'string')
+      || Object.keys(input).some((key) => !['schemaVersion', 'workspaceId', 'prompt', 'intent', 'requestedProvider', 'contextItems', 'editTargets', 'resultPolicy', 'humanSummary', 'risks', 'requiresConfirmation', 'receiverRef', 'orderedReferences', 'resultSlotId'].includes(key))) {
       sendJson(response, 400, failure('INVALID_ARGUMENT', 'Agent Plan contract is invalid.'))
       return true
     }

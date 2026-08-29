@@ -578,13 +578,13 @@ function FallbackViewer({ node, note }: { node: CanvasNode; note?: string }) {
     <strong>{node.title}</strong>
     <dl>
       <dt>类型</dt><dd>{node.fileType ?? node.kind}</dd>
-      <dt>Revision</dt><dd>{node.revisionId ?? '—'}</dd>
-      <dt>预览状态</dt><dd>{node.previewStatus ?? 'not-generated'}</dd>
-      <dt>文件可用性</dt><dd>{node.fileAvailability ?? '—'}</dd>
+      <dt>版本</dt><dd>{node.revisionLabel ?? (node.revisionId ? '已有保存版本' : '—')}</dd>
+      <dt>预览状态</dt><dd>{node.previewStatus === 'ready' ? '可预览' : node.previewStatus === 'failed' ? '预览失败' : '等待预览'}</dd>
+      <dt>文件状态</dt><dd>{node.fileAvailability === 'stale' ? '外部文件有变化' : node.fileAvailability === 'missing' ? '原文件暂时找不到' : node.fileAvailability ? '可用' : '—'}</dd>
     </dl>
     <small>{note ?? (isOfficeDoc
-      ? 'Word/Excel 文档预览暂未接入（列入后续版本）；文件已完整导入，可参与分析与 Agent Run。'
-      : '该格式只读预览未接入；文件仍可导入、分析与参与 Run。')}</small>
+      ? 'Word/Excel 文档预览暂未接入（列入后续版本）；文件已完整导入，仍可参与分析和执行。'
+      : '该格式只读预览未接入；文件仍可导入、分析并参与执行。')}</small>
   </div>
 }
 

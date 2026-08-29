@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { ArrowLeft, Check, PackageOpen, RefreshCw } from 'lucide-react'
-import type { CaptureSpaceSnapshotV1 } from '@local-creative-os/contracts'
+import type { CaptureSpaceSnapshotV1, WarehouseItemV1 } from '@local-creative-os/contracts'
 import type { ProjectPackage } from '../../model'
 import type { LocalCoreClient } from '../../runtime/localCoreClient'
 import { ProjectGlyphMark } from '../project/ProjectGlyphMark'
@@ -14,12 +14,18 @@ function tintHue(projectId: string): number {
   return 210 + (Math.abs(hash) % 105)
 }
 
-export function AssemblyCaptureWorkspace({ client, projects, onClose, onOpenProject, onNotice }: {
+export function AssemblyCaptureWorkspace({ client, projects, onClose, onOpenProject, onNotice, referenceSet }: {
   readonly client: LocalCoreClient
   readonly projects: readonly ProjectPackage[]
   readonly onClose: () => void
   readonly onOpenProject?: (projectId: string) => void
   readonly onNotice?: (message: string) => void
+  readonly referenceSet?: {
+    readonly projectId: string
+    readonly ids: readonly string[]
+    readonly resolveWarehouseReferenceId: (item: WarehouseItemV1) => string | null
+    readonly onToggle: (id: string) => void
+  }
 }) {
   const [snapshot, setSnapshot] = useState<CaptureSpaceSnapshotV1 | null>(null)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
@@ -82,7 +88,7 @@ export function AssemblyCaptureWorkspace({ client, projects, onClose, onOpenProj
 
     <div className="assembly-workspace-body">
       <aside className="assembly-target-scene" aria-label="装配目标">
-        <div className="assembly-pane-kicker"><span>TARGET</span><strong>装配到哪里</strong></div>
+        <div className="assembly-pane-kicker"><span>当前目标</span><strong>装配到哪里</strong></div>
         <div className="assembly-target-list">
           {projects.map((project) => {
             const active = project.id === targetProjectId
@@ -101,15 +107,15 @@ export function AssemblyCaptureWorkspace({ client, projects, onClose, onOpenProj
               onDrop={(event) => { event.preventDefault(); setDropTarget(null); acceptDrop(project.id, event.dataTransfer.getData('application/x-lcos-capture-ids')) }}
             >
               <ProjectGlyphMark label={`${project.label} project mark`} variantSeed={project.id} size={48}/>
-              <span><strong>{project.label}</strong><small>{active ? '当前 Target' : '双击打开项目'}</small></span>
+              <span><strong>{project.label}</strong><small>{active ? '当前目标' : '双击打开项目'}</small></span>
               {active && <Check size={14} className="assembly-target-check"/>}
             </button>
           })}
         </div>
         {targetProject ? <div className="assembly-target-summary">
-          <span>当前目标</span><strong>{targetProject.label}</strong><small>Capture 在这里提交后才进入 Project Truth；原始来源仍保留。</small>
-          {sourceTab === 'capture' ? <button type="button" disabled={!selectedIds.length || busy} onClick={() => void materialize(targetProject.id, selectedIds)}><PackageOpen size={14}/>装配选中 {selectedIds.length || ''}</button> : <small className="assembly-target-contract-note">当前 Source 先用于浏览；只有 Core 已支持的 Semantic Drop 会进入 Commit。</small>}
-        </div> : <div className="assembly-target-empty"><strong>还没有 Project Target</strong><span>先创建或打开一个项目，再把 Capture 材料装配进去。</span></div>}
+          <span>当前目标</span><strong>{targetProject.label}</strong><small>材料装配到这里后会成为项目内容，原始来源仍会保留。</small>
+          {sourceTab === 'capture' ? <button type="button" disabled={!selectedIds.length || busy} onClick={() => void materialize(targetProject.id, selectedIds)}><PackageOpen size={14}/>装配选中 {selectedIds.length || ''}</button> : <small className="assembly-target-contract-note">当前来源先用于浏览；可以直接拖入的内容会按落点决定怎么使用。</small>}
+        </div> : <div className="assembly-target-empty"><strong>还没有装配目标</strong><span>先创建或打开一个项目，再把 Capture 材料装配进去。</span></div>}
       </aside>
 
       <section className="assembly-source-bay">
@@ -119,9 +125,9 @@ export function AssemblyCaptureWorkspace({ client, projects, onClose, onOpenProj
             {(['project', 'capture', 'sources', 'skills'] as const).map((tab) => <button key={tab} type="button" className={sourceTab === tab ? 'is-active' : ''} onClick={() => setSourceTab(tab)}>{tab === 'project' ? 'Project' : tab === 'capture' ? 'Capture' : tab === 'sources' ? 'Sources' : 'Skills'}</button>)}
           </nav>
         </div>
-        {sourceTab === 'project' ? <AssemblyProjectWarehouse client={client} projectId={targetProjectId} onNotice={onNotice}/> : null}
+        {sourceTab === 'project' ? <AssemblyProjectWarehouse client={client} projectId={targetProjectId} onNotice={onNotice} {...(targetProjectId === referenceSet?.projectId ? { referenceIds: referenceSet.ids, resolveReferenceId: referenceSet.resolveWarehouseReferenceId, onToggleReference: referenceSet.onToggle } : {})}/> : null}
         {sourceTab === 'capture' ? <CaptureMaterialFlow client={client} items={snapshot?.items ?? []} selectedIds={selectedIds} onSelectedIdsChange={setSelectedIds} busy={busy}/> : null}
-        {sourceTab === 'sources' ? <div className="assembly-source-empty is-provider"><strong>还没有连接 Source Provider</strong><span>Sources 将保留 provider-native 浏览与搜索；这里不会拿 Project Resources 假装 Pinterest / Behance / Are.na。</span></div> : null}
+        {sourceTab === 'sources' ? <div className="assembly-source-empty is-provider"><strong>还没有连接外部来源</strong><span>之后会直接浏览和搜索各来源自己的内容；这里不会拿项目里的已有材料冒充 Pinterest / Behance / Are.na。</span></div> : null}
         {sourceTab === 'skills' ? <AssemblySkillSource client={client} projectId={targetProjectId} onNotice={onNotice}/> : null}
       </section>
     </div>

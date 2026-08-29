@@ -6,6 +6,9 @@ export function humanizeRuntimeMessage(message?: string | null): string {
   if (/timeout|timed out/i.test(value)) return '本地 Agent 响应较慢，本次操作没有完成，可以重新尝试。'
   if (/stale|version|conflict|409/i.test(value)) return '内容已在其他位置发生变化，请刷新后再试。'
   if (/cancel/i.test(value)) return '任务已撤回或正在撤回，迟到结果不会替换当前版本。'
+  if (/provider|runtime|receiverref|activereceiver|contextmanifest|orderedreference|resultslot|changeset|projection|presentationstate|adapter|embedding|\bfts\b|\brag\b|\bocr\b|\bmcp\b|\bcli\b|session id|read_only|prepare/i.test(value)) {
+    return '这一步暂时还不能完成。你的内容已保留，可以重新尝试；需要排查时可复制诊断信息。'
+  }
   return value
 }
 

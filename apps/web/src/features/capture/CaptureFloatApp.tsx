@@ -77,7 +77,7 @@ export function CaptureFloatApp() {
       setReceiving(false)
       dragDepth.current = 0
       setFailed(true)
-      setLastTitle(value.message?.trim() || 'Capture 失败，请确认 LCOS Runtime 已就绪')
+      setLastTitle(value.message?.trim() || 'Capture 失败，请确认 LCOS 项目服务已就绪')
       // 状态自愈：failure 形态 2s 后回 idle，错误细节留在状态小字里。
       window.clearTimeout(failureTimer.current)
       failureTimer.current = window.setTimeout(() => setFailed(false), FAILURE_HOLD_MS)

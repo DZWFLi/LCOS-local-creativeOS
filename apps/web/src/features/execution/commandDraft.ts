@@ -31,7 +31,7 @@ export function orderedReferenceForNode(node: CanvasNode, order: number): Compos
     const workspaceId = node.id.startsWith('workspace:') ? node.id.slice('workspace:'.length) : null
     return workspaceId
       ? { node, supported: true, orderedReference: { ref: { type: 'workspace', workspaceId }, order, mode: 'structure' } }
-      : { node, supported: false, reason: 'Workspace 缺稳定 workspaceId，不能猜引用身份。' }
+      : { node, supported: false, reason: '这个工作现场还没有稳定的引用身份，暂时不能作为本次参考。' }
   }
   if (node.artifactId) {
     return {
@@ -47,7 +47,7 @@ export function orderedReferenceForNode(node: CanvasNode, order: number): Compos
     return { node, supported: true, orderedReference: { ref: { type: 'view', viewId: node.id }, order } }
   }
   // F6 follow-up：Note / Resource canonical ref 未闭合前必须 fail-close。
-  return { node, supported: false, reason: '当前 Core 还没有这类对象的 canonical RunReference，已阻止伪造引用。' }
+  return { node, supported: false, reason: '这类对象目前还不能安全加入本次参考。' }
 }
 
 export function resolveComposerReceiver(
@@ -61,13 +61,13 @@ export function resolveComposerReceiver(
   const linked = conversations.filter((conversation) => conversation.conversationSessionId && selectedConversationSessionIds.includes(conversation.conversationSessionId))
   if (linked.length === 1) return { receiver: { connectedConversationId: linked[0]!.id }, selectedConversationCount: selectedConversationSessionIds.length }
   if (linked.length > 1 || selectedConversationSessionIds.length > 1) {
-    return { receiver: null, reason: '一次 Run 只能有一只 Receiver Glyth，请明确选择一段 Conversation。', selectedConversationCount: selectedConversationSessionIds.length }
+    return { receiver: null, reason: '一次处理只能交给一段对话，请明确选择。', selectedConversationCount: selectedConversationSessionIds.length }
   }
   if (selectedConversationSessionIds.length === 1 && linked.length === 0) {
-    return { receiver: null, reason: '选中的 Glyth 尚未显式链接 ConnectedConversation，不能猜 Session。', selectedConversationCount: 1 }
+    return { receiver: null, reason: '选中的对话还没有完成连接，请先连接后再使用。', selectedConversationCount: 1 }
   }
   if (activeReceiverId) return { receiver: { connectedConversationId: activeReceiverId }, selectedConversationCount: 0 }
-  return { receiver: null, reason: '当前没有可用 Receiver Glyth，请先选择或链接一段 Conversation。', selectedConversationCount: 0 }
+  return { receiver: null, reason: '当前没有可用的承接对话，请先选择或连接一段对话。', selectedConversationCount: 0 }
 }
 
 export function referenceCandidates(
@@ -85,6 +85,24 @@ export function referenceCandidates(
   return selected.map((node, order) => orderedReferenceForNode(node, order))
 }
 
+/**
+ * Selection and Reference are different interaction truths, but both are foreground
+ * execution context. Keep one deterministic ordered list for Proposal / Run without
+ * mutating either UI set. The explicit Reference Set keeps its order after Selection.
+ */
+export function mergeExecutionReferenceIds(
+  selectionIds: readonly string[],
+  referenceIds: readonly string[],
+  targetId?: string | null,
+): readonly string[] {
+  const merged: string[] = []
+  for (const id of [...selectionIds, ...referenceIds]) {
+    if (id === targetId || merged.includes(id)) continue
+    merged.push(id)
+  }
+  return merged
+}
+
 
 export function proposalCompatibilityBlockReason(input: {
   readonly receiverId: string | null
@@ -92,13 +110,11 @@ export function proposalCompatibilityBlockReason(input: {
   readonly receivers: readonly ConnectedConversationV1[]
   readonly references: readonly ComposerReferenceCandidate[]
 }): string | undefined {
-  if (!input.receiverId) return '请选择一只已链接的 Receiver Glyth。'
+  if (!input.receiverId) return '请选择一段已连接的对话。'
   const receiver = input.receivers.find((item) => item.id === input.receiverId)
-  if (!receiver) return 'Receiver Glyth 已不在当前项目承接列表，请重新选择。'
-  if (!receiver.conversationSessionId) return '这只 Glyth 尚未显式 link-session，不能猜真实 Session。'
+  if (!receiver) return '这段对话已经不在当前项目的可用列表里，请重新选择。'
+  if (!receiver.conversationSessionId) return '这段对话还没有完成连接，请先连接后再使用。'
   const unsupported = input.references.find((candidate) => !candidate.supported)
   if (unsupported) return unsupported.reason ?? '存在不能冻结的引用。'
-  if (input.receiverId !== input.activeReceiverId) return 'Core Proposal 还未携带显式 Receiver；后端补洞前不会偷偷绕过 Proposal。'
-  if (input.references.some((candidate) => candidate.orderedReference?.ref.type !== 'artifact')) return 'Core Proposal 仍是 Artifact-only；异构 Reference 会显示但在补洞前 fail-close。'
   return undefined
 }

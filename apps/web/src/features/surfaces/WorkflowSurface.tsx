@@ -631,11 +631,11 @@ export function WorkflowSurface(props: Props) {
       <div className="lcos-layout-tools">
         <small>{actions.length} 步 · {visibleNodes.length} 份材料</small>
         <button type="button" onClick={() => setComposerOpen(true)}><Plus size={11}/>步骤</button>
-        {nextReview && <button type="button" title={nextReview.label} onClick={() => addBoundComponent('review', nextReview.runId, { runId: nextReview.runId }, nextReview.phase)}><Plus size={11}/>Review</button>}
-        {nextCheckpoint && <button type="button" title={nextCheckpoint.label} onClick={() => addBoundComponent('checkpoint', nextCheckpoint.checkpointId, { checkpointId: nextCheckpoint.checkpointId }, 'protected')}><Plus size={11}/>Checkpoint</button>}
+        {nextReview && <button type="button" title={nextReview.label} onClick={() => addBoundComponent('review', nextReview.runId, { runId: nextReview.runId }, nextReview.phase)}><Plus size={11}/>确认</button>}
+        {nextCheckpoint && <button type="button" title={nextCheckpoint.label} onClick={() => addBoundComponent('checkpoint', nextCheckpoint.checkpointId, { checkpointId: nextCheckpoint.checkpointId }, 'protected')}><Plus size={11}/>版本</button>}
         <button type="button" disabled={items.length < 2 || Boolean(layoutPreview)} onClick={previewLayout}><LayoutGrid size={11}/>整理材料</button>
         {pinnedIds.length > 0 && <button type="button" className="quiet" onClick={() => setPinnedIds([])}>解除 {pinnedIds.length} 个锚点</button>}
-        {props.onSaveSkill && <button type="button" disabled={!actions.length || saveSkillBusy} title="把当前 Step 链存成 SKILL.md 技能" onClick={() => { setSaveSkillOpen(true); setSkillPanelOpen(false) }}><Save size={11}/>存为技能</button>}
+        {props.onSaveSkill && <button type="button" disabled={!actions.length || saveSkillBusy} title="把当前步骤链存成技能" onClick={() => { setSaveSkillOpen(true); setSkillPanelOpen(false) }}><Save size={11}/>存为技能</button>}
         {props.onReplaySkill && <button type="button" title="项目技能（SKILL.md）· 一键重放" onClick={() => { setSkillPanelOpen((open) => !open); setSaveSkillOpen(false) }}><Play size={11}/>技能{props.skills?.length ? ` · ${props.skills.length}` : ''}</button>}
         {props.onExportWorkflow && <button type="button" onClick={props.onExportWorkflow}><Download size={11}/>导出</button>}
         {props.onImportWorkflow && <><button type="button" onClick={() => importInputRef.current?.click()}><Upload size={11}/>导入</button><input ref={importInputRef} hidden type="file" accept=".zip,.lcos-workflow.zip" onChange={(event) => { const file = event.currentTarget.files?.[0]; if (file) props.onImportWorkflow?.(file); event.currentTarget.value = '' }}/></>}

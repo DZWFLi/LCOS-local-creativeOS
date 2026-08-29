@@ -73,8 +73,8 @@ export function ArtifactWorkbench(props: Props) {
                   {props.onRefreshFile !== undefined && <button type="button" className="pressable" onClick={props.onRefreshFile}><RefreshCw size={13} />检查外部变化</button>}
                   {node.fileAvailability === 'stale' && props.onAdoptExternalChange !== undefined && <button type="button" className="pressable" onClick={props.onAdoptExternalChange}><History size={13} />使用外部版本</button>}
                 </div>
-                <p className="workbench-hint"><GitBranch size={12} />单击节点发起局部 Run；这里负责预览、版本来源与只读检查。</p>
-                <p className="workbench-hint"><FileText size={12} />外部 Reference 只能作为上下文，受管内容才可产生 Draft Revision。</p>
+                <p className="workbench-hint"><GitBranch size={12} />单击节点发起一次局部处理；这里负责预览、版本来源与只读检查。</p>
+                <p className="workbench-hint"><FileText size={12} />外部参考只能作为上下文；只有受管内容才能产生草稿版本。</p>
               </div>}
       </main>
     </aside>

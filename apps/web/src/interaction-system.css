@@ -4625,6 +4625,10 @@
 .assembly-warehouse-object-copy { min-width: 0; display: grid; gap: 3px; }
 .assembly-warehouse-object-copy strong { overflow: hidden; font: 600 10px/1.25 var(--lcos-font-ui, sans-serif); text-overflow: ellipsis; white-space: nowrap; }
 .assembly-warehouse-object-copy small { overflow: hidden; color: var(--lcos-ui-ink-faint); font: 500 8.5px/1.2 var(--lcos-font-ui, sans-serif); text-overflow: ellipsis; white-space: nowrap; }
+.assembly-warehouse-reference { display: inline-flex; align-items: center; gap: 3px; height: 22px; padding: 0 7px; border: 1px solid transparent; border-radius: 999px; background: transparent; color: var(--lcos-ui-ink-faint); opacity: 0; font: 560 8px/1 var(--lcos-font-ui, sans-serif); transition: opacity 120ms ease, background 120ms ease, color 120ms ease; }
+.assembly-warehouse-object:hover .assembly-warehouse-reference, .assembly-warehouse-reference:focus-visible, .assembly-warehouse-reference.is-active { opacity: 1; }
+.assembly-warehouse-reference:hover, .assembly-warehouse-reference.is-active { background: color-mix(in srgb, var(--lcos-ui-signal) 9%, var(--lcos-fill-secondary)); color: var(--lcos-ui-ink-soft); }
+.assembly-warehouse-reference.is-active { border-color: color-mix(in srgb, var(--lcos-ui-signal) 20%, transparent); }
 .assembly-relation-count { min-width: 18px; height: 18px; display: grid; place-items: center; border-radius: 999px; background: var(--lcos-fill-tertiary); color: var(--lcos-ui-ink-faint); font: 570 8px/1 var(--lcos-font-mono, monospace); }
 .assembly-warehouse-relations { min-height: 0; overflow: auto; display: flex; flex-wrap: wrap; align-content: flex-start; gap: 18px 22px; padding: 12px 18px 30px; }
 .assembly-relation-island { position: relative; min-width: 180px; max-width: 360px; flex: 1 1 240px; padding: 10px 13px 13px; border: 0; background: color-mix(in srgb, var(--lcos-fill-quaternary) 58%, transparent); clip-path: polygon(2% 7%, 92% 2%, 100% 23%, 98% 91%, 12% 100%, 0 78%); }

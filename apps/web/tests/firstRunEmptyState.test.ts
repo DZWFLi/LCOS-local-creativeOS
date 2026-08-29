@@ -26,7 +26,7 @@ describe('First-run and empty project contract', () => {
   it('opens the safe directory dialog in the user-selected intent', () => {
     expect(dialog).toContain("initialIntent = 'create'")
     expect(dialog).toContain('setIntent(initialIntent)')
-    expect(dialog).toContain('只读扫描并登记所选目录；不会移动或改写其中的文件')
+    expect(dialog).toContain('系统只会读取并登记所选目录；不会移动或改写其中的文件。') // R1-B 人话化后文案，语义不变
   })
 
   it('shows onboarding only for a real zero-content project', () => {

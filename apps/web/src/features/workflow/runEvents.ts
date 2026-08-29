@@ -39,11 +39,11 @@ export function describeRunEvent(event: LcosRunEvent): string {
     case 'run-failed':
       return `执行失败：${String(event.error)}`
     case 'changeset-proposed':
-      return `已提交变更集：${String(event.title)}`
+      return `这次修改已准备好：${String(event.title)}`
     case 'accept-requested':
-      return `请求确认变更集 ${String(event.changeSetId)}`
+      return '正在等待你确认这次修改'
     case 'accept-succeeded':
-      return `变更集已确认：${String(event.changeSetId)}`
+      return '这次修改已确认'
     case 'accept-failed':
       return `确认失败：${String(event.error)}`
     case 'run-waiting-input':

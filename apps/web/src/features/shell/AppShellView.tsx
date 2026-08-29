@@ -24,6 +24,7 @@ export interface AppShellViewProps {
     readonly onClose: ComponentProps<typeof AssemblyCaptureWorkspace>['onClose']
     readonly onOpenProject?: ComponentProps<typeof AssemblyCaptureWorkspace>['onOpenProject']
     readonly onNotice?: ComponentProps<typeof AssemblyCaptureWorkspace>['onNotice']
+    readonly referenceSet?: ComponentProps<typeof AssemblyCaptureWorkspace>['referenceSet']
   }
   readonly drive: {
     readonly open: boolean
@@ -51,7 +52,7 @@ export function AppShellView(props: AppShellViewProps) {
   if (props.capture.open) {
     return <>
       <LcosToaster notice={props.notice} />
-      <AssemblyCaptureWorkspace client={props.capture.client} projects={props.capture.projects} onClose={props.capture.onClose} onOpenProject={props.capture.onOpenProject} onNotice={props.capture.onNotice} />
+      <AssemblyCaptureWorkspace client={props.capture.client} projects={props.capture.projects} onClose={props.capture.onClose} onOpenProject={props.capture.onOpenProject} onNotice={props.capture.onNotice} referenceSet={props.capture.referenceSet} />
     </>
   }
   if (props.drive.open) {

@@ -54,6 +54,31 @@ describe('Runtime Proposal Service (Gate F)', () => {
     expect(plan.humanSummary).toContain('脚本')
   })
 
+  it('keeps Receiver / ordered references / ResultSlot through Agent validation', () => {
+    const plan = validateAgentExecutionPlan({
+      schemaVersion: 1,
+      projectId: 'project-proposal',
+      prompt: '按这些参考继续生成',
+      intent: 'create',
+      requestedProvider: 'auto',
+      contextItems: [],
+      editTargets: [],
+      resultPolicy: { type: 'create_artifact' },
+      receiverRef: { connectedConversationId: 'cc-r1c' },
+      orderedReferences: [
+        { ref: { type: 'scope', scopeId: 'scope-context' }, order: 0, mode: 'summary' },
+        { ref: { type: 'artifact', artifactId: 'artifact-image' }, order: 1 },
+      ],
+      resultSlotId: 'slot-r1c',
+      humanSummary: '交给当前对话，参考上下文和图片继续生成。',
+      risks: [],
+      requiresConfirmation: false,
+    })
+    expect(plan.receiverRef).toEqual({ connectedConversationId: 'cc-r1c' })
+    expect(plan.orderedReferences?.map((item) => item.ref.type)).toEqual(['scope', 'artifact'])
+    expect(plan.resultSlotId).toBe('slot-r1c')
+  })
+
   it('rejects unsafe or internally inconsistent Agent plans', () => {
     expect(() => validateAgentExecutionPlan({
       schemaVersion: 1,

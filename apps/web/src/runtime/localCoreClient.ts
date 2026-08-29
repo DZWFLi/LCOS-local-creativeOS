@@ -431,6 +431,9 @@ export interface LocalCoreClient {
     readonly decisionSource?: 'agent' | 'fallback'
     readonly contextItems: readonly { readonly artifactId: string; readonly revisionId: string; readonly order: number }[]
     readonly editTargets: readonly { readonly artifactId: string; readonly baseRevisionId: string }[]
+    readonly receiverRef?: RunReceiverRefV1
+    readonly orderedReferences?: readonly OrderedRunReferenceV2[]
+    readonly resultSlotId?: string
     readonly resultPolicy?: {
       readonly type: 'reply_only' | 'create_artifact' | 'create_collection' | 'draft_revision_per_target'
       readonly format?: string

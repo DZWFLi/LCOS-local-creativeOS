@@ -7,14 +7,15 @@ import { SpatialCanvas } from '../spatial/SpatialCanvas'
 import { LcosButton } from '../ui/LcosButton'
 import { UnifiedExecutionComposer } from '../execution/UnifiedExecutionComposer'
 import { register as registerOverlay } from '../ui/overlayStack'
-import { proposalCompatibilityBlockReason } from '../execution/commandDraft'
-import type { SurfaceExecutionSubmission, SurfaceExecutionSubmissionResult } from '../execution/surfaceExecution'
+import { mergeExecutionReferenceIds, proposalCompatibilityBlockReason, referenceCandidates } from '../execution/commandDraft'
+import type { SharedComposerCommandState, SurfaceExecutionSubmission, SurfaceExecutionSubmissionResult } from '../execution/surfaceExecution'
 
 interface Props {
   projectId: string
   conversationId?: string | null
   onExit?: () => void
   execution?: {
+    readonly command: SharedComposerCommandState
     readonly receivers: readonly ConnectedConversationV1[]
     readonly activeReceiverId: string | null
     readonly providers: readonly RuntimeProviderStatus[]
@@ -52,11 +53,6 @@ export function ConversationSpaceSurface({ projectId, conversationId, onExit, ex
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const [composerOpen, setComposerOpen] = useState(false)
-  const [prompt, setPrompt] = useState('')
-  const [receiverId, setReceiverId] = useState<string | null>(null)
-  const [provider, setProvider] = useState('auto')
-  const [intent, setIntent] = useState<'analyze' | 'create' | 'revise'>('analyze')
-  const [resultPolicy, setResultPolicy] = useState<'reply_only' | 'create_artifact' | 'create_collection' | 'draft_revision_per_target'>('reply_only')
   const [reachCount, setReachCount] = useState(0)
 
   useEffect(() => {
@@ -90,14 +86,13 @@ export function ConversationSpaceSurface({ projectId, conversationId, onExit, ex
   useEffect(() => {
     // Conversation Subcanvas defaults to its own Glyth. Do not silently fall back to the
     // Project Active Receiver when this Conversation has not been explicitly linked.
-    setReceiverId(currentReceiver?.id ?? null)
-    setPrompt('')
-    setProvider('auto')
-    setIntent('analyze')
-    setResultPolicy('reply_only')
+    execution?.command.onReceiverChange(currentReceiver?.id ?? null)
+    execution?.command.onFinishReferencePick()
     setReachCount(0)
     setComposerOpen(false)
   }, [conversationId, currentReceiver?.id])
+
+  const receiverId = execution?.command.receiverId ?? null
 
   useEffect(() => {
     if (!composerOpen) return undefined
@@ -145,22 +140,29 @@ export function ConversationSpaceSurface({ projectId, conversationId, onExit, ex
     return { ...group, sectionY, messages: messagesWithY }
   })
 
+  const executionReferenceIds = execution
+    ? mergeExecutionReferenceIds(execution.command.selectionIds, execution.command.referenceIds)
+    : []
+  const executionReferences = execution
+    ? referenceCandidates(executionReferenceIds, execution.command.nodes, receiverId, execution.receivers)
+    : []
   const executionBlockedReason = execution && composerOpen
-    ? proposalCompatibilityBlockReason({ receiverId, activeReceiverId: execution.activeReceiverId, receivers: execution.receivers, references: [] })
+    ? proposalCompatibilityBlockReason({ receiverId, activeReceiverId: execution.activeReceiverId, receivers: execution.receivers, references: executionReferences })
     : undefined
 
   const submit = () => {
-    if (!execution || !receiverId || executionBlockedReason || !prompt.trim()) return
+    if (!execution || !receiverId || executionBlockedReason || !execution.command.prompt.trim()) return
     void Promise.resolve(execution.onSubmit({
-      prompt: prompt.trim(),
+      prompt: execution.command.prompt.trim(),
       surface: 'conversation',
+      selectionIds: execution.command.selectionIds,
       receiverId,
-      referenceIds: [],
-      provider,
-      intent,
-      resultPolicy,
+      referenceIds: execution.command.referenceIds,
+      provider: execution.command.provider,
+      intent: execution.command.intent,
+      resultPolicy: execution.command.resultPolicy,
     })).then((result) => {
-      if (result?.runId) setPrompt('')
+      if (result?.runId) execution.command.onPromptChange('')
     })
   }
 
@@ -177,35 +179,35 @@ export function ConversationSpaceSurface({ projectId, conversationId, onExit, ex
       {!loading && !error && laidOut.flatMap((group) => group.messages.map(({ message, y, height }) => <article key={message.id} className="lcos-conversation-space-message" data-role={message.role} data-message-id={message.id} style={{ top: y, minHeight: height }}><span className="lcos-conversation-space-role">{ROLE_LABEL[message.role] ?? message.role}</span><p>{message.contentText}</p></article>))}
     </SpatialCanvas>
     {composerOpen && execution && <UnifiedExecutionComposer
-      nodes={[]}
-      selectedIds={[]}
-      referenceIds={[]}
+      nodes={execution.command.nodes}
+      selectedIds={execution.command.selectionIds}
+      referenceIds={execution.command.referenceIds}
       receivers={execution.receivers}
       activeReceiverId={execution.activeReceiverId}
       receiverId={receiverId}
       reachCount={reachCount}
       x={148}
       y={54}
-      prompt={prompt}
-      provider={provider}
-      createAsNewNode={intent === 'create'}
-      intent={intent}
-      resultPolicy={resultPolicy}
+      prompt={execution.command.prompt}
+      provider={execution.command.provider}
+      createAsNewNode={execution.command.intent === 'create'}
+      intent={execution.command.intent}
+      resultPolicy={execution.command.resultPolicy}
       providers={execution.providers}
       busy={execution.busy}
       referencePickAvailable={false}
-      referencePickUnavailableReason="Conversation 时间线里的 Message 不是 Project Entity；不能把聊天气泡伪造成 Run Reference。Project Search / Assembly 引用会继续接入同一 Reference Tray。"
+      referencePickUnavailableReason="对话时间线里的消息不是项目对象；不能把聊天气泡伪造成参考。画布、搜索和装配区加入的项目参考会继续保留在同一个参考栏里。"
       {...(executionBlockedReason ? { executionBlockedReason } : {})}
-      onPromptChange={setPrompt}
-      onProviderChange={setProvider}
-      onCreateAsNewNodeChange={(value) => { setIntent(value ? 'create' : 'analyze'); setResultPolicy(value ? 'create_artifact' : 'reply_only') }}
-      onIntentChange={(next) => { setIntent(next); setResultPolicy(next === 'create' ? 'create_artifact' : next === 'revise' ? 'draft_revision_per_target' : 'reply_only') }}
-      onResultPolicyChange={setResultPolicy}
-      onReceiverChange={setReceiverId}
-      onRemoveReference={() => undefined}
-      onMoveReference={() => undefined}
+      onPromptChange={execution.command.onPromptChange}
+      onProviderChange={execution.command.onProviderChange}
+      onCreateAsNewNodeChange={() => undefined}
+      onIntentChange={execution.command.onIntentChange}
+      onResultPolicyChange={execution.command.onResultPolicyChange}
+      onReceiverChange={(value) => execution.command.onReceiverChange(value)}
+      onRemoveReference={execution.command.onToggleReference}
+      onMoveReference={execution.command.onMoveReference}
       onStartReferencePick={() => undefined}
-      onFinishReferencePick={() => undefined}
+      onFinishReferencePick={execution.command.onFinishReferencePick}
       onSend={submit}
       onClose={() => setComposerOpen(false)}
     />}

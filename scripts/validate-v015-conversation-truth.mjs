@@ -47,7 +47,9 @@ check('Controller linkage is explicit link-session and never inferred',
   client.includes('linkConnectedConversationSession') &&
   app.includes('item.conversationSessionId === conversationSessionId') &&
   app.includes('Explicit > inferred: even one candidate is not auto-selected.') &&
-  controller.includes('只建立显式 ConversationSession ↔ ConnectedConversation 链接') && !controller.includes('provider ===') && !controller.includes('title ==='))
+  // R1-C 后 controller 是显式点选对话框（data-controller-choice + onChoose，零推断）；
+  // 旧中文注释代理已随重构移除，断言语义信号本身。
+  controller.includes('data-controller-choice') && controller.includes('onChoose(conversation.id)') && !controller.includes('provider ===') && !controller.includes('title ==='))
 
 check('SessionLifecycle drives pose while Activity Decay stays presentation-only',
   model.includes('lifecyclePhase?: SessionPhase') && lifecycle.includes("phase === 'busy'") &&

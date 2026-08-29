@@ -153,7 +153,7 @@ export function SurfaceFrame({ element, definition, zoom, selected, overlap = fa
     <nav className="lcos-surface-component-controls" onPointerDown={(event) => event.stopPropagation()}>
       {showPin && <button type="button" aria-label={pinned ? `解除固定 ${definition.label}` : `固定 ${definition.label}`} title={pinned ? '解除固定' : '固定位置'} onClick={(event) => { event.stopPropagation(); onPresentationChange({ ...element.presentation, pinned: !pinned }) }}>{pinned ? '●' : '○'}</button>}
       {definition.capabilities.collapse && <button type="button" aria-label={collapsed ? `展开 ${definition.label}` : `收起 ${definition.label}`} title={collapsed ? '展开' : '收起'} onClick={(event) => { event.stopPropagation(); onPresentationChange({ ...element.presentation, collapsed: !collapsed }) }}>{collapsed ? '＋' : '−'}</button>}
-      {definition.capabilities.removeProjection && <button type="button" aria-label={`移除 ${definition.label} 投影`} title="只移除这里的投影，不删除 Project Truth" onClick={(event) => { event.stopPropagation(); onRemove() }}>×</button>}
+      {definition.capabilities.removeProjection && <button type="button" aria-label={`从这里移除 ${definition.label}`} title="只从当前现场移除，不会删除原始项目内容" onClick={(event) => { event.stopPropagation(); onRemove() }}>×</button>}
     </nav>
   </div>
 }

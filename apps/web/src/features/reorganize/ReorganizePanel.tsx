@@ -194,7 +194,7 @@ export function ReorganizePanel({ projectId, scopeId, nodes, selectedIds, client
         onChange={(event) => setInstruction(event.target.value)}
       />
       <div className="lcos-reorganize-scope">
-        <span>{hasSelection ? 'Selection 是本轮焦点；固定位置保持不动，位置变化写入同一个可回滚 ChangeSet' : '固定位置会被保留；已有材料不会因为进入整理而持续自动重排'}</span>
+        <span>{hasSelection ? '当前选中的内容是本轮焦点；固定位置保持不动，所有位置变化会一起记录，方便整轮撤回' : '固定位置会被保留；已有材料不会因为进入整理而持续自动重排'}</span>
       </div>
       {error && <p className="reorganize-error">{error}</p>}
       <button className="primary pressable" disabled={busy} onClick={() => void run()}><Sparkles size={14}/>开始整理</button>
@@ -203,15 +203,15 @@ export function ReorganizePanel({ projectId, scopeId, nodes, selectedIds, client
     {stage === 'running' && <div className="lcos-reorganize-running" aria-live="polite">
       <span className="lcos-reorganize-running-signal" aria-label="智能体正在整理"><LcosSignalGlyph state="working"/></span>
       <strong>正在整理当前画布</strong>
-      <small>真实位置写入 ChangeSet · 变化会直接在画布上播放</small>
+      <small>位置变化会一起记录 · 整理过程会直接在画布上播放</small>
     </div>}
 
     {stage === 'review' && <div className="lcos-reorganize-pending" data-review-state="pending">
       <div className="lcos-reorganize-review-title"><div><strong>整理完成</strong><small>{changeCount || '本轮'} 项变化待确认</small></div><span className="lcos-review-pending-signal"><LcosSignalGlyph state="pending"/>待确认</span></div>
       {summary.length ? <ul className="lcos-reorganize-change-summary">{summary.map((item) => <li key={item.label} className={item.tone ?? ''}><span>{item.label}</span><strong>{item.count}</strong></li>)}</ul> : <p className="reorganize-empty">本轮主要是位置整理，没有其它结构性变化。</p>}
       <div className="lcos-reorganize-core-gap" data-core-gap="item-review">
-        <strong>逐项审查等待 Core 能力</strong>
-        <span>当前真实支持整轮 position / hierarchy / relation / emphasis ChangeSet 与冲突安全 rollback；没有伪造逐项 Keep/Revert。内容语义归组只在 Agent 真正提供对应 patch 时出现。</span>
+        <strong>目前先按整轮确认</strong>
+        <span>现在可以安全保留或撤回整轮的位置、层级、关系与重点变化；逐项保留或撤回会在底层能力完整后开放，不会先做一个假的开关。</span>
       </div>
       {error && <p className="reorganize-error">{error}</p>}
       <div className="reorganize-actions">

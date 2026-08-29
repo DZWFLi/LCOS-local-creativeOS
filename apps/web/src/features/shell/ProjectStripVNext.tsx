@@ -2,7 +2,7 @@ import { FolderOpen, History, Import, Inbox, Layers3, MoreHorizontal, Search, Sp
 import { useEffect, useRef, type ReactNode } from 'react'
 import { Menu } from '@base-ui/react/menu'
 import type { MenuRootActions } from '@base-ui/react/menu'
-import type { RunStatus } from '../../model'
+import { runStatusLabel, type RunStatus } from '../../model'
 import type { SaveStatus } from '../../runtime/runtimeBridge'
 import { register as registerOverlay } from '../ui/overlayStack'
 
@@ -86,7 +86,7 @@ export function ProjectStripVNext({ projectLabel, scopeLabel, saveStatus, runSta
     <div className="vnext-project-state" aria-label="项目状态">
       <span className={`vnext-save-dot state-${saveStatus}`} title={`保存状态：${saveStatusCopy(saveStatus)}`} />
       <span className="vnext-save-copy">{saveStatusCopy(saveStatus)}</span>
-      {runStatus && <span className={`vnext-run-dot status-${runStatus}`} title={`Run：${runStatus}`} />}
+      {runStatus && <span className={`vnext-run-dot status-${runStatus}`} title={`执行状态：${runStatusLabel[runStatus]}`} />}
     </div>
     {receiverSlot}
     <nav className="vnext-project-actions" aria-label="项目操作">

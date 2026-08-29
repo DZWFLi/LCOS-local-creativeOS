@@ -33,7 +33,7 @@ describe('Phase 5 Slice 2 — Capture Space convergence contract', () => {
     // provenance 不因 materialize 丢失：来源字段（sourceUrl/pageTitle/capturedAt）与「原始来源仍保留」承诺。
     expect(materialFlow).toContain('item.capturedAt')
     expect(materialFlow).toContain('source.pageUrl')
-    expect(workspace).toContain('原始来源仍保留')
+    expect(workspace).toContain('原始来源仍会保留') // R1-B 人话化后文案
   })
 
   it('opens Capture Space from Project Drive and the application shell', () => {

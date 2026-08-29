@@ -8,18 +8,18 @@ export function PreviewSurface({ node, variant = 'single' }: { node: CanvasNode;
   const isImagePreview = node.previewDataUrl !== undefined && (node.previewMimeType?.startsWith('image/') ?? node.previewDataUrl.startsWith('data:image/'))
   const isTextPreview = node.previewText !== undefined && node.previewText.trim().length > 0
   return <div className={`preview-surface ${variant}`}>
-    <div className="preview-toolbar"><Presentation size={13} /><span>{title}</span><small>{node.fileType ?? 'Artifact'}</small></div>
+    <div className="preview-toolbar"><Presentation size={13} /><span>{title}</span><small>{node.fileType ?? '内容'}</small></div>
     <div className={`preview-page ${isImagePreview ? 'image-preview' : isTextPreview ? 'text-preview' : ''}`}>
       {isImagePreview
         ? <OcrImage artifactId={node.artifactId} ocrEnabled={node.fileType === 'image'} className="preview-page-image" src={node.previewDataUrl} alt={node.title} draggable={false} onDragStart={(event) => event.preventDefault()} />
         : isTextPreview
           ? <pre className="preview-page-text">{node.previewText}</pre>
           : <>
-              <div className="preview-page-copy"><small>{node.previewStatus ?? 'runtime'}</small><strong>{node.title}</strong><span>{summary}</span></div>
+              <div className="preview-page-copy"><small>{node.previewStatus === 'ready' ? '可预览' : node.previewStatus === 'failed' ? '预览失败' : '等待预览'}</small><strong>{node.title}</strong><span>{summary}</span></div>
               <div className="preview-page-visual"><i /><i /><i /></div>
             </>}
       {variant === 'after' && <div className="diff-outline" />}
     </div>
-    <footer><FileText size={12} /> {node.revisionId ? `Revision ${node.revisionId}` : 'Runtime artifact'}</footer>
+    <footer><FileText size={12} /> {node.revisionId ? `版本 · ${node.revisionLabel ?? '已保存'}` : '项目内容'}</footer>
   </div>
 }

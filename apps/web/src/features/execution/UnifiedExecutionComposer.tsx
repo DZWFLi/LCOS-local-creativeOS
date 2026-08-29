@@ -50,12 +50,12 @@ function receiverLabel(receiver: ConnectedConversationV1): string {
 }
 
 function referenceKindLabel(node: CanvasNode): string {
-  if (node.entityKind === 'conversation') return 'Conversation'
-  if (node.entityKind === 'context') return 'Context'
-  if (node.entityKind === 'workflow') return 'Workflow'
-  if (node.entityKind === 'collection') return 'Collection'
-  if (node.entityKind === 'workspace') return 'Scene'
-  if (node.kind === 'note') return 'Note'
+  if (node.entityKind === 'conversation') return '对话'
+  if (node.entityKind === 'context') return '上下文'
+  if (node.entityKind === 'workflow') return '工作流'
+  if (node.entityKind === 'collection') return '集合'
+  if (node.entityKind === 'workspace') return '工作现场'
+  if (node.kind === 'note') return '文本'
   return detectFileIdentity(node).toUpperCase()
 }
 
@@ -70,7 +70,7 @@ export function UnifiedExecutionComposer(props: Props) {
   const providerBlocked = automaticProviders.length === 0 || (props.provider !== 'auto' && selectedProvider === null)
   const receiver = props.receiverId === null ? null : props.receivers.find((item) => item.id === props.receiverId) ?? null
   const unsupportedReferences = references.filter((item) => !item.supported)
-  const blockedReason = props.executionBlockedReason ?? (receiver === null ? '请选择一只已链接的 Receiver Glyth。' : unsupportedReferences[0]?.reason)
+  const blockedReason = props.executionBlockedReason ?? (receiver === null ? '请选择一段已连接的对话。' : unsupportedReferences[0]?.reason)
   const disabled = props.busy || providerBlocked || !props.prompt.trim() || Boolean(blockedReason)
   const provenanceNode = selected.length === 1 ? selected[0] : null
   const provenance = props.baseRevision ?? ((provenanceNode?.historical || provenanceNode?.sourceRunId) ? {
@@ -87,20 +87,21 @@ export function UnifiedExecutionComposer(props: Props) {
 
   return <section className="selection-composer lcos-nearfield-composer lcos-unified-execution-composer" data-testid="selection-composer" data-reference-pick={props.referencePickActive || undefined} style={{ left: props.x, top: props.y } as CSSProperties} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()} onContextMenu={(event) => event.preventDefault()}>
     <div className="lcos-command-draft-head">
-      <label className="lcos-receiver-select" title="这次 Run 交给哪段 Conversation；不会修改全局 Active Receiver">
+      <label className="lcos-receiver-select" title="这次交给哪段对话；不会改变项目默认承接对话">
         <Sparkles size={12}/>
-        <select value={props.receiverId ?? ''} onChange={(event) => props.onReceiverChange(event.target.value)} aria-label="Receiver Glyth">
-          <option value="" disabled>选择 Receiver Glyth</option>
+        <select value={props.receiverId ?? ''} onChange={(event) => props.onReceiverChange(event.target.value)} aria-label="交给哪段对话">
+          <option value="" disabled>选择一段已连接的对话</option>
           {props.receivers.map((item) => <option key={item.id} value={item.id}>{receiverLabel(item)}{item.id === props.activeReceiverId ? ' · 当前' : ''}{item.conversationSessionId ? '' : ' · 未链接'}</option>)}
         </select>
         <ChevronDown size={10}/>
       </label>
-      {props.resultSlot && <span className={`lcos-result-target is-${props.resultSlot.status}`} title="Blank Result 是这次 Return 的明确落点，不是 Reference">Result · {props.resultSlot.title}</span>}
-      <span className="lcos-reach-summary" title="Conversation Reach 是背景可达范围，不等于本次显式 References">Reach {props.reachCount ?? 0}</span>
+      {props.resultSlot && <span className={`lcos-result-target is-${props.resultSlot.status}`} title="这次生成的结果会放在这里，不会把它当成参考内容">结果 · {props.resultSlot.title}</span>}
+      {selected.length > 0 && <span className="lcos-selection-summary" title="当前选择是这次直接处理的对象；它和额外参考是两件事">当前选择 {selected.length}</span>}
+      <span className="lcos-reach-summary" title="这段对话长期知道的材料，不等于你这次明确选中的参考">长期材料 {props.reachCount ?? 0}</span>
     </div>
 
     <div className="lcos-reference-tray" aria-label="本次显式引用">
-      <div className="lcos-reference-tray-head"><span>References</span><small>{references.length} 项 · 顺序会冻结进 ContextManifest</small></div>
+      <div className="lcos-reference-tray-head"><span>这次会参考</span><small>{references.length} 项 · 顺序会随这次处理一起保存</small></div>
       <div className="lcos-reference-chips">
         {references.map((candidate, index) => <div key={candidate.node.id} className={`lcos-reference-chip ${candidate.supported ? '' : 'is-unsupported'}`} data-reference-id={candidate.node.id} data-reference-order={index + 1} title={candidate.reason ?? candidate.node.title}>
           <b>{index + 1}</b>
@@ -114,29 +115,29 @@ export function UnifiedExecutionComposer(props: Props) {
             <button type="button" aria-label={`移除引用 ${candidate.node.title}`} onClick={() => props.onRemoveReference(candidate.node.id)}><X size={10}/></button>
           </div>
         </div>)}
-        {!references.length && <span className="lcos-reference-empty">没有显式引用；Receiver Reach 仍可作为背景范围。</span>}
+        {!references.length && <span className="lcos-reference-empty">没有额外参考；{selected.length ? `当前选择的 ${selected.length} 项仍会随这次处理一起使用。` : '这段对话仍会带上它长期知道的材料。'}</span>}
       </div>
       <div className="lcos-reference-actions">
         <button type="button" className={`lcos-reference-pick ${props.referencePickActive ? 'is-active' : ''}`} disabled={props.referencePickAvailable === false} title={props.referencePickAvailable === false ? props.referencePickUnavailableReason : undefined} onClick={props.referencePickActive ? props.onFinishReferencePick : props.onStartReferencePick}><Crosshair size={11}/>{props.referencePickActive ? '完成画布选择' : '从画布选择'}</button>
-        <button type="button" className="lcos-reference-add" disabled title="Project Search / Assembly 引用入口将在同一 Reference Tray 接入，不另造第二套选择器"><Plus size={11}/>更多来源</button>
+        <button type="button" className="lcos-reference-add" disabled title="项目搜索和装配区会接到同一组参考内容里，不再让你重复选择"><Plus size={11}/>更多来源</button>
       </div>
     </div>
 
     <div className="lcos-composer-input-row">
-      <textarea data-testid="selection-composer-input" value={props.prompt} onChange={(event) => props.onPromptChange(event.target.value)} placeholder={receiver ? `对「${receiverLabel(receiver)}」说要做什么…` : '先选择 Receiver Glyth…'} onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === 'Enter' && !disabled) { event.preventDefault(); props.onSend() } }}/>
+      <textarea data-testid="selection-composer-input" value={props.prompt} onChange={(event) => props.onPromptChange(event.target.value)} placeholder={receiver ? `对「${receiverLabel(receiver)}」说要做什么…` : '先选择一段对话…'} onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === 'Enter' && !disabled) { event.preventDefault(); props.onSend() } }}/>
       <button type="button" className="lcos-composer-send" disabled={disabled} onClick={props.onSend} title={blockedReason ?? (providerBlocked ? '本地 Agent 暂不可用' : '发送 · Ctrl/Cmd+Enter')}><ArrowUp size={15}/></button>
     </div>
 
     <div className="lcos-composer-controls lcos-composer-controls-quiet">
-      <span className="lcos-command-scope-note">{receiver ? `${receiverLabel(receiver)} · ${references.length} 显式引用${props.resultSlot ? ' · 1 结果位' : ''}` : 'Receiver 未定'}</span>
+      <span className="lcos-command-scope-note">{receiver ? `${receiverLabel(receiver)} · ${selected.length} 项选择 · ${references.length} 项额外参考${props.resultSlot ? ' · 结果已有落点' : ''}` : '还没选择承接对话'}</span>
       <details className="lcos-composer-advanced">
         <summary title="高级设置"><Settings2 size={12}/><span>高级</span></summary>
         <div className="lcos-composer-advanced-popover">
-          <small>Provider 是执行器，不是用户层 Receiver</small>
+          <small>通常不需要设置这些，系统会优先选择可用的执行工具</small>
           <label><span>处理方式</span><select value={inferredIntent} onChange={(event) => changeIntent(event.target.value as ComposerIntent)}><option value="analyze">只回答</option><option value="create">创建新内容</option><option value="revise">修改现有内容</option></select></label>
           <label><span>执行器</span><select disabled={automaticProviders.length === 0} value={automaticProviders.length === 0 ? 'unavailable' : automaticProviders.some((item) => item.provider === props.provider) ? props.provider : 'auto'} onChange={(event) => props.onProviderChange(event.target.value)}>{automaticProviders.length === 0 ? <option value="unavailable">暂无可用 Agent</option> : <><option value="auto">自动选择</option>{automaticProviders.map((item) => <option key={item.provider} value={item.provider}>{item.provider === 'workbuddy' ? 'WorkBuddy' : item.provider === 'codex' ? 'Codex' : item.provider}</option>)}</>}</select></label>
           {inferredIntent === 'create' && <label><span>结果</span><select value={inferredResult === 'create_collection' ? 'create_collection' : 'create_artifact'} onChange={(event) => props.onResultPolicyChange?.(event.target.value as ComposerResultPolicy)}><option value="create_artifact">新内容</option><option value="create_collection">Collection</option></select></label>}
-          <small className="lcos-composer-advanced-note">选择一次 Receiver 不会偷偷修改 Project Active Receiver。</small>
+          <small className="lcos-composer-advanced-note">这里只影响这一次处理，不会改变项目默认承接对话。</small>
         </div>
       </details>
       <button type="button" className="lcos-composer-close" aria-label="关闭" onClick={props.onClose}><X size={12}/></button>

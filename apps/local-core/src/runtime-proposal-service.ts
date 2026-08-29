@@ -22,7 +22,7 @@ function defaultResultPolicy(intent: CreateRunProposal['intent']): CreateRunProp
 
 function oneLineSummary(proposal: CreateRunProposal): string {
   const provider = proposal.requestedProvider === 'auto' ? 'Auto' : proposal.requestedProvider
-  const contextCount = proposal.contextItems.length
+  const contextCount = proposal.orderedReferences?.length ?? proposal.contextItems.length
   switch (proposal.intent) {
     case 'analyze':
       return `将参考 ${contextCount} 项，由 ${provider} 分析并${proposal.resultPolicy.type === 'reply_only' ? '直接回复' : '生成分析结果'}。`
@@ -134,6 +134,9 @@ export function validateAgentExecutionPlan(input: AgentExecutionPlanV1): AgentEx
     contextItems: input.contextItems,
     editTargets: input.editTargets,
     resultPolicy: input.resultPolicy,
+    ...(input.receiverRef ? { receiverRef: input.receiverRef } : {}),
+    ...(input.orderedReferences ? { orderedReferences: input.orderedReferences } : {}),
+    ...(input.resultSlotId ? { resultSlotId: input.resultSlotId } : {}),
     decisionSource: 'agent',
   }).proposal
   return {

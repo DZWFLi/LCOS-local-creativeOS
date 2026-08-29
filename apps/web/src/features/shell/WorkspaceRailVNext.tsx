@@ -655,9 +655,9 @@ export function WorkspaceRailVNext({ views, runStatus, onOverview, onActivateVie
           ? <input className="lcos-rail-rename-input" value={renameValue} aria-label="重命名视图" autoFocus onChange={(event) => setRenameValue(event.target.value)} onClick={(event) => event.stopPropagation()} onKeyDown={(event) => { if (event.key === 'Enter') commitRename(preview); else if (event.key === 'Escape') setRenameFor(null) }} onBlur={() => commitRename(preview)}/>
           : <strong data-renameable={canRename(preview) ? '' : undefined} title={canRename(preview) ? '点击重命名' : undefined} onClick={(event) => { if (!canRename(preview)) return; event.stopPropagation(); beginRename(preview) }}>{preview.title}</strong>}
         <span>{memberSummaryLine(preview)}</span></div>
-      {preview.workspaceId && onLocateWorkspace && <button type="button" aria-label={`仅定位 ${preview.title}`} title="定位 Camera" onClick={(event) => { event.stopPropagation(); onLocateWorkspace(preview.workspaceId!); setPreviewId(null) }}><Crosshair size={13}/></button>}
+      {preview.workspaceId && onLocateWorkspace && <button type="button" aria-label={`仅定位 ${preview.title}`} title="定位到这个现场" onClick={(event) => { event.stopPropagation(); onLocateWorkspace(preview.workspaceId!); setPreviewId(null) }}><Crosshair size={13}/></button>}
       {canRename(preview) && <button type="button" aria-label={`重命名 ${preview.title}`} title="重命名" onClick={(event) => { event.stopPropagation(); beginRename(preview) }}><Pencil size={13}/></button>}
-      <span className="lcos-project-view-preview-footer"><GitBranch size={11}/>{preview.kind === 'scene' ? '保存的工作现场 · 激活后成为 Current Scene' : preview.kind === 'context' ? '进入理解现场 · 可切换结构 / 演进' : preview.kind === 'workflow' ? '进入自由工作流画布' : '同一 Project Truth 的空间投影'}</span>
+      <span className="lcos-project-view-preview-footer"><GitBranch size={11}/>{preview.kind === 'scene' ? '保存的工作现场 · 激活后回到这里' : preview.kind === 'context' ? '进入理解现场 · 可切换结构 / 演进' : preview.kind === 'workflow' ? '进入自由工作流画布' : '同一项目的另一个空间视图'}</span>
     </div>}
   </aside>
 }

@@ -12,7 +12,8 @@ check('Relation search seeds real entities then expands one-hop canonical neighb
 check('Relation View derives islands from canonical Relation truth, not a graph explorer store', warehouse.includes('client.relations(') && warehouse.includes('relationIslands(') && !warehouse.includes('cytoscape') && !warehouse.includes('forceSimulation'))
 check('Relation island coordinates are not persisted', !warehouse.includes('save') && !warehouse.includes('localStorage'))
 check('Skills are explicitly read-only and never draggable', skills.includes('data-skill-assembly="read-only"') && !skills.includes('draggable') && !skills.includes('applyAssembly'))
-check('Sources does not fake provider-native data with Project resources', shell.includes('还没有连接 Source Provider') && shell.includes('不会拿 Project Resources 假装'))
+// R1-B 人话化后文案：语义不变（Sources 空态诚实 + 不拿项目材料冒充 provider 数据）
+check('Sources does not fake provider-native data with Project resources', shell.includes('还没有连接外部来源') && shell.includes('不会拿项目里的已有材料冒充'))
 check('Capture remains the only currently supported Project-target mutation in this shell', shell.includes("sourceTab === 'capture'") && shell.includes('materializeCaptureToProject('))
 check('Assembly web writes have a canonical assembly/apply seam ready for supported targets', client.includes('applyAssembly(projectId') && client.includes('/assembly/apply'))
 let failed=0;for(const c of checks){console.log(`${c.ok?'PASS':'FAIL'}  ${c.name}`);if(!c.ok)failed++}

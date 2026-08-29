@@ -87,7 +87,7 @@ export function ProjectVisualProfileControl({ client, projectId, projectLabel, p
 
     setBusy(false)
     if (!call || !call.result.ok) {
-      setMessage(call && !call.result.ok ? `没有保存：${call.result.error.message}` : '没有保存：Core 暂时不可用')
+      setMessage(call && !call.result.ok ? `没有保存：${call.result.error.message}` : '没有保存：本地项目服务暂时不可用')
       return
     }
     onProfileChange(call.result.value)
@@ -111,7 +111,7 @@ export function ProjectVisualProfileControl({ client, projectId, projectLabel, p
     trigger={<><Palette size={13}/><span className="sr-only">调整 {projectLabel} 项目标记</span></>}
   >
     <div className="project-profile-popover" data-testid={`project-profile-${projectId}`}>
-      <header><span>PROJECT IDENTITY</span><strong>{projectLabel}</strong><small>只改变项目入口的视觉身份，不改变任何 Project Truth。</small></header>
+      <header><span>PROJECT IDENTITY</span><strong>{projectLabel}</strong><small>只改变项目入口的视觉身份，不会修改项目内容。</small></header>
 
       <div className="project-profile-preview" aria-hidden="true">
         <ProjectGlyphMark label="项目标记预览" variantSeed={projectId} shapeId={draft.glythMarkId} scale={draft.scale} orientation={draft.orientation} size={62}/>

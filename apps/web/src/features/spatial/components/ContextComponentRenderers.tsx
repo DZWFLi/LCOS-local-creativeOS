@@ -367,11 +367,11 @@ export function ContextPackComponent(props: SurfaceComponentRenderProps) {
     </div> : <Empty>{viewIds.length ? '绑定的引用未出现在当前画布，无法打包阅读范围' : UNBOUND_HINT}</Empty>
   }
   return <div className={`lcos-context-component lcos-context-pack ${selected ? 'is-selected' : ''}`} data-context-component="context-pack">
-    <Header icon={<Sparkles size={15}/>} title="Context Pack" hint="交给 Agent 的当前阅读范围" selected={selected} onMaximize={() => setMaximized(true)}/>
+    <Header icon={<Sparkles size={15}/>} title="阅读范围" hint="交给 Agent 的当前材料" selected={selected} onMaximize={() => setMaximized(true)}/>
     {renderBody(false)}
-    <footer><span>{viewIds.length ? `${sourceNote(viewIds, otherIds)} · 不复制 Project Truth` : '未绑定——拖入对象后再打包'}</span></footer>
+    <footer><span>{viewIds.length ? `${sourceNote(viewIds, otherIds)} · 保留原始项目内容` : '未绑定——拖入对象后再打包'}</span></footer>
     {/* G-1 最大化：沉浸版全量 Pack 列表（无条数截断），关闭回原位 */}
-    <SurfaceComponentImmersive open={maximized} title="Context Pack" hint="交给 Agent 的当前阅读范围" onClose={() => setMaximized(false)}>
+    <SurfaceComponentImmersive open={maximized} title="阅读范围" hint="交给 Agent 的当前材料" onClose={() => setMaximized(false)}>
       {renderBody(true)}
     </SurfaceComponentImmersive>
   </div>

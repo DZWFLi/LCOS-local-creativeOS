@@ -347,13 +347,19 @@ export async function handleProjectsRoute(ctx: ProjectsRouteContext): Promise<bo
     }
     const input = await readJsonBody(request, controller.signal)
     if (!isRecord(input)
+      || !['main', 'context', 'workflow', 'conversation'].includes(String(input.surfaceKind))
+      || (input.surfaceId !== null && typeof input.surfaceId !== 'string')
       || typeof input.prompt !== 'string' || input.prompt.length > 200_000
       || !isStringArray(input.contextViewIds)
+      || !isStringArray(input.selectionViewIds)
+      || (input.receiverId !== null && typeof input.receiverId !== 'string')
       || typeof input.provider !== 'string'
       || typeof input.createAsNewNode !== 'boolean'
+      || !['analyze', 'create', 'revise'].includes(String(input.intent))
+      || !['reply_only', 'create_artifact', 'create_collection', 'draft_revision_per_target'].includes(String(input.resultPolicy))
       || (input.workspaceId !== undefined && input.workspaceId !== null && typeof input.workspaceId !== 'string')
-      || Object.keys(input).some((key) => !['workspaceId', 'prompt', 'contextViewIds', 'provider', 'createAsNewNode'].includes(key))) {
-      sendJson(response, 400, failure('INVALID_ARGUMENT', 'Command Draft requires prompt, contextViewIds, provider and createAsNewNode.'))
+      || Object.keys(input).some((key) => !['workspaceId', 'surfaceKind', 'surfaceId', 'prompt', 'contextViewIds', 'selectionViewIds', 'receiverId', 'provider', 'createAsNewNode', 'intent', 'resultPolicy'].includes(key))) {
+      sendJson(response, 400, failure('INVALID_ARGUMENT', 'Command Draft requires one shared Surface / Selection / Receiver / Reference / Prompt state.'))
       return true
     }
     const value: CommandDraftV1 = {
@@ -361,10 +367,16 @@ export async function handleProjectsRoute(ctx: ProjectsRouteContext): Promise<bo
       projectId,
       workspaceId: input.workspaceId === undefined ? workspaceId : input.workspaceId as string | null,
       composerAnchor,
+      surfaceKind: input.surfaceKind as CommandDraftV1['surfaceKind'],
+      surfaceId: input.surfaceId as string | null,
       prompt: input.prompt,
       contextViewIds: input.contextViewIds,
+      selectionViewIds: input.selectionViewIds,
+      receiverId: input.receiverId as string | null,
       provider: input.provider,
       createAsNewNode: input.createAsNewNode,
+      intent: input.intent as CommandDraftV1['intent'],
+      resultPolicy: input.resultPolicy as CommandDraftV1['resultPolicy'],
       updatedAt: new Date().toISOString(),
     }
     metadata.saveCommandDraft(value)

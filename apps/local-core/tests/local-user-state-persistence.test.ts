@@ -69,10 +69,16 @@ describe('Gate F local user state persistence', () => {
       projectId,
       workspaceId,
       composerAnchor: 'selection',
+      surfaceKind: 'context',
+      surfaceId: 'context:brief',
       prompt: '把开场缩短到三秒',
       contextViewIds: [viewId],
+      selectionViewIds: [viewId],
+      receiverId: 'connected-conversation-one',
       provider: 'codex',
       createAsNewNode: false,
+      intent: 'revise',
+      resultPolicy: 'draft_revision_per_target',
       updatedAt: '2026-08-04T00:01:00.000Z',
     }
     metadata.saveCommandDraft(draft)

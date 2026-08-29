@@ -28,7 +28,7 @@ export function WorkspaceStatesDialog(props: Props) {
   return <div className="workspace-states-backdrop" role="presentation" onPointerDown={(event) => dismissFromBackdrop(event, props.onClose, props.saving || props.restoringId !== null)}>
     <section className="workspace-states-dialog" role="dialog" aria-modal="true" aria-label={`${props.workspace.label} 工作现场`} onPointerDown={(event) => event.stopPropagation()}>
       <header>
-        <div><small>WORKSPACE HISTORY</small><h2>{props.workspace.label}</h2><p>成员、版本组合、视口和关联 Run 的阶段现场。</p></div>
+        <div><small>工作现场历史</small><h2>{props.workspace.label}</h2><p>保存成员、版本组合、视口和相关执行状态的阶段现场。</p></div>
         <button type="button" className="icon-button pressable" aria-label="关闭工作现场" onClick={props.onClose}><X size={15} /></button>
       </header>
       <div className="workspace-states-actions">

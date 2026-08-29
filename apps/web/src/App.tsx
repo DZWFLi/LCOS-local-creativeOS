@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { Command, Play } from 'lucide-react'
-import type { ActiveReceiverIdentityV1, Checkpoint, ConnectedConversationV1, ContextChangeProposalV1, ContextManifestV0, ContinuityResumeSnapshotV1, ConversationSessionV1, ObsidianVaultScanV1, OrderedRunReferenceV2, PresentationEntityRefV0, PresentationSpatialRegionV0, ResultSlotV0, RunEvent, RunProposalResult, RunReceiverRefV1, RunReview, RuntimeProviderStatus, WorkspaceMembership } from '@local-creative-os/contracts'
+import type { ActiveReceiverIdentityV1, Checkpoint, ConnectedConversationV1, ContextChangeProposalV1, ContextManifestV0, ContinuityResumeSnapshotV1, ConversationSessionV1, ObsidianVaultScanV1, OrderedRunReferenceV2, PresentationEntityRefV0, PresentationSpatialRegionV0, ResultSlotV0, RunEvent, RunProposalResult, RunReceiverRefV1, RunReview, RuntimeProviderStatus, WarehouseItemV1, WorkspaceMembership } from '@local-creative-os/contracts'
 import { MAX_STRUCTURAL_CONTAINER_DEPTH, type HandoffRecord } from '@local-creative-os/domain'
 import type { ActiveRun, Camera, CanvasNode, CanvasScope, NodeDisplayMode, NodeLayer, PersistedPrototypeState, ProjectPackage, ScopeKind, TargetContextInference, WorkRailPreferences, Workspace } from './model'
 import { nodeMeta, runStatusLabel } from './model'
 import { ProjectCanvas } from './features/canvas/ProjectCanvas'
 import type { ComposerResultPolicy } from './features/canvas/SelectionComposer'
-import { proposalCompatibilityBlockReason, referenceCandidates, resolveComposerReceiver } from './features/execution/commandDraft'
+import { mergeExecutionReferenceIds, orderedReferenceForNode, proposalCompatibilityBlockReason, referenceCandidates, resolveComposerReceiver } from './features/execution/commandDraft'
 import { reconcileResultSlotProjections } from './features/execution/resultSlotProjection'
 import { CanvasMiniMap } from './features/canvas/CanvasMiniMap'
 import { WorkRail } from './features/workrail/WorkRail'
@@ -69,7 +69,7 @@ import { buildScopePath, createId, decodeTextBuffer, fileNameFromPath, inferFile
 import { AppShellView } from './features/shell/AppShellView'
 import { LocalCoreClientProvider } from './runtime/LocalCoreClientContext'
 import type { SurfaceContextMenuAction, SurfaceContextMenuItem } from './features/shell/SurfaceContextMenu'
-import type { SurfaceExecutionSubmission, SurfaceExecutionSubmissionResult } from './features/execution/surfaceExecution'
+import type { SharedComposerCommandState, SurfaceExecutionSubmission, SurfaceExecutionSubmissionResult } from './features/execution/surfaceExecution'
 import type { DepositHintItem } from './features/shell/BoundaryHints'
 import { parseArtifactRevisions, parseProcessProjection, parseWorkspaceStates, type ArtifactRevisionProvenance, type WorkspaceStateSummary } from './runtime/projectionAdapters'
 import { WorkspaceStatesDialog } from './features/workspace/WorkspaceStatesDialog'
@@ -704,12 +704,27 @@ export function App() {
   const selectionTargetNode = !selectionCreateAsNewNode && selectionResultSlotNode === null && selectionEditableNodes.length === 1 ? selectionEditableNodes[0] ?? null : null
   const defaultSelectionReceiver = useMemo(() => resolveComposerReceiver(selectedNodes, selectionReceiverChoices, activeReceiverIdentity?.activeReceiverId ?? null), [activeReceiverIdentity?.activeReceiverId, selectedNodes, selectionReceiverChoices])
   const effectiveSelectionReceiverId = selectionReceiverId ?? defaultSelectionReceiver.receiver?.connectedConversationId ?? null
-  const effectiveSelectionReferenceIds = selectionComposerOpen ? selectionReferenceIds : selectedIds
-  const selectionReferenceCandidates = useMemo(() => referenceCandidates(effectiveSelectionReferenceIds, nodes, effectiveSelectionReceiverId, selectionReceiverChoices), [effectiveSelectionReceiverId, effectiveSelectionReferenceIds, nodes, selectionReceiverChoices])
+  const sharedCommandSurfaceKind: 'main' | 'context' | 'workflow' | 'conversation' = conversationSpaceId
+    ? 'conversation'
+    : activeSurface === 'context-space' || activeSurface === 'context-flow' || activeSurface === 'context-tree' || activeSurface === 'context-graph'
+      ? 'context'
+      : activeSurface === 'workflow'
+        ? 'workflow'
+        : 'main'
+  const sharedCommandSurfaceId = conversationSpaceId
+    ?? (sharedCommandSurfaceKind === 'context' ? activeContextId : null)
+    ?? (sharedCommandSurfaceKind === 'workflow' ? activeWorkflowId : null)
+    ?? workspaceId
+    ?? scopeId
+  const selectionExecutionReferenceIds = useMemo(
+    () => mergeExecutionReferenceIds(selectedIds, selectionReferenceIds, selectionTargetNode?.id),
+    [selectedIds, selectionReferenceIds, selectionTargetNode?.id],
+  )
+  const selectionReferenceCandidates = useMemo(() => referenceCandidates(selectionExecutionReferenceIds, nodes, effectiveSelectionReceiverId, selectionReceiverChoices), [effectiveSelectionReceiverId, nodes, selectionExecutionReferenceIds, selectionReceiverChoices])
   const selectionOrderedReferences = useMemo(() => selectionReferenceCandidates.flatMap((candidate) => candidate.orderedReference ? [candidate.orderedReference] : []), [selectionReferenceCandidates])
   const selectionExecutionBlockedReason = useMemo(() => {
     if (bootMode !== 'runtime') return undefined
-    if (selectionResultSlotNodes.length > 1) return '一次 Run 只能写入一个 Blank Result，请只保留一个结果位。'
+    if (selectionResultSlotNodes.length > 1) return '一次处理只能写入一个空白结果，请只保留一个结果位。'
     const proposalGap = proposalCompatibilityBlockReason({
       receiverId: effectiveSelectionReceiverId,
       activeReceiverId: activeReceiverIdentity?.activeReceiverId ?? null,
@@ -717,9 +732,8 @@ export function App() {
       references: selectionReferenceCandidates,
     })
     if (proposalGap) return proposalGap
-    if (selectionResultSlotNode?.resultSlotId) return 'Core Proposal 还未携带 ResultSlot；结果位会显示，但后端补洞前不会绕过 Proposal 直接执行。'
     return undefined
-  }, [activeReceiverIdentity?.activeReceiverId, bootMode, effectiveSelectionReceiverId, selectionReceiverChoices, selectionReferenceCandidates, selectionResultSlotNode?.resultSlotId, selectionResultSlotNodes.length])
+  }, [activeReceiverIdentity?.activeReceiverId, bootMode, effectiveSelectionReceiverId, selectionReceiverChoices, selectionReferenceCandidates, selectionResultSlotNodes.length])
   const runBusy = Boolean(activeRun && ['queued', 'running'].includes(activeRun.status))
   useEffect(() => {
     if (!selectionComposerOpen || bootMode !== 'runtime' || !effectiveSelectionReceiverId) { setSelectionReachCount(0); return }
@@ -979,6 +993,9 @@ export function App() {
         setSelectionComposerText(draft.prompt)
         setSelectionProvider(draft.provider)
         setSelectionCreateAsNewNode(draft.createAsNewNode)
+        setSelectionReceiverId(draft.receiverId)
+        setSelectionIntent(draft.intent)
+        setSelectionResultPolicy(draft.resultPolicy)
         restoredDraftContextIdsRef.current = [...draft.contextViewIds]
         setSelectionReferenceIds([...draft.contextViewIds])
       }
@@ -998,19 +1015,26 @@ export function App() {
     if (draftHydratedKeyRef.current !== key) return
     const controller = new AbortController()
     const timer = window.setTimeout(() => {
-      if (!selectionComposerText.trim()) {
+      const hasSharedCommandState = Boolean(selectionComposerText.trim() || selectionReferenceIds.length || selectedIds.length || selectionReceiverId)
+      if (!hasSharedCommandState) {
         void bridgeRef.current.client.deleteCommandDraft(activeProjectId, workspaceId, 'selection', controller.signal)
         return
       }
       void bridgeRef.current.client.saveCommandDraft(activeProjectId, workspaceId, 'selection', {
+        surfaceKind: sharedCommandSurfaceKind,
+        surfaceId: sharedCommandSurfaceId,
         prompt: selectionComposerText,
         contextViewIds: selectionReferenceIds,
+        selectionViewIds: selectedIds,
+        receiverId: effectiveSelectionReceiverId,
         provider: selectionProvider,
         createAsNewNode: selectionCreateAsNewNode,
+        intent: selectionIntent,
+        resultPolicy: selectionResultPolicy,
       }, controller.signal)
     }, 250)
     return () => { window.clearTimeout(timer); controller.abort() }
-  }, [activeProjectId, bootMode, selectionComposerText, selectionCreateAsNewNode, selectionProvider, selectionReferenceIds, workspaceId])
+  }, [activeProjectId, bootMode, effectiveSelectionReceiverId, selectedIds, selectionComposerText, selectionCreateAsNewNode, selectionIntent, selectionProvider, selectionReceiverId, selectionReferenceIds, selectionResultPolicy, sharedCommandSurfaceId, sharedCommandSurfaceKind, workspaceId])
 
   useEffect(() => {
     if (bootMode !== 'runtime') return
@@ -1023,14 +1047,20 @@ export function App() {
         return
       }
       void bridgeRef.current.client.saveCommandDraft(activeProjectId, workspaceId, 'global', {
+        surfaceKind: 'main',
+        surfaceId: workspaceId ?? scopeId,
         prompt: globalComposerText,
         contextViewIds: globalContextIds,
+        selectionViewIds: [],
+        receiverId: null,
         provider: globalProvider,
         createAsNewNode: globalCreateAsNewNode,
+        intent: globalCreateAsNewNode ? 'create' : 'analyze',
+        resultPolicy: globalCreateAsNewNode ? 'create_artifact' : 'reply_only',
       }, controller.signal)
     }, 250)
     return () => { window.clearTimeout(timer); controller.abort() }
-  }, [activeProjectId, bootMode, globalComposerText, globalContextIds, globalCreateAsNewNode, globalProvider, workspaceId])
+  }, [activeProjectId, bootMode, globalComposerText, globalContextIds, globalCreateAsNewNode, globalProvider, scopeId, workspaceId])
 
   useEffect(() => {
     if (bootMode !== 'runtime') return
@@ -1146,7 +1176,7 @@ export function App() {
           setAttentionRuntimeError(attentionCall.result.error.message)
         }
       }).catch((error: unknown) => {
-        if (!controller.signal.aborted) setAttentionRuntimeError(error instanceof Error ? error.message : 'Attention runtime unavailable.')
+        if (!controller.signal.aborted) setAttentionRuntimeError(error instanceof Error ? error.message : '暂时无法读取智能整理状态。')
       })
     }, 180)
     return () => { window.clearTimeout(timer); controller.abort() }
@@ -2612,7 +2642,7 @@ export function App() {
       ...(capability === 'context' && !isContextGraph ? { normalizeMembers: (ids: readonly string[]) => canonicalizeContextMemberIds(ownerId, ids) } : {}),
     }, additions, currentMembers)
     if (!result.ok) {
-      setNotice(`投送失败：${result.message ?? '本地 Core 未确认写入'}`)
+      setNotice(`投送失败：${result.message ? humanizeRuntimeMessage(result.message) : '本地项目服务暂时没有确认这次修改'}`)
       return null
     }
     return result.memberViewIds
@@ -2638,7 +2668,7 @@ export function App() {
       renderer: renderer ?? (capability === 'custom' ? 'collection' : capability),
       ...(persistenceScopeId ? { persistenceScopeId } : {}),
     }, additions)
-    if (!result.ok) { setNotice(`投送失败：${result.message ?? '本地 Core 未确认实体引用'}`); return null }
+    if (!result.ok) { setNotice(`投送失败：${result.message ? humanizeRuntimeMessage(result.message) : '本地项目服务暂时没有确认这次内容引用'}`); return null }
     return result.memberEntityRefs
   }, [activeProjectId, bootMode])
 
@@ -2669,7 +2699,7 @@ export function App() {
       ...(capability === 'context' && !isContextGraph ? { normalizeMembers: (ids: readonly string[]) => canonicalizeContextMemberIds(ownerId, ids) } : {}),
     }, removals)
     if (!result.ok) {
-      setNotice(`移出失败：${result.message ?? '本地 Core 未确认写入'}`)
+      setNotice(`移出失败：${result.message ? humanizeRuntimeMessage(result.message) : '本地项目服务暂时没有确认这次修改'}`)
       return null
     }
     return result.memberViewIds
@@ -2695,7 +2725,7 @@ export function App() {
       renderer,
       ...(persistenceScopeId ? { persistenceScopeId } : {}),
     }, refs)
-    if (!result.ok) { setNotice(`移出失败：${result.message ?? '本地 Core 未确认实体引用'}`); return null }
+    if (!result.ok) { setNotice(`移出失败：${result.message ? humanizeRuntimeMessage(result.message) : '本地项目服务暂时没有确认这次内容引用'}`); return null }
     return result.memberEntityRefs
   }, [activeProjectId, bootMode])
 
@@ -3115,7 +3145,7 @@ export function App() {
   const branchContextHistoryToWorkbench = useCallback((entry: ContextHistoryEntry) => {
     const snapshot = coreContextSnapshots.find((item) => String(item.id) === entry.id)
     if (snapshot === undefined) {
-      setNotice('这条历史没有对应的 Core 快照，无法分支')
+      setNotice('这条历史没有可恢复的保存记录，暂时无法从这里继续')
       return
     }
     if (!isRuntimeProjectMode(bootMode)) {
@@ -3167,7 +3197,7 @@ export function App() {
 
   const openContextHistorySource = useCallback((entry: ContextHistoryEntry) => {
     const node = entry.sourceNodeId ? nodes.find((item) => item.id === entry.sourceNodeId) : undefined
-    if (!node) { setNotice(entry.sourceRunId ? `来源 Run · ${entry.sourceRunId}` : `${entry.label} 暂无可定位来源`); return }
+    if (!node) { setNotice(entry.sourceRunId ? '这条历史来自一次执行，但当前没有可定位的来源对象' : `${entry.label} 暂无可定位来源` ); return }
     if (node.scopeId && node.scopeId !== scopeId) setScopeId(node.scopeId)
     setSelectedIds([node.id])
     setActiveSurface(node.kind === 'process' ? 'workflow' : 'arrange')
@@ -3414,7 +3444,7 @@ export function App() {
     }
     void bridgeRef.current.saveMutations(snapshot).then((saved) => {
       if (saved.status !== 'saved') {
-        setNotice(`Context 创建未完成：${saved.error ?? '本地 Core 未确认 Scope'}`)
+        setNotice(`上下文创建未完成：${saved.error ? humanizeRuntimeMessage(saved.error) : '本地项目服务暂时没有确认这次创建'}`)
         return
       }
       commitMembership()
@@ -3490,7 +3520,7 @@ export function App() {
     }
     void bridgeRef.current.saveMutations(snapshot).then((saved) => {
       if (saved.status !== 'saved') {
-        setNotice(`Workflow 创建未完成：${saved.error ?? '本地 Core 未确认实体'}`)
+        setNotice(`工作流创建未完成：${saved.error ? humanizeRuntimeMessage(saved.error) : '本地项目服务暂时没有确认这次创建'}`)
         return
       }
       commitMembership()
@@ -3685,7 +3715,7 @@ export function App() {
         }, viewIds, currentViews),
         appendExactPresentationEntityRefs('custom', ownerId, entityRefs, 'collection', currentRefs),
       ]).then(([memberResult, refs]) => {
-        if (!memberResult.ok || refs === null) { setNotice(`加入集合失败：${memberResult.ok ? 'Core 未确认实体引用' : memberResult.message ?? 'Core 未确认'}`); return }
+        if (!memberResult.ok || refs === null) { setNotice(`加入集合失败：${memberResult.ok ? '本地项目服务暂时没有确认这次加入' : humanizeRuntimeMessage(memberResult.message ?? '本地项目服务暂时不可用')}`); return }
         setCollectionMembersById((current) => ({ ...current, [ownerId]: memberResult.memberViewIds }))
         setCollectionEntityRefsById((current) => ({ ...current, [ownerId]: refs }))
         setNotice(`已加入「${target.title}」 · ${viewIds.length + entityRefs.length} 项`)
@@ -3866,7 +3896,7 @@ export function App() {
       if (memberships.result.ok) applyMembershipProjection(memberships.result.value)
       await syncProcessProjection()
       setWorkspaceStatesOpen(false)
-      setNotice('已恢复工作现场；后续 Revision 和 Run 记录未被删除')
+      setNotice('已恢复工作现场；后续版本和执行记录未被删除')
     }).finally(() => setWorkspaceStateRestoringId(null))
   }, [activeProjectId, applyMembershipProjection, bootMode, resetGraph, syncProcessProjection, workspaceId, workspaceStatesWorkspaceId])
 
@@ -4621,7 +4651,7 @@ export function App() {
   }, [activeProjectId, bootMode, scopeId, setNodes, workspaceId])
 
   const createBlankResultSlotAt = useCallback(async (x: number, y: number): Promise<string | null> => {
-    if (bootMode !== 'runtime') { setNotice('空白结果需要 Runtime Core 保存；原型模式不会伪造本地结果位'); return null }
+    if (bootMode !== 'runtime') { setNotice('空白结果需要真实项目保存能力；当前预览模式不会伪造一个假的结果位'); return null }
     const call = await bridgeRef.current.client.createResultSlot(activeProjectId, {
       scopeId,
       ...(workspaceId ? { workspaceId } : {}),
@@ -4651,7 +4681,7 @@ export function App() {
       const x = (width / 2 - camera.x) / camera.zoom - slotWidth / 2
       const y = (height / 2 - camera.y) / camera.zoom - slotHeight / 2
       setCreateDialogOpen(false)
-      void createBlankResultSlotAt(x, y).then((slotId) => { if (slotId) setNotice('已留下一个空白结果位；选择它和参考材料后交给 Receiver Glyth') })
+      void createBlankResultSlotAt(x, y).then((slotId) => { if (slotId) setNotice('已留下一个空白结果位；选择它和参考材料后，交给一段已连接的对话即可') })
       return
     }
     const dimensions = nodeDimensions(kind, 'standard')
@@ -4756,7 +4786,7 @@ export function App() {
         setCollectionMembersById((current) => { const next = { ...current }; delete next[created.scope.id]; return next })
         setCollectionEntityRefsById((current) => { const next = { ...current }; delete next[created.scope.id]; return next })
         setSelectedIds(sourceIds)
-        setNotice(`集合创建未完成：${saved.error ?? 'Core 未确认实体'}；未创建无效 Collection`)
+        setNotice(`集合创建未完成：${saved.error ? humanizeRuntimeMessage(saved.error) : '本地项目服务暂时没有确认这次创建'}；没有留下无效集合`)
         return
       }
       commitMembership()
@@ -4892,7 +4922,7 @@ export function App() {
       const position = placements[index] ?? { x, y }
       return { id: createId('file'), artifactId: createId('artifact'), kind: 'source', title: file.name, subtitle: runtimeState === 'importing' ? 'Importing…' : previewUrl ? '本地图片 · 临时预览' : textPreview ? '本地文本 · 临时预览' : '本地文件 · 等待本地核心服务预览', x: position.x, y: position.y, ...defaultSize, displayMode: 'standard', fileType, fileSize: file.size, previewUrl, previewDataUrl: previewUrl, previewMimeType: fileType, scopeId, runtimeState, editable: /\.(pptx?|md|docx?|txt)$/i.test(file.name), managed: false, createdAt: new Date().toISOString(), workspaceIds: workspaceId ? [workspaceId] : [] }
     })
-    setNodes((current) => [...current, ...created]); setSelectedIds(created.map((node) => node.id)); setNotice(bootMode === 'runtime' ? `正在导入 ${created.length} 个文件到 Project imports…` : `已加入 ${created.length} 个本地文件引用，不上传、不移动原文件`)
+    setNodes((current) => [...current, ...created]); setSelectedIds(created.map((node) => node.id)); setNotice(bootMode === 'runtime' ? `正在导入 ${created.length} 个文件到项目…` : `已加入 ${created.length} 个本地文件引用，不上传、不移动原文件`)
     for (const [index, file] of files.entries()) {
       if (!isTextPreviewFile(file)) continue
       const nodeId = created[index]?.id
@@ -5315,10 +5345,10 @@ export function App() {
     const targetRevisionId = targetRevisionIdOverride ?? target?.revisionId
     if (bootMode === 'runtime') {
       if (intent === 'revise' && (target?.artifactId === undefined || targetRevisionId === undefined)) {
-        setNotice('修改 Run 需要已持久化且具有 Current Revision 的目标')
+        setNotice('修改现有内容前，需要先保存目标内容的当前版本')
         return undefined
       }
-      setNotice('正在冻结 ContextManifest 并创建真实 Run…')
+      setNotice('正在准备这次处理…')
       const savedContextIdForRun = activeContextId && ['context-space', 'context-tree', 'context-flow', 'outline'].includes(activeSurface)
         ? activeContextId
         : undefined
@@ -5369,7 +5399,7 @@ export function App() {
         ...(execution?.resultSlotId ? { resultSlotId: execution.resultSlotId } : {}),
       })
       if (!call.result.ok) {
-        setNotice(`Run 创建失败：${call.result.error.message}`)
+        setNotice(`任务创建失败：${humanizeRuntimeMessage(call.result.error.message)}`)
         return undefined
       }
       // Run 创建成功才消费 Handoff 快照（创建失败保持 pending，下次发送重试注入；幂等由后端保证）。
@@ -5438,7 +5468,7 @@ export function App() {
       applyRuntimeReview(review, runtimeRun, providerErrorMessage)
       setNotice(providerError
         ? `Agent 任务已保存，${providerErrorMessage}`
-        : `真实 Run 已派发：${id}`)
+        : '任务已交给 Agent')
       return id
     }
     runCounterRef.current += 1
@@ -5542,7 +5572,7 @@ export function App() {
   const activeRunSkillSteps = useMemo(() => activeRun === null ? [] : deriveSkillRunSteps(activeRun, workflowSkills), [activeRun, workflowSkills])
 
   const handleSaveWorkflowSkill = useCallback(async (input: { readonly name: string; readonly steps: readonly SkillStepInput[] }): Promise<boolean> => {
-    if (bootMode !== 'runtime') { setNotice('原型模式不能保存技能；请连接 Runtime 项目'); return false }
+    if (bootMode !== 'runtime') { setNotice('原型模式不能保存技能；请打开真实项目后再试'); return false }
     const call = await bridgeRef.current.client.createTextArtifact(activeProjectId, {
       title: `SKILL · ${input.name}`,
       body: serializeWorkflowSkill(input),
@@ -5556,7 +5586,7 @@ export function App() {
 
   const handleReplayWorkflowSkill = useCallback((skill: WorkflowSkillSummary) => {
     const node = projectPresentationNodes.find((item) => item.artifactId === skill.artifactId)
-    if (bootMode !== 'runtime' || node?.fileRecordId === undefined) { setNotice('原型模式不能重放技能；请连接 Runtime 项目'); return }
+    if (bootMode !== 'runtime' || node?.fileRecordId === undefined) { setNotice('原型模式不能重放技能；请打开真实项目后再试'); return }
     void bridgeRef.current.client.readFileRecordText(activeProjectId, node.fileRecordId).then((call) => {
       if (!call.result.ok) { setNotice(`技能读取失败：${call.result.error.message}`); return }
       const parsed = parseWorkflowSkillSteps(call.result.value)
@@ -5627,10 +5657,10 @@ export function App() {
   const requestSetActiveConversation = useCallback(async (conversationSessionId: string): Promise<void> => {
     if (bootMode !== 'runtime') { setNotice('原型模式不能设置承接对话'); return }
     const session = conversationSessions.find((item) => item.id === conversationSessionId)
-    if (!session) { setNotice('ConversationSession 不存在'); return }
+    if (!session) { setNotice('这段对话不存在'); return }
     setControllerError(null)
     const listCall = await bridgeRef.current.client.listConnectedConversations(activeProjectId).catch(() => null)
-    if (!listCall?.result.ok) { setNotice('无法读取 ConnectedConversation'); return }
+    if (!listCall?.result.ok) { setNotice('暂时无法读取可承接的对话'); return }
     const linked = listCall.result.value.find((item) => item.conversationSessionId === conversationSessionId)
     if (linked) {
       const activeCall = await bridgeRef.current.client.setActiveReceiver(activeProjectId, linked.id).catch(() => null)
@@ -5663,9 +5693,9 @@ export function App() {
 
   const enterConversationSurface = useCallback((conversationId: string) => {
     const session = conversationSessions.find((item) => item.id === conversationId)
-    if (!session?.conversationViewId) { setNotice('这份对话还没有 canonical 画布入口'); return }
+    if (!session?.conversationViewId) { setNotice('这份对话还没有可进入的画布'); return }
     const node = nodes.find((item) => item.id === String(session.conversationViewId) && item.entityKind === 'conversation')
-    if (!node) { setNotice('对话入口尚未投影到当前 Project Truth'); return }
+    if (!node) { setNotice('这份对话还没有出现在当前项目画布里'); return }
     setNodeInfoId(null)
     setWorkbench(null)
     setImmersiveNodeId(null)
@@ -5767,9 +5797,7 @@ export function App() {
       return document.activeElement === composer
     }
     if (selectedIds.length) {
-      setSelectionReferenceIds([...selectedIds])
       setReferencePickActive(false)
-      setSelectionReceiverId(null)
       setSelectionComposerOpen(true)
       if (bootMode === 'runtime') {
         void bridgeRef.current.client.listConnectedConversations(activeProjectId).then((call) => {
@@ -5778,7 +5806,7 @@ export function App() {
           setSelectionReceiverChoices(conversations)
           const resolved = resolveComposerReceiver(selectedNodes, conversations, activeReceiverIdentity?.activeReceiverId ?? null)
           const receiverId = resolved.receiver?.connectedConversationId ?? null
-          setSelectionReceiverId(receiverId)
+          setSelectionReceiverId((current) => current && conversations.some((item) => item.id === current) ? current : receiverId)
           if (receiverId) {
             const receiverSessionId = conversations.find((item) => item.id === receiverId)?.conversationSessionId ?? null
             if (receiverSessionId) setSelectionReferenceIds((current) => current.filter((id) => nodes.find((node) => node.id === id)?.conversation?.id !== receiverSessionId))
@@ -5801,7 +5829,7 @@ export function App() {
     if (!prompt) { setNotice('先写一句你希望本地 Agent 完成的工作'); return }
     if (!selectedIds.length) { setNotice('先选择要给 Agent 参考的内容'); return }
     const selectedProviderStatus = selectionProvider === 'auto' ? null : runtimeProviders.find((provider) => provider.provider === selectionProvider)
-    if (selectedProviderStatus && !['ready', 'busy'].includes(selectedProviderStatus.availability)) { setNotice(`Agent ${selectionProvider} 当前不能自动执行，换一个再发送`); return }
+    if (selectedProviderStatus && !['ready', 'busy'].includes(selectedProviderStatus.availability)) { setNotice('当前执行工具暂时不可用，换一个再发送'); return }
     // Runtime mode lets the proposal layer resolve ambiguity from the user's
     // natural-language instruction. Do not force a visible Analyze/Create/Revise
     // mode choice merely because multiple editable objects are selected.
@@ -5826,7 +5854,7 @@ export function App() {
       return
     }
     if (selectionExecutionBlockedReason || !effectiveSelectionReceiverId) {
-      setNotice(selectionExecutionBlockedReason ?? 'Receiver Glyth 尚未确定')
+      setNotice(selectionExecutionBlockedReason ?? '还没有选择承接这次工作的对话')
       return
     }
     const execution: RunExecutionEnvelope = {
@@ -5842,9 +5870,12 @@ export function App() {
       createAsNewNode: selectionCreateAsNewNode,
       contextItems: contextNodes.map((node, order) => ({ artifactId: node.artifactId!, revisionId: node.revisionId!, order })),
       editTargets: target && baseRevisionId ? [{ artifactId: target.artifactId!, baseRevisionId }] : [],
+      receiverRef: execution.receiverRef,
+      orderedReferences: execution.orderedReferences,
+      ...(execution.resultSlotId ? { resultSlotId: execution.resultSlotId } : {}),
     }).then((call) => {
       if (!call.result.ok) {
-        setNotice(`Agent 计划未通过安全校验：${call.result.error.message}`)
+        setNotice(`Agent 计划未通过安全校验：${humanizeRuntimeMessage(call.result.error.message)}`)
         return
       }
       const proposal = call.result.value
@@ -5864,7 +5895,11 @@ export function App() {
         baseRevisionId,
         undefined,
         undefined,
-        execution,
+        {
+          receiverRef: proposal.proposal.receiverRef ?? execution.receiverRef,
+          orderedReferences: proposal.proposal.orderedReferences ?? execution.orderedReferences,
+          ...(proposal.proposal.resultSlotId ?? execution.resultSlotId ? { resultSlotId: proposal.proposal.resultSlotId ?? execution.resultSlotId } : {}),
+        },
       )
     })
   }, [activeProjectId, bootMode, selectionBaseRevision?.id, selectionComposerText, selectionCreateAsNewNode, selectionEditableNodes.length, selectionExecutionBlockedReason, selectionOrderedReferences, selectionProvider, effectiveSelectionReceiverId, selectionReferenceCandidates, selectionResultPolicy, selectionResultSlotNode, selectionTargetNode, selectedIds.length, startRunFrom, runtimeProviders, workspaceId])
@@ -5873,7 +5908,7 @@ export function App() {
     const prompt = globalComposerText.trim()
     if (!prompt) { setNotice('先写一句要对当前工作空间做什么'); return }
     const selectedProviderStatus = globalProvider === 'auto' ? null : runtimeProviders.find((provider) => provider.provider === globalProvider)
-    if (selectedProviderStatus && !['ready', 'busy'].includes(selectedProviderStatus.availability)) { setNotice(`Agent ${globalProvider} 当前不能自动执行，换一个再发送`); return }
+    if (selectedProviderStatus && !['ready', 'busy'].includes(selectedProviderStatus.availability)) { setNotice('当前执行工具暂时不可用，换一个再发送'); return }
     const contextNodes = globalContextIds
       .map((id) => nodes.find((node) => node.id === id))
       .filter((node): node is CanvasNode => Boolean(node?.artifactId && node.revisionId))
@@ -5895,7 +5930,7 @@ export function App() {
       contextItems: contextNodes.map((node, order) => ({ artifactId: node.artifactId!, revisionId: node.revisionId!, order })),
       editTargets: [],
     }).then((call) => {
-      if (!call.result.ok) { setNotice(`Agent 计划未通过安全校验：${call.result.error.message}`); return }
+      if (!call.result.ok) { setNotice(`Agent 计划未通过安全校验：${humanizeRuntimeMessage(call.result.error.message)}`); return }
       const proposal = call.result.value
       if (proposal.ambiguity) { setNotice(proposal.ambiguity.question); return }
       setGlobalComposerVisible(false)
@@ -5907,7 +5942,15 @@ export function App() {
     const promptInput = input.prompt.trim()
     if (!promptInput) return undefined
     const receiver = selectionReceiverChoices.find((item) => item.id === input.receiverId)
-    const candidates = referenceCandidates(input.referenceIds, nodes, input.receiverId, selectionReceiverChoices)
+    const selectedExecutionNodes = input.selectionIds.map((id) => nodes.find((node) => node.id === id)).filter((node): node is CanvasNode => Boolean(node))
+    const selectedEditable = selectedExecutionNodes.filter((node) => node.managed && node.artifactId && node.revisionId)
+    const target = input.intent === 'revise' && selectedEditable.length === 1 ? selectedEditable[0] ?? null : null
+    if (input.intent === 'revise' && target === null) {
+      setNotice('修改现有内容需要恰好选择一个可编辑内容；额外参考不会自动变成修改目标。')
+      return undefined
+    }
+    const executionReferenceIds = mergeExecutionReferenceIds(input.selectionIds, input.referenceIds, target?.id)
+    const candidates = referenceCandidates(executionReferenceIds, nodes, input.receiverId, selectionReceiverChoices)
     const proposalGap = proposalCompatibilityBlockReason({
       receiverId: input.receiverId,
       activeReceiverId: activeReceiverIdentity?.activeReceiverId ?? null,
@@ -5915,22 +5958,15 @@ export function App() {
       references: candidates,
     })
     if (proposalGap) { setNotice(proposalGap); return undefined }
-    if (!receiver?.conversationSessionId) { setNotice('Receiver Glyth 尚未 link-session；局部 Surface 不会伪造 Session。'); return undefined }
-    if (input.resultSlotId) { setNotice('Core Proposal 还未携带 ResultSlot；后端补洞前不会绕过 Proposal 直接执行。'); return undefined }
+    if (!receiver?.conversationSessionId) { setNotice('这段对话还没有完成连接，请先选择一段已连接的对话。'); return undefined }
 
     const orderedReferences = candidates.flatMap((candidate) => candidate.orderedReference ? [candidate.orderedReference] : [])
     const referenceNodes = candidates.map((candidate) => candidate.node)
-    const editable = referenceNodes.filter((node) => node.managed && node.artifactId && node.revisionId)
-    const target = input.intent === 'revise' && editable.length === 1 ? editable[0] ?? null : null
-    if (input.intent === 'revise' && target === null) {
-      setNotice('修改现有内容需要恰好一个可编辑 Artifact；请调整 References 或改成“只回答 / 创建新内容”。')
-      return undefined
-    }
     const contextNodes = referenceNodes.filter((node) => node.id !== target?.id && node.artifactId && node.revisionId)
     const contextIds = contextNodes.map((node) => node.id)
     const targetIds = target ? [target.id] : []
     const surfaceLabel = input.surface === 'workflow' ? '工作流' : input.surface === 'conversation' ? '对话现场' : '上下文'
-    const summary = `${surfaceLabel} · ${receiver.label?.trim() || receiver.conversationRef} · ${orderedReferences.length} 项显式引用`
+    const summary = `${surfaceLabel} · ${receiver.label?.trim() || receiver.conversationRef} · ${orderedReferences.length} 项参考`
     const guardedPrompt = input.surface === 'context'
       ? [
           '你正在 LCOS 当前 Context 工作现场内执行这次 Command。当前 Selection/References 是前景材料，Conversation Reach 是背景可达范围。',
@@ -5977,7 +6013,7 @@ export function App() {
       ...(input.resultSlotId ? { resultSlotId: input.resultSlotId } : {}),
     }
 
-    setNotice('Agent 正在理解当前 Surface 的要求并确认操作…')
+    setNotice('Agent 正在理解当前现场的要求并确认操作…')
     try {
       const call = await bridgeRef.current.client.proposeRun(activeProjectId, {
         ...(workspaceId ? { workspaceId } : {}),
@@ -5986,8 +6022,11 @@ export function App() {
         createAsNewNode: input.intent === 'create',
         contextItems: contextNodes.map((node, order) => ({ artifactId: node.artifactId!, revisionId: node.revisionId!, order })),
         editTargets: target && baseRevisionId ? [{ artifactId: target.artifactId!, baseRevisionId }] : [],
+        receiverRef: execution.receiverRef,
+        orderedReferences: execution.orderedReferences,
+        ...(execution.resultSlotId ? { resultSlotId: execution.resultSlotId } : {}),
       })
-      if (!call.result.ok) { setNotice(`Agent 计划未通过安全校验：${call.result.error.message}`); return undefined }
+      if (!call.result.ok) { setNotice(`Agent 计划未通过安全校验：${humanizeRuntimeMessage(call.result.error.message)}`); return undefined }
       const proposal = call.result.value
       if (proposal.ambiguity) { setNotice(proposal.ambiguity.question); return undefined }
       const runId = await startRunFrom(
@@ -6001,11 +6040,15 @@ export function App() {
         baseRevisionId,
         undefined,
         undefined,
-        execution,
+        {
+          receiverRef: proposal.proposal.receiverRef ?? execution.receiverRef,
+          orderedReferences: proposal.proposal.orderedReferences ?? execution.orderedReferences,
+          ...(proposal.proposal.resultSlotId ?? execution.resultSlotId ? { resultSlotId: proposal.proposal.resultSlotId ?? execution.resultSlotId } : {}),
+        },
       )
       return { ...(runId ? { runId } : {}) }
     } catch {
-      setNotice('当前 Surface 的 Agent 执行暂时不可用；Project Truth 未被修改')
+      setNotice('当前工作现场暂时无法交给 Agent；项目内容没有被修改')
       return undefined
     }
   }, [activeProjectId, activeReceiverIdentity?.activeReceiverId, nodes, selectionReceiverChoices, startRunFrom, workspaceId])
@@ -6025,11 +6068,12 @@ export function App() {
       '请重新读取当前 ActiveContext。不要直接应用旧 Proposal，也不要修改旧 Proposal；请用 propose_lcos_context_change 生成一条新的待审查 Proposal。旧 Proposal 继续保持 pending，由用户自行保留或撤掉。',
     ].join('\n')
     const receiverId = activeReceiverIdentity?.activeReceiverId ?? null
-    if (!receiverId) { setNotice('当前没有 Active Receiver Glyth；先选择一只承接对话再修改 Proposal。'); return }
+    if (!receiverId) { setNotice('当前没有承接对话；先选择一段对话，再修改这次提案。'); return }
     void requestSurfaceAgentRun({
       surface: 'context',
+      selectionIds: [...selectedIds],
       receiverId,
-      referenceIds: [...selectedIds],
+      referenceIds: [],
       provider: 'auto',
       intent: 'analyze',
       resultPolicy: 'reply_only',
@@ -6169,15 +6213,15 @@ export function App() {
     if (!activeRun?.pendingArtifactId || !pendingNode) return
     if (activeRun.runtime) {
       if (activeRun.runtimeReturnId === undefined || activeRun.baseRevisionId === undefined) {
-        setNotice('Runtime Return 身份不完整，不能 Accept')
+        setNotice('这份返回结果信息不完整，暂时不能接受')
         return
       }
-      setNotice('正在以 CAS 接受 Draft Revision…')
+      setNotice('正在确认这份草稿版本…')
       void bridgeRef.current.client.acceptArtifactReturn(activeRun.runtimeReturnId, {
         expectedBaseRevisionId: activeRun.baseRevisionId as never,
       }).then(async (call) => {
         if (!call.result.ok) {
-          setNotice(`Accept 失败：${call.result.error.message}`)
+          setNotice(`接受失败：${humanizeRuntimeMessage(call.result.error.message)}`)
           return
         }
         const finalized = await bridgeRef.current.client.finalizeRuntimeRun(
@@ -6238,13 +6282,13 @@ export function App() {
 
   const rejectRun = useCallback(() => {
     if (!activeRun?.runtime || activeRun.runtimeReturnId === undefined) {
-      setNotice('当前没有可拒绝的 Runtime Return')
+      setNotice('当前没有可放弃的返回结果')
       return
     }
-    setNotice('正在拒绝此 Draft…')
+    setNotice('正在放弃这份草稿…')
     void bridgeRef.current.client.rejectArtifactReturn(activeRun.runtimeReturnId).then(async (call) => {
       if (!call.result.ok) {
-        setNotice(`Reject 失败：${call.result.error.message}`)
+        setNotice(`放弃失败：${humanizeRuntimeMessage(call.result.error.message)}`)
         return
       }
       setGraph((graph) => ({
@@ -6292,7 +6336,7 @@ export function App() {
         '',
         input.feedback,
         '',
-        `> 来源 Agent Run: ${activeRun.id}`,
+        `> 来源执行记录: ${activeRun.id}`,
         `> 反馈目标 Revision: ${revisionUpgradeTargetNode.revisionId}`,
       ].join('\n')
       const feedbackCall = await bridgeRef.current.client.createTextArtifact(activeProjectId, {
@@ -6320,7 +6364,7 @@ export function App() {
         requestedProvider: activeRun.provider ?? 'auto',
       })
       if (!preparedCall.result.ok) {
-        setNotice(`反馈升级准备失败：${preparedCall.result.error.message}`)
+        setNotice(`反馈升级准备失败：${humanizeRuntimeMessage(preparedCall.result.error.message)}`)
         return
       }
       const prepared = preparedCall.result.value
@@ -6342,7 +6386,7 @@ export function App() {
         [feedback.artifactId, prepared.decisionArtifactId, prepared.changeRequestArtifactId],
       )
       setRevisionUpgradeOpen(false)
-      setNotice('反馈已收成 Decision + Change Request，并创建了新的待审查 Revision Run')
+      setNotice('反馈已整理为决定和修改要求，并创建了新的待确认版本')
       void openProject(activeProjectId)
     } finally {
       setRevisionUpgradeBusy(false)
@@ -6379,13 +6423,13 @@ export function App() {
         })
         return
       }
-      setNotice('正在创建 Retry Run…')
+      setNotice('正在创建一次重试…')
       void bridgeRef.current.client.retryArtifactReturn(activeRun.runtimeReturnId, {
         // 重新执行 = 用原指令重跑；输入框里的新文本属于“补充修改要求”。
         instruction: activeRun.command,
       }).then(async (retryCall) => {
         if (!retryCall.result.ok) {
-          setNotice(`Retry 失败：${retryCall.result.error.message}`)
+          setNotice(`重试失败：${humanizeRuntimeMessage(retryCall.result.error.message)}`)
           return
         }
         const newRun = retryCall.result.value.run
@@ -6396,7 +6440,7 @@ export function App() {
         )
         const dispatchCall = await bridgeRef.current.client.dispatchRuntimeRun(String(newRun.id))
         if (!dispatchCall.result.ok) {
-          setNotice(`Retry 已保存，但派发失败：${dispatchCall.result.error.message}`)
+          setNotice(`重试已保存，但暂时无法交给 Agent：${humanizeRuntimeMessage(dispatchCall.result.error.message)}`)
           return
         }
         setGraph((graph) => ({
@@ -6421,8 +6465,8 @@ export function App() {
         setGlobalComposerText('')
         setNotice(dispatchCall.result.value.providerError?.message
           ?? (finalized.result.ok && finalized.result.value.providerError === undefined
-            ? `Retry Run 已派发：${String(newRun.id)}`
-            : `Retry Run 已派发；旧 Bridge Review 待恢复：${String(newRun.id)}`))
+            ? '重试任务已交给 Agent'
+            : '重试任务已交给 Agent；上一条待确认状态仍需恢复'))
       })
       return
     }
@@ -6447,10 +6491,59 @@ export function App() {
     })
   }, [])
 
-  const chooseSelectionReceiver = useCallback((connectedConversationId: string) => {
+  const chooseSelectionReceiver = useCallback((connectedConversationId: string | null) => {
     setSelectionReceiverId(connectedConversationId)
+    if (!connectedConversationId) return
     const sessionId = selectionReceiverChoices.find((item) => item.id === connectedConversationId)?.conversationSessionId ?? null
     if (sessionId) setSelectionReferenceIds((current) => current.filter((id) => nodes.find((node) => node.id === id)?.conversation?.id !== sessionId))
+  }, [nodes, selectionReceiverChoices])
+
+  const changeSharedComposerIntent = useCallback((intent: RunOutputIntent) => {
+    setSelectionIntent(intent)
+    setSelectionCreateAsNewNode(intent === 'create')
+    setSelectionResultPolicy(intent === 'create' ? 'create_artifact' : intent === 'revise' ? 'draft_revision_per_target' : 'reply_only')
+    if (intent !== 'revise') setSelectionBaseRevision(null)
+  }, [])
+
+  const sharedComposerCommand: SharedComposerCommandState = useMemo(() => ({
+    nodes,
+    selectionIds: selectedIds,
+    referenceIds: selectionReferenceIds,
+    receiverId: selectionReceiverId,
+    prompt: selectionComposerText,
+    provider: selectionProvider,
+    intent: selectionIntent,
+    resultPolicy: selectionResultPolicy,
+    referencePickActive,
+    onPromptChange: setSelectionComposerText,
+    onProviderChange: setSelectionProvider,
+    onIntentChange: changeSharedComposerIntent,
+    onResultPolicyChange: setSelectionResultPolicy,
+    onReceiverChange: chooseSelectionReceiver,
+    onToggleReference: toggleSelectionReference,
+    onMoveReference: moveSelectionReference,
+    onStartReferencePick: () => setReferencePickActive(true),
+    onFinishReferencePick: () => setReferencePickActive(false),
+  }), [changeSharedComposerIntent, chooseSelectionReceiver, moveSelectionReference, nodes, referencePickActive, selectedIds, selectionComposerText, selectionIntent, selectionProvider, selectionReceiverId, selectionReferenceIds, selectionResultPolicy, toggleSelectionReference])
+
+  const resolveAssemblyWarehouseReferenceId = useCallback((item: WarehouseItemV1): string | null => {
+    const entity = item.entityRef
+    let node: CanvasNode | undefined
+    if (entity.type === 'artifact') {
+      node = (entity.viewId ? nodes.find((candidate) => candidate.id === entity.viewId) : undefined)
+        ?? nodes.find((candidate) => candidate.artifactId === entity.id)
+    } else if (entity.type === 'conversation') {
+      const sessionId = selectionReceiverChoices.find((candidate) => candidate.id === entity.id)?.conversationSessionId ?? null
+      node = sessionId ? nodes.find((candidate) => candidate.entityKind === 'conversation' && candidate.conversation?.id === sessionId) : undefined
+    } else if (entity.type === 'context' || entity.type === 'workflow' || entity.type === 'collection') {
+      node = nodes.find((candidate) => candidate.opensScopeId === entity.id || candidate.id === `scope:${entity.id}`)
+    } else if (entity.type === 'scene') {
+      node = nodes.find((candidate) => candidate.id === `workspace:${entity.id}`)
+    } else {
+      node = nodes.find((candidate) => candidate.id === entity.id)
+    }
+    if (!node) return null
+    return orderedReferenceForNode(node, 0).supported ? node.id : null
   }, [nodes, selectionReceiverChoices])
 
   const toggleContext = useCallback((id: string) => {
@@ -6540,7 +6633,7 @@ export function App() {
 
   const openHandoff = useCallback(async () => {
     if (dataSource !== 'runtime') {
-      setNotice('Handoff 只从 Runtime Project Truth 构建')
+      setNotice('交接内容只能从当前已加载的真实项目状态生成')
       return
     }
     setHandoffOpen(true)
@@ -6559,7 +6652,7 @@ export function App() {
   const copyHandoff = useCallback(async () => {
     if (!handoffManifest) return
     await navigator.clipboard.writeText(handoffManifest.renderedMarkdown)
-    setNotice('Context Manifest Markdown 已复制')
+    setNotice('本次参考清单已复制为 Markdown')
   }, [handoffManifest])
 
   const downloadHandoff = useCallback(() => {
@@ -6721,7 +6814,7 @@ export function App() {
       if (modifier && key === 'd') { event.preventDefault(); duplicateSelection(); return }
       if (modifier && key === 'z') { event.preventDefault(); event.shiftKey ? redo() : undo(); return }
       if (modifier && key === 'y') { event.preventDefault(); redo(); return }
-      if (modifier && event.shiftKey && key === 'l') { event.preventDefault(); if (bootMode === 'runtime') setReorganizeOpen(true); else setNotice('智能体整理只在 Runtime 项目中可用'); return }
+      if (modifier && event.shiftKey && key === 'l') { event.preventDefault(); if (bootMode === 'runtime') setReorganizeOpen(true); else setNotice('智能体整理只在真实项目中可用'); return }
       if (modifier && key === 'o' && selectedNodes.length === 1) { event.preventDefault(); openNative(selectedNodes[0]); return }
       if (event.code === 'Space') { event.preventDefault(); setSpaceHeld(true); return }
       if (event.key === 'Escape') { if (paletteOpen) { setPaletteOpen(false); return } if (projectFocusOpen) setProjectFocusOpen(false); else if (confirmProjectDelete) setConfirmProjectDelete(null); else if (confirmWorkspaceId) setConfirmWorkspaceId(null); else if (conversationSpaceId) setConversationSpaceId(null); else if (immersiveNodeId) setImmersiveNodeId(null); else if (workbench) setWorkbench(null); else if (capabilityOpen) setCapabilityOpen(false); else if (nodeInfoId) setNodeInfoId(null); else if (layoutPreview) { setLayoutPreview(null); setLayoutPreviewFocusIds(null) } else clearSelection(); return }
@@ -6829,8 +6922,8 @@ export function App() {
   const openCurrentRunReview = useCallback(() => {
     const review = pendingReviews[0]
     if (review) { openRunReview(review); return }
-    if (activeRun) { setSelectedIds([activeRun.processNodeId]); setWorkRail((current) => ({ ...current, collapsed: false })); setNotice(`Run ${activeRun.id} · ${runStatusLabel[activeRun.status]}`); return }
-    setNotice('当前没有待 Review 的 Run')
+    if (activeRun) { setSelectedIds([activeRun.processNodeId]); setWorkRail((current) => ({ ...current, collapsed: false })); setNotice(`当前执行 · ${runStatusLabel[activeRun.status]}`); return }
+    setNotice('当前没有待确认的任务')
   }, [activeRun, openRunReview, pendingReviews])
   const workSurfaceRuntime = useMemo<WorkSurfaceRuntime>(() => ({
     activeRun,
@@ -6888,7 +6981,7 @@ export function App() {
     if (action === 'create-content') { setCreateDialogOpen(true); return }
     if (action === 'import') { setImportPanelOpen(true); return }
     if (action === 'create-scene') { createEmptyWorkspaceScene(); return }
-    if (action === 'reorganize') { setReorganizeOpen(true); setNotice('告诉智能体你希望怎么整理；现有 Core 的逐项审查能力会在面板中如实标注'); return }
+    if (action === 'reorganize') { setReorganizeOpen(true); setNotice('告诉智能体你希望怎么整理；当前能安全确认到什么粒度，面板里会如实显示'); return }
     if (action === 'create-context') {
       if (!selectedIds.length) { setNotice('先选择要沉淀进上下文的对象'); return }
       const semantic = semanticRefsForSourceIds(selectedIds, projectPresentationNodes)
@@ -6945,6 +7038,12 @@ export function App() {
       open: captureSpaceOpen,
       client: bridgeRef.current.client,
       projects,
+      referenceSet: {
+        projectId: activeProjectId,
+        ids: selectionReferenceIds,
+        resolveWarehouseReferenceId: resolveAssemblyWarehouseReferenceId,
+        onToggle: toggleSelectionReference,
+      },
       onClose: () => { setCaptureSpaceOpen(false); setProjectOpen(false) },
       onOpenProject: openProjectInNewTab,
       onNotice: setNotice,
@@ -6984,6 +7083,7 @@ export function App() {
       conversationId: conversationSpaceId,
       onExit: () => setConversationSpaceId(null),
       execution: {
+        command: sharedComposerCommand,
         receivers: selectionReceiverChoices,
         activeReceiverId: activeReceiverIdentity?.activeReceiverId ?? null,
         providers: runtimeProviders,
@@ -7036,6 +7136,7 @@ export function App() {
         onAction: handleSurfaceContextMenuAction,
       },
       surfaceExecution: {
+        command: sharedComposerCommand,
         receivers: selectionReceiverChoices,
         activeReceiverId: activeReceiverIdentity?.activeReceiverId ?? null,
         providers: runtimeProviders,
@@ -7111,8 +7212,8 @@ export function App() {
           ...(runProposal?.ambiguity?.question ? { ambiguityQuestion: runProposal.ambiguity.question } : {}),
           onPromptChange: setSelectionComposerText,
           onProviderChange: setSelectionProvider,
-          onCreateAsNewNodeChange: (value) => { setSelectionCreateAsNewNode(value); if (value) { setSelectionIntent('create'); setSelectionResultPolicy('create_artifact') } setSelectionBaseRevision(null) },
-          onIntentChange: (intent) => { setSelectionIntent(intent); setSelectionCreateAsNewNode(intent === 'create'); setSelectionResultPolicy(intent === 'create' ? 'create_artifact' : intent === 'revise' ? 'draft_revision_per_target' : 'reply_only'); if (intent !== 'revise') setSelectionBaseRevision(null) },
+          onCreateAsNewNodeChange: setSelectionCreateAsNewNode,
+          onIntentChange: changeSharedComposerIntent,
           onResultPolicyChange: setSelectionResultPolicy,
           onToggleContext: toggleContext,
           onReceiverChange: chooseSelectionReceiver,
@@ -7121,7 +7222,7 @@ export function App() {
           onStartReferencePick: () => setReferencePickActive(true),
           onFinishReferencePick: () => setReferencePickActive(false),
           onSend: requestSelectionRun,
-          onClose: () => { setReferencePickActive(false); setSelectionComposerOpen(false); setSelectionReceiverId(null) },
+          onClose: () => { setReferencePickActive(false); setSelectionComposerOpen(false) },
         } : undefined,
         referencePick: layoutMode === 'desktop' && selectionComposerOpen ? { active: referencePickActive, ids: selectionReferenceIds, onToggle: toggleSelectionReference } : undefined,
         onSelect: selectNode,
@@ -7160,7 +7261,7 @@ export function App() {
         onDirectProjectViewDrop: directDropToProjectRailView,
         onReorganize: () => {
           if (bootMode === 'runtime') setReorganizeOpen(true)
-          else setNotice('智能体整理只在 Runtime 项目中可用')
+          else setNotice('智能体整理只在真实项目中可用')
         },
         onPointerWorldChange: rememberCanvasPoint,
         onSpaceCreate: (point) => { lastCanvasPointRef.current = point; setCreateDialogOpen(true) },
@@ -7731,7 +7832,7 @@ export function App() {
           onMore={() => setProjectFocusListMode(true)}
         /> : <ProjectFocusNavigator
           open={projectFocusOpen}
-          sourceLabel={projectFocusSourceLabel || (projectFocusCount ? `${projectFocusCount} 项 Selection` : '')}
+          sourceLabel={projectFocusSourceLabel || (projectFocusCount ? `已选 ${projectFocusCount} 项` : '')}
           sourceCount={projectFocusCount}
           locations={projectFocusLocations}
           onClose={() => { setProjectFocusOpen(false); setProjectFocusAnchor(null); setProjectFocusListMode(false) }}

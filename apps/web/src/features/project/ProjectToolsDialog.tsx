@@ -4,6 +4,7 @@ import type { ContinuityResumeSnapshotV1, MutationChangeSetV1, ProviderSessionBi
 import type { ProjectFocusSearchEntry } from '../../state/projectFocus'
 import type { ProjectPackage } from '../../model'
 import type { LocalCoreClient } from '../../runtime/localCoreClient'
+import { humanizeRuntimeMessage } from '../../runtime/messages'
 import { dismissFromBackdrop } from '../ui/dismissibleLayer'
 import { ProjectSearchLens } from './ProjectSearchLens'
 
@@ -175,25 +176,25 @@ export function ProjectToolsDialog(props: Props) {
             <button className="pressable" disabled={busy !== null} onClick={() => fileInput.current?.click()}><FolderOpen size={15} /><span><b>打开工程文件</b><small>从 .lcosproj 恢复项目</small></span></button>
           </div>
           <input ref={fileInput} hidden type="file" accept=".lcosproj,application/vnd.local-creative-os.project" onChange={(event) => { const file = event.currentTarget.files?.[0]; if (file) void openProjectFile(file); event.currentTarget.value = '' }} />
-          <p className="project-tools-note">默认工程包保存项目结构、版本、决策、章节与钉选消息；完整原始对话和可重建向量不默认打包。</p>
+          <p className="project-tools-note">默认工程包保存项目结构、版本、决策、章节与钉选消息；完整原始对话和可重建搜索索引不默认打包。</p>
         </section>}
 
         {!props.searchOnly && <section>
-          <h3>Codex 项目会话</h3>
-          <div className="project-session-card"><div><b>{sessionLabel}</b><small>{session ? `${session.externalSessionId.slice(0, 12)}… · ${session.origin === 'manual' ? '手动建立' : '自动建立'} · 最近使用 ${formatTime(session.lastSeenAt)}` : '首次执行时自动建立，无需填写 Session ID。'}</small></div>{session && <button className="quiet pressable" disabled={busy === 'session'} onClick={() => { void clearSession() }}><Link2Off size={13} />开启新会话</button>}</div>
+          <h3>Codex 承接对话</h3>
+          <div className="project-session-card"><div><b>{sessionLabel}</b><small>{session ? `${session.origin === 'manual' ? '手动建立' : '自动建立'} · 最近使用 ${formatTime(session.lastSeenAt)}` : '首次需要时会自动建立，不需要填写技术信息。'}</small></div>{session && <button className="quiet pressable" disabled={busy === 'session'} onClick={() => { void clearSession() }}><Link2Off size={13} />开启新会话</button>}</div>
         </section>}
 
         {!props.searchOnly && <section>
           <h3>项目连续性</h3>
-          {continuity ? <div className="project-session-card"><div><b>{continuity.attentionRuntime.intent.goal}</b><small>{continuity.workspaceId ? `当前工作现场 ${continuity.workspaceId.slice(0, 12)}…` : '项目总览'} · 上下文 {continuity.attentionRuntime.contextPack.items.length} 项 / 约 {continuity.attentionRuntime.contextPack.estimatedTokens} tokens · {continuity.attentionRuntime.skillTarget.sideEffect === 'READ_ONLY' ? '只读判断' : continuity.attentionRuntime.skillTarget.sideEffect === 'PREPARE' ? '准备动作' : '涉及修改'}</small></div><button className="quiet pressable" disabled={busy !== null} onClick={() => { void inspectContinuity() }}>刷新</button></div> : <div className="project-session-card"><div><b>按需检查当前连续性状态</b><small>会运行当前意图 / 注意力与上下文组合；如配置了 Utility API，可能产生一次模型调用。</small></div><button className="quiet pressable" disabled={busy !== null} onClick={() => { void inspectContinuity() }}>{busy === 'continuity' ? '检查中…' : '检查'}</button></div>}
+          {continuity ? <div className="project-session-card"><div><b>{continuity.attentionRuntime.intent.goal}</b><small>{continuity.workspaceId ? '当前工作现场' : '项目总览'} · 会参考 {continuity.attentionRuntime.contextPack.items.length} 项内容 · {continuityActionLabel(continuity.attentionRuntime.skillTarget.sideEffect)}</small></div><button className="quiet pressable" disabled={busy !== null} onClick={() => { void inspectContinuity() }}>刷新</button></div> : <div className="project-session-card"><div><b>按需检查当前连续性状态</b><small>会结合当前目标、工作现场和参考内容判断接下来该从哪里继续；必要时可能调用一次 AI。</small></div><button className="quiet pressable" disabled={busy !== null} onClick={() => { void inspectContinuity() }}>{busy === 'continuity' ? '检查中…' : '检查'}</button></div>}
         </section>}
 
         {!props.searchOnly && <section>
           <h3>最近项目修改</h3>
-          {changeSets.length === 0 ? <p className="project-tools-note">还没有可追踪的持久化修改。</p> : <div className="project-tools-results">{changeSets.map((changeSet) => <div key={changeSet.id} className="project-change-record"><span><b>{changeSetLabel(changeSet)}</b><small>{formatTime(changeSet.createdAt)} · {changeSet.status === 'applied' ? '已应用' : '已撤销'} · {changeSet.changes.length} 项</small></span><nav>{changeSet.status === 'applied' ? <button className="quiet pressable" disabled={busy === 'change'} onClick={() => { void mutateChangeSet(changeSet, 'revert') }}><RotateCcw size={12}/>撤销</button> : <button className="quiet pressable" disabled={busy === 'change'} onClick={() => { void mutateChangeSet(changeSet, 'reapply') }}><RotateCw size={12}/>重做</button>}</nav></div>)}</div>}
+          {changeSets.length === 0 ? <p className="project-tools-note">还没有可撤销的项目修改。</p> : <div className="project-tools-results">{changeSets.map((changeSet) => <div key={changeSet.id} className="project-change-record"><span><b>{changeSetLabel(changeSet)}</b><small>{formatTime(changeSet.createdAt)} · {changeSet.status === 'applied' ? '已应用' : '已撤销'} · {changeSet.changes.length} 项</small></span><nav>{changeSet.status === 'applied' ? <button className="quiet pressable" disabled={busy === 'change'} onClick={() => { void mutateChangeSet(changeSet, 'revert') }}><RotateCcw size={12}/>撤销</button> : <button className="quiet pressable" disabled={busy === 'change'} onClick={() => { void mutateChangeSet(changeSet, 'reapply') }}><RotateCw size={12}/>重做</button>}</nav></div>)}</div>}
         </section>}
 
-        {error && <div className="project-tools-error"><p>{humanError(error)}</p><button className="quiet pressable" onClick={() => { void navigator.clipboard?.writeText(error) }}>复制诊断信息</button></div>}
+        {error && <div className="project-tools-error"><p>{humanizeRuntimeMessage(error)}</p><button className="quiet pressable" onClick={() => { void navigator.clipboard?.writeText(error) }}>复制诊断信息</button></div>}
       </div>
     </section>
   </div>
@@ -242,11 +243,10 @@ function changeSetLabel(changeSet: MutationChangeSetV1): string {
 }
 
 
-function humanError(message: string): string {
-  if (/offline|unavailable|ECONNREFUSED|fetch failed/i.test(message)) return '本地项目服务暂时不可用。你的项目内容没有丢失，重新启动 LCOS 后再试。'
-  if (/conflict|stale|version/i.test(message)) return '项目已在其他位置发生变化，请刷新后再试。'
-  if (/lcosproj|project file/i.test(message)) return '这个工程文件无法打开，可能不完整或来自不兼容版本。'
-  return message
+function continuityActionLabel(sideEffect: string): string {
+  if (sideEffect === 'READ_ONLY') return '只会查看，不会改动内容'
+  if (sideEffect === 'PREPARE') return '会先准备下一步，不会直接改动内容'
+  return '下一步可能涉及修改'
 }
 
 function formatTime(value: string): string {

@@ -34,7 +34,7 @@ export function AssemblySkillSource({ client, projectId, onNotice }: {
 
   return <div className="assembly-skill-source" data-skill-assembly="read-only">
     <div className="assembly-source-toolbar"><label><Search size={13}/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索 Skills" aria-label="搜索 Skills"/></label></div>
-    <div className="assembly-skill-readonly-note">Skills 在 v0.15 是能力目录。usage-binding 尚未进入 Core，所以这里<strong>不提供假拖拽</strong>。</div>
+    <div className="assembly-skill-readonly-note">Skills 在 v0.15 先作为能力目录浏览。当前还不能把能力直接装配到对象上，所以这里<strong>不提供假拖拽</strong>。</div>
     <div className="assembly-skill-grid">
       {skills.map((skill) => <button type="button" key={`${skill.source}:${skill.id}`} className="assembly-skill-object" onClick={() => void openSkill(skill)}>
         <span aria-hidden="true"><Sparkles size={15}/></span><strong>{skill.name}</strong><small>{skill.description || skill.source}</small>

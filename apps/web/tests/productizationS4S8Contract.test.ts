@@ -21,7 +21,7 @@ describe('0.1 productization S4-S8 wiring', () => {
     // Proposal 对未支持 contract fail-close（commandDraft 边界诚实）。
     const draft = source('features', 'execution', 'commandDraft.ts')
     expect(draft).toContain('fail-close')
-    expect(draft).toContain('已阻止伪造引用')
+    expect(draft).toContain('这类对象目前还不能安全加入本次参考') // R1-B 人话化后的 fail-close 理由
   })
 
   it('uses the existing Context Proposal chain and exposes keep/modify/remove review actions', () => {
