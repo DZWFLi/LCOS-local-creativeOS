@@ -63,6 +63,20 @@ export type {
 } from './runtime-adapter.js'
 export { guardTrustedFilePath } from './path-guard.js'
 export { RendererRegistry, DEFAULT_RENDERERS } from './renderer-registry.js'
+export {
+  SemanticProviderRegistry,
+  OllamaEmbeddingProvider,
+  RepositoryChunkRetrievalProvider,
+  OLLAMA_EMBEDDING_PROVIDER_ID,
+  LOCAL_CHUNK_RETRIEVAL_PROVIDER_ID,
+} from './semantic-provider-registry.js'
+export type {
+  EmbeddingProvider,
+  RetrievalProvider,
+  ContentExtractor,
+  VisualEmbeddingProvider,
+  SemanticVectorHitV0,
+} from './semantic-provider-registry.js'
 export { PreviewCacheService } from './preview-cache-service.js'
 export { PreviewWorkerService } from './preview-worker-service.js'
 export { ensureMvpSampleProject, createMvpSampleSnapshot, MVP_SAMPLE_PROJECT_ID } from './mvp-sample-project.js'

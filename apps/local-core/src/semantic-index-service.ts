@@ -2,6 +2,17 @@ import { createHash } from 'node:crypto'
 import { join, resolve } from 'node:path'
 
 import type { SqliteMetadataRepository } from './metadata-repository.js'
+import { createDefaultSearchContentExtractors, readArtifactIndexBody } from './search-artifact-body.js'
+import {
+  LOCAL_CHUNK_RETRIEVAL_PROVIDER_ID,
+  OLLAMA_EMBEDDING_PROVIDER_ID,
+  OllamaEmbeddingProvider,
+  RepositoryChunkRetrievalProvider,
+  SemanticProviderRegistry,
+  type SemanticVectorHitV0,
+} from './semantic-provider-registry.js'
+
+export type { SemanticVectorHitV0 } from './semantic-provider-registry.js'
 
 const DEFAULT_EMBEDDING_MODEL = process.env.LCOS_OLLAMA_EMBED_MODEL ?? 'nomic-embed-text'
 const DEFAULT_OLLAMA_URL = process.env.LCOS_OLLAMA_URL ?? 'http://127.0.0.1:11434'
@@ -18,10 +29,14 @@ const HEADING_PATTERN = /^(#{1,6})\s+(.+)$/
 const ANCHOR_TITLE_MAX_CHARS = 60
 
 export interface SemanticIndexHealthV0 {
+  /** Compatibility signal for the built-in Ollama adapter; availability is still probed lazily on embed. */
   readonly ollama: 'available' | 'unavailable'
   readonly vector: 'native' | 'fallback' | 'unavailable'
   readonly backend: 'sqlite-vec' | 'sqlite-blob-fallback' | 'none'
   readonly model: string
+  readonly embeddingProvider: string
+  readonly retrievalProvider: string
+  readonly visualEmbeddingProviders: readonly string[]
 }
 
 export interface SemanticIndexedEntityV0 {
@@ -40,18 +55,6 @@ export interface SemanticChunkPlanV0 {
   readonly contentHash: string
   readonly chunkIndex: number
   readonly chunkCount: number
-}
-
-/** 向量检索命中：标题块命中 = 文档级（无 chunkAnchor），正文块命中 = 块级（带 anchor）。 */
-export interface SemanticVectorHitV0 {
-  readonly entityId: string
-  readonly distance: number
-  readonly documentTitle?: string
-  readonly chunkKind: 'title' | 'body'
-  readonly chunkAnchor?: string
-  readonly chunkIndex?: number
-  readonly chunkCount?: number
-  readonly chunkText?: string
 }
 
 function isCjkCodePoint(code: number): boolean {
@@ -270,51 +273,80 @@ export function chunkEntity(input: { readonly title: string; readonly body: stri
  * 核心能力 B：正文按块（chunk）独立 embed，检索命中带 chunkAnchor（块级锚点），
  * 标题块命中仍保留为文档级命中。
  */
+export interface SemanticIndexServiceOptions {
+  readonly ollamaUrl?: string
+  readonly vectorExtensionPath?: string
+  readonly providers?: SemanticProviderRegistry
+  readonly embeddingProviderId?: string
+  readonly retrievalProviderId?: string
+}
+
 export class SemanticIndexService {
   #vectorLoaded = false
-  readonly #ollamaUrl: string
   readonly #vectorExtensionPath: string | undefined
+  readonly #providers: SemanticProviderRegistry
+  readonly #embeddingProviderId: string
+  readonly #retrievalProviderId: string
 
   constructor(
     private readonly repository: SqliteMetadataRepository,
-    options: { readonly ollamaUrl?: string; readonly vectorExtensionPath?: string } = {},
+    options: SemanticIndexServiceOptions = {},
   ) {
     const repoRoot = resolve(import.meta.dirname, '..', '..', '..')
-    this.#ollamaUrl = options.ollamaUrl ?? DEFAULT_OLLAMA_URL
     this.#vectorExtensionPath = options.vectorExtensionPath
       ?? join(repoRoot, '.runtime', 'sqlite-vec', process.platform === 'win32' ? 'vec0.dll' : process.platform === 'darwin' ? 'vec0.dylib' : 'vec0.so')
     if (this.#vectorExtensionPath !== undefined) {
       this.#vectorLoaded = this.repository.loadVectorExtension(resolve(this.#vectorExtensionPath))
     }
+
+    this.#providers = options.providers ?? new SemanticProviderRegistry()
+    for (const extractor of createDefaultSearchContentExtractors()) {
+      if (this.#providers.contentExtractor(extractor.id) === undefined) this.#providers.registerContentExtractor(extractor)
+    }
+
+    const requestedEmbeddingId = options.embeddingProviderId ?? this.#providers.defaultEmbeddingProviderId()
+    if (requestedEmbeddingId === undefined) {
+      this.#providers.registerEmbedding(new OllamaEmbeddingProvider(options.ollamaUrl ?? DEFAULT_OLLAMA_URL))
+      this.#embeddingProviderId = OLLAMA_EMBEDDING_PROVIDER_ID
+    } else {
+      if (this.#providers.embedding(requestedEmbeddingId) === undefined) {
+        throw new Error(`Embedding provider not found: ${requestedEmbeddingId}`)
+      }
+      this.#embeddingProviderId = requestedEmbeddingId
+    }
+
+    const requestedRetrievalId = options.retrievalProviderId ?? this.#providers.defaultRetrievalProviderId()
+    if (requestedRetrievalId === undefined) {
+      this.#providers.registerRetrieval(new RepositoryChunkRetrievalProvider(this.repository))
+      this.#retrievalProviderId = LOCAL_CHUNK_RETRIEVAL_PROVIDER_ID
+    } else {
+      if (this.#providers.retrieval(requestedRetrievalId) === undefined) {
+        throw new Error(`Retrieval provider not found: ${requestedRetrievalId}`)
+      }
+      this.#retrievalProviderId = requestedRetrievalId
+    }
+  }
+
+  providers(): SemanticProviderRegistry {
+    return this.#providers
   }
 
   health(): SemanticIndexHealthV0 {
     return {
-      ollama: 'available', // real availability is probed lazily by embed(); embed failure reports unavailable to callers
+      ollama: this.#embeddingProviderId === OLLAMA_EMBEDDING_PROVIDER_ID ? 'available' : 'unavailable',
       vector: this.#vectorLoaded ? 'native' : 'fallback',
       backend: this.#vectorLoaded ? 'sqlite-vec' : 'sqlite-blob-fallback',
       model: DEFAULT_EMBEDDING_MODEL,
+      embeddingProvider: this.#embeddingProviderId,
+      retrievalProvider: this.#retrievalProviderId,
+      visualEmbeddingProviders: this.#providers.list().visualEmbedding,
     }
   }
 
   async embed(model: string, input: readonly string[]): Promise<number[][]> {
-    const url = new URL('/api/embed', this.#ollamaUrl)
-    if (!['127.0.0.1', 'localhost', '[::1]', '::1'].includes(url.hostname)) throw new Error('Ollama embedding endpoint must be loopback.')
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 120_000)
-    try {
-      const response = await fetch(url, {
-        method: 'POST', signal: controller.signal,
-        headers: { 'content-type': 'application/json', accept: 'application/json' },
-        body: JSON.stringify({ model, input, truncate: true }),
-      })
-      if (!response.ok) throw new Error(`Ollama embed failed with HTTP ${response.status}.`)
-      const value = await response.json() as { embeddings?: unknown }
-      if (!Array.isArray(value.embeddings) || !value.embeddings.every((vector) => Array.isArray(vector) && vector.every((item) => typeof item === 'number'))) {
-        throw new Error('Ollama returned an invalid embedding response.')
-      }
-      return value.embeddings as number[][]
-    } finally { clearTimeout(timeout) }
+    const provider = this.#providers.embedding(this.#embeddingProviderId)
+    if (provider === undefined) throw new Error(`Embedding provider not found: ${this.#embeddingProviderId}`)
+    return provider.embed({ model, input })
   }
 
   async indexEntity(entity: SemanticIndexedEntityV0, model = DEFAULT_EMBEDDING_MODEL): Promise<{ readonly indexed: boolean; readonly vector: boolean }> {
@@ -377,7 +409,7 @@ export class SemanticIndexService {
           vector = status === 'applied'
         }
       } catch {
-        // Ollama unavailable: document stays FTS-indexed; vectors fill on next content change.
+        // Embedding provider unavailable: document stays FTS-indexed; vectors fill on a later reindex.
       }
     }
     return { indexed: true, vector }
@@ -399,13 +431,13 @@ export class SemanticIndexService {
       const revisionId = artifact.currentRevisionId
       const revision = revisionId === undefined ? undefined : this.repository.getArtifactRevision(revisionId)
       const fileRecord = revision?.fileRecordId === undefined ? undefined : this.repository.getFileRecord(String(revision.fileRecordId))
-      const { readArtifactIndexBody } = await import('./search-artifact-body.js')
       const body = await readArtifactIndexBody({
         fileRecord: fileRecord === undefined ? undefined : { mimeType: fileRecord.mimeType, observedPath: fileRecord.observedPath },
         maxChars: 200_000,
         ocrEvidence: (pid, aid) => this.repository.getOcrEvidenceText(pid, aid),
         projectId,
         artifactId,
+        providers: this.#providers,
       })
       await this.indexEntity({
         projectId,
@@ -436,7 +468,9 @@ export class SemanticIndexService {
     try {
       const [vector] = await this.embed(model, [query])
       if (vector === undefined) return []
-      return this.repository.querySearchChunkVectors(model, vector, limit, projectId)
+      const provider = this.#providers.retrieval(this.#retrievalProviderId)
+      if (provider === undefined) return []
+      return provider.retrieve({ model, vector, limit, ...(projectId === undefined ? {} : { projectId }) })
     } catch {
       return []
     }

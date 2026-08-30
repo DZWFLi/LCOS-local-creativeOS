@@ -319,6 +319,7 @@ export class ProjectSearchService {
       ocrEvidence: (pid, aid) => this.repository.getOcrEvidenceText(pid, aid),
       projectId: String(artifact.projectId),
       artifactId: String(artifact.id),
+      ...(this.semantic === undefined ? {} : { providers: this.semantic.providers() }),
     })
   }
 

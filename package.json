@@ -108,7 +108,8 @@
     "check:v015-p0c": "node scripts/validate-v015-p0c.mjs",
     "check:v015-p0d": "node scripts/validate-v015-p0d.mjs",
     "check:v015-s6": "node scripts/validate-v015-s6.mjs",
-    "check:v015-s7": "node scripts/validate-v015-s7.mjs"
+    "check:v015-s7": "node scripts/validate-v015-s7.mjs",
+    "check:v015-s9": "node scripts/validate-v015-s9.mjs && vitest run apps/local-core/tests/semantic-provider-registry.test.ts --reporter=verbose"
   },
   "dependencies": {
     "lucide-react": "^1.24.0",
