@@ -4,6 +4,7 @@
  * S9/S10 convergence:
  * - extraction is registered through ContentExtractor providers;
  * - PDF / OOXML / OCR evidence behavior is preserved;
+ * - plain structured text (CSV/JSON/YAML/XML/HTML) is now indexed as real text evidence;
  * - unsupported formats return empty body and remain title-searchable only.
  */
 import { open, readFile } from 'node:fs/promises'
@@ -35,6 +36,11 @@ const PPTX_SLIDE_LIMIT = 200
 const PLAIN_TEXT_MIME_TYPES = new Set([
   'text/markdown',
   'text/plain',
+  'text/csv',
+  'application/json',
+  'application/yaml',
+  'application/xml',
+  'text/html',
 ])
 
 /** OCR service currently accepts these bitmap formats; TIFF/SVG are intentionally not claimed. */

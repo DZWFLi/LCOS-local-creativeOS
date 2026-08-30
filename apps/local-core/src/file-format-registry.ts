@@ -1,7 +1,7 @@
 import { extname } from 'node:path'
 import type { Artifact } from '@local-creative-os/domain'
 
-const MIME_BY_EXTENSION: Readonly<Record<string, string>> = {
+export const MIME_BY_EXTENSION: Readonly<Record<string, string>> = {
   '.md': 'text/markdown', '.txt': 'text/plain', '.csv': 'text/csv', '.json': 'application/json',
   '.yaml': 'application/yaml', '.yml': 'application/yaml', '.xml': 'application/xml', '.html': 'text/html',
   '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp',
@@ -16,6 +16,15 @@ const MIME_BY_EXTENSION: Readonly<Record<string, string>> = {
   '.mp4': 'video/mp4', '.mov': 'video/quicktime', '.webm': 'video/webm',
   '.psd': 'image/vnd.adobe.photoshop', '.ai': 'application/postscript',
 }
+
+export interface KnownFileFormatV0 {
+  readonly extension: string
+  readonly mimeType: string
+}
+
+export const KNOWN_FILE_FORMATS_V0: readonly KnownFileFormatV0[] = Object.entries(MIME_BY_EXTENSION)
+  .map(([extension, mimeType]) => ({ extension, mimeType }))
+  .sort((left, right) => left.extension.localeCompare(right.extension))
 
 export function extensionOf(path: string): string {
   return extname(path).toLocaleLowerCase('en-US')

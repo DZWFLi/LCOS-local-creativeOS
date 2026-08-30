@@ -77,6 +77,7 @@ export type {
   VisualEmbeddingProvider,
   SemanticVectorHitV0,
 } from './semantic-provider-registry.js'
+export { SEARCH_FORMAT_COVERAGE_V0, validateSearchFormatCoverage } from './search-format-coverage.js'
 export { PreviewCacheService } from './preview-cache-service.js'
 export { PreviewWorkerService } from './preview-worker-service.js'
 export { ensureMvpSampleProject, createMvpSampleSnapshot, MVP_SAMPLE_PROJECT_ID } from './mvp-sample-project.js'
