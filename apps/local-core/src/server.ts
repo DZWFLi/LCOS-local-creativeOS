@@ -94,6 +94,7 @@ import { handleSpaceRoute } from './routes/space.js'
 import { handleAgentletsRoute } from './routes/agentlets.js'
 import { handleCuratorRoute } from './routes/curator-dispatch.js'
 import { handleSkillAuthorRoute } from './routes/skill-author-dispatch.js'
+import { handleEventsRoute } from './routes/events.js'
 import { handleRetrievalRoute } from './routes/retrieval.js'
 import { handleAttentionRoute } from './routes/attention.js'
 import { handleArtifactsRoute } from './routes/artifacts.js'
@@ -1229,6 +1230,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
         response,
         controller,
         metadata,
+        agentletRuntime,
 
         helpers: routeHelpers,
       })) return
@@ -1326,6 +1328,17 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
         controller,
         metadata,
         skillAuthorDispatch,
+        helpers: routeHelpers,
+      })) return
+      if (metadata !== undefined && await handleEventsRoute({
+        method,
+        pathname,
+        url,
+        request,
+        response,
+        controller,
+        metadata,
+        projectEvents,
         helpers: routeHelpers,
       })) return
       if (await handleAgentletsRoute({

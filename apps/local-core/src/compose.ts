@@ -236,7 +236,7 @@ export function composeLocalCoreServices(options: LocalCoreServerOptions = {}): 
   const companionProjections = metadata === undefined || receiverRuntime === undefined
     || captureStaging === undefined || options.runtimeApplicationService === undefined
     ? undefined
-    : new CompanionProjectionService(metadata, receiverRuntime, activeContext, captureStaging, options.runtimeApplicationService)
+    : new CompanionProjectionService(metadata, receiverRuntime, activeContext, captureStaging, options.runtimeApplicationService, agentletRuntime)
 
   const curatorDispatch = metadata === undefined || reorganize === undefined || agentletRuntime === undefined
     ? undefined
