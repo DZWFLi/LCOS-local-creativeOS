@@ -17,6 +17,7 @@
       "apps/local-core/src/routes/curation.ts",
       "apps/local-core/src/routes/curator-dispatch.ts",
       "apps/local-core/src/routes/entity.ts",
+      "apps/local-core/src/routes/events.ts",
       "apps/local-core/src/routes/executor.ts",
       "apps/local-core/src/routes/f6-assembly.ts",
       "apps/local-core/src/routes/handoffs.ts",
@@ -64,7 +65,7 @@
         "pathPattern": "^\\/agentlets$",
         "mutationClass": "read",
         "file": "apps/local-core/src/routes/agentlets.ts",
-        "line": 44
+        "line": 45
       },
       {
         "method": "GET",
@@ -72,7 +73,7 @@
         "pathPattern": "^\\/agentlets\\/runs$",
         "mutationClass": "read",
         "file": "apps/local-core/src/routes/agentlets.ts",
-        "line": 49
+        "line": 50
       },
       {
         "method": "POST",
@@ -80,7 +81,7 @@
         "pathPattern": "^\\/projects\\/([^/]+)\\/agentlets\\/([^/]+)\\/launch$",
         "mutationClass": "mutation",
         "file": "apps/local-core/src/routes/agentlets.ts",
-        "line": 55
+        "line": 56
       },
       {
         "method": "GET",
@@ -88,7 +89,7 @@
         "pathPattern": "^\\/projects\\/([^/]+)\\/artifacts\\/search$",
         "mutationClass": "read",
         "file": "apps/local-core/src/routes/artifacts.ts",
-        "line": 91
+        "line": 92
       },
       {
         "method": "GET",
@@ -96,7 +97,7 @@
         "pathPattern": "^\\/artifacts\\/([^/]+)$",
         "mutationClass": "read",
         "file": "apps/local-core/src/routes/artifacts.ts",
-        "line": 103
+        "line": 104
       },
       {
         "method": "GET",
@@ -104,7 +105,7 @@
         "pathPattern": "^\\/artifacts\\/([^/]+)\\/revisions$",
         "mutationClass": "read",
         "file": "apps/local-core/src/routes/artifacts.ts",
-        "line": 139
+        "line": 140
       },
       {
         "method": "GET",
@@ -112,7 +113,7 @@
         "pathPattern": "^\\/projects\\/([^/]+)\\/revisions\\/compare$",
         "mutationClass": "read",
         "file": "apps/local-core/src/routes/artifacts.ts",
-        "line": 147
+        "line": 148
       },
       {
         "method": "GET",
@@ -120,7 +121,7 @@
         "pathPattern": "^\\/projects\\/([^/]+)\\/process-projection$",
         "mutationClass": "read",
         "file": "apps/local-core/src/routes/artifacts.ts",
-        "line": 167
+        "line": 168
       },
       {
         "method": "GET",
@@ -128,7 +129,7 @@
         "pathPattern": "^\\/projects\\/([^/]+)\\/execution-items$",
         "mutationClass": "read",
         "file": "apps/local-core/src/routes/artifacts.ts",
-        "line": 179
+        "line": 180
       },
       {
         "method": "POST",
@@ -1483,21 +1484,21 @@
         "path": "/health",
         "mutationClass": "read",
         "file": "apps/local-core/src/server.ts",
-        "line": 404
+        "line": 405
       },
       {
         "method": "POST",
         "path": "/capture/v1",
         "mutationClass": "mutation",
         "file": "apps/local-core/src/server.ts",
-        "line": 410
+        "line": 411
       },
       {
         "method": "POST",
         "path": "/runtime/extension-token",
         "mutationClass": "mutation",
         "file": "apps/local-core/src/server.ts",
-        "line": 450
+        "line": 451
       },
       {
         "method": "POST",
@@ -1505,77 +1506,77 @@
         "pathPattern": "^\\/runtime\\/projects\\/([^/]+)\\/focus$",
         "mutationClass": "mutation",
         "file": "apps/local-core/src/server.ts",
-        "line": 515
+        "line": 516
       },
       {
         "method": "GET",
         "path": "/runtime/registry",
         "mutationClass": "read",
         "file": "apps/local-core/src/server.ts",
-        "line": 530
+        "line": 531
       },
       {
         "method": "POST",
         "path": "/runtime/registry/capture-target",
         "mutationClass": "mutation",
         "file": "apps/local-core/src/server.ts",
-        "line": 535
+        "line": 536
       },
       {
         "method": "GET",
         "path": "/runtime/intelligence",
         "mutationClass": "read",
         "file": "apps/local-core/src/server.ts",
-        "line": 555
+        "line": 556
       },
       {
         "method": "POST",
         "path": "/capture",
         "mutationClass": "mutation",
         "file": "apps/local-core/src/server.ts",
-        "line": 565
+        "line": 566
       },
       {
         "method": "POST",
         "path": "/runtime/affinity/resolve",
         "mutationClass": "mutation",
         "file": "apps/local-core/src/server.ts",
-        "line": 588
+        "line": 589
       },
       {
         "method": "POST",
         "path": "/runtime/captures/staging",
         "mutationClass": "mutation",
         "file": "apps/local-core/src/server.ts",
-        "line": 609
+        "line": 610
       },
       {
         "method": "GET",
         "path": "/runtime/captures/staging",
         "mutationClass": "read",
         "file": "apps/local-core/src/server.ts",
-        "line": 641
+        "line": 642
       },
       {
         "method": "POST",
         "path": "/runtime/capture-space/enqueue",
         "mutationClass": "mutation",
         "file": "apps/local-core/src/server.ts",
-        "line": 674
+        "line": 675
       },
       {
         "method": "GET",
         "path": "/runtime/capture-space",
         "mutationClass": "read",
         "file": "apps/local-core/src/server.ts",
-        "line": 712
+        "line": 713
       },
       {
         "method": "PUT",
         "path": "/runtime/capture-space/presentation",
         "mutationClass": "mutation",
         "file": "apps/local-core/src/server.ts",
-        "line": 723
+        "line": 724
       },
       {
         "method": "GET",
@@ -1583,28 +1584,28 @@
         "pathPattern": "^\\/runtime\\/capture-space\\/items\\/([^/]+)\\/preview$",
         "mutationClass": "read",
         "file": "apps/local-core/src/server.ts",
-        "line": 751
+        "line": 752
       },
       {
         "method": "POST",
         "path": "/runtime/capture-space/organize",
         "mutationClass": "mutation",
         "file": "apps/local-core/src/server.ts",
-        "line": 765
+        "line": 766
       },
       {
         "method": "POST",
         "path": "/runtime/capture-space/materialize",
         "mutationClass": "mutation",
         "file": "apps/local-core/src/server.ts",
-        "line": 779
+        "line": 780
       },
       {
         "method": "POST",
         "path": "/runtime/captures/create-project",
         "mutationClass": "mutation",
         "file": "apps/local-core/src/server.ts",
-        "line": 803
+        "line": 804
       },
       {
         "method": "POST",
@@ -1612,35 +1613,35 @@
         "pathPattern": "^\\/runtime\\/captures\\/([^/]+)\\/resolve$",
         "mutationClass": "mutation",
         "file": "apps/local-core/src/server.ts",
-        "line": 839
+        "line": 840
       },
       {
         "method": "POST",
         "path": "/runtime/registry/browser-tab",
         "mutationClass": "mutation",
         "file": "apps/local-core/src/server.ts",
-        "line": 868
+        "line": 869
       },
       {
         "method": "GET",
         "path": "/runtime/capture-watch/rules",
         "mutationClass": "read",
         "file": "apps/local-core/src/server.ts",
-        "line": 884
+        "line": 885
       },
       {
         "method": "POST",
         "path": "/runtime/capture-watch/rules",
         "mutationClass": "mutation",
         "file": "apps/local-core/src/server.ts",
-        "line": 884
+        "line": 885
       },
       {
         "method": "DELETE",
         "path": "/runtime/capture-watch/rules",
         "mutationClass": "delete",
         "file": "apps/local-core/src/server.ts",
-        "line": 884
+        "line": 885
       },
       {
         "method": "POST",
@@ -1648,7 +1649,7 @@
         "pathPattern": "^\\/runtime\\/sessions\\/([^/]+)\\/bind$",
         "mutationClass": "mutation",
         "file": "apps/local-core/src/server.ts",
-        "line": 926
+        "line": 927
       },
       {
         "method": "GET",
@@ -1656,7 +1657,7 @@
         "pathPattern": "^\\/runtime\\/sessions\\/([^/]+)\\/context$",
         "mutationClass": "read",
         "file": "apps/local-core/src/server.ts",
-        "line": 956
+        "line": 957
       },
       {
         "method": "POST",
@@ -1664,14 +1665,14 @@
         "pathPattern": "^\\/runtime\\/sessions\\/([^/]+)\\/close$",
         "mutationClass": "mutation",
         "file": "apps/local-core/src/server.ts",
-        "line": 969
+        "line": 970
       },
       {
         "method": "GET",
         "path": "/runtime/sessions/contexts",
         "mutationClass": "read",
         "file": "apps/local-core/src/server.ts",
-        "line": 982
+        "line": 983
       },
       {
         "method": "POST",
@@ -1679,7 +1680,7 @@
         "pathPattern": "^\\/projects\\/([^/]+)\\/reorganize\\/proposals$",
         "mutationClass": "mutation-proposal",
         "file": "apps/local-core/src/server.ts",
-        "line": 994
+        "line": 995
       },
       {
         "method": "POST",
@@ -1687,7 +1688,7 @@
         "pathPattern": "^\\/projects\\/([^/]+)\\/reorganize\\/proposals\\/([^/]+)\\/(preview|apply|accept|rollback|reject)$",
         "mutationClass": "mutation-proposal",
         "file": "apps/local-core/src/server.ts",
-        "line": 1030
+        "line": 1031
       },
       {
         "method": "POST",
@@ -1695,7 +1696,7 @@
         "pathPattern": "^\\/projects\\/([^/]+)\\/reveal$",
         "mutationClass": "mutation",
         "file": "apps/local-core/src/server.ts",
-        "line": 1068
+        "line": 1069
       },
       {
         "method": "POST",
@@ -1703,7 +1704,7 @@
         "pathPattern": "^\\/entities\\/(project|workspace|artifact|scope)\\/([^/]+)\\/title$",
         "mutationClass": "mutation",
         "file": "apps/local-core/src/server.ts",
-        "line": 1090
+        "line": 1091
       }
     ]
   },

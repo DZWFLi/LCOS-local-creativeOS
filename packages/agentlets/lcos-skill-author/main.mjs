@@ -19,6 +19,7 @@ const token = process.env.LCOS_AGENTLET_TOKEN
 const projectId = process.env.LCOS_PROJECT_ID
 const scopeId = process.env.LCOS_SCOPE_ID
 const sessionId = process.env.LCOS_SESSION_ID
+const runId = process.env.LCOS_AGENTLET_RUN_ID || ''
 const instructionRaw = process.env.LCOS_AGENTLET_INSTRUCTION
 
 if (!base || !projectId || !scopeId || !sessionId) {
@@ -44,6 +45,15 @@ async function call(method, path, body) {
   return json.value ?? json
 }
 
+
+function reportProgress(progress) {
+  if (!runId || !projectId) return
+  fetch(`${base}/agentlets/runs/${encodeURIComponent(runId)}/progress`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ projectId, progress }),
+  }).catch(() => {})
+}
 function fail(code, message) {
   console.error(JSON.stringify({ ok: false, code, message }))
   process.exit(1)
@@ -125,6 +135,7 @@ if (content === null) {
   methods = ["按来源 prompt 组织同类任务"]
   facts = []
 }
+reportProgress(0.8)
 const result = {
   schemaVersion: 1,
   kind: 'skill-proposal',
@@ -143,6 +154,7 @@ const result = {
 }
 
 // ---- Reachback 写：ingest 回传（校验 + SkillProposalService 持久化在 Core 侧）----
+reportProgress(1)
 try {
   const ingested = await call('POST', `/projects/${encodeURIComponent(projectId)}/skill-author/ingest`, {
     sessionId,

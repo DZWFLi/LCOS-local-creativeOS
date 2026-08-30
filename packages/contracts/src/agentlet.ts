@@ -32,6 +32,8 @@ export interface AgentletRunV1 {
   readonly sessionId: string
   readonly instruction?: string
   readonly status: AgentletRunStatusV1
+  /** 0-1；无进度来源时为 undefined（S6 事件流接入后填充）。 */
+  readonly progress?: number
   readonly pid?: number
   readonly exitCode?: number
   /** 失败/超时的尾部 stderr 摘录（排障用）。 */

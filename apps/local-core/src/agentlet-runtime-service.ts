@@ -101,6 +101,7 @@ interface RunningEntry {
   readonly run: AgentletRunV1
   readonly child: ChildProcess
   stderrTail: string
+  progress?: number
   timer?: ReturnType<typeof setTimeout>
 }
 
@@ -129,6 +130,17 @@ export class AgentletRuntimeService {
   /** server.start 后注入实际地址（ephemeral port 场景必需）。 */
   setAddress(address: { readonly host: string; readonly port: number }): void {
     this.#address = address
+  }
+
+  /** P0-C/P0-D progress：agentlet 子进程经 reachback 上报进度（0-1）。 */
+  reportProgress(runId: string, projectId: string, progress: number): void {
+    const entry = this.#running.get(runId)
+    if (entry === undefined || entry.run.projectId !== projectId) return
+    const clamped = Number.isFinite(progress) ? Math.max(0, Math.min(1, progress)) : undefined
+    this.#running.set(runId, {
+      ...entry,
+      run: { ...entry.run, ...(clamped === undefined ? {} : { progress: clamped }) },
+    })
   }
 
   #scan(): ManifestEntry[] {
@@ -199,6 +211,7 @@ export class AgentletRuntimeService {
         LCOS_CORE_URL: `http://${this.#address.host}:${this.#address.port}`,
         ...(this.#apiToken === undefined ? {} : { LCOS_AGENTLET_TOKEN: this.#apiToken }),
         LCOS_SESSION_ID: sessionId,
+        LCOS_AGENTLET_RUN_ID: runId,
         LCOS_PROJECT_ID: projectId,
         LCOS_SCOPE_ID: String(scopeId),
         ...(input.instruction === undefined || input.instruction === '' ? {} : { LCOS_AGENTLET_INSTRUCTION: input.instruction }),

@@ -9,6 +9,7 @@ import { routeRequireMetadata, type RouteHttpContext, type RouteHttpHelpers } fr
 
 export interface ArtifactsRouteContext extends RouteHttpContext {
   readonly helpers: RouteHttpHelpers
+  readonly agentletRuntime?: import('../agentlet-runtime-service.js').AgentletRuntimeService | undefined
 }
 
 /**
@@ -16,7 +17,7 @@ export interface ArtifactsRouteContext extends RouteHttpContext {
  * 原为 server.ts 分发器内联块，外迁后行为不变。
  */
 export async function handleArtifactsRoute(ctx: ArtifactsRouteContext): Promise<boolean> {
-  const { method, pathname, url, request, controller, response, metadata } = ctx
+  const { method, pathname, url, request, controller, response, metadata, agentletRuntime } = ctx
   const { sendJson, failure, readJsonBody, isRecord } = ctx.helpers
 
   const sourceActionMatch = /^\/artifacts\/([^/]+)\/(open|reveal|source-path|relink|shortcut-resolve)$/.exec(pathname)
@@ -181,7 +182,7 @@ export async function handleArtifactsRoute(ctx: ArtifactsRouteContext): Promise<
     const projectId = decodeURIComponent(executionItemsMatch[1] ?? '') as ProjectId
     sendJson(response, 200, {
       ok: true,
-      value: new ExecutionItemService(db).project(projectId),
+      value: new ExecutionItemService(db, agentletRuntime).project(projectId),
     })
     return true
   }

@@ -875,6 +875,8 @@ export * from './project-profile.js'
 export * from './curation-patch.js'
 export * from './curator-dispatch.js'
 export * from './skill-author-dispatch.js'
+export * from './extension-manifest.js'
+export * from './remote-command.js'
 
 // 本地 OCR（RapidOCR）
 export interface OcrLineV1 {

@@ -34,7 +34,8 @@ export async function handleAgentletsRoute(ctx: AgentletsRouteContext): Promise<
   const listMatch = /^\/agentlets$/.exec(pathname)
   const runsMatch = /^\/agentlets\/runs$/.exec(pathname)
   const launchMatch = /^\/projects\/([^/]+)\/agentlets\/([^/]+)\/launch$/.exec(pathname)
-  if (listMatch === null && runsMatch === null && launchMatch === null) return false
+  const progressMatch = /^\/agentlets\/runs\/([^/]+)\/progress$/.exec(pathname)
+  if (listMatch === null && runsMatch === null && launchMatch === null && progressMatch === null) return false
 
   if (agentletRuntime === undefined) {
     sendJson(response, 503, failure('UNAVAILABLE', 'Agentlet runtime is not configured.'))
@@ -85,6 +86,24 @@ export async function handleAgentletsRoute(ctx: AgentletsRouteContext): Promise<
     return true
   }
 
+
+  if (progressMatch !== null && method === "POST") {
+    const runId = decodeURIComponent(progressMatch[1] ?? "")
+    let body: unknown
+    try { body = await readJsonBody(request, controller.signal) } catch {
+      sendJson(response, 400, failure('INVALID_ARGUMENT', 'Progress requires a JSON body.'))
+      return true
+    }
+    const progress = Number((body as { progress?: unknown })?.progress)
+    if (!Number.isFinite(progress)) {
+      sendJson(response, 400, failure('INVALID_ARGUMENT', 'progress must be a finite number (0-1).'))
+      return true
+    }
+    const projectId = String((body as { projectId?: unknown })?.projectId ?? "")
+    agentletRuntime.reportProgress(runId, projectId, progress)
+    sendJson(response, 200, { ok: true, value: { runId, progress } })
+    return true
+  }
   sendJson(response, 405, failure('INVALID_ARGUMENT', 'Agentlet routes accept GET/POST only.'))
   return true
 }

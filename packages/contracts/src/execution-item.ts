@@ -25,13 +25,13 @@ export type ExecutionItemAction = 'pause' | 'resume' | 'cancel' | 'retry' | 'ans
 
 /** ExecutionItemV1 目标引用（v0.15 只有 artifact 目标；S4 companion 扩展 kind）。 */
 export interface ExecutionItemTargetRef {
-  readonly kind: 'artifact'
+  readonly kind: 'artifact' | 'agentlet'
   readonly artifactId: string
 }
 
 export interface ExecutionItemV1 {
   readonly schemaVersion: 1
-  readonly kind: 'run'
+  readonly kind: 'run' | 'agentlet'
   readonly id: string
   readonly runId: string
   readonly targetRef: ExecutionItemTargetRef | null

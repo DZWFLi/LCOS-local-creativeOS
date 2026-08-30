@@ -7,6 +7,7 @@ import type { ReceiverRuntimeService } from './receiver-runtime-service.js'
 import type { ActiveContextStore } from './active-context-store.js'
 import type { CaptureStagingService } from './capture-staging-service.js'
 import type { RuntimeApplicationService } from './runtime-application-service.js'
+import type { AgentletRuntimeService } from './agentlet-runtime-service.js'
 import { ExecutionItemService } from './execution-item-service.js'
 
 /**
@@ -36,8 +37,9 @@ export class CompanionProjectionService {
     private readonly activeContext: ActiveContextStore,
     private readonly captureStaging: CaptureStagingService,
     private readonly runtimeApplication: RuntimeApplicationService,
+    private readonly agentletRuntime?: AgentletRuntimeService | undefined,
   ) {
-    this.#executionItems = new ExecutionItemService(metadata)
+    this.#executionItems = new ExecutionItemService(metadata, agentletRuntime)
   }
 
   async project(projectId: ProjectId, query: CompanionProjectionQueryV1 = {}): Promise<CompanionProjectionV1> {
