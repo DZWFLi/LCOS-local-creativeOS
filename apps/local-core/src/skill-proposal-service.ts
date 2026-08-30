@@ -79,7 +79,7 @@ export class SkillProposalService {
       source,
       draft,
       status: 'pending',
-      createdBy: 'agent',
+      createdBy: 'system',
       createdAt: now,
       updatedAt: now,
     }
@@ -157,7 +157,7 @@ version: 0.1.0
 ${source.prompt}
 \`\`\`
 
-执行要点（机器起草底稿，审批时可编辑）：
+执行要点（系统从完成 Run 提炼的候选底稿，待 Skill Author 进一步完成 Method-vs-Fact 与 Root/Subskill 提炼后，方可视为成熟 Skill）：
 1. 按来源 prompt 的方法组织同类任务。
 2. ${source.orderedReferenceCount > 0 ? `复用来源 Run 的参考结构（${source.orderedReferenceCount} 项 ordered references）。` : '本方法无固定参考结构。'}
 3. 产出意图：${INTENT_LABEL[source.intent]}。

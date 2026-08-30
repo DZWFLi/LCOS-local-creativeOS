@@ -42,7 +42,7 @@ export interface SkillProposalV1 {
   readonly source: SkillProposalSourceV1
   readonly draft: SkillProposalDraftV1
   readonly status: SkillProposalStatusV1
-  readonly createdBy: 'agent' | 'user'
+  readonly createdBy: 'system' | 'user'
   readonly createdAt: string
   readonly updatedAt: string
   /** accept 后由 Skill Builder 写入的 user skill id。 */

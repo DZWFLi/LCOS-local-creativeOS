@@ -92,6 +92,8 @@ import { handleWorkflowRoute } from './routes/workflow.js'
 import { handleCurationRoute } from './routes/curation.js'
 import { handleSpaceRoute } from './routes/space.js'
 import { handleAgentletsRoute } from './routes/agentlets.js'
+import { handleCuratorRoute } from './routes/curator-dispatch.js'
+import { handleSkillAuthorRoute } from './routes/skill-author-dispatch.js'
 import { handleRetrievalRoute } from './routes/retrieval.js'
 import { handleAttentionRoute } from './routes/attention.js'
 import { handleArtifactsRoute } from './routes/artifacts.js'
@@ -342,7 +344,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
     catalog, metadata, fileRegistry, fileObservation, importCopy, resources, packages, uploads,
     resourceReader, matcher, contextManifest, runtimeReview, runtimeApplication, activeContext,
     contextProposals, runEventListeners, obsidian, obsidianSessions, connectorRegistry,
-    ownsConversationService, conversations, previewWorker, presentation, curation, search, curationCommand, semantic, warehouse, resultSlots, assemblyApply, projectSummary, skillCatalog, skillPackages, skillProposals, companionProjections,
+    ownsConversationService, conversations, previewWorker, presentation, curation, search, curationCommand, semantic, warehouse, resultSlots, assemblyApply, projectSummary, skillCatalog, skillPackages, skillProposals, companionProjections, curatorDispatch, skillAuthorDispatch,
     runtimeRegistry, intelligence, captureStaging, resolveProjectAffinity, captureApplication, captureWatch, captureSpace, reorganize, sessionReadSet, spaceSandbox, agentletRuntime, spatialRetrieval, attentionRuntime, boundaryEvaluator, projectEvents, projectMutations, mutationSafety, feedbackRevision, continuityRuntime, receiverRuntime, sessionLifecycle, conversationIdentity,
   } = services
   metadata?.setRunEventSink?.((event) => {
@@ -1302,6 +1304,28 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
         controller,
         metadata,
         spaceSandbox,
+        helpers: routeHelpers,
+      })) return
+      if (metadata !== undefined && await handleCuratorRoute({
+        method,
+        pathname,
+        url,
+        request,
+        response,
+        controller,
+        metadata,
+        curatorDispatch,
+        helpers: routeHelpers,
+      })) return
+      if (metadata !== undefined && await handleSkillAuthorRoute({
+        method,
+        pathname,
+        url,
+        request,
+        response,
+        controller,
+        metadata,
+        skillAuthorDispatch,
         helpers: routeHelpers,
       })) return
       if (await handleAgentletsRoute({

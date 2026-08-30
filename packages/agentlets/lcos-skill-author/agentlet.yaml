@@ -1,0 +1,6 @@
+schema: lcos-agentlet-schema-v1
+name: lcos-skill-author
+description: LCOS Skill 炼制 agentlet——经 Reachback 读取完成 Run 的 frozen RunRecipe，产出结构化 SkillProposal（Method-vs-Fact 判定 + Root/Subskill 组成）供 review。是 P0-D semantic execution bridge 的 canonical agentlet identity。
+command:
+  node: node main.mjs
+timeoutSeconds: 240

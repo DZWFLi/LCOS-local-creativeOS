@@ -84,6 +84,7 @@ describe('SkillProposalService (RunRecipe → Skill Proposal seam)', () => {
       const proposal = await proposals.proposeFromRun(String(run.id))
       expect(proposal.status).toBe('pending')
       expect(proposal.schemaVersion).toBe(1)
+      expect(proposal.createdBy).toBe('system')
       expect(proposal.source.runId).toBe(String(run.id))
       expect(proposal.source.prompt).toBe(run.instruction)
       expect(proposal.source.intent).toBe('revise')

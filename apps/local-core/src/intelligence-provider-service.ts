@@ -356,6 +356,18 @@ export class IntelligenceProviderService {
     return this.#candidates(role)[0]
   }
 
+  /** P0-C/P0-D harness 语义生成入口：Core 侧保留凭证，子进程经 reachback 调用。
+   * 返回 undefined / 抛错 → semanticUnavailable=true（honest，harness 据此诚实降级/失败）。
+   */
+  async generateSemantic(request: { readonly schemaName: string; readonly schema: Record<string, unknown>; readonly system: string; readonly input: unknown; readonly temperature?: number; readonly timeoutMs?: number }): Promise<{ readonly ok: boolean; readonly value?: Record<string, unknown>; readonly model?: string; readonly semanticUnavailable?: boolean }> {
+    try {
+      const result = await this.generateStructured('utility', request)
+      if (result === undefined) return { ok: false, semanticUnavailable: true }
+      return { ok: true, ...(result.value ? { value: result.value } : {}), ...(result.model ? { model: result.model } : {}) }
+    } catch {
+      return { ok: false, semanticUnavailable: true }
+    }
+  }
   async status(): Promise<IntelligenceStatusV0> {
     if (this.#statusCache && this.#statusCache.expiresAt > Date.now()) return this.#statusCache.value
     const utility = this.#resolve('utility')

@@ -54,6 +54,8 @@ import { ResultSlotService } from './result-slot-service.js'
 import { SessionReadSet } from './session-read-set.js'
 import { SpaceSandboxService } from './space-sandbox-service.js'
 import { AgentletRuntimeService } from './agentlet-runtime-service.js'
+import { CuratorDispatchService } from './curator-dispatch-service.js'
+import { SkillAuthorDispatchService } from './skill-author-dispatch-service.js'
 import { SpatialRetrievalService } from './spatial-retrieval-service.js'
 import { AttentionRuntimeService } from './attention-runtime-service.js'
 import { BoundaryEvaluatorService } from './boundary-evaluator-service.js'
@@ -121,6 +123,8 @@ export interface LocalCoreServices {
   readonly skillPackages: SkillPackageService | undefined
   readonly skillProposals: SkillProposalService | undefined
   readonly companionProjections: CompanionProjectionService | undefined
+  readonly curatorDispatch: CuratorDispatchService | undefined
+  readonly skillAuthorDispatch: SkillAuthorDispatchService | undefined
 }
 
 /** 服务装配：把 options 解析成 createLocalCoreServer 需要的一组服务。 */
@@ -233,6 +237,14 @@ export function composeLocalCoreServices(options: LocalCoreServerOptions = {}): 
     || captureStaging === undefined || options.runtimeApplicationService === undefined
     ? undefined
     : new CompanionProjectionService(metadata, receiverRuntime, activeContext, captureStaging, options.runtimeApplicationService)
+
+  const curatorDispatch = metadata === undefined || reorganize === undefined || agentletRuntime === undefined
+    ? undefined
+    : new CuratorDispatchService({ repository: metadata, agentletRuntime, reorganize, intelligence })
+
+  const skillAuthorDispatch = metadata === undefined || skillProposals === undefined || agentletRuntime === undefined
+    ? undefined
+    : new SkillAuthorDispatchService({ repository: metadata, agentletRuntime, skillProposals, intelligence })
   return {
     catalog: options.catalog ?? new ExplicitProjectCatalog([]),
     metadata,
@@ -302,5 +314,7 @@ export function composeLocalCoreServices(options: LocalCoreServerOptions = {}): 
     skillPackages,
     skillProposals,
     companionProjections,
+    curatorDispatch,
+    skillAuthorDispatch,
   }
 }

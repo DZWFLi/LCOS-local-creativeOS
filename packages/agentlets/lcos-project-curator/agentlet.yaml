@@ -1,0 +1,6 @@
+schema: lcos-agentlet-schema-v1
+name: lcos-project-curator
+description: LCOS 项目语义整理 agentlet——经 Reachback 读当前 Presentation / Selection，产出结构化 ReorganizeProposalV0（只提出方案，不直接改项目）。是 P0-C semantic execution bridge 的 canonical agentlet identity。
+command:
+  node: node main.mjs
+timeoutSeconds: 240
