@@ -13,6 +13,7 @@ import {
   Sparkles,
   X,
 } from 'lucide-react'
+import type { ExecutionItemAction } from '@local-creative-os/contracts'
 import type { ActiveRun, CanvasNode, Workspace } from '../../model'
 import { runStatusLabel } from '../../model'
 import { deriveWorkRailMode, isRunBusy, type WorkRailMode } from '../../state/workRailMode'
@@ -65,6 +66,8 @@ interface Props {
   onContinueModify: () => void
   onUpgradeWithFeedback: () => void
   onShowRun: () => void
+  /** S1 alignment: Core-derived available actions for the active run. When present, control rendering fail-closes on allowed actions. */
+  runActions?: readonly ExecutionItemAction[]
 }
 
 export function WorkRail(props: Props) {
@@ -101,11 +104,11 @@ export function WorkRail(props: Props) {
     <div className="work-rail-body" data-testid="work-rail-body">
       <RunList activeRun={props.activeRun} reviews={props.runReviews} onOpen={props.onOpenRunReview} />
       {mode === 'waiting-input' && props.activeRun
-        ? <WaitingState run={props.activeRun} onSync={props.onSyncRun} onAnswer={props.onAnswerInput} />
+        ? <WaitingState run={props.activeRun} onSync={props.onSyncRun} onAnswer={props.onAnswerInput} runActions={props.runActions} />
         : mode === 'review' && props.activeRun && primary
           ? <ReviewState node={primary} run={props.activeRun} onAccept={props.onAccept} onReject={props.onReject} onRetry={props.onRetry} onContinueModify={props.onContinueModify} />
           : mode === 'run' && props.activeRun
-            ? <RunState run={props.activeRun} nodes={props.nodes} outline={runOutline} onRetry={props.onRetry} onSync={props.onSyncRun} onCancel={props.onCancelRun} onRecover={props.onRecoverRun} recovering={props.runtimeRecovering} />
+            ? <RunState run={props.activeRun} nodes={props.nodes} outline={runOutline} onRetry={props.onRetry} onSync={props.onSyncRun} onCancel={props.onCancelRun} onRecover={props.onRecoverRun} recovering={props.runtimeRecovering} runActions={props.runActions} />
             : mode === 'completed' && props.activeRun
               ? <CompletedState run={props.activeRun} nodes={props.nodes} outline={runOutline} onUpgradeWithFeedback={props.onUpgradeWithFeedback} />
               : <RailIdleState contextLabel={props.contextLabel} contextCount={props.contextCount} />}
@@ -195,7 +198,7 @@ function RailIdleState({ contextLabel, contextCount }: { contextLabel: string; c
   </div>
 }
 
-function RunState({ run, nodes, outline, onRetry, onSync, onCancel, onRecover, recovering }: { run: ActiveRun; nodes: CanvasNode[]; outline: readonly RunOutlineItem[]; onRetry: () => void; onSync: () => void; onCancel: () => void; onRecover: () => void; recovering: boolean }) {
+function RunState({ run, nodes, outline, onRetry, onSync, onCancel, onRecover, recovering, runActions }: { run: ActiveRun; nodes: CanvasNode[]; outline: readonly RunOutlineItem[]; onRetry: () => void; onSync: () => void; onCancel: () => void; onRecover: () => void; recovering: boolean; runActions?: readonly ExecutionItemAction[] }) {
   const targets = run.targetIds.map((id) => nodes.find((node) => node.id === id)).filter((node): node is CanvasNode => Boolean(node))
   const stages: ActiveRun['status'][] = run.status === 'cancelled'
     ? ['queued', 'running', 'cancelled']
@@ -209,17 +212,18 @@ function RunState({ run, nodes, outline, onRetry, onSync, onCancel, onRecover, r
     <section className="run-targets"><h4>{targets.length ? '将修改的内容' : '参考范围'}</h4>{targets.length ? targets.map((node) => <b key={node.id}>{node.title}</b>) : <p>{run.contextIds.length} 项上下文，无直接覆盖目标。</p>}</section>
     <section className="changed-files"><h4>文件变化</h4>{run.changedFiles.length ? run.changedFiles.map((file) => <b key={file}>{file}</b>) : <p>Agent 返回后会显示文件变化。</p>}</section>
     {run.runtime && <button className="rail-secondary pressable" onClick={onSync}><RefreshCw size={14} />刷新执行状态</button>}
-    {['queued', 'running'].includes(run.status) && <button className="rail-secondary danger pressable" data-testid="cancel-runtime" onClick={onCancel}>撤回任务</button>}
+    {['queued', 'running'].includes(run.status) && canAct(runActions, 'cancel') && <button className="rail-secondary danger pressable" data-testid="cancel-runtime" onClick={onCancel}>撤回任务</button>}
     {run.providerError && <p className="rail-empty-copy">{humanizeRunError(run.providerError)}</p>}
     {run.runtime && (run.status === 'failed' || Boolean(run.providerError)) && <button className="rail-primary pressable" disabled={recovering} onClick={onRecover}><RefreshCw size={14} />{recovering ? '正在重新连接…' : '重新连接并继续任务'}</button>}
-    {run.status === 'failed' && <button className="rail-secondary pressable" onClick={onRetry}><RotateCcw size={14} />重新执行为新任务</button>}
+    {run.status === 'failed' && canAct(runActions, 'retry') && <button className="rail-secondary pressable" onClick={onRetry}><RotateCcw size={14} />重新执行为新任务</button>}
   </div>
 }
 
-function WaitingState({ run, onSync, onAnswer }: {
+function WaitingState({ run, onSync, onAnswer, runActions }: {
   run: ActiveRun
   onSync: () => void
   onAnswer: (input: { readonly requestId: string; readonly text?: string; readonly selectedOptions?: readonly string[] }) => void
+  runActions?: readonly ExecutionItemAction[]
 }) {
   const [text, setText] = useState('')
   const [selectedOptions, setSelectedOptions] = useState<string[]>([])
@@ -229,7 +233,7 @@ function WaitingState({ run, onSync, onAnswer }: {
     <div className="waiting-hero"><CircleAlert size={19} /><div><small>Agent 已暂停</small><h3>需要你补充一点信息</h3><p>{request?.question ?? '你的原内容和任务记录都已保留。补充后会继续同一个任务。'}</p></div></div>
     {request?.options.length ? <section className="waiting-options"><h4>可以直接选择</h4>{request.options.map((option) => <label key={option}><input type="checkbox" checked={selectedOptions.includes(option)} onChange={() => setSelectedOptions((current) => current.includes(option) ? current.filter((item) => item !== option) : [...current, option])} /><span>{option}</span></label>)}</section> : null}
     {request?.allowFreeText !== false && <textarea data-testid="run-input-answer" value={text} onChange={(event) => setText(event.target.value)} placeholder="补充你的要求……" />}
-    {request && <button className="rail-primary pressable" data-testid="answer-runtime-input" disabled={!canSubmit} onClick={() => onAnswer({ requestId: request.requestId, ...(text.trim() ? { text: text.trim() } : {}), selectedOptions })}><Send size={14} />继续这个任务</button>}
+    {request && canAct(runActions, 'answer_input') && <button className="rail-primary pressable" data-testid="answer-runtime-input" disabled={!canSubmit} onClick={() => onAnswer({ requestId: request.requestId, ...(text.trim() ? { text: text.trim() } : {}), selectedOptions })}><Send size={14} />继续这个任务</button>}
     <section className="review-summary"><h4>内容已保留</h4><ul><li>{run.command}</li><li>当前版本没有被改动。</li><li>任务不会因为等待而自动取消。</li></ul></section>
     {run.runtime && <button className="rail-secondary pressable" onClick={onSync}><RefreshCw size={14} />刷新处理状态</button>}
   </div>
@@ -286,6 +290,10 @@ function RunActivity({ events, error }: { events: readonly RunEvent[]; error: st
       : <ol>{visible.map((event) => <li key={String(event.id)}><span>{new Date(String(event.occurredAt)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span><b>{RUN_EVENT_LABELS[event.type]}</b></li>)}</ol>}
     {error && <p className="rail-empty-copy">暂时无法读取任务过程，当前任务本身不受影响。</p>}
   </section>
+}
+
+function canAct(runActions: readonly ExecutionItemAction[] | undefined, action: ExecutionItemAction): boolean {
+  return runActions === undefined || runActions.includes(action)
 }
 
 function humanizeRunError(message: string): string {

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { Command, Play } from 'lucide-react'
 import type { AssemblySourceRefV1 } from '@local-creative-os/contracts'
-import type { ActiveReceiverIdentityV1, Checkpoint, ConnectedConversationV1, ContextChangeProposalV1, ContextManifestV0, ContinuityResumeSnapshotV1, ConversationSessionV1, ObsidianVaultScanV1, OrderedRunReferenceV2, PresentationEntityRefV0, ResultSlotV0, RunEvent, RunProposalResult, RunReceiverRefV1, RunReview, RuntimeProviderStatus, WarehouseItemV1, WorkspaceMembership } from '@local-creative-os/contracts'
+import type { ActiveReceiverIdentityV1, Checkpoint, ConnectedConversationV1, ContextChangeProposalV1, ContextManifestV0, ContinuityResumeSnapshotV1, ConversationSessionV1, ExecutionItemAction, ExecutionItemV1, ObsidianVaultScanV1, OrderedRunReferenceV2, PresentationEntityRefV0, ResultSlotV0, RunEvent, RunProposalResult, RunReceiverRefV1, RunReview, RuntimeProviderStatus, WarehouseItemV1, WorkspaceMembership } from '@local-creative-os/contracts'
 import { MAX_STRUCTURAL_CONTAINER_DEPTH, type HandoffRecord, type ProjectId, type RelationId } from '@local-creative-os/domain'
 import type { ActiveRun, Camera, CanvasNode, CanvasScope, NodeDisplayMode, NodeLayer, PersistedPrototypeState, ProjectPackage, ScopeKind, TargetContextInference, WorkRailPreferences, Workspace } from './model'
 import { nodeMeta, runStatusLabel } from './model'
@@ -245,6 +245,7 @@ export function App() {
   const [revisionUpgradeOpen, setRevisionUpgradeOpen] = useState(false)
   const [revisionUpgradeBusy, setRevisionUpgradeBusy] = useState(false)
   const [runReviews, setRunReviews] = useState<readonly RunReview[]>([])
+  const [executionItems, setExecutionItems] = useState<readonly ExecutionItemV1[]>([])
   const [workflowCheckpoints, setWorkflowCheckpoints] = useState<readonly Checkpoint[]>([])
   const [coreHandoffs, setCoreHandoffs] = useState<readonly HandoffRecord[]>([])
   const [agentSurfaceDetailsOpen, setAgentSurfaceDetailsOpen] = useState(false)
@@ -1581,6 +1582,17 @@ export function App() {
     })
     return () => { cancelled = true }
   }, [activeProjectId, applyMembershipProjection, bootMode, syncProcessProjection])
+
+  // S1 alignment: pull Core-derived execution items so control rendering can fail-close on availableActions.
+  useEffect(() => {
+    if (bootMode !== 'runtime' || activeProjectId === null) { setExecutionItems([]); return }
+    let cancelled = false
+    void bridgeRef.current.client.executionItems(activeProjectId).then((call) => {
+      if (cancelled) return
+      setExecutionItems(call.result.ok ? call.result.value : [])
+    })
+    return () => { cancelled = true }
+  }, [activeProjectId, bootMode, activeRun?.id])
 
   useEffect(() => {
     let frame = 0
@@ -7703,6 +7715,12 @@ export function App() {
       workspace: effectiveWorkspace,
       nodes,
       activeRun,
+      runActions: activeRun === null
+        ? undefined
+        : executionItems.find((item) => item.runId === activeRun.id)?.availableActions
+          ?? (["queued", "running", "waiting_input", "failed"].includes(activeRun.status)
+            ? (["cancel"] as ExecutionItemAction[]).concat(activeRun.status === "waiting_input" ? (["answer_input"] as ExecutionItemAction[]) : [], activeRun.status === "failed" ? (["retry"] as ExecutionItemAction[]) : [])
+            : []),
       pendingNode,
       collapsed: workRail.collapsed,
       width: effectiveRailWidth,
