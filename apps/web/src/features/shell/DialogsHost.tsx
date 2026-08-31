@@ -14,6 +14,13 @@ import { UniversalImportPanel } from '../resources/UniversalImportPanel'
 import { ConversationContextDialog } from '../conversations/ConversationContextDialog'
 import { ObsidianImportDialog } from '../resources/ObsidianImportDialog'
 import { ResourceDetailDialog } from '../resources/ResourceDetailDialog'
+import { dominantDialogOwner, type DialogOwnerTier } from './dialogOwner'
+
+export interface DialogLayerCandidate {
+  readonly id: string
+  readonly tier: DialogOwnerTier
+  readonly node: ReactNode
+}
 
 export interface DialogsHostProps {
   readonly projectCreate: ComponentProps<typeof ProjectCreateDialog> | null
@@ -33,29 +40,38 @@ export interface DialogsHostProps {
   readonly conversationContext: ComponentProps<typeof ConversationContextDialog> | null
   readonly obsidianImport: ComponentProps<typeof ObsidianImportDialog> | null
   readonly resourceDetail: ComponentProps<typeof ResourceDetailDialog> | null
-  /** 需要 IIFE 推导的复杂弹窗（如 WorkspaceStatesDialog）由上层渲染后传入。 */
-  readonly extraDialogs: ReactNode
+  /** 上层复杂浮层也必须显式进入 dominant-owner 候选，不再传 opaque Fragment。 */
+  readonly extraDialogs: readonly DialogLayerCandidate[]
 }
 
-/** 所有弹窗/浮层的纯展示宿主；行为全部来自上层注入的 props。 */
+/**
+ * Dialog/modal dominant owner.
+ *
+ * 只渲染当前最高优先级的一层。被遮住的父层 state 不被销毁；child/confirm
+ * 关闭后父层可以自然恢复。这样避免 DialogsHost 同时把多个 non-null state
+ * 平铺到 DOM，也不引入第二套全局 overlay state。
+ */
 export function DialogsHost(props: DialogsHostProps) {
-  return <>{[
-    props.projectCreate && <ProjectCreateDialog key="project-create" {...props.projectCreate} />,
-    props.projectTools && <ProjectToolsDialog key="project-tools" {...props.projectTools} />,
-    props.workbench && <ArtifactWorkbench key="workbench" {...props.workbench} />,
-    props.scopeCreate && <ScopeCreateDialog key="scope-create" {...props.scopeCreate} />,
-    props.createContent && <CreateContentDialog key="create-content" {...props.createContent} />,
-    props.workspaceEditor && <WorkspaceDialog key="workspace-editor" {...props.workspaceEditor} />,
-    props.nodeRename && <InlineNodeRename key="node-rename" {...props.nodeRename} />,
-    props.noteEdit && <InlineNoteEditor key="note-edit" {...props.noteEdit} />,
-    props.confirmWorkspaceDelete && <ConfirmDialog key="confirm-workspace-delete" {...props.confirmWorkspaceDelete} />,
-    props.confirmScopeDelete && <ConfirmDialog key="confirm-scope-delete" {...props.confirmScopeDelete} />,
-    props.confirmProjectDelete && <ConfirmDialog key="confirm-project-delete" {...props.confirmProjectDelete} />,
-    props.handoff && <HandoffDialog key="handoff" {...props.handoff} />,
-    props.linkReference && <LinkReferenceDialog key="link-reference" {...props.linkReference} />,
-    props.universalImport && <UniversalImportPanel key="universal-import" {...props.universalImport} />,
-    props.conversationContext && <ConversationContextDialog key="conversation-context" {...props.conversationContext} />,
-    props.obsidianImport && <ObsidianImportDialog key="obsidian-import" {...props.obsidianImport} />,
-    props.resourceDetail && <ResourceDetailDialog key="resource-detail" {...props.resourceDetail} />,
-  ]}{props.extraDialogs}</>
+  const candidates: DialogLayerCandidate[] = [
+    ...(props.nodeRename ? [{ id: 'node-rename', tier: 'editor' as const, node: <InlineNodeRename key="node-rename" {...props.nodeRename} /> }] : []),
+    ...(props.noteEdit ? [{ id: 'note-edit', tier: 'editor' as const, node: <InlineNoteEditor key="note-edit" {...props.noteEdit} /> }] : []),
+    ...(props.projectCreate ? [{ id: 'project-create', tier: 'surface' as const, node: <ProjectCreateDialog key="project-create" {...props.projectCreate} /> }] : []),
+    ...(props.projectTools ? [{ id: 'project-tools', tier: 'surface' as const, node: <ProjectToolsDialog key="project-tools" {...props.projectTools} /> }] : []),
+    ...(props.workbench ? [{ id: 'workbench', tier: 'surface' as const, node: <ArtifactWorkbench key="workbench" {...props.workbench} /> }] : []),
+    ...(props.scopeCreate ? [{ id: 'scope-create', tier: 'surface' as const, node: <ScopeCreateDialog key="scope-create" {...props.scopeCreate} /> }] : []),
+    ...(props.createContent ? [{ id: 'create-content', tier: 'surface' as const, node: <CreateContentDialog key="create-content" {...props.createContent} /> }] : []),
+    ...(props.workspaceEditor ? [{ id: 'workspace-editor', tier: 'surface' as const, node: <WorkspaceDialog key="workspace-editor" {...props.workspaceEditor} /> }] : []),
+    ...(props.handoff ? [{ id: 'handoff', tier: 'surface' as const, node: <HandoffDialog key="handoff" {...props.handoff} /> }] : []),
+    ...(props.universalImport ? [{ id: 'universal-import', tier: 'surface' as const, node: <UniversalImportPanel key="universal-import" {...props.universalImport} /> }] : []),
+    ...(props.linkReference ? [{ id: 'link-reference', tier: 'child' as const, node: <LinkReferenceDialog key="link-reference" {...props.linkReference} /> }] : []),
+    ...(props.conversationContext ? [{ id: 'conversation-context', tier: 'child' as const, node: <ConversationContextDialog key="conversation-context" {...props.conversationContext} /> }] : []),
+    ...(props.obsidianImport ? [{ id: 'obsidian-import', tier: 'child' as const, node: <ObsidianImportDialog key="obsidian-import" {...props.obsidianImport} /> }] : []),
+    ...(props.resourceDetail ? [{ id: 'resource-detail', tier: 'child' as const, node: <ResourceDetailDialog key="resource-detail" {...props.resourceDetail} /> }] : []),
+    ...props.extraDialogs,
+    ...(props.confirmWorkspaceDelete ? [{ id: 'confirm-workspace-delete', tier: 'blocking' as const, node: <ConfirmDialog key="confirm-workspace-delete" {...props.confirmWorkspaceDelete} /> }] : []),
+    ...(props.confirmScopeDelete ? [{ id: 'confirm-scope-delete', tier: 'blocking' as const, node: <ConfirmDialog key="confirm-scope-delete" {...props.confirmScopeDelete} /> }] : []),
+    ...(props.confirmProjectDelete ? [{ id: 'confirm-project-delete', tier: 'blocking' as const, node: <ConfirmDialog key="confirm-project-delete" {...props.confirmProjectDelete} /> }] : []),
+  ]
+  const dominantId = dominantDialogOwner(candidates.map((candidate) => ({ id: candidate.id, tier: candidate.tier, open: true })))
+  return dominantId === null ? null : candidates.find((candidate) => candidate.id === dominantId)?.node ?? null
 }

@@ -430,3 +430,18 @@ Primary A17 evidence:
 - `apps/web/src/features/spatial/projectRelationEndpoint.ts`
 - `apps/web/src/features/canvas/ProjectCanvas.tsx`
 - `scripts/validate-v015-a17-conversation-semantic-relation.mjs`
+
+
+---
+
+# A18 context/owner index update
+
+Fresh census after A17: Relation source/static semantics are closed through A17; the next explicit Phase A owner defect is Dialog/Modal multi-owner rendering.
+
+A18 candidate owner:
+
+`application dialog states → explicit DialogLayerCandidate[] → dominantDialogOwner → exactly one rendered dialog/modal`
+
+SpatialOverlayPlacement remains separate/open.
+
+Provenance limitation: user supplied an A17 merged archive named `ec01327`, but the sandbox mount path failed. A18 therefore uses `0691812 exact source + exact A17 final patch` only as `TEMP_RECONSTRUCTED_CURRENT_SOURCE` and is not formal merge-authorized until exact current bytes or local apply validation return.

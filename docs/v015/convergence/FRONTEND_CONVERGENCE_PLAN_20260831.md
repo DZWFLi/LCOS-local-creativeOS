@@ -920,3 +920,16 @@ A17 therefore:
 - does not introduce generic `connect()` or merge Conversation Context Mapping.
 
 After A17 source/static, Phase A remains OPEN pending real browser/human/save→reload evidence and a fresh runtime census. Phase B remains NOT ADMITTED.
+
+
+---
+
+# 28. Phase A candidate · A18 Dialog Dominant Owner Arbitration
+
+Fresh census after A17 finds no new Relation semantic debt. The next explicit owner defect is `DialogsHost` multi-owner rendering: multiple non-null dialog states can render together and `extraDialogs` is opaque to arbitration.
+
+A18 candidate introduces one pure dominant-dialog owner (`editor < surface < child < blocking`), converts complex App dialogs into explicit candidates, and renders only the current dominant dialog while preserving hidden parent application state.
+
+A18 does **not** implement SpatialOverlayPlacement or complete all portal/overlayStack convergence.
+
+The uploaded real A17 merged archive `ec01327` could not be mounted in the current sandbox, so A18 is source/static PASS on `0691812 + exact A17 patch` reconstruction but is **not formally merge-authorized** until exact current-source or local apply validation returns. Phase A remains OPEN; Phase B remains NOT ADMITTED.

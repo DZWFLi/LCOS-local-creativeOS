@@ -7866,14 +7866,14 @@ export function App() {
       onShowRun: clearSelection,
     }}
     dialogs={{
-      projectCreate: {
-        open: projectCreateOpen,
+      projectCreate: projectCreateOpen ? {
+        open: true,
         initialIntent: projectCreateIntent,
         onCancel: () => setProjectCreateOpen(false),
         onBrowseDirectory: browseProjectDirectory,
         onInspectDirectory: inspectProjectDirectory,
         onCreate: createProject,
-      },
+      } : null,
       projectTools: projectToolsMode ? {
         open: true,
         searchOnly: projectToolsMode === 'search',
@@ -8015,58 +8015,75 @@ export function App() {
         onClose: () => setResourceDetailArtifactId(null),
         onChanged: () => undefined,
       } : null,
-      extraDialogs: <>
-        {/* 权限门确认卡（第一梯队 ⑥）：写意图 Run 挂起在此，确认→原发送链，取消→不发起。 */}
-        {pendingPermissionRun !== null ? <PermissionConfirmCard title={pendingPermissionRun.card.title} items={pendingPermissionRun.card.items} onConfirm={confirmPendingPermissionRun} onCancel={cancelPendingPermissionRun} /> : null}
-        {revisionUpgradeOpen && revisionUpgradeTargetNode ? <RevisionUpgradeDialog targetTitle={revisionUpgradeTargetNode.title} busy={revisionUpgradeBusy} onClose={() => { if (!revisionUpgradeBusy) setRevisionUpgradeOpen(false) }} onSubmit={(input) => { void upgradeAgentResultWithFeedback(input) }} /> : null}
-        {workspaceStatesOpen && workspaceStatesWorkspaceId ? (() => {
+      extraDialogs: [
+        pendingPermissionRun !== null ? {
+          id: 'permission-confirm', tier: 'blocking' as const,
+          node: <PermissionConfirmCard title={pendingPermissionRun.card.title} items={pendingPermissionRun.card.items} onConfirm={confirmPendingPermissionRun} onCancel={cancelPendingPermissionRun} />,
+        } : null,
+        revisionUpgradeOpen && revisionUpgradeTargetNode ? {
+          id: 'revision-upgrade', tier: 'child' as const,
+          node: <RevisionUpgradeDialog targetTitle={revisionUpgradeTargetNode.title} busy={revisionUpgradeBusy} onClose={() => { if (!revisionUpgradeBusy) setRevisionUpgradeOpen(false) }} onSubmit={(input) => { void upgradeAgentResultWithFeedback(input) }} />,
+        } : null,
+        workspaceStatesOpen && workspaceStatesWorkspaceId ? (() => {
           const stateWorkspace = workspaces.find((workspace) => workspace.id === workspaceStatesWorkspaceId)
-          return stateWorkspace ? <WorkspaceStatesDialog workspace={stateWorkspace} states={workspaceStates} loading={workspaceStatesLoading} saving={workspaceStateSaving} restoringId={workspaceStateRestoringId} error={workspaceStatesError} onClose={() => setWorkspaceStatesOpen(false)} onRefresh={() => loadWorkspaceStates(workspaceStatesWorkspaceId)} onSave={(name) => saveCurrentWorkspaceState(workspaceStatesWorkspaceId, name)} onRestore={restoreSavedWorkspaceState} /> : null
-        })() : null}
-        {controllerTargetSessionId ? <ConversationControllerDialog
-          sessionTitle={conversationSessions.find((item) => item.id === controllerTargetSessionId)?.title ?? 'Conversation'}
-          conversations={controllerChoices}
-          busy={controllerBusy}
-          error={controllerError}
-          onChoose={(id) => { void confirmControllerLink(id) }}
-          onClose={() => { if (!controllerBusy) { setControllerTargetSessionId(null); setControllerChoices([]); setControllerError(null) } }}
-        /> : null}
-        {projectFocusOpen && projectFocusSourceIds.length === 1 && projectFocusAnchor !== null && projectFocusLocations.length > 0 && !projectFocusListMode ? <ArtifactLocationOrbit
-          open
-          anchor={projectFocusAnchor}
-          sourceLabel={projectFocusSourceLabel || '当前对象'}
-          locations={projectFocusLocations}
-          onClose={() => { setProjectFocusOpen(false); setProjectFocusAnchor(null) }}
-          onNavigate={navigateProjectFocus}
-          onMore={() => setProjectFocusListMode(true)}
-        /> : <ProjectFocusNavigator
-          open={projectFocusOpen}
-          sourceLabel={projectFocusSourceLabel || (projectFocusCount ? `已选 ${projectFocusCount} 项` : '')}
-          sourceCount={projectFocusCount}
-          locations={projectFocusLocations}
-          onClose={() => { setProjectFocusOpen(false); setProjectFocusAnchor(null); setProjectFocusListMode(false) }}
-          onNavigate={navigateProjectFocus}
-        />}
-        {reorganizeOpen && bootMode === 'runtime' ? <ReorganizePanel
-          projectId={activeProjectId}
-          scopeId={scopeId}
-          nodes={scopeNodes}
-          selectedIds={selectedIds}
-          client={bridgeRef.current.client}
-          onClose={closeReorganize}
-          onApplied={setNotice}
-          onGhost={reorganizeGhost}
-          onLivePositions={(positions, phase) => {
-            const byId = new Map(positions.map((position) => [position.id, position]))
-            setNodes((current) => current.map((node) => {
-              const position = byId.get(node.id)
-              return position ? { ...node, x: position.x, y: position.y } : node
-            }))
-            setReorganizePendingIds(phase === 'apply' ? positions.map((position) => position.id) : [])
-          }}
-          onReviewSettled={() => setReorganizePendingIds([])}
-        /> : null}
-      </>,
+          return stateWorkspace ? {
+            id: 'workspace-states', tier: 'child' as const,
+            node: <WorkspaceStatesDialog workspace={stateWorkspace} states={workspaceStates} loading={workspaceStatesLoading} saving={workspaceStateSaving} restoringId={workspaceStateRestoringId} error={workspaceStatesError} onClose={() => setWorkspaceStatesOpen(false)} onRefresh={() => loadWorkspaceStates(workspaceStatesWorkspaceId)} onSave={(name) => saveCurrentWorkspaceState(workspaceStatesWorkspaceId, name)} onRestore={restoreSavedWorkspaceState} />,
+          } : null
+        })() : null,
+        controllerTargetSessionId ? {
+          id: 'conversation-controller', tier: 'child' as const,
+          node: <ConversationControllerDialog
+            sessionTitle={conversationSessions.find((item) => item.id === controllerTargetSessionId)?.title ?? 'Conversation'}
+            conversations={controllerChoices}
+            busy={controllerBusy}
+            error={controllerError}
+            onChoose={(id) => { void confirmControllerLink(id) }}
+            onClose={() => { if (!controllerBusy) { setControllerTargetSessionId(null); setControllerChoices([]); setControllerError(null) } }}
+          />,
+        } : null,
+        projectFocusOpen ? {
+          id: 'project-focus', tier: 'child' as const,
+          node: projectFocusSourceIds.length === 1 && projectFocusAnchor !== null && projectFocusLocations.length > 0 && !projectFocusListMode ? <ArtifactLocationOrbit
+            open
+            anchor={projectFocusAnchor}
+            sourceLabel={projectFocusSourceLabel || '当前对象'}
+            locations={projectFocusLocations}
+            onClose={() => { setProjectFocusOpen(false); setProjectFocusAnchor(null) }}
+            onNavigate={navigateProjectFocus}
+            onMore={() => setProjectFocusListMode(true)}
+          /> : <ProjectFocusNavigator
+            open
+            sourceLabel={projectFocusSourceLabel || (projectFocusCount ? `已选 ${projectFocusCount} 项` : '')}
+            sourceCount={projectFocusCount}
+            locations={projectFocusLocations}
+            onClose={() => { setProjectFocusOpen(false); setProjectFocusAnchor(null); setProjectFocusListMode(false) }}
+            onNavigate={navigateProjectFocus}
+          />,
+        } : null,
+        reorganizeOpen && bootMode === 'runtime' ? {
+          id: 'reorganize', tier: 'child' as const,
+          node: <ReorganizePanel
+            projectId={activeProjectId}
+            scopeId={scopeId}
+            nodes={scopeNodes}
+            selectedIds={selectedIds}
+            client={bridgeRef.current.client}
+            onClose={closeReorganize}
+            onApplied={setNotice}
+            onGhost={reorganizeGhost}
+            onLivePositions={(positions, phase) => {
+              const byId = new Map(positions.map((position) => [position.id, position]))
+              setNodes((current) => current.map((node) => {
+                const position = byId.get(node.id)
+                return position ? { ...node, x: position.x, y: position.y } : node
+              }))
+              setReorganizePendingIds(phase === 'apply' ? positions.map((position) => position.id) : [])
+            }}
+            onReviewSettled={() => setReorganizePendingIds([])}
+          />,
+        } : null,
+      ].filter((candidate): candidate is NonNullable<typeof candidate> => candidate !== null),
     }}
     immersive={immersiveNodeId ? (() => {
       const immersiveNode = nodes.find((node) => node.id === immersiveNodeId) ?? presentationEntityNodes.find((node) => node.id === immersiveNodeId)

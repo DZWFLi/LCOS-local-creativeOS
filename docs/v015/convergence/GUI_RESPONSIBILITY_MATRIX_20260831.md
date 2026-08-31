@@ -602,3 +602,19 @@ A16 is endpoint canonicalization, not a universal Relation ontology. Main persis
 | Conversation without artifact identity | fail-close | guessing any receiver/view identity | KEEP |
 
 A17 resolves the previous `SEMANTIC_OWNER_UNPROVEN` state through later L0 + structural Core evidence; the earlier fail-close remains valid historical protection, not an error to erase.
+
+
+---
+
+# A18 Dialog Dominant Owner Arbitration
+
+| Domain | Canonical owner after A18 candidate | Forbidden regression | Status |
+|---|---|---|---|
+| Dialog/modal dominant transient | `DialogsHost → dominantDialogOwner` | flat render of every non-null dialog state | SOURCE/STATIC CANDIDATE |
+| Parent→child dialog causality | lower application state preserved; child tier outranks surface tier | closing child destroys parent state / two visible modals | SOURCE/STATIC CANDIDATE |
+| destructive confirmation | blocking tier | confirmation underneath editor/tool dialog | SOURCE/STATIC CANDIDATE |
+| complex App dialog layers | explicit `DialogLayerCandidate[]` | opaque `extraDialogs` Fragment bypass | SOURCE/STATIC CANDIDATE |
+| SpatialOverlayPlacement | not changed by A18 | claiming dominant owner solves placement | OPEN |
+| real ec01327 exact-byte integration | current upload mount blocked | fabricated exact-source PASS | BLOCKED_ENV |
+
+A18 closes one multi-owner class only. Overlay free-space placement and runtime/human evidence remain Phase A debt.

@@ -113,7 +113,7 @@ describe('App 接线契约（源码断言：startRunFrom 统一过门）', () =>
   })
 
   it('确认卡挂载在 extraDialogs，pending 非 null 才渲染（useState open + pending payload 模式）', () => {
-    expect(app).toContain('{pendingPermissionRun !== null ? <PermissionConfirmCard')
+    expect(app).toContain("node: <PermissionConfirmCard")
     expect(app).toContain('onConfirm={confirmPendingPermissionRun}')
     expect(app).toContain('onCancel={cancelPendingPermissionRun}')
   })
