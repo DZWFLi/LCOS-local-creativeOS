@@ -128,7 +128,11 @@ Handoff 隐藏未完成
 
 ## `LCOS_0.1_三大独立视图组件化详细施工总稿_v03_对话选择与承接全链补齐_20260821.md`
 
-这是目前所有 Context / Workflow GUI 修复的**第一回源原文**。
+状态：`RAW_SOURCE_LOST / CACHE EVICTED`。
+
+它是 8/21 当时的重要**施工汇总主稿**，但不是三 Surface 产品定义的唯一创世来源，也不是后续 Freeze 的唯一 authority。当前不得再把它作为永久施工 blocker；其权威内容按 `LOST_SOURCE_PROVENANCE_LEDGER_20260831.md` 由上游专题稿、后续 explicit Freeze、差分审计、当前源码/测试与最新用户裁决交叉重建。
+
+历史上它曾是 Context / Workflow GUI 修复的**第一施工回源入口之一**。
 
 原文冻结：
 

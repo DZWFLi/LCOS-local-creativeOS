@@ -1338,6 +1338,44 @@ prompt / reference / run-local execution。
 9. `LCOS_v015_CONTEXT_TRACE_INDEX_20260830.md`
 10. 当前真实 HEAD / source / tests / closeout。
 
+## 41.1 原始文件永久丢失时
+
+默认仍要求 FULL READ。
+
+如果某个点名 raw source 已确认永久丢失 / cache evicted，不允许：
+
+- 用搜索 snippet 冒充全文；
+- 伪造原文；
+- 因不存在的文件永久冻结施工。
+
+改走：
+
+```text
+RAW_SOURCE_LOST
+→ LOST_SOURCE_PROVENANCE_LEDGER
+→ surviving upstream source
+→ later explicit Freeze / L0 adjudication
+→ delta audit
+→ current source/test owner
+→ latest user adjudication
+→ RECONSTRUCTED_AUTHORITY
+```
+
+多源一致：允许继续。
+多源冲突：`USER_ARBITRATION_REQUIRED / STOP`。
+证据不足：`RECONSTRUCTION_INSUFFICIENT / STOP`。
+
+当前 2026-08-21 v0.3 三 Surface 施工总稿已经按 2026-08-31 用户最新裁决登记为：
+
+```text
+RAW_SOURCE_LOST / RECONSTRUCTED_AUTHORITY
+NON-BLOCKING for A13
+```
+
+详见：
+
+`docs/v015/convergence/LOST_SOURCE_PROVENANCE_LEDGER_20260831.md`
+
 ---
 
 # 42. 每次施工强制 Source-Diff Gate

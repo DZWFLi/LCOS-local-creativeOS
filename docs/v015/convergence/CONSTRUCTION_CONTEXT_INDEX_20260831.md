@@ -261,3 +261,26 @@ Runtime/browser/manual status remains `BLOCKED_ENV` until dependencies are avail
 Next admissible proposition after review:
 
 - A13 Cross-surface Relation Gesture Adapter, but only after a fresh owner census distinguishes physical gesture from Main/Context/Workflow persistence truth.
+---
+
+# 15. SOP-R1 pointer · Lost Raw Source / Reconstructed Authority
+
+Latest process adjudication:
+
+- `docs/v015/convergence/LOST_SOURCE_PROVENANCE_LEDGER_20260831.md`
+- `docs/v015/convergence/SOP_R1_RAW_SOURCE_RECONSTRUCTED_AUTHORITY_CLOSEOUT_20260831.md`
+
+Current rule:
+
+- FULL READ remains the default for available T0/T1 sources;
+- an actually lost raw source is never silently replaced by snippets or a fabricated reconstruction;
+- verified permanent loss enters `RAW_SOURCE_LOST → RECONSTRUCTED_AUTHORITY`;
+- surviving upstream sources + later explicit Freeze/L0 + delta audit + current code/test + latest user adjudication must agree;
+- conflict means `USER_ARBITRATION_REQUIRED / STOP`; insufficient evidence means `RECONSTRUCTION_INSUFFICIENT / STOP`;
+- every lost source remains visible in the provenance ledger.
+
+Current LS-001:
+
+`LCOS_0.1_三大独立视图组件化详细施工总稿_v03_对话选择与承接全链补齐_20260821.md`
+
+is `RAW_SOURCE_LOST / RECONSTRUCTED_AUTHORITY PASS` and is **not a permanent A13 blocker** after the 2026-08-31 user adjudication.

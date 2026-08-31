@@ -156,6 +156,83 @@ superseded_by: ...
 
 ---
 
+## 3.1 · RAW_SOURCE_LOST / RECONSTRUCTED_AUTHORITY Gate
+
+FULL READ 仍是默认规则。
+
+但如果 Mandatory / T1 点名的原始文件已经被确认**永久丢失、缓存淘汰、或无法再取得全文**，不得让一个不存在的文件永久冻结整个施工线，也不得假装搜索片段等于全文。
+
+此时允许进入：
+
+```text
+RAW_SOURCE_LOST
+→ Provenance Audit
+→ Reconstructed Authority Gate
+```
+
+只有同时满足以下条件，才允许标记：
+
+```text
+RECONSTRUCTED_AUTHORITY = PASS
+```
+
+### 最低证据集
+
+1. 已确认 raw source 不可恢复，且记录丢失原因；
+2. 至少一份仍存的上游原稿 / 同期专题稿能证明该定义不是只存在于丢失文件；
+3. 至少一份更晚的 explicit Freeze / L0 用户裁决重新展开或覆盖对应定义；
+4. 有 Delta Audit / Handoff / regression evidence 能说明后续如何继承、修改或压缩该定义；
+5. 当前 production owner / source / tests 与 surviving authority 不冲突；
+6. 当前用户可重新裁决时，最新明确用户裁决进入最高优先级；
+7. 对当前 patch 的影响范围、置信度、仍不可恢复的历史细节必须显式记录。
+
+### 判定
+
+```text
+多源一致
+→ RAW_SOURCE_LOST / RECONSTRUCTED_AUTHORITY PASS
+→ 允许施工
+
+多源冲突
+→ USER_ARBITRATION_REQUIRED
+→ STOP
+
+证据不足
+→ RECONSTRUCTION_INSUFFICIENT
+→ STOP
+```
+
+### 永久禁止
+
+- 把搜索 snippet / 摘要冒充原文 FULL READ；
+- 伪造一份“重建原文”并当成原始文件；
+- 删除 provenance debt；
+- 仅凭一份下游 Handoff 宣称重建成功；
+- 用重建 authority 反向覆盖更新的 explicit Freeze / L0 用户裁决。
+
+### 必须建立 Provenance Ledger
+
+每个丢失原稿必须记录：
+
+```text
+Lost source
+Loss status / reason
+Nature of the source
+Surviving upstream authorities
+Downstream superseding / expanding authorities
+Delta-audit evidence
+Current code/test evidence
+Latest user adjudication
+Recoverability
+Current-domain impact
+Blocking status
+Confidence
+```
+
+Ledger 是**丢失事实与权威重建记录**，不是假原文。
+
+---
+
 # 4. 每 Session 上下文恢复清单
 
 开工前必须记录：
@@ -188,6 +265,7 @@ Current production owner:
 
 1. `LCOS_0.1_INTERFACE_PRODUCTIZATION_CODEX_CONSTRUCTION_PLAN_20260816.md`
 2. `LCOS_0.1_三大独立视图组件化详细施工总稿_v03_对话选择与承接全链补齐_20260821.md`
+   - 当前状态：`RAW_SOURCE_LOST`；按 `LOST_SOURCE_PROVENANCE_LEDGER_20260831.md` 执行 Reconstructed Authority Gate，不再把不可恢复原文作为永久 blocker。
 3. `LCOS_v015_三Surface交互同构硬规则_20260831.md`
 4. `LCOS_v015_GUI_ProductionPath_RendererOwner_Overlay回归审计_20260830.md`
 5. `LCOS_v015_GUI_全量同类问题排查与修改责任矩阵_20260831.md`
@@ -244,6 +322,7 @@ Current production owner:
 ### 必须全文读
 
 1. `LCOS_0.1_三大独立视图组件化详细施工总稿_v03_对话选择与承接全链补齐_20260821.md`
+   - 当前状态：`RAW_SOURCE_LOST`；必须读 Provenance Ledger + surviving upstream/downstream authority chain；若对应域证据冲突则 `USER_ARBITRATION_REQUIRED / STOP`。
 2. `LCOS_三大视图组件体系筛选表_v01_20260821.md`
 3. `LCOS_v0.15_UX冻结_同一套物理三个语义现场与Assembly_20260829.md`
 4. `LCOS_v0.15_R3D_SkillArtifact_SkillBuilder_CrossSurface_Freeze_20260830.md`
