@@ -15,7 +15,7 @@ const checks=[
  ['Conversation execution still passes through Proposal compatibility fail-close',surface.includes('proposalCompatibilityBlockReason')&&app.includes('proposeRun(activeProjectId')],
  ['App injects the same shared command/execution surface',app.includes('conversationScene={conversationSpaceId ? {')&&app.includes('command: sharedComposerCommand')&&app.includes('onSubmit: requestSurfaceAgentRun')],
  ['Conversation prompt explicitly preserves one canonical Conversation truth',app.includes('同一段 canonical Conversation，不创建新的 chat/session truth')],
- ['Conversation Work registers with the shared Overlay Stack',surface.includes('registerOverlay(`conversation-work:')&&surface.includes("kind: 'popover'")],
+ ['Conversation Work delegates Overlay Stack ownership to the shared Unified Composer',composer.includes('registerOverlay(overlayId')&&composer.includes("kind: 'popover'")&&!surface.includes('registerOverlay(`conversation-work:')],
  ['Global Esc consults Overlay Stack before exiting the Conversation scene',app.includes('escapeTopOverlay()')&&app.indexOf('escapeTopOverlay()')<app.indexOf('if (isText) return')],
 ]
 let passed=0;for(const [label,ok] of checks){if(ok){passed++;console.log(`PASS ${label}`)}else console.error(`FAIL ${label}`)}

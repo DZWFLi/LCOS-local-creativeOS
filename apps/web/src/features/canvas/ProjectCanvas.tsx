@@ -42,6 +42,7 @@ import { resolveSurfaceIntent, type SurfaceIntent } from '../spatial/model/surfa
 import { ObjectOrbit } from '../ui/ObjectOrbit'
 import { ProjectObjectOrbit } from '../ui/ProjectObjectOrbit'
 import { SelectionGroupActions, type SelectionGroupAction } from '../ui/SelectionGroupActions'
+import { collectSpatialOverlayOccupiedRects } from '../ui/spatialOverlayEnvironment'
 import { BirthProvenanceBadge } from '../provenance/BirthProvenanceBadge'
 import { projectMaterialRelationTargetAt, relationTargetWithinScreenHaloAt } from '../spatial/projectMaterialRelationGesture'
 
@@ -409,15 +410,30 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
   }
   const overlayWidth = canvasRef.current?.clientWidth ?? 1440
   const overlayHeight = canvasRef.current?.clientHeight ?? 900
+  const canvasScreenRect = canvasRef.current?.getBoundingClientRect() ?? null
   const selectionGroupActionAnchor = selectionBounds ? spatialWorldToScreen({ x: selectionBounds.x, y: selectionBounds.y }, camera) : null
   const selectionComposerAnchor = selectedBounds ? spatialWorldToScreen({ x: selectedBounds.x, y: selectedBounds.y + selectedBounds.height }, camera) : null
+  const selectionComposerTargetBounds = selectedVisualBounds && canvasScreenRect ? {
+    left: canvasScreenRect.left + camera.x + selectedVisualBounds.x * camera.zoom,
+    top: canvasScreenRect.top + camera.y + selectedVisualBounds.y * camera.zoom,
+    width: selectedVisualBounds.width * camera.zoom,
+    height: selectedVisualBounds.height * camera.zoom,
+  } : null
+  const selectionComposerSpatialPlacement = selectionComposerTargetBounds && canvasScreenRect ? {
+    targetBounds: selectionComposerTargetBounds,
+    viewport: { left: canvasScreenRect.left, top: canvasScreenRect.top, width: canvasScreenRect.width, height: canvasScreenRect.height },
+    occupiedRects: collectSpatialOverlayOccupiedRects({ left: canvasScreenRect.left, top: canvasScreenRect.top, width: canvasScreenRect.width, height: canvasScreenRect.height }),
+    preferredSide: 'below' as const,
+    gap: 12,
+    margin: 12,
+  } : undefined
   const selectionGroupActionPosition = selectionGroupActionAnchor ? {
     left: Math.max(12, Math.min(Math.max(12, overlayWidth - 40), selectionGroupActionAnchor.x)),
     top: Math.max(12, Math.min(Math.max(12, overlayHeight - 40), selectionGroupActionAnchor.y - 38)),
   } : null
   const selectionComposerPosition = selectionComposerAnchor ? {
-    left: Math.max(12, Math.min(Math.max(12, overlayWidth - Math.min(430, overlayWidth - 24)), selectionComposerAnchor.x)),
-    top: Math.max(12, Math.min(Math.max(12, overlayHeight - 128), selectionComposerAnchor.y + 12)),
+    left: selectionComposerAnchor.x,
+    top: selectionComposerAnchor.y + 12,
   } : null
   const pendingZone = useMemo(() => getPendingZoneBounds(nodes), [nodes])
   const zoomBand = camera.zoom < .35 ? '20' : camera.zoom < .6 ? '35' : camera.zoom < .9 ? '60' : '90'
@@ -1124,7 +1140,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
         else { setSelectedColonyId(null); setColonyLassoMode({ kind: 'create' }); setColonyLassoPoints([]); setColonyCandidateIds([]) }
       }}><LassoSelect size={13}/>{colonyLassoMode?.kind === 'rescope' ? '重新圈定中' : colonyLassoMode ? '圈定中 · Esc 取消' : '圈一片'}</button>
     </div>}
-    {selectedIds.length > 1 && selectionGroupActionPosition && <SelectionGroupActions
+    {!selectionComposer && selectedIds.length > 1 && selectionGroupActionPosition && <SelectionGroupActions
       x={selectionGroupActionPosition.left}
       y={selectionGroupActionPosition.top}
       count={selectedIds.length}
@@ -1136,6 +1152,8 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
       selectedIds={selectedIds}
       x={selectionComposerPosition.left}
       y={selectionComposerPosition.top}
+      spatialPlacement={selectionComposerSpatialPlacement}
+      spatialPlacementOrigin={canvasScreenRect ? { x: canvasScreenRect.left, y: canvasScreenRect.top } : undefined}
       {...selectionComposer}
     />}
     {createMenu && <div data-testid="anchor-create-menu" className="anchor-create-menu" style={{ left: createMenu.screenX, top: createMenu.screenY }} onPointerDown={(event) => event.stopPropagation()} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation() }}><span>在此创建并连接</span><button data-testid="anchor-create-note" onClick={() => { onCreateNodeFromAnchor('note', createMenu.x, createMenu.y, createMenu.from); setCreateMenu(null) }}>文本</button><button data-testid="anchor-create-context" onClick={() => { onCreateNodeFromAnchor('context', createMenu.x, createMenu.y, createMenu.from); setCreateMenu(null) }}>内容集合</button><button className="cancel" onClick={() => setCreateMenu(null)}>取消</button></div>}

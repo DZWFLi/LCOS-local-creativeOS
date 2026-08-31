@@ -1,9 +1,12 @@
 import { Copy, ExternalLink, FileStack, FileText, FolderOpen, GitBranch, Layers3, Link2, X } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { Camera, CanvasNode } from '../../model'
 import { nodeMeta } from '../../model'
 import { detectFileIdentity } from './CanvasNodeVisual'
+import { nodeVisualBounds } from './canvasVisualGeometry'
+import { collectSpatialOverlayOccupiedRects } from '../ui/spatialOverlayEnvironment'
+import { resolveSpatialOverlayPlacement } from '../ui/spatialOverlayPlacement'
 
 interface Props {
   node: CanvasNode
@@ -28,6 +31,23 @@ interface Props {
 export function NodeInfoPopover({ node, camera, relationCount, onClose, onRelations, onShowResource, onPreview, onOpenMaterialSource, onRevisions, onOpenSource, onRevealSource, onCopyPath, onCopyImage, onCopyLink, onCopyText, onRelinkSource, shortcutResolution }: Props) {
   const popoverRef = useRef<HTMLElement | null>(null)
   const [relinkPath, setRelinkPath] = useState('')
+  const [measuredOverlaySize, setMeasuredOverlaySize] = useState({ width: 294, height: 510 })
+  useLayoutEffect(() => {
+    const element = popoverRef.current
+    if (!element) return
+    const measure = () => {
+      const rect = element.getBoundingClientRect()
+      if (rect.width <= 1 || rect.height <= 1) return
+      setMeasuredOverlaySize((current) => Math.abs(current.width - rect.width) < .5 && Math.abs(current.height - rect.height) < .5
+        ? current
+        : { width: rect.width, height: rect.height })
+    }
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(measure)
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [])
   useEffect(() => {
     const closeFromOutside = (event: PointerEvent) => {
       const target = event.target as Element | null
@@ -39,20 +59,28 @@ export function NodeInfoPopover({ node, camera, relationCount, onClose, onRelati
     return () => window.removeEventListener('pointerdown', closeFromOutside)
   }, [onClose])
   const canvas = document.querySelector<HTMLElement>('[data-testid="canvas"]')
-  const rect = canvas?.getBoundingClientRect()
-  const anchorX = (rect?.left ?? 0) + camera.x + (node.x + node.width) * camera.zoom
-  const anchorY = (rect?.top ?? 44) + camera.y + 8 * camera.zoom + node.y * camera.zoom
-  // B-1：视口边界翻转——右侧放不下翻左侧、底部放不下（含底部 Dock 占位）翻节点上方；
-  // Popover 与节点之间统一留 8px 间距。
-  const width = 294
-  const height = 510
-  const gap = 8
-  const preferLeft = anchorX + width + gap > window.innerWidth - 56
-  const left = preferLeft ? Math.max(12, anchorX - width - gap) : Math.min(window.innerWidth - width - 12, anchorX + gap)
-  const preferAbove = window.innerHeight - anchorY < height + gap
-  const top = preferAbove
-    ? Math.max(54, anchorY - height - gap)
-    : Math.max(54, Math.min(window.innerHeight - height - gap, anchorY))
+  const canvasRect = canvas?.getBoundingClientRect()
+  const visualBounds = nodeVisualBounds(node)
+  const targetBounds = canvasRect ? {
+    left: canvasRect.left + camera.x + visualBounds.x * camera.zoom,
+    top: canvasRect.top + camera.y + visualBounds.y * camera.zoom,
+    width: visualBounds.width * camera.zoom,
+    height: visualBounds.height * camera.zoom,
+  } : { left: 0, top: 0, width: 1, height: 1 }
+  const viewport = canvasRect
+    ? { left: canvasRect.left, top: canvasRect.top, width: canvasRect.width, height: canvasRect.height }
+    : { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight }
+  const placement = resolveSpatialOverlayPlacement({
+    targetBounds,
+    overlaySize: measuredOverlaySize,
+    viewport,
+    occupiedRects: collectSpatialOverlayOccupiedRects(viewport, popoverRef.current),
+    preferredSide: 'right',
+    gap: 10,
+    margin: 12,
+  })
+  const left = placement.left
+  const top = placement.top
   const url = node.previewText?.match(/^url:\s*(https?:\/\/\S+)/mi)?.[1]
   const identity = detectFileIdentity(node)
   const linkUrl = url
@@ -74,7 +102,7 @@ export function NodeInfoPopover({ node, camera, relationCount, onClose, onRelati
   const hasRevision = revisionCount > 0
   const hasPreview = node.previewStatus !== undefined && node.previewStatus !== 'not-generated'
 
-  return createPortal(<aside ref={popoverRef} className={`node-info-popover ${preferLeft ? 'place-left' : 'place-right'}`} style={{ position: 'fixed', left, top, zIndex: 'var(--lcos-z-overlay-ui)' /* z-tier: overlay-ui（B-1 归层；portal 到 body 须自带定位与层级） */ }} data-testid="node-info-popover" role="dialog" aria-label={`${node.title} 信息`} onContextMenu={(event) => event.preventDefault()}>
+  return createPortal(<aside ref={popoverRef} className={`node-info-popover place-${placement.side}`} data-spatial-placement-side={placement.side} data-spatial-placement-free={placement.free || undefined} style={{ position: 'fixed', left, top, zIndex: 'var(--lcos-z-overlay-ui)' /* z-tier: overlay-ui（B-1 归层；portal 到 body 须自带定位与层级） */ }} data-testid="node-info-popover" role="dialog" aria-label={`${node.title} 信息`} onContextMenu={(event) => event.preventDefault()}>
     <header><div><small>{nodeMeta[node.kind].label}</small><h3>{node.title}</h3></div><button className="icon-button pressable" aria-label="关闭节点信息" onClick={onClose}><X size={14} /></button></header>
     <dl>
       {hasRevision && <div><dt><FileText size={12} />版本</dt><dd>{revisionState}</dd></div>}

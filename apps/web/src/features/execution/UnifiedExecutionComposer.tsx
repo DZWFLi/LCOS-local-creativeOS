@@ -1,3 +1,4 @@
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { ArrowDown, ArrowUp, ChevronDown, Crosshair, History, Plus, Settings2, Sparkles, X } from 'lucide-react'
 import type { ConnectedConversationV1, RuntimeProviderStatus } from '@local-creative-os/contracts'
@@ -5,6 +6,8 @@ import type { CanvasNode } from '../../model'
 import type { ArtifactRevisionProvenance } from '../../runtime/projectionAdapters'
 import type { ComposerIntent, ComposerResultPolicy } from '../canvas/SelectionComposer'
 import { detectFileIdentity } from '../canvas/CanvasNodeVisual'
+import { dismissTop, queryStack, register as registerOverlay } from '../ui/overlayStack'
+import { resolveSpatialOverlayPlacement, type SpatialOverlayPlacementInput } from '../ui/spatialOverlayPlacement'
 import { referenceCandidates } from './commandDraft'
 
 interface Props {
@@ -17,6 +20,8 @@ interface Props {
   reachCount?: number
   x: number
   y: number
+  spatialPlacement?: Omit<SpatialOverlayPlacementInput, 'overlaySize'>
+  spatialPlacementOrigin?: { readonly x: number; readonly y: number }
   prompt: string
   provider: string
   createAsNewNode: boolean
@@ -60,6 +65,52 @@ function referenceKindLabel(node: CanvasNode): string {
 }
 
 export function UnifiedExecutionComposer(props: Props) {
+  const rootRef = useRef<HTMLElement | null>(null)
+  const [measuredOverlaySize, setMeasuredOverlaySize] = useState({ width: 430, height: 180 })
+  const overlayId = useId()
+  const onCloseRef = useRef(props.onClose)
+  useEffect(() => { onCloseRef.current = props.onClose }, [props.onClose])
+  useLayoutEffect(() => {
+    const element = rootRef.current
+    if (!element) return
+    const measure = () => {
+      const rect = element.getBoundingClientRect()
+      if (rect.width <= 1 || rect.height <= 1) return
+      setMeasuredOverlaySize((current) => Math.abs(current.width - rect.width) < .5 && Math.abs(current.height - rect.height) < .5
+        ? current
+        : { width: rect.width, height: rect.height })
+    }
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(measure)
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [])
+  const spatialPlacement = props.spatialPlacement
+    ? resolveSpatialOverlayPlacement({ ...props.spatialPlacement, overlaySize: measuredOverlaySize })
+    : null
+  const spatialPlacementOrigin = props.spatialPlacementOrigin ?? (props.spatialPlacement ? { x: props.spatialPlacement.viewport.left, y: props.spatialPlacement.viewport.top } : { x: 0, y: 0 })
+  const composerLeft = spatialPlacement ? spatialPlacement.left - spatialPlacementOrigin.x : props.x
+  const composerTop = spatialPlacement ? spatialPlacement.top - spatialPlacementOrigin.y : props.y
+  useEffect(() => {
+    const unregister = registerOverlay(overlayId, {
+      kind: 'popover',
+      element: () => rootRef.current,
+      onEsc: () => onCloseRef.current(),
+      dismissOnOutside: true,
+    })
+    const onOutsidePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null
+      if (target !== null && rootRef.current?.contains(target)) return
+      const stack = queryStack()
+      if (stack[stack.length - 1]?.id === overlayId) dismissTop()
+    }
+    window.addEventListener('pointerdown', onOutsidePointerDown, true)
+    return () => {
+      window.removeEventListener('pointerdown', onOutsidePointerDown, true)
+      unregister()
+    }
+  }, [overlayId])
   const selected = props.selectedIds.map((id) => props.nodes.find((node) => node.id === id)).filter((node): node is CanvasNode => Boolean(node))
   const references = referenceCandidates(props.referenceIds, props.nodes, props.receiverId, props.receivers)
   const editable = selected.filter((node) => node.managed === true && node.artifactId && node.revisionId)
@@ -85,7 +136,7 @@ export function UnifiedExecutionComposer(props: Props) {
     props.onResultPolicyChange?.(next === 'analyze' ? 'reply_only' : next === 'revise' ? 'draft_revision_per_target' : 'create_artifact')
   }
 
-  return <section className="selection-composer lcos-nearfield-composer lcos-unified-execution-composer" data-testid="selection-composer" data-reference-pick={props.referencePickActive || undefined} style={{ left: props.x, top: props.y } as CSSProperties} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()} onContextMenu={(event) => event.preventDefault()}>
+  return <section ref={rootRef} className="selection-composer lcos-nearfield-composer lcos-unified-execution-composer" data-lcos-transient-owner="selection-composer" data-testid="selection-composer" data-reference-pick={props.referencePickActive || undefined} data-spatial-placement-side={spatialPlacement?.side} data-spatial-placement-free={spatialPlacement?.free || undefined} style={{ left: composerLeft, top: composerTop } as CSSProperties} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()} onContextMenu={(event) => event.preventDefault()}>
     <div className="lcos-command-draft-head">
       <label className="lcos-receiver-select" title="这次交给哪段对话；不会改变项目默认承接对话">
         <Sparkles size={12}/>

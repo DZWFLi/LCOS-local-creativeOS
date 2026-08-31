@@ -6,7 +6,6 @@ import { useSpatialSessionCamera } from '../../state/spatialSessionState'
 import { SpatialCanvas } from '../spatial/SpatialCanvas'
 import { LcosButton } from '../ui/LcosButton'
 import { UnifiedExecutionComposer } from '../execution/UnifiedExecutionComposer'
-import { register as registerOverlay } from '../ui/overlayStack'
 import { explicitExecutionReferenceIds, proposalCompatibilityBlockReason, referenceCandidates } from '../execution/commandDraft'
 import type { SharedComposerCommandState, SurfaceExecutionSubmission, SurfaceExecutionSubmissionResult } from '../execution/surfaceExecution'
 
@@ -93,15 +92,6 @@ export function ConversationSpaceSurface({ projectId, conversationId, onExit, ex
   }, [conversationId, currentReceiver?.id])
 
   const receiverId = execution?.command.receiverId ?? null
-
-  useEffect(() => {
-    if (!composerOpen) return undefined
-    return registerOverlay(`conversation-work:${conversationId ?? 'missing'}`, {
-      kind: 'popover',
-      onEsc: () => setComposerOpen(false),
-      dismissOnOutside: false,
-    })
-  }, [composerOpen, conversationId])
 
   useEffect(() => {
     if (!composerOpen || !execution?.onReadReach || !receiverId) { setReachCount(0); return }

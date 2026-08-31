@@ -145,7 +145,10 @@ test.describe('LCOS Interaction Foundation', () => {
     await expect(composer.locator(`[data-reference-id="${views[1].id}"]`)).toBeVisible()
     await expect(first).toHaveClass(/selected/)
     await expect(second).not.toHaveClass(/selected/)
+    const composerInput = composer.getByTestId('selection-composer-input')
+    await composerInput.focus()
     await page.keyboard.press('Escape')
+    await expect(composer).toHaveCount(0)
 
     const before = await first.evaluate((element) => ({ left: Number.parseFloat((element as HTMLElement).style.left), top: Number.parseFloat((element as HTMLElement).style.top) }))
     let point = await nodeGesturePoint(page, views[0].id)

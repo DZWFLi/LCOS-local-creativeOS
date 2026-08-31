@@ -5907,6 +5907,7 @@ export function App() {
       return document.activeElement === composer
     }
     if (selectedIds.length) {
+      setNodeInfoId(null)
       setReferencePickActive(false)
       setSelectionComposerOpen(true)
       if (bootMode === 'runtime') {
@@ -6900,6 +6901,8 @@ export function App() {
   }, [activeProjectId, bootMode, closeImmersive, enterConversationSurface, enterScope, nodes, openImmersive, openSavedContextView, openSavedWorkflowView, openWorkspaceScene, presentationEntityNodes, scopes, selectNode, setNodes])
 
   const showNodeDetails = useCallback((id: string) => {
+    setReferencePickActive(false)
+    setSelectionComposerOpen(false)
     setNodeInfoId(id)
   }, [])
   const copySelectedViews = useCallback(() => { copySelection() }, [copySelection])

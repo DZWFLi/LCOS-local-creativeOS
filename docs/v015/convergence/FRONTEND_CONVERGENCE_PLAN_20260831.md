@@ -933,3 +933,57 @@ A18 candidate introduces one pure dominant-dialog owner (`editor < surface < chi
 A18 does **not** implement SpatialOverlayPlacement or complete all portal/overlayStack convergence.
 
 The uploaded real A17 merged archive `ec01327` could not be mounted in the current sandbox, so A18 is source/static PASS on `0691812 + exact A17 patch` reconstruction but is **not formally merge-authorized** until exact current-source or local apply validation returns. Phase A remains OPEN; Phase B remains NOT ADMITTED.
+
+
+---
+
+# 29. Phase A candidate · A19 Selection Composer Transient Ownership
+
+Real local authority reported by user: `5901c02` (A18 locally merged; A18 validator/typecheck/web/local-core all PASS).
+
+Fresh post-A18 census finds that `UnifiedExecutionComposer` itself is missing from overlayStack. With focus inside the Composer textarea, global Esc reaches `escapeTopOverlay()`, finds no Composer owner, then exits through the text-input early return. Main multi-selection can also show group actions beside the open Composer, while Conversation Subcanvas carries a duplicate surface-specific `conversation-work:*` registration.
+
+A19 candidate moves ownership to the shared Composer itself:
+
+```text
+UnifiedExecutionComposer
+→ overlayStack owner
+→ Esc / top-only outside dismissal
+→ one local transient slot
+```
+
+Main group actions and NodeInfo yield while Composer is dominant; Conversation Subcanvas duplicate registration retires.
+
+A19 does not implement SpatialOverlayPlacement. Phase A remains OPEN.
+
+---
+
+# 30. Phase A candidate · A20 SpatialOverlayPlacement Owner
+
+The user explicitly continues construction before returning a real-local A19 HEAD. Provenance remains:
+
+```text
+real local authority 5901c02 (A18)
+→ A19 source/static candidate
+→ A20 source/static
+```
+
+Fresh post-A19 census finds two duplicate contextual geometry owners:
+
+- Main Selection Composer: persisted Selection anchor + hand-written viewport clamp;
+- NodeInfoPopover: independent right/left/above clamp with hard-coded footprint.
+
+A20 introduces the canonical screen-space `SpatialOverlayPlacement` owner:
+
+```text
+visual target bounds
++ measured overlay size
++ viewport
++ safe insets / occupied rects
++ preferred side
+→ nearest low-collision canvas rect
+```
+
+First migrated call sites are Main Unified Composer and NodeInfoPopover. Mature ObjectOrbit/Base UI menu positioners are intentionally not rewritten.
+
+A20 architecture/source-static completion does **not** equal visual acceptance. Four-corner, Dock/Rail/Minimap, zoom/DPI and motion-direction QA remain runtime/Human debt. Phase A remains OPEN.

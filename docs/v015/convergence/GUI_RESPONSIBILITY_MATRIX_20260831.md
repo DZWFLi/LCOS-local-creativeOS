@@ -618,3 +618,34 @@ A17 resolves the previous `SEMANTIC_OWNER_UNPROVEN` state through later L0 + str
 | real ec01327 exact-byte integration | current upload mount blocked | fabricated exact-source PASS | BLOCKED_ENV |
 
 A18 closes one multi-owner class only. Overlay free-space placement and runtime/human evidence remain Phase A debt.
+
+
+---
+
+# A19 Selection Composer Transient Ownership
+
+| Domain | Canonical owner after A19 candidate | Forbidden regression | Status |
+|---|---|---|---|
+| Unified Composer transient lifecycle | `UnifiedExecutionComposer → overlayStack` | per-Surface wrapper registration / no overlay owner | SOURCE/STATIC PASS |
+| Composer Esc while text control focused | global `escapeTopOverlay()` → Composer `onEsc` | `isText` early return trapping Composer open | SOURCE/STATIC PASS |
+| Composer outside close | Composer capture listener → `dismissTop()` only if Composer is stack top | direct close that punches through deeper overlay | SOURCE/STATIC PASS |
+| Main multi-selection transient slot | Composer dominates; group action notch yields | Composer + SelectionGroupActions simultaneous | SOURCE/STATIC PASS |
+| NodeInfo vs Composer | explicit mutual exclusion at App owner | two local inspectors/composers visible together | SOURCE/STATIC PASS |
+| Conversation Work overlay | shared Unified Composer owner | `conversation-work:*` duplicate registration | RETIRED |
+| SpatialOverlayPlacement | separate future owner | claiming lifecycle ownership solves geometry | OPEN |
+| Runtime proof | real local browser/human environment | static E2E source treated as executed PASS | OPEN |
+
+A19 closes contextual Composer lifecycle ownership only. Placement remains separate.
+
+---
+
+## A20 update · SpatialOverlayPlacement canonical owner
+
+| Item | A20 state | Still not claimed |
+|---|---|---|
+| B07 contextual overlay blank-space architecture | `SpatialOverlayPlacement` owner added; Main Composer + NodeInfo migrated | real visual handfeel at four corners / Dock / Rail / Minimap |
+| C04 occupied-rect planner | deterministic screen-space resolver + DOM measurement adapter | exhaustive production portal migration and live geometry QA |
+| target geometry | visual bounds used for first migrated callers | all species/overlays migrated |
+| overlay size | real `getBoundingClientRect` / ResizeObserver for migrated overlays | all portal overlays measured |
+
+A20 is architecture/source-static closure only. Runtime/Human visual acceptance remains mandatory.

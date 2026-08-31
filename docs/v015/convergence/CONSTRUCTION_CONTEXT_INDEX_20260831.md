@@ -445,3 +445,77 @@ A18 candidate owner:
 SpatialOverlayPlacement remains separate/open.
 
 Provenance limitation: user supplied an A17 merged archive named `ec01327`, but the sandbox mount path failed. A18 therefore uses `0691812 exact source + exact A17 final patch` only as `TEMP_RECONSTRUCTED_CURRENT_SOURCE` and is not formal merge-authorized until exact current bytes or local apply validation return.
+
+
+---
+
+# A19 context/owner index update
+
+User local evidence upgrades A18 real RC authority to `5901c02` for source/static/typecheck/unit truth. The current sandbox could not read the uploaded archive bytes, so A19 is constructed against an A18-equivalent reconstruction with the explicitly reported local permission-gate assertion update.
+
+Fresh post-A18 owner defect:
+
+```text
+UnifiedExecutionComposer
+→ missing overlayStack owner
+→ Esc fails under text focus
+→ Main group action can coexist
+→ Conversation has duplicate surface-specific registration
+```
+
+A19 canonical owner:
+
+```text
+UnifiedExecutionComposer
+→ one shared overlayStack registration
+→ top-only Esc/outside lifecycle
+```
+
+Primary evidence:
+
+- `docs/v015/convergence/PHASE_A_FRESH_PARITY_CENSUS_AFTER_A18_20260831.md`
+- `docs/v015/convergence/A19_SELECTION_COMPOSER_TRANSIENT_OWNERSHIP_CLOSEOUT_20260831.md`
+- `apps/web/src/features/execution/UnifiedExecutionComposer.tsx`
+- `apps/web/src/features/canvas/ProjectCanvas.tsx`
+- `apps/web/src/App.tsx`
+- `tests/e2e/interaction-foundation.spec.ts`
+- `tests/e2e/orbit-lifecycle.spec.ts`
+- `scripts/validate-v015-a19-selection-composer-transient-owner.mjs`
+
+SpatialOverlayPlacement remains the next separate owner/geometry census target.
+
+---
+
+# A20 context/owner index update
+
+Current real local authority at construction time: `5901c02` (A18). A19 is stacked source/static pending real-local merge.
+
+Fresh geometry owner defect:
+
+```text
+Main Composer manual viewport clamp
++ NodeInfo manual right/left/above clamp
+→ duplicate contextual placement owners
+```
+
+A20 canonical owner:
+
+```text
+visual target bounds
++ measured overlay size
++ viewport/safe/occupied screen geometry
+→ resolveSpatialOverlayPlacement()
+```
+
+Primary files:
+
+- `apps/web/src/features/ui/spatialOverlayPlacement.ts`
+- `apps/web/src/features/ui/spatialOverlayEnvironment.ts`
+- `apps/web/src/features/execution/UnifiedExecutionComposer.tsx`
+- `apps/web/src/features/canvas/NodeInfoPopover.tsx`
+- `apps/web/src/features/canvas/ProjectCanvas.tsx`
+- `scripts/validate-v015-a20-spatial-overlay-placement.mjs`
+- `docs/v015/convergence/PHASE_A_FRESH_PARITY_CENSUS_AFTER_A19_20260831.md`
+- `docs/v015/convergence/A20_SPATIAL_OVERLAY_PLACEMENT_OWNER_CLOSEOUT_20260831.md`
+
+A20 does not close visual placement QA, all portal ownership, or Phase A.
