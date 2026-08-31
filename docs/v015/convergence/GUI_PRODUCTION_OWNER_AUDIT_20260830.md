@@ -1486,3 +1486,27 @@ The following are explicitly rejected:
 - Component generic window chrome;
 - collapse-to-empty-bar;
 - Composer-open as a reason to erase all direct-action context.
+
+---
+
+# A23 production-owner update · Unified Compact Composer
+
+A23 keeps `UnifiedExecutionComposer` as the one target-local AI Work presentation owner and narrows its visible responsibility:
+
+```text
+UnifiedExecutionComposer
+→ Prompt / explicit Reference / Receiver / task settings / Send
+
+Selection
+→ remains Selection truth
+
+Ctrl/Cmd Reference
+→ pointer accelerator only while Composer is active
+
+Right-click / Action Arc
+→ remain outside Composer ownership
+```
+
+Reference modifier handling remains shared pointer grammar; A23 only gates the accelerator by the existence of the local Composer so a closed Composer cannot own invisible reference mutations.
+
+The Composer itself becomes the bounded text scroll owner after 88px rather than allowing the outer near-field panel to grow indefinitely.

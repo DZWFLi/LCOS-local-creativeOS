@@ -666,3 +666,17 @@ A20 is architecture/source-static closure only. Runtime/Human visual acceptance 
 | Compact Composer internals | A23 | claiming A22 already closes prompt/ref/layout UX | OPEN |
 | Voice input | A24 | bespoke per-surface ASR UI | OPEN |
 | Centered Spatial Index / Focus / Color Pin | later Phase A proposition | reusing old large Focus list | FROZEN / NOT IMPLEMENTED |
+
+---
+
+## A23 · Unified Compact Composer responsibility update
+
+| Concern | Canonical owner | A23 rule |
+| --- | --- | --- |
+| Selection target | Selection state | never auto-promoted into Reference |
+| Explicit Reference | Shared command state | compact chips; only real refs render |
+| Ctrl/Cmd Reference accelerator | pointer grammar + active Composer | disabled when local Composer is closed |
+| Prompt edit | UnifiedExecutionComposer | bounded autosize; internal scroll after cap |
+| Receiver | canonical connected Conversation choice | compact footer selector |
+| Provider / intent / result policy | UnifiedExecutionComposer advanced disclosure | anchored popover, not first-screen chrome |
+| Voice | future shared input primitive | not implemented in A23 |

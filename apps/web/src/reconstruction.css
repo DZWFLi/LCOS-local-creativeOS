@@ -1644,3 +1644,161 @@
 @media (prefers-reduced-motion: reduce) {
   .lcos-reconstructed .lcos-conversation-space * { scroll-behavior:auto !important; }
 }
+
+/* A23 Unified Compact Composer · target-local AI Work surface. */
+.lcos-reconstructed .lcos-unified-execution-composer[data-composer-density="compact"] {
+  width:min(382px,calc(100vw - 96px)) !important;
+  gap:4px !important;
+  padding:5px !important;
+  border-radius:13px !important;
+}
+.lcos-reconstructed .lcos-command-draft-head-compact {
+  min-height:22px;
+  gap:4px;
+}
+.lcos-reconstructed .lcos-command-target-title {
+  min-width:0;
+  flex:1;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  color:#8d8994;
+  font-size:10px;
+}
+.lcos-reconstructed .lcos-command-draft-head-compact .lcos-selection-summary,
+.lcos-reconstructed .lcos-command-draft-head-compact .lcos-result-target {
+  flex:none;
+  height:21px;
+  max-width:112px;
+  display:flex;
+  align-items:center;
+  padding:0 6px;
+  border-radius:999px;
+  background:rgba(80,72,104,.055);
+  color:#77727f;
+  font-size:9.5px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.lcos-reconstructed .lcos-command-draft-head-compact .lcos-composer-close {
+  width:22px;
+  height:22px;
+  margin-left:0;
+  display:grid;
+  place-items:center;
+  padding:0;
+  border:0;
+  border-radius:7px;
+  background:transparent;
+  color:#908b97;
+}
+.lcos-reconstructed .lcos-command-draft-head-compact .lcos-composer-close:hover {
+  background:rgba(80,72,104,.06);
+  color:#4f4a58;
+}
+.lcos-reconstructed .lcos-reference-strip {
+  min-width:0;
+  overflow:hidden;
+}
+.lcos-reconstructed .lcos-reference-strip .lcos-reference-chips {
+  min-height:0;
+  display:flex;
+  flex-wrap:nowrap;
+  gap:4px;
+  overflow-x:auto;
+  overflow-y:hidden;
+  padding:1px 0;
+  scrollbar-width:none;
+}
+.lcos-reconstructed .lcos-reference-strip .lcos-reference-chips::-webkit-scrollbar { display:none; }
+.lcos-reconstructed .lcos-reference-strip .lcos-reference-chip {
+  flex:0 0 auto;
+  max-width:142px;
+  height:25px;
+  grid-template-columns:15px 21px minmax(0,1fr) auto;
+  gap:3px;
+  padding:2px 3px;
+  border-radius:7px;
+}
+.lcos-reconstructed .lcos-reference-strip .lcos-reference-chip > b {
+  width:14px;
+  height:14px;
+  font-size:7px;
+}
+.lcos-reconstructed .lcos-reference-strip .lcos-reference-chip > img { width:21px; height:16px; }
+.lcos-reconstructed .lcos-reference-strip .lcos-reference-chip > i { height:16px; font-size:6px; }
+.lcos-reconstructed .lcos-reference-strip .lcos-reference-chip > span { font-size:9.75px; }
+.lcos-reconstructed .lcos-unified-execution-composer[data-composer-density="compact"] .lcos-composer-input-row {
+  grid-template-columns:minmax(0,1fr) 30px;
+  gap:4px;
+}
+.lcos-reconstructed .lcos-unified-execution-composer[data-composer-density="compact"] .lcos-composer-input-row textarea {
+  height:34px;
+  min-height:34px;
+  max-height:88px;
+  overflow-y:hidden;
+  padding:8px 9px;
+  line-height:17px;
+  scrollbar-width:thin;
+}
+.lcos-reconstructed .lcos-composer-footer-compact {
+  min-height:25px;
+  gap:3px;
+}
+.lcos-reconstructed .lcos-composer-footer-compact .lcos-reference-pick {
+  height:24px;
+  min-height:24px;
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  padding:0 6px;
+  border:0;
+  border-radius:7px;
+  background:transparent;
+  color:#797582;
+  font-size:10px;
+}
+.lcos-reconstructed .lcos-composer-footer-compact .lcos-reference-pick b {
+  min-width:14px;
+  height:14px;
+  display:grid;
+  place-items:center;
+  padding:0 3px;
+  border-radius:999px;
+  background:rgba(80,72,104,.08);
+  font:650 7px/1 "JetBrains Mono",monospace;
+}
+.lcos-reconstructed .lcos-receiver-select-compact {
+  flex:0 1 142px;
+  width:142px;
+  height:24px;
+  grid-template-columns:14px minmax(0,1fr) 10px;
+  padding:0 5px;
+  border-color:transparent;
+  background:transparent;
+}
+.lcos-reconstructed .lcos-receiver-select-compact:hover,
+.lcos-reconstructed .lcos-receiver-select-compact:focus-within {
+  border-color:var(--lcos-hair);
+  background:rgba(80,72,104,.04);
+}
+.lcos-reconstructed .lcos-receiver-select-compact select { font-size:10px; }
+.lcos-reconstructed .lcos-composer-footer-compact .lcos-command-scope-note {
+  flex:1;
+  min-width:0;
+  font-size:9.5px;
+  color:#aaa6b0;
+}
+.lcos-reconstructed .lcos-composer-footer-compact .lcos-composer-advanced { margin-left:auto; }
+.lcos-reconstructed .lcos-composer-footer-compact .lcos-composer-advanced > summary {
+  height:24px;
+  padding:0 5px;
+  font-size:10px;
+}
+.lcos-reconstructed .lcos-unified-execution-composer[data-composer-density="compact"] .lcos-composer-advanced-popover {
+  right:0;
+  left:auto;
+  bottom:29px;
+  width:238px;
+}

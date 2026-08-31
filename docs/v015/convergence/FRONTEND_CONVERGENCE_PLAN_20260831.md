@@ -1011,3 +1011,23 @@ Component Functional Face = intrinsic instrument work
 ```
 
 A22 does not implement A23 Compact Composer internals, A24 Voice, Centered Spatial Index navigation, or Phase C Assembly taxonomy. Phase A remains OPEN until local runtime/human gates are satisfied.
+
+---
+
+# 32. Phase A candidate · A23 Unified Compact Composer
+
+A22 restores object-local interaction hierarchy. A23 narrows the existing `UnifiedExecutionComposer` into the newly frozen target-local Compact Composer grammar without changing execution truth.
+
+```text
+Selection / Target
+→ bounded Compact Composer
+→ explicit Reference chips
+→ compact Receiver / Settings footer
+→ Send
+```
+
+A23 retires the permanent empty Reference tray and closes the invisible modifier-only Reference mode: Ctrl/Cmd remains the this-run Reference accelerator, but only while a local Composer is active. Shift remains additive Selection.
+
+The prompt textarea grows only to a bounded measured height and then owns internal scrolling. Main / Context / Workflow / Conversation keep one shared Composer shell.
+
+Voice / ASR remains a separate A24 proposition. Phase A remains OPEN; Phase B remains NOT ADMITTED.

@@ -98,7 +98,7 @@ interface Props {
     onSend: () => void
     onClose: () => void
   }
-  referencePick?: { readonly active: boolean; readonly ids: readonly string[]; readonly onToggle: (id: string) => void }
+  referencePick?: { readonly active: boolean; readonly modifierEnabled?: boolean; readonly ids: readonly string[]; readonly onToggle: (id: string) => void }
   onCreateNodeFromAnchor: (kind: 'note' | 'context', x: number, y: number, from: string) => void; onFilesDropped: (files: File[], x: number, y: number) => void; onExternalTextDrop?: (text: string, x: number, y: number) => void; onMaterialTransferDrop?: (raw: string, x: number, y: number) => void
   /** G-4 导图分支摘取：按住导图分支拖到空白处松手 → 以正常文本节点形态落画布（区别于外部文本拖入）。 */
   onMindmapBranchDrop?: (text: string, x: number, y: number) => void
@@ -209,7 +209,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
     }
   }, [])
 
-  const referencePickIntent = Boolean(referencePick && (referencePick.active || referenceModifierHeld))
+  const referencePickIntent = Boolean(referencePick && (referencePick.active || (referencePick.modifierEnabled && referenceModifierHeld)))
 
   const collectionMotionByNodeId = useMemo(() => {
     const result = new Map<string, { phase: 'opening' | 'closing'; dx: number; dy: number }>()
@@ -1464,7 +1464,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
         if (clusteredGlythIds.has(node.id)) return null
         const collectionScopeId = node.entityKind === 'collection' ? (node.opensScopeId ?? (node.id.startsWith('scope:') ? node.id.slice('scope:'.length) : null)) : null
         return <CanvasCard key={node.id} projectId={projectId} node={node} density={nodeDensity(node, lod)} zoom={camera.zoom} showDetails={camera.zoom > .2 && lod !== 'overview'} performanceProxy={node.entityKind !== 'conversation' && (lod === 'aggregate' || lod === 'overview') && !selectedIds.includes(node.id) && pendingId !== node.id} glythCritical={criticalGlythIds.has(node.id)} runId={runId} runStatus={runStatus} selected={selectedIds.includes(node.id)} multiSelected={selectedIds.length > 1 && selectedIds.includes(node.id)} pending={pendingId === node.id} reviewPending={pendingReviewIds.includes(node.id)} referenceOrder={referencePick ? referencePick.ids.indexOf(node.id) + 1 : 0} dragging={draggingId === node.id} dragSignal={draggingId === node.id ? dragSignal : undefined} resizing={resizingId === node.id} workspaceMember={Boolean(activeWorkspaceId && workspaceFrames.find((frame) => frame.workspaceId === activeWorkspaceId)?.memberViewIds.includes(node.id))} locatePulse={locatePulseId === node.id} attentionBucket={attentionBucketsByViewId[node.id]} collectionExpanded={Boolean(collectionScopeId && expandedCollectionScopeIds.includes(collectionScopeId))} collectionMembers={collectionMembersByNodeId[node.id] ?? (collectionScopeId ? collectionMembersByNodeId[`scope:${collectionScopeId}`] ?? [] : [])} collectionMotion={collectionMotionByNodeId.get(node.id)} onOpenContextLens={onOpenContextLens} onCollectionMemberSelect={onSelect} onLocate={onLocateNode} onLocateConversationSource={onLocateConversationSource} onDetails={onDetails} referenceReceptive={referencePickIntent && node.entityKind !== 'conversation'} colonyCandidate={colonyCandidateIds.includes(node.id)} onPointerDown={(event) => {
-        if (event.button === 0 && referencePick && (referencePick.active || referencePickModifier(event))) {
+        if (event.button === 0 && referencePick && (referencePick.active || (referencePick.modifierEnabled && referencePickModifier(event)))) {
           event.preventDefault(); event.stopPropagation(); suppressClick.current = node.id
           if (node.entityKind === 'conversation' && node.conversation) {
             onSetActiveConversation?.(node.conversation.id)

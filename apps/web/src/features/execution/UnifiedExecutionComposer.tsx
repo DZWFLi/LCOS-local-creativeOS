@@ -66,7 +66,8 @@ function referenceKindLabel(node: CanvasNode): string {
 
 export function UnifiedExecutionComposer(props: Props) {
   const rootRef = useRef<HTMLElement | null>(null)
-  const [measuredOverlaySize, setMeasuredOverlaySize] = useState({ width: 430, height: 180 })
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const [measuredOverlaySize, setMeasuredOverlaySize] = useState({ width: 380, height: 132 })
   const overlayId = useId()
   const onCloseRef = useRef(props.onClose)
   useEffect(() => { onCloseRef.current = props.onClose }, [props.onClose])
@@ -86,6 +87,16 @@ export function UnifiedExecutionComposer(props: Props) {
     observer.observe(element)
     return () => observer.disconnect()
   }, [])
+  useLayoutEffect(() => {
+    const textarea = textareaRef.current
+    if (!textarea) return
+    const minHeight = 34
+    const maxHeight = 88
+    textarea.style.height = '0px'
+    const nextHeight = Math.min(maxHeight, Math.max(minHeight, textarea.scrollHeight))
+    textarea.style.height = `${nextHeight}px`
+    textarea.style.overflowY = textarea.scrollHeight > maxHeight ? 'auto' : 'hidden'
+  }, [props.prompt])
   const spatialPlacement = props.spatialPlacement
     ? resolveSpatialOverlayPlacement({ ...props.spatialPlacement, overlaySize: measuredOverlaySize })
     : null
@@ -129,6 +140,10 @@ export function UnifiedExecutionComposer(props: Props) {
     runId: provenanceNode.sourceRunId, prompt: provenanceNode.sourcePrompt, provider: provenanceNode.sourceProvider,
     current: Boolean(provenanceNode.current), draft: Boolean(provenanceNode.draft),
   } : null)
+  const targetLabel = selected.length === 1 ? selected[0].title : selected.length > 1 ? `${selected.length} 项选择` : receiver ? receiverLabel(receiver) : '当前目标'
+  const selectionReferenceSeparationHint = selected.length
+    ? `当前选择的 ${selected.length} 项是直接处理对象，不会自动记入参考。`
+    : 'Selection 与额外参考保持分离。'
 
   const changeIntent = (next: ComposerIntent) => {
     props.onIntentChange?.(next)
@@ -136,23 +151,17 @@ export function UnifiedExecutionComposer(props: Props) {
     props.onResultPolicyChange?.(next === 'analyze' ? 'reply_only' : next === 'revise' ? 'draft_revision_per_target' : 'create_artifact')
   }
 
-  return <section ref={rootRef} className="selection-composer lcos-nearfield-composer lcos-unified-execution-composer" data-lcos-transient-owner="selection-composer" data-testid="selection-composer" data-reference-pick={props.referencePickActive || undefined} data-spatial-placement-side={spatialPlacement?.side} data-spatial-placement-free={spatialPlacement?.free || undefined} style={{ left: composerLeft, top: composerTop } as CSSProperties} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()} onContextMenu={(event) => event.preventDefault()}>
-    <div className="lcos-command-draft-head">
-      <label className="lcos-receiver-select" title="这次交给哪段对话；不会改变项目默认承接对话">
-        <Sparkles size={12}/>
-        <select value={props.receiverId ?? ''} onChange={(event) => props.onReceiverChange(event.target.value)} aria-label="交给哪段对话">
-          <option value="" disabled>选择一段已连接的对话</option>
-          {props.receivers.map((item) => <option key={item.id} value={item.id}>{receiverLabel(item)}{item.id === props.activeReceiverId ? ' · 当前' : ''}{item.conversationSessionId ? '' : ' · 未链接'}</option>)}
-        </select>
-        <ChevronDown size={10}/>
-      </label>
+  return <section ref={rootRef} className="selection-composer lcos-nearfield-composer lcos-unified-execution-composer" data-lcos-transient-owner="selection-composer" data-testid="selection-composer" data-composer-density="compact" data-reference-pick={props.referencePickActive || undefined} data-spatial-placement-side={spatialPlacement?.side} data-spatial-placement-free={spatialPlacement?.free || undefined} style={{ left: composerLeft, top: composerTop } as CSSProperties} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()} onContextMenu={(event) => event.preventDefault()}>
+    <div className="lcos-command-draft-head lcos-command-draft-head-compact">
+      {selected.length > 0
+        ? <span className="lcos-selection-summary" title={`${selectionReferenceSeparationHint} 额外参考 ${references.length} 项。`}>当前选择 {selected.length}</span>
+        : <span className="lcos-selection-summary" title="当前没有直接处理对象">当前现场</span>}
       {props.resultSlot && <span className={`lcos-result-target is-${props.resultSlot.status}`} title="这次生成的结果会放在这里，不会把它当成参考内容">结果 · {props.resultSlot.title}</span>}
-      {selected.length > 0 && <span className="lcos-selection-summary" title="当前选择是这次直接处理的对象；它和额外参考是两件事">当前选择 {selected.length}</span>}
-      <span className="lcos-reach-summary" title="这段对话长期知道的材料，不等于你这次明确选中的参考">长期材料 {props.reachCount ?? 0}</span>
+      <span className="lcos-command-target-title" title={targetLabel}>{targetLabel}</span>
+      <button type="button" className="lcos-composer-close" aria-label="关闭" onClick={props.onClose}><X size={12}/></button>
     </div>
 
-    <div className="lcos-reference-tray" aria-label="本次显式引用">
-      <div className="lcos-reference-tray-head"><span>这次会参考</span><small>{references.length} 项 · 顺序会随这次处理一起保存</small></div>
+    {references.length > 0 && <div className="lcos-reference-strip" aria-label="本次显式引用" title={selectionReferenceSeparationHint}>
       <div className="lcos-reference-chips">
         {references.map((candidate, index) => <div key={candidate.node.id} className={`lcos-reference-chip ${candidate.supported ? '' : 'is-unsupported'}`} data-reference-id={candidate.node.id} data-reference-order={index + 1} title={candidate.reason ?? candidate.node.title}>
           <b>{index + 1}</b>
@@ -166,23 +175,27 @@ export function UnifiedExecutionComposer(props: Props) {
             <button type="button" aria-label={`移除引用 ${candidate.node.title}`} onClick={() => props.onRemoveReference(candidate.node.id)}><X size={10}/></button>
           </div>
         </div>)}
-        {!references.length && <span className="lcos-reference-empty">没有额外参考；{selected.length ? `当前选择的 ${selected.length} 项是直接处理对象，不会自动记入参考。` : '这段对话仍会带上它长期知道的材料。'}</span>}
       </div>
-      <div className="lcos-reference-actions">
-        <button type="button" className={`lcos-reference-pick ${props.referencePickActive ? 'is-active' : ''}`} disabled={props.referencePickAvailable === false} title={props.referencePickAvailable === false ? props.referencePickUnavailableReason : undefined} onClick={props.referencePickActive ? props.onFinishReferencePick : props.onStartReferencePick}><Crosshair size={11}/>{props.referencePickActive ? '完成画布选择' : '从画布选择'}</button>
-        <button type="button" className="lcos-reference-add" disabled title="项目搜索和装配区会接到同一组参考内容里，不再让你重复选择"><Plus size={11}/>更多来源</button>
-      </div>
-    </div>
+    </div>}
 
     <div className="lcos-composer-input-row">
-      <textarea data-testid="selection-composer-input" value={props.prompt} onChange={(event) => props.onPromptChange(event.target.value)} placeholder={receiver ? `对「${receiverLabel(receiver)}」说要做什么…` : '先选择一段对话…'} onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === 'Enter' && !disabled) { event.preventDefault(); props.onSend() } }}/>
+      <textarea ref={textareaRef} rows={1} data-testid="selection-composer-input" value={props.prompt} onChange={(event) => props.onPromptChange(event.target.value)} placeholder={selected.length ? `对「${targetLabel}」说要做什么…` : receiver ? `对「${receiverLabel(receiver)}」说要做什么…` : '先选择一段对话…'} onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === 'Enter' && !disabled) { event.preventDefault(); props.onSend() } }}/>
       <button type="button" className="lcos-composer-send" disabled={disabled} onClick={props.onSend} title={blockedReason ?? (providerBlocked ? '本地 Agent 暂不可用' : '发送 · Ctrl/Cmd+Enter')}><ArrowUp size={15}/></button>
     </div>
 
-    <div className="lcos-composer-controls lcos-composer-controls-quiet">
-      <span className="lcos-command-scope-note">{receiver ? `${receiverLabel(receiver)} · ${selected.length} 项选择 · ${references.length} 项额外参考${props.resultSlot ? ' · 结果已有落点' : ''}` : '还没选择承接对话'}</span>
+    <div className="lcos-composer-controls lcos-composer-controls-quiet lcos-composer-footer-compact">
+      <button type="button" className={`lcos-reference-pick ${props.referencePickActive ? 'is-active' : ''}`} disabled={props.referencePickAvailable === false} title={props.referencePickAvailable === false ? props.referencePickUnavailableReason : '参考 · Ctrl/Cmd + 点击画布对象；不会改变当前选择'} onClick={props.referencePickActive ? props.onFinishReferencePick : props.onStartReferencePick}><Crosshair size={11}/><span>{props.referencePickActive ? '完成参考' : '参考'}</span>{references.length > 0 && <b>{references.length}</b>}</button>
+      <label className="lcos-receiver-select lcos-receiver-select-compact" title={`这次交给哪段对话；长期材料 ${props.reachCount ?? 0} 项，不等于你这次明确选中的参考`}>
+        <Sparkles size={11}/>
+        <select value={props.receiverId ?? ''} onChange={(event) => props.onReceiverChange(event.target.value)} aria-label="交给哪段对话">
+          <option value="" disabled>选择承接对话</option>
+          {props.receivers.map((item) => <option key={item.id} value={item.id}>{receiverLabel(item)}{item.id === props.activeReceiverId ? ' · 当前' : ''}{item.conversationSessionId ? '' : ' · 未链接'}</option>)}
+        </select>
+        <ChevronDown size={9}/>
+      </label>
+      <span className="lcos-command-scope-note" title={`${receiver ? receiverLabel(receiver) : '还没选择承接对话'} · ${selected.length} 项选择 · ${references.length} 项额外参考 · 长期材料 ${props.reachCount ?? 0}；长期材料不等于你这次明确选中的参考`}>{references.length ? `${references.length} 参考` : `${props.reachCount ?? 0} 长期材料`}</span>
       <details className="lcos-composer-advanced">
-        <summary title="高级设置"><Settings2 size={12}/><span>高级</span></summary>
+        <summary title="本次设置"><Settings2 size={12}/><span>设置</span></summary>
         <div className="lcos-composer-advanced-popover">
           <small>通常不需要设置这些，系统会优先选择可用的执行工具</small>
           <label><span>处理方式</span><select value={inferredIntent} onChange={(event) => changeIntent(event.target.value as ComposerIntent)}><option value="analyze">只回答</option><option value="create">创建新内容</option><option value="revise">修改现有内容</option></select></label>
@@ -191,7 +204,6 @@ export function UnifiedExecutionComposer(props: Props) {
           <small className="lcos-composer-advanced-note">这里只影响这一次处理，不会改变项目默认承接对话。</small>
         </div>
       </details>
-      <button type="button" className="lcos-composer-close" aria-label="关闭" onClick={props.onClose}><X size={12}/></button>
     </div>
 
     {blockedReason && <div className="lcos-composer-ambiguity"><Crosshair size={11}/><span>{blockedReason}</span></div>}

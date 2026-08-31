@@ -7442,7 +7442,7 @@ export function App() {
           onSend: requestSelectionRun,
           onClose: () => { setReferencePickActive(false); setSelectionComposerOpen(false) },
         } : undefined,
-        referencePick: layoutMode === 'desktop' ? { active: referencePickActive, ids: selectionReferenceIds, onToggle: toggleSelectionReference } : undefined,
+        referencePick: layoutMode === 'desktop' ? { active: referencePickActive, modifierEnabled: selectionComposerOpen, ids: selectionReferenceIds, onToggle: toggleSelectionReference } : undefined,
         onSelect: selectNode,
         onClearSelection: clearSelection,
         onMarqueeSelect: selectMarquee,

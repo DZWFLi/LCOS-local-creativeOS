@@ -332,7 +332,7 @@ export function CanvasSceneHost(props: CanvasSceneHostProps) {
     return () => { cancelled = true }
   }, [agentNode, effectiveSurfaceReceiverId])
 
-  const surfaceReferencePickIntent = Boolean(command && (command.referencePickActive || referenceModifierHeld))
+  const surfaceReferencePickIntent = Boolean(command && (command.referencePickActive || (agentNode && referenceModifierHeld)))
   const pickSurfaceReference = (id: string) => {
     if (!command) return
     const node = (command.nodes ?? props.projection.nodes).find((candidate) => candidate.id === id)

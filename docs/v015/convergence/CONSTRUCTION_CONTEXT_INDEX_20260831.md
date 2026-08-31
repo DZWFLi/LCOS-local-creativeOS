@@ -549,3 +549,16 @@ Primary implementation:
 - `docs/v015/convergence/A22_OBJECT_LOCAL_INTERACTION_GRAMMAR_CLOSEOUT_20260831.md`
 
 A23/A24 remain separate Compact Composer / Voice propositions. Centered Spatial Index and Assembly category UX are frozen but not implemented by A22.
+
+---
+
+## A23 · Unified Compact Composer
+
+Read together:
+
+- `UNIFIED_COMPACT_COMPOSER_PROMPT_REFERENCE_VOICE_GUI_FREEZE_20260831.md`
+- `PHASE_A_STACKED_CENSUS_AFTER_A22_20260831.md`
+- `A23_UNIFIED_COMPACT_COMPOSER_CLOSEOUT_20260831.md`
+- `scripts/validate-v015-a23-unified-compact-composer.mjs`
+
+A23 is a stacked source/static proposition after A21/A22. Voice remains separately staged.
