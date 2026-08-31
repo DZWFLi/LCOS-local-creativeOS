@@ -7,7 +7,7 @@ import type { ActiveRun, Camera, CanvasNode, CanvasScope, NodeDisplayMode, NodeL
 import { nodeMeta, runStatusLabel } from './model'
 import { ProjectCanvas } from './features/canvas/ProjectCanvas'
 import type { ComposerResultPolicy } from './features/canvas/SelectionComposer'
-import { mergeExecutionReferenceIds, orderedReferenceForNode, proposalCompatibilityBlockReason, referenceCandidates, resolveComposerReceiver } from './features/execution/commandDraft'
+import { explicitExecutionReferenceIds, mergeExecutionContextIds, orderedReferenceForNode, proposalCompatibilityBlockReason, referenceCandidates, resolveComposerReceiver } from './features/execution/commandDraft'
 import { reconcileResultSlotProjections } from './features/execution/resultSlotProjection'
 import { CanvasMiniMap } from './features/canvas/CanvasMiniMap'
 import { WorkRail } from './features/workrail/WorkRail'
@@ -197,6 +197,7 @@ interface PendingPermissionRun {
 export function App() {
   const launchSearchParams = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search)
   const agentMode = launchSearchParams?.get('agent') === '1' || launchSearchParams?.get('agent') === 'codex'
+  const launchHarness = launchSearchParams?.get('agent') ?? 'codex'
   const launchSurface = launchSearchParams?.get('surface') === 'companion' ? 'companion' : launchSearchParams?.get('surface') === 'tap' ? 'tap' : null
   const launchPath = typeof window === 'undefined' ? '' : window.location.pathname
   const pathProjectMatch = /^\/projects\/([^/]+)\/?$/.exec(launchPath)
@@ -328,10 +329,8 @@ export function App() {
   const [workspaceEditor, setWorkspaceEditor] = useState<{ id: string } | null>(null)
   const [renameNodeId, setRenameNodeId] = useState<string | null>(null)
   const [noteEditorId, setNoteEditorId] = useState<string | null>(null)
-  /** 投影/本体冲突提示：待确认「复制引用副本」的实体投影节点 id。 */
-  const [forkPromptId, setForkPromptId] = useState<string | null>(null)
-  /** 本会话内由用户创建的文本实体 origin 视图（双击直接编辑，不触发投影冲突提示）。 */
-  const originTextIdsRef = useRef<Set<string>>(new Set())
+  /** Prevent duplicate canonical text revisions while the same save is in flight. */
+  const noteSavePendingRef = useRef<Set<string>>(new Set())
   const [layoutPreview, setLayoutPreview] = useState<LayoutPreviewItem[] | null>(null)
   const [reorganizeOpen, setReorganizeOpen] = useState(false)
   const [reorganizePendingIds, setReorganizePendingIds] = useState<string[]>([])
@@ -728,10 +727,17 @@ export function App() {
     ?? workspaceId
     ?? scopeId
   const selectionExecutionReferenceIds = useMemo(
-    () => mergeExecutionReferenceIds(selectedIds, selectionReferenceIds, selectionTargetNode?.id),
+    () => explicitExecutionReferenceIds(selectionReferenceIds, selectionTargetNode?.id),
+    [selectionReferenceIds, selectionTargetNode?.id],
+  )
+  const selectionExecutionContextIds = useMemo(
+    () => mergeExecutionContextIds(selectedIds, selectionReferenceIds, selectionTargetNode?.id),
     [selectedIds, selectionReferenceIds, selectionTargetNode?.id],
   )
   const selectionReferenceCandidates = useMemo(() => referenceCandidates(selectionExecutionReferenceIds, nodes, effectiveSelectionReceiverId, selectionReceiverChoices), [effectiveSelectionReceiverId, nodes, selectionExecutionReferenceIds, selectionReceiverChoices])
+  const selectionExecutionContextNodes = useMemo(() => selectionExecutionContextIds
+    .map((id) => nodes.find((node) => node.id === id))
+    .filter((node): node is CanvasNode => Boolean(node?.artifactId && node.revisionId)), [nodes, selectionExecutionContextIds])
   const selectionOrderedReferences = useMemo(() => selectionReferenceCandidates.flatMap((candidate) => candidate.orderedReference ? [candidate.orderedReference] : []), [selectionReferenceCandidates])
   const selectionExecutionBlockedReason = useMemo(() => {
     if (bootMode !== 'runtime') return undefined
@@ -1088,7 +1094,7 @@ export function App() {
         pinnedContextIds,
         excludedContextIds,
         currentSurface: activeSurface,
-        ...(agentMode ? { currentHarness: launchSearchParams?.get('agent') || 'codex' } : {}),
+        ...(agentMode ? { currentHarness: launchHarness } : {}),
         viewport: { x: camera.x, y: camera.y, zoom: camera.zoom },
         visibleViewIds: visibleNodes.map((node) => node.id),
         ...(selectionTargetNode?.artifactId ? { targetArtifactId: selectionTargetNode.artifactId } : {}),
@@ -1152,7 +1158,7 @@ export function App() {
       window.clearTimeout(timeout)
       cancelledBeforeDispatch = true
     }
-  }, [activeProjectId, activeSurface, agentMode, bootMode, camera.x, camera.y, camera.zoom, excludedContextIds, launchSearchParams, pinnedContextIds, scopeId, selectedIds, selectionBaseRevision?.id, selectionTargetNode?.artifactId, selectionTargetNode?.revisionId, visibleNodes, workspaceId])
+  }, [activeProjectId, activeSurface, agentMode, bootMode, camera.x, camera.y, camera.zoom, excludedContextIds, launchHarness, pinnedContextIds, scopeId, selectedIds, selectionBaseRevision?.id, selectionTargetNode?.artifactId, selectionTargetNode?.revisionId, visibleNodes, workspaceId])
 
   // B4 Attention + Intent Runtime: read-only projection over existing Project Truth.
   // Deliberately key refreshes to semantic inputs, not camera movement, so panning
@@ -1801,7 +1807,7 @@ export function App() {
   }, [resetGraph])
 
   const openProject = useCallback((projectId: string) => {
-    if (projectId === activeProjectId && projectOpen) return
+    if (projectId === activeProjectId && projectOpen) { setCaptureSpaceOpen(false); return }
     if (projectOpen) { saveProjectNavigationState(activeProjectId, camera); projectStateCacheRef.current.set(activeProjectId, captureProjectState()) }
     if (bootMode === 'runtime') {
       bridgeRef.current = new RuntimeBridge(projectId)
@@ -1809,6 +1815,7 @@ export function App() {
         if (loaded.source !== 'runtime' || loaded.state === null) { setNotice(`项目打开失败：${humanizeRuntimeMessage(loaded.error ?? '项目数据暂时无法读取')}`); return }
         projectStateCacheRef.current.set(projectId, loaded.state)
         setOpenProjectIds((current) => current.includes(projectId) ? current : [...current, projectId])
+        setCaptureSpaceOpen(false)
         applyProjectState(projectId, loaded.state)
         setDataSource('runtime')
         setNotice(`已打开 ${projects.find((project) => project.id === projectId)?.label ?? '项目'}`)
@@ -1821,6 +1828,7 @@ export function App() {
     )
     projectStateCacheRef.current.set(projectId, next)
     setOpenProjectIds((current) => current.includes(projectId) ? current : [...current, projectId])
+    setCaptureSpaceOpen(false)
     applyProjectState(projectId, next)
     setNotice(`已打开 ${projects.find((project) => project.id === projectId)?.label ?? '项目'}`)
   }, [activeProjectId, applyProjectState, bootMode, camera, captureProjectState, projectOpen, projects])
@@ -1844,17 +1852,6 @@ export function App() {
     if (`${window.location.pathname}${window.location.search}` === desiredUrl) return
     window.history.replaceState(null, '', desiredUrl)
   }, [activeProjectId, captureSpaceOpen, projectOpen])
-
-  // Phase A: Project Home 是 Launcher —— 卡片点击在新标签页打开项目，实例互不干扰。
-  const openProjectInNewTab = useCallback((projectId: string) => {
-    const params = new URLSearchParams()
-    if (agentMode) params.set('agent', 'codex')
-    if (launchSurface) params.set('surface', launchSurface)
-    const query = params.toString()
-    const url = `${window.location.origin}/projects/${encodeURIComponent(projectId)}${query ? `?${query}` : ''}`
-    window.open(url, '_blank', 'noopener')
-    setProjectOpen(false)
-  }, [agentMode, launchSurface])
 
   const revealProjectFolder = useCallback((projectId: string) => {
     if (bootMode !== 'runtime') {
@@ -1992,12 +1989,12 @@ export function App() {
     selectionContextIntentRef.current.touched = true
     selectionIntentVersionRef.current += 1
     setSelectedEdgeId(null)
-    // Full workspace may summon a transient composer on deliberate second click.
-    // Sidecar is a collaboration/status surface and never owns another LCOS prompt box.
-    setSelectionComposerOpen(layoutMode === 'desktop' && !additive && selectedIds.includes(id))
+    // Click owns Selection only. An already-open explicit Composer may survive only
+    // when the same single target is reselected; ordinary selection can never summon it.
+    setSelectionComposerOpen((current) => current && !additive && selectedIds.includes(id))
     setSelectedIds((current) => additive ? current.includes(id) ? current.filter((item) => item !== id) : [...current, id] : [id])
     if (!additive) setNodeInfoId(null)
-  }, [layoutMode, selectedIds])
+  }, [selectedIds])
   const selectMarquee = useCallback((ids: string[], additive: boolean) => {
     selectionContextIntentRef.current.touched = true
     selectionIntentVersionRef.current += 1
@@ -3953,67 +3950,102 @@ export function App() {
     setPresentationCommit((current) => current + 1)
   }, [])
 
-  const saveNoteBody = useCallback((id: string, input: { title: string; body: string }) => {
+  const applyReloadedRuntimeState = useCallback((state: PersistedPrototypeState, selectedNodeId: string) => {
+    projectStateCacheRef.current.set(activeProjectId, state)
+    resetGraph({ nodes: state.nodes, edges: state.edges })
+    setWorkspaces(state.workspaces)
+    setScopes(state.scopes)
+    setWorkRail((current) => ({ ...state.workRail, collapsed: current.collapsed, width: 312 }))
+    setSelectedIds([selectedNodeId])
+  }, [activeProjectId, resetGraph])
+  const saveNoteBody = useCallback(async (id: string, input: { title: string; body: string }) => {
     const { title, body } = input
-    if (!title.trim()) { setNotice('标题不能为空'); return }
-    setNodes((current) => current.map((node) => node.id === id ? {
-      ...node,
-      title: title.trim(),
+    const nextTitle = title.trim()
+    if (!nextTitle) { setNotice('标题不能为空'); return false }
+    const node = nodes.find((item) => item.id === id)
+    if (!node) return false
+
+    // Runtime managed text edits are canonical Project Truth mutations. Never
+    // update the projection first and hope Core catches up afterwards.
+    if (bootMode === 'runtime' && node.artifactId) {
+      if (noteSavePendingRef.current.has(id)) return false
+      noteSavePendingRef.current.add(id)
+      setNotice('正在保存文本修订…')
+      try {
+        const revision = await bridgeRef.current.client.updateTextArtifact(activeProjectId, {
+          viewId: id,
+          artifactId: node.artifactId,
+          body,
+        })
+        if (!revision.result.ok) {
+          setNotice(`文本保存失败：${revision.result.error.message}`)
+          return false
+        }
+
+        const canonical = revision.result.value
+        let titleSyncFailed = false
+        if (node.title !== nextTitle) {
+          try {
+            const titleCall = await bridgeRef.current.client.updateEntityTitle('artifact', node.artifactId, {
+              title: nextTitle,
+              mode: 'manual',
+              generatedBy: 'user',
+            })
+            titleSyncFailed = !titleCall.result.ok
+          } catch {
+            titleSyncFailed = true
+          }
+        }
+
+        // Session-local body cache is only a render bridge for preview-generation lag.
+        // It is revision-bound, so a newer canonical revision automatically invalidates it.
+        rememberNotePresentation(id, {
+          noteBody: body,
+          noteBodyRevisionId: canonical.revisionId,
+          ...(node.noteLayout === 'mindmap' ? { noteOutline: body } : {}),
+        })
+        setNoteEditorId(null)
+
+        const loaded = await bridgeRef.current.loadProject().catch(() => null)
+        if (loaded?.source === 'runtime' && loaded.state) {
+          applyReloadedRuntimeState(loaded.state, id)
+        } else {
+          // Canonical save already succeeded. Keep the visible projection truthful even
+          // if the immediate hydration round is temporarily unavailable.
+          setNodes((current) => current.map((item) => item.id === id ? {
+            ...item,
+            title: titleSyncFailed ? item.title : nextTitle,
+            noteBody: body,
+            previewText: body,
+            revisionId: canonical.revisionId,
+            revisionCount: Math.max(1, (item.revisionCount ?? 1) + 1),
+          } : item))
+        }
+        setNotice(titleSyncFailed
+          ? '正文已保存为新修订；标题同步失败，已保留原标题'
+          : '文本已保存为新的 Current Revision')
+        return true
+      } catch (error: unknown) {
+        setNotice(`文本保存失败：${error instanceof Error ? error.message : '本地项目服务暂时不可用'}`)
+        return false
+      } finally {
+        noteSavePendingRef.current.delete(id)
+      }
+    }
+
+    // Prototype/local-only notes keep their existing presentation-local behavior.
+    setNodes((current) => current.map((item) => item.id === id ? {
+      ...item,
+      title: nextTitle,
       subtitle: body.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).slice(1).join(' ').trim().slice(0, 24),
       noteBody: body,
-      // 导图模式：大纲与正文同源（body 就是无标题行的大纲，标题独立做根）。
-      ...(node.noteLayout === 'mindmap' ? { noteOutline: body } : {}),
-    } : node))
-    const edited = nodes.find((item) => item.id === id)
-    // 会话级正文记忆：runtime text artifact 的 body 更新在 Core revision API 落地前
-    // 是 presentation-local 的，存这里防刷新丢失（含导图大纲）。
-    rememberNotePresentation(id, edited?.noteLayout === 'mindmap' ? { noteOutline: body, noteBody: body } : { noteBody: body })
+      ...(item.noteLayout === 'mindmap' ? { noteOutline: body } : {}),
+    } : item))
+    rememberNotePresentation(id, node.noteLayout === 'mindmap' ? { noteOutline: body, noteBody: body } : { noteBody: body })
     setNoteEditorId(null)
-    // Runtime artifact title sync (body updates are presentation-local until
-    // a Core text-revision API lands; recorded as known debt, not blocking).
-    const node = nodes.find((item) => item.id === id)
-    if (bootMode === 'runtime' && node?.artifactId && node.title !== title.trim()) {
-      void bridgeRef.current.client.updateEntityTitle('artifact', node.artifactId, { title: title.trim(), mode: 'manual', generatedBy: 'user' }).catch(() => undefined)
-    }
     setNotice('文本已保存')
-  }, [bootMode, nodes, setNodes])
-
-  /** 投影/本体冲突的落地动作：复制一个本地可编辑副本节点，并连一条「引用」边指向原投影。 */
-  const confirmForkProjection = useCallback(() => {
-    const source = forkPromptId ? nodes.find((node) => node.id === forkPromptId) : undefined
-    setForkPromptId(null)
-    if (!source) return
-    const forkId = createId('note')
-    const body = source.noteBody ?? source.previewText ?? ''
-    const fork: CanvasNode = {
-      id: forkId,
-      kind: 'note',
-      title: source.title,
-      subtitle: '引用副本 · 本地可编辑',
-      x: source.x + 48,
-      y: source.y + 64,
-      width: source.width,
-      height: source.height,
-      displayMode: source.displayMode ?? 'standard',
-      noteBody: body,
-      scopeId: source.scopeId,
-      createdAt: new Date().toISOString(),
-      workspaceIds: source.workspaceIds ?? [],
-    }
-    setNodes((current) => [...current, fork])
-    setEdges((current) => [...current, {
-      id: createId('edge'),
-      from: forkId,
-      to: source.id,
-      kind: 'reference',
-      label: '引用',
-      scope: 'presentation',
-      origin: 'user',
-    }])
-    setSelectedIds([forkId])
-    setNoteEditorId(forkId)
-    setNotice('已复制为引用副本，在副本上编辑')
-  }, [forkPromptId, nodes, setEdges, setNodes])
+    return true
+  }, [activeProjectId, applyReloadedRuntimeState, bootMode, nodes, setNodes])
 
   const toggleNoteLayout = useCallback((id: string, layout: 'text' | 'mindmap', override?: { title: string; body: string }) => {
     // 统一文本体系：note 与 markdown 文本 artifact 都能转导图（PDF/图片等非文本除外）。
@@ -4280,9 +4312,9 @@ export function App() {
       return null
     }
     const value = call.result.value
-    originTextIdsRef.current.add(value.viewId)
-    // 会话记忆同步写一份：mapGraphToState 重载时按 recallNotePresentation 恢复 noteBody/noteOutline。
-    rememberNotePresentation(value.viewId, { noteBody: text, ...(isOutline ? { noteOutline: text } : {}) })
+    // Canonical write succeeded. Cache only against that exact revision so a later
+    // external/agent revision can never be masked by this session-local body cache.
+    rememberNotePresentation(value.viewId, { noteBody: text, noteBodyRevisionId: value.revisionId, ...(isOutline ? { noteOutline: text } : {}) })
     setNodes((current) => current.map((node) => node.id === localId ? {
       ...node,
       id: value.viewId,
@@ -4614,7 +4646,6 @@ export function App() {
         const value = call.result.value
         // 与 runtime 投影对齐（mapGraphToState 的 fileType: artifact.kind）：
         // 漏掉 fileType 会让 detectFileIdentity 判成 'file'，卡片退回纸片（“老样子”）。
-        originTextIdsRef.current.add(value.viewId)
         setNodes((current) => current.map((node) => node.id === localId ? {
           ...node,
           id: value.viewId,
@@ -4954,14 +4985,6 @@ export function App() {
     })
   }, [activeProjectId, bootMode, resetGraph])
 
-  const applyReloadedRuntimeState = useCallback((state: PersistedPrototypeState, selectedNodeId: string) => {
-    projectStateCacheRef.current.set(activeProjectId, state)
-    resetGraph({ nodes: state.nodes, edges: state.edges })
-    setWorkspaces(state.workspaces)
-    setScopes(state.scopes)
-    setWorkRail((current) => ({ ...state.workRail, collapsed: current.collapsed, width: 312 }))
-    setSelectedIds([selectedNodeId])
-  }, [activeProjectId, resetGraph])
 
   const refreshSource = useCallback((node: CanvasNode) => {
     if (bootMode !== 'runtime' || !node.fileRecordId) {
@@ -5913,7 +5936,7 @@ export function App() {
   const requestSelectionRun = useCallback(() => {
     const prompt = selectionComposerText.trim()
     if (!prompt) { setNotice('先写一句你希望本地 Agent 完成的工作'); return }
-    if (!selectedIds.length) { setNotice('先选择要给 Agent 参考的内容'); return }
+    if (!selectedIds.length) { setNotice('先选择要处理的内容'); return }
     const selectedProviderStatus = selectionProvider === 'auto' ? null : runtimeProviders.find((provider) => provider.provider === selectionProvider)
     if (selectedProviderStatus && !['ready', 'busy'].includes(selectedProviderStatus.availability)) { setNotice('当前执行工具暂时不可用，换一个再发送'); return }
     // Runtime mode lets the proposal layer resolve ambiguity from the user's
@@ -5929,9 +5952,7 @@ export function App() {
     const requestedIntent = selectionIntent
     const fallbackIntent: RunOutputIntent = selectionResultSlotNode ? 'create' : selectionCreateAsNewNode ? (requestedIntent === 'revise' ? 'create' : requestedIntent) : requestedIntent === 'create' ? 'create' : target ? 'revise' : 'analyze'
     const fallbackPolicy: ComposerResultPolicy = selectionResultSlotNode ? 'create_artifact' : selectionResultPolicy === 'reply_only' && fallbackIntent !== 'analyze' ? (fallbackIntent === 'create' ? 'create_artifact' : 'draft_revision_per_target') : selectionResultPolicy
-    const contextNodes = selectionReferenceCandidates
-      .map((candidate) => candidate.node)
-      .filter((node) => node.id !== target?.id && Boolean(node.artifactId && node.revisionId))
+    const contextNodes = selectionExecutionContextNodes
     const targetIds = target ? [target.id] : []
     const contextIds = contextNodes.map((node) => node.id)
 
@@ -5988,7 +6009,7 @@ export function App() {
         },
       )
     })
-  }, [activeProjectId, bootMode, selectionBaseRevision?.id, selectionComposerText, selectionCreateAsNewNode, selectionEditableNodes.length, selectionExecutionBlockedReason, selectionOrderedReferences, selectionProvider, effectiveSelectionReceiverId, selectionReferenceCandidates, selectionResultPolicy, selectionResultSlotNode, selectionTargetNode, selectedIds.length, startRunFrom, runtimeProviders, workspaceId])
+  }, [activeProjectId, bootMode, selectionBaseRevision?.id, selectionComposerText, selectionCreateAsNewNode, selectionEditableNodes.length, selectionExecutionBlockedReason, selectionExecutionContextNodes, selectionOrderedReferences, selectionProvider, effectiveSelectionReceiverId, selectionResultPolicy, selectionResultSlotNode, selectionTargetNode, selectedIds.length, startRunFrom, runtimeProviders, workspaceId])
 
   const requestGlobalRun = useCallback(() => {
     const prompt = globalComposerText.trim()
@@ -6035,7 +6056,8 @@ export function App() {
       setNotice('修改现有内容需要恰好选择一个可编辑内容；额外参考不会自动变成修改目标。')
       return undefined
     }
-    const executionReferenceIds = mergeExecutionReferenceIds(input.selectionIds, input.referenceIds, target?.id)
+    const executionReferenceIds = explicitExecutionReferenceIds(input.referenceIds, target?.id)
+    const executionContextIds = mergeExecutionContextIds(input.selectionIds, input.referenceIds, target?.id)
     const candidates = referenceCandidates(executionReferenceIds, nodes, input.receiverId, selectionReceiverChoices)
     const proposalGap = proposalCompatibilityBlockReason({
       receiverId: input.receiverId,
@@ -6047,8 +6069,9 @@ export function App() {
     if (!receiver?.conversationSessionId) { setNotice('这段对话还没有完成连接，请先选择一段已连接的对话。'); return undefined }
 
     const orderedReferences = candidates.flatMap((candidate) => candidate.orderedReference ? [candidate.orderedReference] : [])
-    const referenceNodes = candidates.map((candidate) => candidate.node)
-    const contextNodes = referenceNodes.filter((node) => node.id !== target?.id && node.artifactId && node.revisionId)
+    const contextNodes = executionContextIds
+      .map((id) => nodes.find((node) => node.id === id))
+      .filter((node): node is CanvasNode => Boolean(node?.artifactId && node.revisionId))
     const contextIds = contextNodes.map((node) => node.id)
     const targetIds = target ? [target.id] : []
     const surfaceLabel = input.surface === 'workflow' ? '工作流' : input.surface === 'conversation' ? '对话现场' : '上下文'
@@ -6138,6 +6161,12 @@ export function App() {
       return undefined
     }
   }, [activeProjectId, activeReceiverIdentity?.activeReceiverId, nodes, selectionReceiverChoices, startRunFrom, workspaceId])
+
+  const readConversationReach = useCallback(async (connectedConversationId: string): Promise<number> => {
+    if (bootMode !== 'runtime') return 0
+    const call = await bridgeRef.current.client.conversationReach(activeProjectId, connectedConversationId)
+    return call.result.ok ? call.result.value.items.length : 0
+  }, [activeProjectId, bootMode])
 
   const requestContextProposalModification = useCallback((proposal: ContextChangeProposalV1, instruction: string) => {
     const changeRequest = instruction.trim()
@@ -6804,15 +6833,44 @@ export function App() {
       enterConversationSurface(node.conversation.id)
       return
     }
-    // Text nodes open the inline editor (mubu-style canvas writing), not the Reader.
-    // 统一文本体系：note 与 markdown 文本 artifact 双击都直接就地编辑。
+    // Text nodes edit the same Project Artifact truth. Runtime projections first
+    // hydrate the canonical current body so stale preview/cache content cannot be
+    // written back over a newer revision. Long/truncated text fails closed into Reader.
     if (node.kind === 'note' || node.fileType === 'markdown') {
       setNodeInfoId(null)
       closeImmersive()
-      // 投影/本体冲突：runtime 实体投影的正文属于本体（text-revision API 未落地，
-      // 本地改写只会造成投影分叉）。双击不直接编辑，提示复制一个引用副本节点来改。
-      if (bootMode === 'runtime' && node.artifactId && !originTextIdsRef.current.has(node.id)) {
-        setForkPromptId(id)
+      if (bootMode === 'runtime' && node.artifactId) {
+        setNotice('正在读取当前文本…')
+        void bridgeRef.current.client.readCurationViews(activeProjectId, {
+          viewIds: [id],
+          budget: { maxItems: 1, maxCharsPerItem: 30_000, maxTotalChars: 30_000 },
+        }).then((call) => {
+          if (!call.result.ok) {
+            setNotice(`无法进入编辑：${call.result.error.message}`)
+            return
+          }
+          const current = call.result.value.nodes.find((item) => item.viewId === id)
+          if (!current) {
+            setNotice('无法进入编辑：当前文本投影已不存在')
+            return
+          }
+          if (current.truncated || call.result.value.truncated) {
+            setNotice('文本超过安全的就地编辑范围，已打开完整阅读视图')
+            openImmersive(id)
+            return
+          }
+          const revisionId = current.currentRevisionId ?? node.revisionId
+          if (revisionId) rememberNotePresentation(id, { noteBody: current.boundedText, noteBodyRevisionId: revisionId })
+          setNodes((items) => items.map((item) => item.id === id ? {
+            ...item,
+            noteBody: current.boundedText,
+            ...(revisionId ? { revisionId } : {}),
+          } : item))
+          setNoteEditorId(id)
+          setNotice('')
+        }).catch((error: unknown) => {
+          setNotice(`无法进入编辑：${error instanceof Error ? error.message : '本地项目服务暂时不可用'}`)
+        })
         return
       }
       setNoteEditorId(id)
@@ -6838,7 +6896,7 @@ export function App() {
       setWorkbench(null)
       openImmersive(id)
     }
-  }, [bootMode, closeImmersive, enterConversationSurface, enterScope, nodes, openImmersive, openSavedContextView, openSavedWorkflowView, openWorkspaceScene, presentationEntityNodes, scopes, selectNode])
+  }, [activeProjectId, bootMode, closeImmersive, enterConversationSurface, enterScope, nodes, openImmersive, openSavedContextView, openSavedWorkflowView, openWorkspaceScene, presentationEntityNodes, scopes, selectNode, setNodes])
 
   const showNodeDetails = useCallback((id: string) => {
     setNodeInfoId(id)
@@ -6916,7 +6974,7 @@ export function App() {
       if (modifier && key === 'o' && selectedNodes.length === 1) { event.preventDefault(); openNative(selectedNodes[0]); return }
       if (event.code === 'Space') { event.preventDefault(); setSpaceHeld(true); return }
       if (event.key === 'Escape') { if (paletteOpen) { setPaletteOpen(false); return } if (projectFocusOpen) setProjectFocusOpen(false); else if (confirmProjectDelete) setConfirmProjectDelete(null); else if (confirmWorkspaceId) setConfirmWorkspaceId(null); else if (conversationSpaceId) setConversationSpaceId(null); else if (immersiveNodeId) closeImmersive(); else if (workbench) setWorkbench(null); else if (capabilityOpen) setCapabilityOpen(false); else if (nodeInfoId) setNodeInfoId(null); else if (layoutPreview) { setLayoutPreview(null); setLayoutPreviewFocusIds(null) } else clearSelection(); return }
-      if (key === 'f' && selectedIds.length === 1) { event.preventDefault(); openProjectFocus(); return }
+      if (key === 'f' && selectedIds.length > 0) { event.preventDefault(); openProjectFocus(); return }
       if (key === 'c') { event.preventDefault(); if (layoutMode === 'sidecar') { setNotice('侧边协作模式不提供 LCOS 输入框'); return } requestComposerFocus(); return }
       if (event.key === 'F2' && selectedIds.length === 1 && selectedNodes.length === 1) { event.preventDefault(); setRenameNodeId(selectedNodes[0]!.id); return }
       if (event.key === 'Delete' || event.key === 'Backspace') {
@@ -7023,8 +7081,13 @@ export function App() {
     if (activeRun) { setSelectedIds([activeRun.processNodeId]); setWorkRail((current) => ({ ...current, collapsed: false })); setNotice(`当前执行 · ${runStatusLabel[activeRun.status]}`); return }
     setNotice('当前没有待确认的任务')
   }, [activeRun, openRunReview, pendingReviews])
+  const activeRunActions = useMemo<readonly ExecutionItemAction[]>(() => {
+    if (activeRun === null) return []
+    return executionItems.find((item) => item.runId === activeRun.id)?.availableActions ?? []
+  }, [activeRun, executionItems])
   const workSurfaceRuntime = useMemo<WorkSurfaceRuntime>(() => ({
     activeRun,
+    runActions: activeRunActions,
     runEvents,
     pendingReviewCount: pendingReviews.length,
     onCancel: cancelActiveRun,
@@ -7032,9 +7095,10 @@ export function App() {
     onReview: openCurrentRunReview,
     onOpenRunDetails: (node) => showNodeDetails(node.id),
     onAnswerInput: answerActiveRunInput,
-  }), [activeRun, answerActiveRunInput, cancelActiveRun, openCurrentRunReview, pendingReviews.length, retryRun, runEvents, showNodeDetails])
+  }), [activeRun, activeRunActions, answerActiveRunInput, cancelActiveRun, openCurrentRunReview, pendingReviews.length, retryRun, runEvents, showNodeDetails])
   const deliverSurfaceRuntime = useMemo<DeliverSurfaceRuntime>(() => ({
     activeRun,
+    runActions: activeRunActions,
     pendingReviewCount: pendingReviews.length,
     onAccept: acceptRun,
     onReject: rejectRun,
@@ -7042,7 +7106,7 @@ export function App() {
     onReview: openCurrentRunReview,
     onOpenRevisions: (node) => setWorkbench({ nodeId: node.id, focus: 'revisions' }),
     onCompareNodes: (left, right) => { setSelectedIds([left.id, right.id]); setWorkbench({ nodeId: right.id, focus: 'revisions' }); setNotice(`Compare · ${left.title} ↔ ${right.title}`) },
-  }), [acceptRun, activeRun, openCurrentRunReview, pendingReviews.length, rejectRun, retryRun])
+  }), [acceptRun, activeRun, activeRunActions, openCurrentRunReview, pendingReviews.length, rejectRun, retryRun])
 
   const surfaceContextMenuItems = useCallback((surface: SurfaceId): readonly SurfaceContextMenuItem[] => {
     const hasSelection = selectedIds.length > 0
@@ -7144,7 +7208,7 @@ export function App() {
         onToggle: toggleSelectionReference,
       },
       onClose: () => { setCaptureSpaceOpen(false); setProjectOpen(false) },
-      onOpenProject: openProjectInNewTab,
+      onOpenProject: openProject,
       onNotice: setNotice,
     }}
     drive={{
@@ -7152,7 +7216,7 @@ export function App() {
       projects,
       openProjectIds,
       onOpenCaptureSpace: () => { setCaptureSpaceOpen(true); setProjectOpen(false) },
-      onOpen: openProjectInNewTab,
+      onOpen: openProject,
       onRevealFolder: revealProjectFolder,
       onCreate: (intent = 'create') => { setProjectCreateIntent(intent); setProjectCreateOpen(true) },
       onDelete: requestDeleteProject,
@@ -7188,11 +7252,7 @@ export function App() {
         providers: runtimeProviders,
         busy: runBusy,
         onSubmit: requestSurfaceAgentRun,
-        onReadReach: async (connectedConversationId) => {
-          if (bootMode !== 'runtime') return 0
-          const call = await bridgeRef.current.client.conversationReach(activeProjectId, connectedConversationId)
-          return call.result.ok ? call.result.value.items.length : 0
-        },
+        onReadReach: readConversationReach,
       },
     } : null}
     scene={{
@@ -7241,11 +7301,7 @@ export function App() {
         providers: runtimeProviders,
         busy: runBusy,
         onSubmit: requestSurfaceAgentRun,
-        onReadReach: async (connectedConversationId) => {
-          if (bootMode !== 'runtime') return 0
-          const call = await bridgeRef.current.client.conversationReach(activeProjectId, connectedConversationId)
-          return call.result.ok ? call.result.value.items.length : 0
-        },
+        onReadReach: readConversationReach,
       },
       resumeHint: layoutMode === 'desktop' ? resumeHint : null,
       idleHint: layoutMode === 'desktop' ? idleHint : null,
@@ -7334,7 +7390,8 @@ export function App() {
         onSetActiveConversation: (conversationId) => { void requestSetActiveConversation(conversationId) },
         onMapToConversation: mapCanvasObjectsToConversation,
         activeConversationId: activeReceiverIdentity?.chain?.conversationSession?.id ?? null,
-        onFocusSelection: selectedIds.length === 1 ? () => openProjectFocus() : undefined,
+        onFocusSelection: selectedIds.length > 0 ? () => openProjectFocus() : undefined,
+        onFocusNode: (id) => openProjectFocus([id]),
         onRenameSelection: selectedIds.length === 1 && selectedNodes.length === 1 ? () => setRenameNodeId(selectedNodes[0]!.id) : undefined,
         onToggleNoteLayout: toggleNoteLayout,
         onCreateNodeFromAnchor: createNodeFromAnchor,
@@ -7418,6 +7475,51 @@ export function App() {
         workflowViews: savedWorkflowViews,
         activeWorkflowId,
         focusRequest: projectFocusRequest,
+        onFocusObject: (id) => openProjectFocus([id]),
+        onFocusSelection: (ids) => openProjectFocus(ids),
+        onRemoveProjection: (sourceIds) => {
+          const semantic = semanticRefsForSourceIds(sourceIds, projectPresentationNodes)
+          if (!semantic.viewIds.length && !semantic.entityRefs.length) return
+          if (activeSurface === 'workflow') {
+            const ownerId = workflowPresentationOwnerId
+            const currentRefs = ownerId === rootScope.id ? workflowPresentationEntityRefs : (workflowEntityRefsById[ownerId] ?? [])
+            void Promise.all([
+              removeExactPresentationMembers('workflow', ownerId, semantic.viewIds),
+              removeExactPresentationEntityRefs('workflow', ownerId, semantic.entityRefs, 'workflow', currentRefs),
+            ]).then(([members, refs]) => {
+              if (members === null || refs === null) return
+              setWorkflowPresentationIds(members)
+              setWorkflowPresentationEntityRefs(refs)
+              if (ownerId !== rootScope.id) {
+                setWorkflowMembersById((current) => ({ ...current, [ownerId]: members }))
+                setWorkflowEntityRefsById((current) => ({ ...current, [ownerId]: refs }))
+              }
+              setNotice('已从当前 Workflow 投影移出；Project Entity 保持不变')
+            })
+            return
+          }
+          if (activeSurface === 'context-graph' || activeSurface === 'outline' || activeSurface === 'context-space' || activeSurface === 'context-flow' || activeSurface === 'context-tree') {
+            const ownerId = activeSurface === 'context-graph' ? rootScope.id : (activeContextId ?? rootScope.id)
+            const rootContext = ownerId === rootScope.id
+            const currentRefs = rootContext ? contextGraphEntityRefs : (contextEntityRefsById[ownerId] ?? [])
+            void Promise.all([
+              removeExactPresentationMembers('context', ownerId, semantic.viewIds),
+              removeExactPresentationEntityRefs('context', ownerId, semantic.entityRefs, rootContext ? 'context-graph' : 'context', currentRefs),
+            ]).then(([members, refs]) => {
+              if (members === null || refs === null) return
+              if (rootContext) {
+                setContextGraphPresentationIds(members)
+                setContextGraphEntityRefs(refs)
+              } else {
+                setContextMembersById((current) => ({ ...current, [ownerId]: members }))
+                setContextEntityRefsById((current) => ({ ...current, [ownerId]: refs }))
+                setContextPresentationIds(members)
+                setContextPresentationEntityRefs(refs)
+              }
+              setNotice('已从当前 Context 投影移出；Project Entity 保持不变')
+            })
+          }
+        },
         onSurfaceChange: setActiveSurface,
         // G-4 导图分支摘取（Context 通道）：建进当前 Context scope 并写入成员集——
         // Context 视图只排 presentation 成员，漏写成员集会让新节点"建了却看不见"。
@@ -7715,12 +7817,7 @@ export function App() {
       workspace: effectiveWorkspace,
       nodes,
       activeRun,
-      runActions: activeRun === null
-        ? undefined
-        : executionItems.find((item) => item.runId === activeRun.id)?.availableActions
-          ?? (["queued", "running", "waiting_input", "failed"].includes(activeRun.status)
-            ? (["cancel"] as ExecutionItemAction[]).concat(activeRun.status === "waiting_input" ? (["answer_input"] as ExecutionItemAction[]) : [], activeRun.status === "failed" ? (["retry"] as ExecutionItemAction[]) : [])
-            : []),
+      runActions: activeRunActions,
       pendingNode,
       collapsed: workRail.collapsed,
       width: effectiveRailWidth,
@@ -7834,8 +7931,12 @@ export function App() {
         node: noteToEdit,
         camera,
         onCancel: () => setNoteEditorId(null),
-        onSave: (input) => saveNoteBody(noteToEdit.id, input),
-        onConvertToMindmap: (input) => { setNoteEditorId(null); toggleNoteLayout(noteToEdit.id, 'mindmap', input) },
+        onSave: (input) => { void saveNoteBody(noteToEdit.id, input) },
+        onConvertToMindmap: (input) => {
+          void saveNoteBody(noteToEdit.id, input).then((saved) => {
+            if (saved) toggleNoteLayout(noteToEdit.id, 'mindmap', input)
+          })
+        },
       } : null,
       confirmWorkspaceDelete: confirmWorkspaceId ? {
         title: '删除这个工作空间？',
@@ -7854,13 +7955,6 @@ export function App() {
         description: '项目会从项目列表移除；磁盘上的源文件和 .lcosproj 工程文件都会保留，之后仍可重新打开。',
         onCancel: () => setConfirmProjectDelete(null),
         onConfirm: confirmDeleteProject,
-      } : null,
-      confirmForkProjection: forkPromptId ? {
-        title: '这是项目实体的投影，直接修改会与本体冲突',
-        description: '画布上的文本节点是文本实体的投影，正文属于本体。要修改时，可复制一个新节点作为该投影的引用，在副本上编辑；原投影保持与本体一致。',
-        confirmLabel: '复制并编辑',
-        onCancel: () => setForkPromptId(null),
-        onConfirm: confirmForkProjection,
       } : null,
       handoff: handoffOpen ? {
         open: handoffOpen,

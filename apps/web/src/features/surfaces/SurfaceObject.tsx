@@ -1,4 +1,5 @@
-import type { PointerEvent as ReactPointerEvent } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react'
 import { GripVertical } from 'lucide-react'
 import type { CanvasNode, NodeDisplayMode } from '../../model'
 import { CanvasNodeVisual, detectFileIdentity, displayNodeTitle } from '../canvas/CanvasNodeVisual'
@@ -11,6 +12,7 @@ import { LcosSignalGlyph } from '../design/DotGlyph'
 import { resolveSpatialSignal, type SpatialRuntimeSignal } from '../spatial/visual/spatialSignal'
 import { nodeRole } from './surfaceModel'
 import type { SurfaceAttentionBucket } from './surfaceContracts'
+import { ProjectObjectOrbit } from '../ui/ProjectObjectOrbit'
 
 export function SurfaceIdentityGlyph({ node }: { node: CanvasNode }) {
   if (node.entityKind === 'collection') return <CollectionGlyph/>
@@ -48,6 +50,10 @@ interface Props {
   spatialSemantic?: string
   onSelect: (id: string, additive?: boolean) => void
   onDoubleClick: (id: string) => void
+  /** Universal Object Orbit: optional project-level Focus/在哪 capability. */
+  onLocate?: (id: string) => void
+  /** Parent selection truth decides whether a single-object Orbit is admissible. */
+  orbitEligible?: boolean
   dropIds?: readonly string[]
   onDirectProjectViewDrop?: (targetViewId: string, sourceIds: readonly string[]) => void
 }
@@ -65,6 +71,8 @@ export function SurfaceObject({
   spatialSemantic,
   onSelect,
   onDoubleClick,
+  onLocate,
+  orbitEligible = true,
   dropIds,
   onDirectProjectViewDrop,
 }: Props) {
@@ -81,6 +89,29 @@ export function SurfaceObject({
   })
   const semanticDropIds = dropIds?.length ? dropIds : [node.id]
   const dropFeedback = useSemanticDropFeedback()
+  const orbitAnchorRef = useRef<HTMLButtonElement | null>(null)
+  const [orbitOpen, setOrbitOpen] = useState(false)
+
+  // Selection owns Orbit lifetime. An unselected object or a multi-selection
+  // must never leave a detached single-object Orbit behind.
+  useEffect(() => {
+    if (!selected || !orbitEligible) setOrbitOpen(false)
+  }, [orbitEligible, selected])
+
+  const selectAndMaybeOpenOrbit = (event: ReactMouseEvent<HTMLButtonElement>) => {
+    const additive = additiveSelectionModifier(event)
+    onSelect(node.id, additive)
+    if (node.entityKind === 'conversation' || additive) {
+      setOrbitOpen(false)
+      return
+    }
+    setOrbitOpen(true)
+  }
+
+  const openDeeper = () => {
+    setOrbitOpen(false)
+    onDoubleClick(node.id)
+  }
   const onPointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
     beginSemanticDrop(event, semanticDropIds, onDirectProjectViewDrop, dropFeedback.onPhase)
   }
@@ -88,6 +119,7 @@ export function SurfaceObject({
   if (glyph) {
     return <>
       <button
+        ref={orbitAnchorRef}
         type="button"
         data-node-id={node.id}
         data-surface-role={role}
@@ -95,13 +127,14 @@ export function SurfaceObject({
         className={`lcos-surface-glyph role-${role} ${selected ? 'selected' : ''} ${attentionBucket ? `attention-${attentionBucket}` : ''} ${dim ? 'dim' : ''}`}
         aria-label={displayNodeTitle(node)}
         onPointerDown={onPointerDown}
-        onClick={(event) => onSelect(node.id, additiveSelectionModifier(event))}
-        onDoubleClick={() => onDoubleClick(node.id)}
+        onClick={selectAndMaybeOpenOrbit}
+        onDoubleClick={openDeeper}
       >
         <span className="lcos-semantic-drop-handle" data-semantic-drop-handle aria-hidden="true" onClick={(event)=>event.stopPropagation()} title="Semantic Drop：拖到上下文或工作流（右键拖 / Alt+左拖）"><GripVertical size={11}/></span>
         <span className="lcos-surface-identity-glyph" aria-hidden="true"><SurfaceIdentityGlyph node={node}/></span>
         <span className="lcos-glyph-label">{displayNodeTitle(node)}</span>
       </button>
+      {node.entityKind !== 'conversation' && <ProjectObjectOrbit open={orbitOpen} node={node} anchorRef={orbitAnchorRef} onClose={() => setOrbitOpen(false)} onOpen={openDeeper} {...(onLocate ? { onLocate: () => onLocate(node.id) } : {})}/>}
       <DropFeedbackLayer phase={dropFeedback.phase} hitElement={dropFeedback.hitElement} />
     </>
   }
@@ -109,6 +142,7 @@ export function SurfaceObject({
   const density: NodeDisplayMode = compact ? 'compact' : (node.displayMode ?? 'standard')
   return <>
     <button
+      ref={orbitAnchorRef}
       type="button"
       data-node-id={node.id}
       data-surface-role={role}
@@ -116,8 +150,8 @@ export function SurfaceObject({
       className={`lcos-surface-object lcos-surface-material role-${role} ${selected ? 'selected' : ''} ${attentionBucket ? `attention-${attentionBucket}` : ''} ${compact ? 'compact' : ''} ${dim ? 'dim' : ''}`}
       aria-label={displayNodeTitle(node)}
       onPointerDown={onPointerDown}
-      onClick={(event) => onSelect(node.id, additiveSelectionModifier(event))}
-      onDoubleClick={() => onDoubleClick(node.id)}
+      onClick={selectAndMaybeOpenOrbit}
+      onDoubleClick={openDeeper}
     >
       <span className="lcos-semantic-drop-handle" data-semantic-drop-handle aria-hidden="true" onClick={(event)=>event.stopPropagation()} title="Semantic Drop：拖到上下文或工作流（右键拖 / Alt+左拖）"><GripVertical size={11}/></span>
       {performanceProxy && node.entityKind !== 'conversation'
@@ -135,6 +169,7 @@ export function SurfaceObject({
       {usageHint && <span className="lcos-surface-usage-hint">{usageHint}</span>}
       {(selected || signal.state !== 'stable') && <span className="lcos-surface-system-signal" data-spatial-signal={selected && signal.state === 'stable' ? 'focus' : signal.state} aria-hidden="true"><LcosSignalGlyph state={selected && signal.state === 'stable' ? 'focus' : signal.state}/></span>}
     </button>
+    {node.entityKind !== 'conversation' && <ProjectObjectOrbit open={orbitOpen} node={node} anchorRef={orbitAnchorRef} onClose={() => setOrbitOpen(false)} onOpen={openDeeper} {...(onLocate ? { onLocate: () => onLocate(node.id) } : {})}/>}
     <DropFeedbackLayer phase={dropFeedback.phase} hitElement={dropFeedback.hitElement} />
   </>
 }

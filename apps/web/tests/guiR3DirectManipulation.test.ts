@@ -69,8 +69,8 @@ describe('GUI R3 direct manipulation contract', () => {
     expect(canvas).toContain('data-semantic-drop-handle')
     expect(canvas).not.toContain('onDirectProjectViewDrop?.(directDrop.id')
     // 只抑制 active right-drag 期间的浏览器菜单，不全局禁用普通右键
-    expect(canvas).toContain('contextMenuGuard.current = (menuEvent: Event) =>')
-    expect(canvas).toContain("window.addEventListener('contextmenu', contextMenuGuard.current, true)")
+    expect(canvas).toContain("window.addEventListener('contextmenu', guard, true)")
+    expect(canvas).toContain("window.removeEventListener('contextmenu', guard, true)")
   })
 
   it('keeps R3 legacy-drop removal intact (no DropShelf / stage transfer revival)', () => {

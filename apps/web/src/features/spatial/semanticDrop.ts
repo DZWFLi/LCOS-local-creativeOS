@@ -90,7 +90,7 @@ export function beginSemanticDrop<T extends HTMLElement>(
 
   const directPrimary = trigger === 'direct-primary'
   if (!directPrimary) {
-    event.preventDefault()
+    if (trigger !== 'secondary-pointer') event.preventDefault()
     event.stopPropagation()
   }
 
@@ -110,14 +110,20 @@ export function beginSemanticDrop<T extends HTMLElement>(
     onPhase?.(next, hit)
   }
 
-  if (!directPrimary) {
+  if (!directPrimary && trigger !== 'secondary-pointer') {
     try { sourceElement.setPointerCapture(pointerId) } catch { /* browser may own capture */ }
     sourceElement.classList.add('is-semantic-drop-source')
     sourceElement.dataset.semanticDropTrigger = trigger
   }
 
   const guardMenu = (menuEvent: Event) => menuEvent.preventDefault()
-  if (trigger === 'secondary-pointer') window.addEventListener('contextmenu', guardMenu, true)
+  let menuGuardInstalled = false
+  let menuGuardCleanupTimer: number | null = null
+  const installMenuGuard = () => {
+    if (trigger !== 'secondary-pointer' || menuGuardInstalled) return
+    menuGuardInstalled = true
+    window.addEventListener('contextmenu', guardMenu, true)
+  }
 
   const clearHover = () => {
     hovered?.classList.remove('is-direct-drop-target')
@@ -156,7 +162,16 @@ export function beginSemanticDrop<T extends HTMLElement>(
     window.removeEventListener('pointerup', finish, true)
     window.removeEventListener('pointercancel', cancel, true)
     window.removeEventListener('keydown', cancelWithEscape, true)
-    if (trigger === 'secondary-pointer') window.removeEventListener('contextmenu', guardMenu, true)
+    if (menuGuardInstalled) {
+      // Chrome/Edge may dispatch contextmenu after pointerup. Keep the drag-only guard alive
+      // briefly so right-drag never falls through into the management menu.
+      if (menuGuardCleanupTimer !== null) window.clearTimeout(menuGuardCleanupTimer)
+      menuGuardCleanupTimer = window.setTimeout(() => {
+        window.removeEventListener('contextmenu', guardMenu, true)
+        menuGuardInstalled = false
+        menuGuardCleanupTimer = null
+      }, 300)
+    }
   }
   const move = (pointerEvent: PointerEvent) => {
     if (pointerEvent.pointerId !== pointerId) return
@@ -167,7 +182,15 @@ export function beginSemanticDrop<T extends HTMLElement>(
       cleanup()
       return
     }
-    if (!moved && Math.hypot(pointerEvent.clientX - startX, pointerEvent.clientY - startY) > 4) moved = true
+    if (!moved && Math.hypot(pointerEvent.clientX - startX, pointerEvent.clientY - startY) > 4) {
+      moved = true
+      if (trigger === 'secondary-pointer') {
+        try { sourceElement.setPointerCapture(pointerId) } catch { /* browser may own capture */ }
+        sourceElement.classList.add('is-semantic-drop-source')
+        sourceElement.dataset.semanticDropTrigger = trigger
+      }
+      installMenuGuard()
+    }
     if (!moved) return
     const rawHit = targetAt(pointerEvent.clientX, pointerEvent.clientY)
     const hit = rawHit && rawHit.element !== sourceSurface ? rawHit : null

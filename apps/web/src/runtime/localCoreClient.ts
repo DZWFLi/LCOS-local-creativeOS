@@ -17,6 +17,7 @@ import type {
   ConversationReachResultV0,
   CreateResultSlotInputV0,
   ContextChangeProposalV1,
+  CurationReadResultV0,
   ProviderSessionBindingV1,
   ConnectedConversationV1,
   ActiveReceiverIdentityV1,
@@ -178,6 +179,13 @@ export interface AdoptExternalChangeResult {
   readonly updatedViews: readonly ProjectGraphSnapshot['artifactViews'][number][]
 }
 
+export interface UpdateTextArtifactResult {
+  readonly artifactId: string
+  readonly viewId: string
+  readonly revisionId: string
+  readonly legacyMigrated: boolean
+}
+
 export interface CreateRuntimeRunInput {
   readonly instruction: string
   readonly targetArtifactId?: string
@@ -267,6 +275,8 @@ export interface LocalCoreClient {
   setPinnedCaptureProject(projectId: string | null, signal?: AbortSignal): Promise<RuntimeCall<unknown>>
   revealProject(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<{ readonly projectId: string; readonly revealed: boolean }>>
   updateEntityTitle(entity: 'project' | 'workspace' | 'artifact' | 'scope', id: string, input: { readonly title: string; readonly mode: 'auto' | 'manual' | 'locked'; readonly generatedBy?: string }, signal?: AbortSignal): Promise<RuntimeCall<{ readonly id: string; readonly entity: string; readonly title: string; readonly mode: string }>>
+  updateTextArtifact(projectId: string, input: { readonly viewId?: string; readonly artifactId?: string; readonly body: string }, signal?: AbortSignal): Promise<RuntimeCall<UpdateTextArtifactResult>>
+  readCurationViews(projectId: string, input: { readonly viewIds: readonly string[]; readonly budget?: { readonly maxItems?: number; readonly maxCharsPerItem?: number; readonly maxTotalChars?: number } }, signal?: AbortSignal): Promise<RuntimeCall<CurationReadResultV0>>
   localIntelligence(signal?: AbortSignal): Promise<RuntimeCall<IntelligenceStatusV0>>
   boundaryEvaluate(projectId: string, input: BoundaryEvaluationRequestV1, signal?: AbortSignal): Promise<RuntimeCall<BoundaryEvaluationResultV1>>
   attentionRuntime(projectId: string, input?: { readonly workspaceId?: string | null; readonly explicitAction?: string; readonly tokenBudget?: number; readonly expandViewIds?: readonly string[]; readonly fullViewIds?: readonly string[]; readonly intentPolicy?: 'rules_only' | 'allow_model' }, signal?: AbortSignal): Promise<RuntimeCall<AttentionRuntimeSnapshotV0>>
@@ -912,6 +922,29 @@ export function createLocalCoreClient(): LocalCoreClient {
         signal,
         init: { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) },
         decode: decodeResult<{ readonly id: string; readonly entity: string; readonly title: string; readonly mode: string }>,
+      })
+    },
+    updateTextArtifact(projectId, input, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/curation/text`, {
+        signal,
+        timeoutMs: LOCAL_CORE_WRITE_TIMEOUT_MS,
+        init: {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(input),
+        },
+        decode: decodeResult<UpdateTextArtifactResult>,
+      })
+    },
+    readCurationViews(projectId, input, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/curation/read`, {
+        signal,
+        init: {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(input),
+        },
+        decode: decodeResult<CurationReadResultV0>,
       })
     },
     localIntelligence(signal) {

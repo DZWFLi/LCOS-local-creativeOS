@@ -2209,7 +2209,7 @@ body { color: var(--ink); }
 .canvas-node .node-footer small { display:block; color:var(--ink-42); font-size: 10px; }
 
 /* Apple Donor Map §2.5 冻结值 · A-2a */
-:root { --lcos-dur-micro:.1s; --lcos-dur-fast:.2s; --lcos-dur-normal:.3s; --lcos-dur-slow:.4s; --lcos-dur-xslow:.5s; --lcos-dur-menu-open:.25s; --lcos-dur-menu-close:.15s; --lcos-dur-popover:.28s; --lcos-dur-morph:.35s; --lcos-dur-sheet-in:.5s; --lcos-dur-sheet-out:.3s; --lcos-dur-press:.1s; --lcos-ease-apple:cubic-bezier(.25,.46,.45,.94); --lcos-ease-out:cubic-bezier(0,0,.58,1); --lcos-ease-spring:cubic-bezier(.34,1.56,.64,1); }
+:root { --lcos-dur-micro:.1s; --lcos-dur-fast:.2s; --lcos-dur-normal:.3s; --lcos-dur-slow:.4s; --lcos-dur-xslow:.5s; --lcos-dur-menu-open:.25s; --lcos-dur-menu-close:.15s; --lcos-dur-popover:.28s; --lcos-dur-morph:.35s; --lcos-dur-sheet-in:.5s; --lcos-dur-sheet-out:.3s; --lcos-dur-press:.1s; --lcos-dur-swap-opacity:180ms; --lcos-dur-swap-transform:260ms; --lcos-ease-apple:cubic-bezier(.25,.46,.45,.94); --lcos-ease-out:cubic-bezier(0,0,.58,1); --lcos-ease-spring:cubic-bezier(.34,1.56,.64,1); --lcos-ease-swap-in:cubic-bezier(.22,1,.36,1); --lcos-ease-swap-out:cubic-bezier(.4,0,.2,1); --lcos-swap-travel:18px; --lcos-swap-scale:.985; }
 .resize-handle { position:absolute; right:5px; bottom:5px; width:14px; height:14px; z-index: var(--lcos-z-content-handle); /* z-tier: canvas-content */ border:0; border-right:2px solid rgba(60,73,90,.34); border-bottom:2px solid rgba(60,73,90,.34); border-radius:0 0 3px 0; background:transparent; cursor:nwse-resize; opacity:.62; }
 .resize-handle:hover { opacity:1; border-color:var(--accent); }
 .canvas-node.multi-selected .resize-handle { display:none; }

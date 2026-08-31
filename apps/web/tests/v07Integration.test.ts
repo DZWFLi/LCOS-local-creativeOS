@@ -45,7 +45,7 @@ describe('v0.7.1 lightweight backend-integrated UI', () => {
     expect(canvas).toContain('onCreateScopeFromSelection')
     expect(canvas).toContain('onDirectProjectViewDrop')
     expect(canvas).not.toContain('onStageTransfer')
-    expect(canvas).toContain('data-testid="selection-toolbar"')
+    expect(canvas).toContain('<SelectionGroupActions')
     expect(canvas).toContain('selectionComposerPosition')
     expect(nodeVisual).toContain('<Info')
     expect(nodeVisual).not.toContain('CircleHelp')

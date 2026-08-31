@@ -59,7 +59,7 @@ describe('Phase D renderer isomorphism contract',()=>{
     expect(surfaceObject).toContain('LcosSignalGlyph')
     expect(surfaceObject).not.toContain('GlythAvatar')
     expect(surfaceObject).not.toContain('<LcosGlyth')
-    expect(surfaceObject).toContain('onDoubleClick={() => onDoubleClick(node.id)}')
+    expect(surfaceObject).toContain('onDoubleClick={openDeeper}')
     expect(mind).toContain('lcos-mind-hover-card')
     expect(mind).toContain('onDoubleClick={() => props.onDoubleClick(item.node.id)}')
   })

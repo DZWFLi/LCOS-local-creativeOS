@@ -1209,6 +1209,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
         runtimeReview,
         runtimeApplication,
         contextManifest,
+        previewWorker,
         helpers: routeHelpers,
       })) return
       if (await handleLcosprojRoute({

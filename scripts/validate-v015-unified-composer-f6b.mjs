@@ -5,7 +5,7 @@ const checks=[
  ['Main uses UnifiedExecutionComposer',canvas.includes("import { UnifiedExecutionComposer } from '../execution/UnifiedExecutionComposer'")&&canvas.includes('<UnifiedExecutionComposer')],
  ['Receiver is Conversation-first, provider remains advanced',composer.includes('lcos-receiver-select')&&composer.includes('交给哪段对话')&&composer.includes('<span>执行器</span>')],
  ['Explicit References are ordered/removeable',composer.includes('data-reference-order')&&composer.includes('onMoveReference')&&composer.includes('onRemoveReference')],
- ['Selection and explicit References remain separate',composer.includes('当前选择')&&composer.includes('额外参考')&&draft.includes('mergeExecutionReferenceIds')],
+ ['Selection and explicit References remain separate',composer.includes('当前选择')&&composer.includes('额外参考')&&draft.includes('explicitExecutionReferenceIds')&&draft.includes('mergeExecutionContextIds')],
  ['Canvas Reference Pick does not mutate primary Selection',canvas.includes('referencePick ? referencePick.ids.indexOf')&&canvas.includes('referencePick.onToggle(node.id)')&&canvas.includes('suppressClick.current = node.id')],
  ['Reference Pick has numbered world markers',canvas.includes('lcos-reference-pick-badge')&&css.includes('.lcos-reference-pick-badge')],
  ['Selected receiver is removed from explicit refs',draft.includes('receiverSessionId')&&draft.includes("node.entityKind === 'conversation'")],

@@ -8,10 +8,9 @@
  * - 新版只渲染动作卫星：从身体中心沿径向飞出到完整圆环落点，spring 逐个
  *   stagger 出场、反向收拢退场；无卡头无卡尾（身份长在画布身体上，弹层只
  *   承担动作——Object First，Card Last）。
- * - 行为统一（S13 原话：pointer leave / Esc / outside click 行为统一）：
- *   window capture 阶段监听（画布层 stopPropagation 不再截断，P0-B 教训），
- *   卫星与锚点身体同属 orbit 热区（leave 300ms 容错，期间 re-enter 取消）；
- *   动作执行即收口（transient orbit：单击即完成并消失）。
+ * - L0 生命周期裁决：click-open Orbit 不是 hover tooltip。打开后不因 pointer leave 自动关闭；
+ *   只由动作执行、outside click、Esc、selection change 或进入更深层 Viewer 收口。
+ *   outside / Esc 继续使用 capture 阶段监听，避免画布层 stopPropagation 截断。
  * - overlayStack 注册 kind:'orbit'（A0-4 栈态一致性；Esc 链全局接线前的位置占位）。
  *
  * 径向布局（satellitePlacements 纯函数，测试数值钉死）：
@@ -28,8 +27,6 @@ import './ui-primitives.css'
 
 /** Grammar S13：一级 satellite 上限（3~5 取上界；低频动作归右键菜单，调用方自律） */
 export const MAX_VISIBLE_SATELLITES = 5
-/** Grammar S13「pointer leave 行为统一」：离开 300ms 后关，期间 re-enter 取消 */
-export const POINTER_LEAVE_CLOSE_DELAY_MS = 300
 /** 卫星环半径 = 锚点半径 + 该间距（px） */
 const SATELLITE_RING_GAP = 23
 /** Grammar S13 编排区间（0.04~0.08s）取中：卫星逐个出场间隔 */
@@ -133,12 +130,12 @@ export interface ObjectOrbitProps {
 }
 
 /**
- * ObjectOrbit —— 行为壳：径向卫星 + Esc/outside/leave 统一收口。
- * 层与卫星只在 open 期间存在（HUD 零侵入）；卫星与锚点身体同属热区。
+ * ObjectOrbit —— 行为壳：径向卫星 + explicit lifecycle dismissal。
+ * 层与卫星只在 open 期间存在（HUD 零侵入）；pointer leave 不改变 click-open 状态。
  */
 export function ObjectOrbit({ open, onClose, anchorRef, anchorRect, ariaLabel, actions }: ObjectOrbitProps) {
   const layerRootRef = useRef<HTMLDivElement | null>(null)
-  const leaveTimerRef = useRef<number | null>(null)
+  const anchorNodeRef = useRef<Element | null>(null)
   const orbitId = useId()
   const onCloseRef = useRef(onClose)
   useEffect(() => {
@@ -182,51 +179,23 @@ export function ObjectOrbit({ open, onClose, anchorRef, anchorRect, ariaLabel, a
     return () => window.removeEventListener('keydown', onKeyDown, true)
   }, [open, close])
 
+  /** Keep the latest DOM anchor without making caller ref-object identity part of listener ownership. */
+  useEffect(() => {
+    anchorNodeRef.current = anchorRef?.current ?? null
+  })
+
   /** outside press（capture pointerdown；层内/锚点身体内不算外——P0-B 教训走 capture） */
   useEffect(() => {
     if (!open) return undefined
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target as Node | null
       if (target !== null && layerRootRef.current?.contains(target) === true) return
-      if (target !== null && anchorRef?.current?.contains(target) === true) return
+      if (target !== null && anchorNodeRef.current?.contains(target) === true) return
       close()
     }
     window.addEventListener('pointerdown', onPointerDown, true)
     return () => window.removeEventListener('pointerdown', onPointerDown, true)
-  }, [open, close, anchorRef])
-
-  const cancelLeave = useCallback(() => {
-    if (leaveTimerRef.current !== null) {
-      window.clearTimeout(leaveTimerRef.current)
-      leaveTimerRef.current = null
-    }
-  }, [])
-
-  const scheduleLeave = useCallback(() => {
-    cancelLeave()
-    leaveTimerRef.current = window.setTimeout(() => {
-      leaveTimerRef.current = null
-      close()
-    }, POINTER_LEAVE_CLOSE_DELAY_MS)
-  }, [cancelLeave, close])
-
-  /** 锚点身体也算 orbit 热区：enter 取消关场计时，leave 重新计时 */
-  useEffect(() => {
-    if (!open) return undefined
-    const anchor = anchorRef?.current ?? null
-    if (anchor === null) return undefined
-    anchor.addEventListener('mouseenter', cancelLeave)
-    anchor.addEventListener('mouseleave', scheduleLeave)
-    return () => {
-      anchor.removeEventListener('mouseenter', cancelLeave)
-      anchor.removeEventListener('mouseleave', scheduleLeave)
-    }
-  }, [open, anchorRef, cancelLeave, scheduleLeave])
-
-  useEffect(() => cancelLeave, [cancelLeave])
-  useEffect(() => {
-    if (!open) cancelLeave()
-  }, [open, cancelLeave])
+  }, [open, close])
 
   /** 卫星执行：先动作后收口（transient orbit：单击即完成并消失） */
   const handleAction = useCallback(
@@ -278,8 +247,6 @@ export function ObjectOrbit({ open, onClose, anchorRef, anchorRect, ariaLabel, a
                     data-lcos-readonly="true"
                     role="status"
                     aria-label={action.label}
-                    onPointerEnter={cancelLeave}
-                    onPointerLeave={scheduleLeave}
                   >
                     {ActionIcon !== undefined ? <ActionIcon size={16} aria-hidden="true" /> : null}
                     <span className="lcos-orbit-satellite-label">{action.label}</span>
@@ -290,8 +257,6 @@ export function ObjectOrbit({ open, onClose, anchorRef, anchorRect, ariaLabel, a
                     className="lcos-orbit-satellite"
                     data-lcos-orbit-action={action.id}
                     data-lcos-primary={action.primary === true ? 'true' : undefined}
-                    onPointerEnter={cancelLeave}
-                    onPointerLeave={scheduleLeave}
                     onClick={() => handleAction(action)}
                   >
                     {ActionIcon !== undefined ? <ActionIcon size={16} aria-hidden="true" /> : null}

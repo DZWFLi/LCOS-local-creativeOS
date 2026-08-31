@@ -1,4 +1,13 @@
-# Codex Start Here — LCOS v0.15 Final Convergence
+# Codex Start Here — LCOS v0.15 Frontend Final Convergence
+
+> **2026-08-31 authority update:** before doing anything else, read in full:
+>
+> 1. `docs/v015/convergence/MANDATORY_PRECONSTRUCTION_CONTEXT_20260831.md`
+> 2. `docs/v015/convergence/CONSTRUCTION_SOP_FINAL_FROZEN_20260831.md`
+> 3. `docs/v015/convergence/CONSTRUCTION_CONTEXT_INDEX_20260831.md`
+> 4. `docs/v015/CONTEXT_TRACE_INDEX.md`
+>
+> The 2026-08-30 S9/S10 release ordering remains implementation evidence, but it no longer overrides the 2026-08-31 product/reality-feedback convergence gate. Human product smoke and correct production ownership must pass before Full E2E.
 
 This is the v0.15 entry document. Pre-v0.15 root handoffs are historical only.
 
@@ -34,15 +43,15 @@ Open `docs/v015/CONTEXT_TRACE_INDEX.md` and locate the concept. Follow its **Cod
 
 ## Current final-convergence ordering
 
-1. S9 provider seams and regression.
-2. S10 format/extractor coverage and regression.
-3. Final convergence audit, including removal of any Web control-state fallback that violates `ExecutionItemV1.availableActions` fail-close.
-4. Browser v0.15 E2E.
-5. Real semantic provider E2E (Curator + Skill Author + retrieval).
-6. Bridge/MCP E2E.
-7. Desktop/Companion automated E2E.
-8. Capture + restart persistence + failure injection.
+1. Phase A — Shared Spatial Kernel + production-owner cleanup.
+2. Phase B — Object Species / Text / File / Link / HTML / Glyth / Project identity.
+3. Phase C — Context / Workflow / Assembly / Skill restoration.
+4. Phase D — HUD / Pin / Glyph / Material / Motion convergence.
+5. Manual cross-surface Product Smoke.
+6. Browser v0.15 E2E.
+7. Real semantic provider + Bridge/MCP E2E.
+8. Desktop/Companion/Capture/restart/failure-injection E2E.
 9. Windows native QA.
-10. Installer + cross-system Golden Path.
+10. Installer + final cross-system Golden Path.
 
-See the external final-convergence construction package if supplied for the complete release matrix.
+The phase plan lives at `docs/v015/convergence/FRONTEND_CONVERGENCE_PLAN_20260831.md`. Patch/diff/handoff mechanics are governed only by the frozen SOP.

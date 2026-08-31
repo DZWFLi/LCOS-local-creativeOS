@@ -124,6 +124,29 @@ test.describe('LCOS Interaction Foundation', () => {
     }
     await expect(page.getByRole('button', { name: '返回画布' })).toHaveCount(0)
 
+    // A04: ordinary Selection never summons the execution Composer. Wait beyond
+    // the deliberate double-press window, then reselect the same already-selected node.
+    await first.click()
+    await page.waitForTimeout(500)
+    await first.click()
+    await expect(page.getByTestId('selection-composer')).toHaveCount(0)
+
+    // A05: Selection and explicit Reference are different truths. Opening the
+    // Composer over a Selection must not manufacture Reference chips. Ctrl/Cmd
+    // click on another object adds exactly that object to the explicit Reference Set
+    // without replacing the existing Selection.
+    await page.keyboard.press('c')
+    const composer = page.getByTestId('selection-composer')
+    await expect(composer).toBeVisible()
+    await expect(composer.locator('[data-reference-id]')).toHaveCount(0)
+    await expect(composer.getByText(/当前选择 1/)).toBeVisible()
+    await second.click({ modifiers: ['Control'] })
+    await expect(composer.locator('[data-reference-id]')).toHaveCount(1)
+    await expect(composer.locator(`[data-reference-id="${views[1].id}"]`)).toBeVisible()
+    await expect(first).toHaveClass(/selected/)
+    await expect(second).not.toHaveClass(/selected/)
+    await page.keyboard.press('Escape')
+
     const before = await first.evaluate((element) => ({ left: Number.parseFloat((element as HTMLElement).style.left), top: Number.parseFloat((element as HTMLElement).style.top) }))
     let point = await nodeGesturePoint(page, views[0].id)
     await page.mouse.move(point.x, point.y)
@@ -209,9 +232,9 @@ test.describe('LCOS Interaction Foundation', () => {
     await page.keyboard.press('Control+z')
   })
 
-  test('relation creation, endpoint reconnect, cut and anchor-to-empty are complete gestures', async ({ page }) => {
+  test('relation creation, endpoint reconnect, cut and create-at-empty start from explicit Orbit intent', async ({ page }) => {
     const canvas = await openCanvas(page)
-    const items = await visibleNodes(page)
+    const items = artifactViews(await visibleNodes(page))
     expect(items.length).toBeGreaterThanOrEqual(3)
     const pairs = await page.locator('.edge').evaluateAll((elements) => elements.map((element) => `${element.getAttribute('data-edge-from')}→${element.getAttribute('data-edge-to')}`))
     let source = items[0]
@@ -227,13 +250,21 @@ test.describe('LCOS Interaction Foundation', () => {
     }
     const reconnectTarget = items.find((item) => item.id !== source.id && item.id !== target.id) ?? items[2]
     const countBefore = Number(await canvas.getAttribute('data-edge-count'))
-    const anchor = await center(page.getByTestId(`anchor-out-${source.id}`))
-    const targetPoint = await center(page.getByTestId(`canvas-node-${target.id}`))
-    await page.mouse.move(anchor.x, anchor.y)
-    await page.mouse.down()
+    const sourceNode = page.getByTestId(`canvas-node-${source.id}`)
+    const targetNode = page.getByTestId(`canvas-node-${target.id}`)
+
+    // A12: Relation is no longer a hover-only boundary secret. Select the object,
+    // explicitly choose Relation from Object Orbit, then the source port wakes and
+    // the live relation follows the pointer to a receptive target.
+    await sourceNode.click()
+    await page.locator('[data-lcos-orbit-action="object-relation"]').click()
+    await expect(page.getByTestId(`relation-source-port-${source.id}`)).toBeVisible()
+    const targetPoint = await center(targetNode)
     await page.mouse.move(targetPoint.x, targetPoint.y, { steps: 8 })
-    await page.mouse.up()
+    await expect(targetNode).toHaveClass(/is-relation-target/)
+    await page.mouse.click(targetPoint.x, targetPoint.y)
     await expect.poll(async () => Number(await canvas.getAttribute('data-edge-count'))).toBe(countBefore + 1)
+    await expect(page.getByTestId(`relation-source-port-${source.id}`)).toHaveCount(0)
     const createdId = await page.locator('.edge.selected').getAttribute('data-edge-id')
     expect(createdId).toBeTruthy()
 
@@ -249,14 +280,11 @@ test.describe('LCOS Interaction Foundation', () => {
     await page.getByTestId(`edge-cut-${createdId}`).click({ force: true })
     await expect.poll(async () => Number(await canvas.getAttribute('data-edge-count'))).toBe(countBefore)
 
-    const canvasBox = await canvas.boundingBox()
-    if (!canvasBox) throw new Error('Canvas bounds unavailable')
-    const empty = { x: canvasBox.x + canvasBox.width * .72, y: canvasBox.y + canvasBox.height * .28 }
-    const emptyAnchor = await center(page.getByTestId(`anchor-out-${source.id}`))
-    await page.mouse.move(emptyAnchor.x, emptyAnchor.y)
-    await page.mouse.down()
-    await page.mouse.move(empty.x, empty.y, { steps: 8 })
-    await page.mouse.up()
+    const empty = await blankCanvasPoint(page)
+    await sourceNode.click()
+    await page.locator('[data-lcos-orbit-action="object-relation"]').click()
+    await expect(page.getByTestId(`relation-source-port-${source.id}`)).toBeVisible()
+    await page.mouse.click(empty.x, empty.y)
     await expect(page.getByTestId('anchor-create-menu')).toBeVisible()
     await page.getByRole('button', { name: '取消' }).click()
   })

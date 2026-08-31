@@ -27,8 +27,6 @@ export interface DialogsHostProps {
   readonly confirmWorkspaceDelete: ComponentProps<typeof ConfirmDialog> | null
   readonly confirmScopeDelete: ComponentProps<typeof ConfirmDialog> | null
   readonly confirmProjectDelete: ComponentProps<typeof ConfirmDialog> | null
-  /** 投影/本体冲突：复制引用副本的确认（非破坏性，主按钮）。 */
-  readonly confirmForkProjection: ComponentProps<typeof ConfirmDialog> | null
   readonly handoff: ComponentProps<typeof HandoffDialog> | null
   readonly linkReference: ComponentProps<typeof LinkReferenceDialog> | null
   readonly universalImport: ComponentProps<typeof UniversalImportPanel> | null
@@ -53,7 +51,6 @@ export function DialogsHost(props: DialogsHostProps) {
     props.confirmWorkspaceDelete && <ConfirmDialog key="confirm-workspace-delete" {...props.confirmWorkspaceDelete} />,
     props.confirmScopeDelete && <ConfirmDialog key="confirm-scope-delete" {...props.confirmScopeDelete} />,
     props.confirmProjectDelete && <ConfirmDialog key="confirm-project-delete" {...props.confirmProjectDelete} />,
-    props.confirmForkProjection && <ConfirmDialog key="confirm-fork-projection" {...props.confirmForkProjection} />,
     props.handoff && <HandoffDialog key="handoff" {...props.handoff} />,
     props.linkReference && <LinkReferenceDialog key="link-reference" {...props.linkReference} />,
     props.universalImport && <UniversalImportPanel key="universal-import" {...props.universalImport} />,

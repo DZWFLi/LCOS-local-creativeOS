@@ -1,3 +1,4 @@
+import type { ExecutionItemAction } from '@local-creative-os/contracts'
 import type { ActiveRun, CanvasNode } from '../../model'
 
 export type SurfaceAttentionBucket = 'pinned' | 'related' | 'retrieved'
@@ -53,6 +54,8 @@ export interface ContextSurfaceRuntime {
 
 export interface WorkSurfaceRuntime {
   activeRun: ActiveRun | null
+  /** Canonical runtime controls. Missing action means unavailable: fail-close. */
+  runActions: readonly ExecutionItemAction[]
   runEvents: ReadonlyArray<{ id: string | number; type: string; occurredAt: string | number | Date }>
   pendingReviewCount: number
   onCancel: () => void
@@ -64,6 +67,8 @@ export interface WorkSurfaceRuntime {
 
 export interface DeliverSurfaceRuntime {
   activeRun: ActiveRun | null
+  /** Canonical runtime controls. Review actions remain owned by review truth. */
+  runActions: readonly ExecutionItemAction[]
   pendingReviewCount: number
   onAccept: () => void
   onReject: () => void

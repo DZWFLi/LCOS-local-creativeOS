@@ -86,11 +86,28 @@ export function referenceCandidates(
 }
 
 /**
- * Selection and Reference are different interaction truths, but both are foreground
- * execution context. Keep one deterministic ordered list for Proposal / Run without
- * mutating either UI set. The explicit Reference Set keeps its order after Selection.
+ * Explicit References are their own interaction truth. Selection never becomes
+ * Reference merely because the user opened a Composer. Keep Reference order stable
+ * and exclude an explicit edit target from the ordered reference set.
  */
-export function mergeExecutionReferenceIds(
+export function explicitExecutionReferenceIds(
+  referenceIds: readonly string[],
+  targetId?: string | null,
+): readonly string[] {
+  const explicit: string[] = []
+  for (const id of referenceIds) {
+    if (id === targetId || explicit.includes(id)) continue
+    explicit.push(id)
+  }
+  return explicit
+}
+
+/**
+ * Selection is still foreground execution context. This helper is deliberately
+ * separate from explicitExecutionReferenceIds so runtime context may contain the
+ * current foreground material without misreporting it as user-picked Reference.
+ */
+export function mergeExecutionContextIds(
   selectionIds: readonly string[],
   referenceIds: readonly string[],
   targetId?: string | null,

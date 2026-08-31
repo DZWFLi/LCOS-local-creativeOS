@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Check, FileText, Link2, MessageCircle, Network, Plus, Search, StickyNote } from 'lucide-react'
+import { Archive, Check, File, FileCode, FileSpreadsheet, FileText, Film, Folder, Globe, Image as ImageIcon, Link2, MessageCircle, Music, Network, Plus, Search, StickyNote } from 'lucide-react'
 import type { Relation, SearchHitVNext, WarehouseItemV1, WarehouseSnapshotV1 } from '@local-creative-os/contracts'
 import type { LocalCoreClient } from '../../runtime/localCoreClient'
 
@@ -8,8 +8,19 @@ type WarehouseViewMode = 'material' | 'relation'
 function itemIcon(item: WarehouseItemV1) {
   if (item.kind === 'conversation') return MessageCircle
   if (item.kind === 'note') return StickyNote
-  if (item.kind === 'resource') return Link2
-  return FileText
+  // 基于 canonical visualFamily 的真实物种图标（F6 B6 + 仓库契约）——避免按 kind 塌陷成 FileText。
+  switch (item.visualFamily) {
+    case 'video': return Film
+    case 'audio': return Music
+    case 'pdf': return FileText
+    case 'ppt': return FileSpreadsheet
+    case 'image': return ImageIcon
+    case 'link': return Globe
+    case 'archive': return Archive
+    case 'file': return File
+    case 'markdown': return FileCode
+    default: return item.kind === 'resource' ? Link2 : Folder
+  }
 }
 
 function provenanceLabel(item: WarehouseItemV1) {

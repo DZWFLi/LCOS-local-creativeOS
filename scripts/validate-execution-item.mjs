@@ -85,11 +85,27 @@ console.log('[4/4] 路由 + web seam 存在')
   if (!clientSource.includes('executionItems(projectId')) errors.push('LocalCoreClient 缺少 executionItems 方法')
   if (!clientSource.includes('ExecutionItemV1')) errors.push('LocalCoreClient 未 import ExecutionItemV1 类型')
 
+  const appSource = readText('apps/web/src/App.tsx')
+  const workRailSource = readText('apps/web/src/features/workrail/WorkRail.tsx')
+  const workSurfaceSource = readText('apps/web/src/features/surfaces/WorkSurface.tsx')
+  const deliverSurfaceSource = readText('apps/web/src/features/surfaces/DeliverSurface.tsx')
+  if (!appSource.includes('client.executionItems(activeProjectId)')) errors.push('Web 尚未消费 Core ExecutionItemV1')
+  if (!appSource.includes('const activeRunActions = useMemo<readonly ExecutionItemAction[]>')) errors.push('Web 缺少 active Run 的 canonical availableActions 投影')
+  if (appSource.includes('concat(activeRun.status') || appSource.includes('?? (["queued", "running", "waiting_input", "failed"].includes(activeRun.status)')) {
+    errors.push('App 仍按 activeRun.status 猜测 runtime actions，必须 fail-close')
+  }
+  if (!workRailSource.includes('runActions?.includes(action) === true')) errors.push('WorkRail 缺少 strict fail-close action gate')
+  if (!workRailSource.includes("canAct(runActions, 'retry') && <button className=\"rail-secondary pressable\" data-testid=\"retry-runtime\"")) errors.push('WorkRail Review retry 仍可绕过 availableActions')
+  for (const action of ['cancel', 'retry', 'answer_input']) {
+    if (!workSurfaceSource.includes(`canRunAction('${action}')`)) errors.push(`WorkSurface ${action} 仍未受 availableActions 控制`)
+  }
+  if (!deliverSurfaceSource.includes("runActions.includes('retry')===true")) errors.push('DeliverSurface retry 仍未受 availableActions 控制')
+
   // census 路由清单应包含新路由（证明 registry 与源码同步）
   const census = JSON.parse(readFileSync(repoPath('docs/census/capability-map.v0.json'), 'utf8'))
   const hasRoute = census.routes.items.some((item) => item.path === '/projects/:id/execution-items' && item.method === 'GET')
   if (!hasRoute) errors.push('census routes 未包含 /projects/:id/execution-items——运行 npm run census 更新 registry')
-  ok('路由 + web seam + census registry 同步')
+  ok('路由 + Web fail-close canonical consumption + census registry 同步')
 }
 
 if (errors.length > 0) {

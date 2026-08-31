@@ -454,10 +454,14 @@ export function mapGraphToState(
       // 统一文本编辑：text artifact 也走 note 编辑体系（noteBody / 导图布局随会话记忆恢复）。
       ...(() => {
         const presentation = recallNotePresentation(String(view.id))
+        const bodyMatchesCanonicalRevision = presentation.noteBody !== undefined
+          && presentation.noteBodyRevisionId !== undefined
+          && revisionId !== undefined
+          && String(presentation.noteBodyRevisionId) === String(revisionId)
         return {
-          ...(presentation.noteBody !== undefined ? { noteBody: presentation.noteBody } : {}),
+          ...(bodyMatchesCanonicalRevision ? { noteBody: presentation.noteBody } : {}),
           ...(presentation.noteLayout ? { noteLayout: presentation.noteLayout } : {}),
-          ...(presentation.noteOutline ? { noteOutline: presentation.noteOutline } : {}),
+          ...(bodyMatchesCanonicalRevision && presentation.noteOutline ? { noteOutline: presentation.noteOutline } : {}),
           ...(presentation.noteTags ? { noteTags: presentation.noteTags } : {}),
         }
       })(),

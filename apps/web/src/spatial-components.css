@@ -1749,7 +1749,7 @@ button.lcos-context-expand:hover { background: rgba(111,87,177,.07); }
 /* ================================================================
    §4.13 画布引导·边缘气泡标点（CanvasEdgePin / EdgePinCluster）
    一级导航系统成员：浮岛公式小壳（14px 圆角）+ Matrix 方点箭头 + 单色纪律，
-   跟 minimap/dock/selection-toolbar 同族；颜色全部复用现有 --lcos-* token。
+   跟 minimap/dock/selection-field controls 同族；颜色全部复用现有 --lcos-* token。
    ================================================================ */
 
 /* 气泡层：不跟随相机 transform 的固定屏幕层（SpatialOverlayLayer 内、minimap 同层）；

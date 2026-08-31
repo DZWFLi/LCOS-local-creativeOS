@@ -5,6 +5,10 @@
 
 > 本索引不是需求大全，也不是另一个 PRD。它只回答：**“我现在不确定这个东西到底是什么，该去哪里查？”**
 
+> **2026-08-31 authority correction:** 本索引继续负责“语义追溯”，但产品 Truth 不再采用“当前代码优先于原始产品裁决”的简化规则。新的顺序是：**最新明确用户 L0 裁决 → 最新 v0.15 Freeze / Mandatory Context → 原始高置信产品根稿 → 当前实现 Truth / tests → historical evidence**。当前代码用于证明“现在实现了什么”，不能单独证明“产品本来应该是什么”。
+>
+> 开工前必须先全文阅读 `docs/v015/convergence/MANDATORY_PRECONSTRUCTION_CONTEXT_20260831.md`、`CONSTRUCTION_SOP_FINAL_FROZEN_20260831.md` 与 `CONSTRUCTION_CONTEXT_INDEX_20260831.md`。
+
 ---
 
 ## 0. 使用协议
@@ -37,9 +41,9 @@
 
 # 1. Authority Levels
 
-## A0 · 当前运行真相
+## A0 · 当前产品权威 + 当前实现真相（必须分开）
 
-优先级最高：
+产品权威优先级最高的是最新明确用户裁决 / v0.15 Freeze / Mandatory Context；当前代码、tests 与 schema 用于确定实现真相：
 
 - current contracts
 - current Local Core services/repositories
@@ -47,7 +51,7 @@
 - executable tests/gates
 - current schema/migrations
 
-代码不是天然正确，但**已通过 v0.15 closeout 的当前代码 + 测试**比旧文档更可信。
+代码不是天然正确。对“当前实现是什么”，当前代码 + tests 优先；对“产品应该是什么”，必须回到最新 L0 / Freeze / Original Source。若二者冲突，标记 `IMPLEMENTATION_GAP` / `WRONG_OWNER`，不得用代码反向改写产品语义。
 
 ## A1 · v0.15 当前入口
 

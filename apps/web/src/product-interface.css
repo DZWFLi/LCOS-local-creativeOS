@@ -882,52 +882,6 @@
   bottom: 12px !important;
 }
 
-/* Multi-selection actions live in screen space: fixed-size icons, no white card. */
-.lcos-reconstructed .selection-toolbar.lcos-selection-strip {
-  position: absolute !important;
-  z-index: var(--lcos-z-overlay-ui-high) !important; /* z-tier: overlay-ui（值收敛为 token；important 保留以压住历史覆盖链） */
-  display: flex !important;
-  align-items: center !important;
-  gap: 3px !important;
-  width: auto !important;
-  max-width: calc(100% - 24px) !important;
-  padding: 0 !important;
-  border: 0 !important;
-  border-radius: 0 !important;
-  background: transparent !important;
-  box-shadow: none !important;
-  backdrop-filter: none !important;
-  transform: none !important;
-  pointer-events: auto !important;
-}
-
-.lcos-reconstructed .selection-toolbar.lcos-selection-strip > button,
-.lcos-reconstructed .selection-toolbar.lcos-selection-strip > details > summary {
-  position: static !important;
-  width: 32px !important;
-  min-width: 32px !important;
-  height: 32px !important;
-  display: grid !important;
-  place-items: center !important;
-  padding: 0 !important;
-  border: 0 !important;
-  border-radius: 10px !important;
-  background: transparent !important;
-  box-shadow: none !important;
-  color: var(--lcos-color-text-soft) !important;
-  list-style: none;
-}
-
-.lcos-reconstructed .selection-toolbar.lcos-selection-strip > button:hover,
-.lcos-reconstructed .selection-toolbar.lcos-selection-strip > details > summary:hover {
-  color: var(--lcos-color-text) !important;
-  background: rgba(83, 75, 107, .075) !important;
-}
-
-.lcos-reconstructed .selection-toolbar.lcos-selection-strip > button > span {
-  display: none !important;
-}
-
 .lcos-reconstructed .selection-composer.lcos-nearfield-composer {
   position: absolute !important;
   z-index: var(--lcos-z-overlay-ui-high) !important; /* z-tier: overlay-ui（值收敛为 token；important 保留以压住历史覆盖链） */
@@ -2147,83 +2101,6 @@
   background-size: auto, 22px 22px !important;
 }
 
-/* Near-field actions should read as actions, not unlabeled glyph archaeology. */
-.lcos-reconstructed .selection-toolbar.lcos-selection-strip {
-  gap: 4px !important;
-  padding: 4px !important;
-  border: 1px solid rgba(54, 48, 72, .10) !important;
-  border-radius: 13px !important;
-  background: rgba(255, 255, 255, .96) !important;
-  box-shadow: 0 10px 28px rgba(42, 36, 60, .12), 0 1px 2px rgba(42, 36, 60, .06) !important;
-  backdrop-filter: blur(16px) !important;
-  -webkit-backdrop-filter: blur(16px) !important;
-}
-
-.lcos-reconstructed .selection-toolbar.lcos-selection-strip > button.selection-primary {
-  width: auto !important;
-  min-width: 58px !important;
-  height: 32px !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  gap: 5px !important;
-  padding: 0 9px !important;
-  border-radius: 9px !important;
-  color: rgba(48, 43, 60, .78) !important;
-}
-
-.lcos-reconstructed .selection-toolbar.lcos-selection-strip > button.selection-primary:first-child {
-  color: #5e49a8 !important;
-  background: rgba(105, 79, 187, .09) !important;
-}
-
-.lcos-reconstructed .selection-toolbar.lcos-selection-strip > button.selection-primary > span {
-  display: inline !important;
-  font-size: 12.5px;
-  font-weight: 680;
-  letter-spacing: -.01em;
-  white-space: nowrap;
-}
-
-.lcos-reconstructed .selection-toolbar.lcos-selection-strip > details > summary {
-  width: 32px !important;
-  min-width: 32px !important;
-  height: 32px !important;
-}
-
-.lcos-reconstructed .lcos-selection-more { position: relative; }
-.lcos-reconstructed .lcos-selection-more > summary { cursor: pointer; }
-.lcos-reconstructed .lcos-selection-more > summary::-webkit-details-marker { display: none; }
-.lcos-reconstructed .lcos-selection-more > div {
-  position: absolute;
-  z-index: var(--lcos-z-overlay-ui-top); /* z-tier: overlay-ui */
-  top: calc(100% + 7px);
-  right: 0;
-  display: grid;
-  min-width: 174px;
-  gap: 2px;
-  padding: 5px;
-  border: 1px solid rgba(52, 46, 70, .10);
-  border-radius: 11px;
-  background: rgba(255, 255, 255, .98);
-  box-shadow: 0 14px 34px rgba(39, 33, 55, .14);
-}
-.lcos-reconstructed .lcos-selection-more > div > button {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-height: 30px;
-  padding: 0 8px;
-  border: 0;
-  border-radius: 7px;
-  color: rgba(48, 43, 60, .72);
-  background: transparent;
-  font-size: 12.5px;
-  text-align: left;
-}
-.lcos-reconstructed .lcos-selection-more > div > button:hover { background: rgba(78, 69, 105, .065); }
-.lcos-reconstructed .lcos-selection-more > div > button.danger { color: rgba(151, 67, 74, .84); }
-
 /* The persistent dock is a capability switcher, not the focal object. */
 .lcos-reconstructed .lcos-bottom-dock button {
   min-width: 52px !important;
@@ -2688,9 +2565,6 @@
 .lcos-reconstructed[data-collaboration-mode="narrow"] .vnext-project-actions > button { min-width:30px; padding-inline:6px; }
 .lcos-reconstructed[data-collaboration-mode="narrow"] .lcos-surface-heading { padding-inline:10px; }
 .lcos-reconstructed[data-collaboration-mode="narrow"] .lcos-surface-heading small { display:none; }
-.lcos-reconstructed[data-collaboration-mode="narrow"] .selection-toolbar { max-width:calc(100vw - 20px); overflow-x:auto; scrollbar-width:none; }
-.lcos-reconstructed[data-collaboration-mode="narrow"] .selection-toolbar .selection-primary span { display:none; }
-.lcos-reconstructed[data-collaboration-mode="narrow"] .selection-toolbar button { min-width:30px; }
 .lcos-reconstructed[data-collaboration-mode="narrow"] .lcos-workflow-edge-inspector { left:8px; right:8px; bottom:66px; width:auto; max-width:none; }
 .lcos-reconstructed[data-collaboration-mode="narrow"] .minimap,
 .lcos-reconstructed[data-collaboration-mode="narrow"] .canvas-minimap { display:none !important; }
@@ -2817,6 +2691,7 @@
 .lcos-reconstructed .lcos-surface-context-menu > button { min-height:34px; display:grid; grid-template-columns:20px minmax(0,1fr); align-items:center; gap:7px; padding:5px 7px; border:0; border-radius:9px; background:transparent; color:var(--lcos-ink); text-align:left; cursor:pointer; }
 .lcos-reconstructed .lcos-surface-context-menu > button:hover:not(:disabled) { background:rgba(92,75,170,.075); }
 .lcos-reconstructed .lcos-surface-context-menu > button:disabled { opacity:.34; cursor:default; }
+.lcos-reconstructed .lcos-surface-context-menu > button.danger { color:var(--lcos-danger, #a33f4b); }
 .lcos-reconstructed .lcos-surface-context-menu > button.with-divider { margin-top:4px; border-top:1px solid rgba(79,72,104,.09); border-radius:0 0 9px 9px; padding-top:8px; }
 .lcos-reconstructed .lcos-surface-context-menu button span { min-width:0; display:grid; gap:1px; }
 .lcos-reconstructed .lcos-surface-context-menu button strong { font-size: 10.5px; font-weight:600; }
@@ -2977,10 +2852,6 @@
   transform: scale(var(--lcos-ui-scale));
   transform-origin: top left;
 }
-.lcos-reconstructed .selection-toolbar.lcos-selection-strip {
-  transform: scale(calc((1 / var(--canvas-zoom)) * var(--lcos-ui-scale))) !important;
-  transform-origin: center !important;
-}
 .lcos-reconstructed .selection-composer.lcos-nearfield-composer {
   --selection-composer-scale: var(--lcos-ui-scale);
 }
@@ -3070,20 +2941,6 @@
   background: rgba(255,255,255,.72) !important;
   border-color: rgba(91,72,143,.10) !important;
   box-shadow: 0 4px 14px rgba(56,46,83,.065) !important;
-}
-
-/* Selection actions are screen HUD. Canvas zoom changes where the island sits,
-   never how large the island itself becomes. UI Scale remains the only size
-   owner, matching the side-rail/dock scale preference. */
-.lcos-reconstructed:not([data-layout-mode="sidecar"]) .selection-toolbar.lcos-selection-strip {
-  transform: scale(var(--lcos-ui-scale)) !important;
-  transform-origin: top left !important;
-  max-width: min(560px, calc(100vw - var(--lcos-ui-rail-w) - 36px)) !important;
-  padding: 5px !important;
-  border-radius: 18px !important;
-  background: rgba(251,251,253,.82) !important;
-  backdrop-filter: blur(20px) saturate(1.08) !important;
-  box-shadow: 0 10px 30px rgba(40,35,56,.085), inset 0 1px 0 rgba(255,255,255,.86) !important;
 }
 
 /* The snap texture follows camera pan/zoom because its CSS lattice is derived
@@ -3213,8 +3070,7 @@
   .lcos-reconstructed:not([data-layout-mode="sidecar"]) .vnext-bottom-dock .lcos-scope-axis,
   .lcos-reconstructed:not([data-layout-mode="sidecar"]) .minimap,
   .lcos-reconstructed:not([data-layout-mode="sidecar"]) .canvas-minimap,
-  .lcos-reconstructed:not([data-layout-mode="sidecar"]) .lcos-spatial-minimap,
-  .lcos-reconstructed:not([data-layout-mode="sidecar"]) .selection-toolbar.lcos-selection-strip {
+  .lcos-reconstructed:not([data-layout-mode="sidecar"]) .lcos-spatial-minimap {
     transition: none !important;
   }
 }

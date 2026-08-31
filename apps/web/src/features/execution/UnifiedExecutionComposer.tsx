@@ -115,7 +115,7 @@ export function UnifiedExecutionComposer(props: Props) {
             <button type="button" aria-label={`移除引用 ${candidate.node.title}`} onClick={() => props.onRemoveReference(candidate.node.id)}><X size={10}/></button>
           </div>
         </div>)}
-        {!references.length && <span className="lcos-reference-empty">没有额外参考；{selected.length ? `当前选择的 ${selected.length} 项仍会随这次处理一起使用。` : '这段对话仍会带上它长期知道的材料。'}</span>}
+        {!references.length && <span className="lcos-reference-empty">没有额外参考；{selected.length ? `当前选择的 ${selected.length} 项是直接处理对象，不会自动记入参考。` : '这段对话仍会带上它长期知道的材料。'}</span>}
       </div>
       <div className="lcos-reference-actions">
         <button type="button" className={`lcos-reference-pick ${props.referencePickActive ? 'is-active' : ''}`} disabled={props.referencePickAvailable === false} title={props.referencePickAvailable === false ? props.referencePickUnavailableReason : undefined} onClick={props.referencePickActive ? props.onFinishReferencePick : props.onStartReferencePick}><Crosshair size={11}/>{props.referencePickActive ? '完成画布选择' : '从画布选择'}</button>

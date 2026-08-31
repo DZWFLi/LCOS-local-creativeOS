@@ -417,39 +417,7 @@
   box-shadow: 0 0 0 4px rgba(var(--lcos-ui-signal-rgb), .09) !important;
 }
 
-/* B-5 工具条判废（Grammar §11 禁止常驻横向工具条）：条收窄为最小占位小胶囊——
-   只留「在哪」+主动作+More，其余动作收进 More 菜单；B-6 Orbit 就绪后整条退役（动作进 object-local Orbit）。 */
-.lcos-reconstructed .selection-toolbar.lcos-selection-strip {
-  gap: 2px !important;
-  padding: 3px !important;
-  border: 1px solid rgba(51, 45, 66, .11) !important;
-  border-radius: 11px !important;
-  background: rgba(253,253,255,.965) !important;
-  box-shadow: 0 8px 22px rgba(39,34,52,.11), 0 1px 2px rgba(39,34,52,.05) !important;
-  backdrop-filter: var(--lcos-mat-popover-blur) !important; /* A-2c 收编popover */
-}
-.lcos-reconstructed .selection-toolbar.lcos-selection-strip > button.selection-primary {
-  min-width: 0 !important;
-  width: auto !important;
-  height: 29px !important;
-  gap: 5px !important;
-  padding: 0 8px !important;
-  border-radius: 8px !important;
-}
-.lcos-reconstructed .selection-toolbar.lcos-selection-strip > button.selection-primary > span { font-size: 10px !important; font-weight: 620 !important; }
-/* Toggle-on state for strip toggles (e.g. mindmap auto-sync). */
-.lcos-reconstructed .selection-toolbar.lcos-selection-strip > button.selection-primary.is-active {
-  background: rgba(var(--lcos-ui-signal-rgb), .14) !important;
-  color: var(--lcos-ui-signal) !important;
-  box-shadow: inset 0 0 0 1px rgba(var(--lcos-ui-signal-rgb), .38);
-}
-.lcos-reconstructed .selection-toolbar.lcos-selection-strip > details > summary { width: 29px !important; min-width: 29px !important; height: 29px !important; border-radius: 8px !important; }
-/* B-5：首钮紫色残留（product-interface 的 #5e49a8 紫 tint）改 active 微 tint。 */
-.lcos-reconstructed .selection-toolbar.lcos-selection-strip > button.selection-primary:first-child {
-  color: color-mix(in srgb, var(--lcos-ui-active) 72%, var(--lcos-ui-ink)) !important;
-  background: color-mix(in srgb, var(--lcos-ui-active) 8%, transparent) !important;
-}
-
+/* A10: multi-selection actions are owned by SelectionGroupActions; the B-5 strip is retired. */
 /* Freeform / Grid is a tiny mode switch, not a floating glass pill. */
 .lcos-reconstructed .lcos-spatial-mode-switch {
   position: absolute;
@@ -4819,7 +4787,39 @@
   box-shadow: var(--porcelain-shadow), 0 0 0 1px rgba(var(--lcos-ui-signal-rgb), .20), 0 0 14px rgba(var(--lcos-ui-signal-rgb), .06);
 }
 
-/* Relation is born from a boundary light notch, never from permanent in/out ports. */
+/* A12 · Ordinary Project objects reveal a source port only after explicit Orbit -> Relation intent.
+   The hit target stays motor-tolerant while the visible Light Segment remains compact and screen-space stable. */
+.lcos-reconstructed .lcos-relation-port {
+  position:absolute;
+  z-index:var(--lcos-z-content-control);
+  right:-12px;
+  top:calc(50% - 18px);
+  width:24px;
+  height:36px;
+  display:grid;
+  place-items:center;
+  padding:0;
+  border:0;
+  background:transparent;
+  opacity:.84;
+  cursor:crosshair;
+  transform:scale(calc(.92 / var(--canvas-zoom, 1)));
+  transform-origin:center;
+  transition:opacity 120ms ease, transform 180ms cubic-bezier(.22,1,.36,1);
+}
+.lcos-reconstructed .lcos-relation-port > span {
+  display:block;
+  width:4px;
+  height:20px;
+  border-radius:999px;
+  background:rgba(var(--lcos-ui-signal-rgb), .66);
+  box-shadow:0 0 10px rgba(var(--lcos-ui-signal-rgb), .22);
+}
+.lcos-reconstructed .lcos-relation-port:hover { opacity:1; transform:scale(calc(1 / var(--canvas-zoom, 1))); }
+.lcos-reconstructed .canvas.is-reference-pick .lcos-relation-port { opacity:0 !important; pointer-events:none; }
+
+/* Legacy Workspace relation source remains temporarily until Workspace receives the same object-local intent owner.
+   Do not reuse this notch for ordinary canvas objects. */
 .lcos-reconstructed .lcos-relation-notch {
   position:absolute;
   z-index:var(--lcos-z-content-control);
@@ -4845,13 +4845,12 @@
   background:rgba(var(--lcos-ui-signal-rgb), .48);
   box-shadow:0 0 10px rgba(var(--lcos-ui-signal-rgb), .18);
 }
-.lcos-reconstructed .canvas-node:hover > .lcos-relation-notch,
-.lcos-reconstructed .canvas-node.selected > .lcos-relation-notch,
 .lcos-reconstructed .workspace-frame:hover > .lcos-relation-notch,
-.lcos-reconstructed .canvas.is-relation-dragging .lcos-relation-notch { opacity:.72; }
+.lcos-reconstructed .canvas.is-relation-dragging .workspace-frame > .lcos-relation-notch { opacity:.72; }
 .lcos-reconstructed .lcos-relation-notch:hover { opacity:1 !important; transform:scale(calc(1 / var(--canvas-zoom, 1))); }
 .lcos-reconstructed .canvas.is-reference-pick .lcos-relation-notch { opacity:0 !important; pointer-events:none; }
-.lcos-reconstructed .canvas.is-relation-dragging { cursor:crosshair; }
+.lcos-reconstructed .canvas.is-relation-dragging,
+.lcos-reconstructed .canvas.is-relation-intent { cursor:crosshair; }
 .lcos-reconstructed .canvas-node.is-relation-target::after,
 .lcos-reconstructed .workspace-frame.is-relation-target::after {
   content:"";
@@ -4878,4 +4877,152 @@
 }
 .lcos-reconstructed .lcos-surface-host.is-reference-pick :is(.lcos-surface-object, [data-mind-topic], .lcos-context-project-dot, .lcos-context-dot-core):hover {
   box-shadow: 0 0 0 2px rgba(var(--lcos-ui-signal-rgb), .10), 0 0 16px rgba(var(--lcos-ui-signal-rgb), .07);
+}
+
+
+/* A10 · Multi-selection Selection Field action owner ---------------------- */
+.lcos-selection-group-actions {
+  position: absolute;
+  z-index: var(--lcos-z-overlay-ui-high);
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  pointer-events: auto;
+  transform: translate(-4px, -4px);
+}
+
+.lcos-selection-group-trigger {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgba(54, 48, 72, .11);
+  border-radius: 12px;
+  color: color-mix(in srgb, var(--lcos-ui-ink) 72%, transparent);
+  background: rgba(252, 252, 254, .88);
+  box-shadow: 0 7px 20px rgba(39, 34, 52, .09), inset 0 1px 0 rgba(255, 255, 255, .88);
+  -webkit-backdrop-filter: blur(18px) saturate(1.06);
+  backdrop-filter: blur(18px) saturate(1.06);
+  cursor: pointer;
+  transition:
+    color var(--lcos-dur-micro) ease,
+    background var(--lcos-dur-micro) ease,
+    border-color var(--lcos-dur-micro) ease,
+    transform var(--lcos-dur-micro) var(--lcos-ease-swap-in);
+}
+
+.lcos-selection-group-trigger:hover,
+.lcos-selection-group-trigger[data-popup-open] {
+  color: var(--lcos-ui-ink);
+  border-color: rgba(var(--lcos-ui-signal-rgb), .20);
+  background: rgba(253, 253, 255, .97);
+}
+
+.lcos-selection-group-trigger:hover { transform: scale(1.04); }
+.lcos-selection-group-trigger:focus-visible { outline: 2px solid rgba(var(--lcos-ui-signal-rgb), .34); outline-offset: 2px; }
+.lcos-selection-group-trigger > small {
+  position: absolute;
+  right: -4px;
+  top: -4px;
+  min-width: 16px;
+  height: 16px;
+  display: grid;
+  place-items: center;
+  padding: 0 4px;
+  border: 2px solid rgba(252, 252, 254, .96);
+  border-radius: 999px;
+  color: rgba(255, 255, 255, .96);
+  background: color-mix(in srgb, var(--lcos-ui-signal) 76%, #4e465b);
+  font-size: 9px;
+  font-weight: 720;
+  line-height: 1;
+  box-sizing: border-box;
+}
+
+.lcos-selection-group-positioner {
+  z-index: var(--lcos-z-overlay-ui-top);
+  outline: 0;
+}
+
+.lcos-selection-group-menu {
+  box-sizing: border-box;
+  width: min(268px, calc(100vw - 16px));
+  max-height: min(540px, calc(100dvh - 16px));
+  overflow: auto;
+  display: grid;
+  gap: 2px;
+  padding: 6px;
+  border: 1px solid rgba(52, 46, 70, .11);
+  border-radius: 14px;
+  color: var(--lcos-ui-ink);
+  background: rgba(252, 252, 254, .94);
+  box-shadow: 0 16px 42px rgba(39, 33, 55, .14), inset 0 1px 0 rgba(255, 255, 255, .90);
+  -webkit-backdrop-filter: blur(22px) saturate(1.08);
+  backdrop-filter: blur(22px) saturate(1.08);
+  transform-origin: top left;
+  transition:
+    opacity var(--lcos-dur-swap-opacity) var(--lcos-ease-swap-in),
+    transform var(--lcos-dur-swap-transform) var(--lcos-ease-swap-in);
+  will-change: opacity, transform;
+}
+
+.lcos-selection-group-menu[data-side='top'] { transform-origin: bottom left; }
+.lcos-selection-group-menu[data-starting-style] {
+  opacity: 0;
+  transform: translateY(10px) scale(var(--lcos-swap-scale));
+}
+.lcos-selection-group-menu[data-ending-style] {
+  opacity: 0;
+  transform: translateY(10px) scale(var(--lcos-swap-scale));
+}
+.lcos-selection-group-menu[data-instant] { transition: none; }
+
+.lcos-selection-group-menu > header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 30px;
+  padding: 5px 8px 6px;
+  color: color-mix(in srgb, var(--lcos-ui-ink) 78%, transparent);
+}
+.lcos-selection-group-menu > header strong { font-size: 11.5px; font-weight: 700; }
+.lcos-selection-group-menu > header small { font-size: 9.5px; color: color-mix(in srgb, var(--lcos-ui-ink) 44%, transparent); }
+
+.lcos-selection-group-menu > [role='menuitem'] {
+  width: 100%;
+  min-height: 34px;
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 9px;
+  color: color-mix(in srgb, var(--lcos-ui-ink) 76%, transparent);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.lcos-selection-group-menu > [role='menuitem'][data-highlighted] { color: var(--lcos-ui-ink); background: rgba(78, 69, 105, .06); }
+.lcos-selection-group-menu > [role='menuitem']:focus-visible { outline: 2px solid rgba(var(--lcos-ui-signal-rgb), .26); outline-offset: -2px; }
+.lcos-selection-group-menu > [role='menuitem'][data-disabled] { opacity: .42; cursor: default; }
+.lcos-selection-group-menu > [role='menuitem'].with-divider { margin-top: 4px; border-top: 1px solid rgba(54, 48, 72, .08); border-radius: 0 0 9px 9px; padding-top: 9px; }
+.lcos-selection-group-menu > [role='menuitem'].danger { color: rgba(151, 67, 74, .86); }
+.lcos-selection-group-menu > [role='menuitem'] > svg,
+.lcos-selection-group-menu-dot { justify-self: center; }
+.lcos-selection-group-menu-dot { width: 4px; height: 4px; border-radius: 50%; background: currentColor; opacity: .34; }
+.lcos-selection-group-menu > [role='menuitem'] > span:last-child { min-width: 0; display: grid; gap: 1px; }
+.lcos-selection-group-menu > [role='menuitem'] strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; font-weight: 620; }
+.lcos-selection-group-menu > [role='menuitem'] small { font-size: 9.5px; line-height: 1.25; color: color-mix(in srgb, currentColor 58%, transparent); }
+
+@media (prefers-reduced-motion: reduce) {
+  .lcos-selection-group-trigger { transition: none !important; }
+  .lcos-selection-group-menu,
+  .lcos-selection-group-menu[data-ending-style] { transition: none !important; }
+  .lcos-selection-group-menu[data-starting-style],
+  .lcos-selection-group-menu[data-ending-style] { transform: none; }
 }

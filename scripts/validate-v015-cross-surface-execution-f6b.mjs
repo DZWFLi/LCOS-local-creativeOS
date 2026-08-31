@@ -7,7 +7,7 @@ const oldSurfaceAgentExists=fs.existsSync('apps/web/src/features/shell/SurfaceAg
 const checks=[
  ['Context/Workflow render the same UnifiedExecutionComposer',host.includes("import { UnifiedExecutionComposer } from '../execution/UnifiedExecutionComposer'")&&host.includes('<UnifiedExecutionComposer')],
  ['Surface execution uses canonical ConnectedConversation receiver',surface.includes('receiverId: string')&&app.includes("receiverRef: { connectedConversationId: input.receiverId }")],
- ['Surface execution carries ordered Selection + explicit References',surface.includes('selectionIds: readonly string[]')&&surface.includes('referenceIds: readonly string[]')&&app.includes('mergeExecutionReferenceIds(input.selectionIds, input.referenceIds')],
+ ['Surface execution keeps Selection context separate from explicit ordered References',surface.includes('selectionIds: readonly string[]')&&surface.includes('referenceIds: readonly string[]')&&app.includes('explicitExecutionReferenceIds(input.referenceIds, target?.id)')&&app.includes('mergeExecutionContextIds(input.selectionIds, input.referenceIds, target?.id)')],
  ['Surface execution never invents a local session id',!app.includes('surface-agent-')&&!host.includes('surface-agent-')],
  ['Reference Pick is shared command state and does not replace primary Selection',host.includes('command.referencePickActive')&&host.includes('command.onToggleReference')&&!host.includes('surfaceReferenceIds')],
  ['Conversation Reach is read through canonical Core projection',host.includes('onReadReach')&&app.includes('conversationReach(activeProjectId, connectedConversationId)')],

@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   MAX_VISIBLE_SATELLITES,
-  POINTER_LEAVE_CLOSE_DELAY_MS,
   satellitePlacements,
 } from '../ObjectOrbit'
 
@@ -9,7 +8,7 @@ import {
  * Wave B-6/C-3（Native Visual Gate 圆环重写）契约测试：Orbit = 动作卫星径向围绕锚点身体（Grammar S13）。
  * 环境说明：本项目 vitest 走 node 环境（无 jsdom / 无 Base UI Portal）——行为壳
  * （createPortal + window capture 监听）无法静态渲染，此处只测纯函数数值契约；
- * 行为统一（Esc/outside/leave）由 overlayStack 契约测试与浏览器活体覆盖。
+ * click-open 生命周期（pointer leave 保持、Esc/outside/action 收口）由浏览器 E2E 覆盖。
  */
 
 const ANCHOR = { x: 100, y: 100, width: 148, height: 92 }
@@ -64,9 +63,5 @@ describe('satellitePlacements：径向布局（Grammar S13「围绕 object，不
 describe('Orbit 常量契约（Grammar S13 冻结值）', () => {
   it('一级卫星上限 = 5（3~5 取上界）', () => {
     expect(MAX_VISIBLE_SATELLITES).toBe(5)
-  })
-
-  it('pointer leave 容错 = 300ms（期间 re-enter 取消）', () => {
-    expect(POINTER_LEAVE_CLOSE_DELAY_MS).toBe(300)
   })
 })

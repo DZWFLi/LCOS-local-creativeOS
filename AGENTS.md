@@ -1,5 +1,32 @@
 # AGENTS.md — LCOS v0.15 Final Convergence Rules
 
+
+
+## 0. Mandatory v0.15 pre-construction gate
+
+Before **any** LCOS v0.15 GUI / UX / Surface / Assembly / Skill / Spatial / convergence / E2E work, read these files **in full**:
+
+1. `docs/v015/convergence/MANDATORY_PRECONSTRUCTION_CONTEXT_20260831.md`
+2. `docs/v015/convergence/CONSTRUCTION_SOP_FINAL_FROZEN_20260831.md`
+3. `docs/v015/convergence/CONSTRUCTION_CONTEXT_INDEX_20260831.md`
+4. the current phase's T1 full-read sources listed by the SOP/index;
+5. the current HEAD's latest closeout/handoff and real source/tests.
+
+Do **not** substitute a prior handoff, summary, or keyword search for a required full read. If a required original freeze document is absent from the repository, report `CONTEXT_GAP` and retrieve the original source before changing product semantics.
+
+Every patch must complete the SOP's Source-Diff Gate and classify the work as one or more of:
+
+- `MATCH`
+- `PLAN_GAP`
+- `REALITY_GAP`
+- `EXPLICIT_OVERRIDE`
+- `IMPLEMENTATION_GAP`
+- `WRONG_OWNER`
+
+For Main / Context / Workflow shared interactions, parity across all three surfaces is release-blocking. For GUI work, human product smoke precedes Full E2E. A new canonical owner is not complete until the competing old production owner is retired.
+
+For local transient UI motion (Orbit yielding, Composer, contextual popover, Pin group popover, control replacement), read `docs/v015/convergence/TODOPANEL_MOTION_TOKEN_20260831.md` and consume the shared LCOS motion tokens rather than inventing per-component timings.
+
 > **AUTHORITATIVE FOR v0.15.** This file completely replaces every pre-v0.15 Agent/Codex rule set.
 > Old `0.1`, `Phase 2.5`, PASS8/PASS9, old Workspace/Canvas interaction rules, and historical closeout documents are **not executable instructions** unless the v0.15 Context Trace Index explicitly points to them as evidence.
 

@@ -1018,23 +1018,6 @@
   border-radius: 20px;
   box-shadow: 0 0 0 4px rgba(111,86,213,.05);
 }
-.app-shell.v052 .selection-toolbar {
-  position: absolute;
-  left: 12px;
-  top: -40px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  pointer-events: auto;
-  padding: 5px 6px 5px 10px;
-  border: 1px solid rgba(59,72,92,.12);
-  border-radius: 12px;
-  background: rgba(255,255,255,.96);
-  box-shadow: 0 8px 20px rgba(45,56,78,.12), inset 0 1px 0 #fff;
-}
-.app-shell.v052 .selection-toolbar span { position: static; padding: 0; background: none; box-shadow: none; color: rgba(19,40,61,.68); font-size: 10.5px; }
-.app-shell.v052 .selection-toolbar button { position: static; width: auto; height: 28px; display: flex; align-items: center; gap: 5px; padding: 0 8px; border: 1px solid rgba(74,91,111,.10); border-radius: 8px; background: #f4f6f8; color: rgba(19,40,61,.68); font-size: 10px; cursor: grab; }
-.app-shell.v052 .selection-toolbar button:active { cursor: grabbing; }
 .app-shell.v052 .anchor { display: none; }
 .app-shell.v052 .canvas-node.link-mode .anchor { display: block; opacity: 1; }
 .app-shell.v052 .canvas-node.multi-selected .anchor,
@@ -1223,54 +1206,12 @@
 .app-shell.v052 .density-compact .artifact-statuses { display: none; }
 .app-shell.v052 .canvas-node.multi-selected .node-details { display: none !important; }
 /* v0.5.3 Interaction Completeness: clipboard, history and local arrange controls. */
-.app-shell.v053 .selection-toolbar {
-  max-width: min(620px, calc(100vw - 120px));
-  gap: 5px;
-  padding: 5px 6px 5px 10px;
-}
-.app-shell.v053 .selection-toolbar > span {
-  margin-right: 3px;
-  white-space: nowrap;
-}
-.app-shell.v053 .selection-toolbar button {
-  cursor: pointer;
-  white-space: nowrap;
-}
-.app-shell.v053 .selection-toolbar button[aria-label="拖动选中组"] { cursor: grab; }
-.app-shell.v053 .selection-toolbar button[aria-label="拖动选中组"]:active { cursor: grabbing; }
-.app-shell.v053 .selection-toolbar button.danger {
-  width: 28px;
-  justify-content: center;
-  padding: 0;
-  color: #a54f49;
-  background: #fff7f5;
-}
-.app-shell.v053 .selection-toolbar button:hover {
-  color: #5f3bc9;
-  border-color: rgba(95,59,201,.18);
-  background: #f5f1ff;
-}
-.app-shell.v053 .selection-toolbar button.danger:hover {
-  color: #9e3e38;
-  border-color: rgba(168,65,58,.18);
-  background: #fff0ed;
-}
 .app-shell.v053 .notice {
   max-width: min(560px, calc(100vw - 40px));
   text-align: center;
 }
 
 @media (max-width: 1366px) {
-  .app-shell.v053 .selection-toolbar {
-    max-width: 540px;
-  }
-  .app-shell.v053 .selection-toolbar button {
-    font-size: 0;
-    width: 30px;
-    justify-content: center;
-    padding: 0;
-  }
-  .app-shell.v053 .selection-toolbar button svg { width: 13px; height: 13px; }
 }
 /*
   v0.5.6 — Persistent Right Rail + Compositor Stability

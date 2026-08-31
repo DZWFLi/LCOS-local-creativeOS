@@ -451,7 +451,6 @@
 .lcos-reconstructed .workspace-frame-label { color:#767180 !important; background:rgba(247,246,251,.72) !important; backdrop-filter:blur(7px); }
 
 /* ---------- Selection + near-field composer ---------- */
-.lcos-reconstructed .selection-toolbar,
 .lcos-reconstructed .selection-action-strip {
   padding:4px !important;
   gap:6px !important;
@@ -461,7 +460,6 @@
   backdrop-filter:blur(20px) saturate(1.08) !important;
   box-shadow:var(--lcos-shadow-float) !important;
 }
-.lcos-reconstructed .selection-toolbar button,
 .lcos-reconstructed .selection-action-strip button {
   display:flex !important;
   align-items:center !important;
@@ -477,11 +475,8 @@
   gap:5px !important;
   white-space:nowrap !important;
 }
-.lcos-reconstructed .selection-toolbar button svg,
 .lcos-reconstructed .selection-action-strip button svg { width:14px !important; height:14px !important; flex:0 0 auto; }
-.lcos-reconstructed .selection-toolbar button:hover,
 .lcos-reconstructed .selection-action-strip button:hover { background:rgba(82,74,107,.065) !important; color:#312e39 !important; }
-.lcos-reconstructed .selection-toolbar,
 .lcos-reconstructed .selection-action-strip { transform:scale(calc(1 / var(--canvas-zoom))) !important; transform-origin:center !important; }
 
 .lcos-reconstructed .selection-composer.lcos-nearfield-composer {

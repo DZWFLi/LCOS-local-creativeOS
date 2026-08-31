@@ -77,7 +77,7 @@ describe('v0.6.1 canvas interaction architecture', () => {
     // F6 truth：执行入口 = UnifiedExecutionComposer（原 SelectionComposer 升级为四入口统一模型），
     // 与轻量 selection strip 同在 screen-space overlay 层，顺序：strip → composer。
     const overlayIndex = canvas.indexOf('const spatialOverlays = <>')
-    const toolbarIndex = canvas.indexOf('data-testid="selection-toolbar"', overlayIndex)
+    const toolbarIndex = canvas.indexOf('<SelectionGroupActions', overlayIndex)
     const composerIndex = canvas.indexOf('<UnifiedExecutionComposer', toolbarIndex)
     expect(overlayIndex).toBeGreaterThan(-1)
     expect(toolbarIndex).toBeGreaterThan(overlayIndex)
@@ -85,8 +85,8 @@ describe('v0.6.1 canvas interaction architecture', () => {
     expect(canvas).toContain('overlays={spatialOverlays}')
     // B-5 Selection 轻量化：条收窄为最小占位（在哪 + 整理这些），其余动作进 More 菜单，
     // 不恢复常驻大横工具条（Grammar §11）。
-    expect(canvas).toContain('lcos-selection-strip')
-    expect(canvas).toContain('lcos-selection-more')
+    expect(canvas).toContain('selectionGroupActionPosition')
+    expect(canvas).toContain('<SelectionGroupActions')
     // ObjectOrbit 行为层统一收口空白点击 / Esc。
     expect(canvas).toContain("from '../ui/ObjectOrbit'")
     // camera/pan/zoom 不进入 Project semantic mutation（保留）。

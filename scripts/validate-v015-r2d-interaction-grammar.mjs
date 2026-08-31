@@ -12,6 +12,7 @@ const contextTree = read('apps/web/src/features/surfaces/ContextTreeSurface.tsx'
 const contextHome = read('apps/web/src/features/surfaces/ContextRelationshipHomeSurface.tsx')
 const workflowGraph = read('apps/web/src/features/surfaces/WorkflowGraphSurface.tsx')
 const workSurface = read('apps/web/src/features/surfaces/WorkSurface.tsx')
+const projectOrbit = read('apps/web/src/features/ui/ProjectObjectOrbit.tsx')
 const assembly = read('packages/contracts/src/assembly.ts')
 const assemblyApply = read('apps/local-core/src/assembly-apply-service.ts')
 
@@ -22,7 +23,7 @@ const checks = [
   ['Reference Pick toggles shared Reference Set without mutating Selection', canvas.includes('referencePick.onToggle(node.id)') && canvas.includes('suppressClick.current = node.id') && app.includes('onToggle: toggleSelectionReference')],
   ['Reference identity remains visible after modifier release', canvas.includes('referenceOrder={referencePick ? referencePick.ids.indexOf(node.id) + 1 : 0}') && css.includes('.canvas-node.reference-picked:not(.selected)')],
   ['Glyth Ctrl/Cmd click switches Receiver instead of becoming an ordinary Reference', canvas.includes("node.entityKind === 'conversation' && node.conversation") && canvas.includes('onSetActiveConversation?.(node.conversation.id)')],
-  ['Relation creation starts from one boundary Light Notch', canvas.includes('data-testid={`relation-notch-${node.id}`}') && canvas.includes('className="lcos-relation-notch"') && !canvas.includes('data-testid={`anchor-out-${node.id}`}') && !canvas.includes('data-testid={`anchor-in-${node.id}`}')],
+  ['Relation creation starts from explicit Object Orbit intent and reveals one temporary source port', projectOrbit.includes("id: 'object-relation'") && canvas.includes('const beginRelationIntent =') && canvas.includes('data-testid={`relation-source-port-${node.id}`}') && canvas.includes('className="lcos-relation-port"') && !canvas.includes('data-testid={`relation-notch-${node.id}`}') && !canvas.includes('data-testid={`anchor-out-${node.id}`}') && !canvas.includes('data-testid={`anchor-in-${node.id}`}')],
   ['Relation target receptivity stays object-local', canvas.includes("relationTargetId === node.id") && css.includes('.canvas-node.is-relation-target::after')],
   ['Canvas body drop onto Glyth has its own mapping target language', canvas.includes('conversationGlythDropTarget(node.conversation.id)') && canvas.includes("data-project-view-drop-label={node.entityKind === 'conversation' ? '给这段对话' : undefined}")],
   ['Canvas → Glyth durable mapping reuses Assembly apply rather than a second store', app.includes('mapCanvasObjectsToConversation') && app.includes('client.applyAssembly(activeProjectId') && app.includes("targetRef: { kind: 'conversation', id: receiver.id }") && assembly.includes("kind: 'conversation'")],

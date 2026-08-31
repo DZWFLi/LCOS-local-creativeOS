@@ -3,12 +3,13 @@ import type {
   BuildContextManifestV0Input,
   CreateRunProposal,
 } from '@local-creative-os/contracts'
-import type { ProjectId, RunId } from '@local-creative-os/domain'
+import type { ArtifactRevisionId, ProjectId, RunId } from '@local-creative-os/domain'
 import type { ContextManifestService } from '../context-manifest-service.js'
 import type { RuntimeReviewService } from '../runtime-review-service.js'
 import { buildHandoffZip } from '../handoff-zip-service.js'
 import { proposeRun, validateAgentExecutionPlan } from '../runtime-proposal-service.js'
 import { createTextArtifact } from '../text-artifact-service.js'
+import type { PreviewWorkerService } from '../preview-worker-service.js'
 import type { CreateRuntimeRunInput, RuntimeApplicationService } from '../runtime-application-service.js'
 import { routeRequireMetadata, routeRequireProject, type RouteHttpContext, type RouteHttpHelpers } from './route-context.js'
 
@@ -17,6 +18,7 @@ export interface RunsRouteContext extends RouteHttpContext {
   readonly runtimeReview: RuntimeReviewService | undefined
   readonly runtimeApplication: RuntimeApplicationService | undefined
   readonly contextManifest: ContextManifestService | undefined
+  readonly previewWorker: PreviewWorkerService | undefined
 }
 
 /**
@@ -25,7 +27,7 @@ export interface RunsRouteContext extends RouteHttpContext {
  * 原为 server.ts 分发器内联块，外迁后行为不变。
  */
 export async function handleRunsRoute(ctx: RunsRouteContext): Promise<boolean> {
-  const { method, pathname, request, response, controller, url, runtimeReview, runtimeApplication, contextManifest } = ctx
+  const { method, pathname, request, response, controller, url, runtimeReview, runtimeApplication, contextManifest, previewWorker } = ctx
   const { sendJson, failure, readJsonBody, isRecord, isStringArray } = ctx.helpers
 
   // Handoff 文件级 zip：manifest（renderedMarkdown + 校验 JSON）+ 引用文件副本。
@@ -396,17 +398,19 @@ export async function handleRunsRoute(ctx: RunsRouteContext): Promise<boolean> {
       return true
     }
     try {
-      sendJson(response, 201, {
-        ok: true,
-        value: await createTextArtifact(metadata, projectId, {
-          ...(typeof input.title === 'string' ? { title: input.title } : {}),
-          body: input.body,
-          scopeId: input.scopeId,
-          ...(typeof input.workspaceId === 'string' ? { workspaceId: input.workspaceId } : {}),
-          ...(typeof input.x === 'number' ? { x: input.x } : {}),
-          ...(typeof input.y === 'number' ? { y: input.y } : {}),
-        }),
+      const created = await createTextArtifact(metadata, projectId, {
+        ...(typeof input.title === 'string' ? { title: input.title } : {}),
+        body: input.body,
+        scopeId: input.scopeId,
+        ...(typeof input.workspaceId === 'string' ? { workspaceId: input.workspaceId } : {}),
+        ...(typeof input.x === 'number' ? { x: input.x } : {}),
+        ...(typeof input.y === 'number' ? { y: input.y } : {}),
       })
+      // HU/白卡片修复：文本工件创建后同步触发 markdown/text 预览生成，前端不再显示“预览未生成”。
+      if (previewWorker !== undefined) {
+        try { await previewWorker.generate({ projectId, revisionId: created.revisionId as ArtifactRevisionId, previewProfile: 'thumbnail' }) } catch { /* 预览失败不阻断创建 */ }
+      }
+      sendJson(response, 201, { ok: true, value: created })
     } catch (error: unknown) {
       sendJson(response, 409, failure('CONFLICT', error instanceof Error ? error.message : 'Text artifact creation failed.'))
     }

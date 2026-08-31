@@ -47,6 +47,7 @@ interface Props {
   onSelect: (id: string, additive?: boolean) => void
   onMarqueeSelect?: (ids: string[], additive: boolean) => void
   onDoubleClick: (id: string) => void
+  onFocusObject?: (id: string) => void
   onImportProjectView?: (memberViewIds: readonly string[]) => string[]
   /** G-4 导图分支摘取/外部文本 → 在当前 Context scope 落一个新文本节点（复用主画布 pasteTextAsNode 链路）。 */
   onExternalTextDrop?: (text: string, x: number, y: number) => void
@@ -376,7 +377,7 @@ export function ContextSpaceSurface(props: Props) {
       </SpatialEdgeLayer>
       <SpatialNodeLayer>
         {renderItems.map((item, index) => <div key={item.node.id} className={`lcos-context-space-node lcos-spatial-placement ${props.selectedIds.includes(item.node.id) ? 'selected' : ''} ${draggingId === item.node.id ? 'is-dragging' : ''} ${pinnedIds.includes(item.node.id) ? 'is-manual-anchor' : ''}`} data-attention-bucket={props.attentionBucketsByViewId?.[item.node.id]} style={{ left: item.x, top: item.y, width: item.width, '--i': index } as CSSProperties} onPointerDown={(event) => beginDrag(event, item.node.id)} onPointerMove={moveDrag} onPointerUp={endDrag}>
-          <SurfaceObject node={item.node} zoom={camera.zoom} compact={lod !== 'full'} performanceProxy={(lod === 'aggregate' || lod === 'overview') && !props.selectedIds.includes(item.node.id)} selected={props.selectedIds.includes(item.node.id)} spatialSemantic={boundRegionSemanticForView(surfaceElements, item.node.id)} usageHint={item.node.anchors?.length ? '来源锚点' : undefined} attentionBucket={props.attentionBucketsByViewId?.[item.node.id] === 'pinned' ? 'pinned' : props.attentionBucketsByViewId?.[item.node.id] === 'related' ? 'related' : props.attentionBucketsByViewId?.[item.node.id] === 'retrieved' ? 'retrieved' : undefined} dropIds={props.selectedIds.includes(item.node.id) && props.selectedIds.length ? props.selectedIds : [item.node.id]} onDirectProjectViewDrop={props.onDirectProjectViewDrop} onSelect={props.onSelect} onDoubleClick={props.onDoubleClick}/>
+          <SurfaceObject node={item.node} zoom={camera.zoom} compact={lod !== 'full'} performanceProxy={(lod === 'aggregate' || lod === 'overview') && !props.selectedIds.includes(item.node.id)} selected={props.selectedIds.includes(item.node.id)} spatialSemantic={boundRegionSemanticForView(surfaceElements, item.node.id)} usageHint={item.node.anchors?.length ? '来源锚点' : undefined} attentionBucket={props.attentionBucketsByViewId?.[item.node.id] === 'pinned' ? 'pinned' : props.attentionBucketsByViewId?.[item.node.id] === 'related' ? 'related' : props.attentionBucketsByViewId?.[item.node.id] === 'retrieved' ? 'retrieved' : undefined} dropIds={props.selectedIds.includes(item.node.id) && props.selectedIds.length ? props.selectedIds : [item.node.id]} onDirectProjectViewDrop={props.onDirectProjectViewDrop} onSelect={props.onSelect} onDoubleClick={props.onDoubleClick} onLocate={props.onFocusObject} orbitEligible={props.selectedIds.length <= 1}/>
           {pinnedIds.includes(item.node.id) && <i className="lcos-manual-anchor-mark" title="手工位置锚点"/>}
         </div>)}
       </SpatialNodeLayer>

@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { CurationQueryService } from '../src/curation-query-service.js'
 import { SqliteMetadataRepository } from '../src/metadata-repository.js'
 import { createMvpSampleSnapshot } from '../src/mvp-sample-project.js'
+import { reviseManagedTextArtifact } from '../src/text-artifact-service.js'
 
 const roots: string[] = []
 const repositories: SqliteMetadataRepository[] = []
@@ -42,6 +43,24 @@ describe('CurationQueryService (Phase D)', () => {
     expect(node.currentRevisionId).toBe('revision-brief-initial')
     expect(node.sourceRefs[0]?.kind).toBe('artifact')
     expect(node.truncated).toBe(false)
+  })
+
+  it('primary view reads follow the Artifact current revision after a canonical edit', async () => {
+    const { repository, snapshot, projectId } = setup()
+    const service = new CurationQueryService({ repository })
+    const briefView = snapshot.artifactViews.find((view) => view.artifactId === 'artifact-brief')!
+
+    const revised = await reviseManagedTextArtifact(
+      repository,
+      snapshot.project.id,
+      { viewId: String(briefView.id) },
+      'PortaSplit current body after GUI edit',
+    )
+
+    const result = await service.readViews(projectId, [String(briefView.id)])
+    expect(result.nodes).toHaveLength(1)
+    expect(result.nodes[0]?.currentRevisionId).toBe(revised.revisionId)
+    expect(result.nodes[0]?.boundedText).toBe('PortaSplit current body after GUI edit')
   })
 
   it('enforces bounded read budget and marks truncation', async () => {

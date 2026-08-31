@@ -12,12 +12,20 @@ import { ProjectionSurface } from '../surfaces/ProjectionSurfaces'
 import { CanvasEmptyState, FirstArtifactGuide } from '../onboarding/CanvasEmptyState'
 import { SurfaceContextMenu, type SurfaceContextMenuAction, type SurfaceContextMenuItem } from './SurfaceContextMenu'
 import { UnifiedExecutionComposer } from '../execution/UnifiedExecutionComposer'
-import { mergeExecutionReferenceIds, proposalCompatibilityBlockReason, referenceCandidates, resolveComposerReceiver } from '../execution/commandDraft'
+import { explicitExecutionReferenceIds, proposalCompatibilityBlockReason, referenceCandidates, resolveComposerReceiver } from '../execution/commandDraft'
 import type { SharedComposerCommandState, SurfaceExecutionSubmission, SurfaceExecutionSubmissionResult } from '../execution/surfaceExecution'
 import type { ConnectedConversationV1, RuntimeProviderStatus } from '@local-creative-os/contracts'
 import { ProjectResumeHint, SurfaceDepositHint, type DepositHintItem } from './BoundaryHints'
 import { CANVAS_IDLE_HINT_MS, loadBoundaryHintMemory, recordDepositHint, saveBoundaryHintMemory, shouldShowDepositHint, type BoundaryHintMemory } from '../../runtime/boundaryHintState'
 import { referencePickModifier } from '../spatial/pointerInteractionLanguage'
+import { useProjectSpatialMarkersOrNull } from '../spatial/ProjectSpatialMarkerContext'
+import { markerForNavigationTarget } from '../spatial/spatialNavigationFamily'
+import { projectObjectCanOpen } from '../ui/ProjectObjectOrbit'
+import { dismissTop, queryStack } from '../ui/overlayStack'
+
+type SceneContextMenuState =
+  | { readonly kind: 'surface'; readonly x: number; readonly y: number }
+  | { readonly kind: 'object'; readonly x: number; readonly y: number; readonly anchorId: string; readonly ids: readonly string[] }
 
 export interface CanvasSceneHostProps {
   readonly sceneStyle: CSSProperties
@@ -67,8 +75,10 @@ export interface CanvasSceneHostProps {
 
 /** Persistent shell. Project/Scope/Selection persist while each Lens owns its renderer. */
 export function CanvasSceneHost(props: CanvasSceneHostProps) {
-  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
+  const [menu, setMenu] = useState<SceneContextMenuState | null>(null)
+  const markerRuntime = useProjectSpatialMarkersOrNull()
   const [agentNode, setAgentNode] = useState<{ x: number; y: number; seedPrompt?: string; contextLabel?: string } | null>(null)
+  const readReachRef = useRef(props.surfaceExecution?.onReadReach ?? null)
   const [surfaceReachCount, setSurfaceReachCount] = useState(0)
   const [referenceModifierHeld, setReferenceModifierHeld] = useState(false)
   const [resumeDismissed, setResumeDismissed] = useState(false)
@@ -184,15 +194,39 @@ export function CanvasSceneHost(props: CanvasSceneHostProps) {
     && !menu && !agentNode
     && (props.resumeHint === null || props.resumeHint === undefined || resumeDismissed)
 
+  const menuPoint = (event: ReactMouseEvent<HTMLDivElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect()
+    return {
+      x: Math.max(8, Math.min(event.clientX - rect.left, rect.width - 240)),
+      y: Math.max(8, Math.min(event.clientY - rect.top, rect.height - 280)),
+    }
+  }
+
+  const sceneSelectedIds = props.surface === 'arrange' ? (props.canvas.selectedIds ?? []) : props.projection.selectedIds
+  const sceneNodes = props.surface === 'arrange' ? props.canvas.nodes : props.projection.nodes
+  const sceneSelect = props.surface === 'arrange' ? props.canvas.onSelect : props.projection.onSelect
+
   const openSurfaceMenu = (event: ReactMouseEvent<HTMLDivElement>) => {
-    if (!props.surfaceMenu) return
     const target = event.target as HTMLElement
-    const interactive = target.closest('button, input, textarea, select, summary, a, [contenteditable="true"], [data-node-id], [data-context-view], .lcos-spatial-placement, .lcos-workflow-node, .lcos-signal-segment, .lcos-context-project-dot, .lcos-context-dot-node, .lcos-workflow-edge-group, .lcos-boundary-hint, .lcos-unified-execution-composer')
+    const objectTarget = target.closest<HTMLElement>('[data-node-id]')
+    if (objectTarget?.dataset.nodeId) {
+      event.preventDefault()
+      markMeaningfulActivity()
+      const overlayStack = queryStack()
+      const top = overlayStack[overlayStack.length - 1]
+      if (top?.kind === 'orbit') dismissTop()
+      const anchorId = objectTarget.dataset.nodeId
+      const ids = sceneSelectedIds.includes(anchorId) && sceneSelectedIds.length > 1 ? [...sceneSelectedIds] : [anchorId]
+      if (!sceneSelectedIds.includes(anchorId) || sceneSelectedIds.length !== ids.length) sceneSelect(anchorId, false)
+      setMenu({ kind: 'object', ...menuPoint(event), anchorId, ids })
+      return
+    }
+    if (!props.surfaceMenu) return
+    const interactive = target.closest('button, input, textarea, select, summary, a, [contenteditable="true"], [data-context-view], .lcos-spatial-placement, .lcos-workflow-node, .lcos-signal-segment, .lcos-context-project-dot, .lcos-context-dot-node, .lcos-workflow-edge-group, .lcos-boundary-hint, .lcos-unified-execution-composer')
     if (interactive) return
     event.preventDefault()
     markMeaningfulActivity()
-    const rect = event.currentTarget.getBoundingClientRect()
-    setMenu({ x: Math.max(8, Math.min(event.clientX - rect.left, rect.width - 240)), y: Math.max(8, Math.min(event.clientY - rect.top, rect.height - 280)) })
+    setMenu({ kind: 'surface', ...menuPoint(event) })
   }
 
   const openSurfaceExecution = (input: { readonly x: number; readonly y: number; readonly seedPrompt?: string; readonly contextLabel?: string }) => {
@@ -219,20 +253,91 @@ export function CanvasSceneHost(props: CanvasSceneHostProps) {
 
   const title = capabilityKind === 'arrange' ? '主画布' : capabilityKind === 'context' ? '上下文' : '工作流'
   // B-2 互斥：画布选中集（arrange 画布 + 投影视图并集）。
-  // 同一节点同一时刻只显示一个浮层：选中态由 selection-toolbar 负责，详情 Popover 让位。
+  // 同一节点同一时刻只显示一个浮层：选中态由 ObjectOrbit / Selection Field controls 负责，详情 Popover 让位。
   const selectedNodeIds = new Set([...(props.canvas.selectedIds ?? []), ...(props.projection.selectedIds ?? [])])
   const contextSeed = '整理最近项目变化、Agent/Chat 对话与材料，提出值得沉淀到 Context 的内容。只做提案，不自动修改项目结构。'
   const workflowSeed = '回看最近项目工作、Agent/Chat 对话和修改记录，提出已经重复出现、值得保存为 Workflow/Skill 的方法。只做提案，不自动固化流程。'
 
   const surfaceReceivers = props.surfaceExecution?.receivers ?? []
   const command = props.surfaceExecution?.command
+  const objectMenuNodes = menu?.kind === 'object'
+    ? menu.ids.flatMap((id) => { const node = sceneNodes.find((candidate) => candidate.id === id); return node ? [node] : [] })
+    : []
+  const referenceableMenuIds = objectMenuNodes.filter((node) => node.entityKind !== 'conversation').map((node) => node.id)
+  const allMenuReferences = referenceableMenuIds.length > 0 && referenceableMenuIds.every((id) => command?.referenceIds.includes(id))
+  const markerTargets = markerRuntime && menu?.kind === 'object'
+    ? menu.ids.map((id) => ({ id, targetRef: { projectId: markerRuntime.projectId, kind: 'view' as const, id }, marker: markerForNavigationTarget(markerRuntime.records, { projectId: markerRuntime.projectId, kind: 'view' as const, id }) }))
+    : []
+  const allMenuPinned = markerTargets.length > 0 && markerTargets.every((item) => item.marker !== null)
+  const canFocusMenu = menu?.kind === 'object' && (props.surface === 'arrange'
+    ? (menu.ids.length > 1 ? Boolean(props.canvas.onFocusSelection) : Boolean(props.canvas.onFocusNode))
+    : (menu.ids.length > 1 ? Boolean(props.projection.onFocusSelection) : Boolean(props.projection.onFocusObject)))
+  const removableProjectionSurface = props.surface === 'workflow' || props.surface === 'context-graph' || props.surface === 'context-space' || props.surface === 'context-flow' || props.surface === 'context-tree' || props.surface === 'outline'
+  const canRemoveProjection = menu?.kind === 'object' && (props.surface === 'arrange' ? Boolean(props.canvas.onDeleteSelection) : removableProjectionSurface && Boolean(props.projection.onRemoveProjection))
+  const canDuplicateView = menu?.kind === 'object' && props.surface === 'arrange' && Boolean(props.canvas.onDuplicateSelection)
+  const objectMenuItems: readonly SurfaceContextMenuItem[] = menu?.kind === 'object' ? [
+    ...(objectMenuNodes.length === 1 && (objectMenuNodes[0]?.entityKind === 'conversation' || (objectMenuNodes[0] ? projectObjectCanOpen(objectMenuNodes[0]) : false))
+      ? [{ action: 'open' as const, label: objectMenuNodes[0]?.entityKind === 'conversation' ? '进入现场' : '打开' }]
+      : []),
+    ...(canFocusMenu ? [{ action: 'focus' as const, label: menu.ids.length > 1 ? '这些对象在哪' : '在哪' }] : []),
+    ...(markerRuntime && markerTargets.length > 0
+      ? [{ action: allMenuPinned ? 'unpin' as const : 'pin' as const, label: allMenuPinned ? (menu.ids.length > 1 ? '取消这些 Pin' : '取消 Pin') : (menu.ids.length > 1 ? 'Pin 这些对象' : 'Pin') }]
+      : []),
+    ...(command && referenceableMenuIds.length > 0
+      ? [{ action: allMenuReferences ? 'remove-reference' as const : 'add-reference' as const, label: allMenuReferences ? (referenceableMenuIds.length > 1 ? '从参考移除这些对象' : '从参考移除') : '加入这次参考', dividerBefore: true }]
+      : []),
+    ...(canDuplicateView ? [{ action: 'duplicate-view' as const, label: menu.ids.length > 1 ? '额外 View' : '创建额外 View', dividerBefore: true }] : []),
+    ...(canRemoveProjection ? [{ action: 'remove-projection' as const, label: menu.ids.length > 1 ? '移出这些投影' : '移出当前投影', dividerBefore: !canDuplicateView, danger: true }] : []),
+  ] : []
+
+  const runObjectMenuAction = (action: SurfaceContextMenuAction) => {
+    if (menu?.kind !== 'object') return
+    const ids = [...menu.ids]
+    const node = objectMenuNodes.length === 1 ? objectMenuNodes[0] ?? null : null
+    if (action === 'open' && node) {
+      if (props.surface === 'arrange') props.canvas.onDoubleClick(node.id)
+      else props.projection.onDoubleClick(node.id)
+      return
+    }
+    if (action === 'focus') {
+      if (props.surface === 'arrange') {
+        if (ids.length > 1) props.canvas.onFocusSelection?.()
+        else if (ids[0]) props.canvas.onFocusNode?.(ids[0])
+      } else {
+        if (ids.length > 1) props.projection.onFocusSelection?.(ids)
+        else if (ids[0]) props.projection.onFocusObject?.(ids[0])
+      }
+      return
+    }
+    if ((action === 'pin' || action === 'unpin') && markerRuntime) {
+      if (action === 'unpin') {
+        for (const item of markerTargets) if (item.marker) void markerRuntime.deleteMarker(item.marker.id)
+      } else {
+        for (const item of markerTargets) if (!item.marker) void markerRuntime.createMarker({ targetRef: item.targetRef, scope: 'cross-surface' })
+      }
+      return
+    }
+    if ((action === 'add-reference' || action === 'remove-reference') && command) {
+      const removing = action === 'remove-reference'
+      for (const id of referenceableMenuIds) {
+        const referenced = command.referenceIds.includes(id)
+        if ((removing && referenced) || (!removing && !referenced)) command.onToggleReference(id)
+      }
+      return
+    }
+    if (action === 'duplicate-view' && props.surface === 'arrange') { props.canvas.onDuplicateSelection?.(); return }
+    if (action === 'remove-projection') {
+      if (props.surface === 'arrange') props.canvas.onDeleteSelection?.()
+      else props.projection.onRemoveProjection?.(ids)
+    }
+  }
   const surfaceSelectedNodes = (command?.selectionIds ?? props.projection.selectedIds).map((id) => (command?.nodes ?? props.projection.nodes).find((node) => node.id === id)).filter((node): node is NonNullable<typeof node> => Boolean(node))
   const defaultSurfaceReceiver = resolveComposerReceiver(surfaceSelectedNodes, surfaceReceivers, props.surfaceExecution?.activeReceiverId ?? null)
   const effectiveSurfaceReceiverId = command?.receiverId ?? defaultSurfaceReceiver.receiver?.connectedConversationId ?? null
   const surfaceResultSlots = surfaceSelectedNodes.filter((node) => node.resultSlotId && node.resultSlotStatus !== 'materialized')
   const surfaceResultSlot = surfaceResultSlots.length === 1 ? surfaceResultSlots[0] ?? null : null
   const surfaceTarget = command?.intent === 'revise' && surfaceSelectedNodes.length === 1 ? surfaceSelectedNodes[0] ?? null : null
-  const surfaceExecutionReferenceIds = mergeExecutionReferenceIds(command?.selectionIds ?? [], command?.referenceIds ?? [], surfaceTarget?.id)
+  const surfaceExecutionReferenceIds = explicitExecutionReferenceIds(command?.referenceIds ?? [], surfaceTarget?.id)
   const surfaceReferenceCandidates = referenceCandidates(surfaceExecutionReferenceIds, command?.nodes ?? props.projection.nodes, effectiveSurfaceReceiverId, surfaceReceivers)
   const surfaceExecutionBlockedReason = agentNode && props.surfaceExecution ? (() => {
     if (surfaceResultSlots.length > 1) return '一次处理只能写入一个空白结果，请只保留一个结果位。'
@@ -247,11 +352,21 @@ export function CanvasSceneHost(props: CanvasSceneHostProps) {
   })() : undefined
 
   useEffect(() => {
-    if (!agentNode || !props.surfaceExecution?.onReadReach || !effectiveSurfaceReceiverId) { setSurfaceReachCount(0); return }
+    readReachRef.current = props.surfaceExecution?.onReadReach ?? null
+  }, [props.surfaceExecution?.onReadReach])
+
+  useEffect(() => {
+    const readReach = readReachRef.current
+    if (!agentNode || !readReach || !effectiveSurfaceReceiverId) {
+      setSurfaceReachCount((current) => current === 0 ? current : 0)
+      return
+    }
     let cancelled = false
-    void props.surfaceExecution.onReadReach(effectiveSurfaceReceiverId).then((count) => { if (!cancelled) setSurfaceReachCount(count) }).catch(() => { if (!cancelled) setSurfaceReachCount(0) })
+    void readReach(effectiveSurfaceReceiverId)
+      .then((count) => { if (!cancelled) setSurfaceReachCount((current) => current === count ? current : count) })
+      .catch(() => { if (!cancelled) setSurfaceReachCount((current) => current === 0 ? current : 0) })
     return () => { cancelled = true }
-  }, [agentNode, effectiveSurfaceReceiverId, props.surfaceExecution])
+  }, [agentNode, effectiveSurfaceReceiverId])
 
   const surfaceReferencePickIntent = Boolean(command && (command.referencePickActive || referenceModifierHeld))
   const pickSurfaceReference = (id: string) => {
@@ -301,7 +416,8 @@ export function CanvasSceneHost(props: CanvasSceneHostProps) {
         {props.surface === 'arrange' ? <ProjectCanvas {...props.canvas}/> : <ProjectionSurface {...projectionForRender}/>}
       </div>
       {props.surface === 'arrange' && props.emptyState && <CanvasEmptyState {...props.emptyState}/>}
-      {menu && props.surfaceMenu && <SurfaceContextMenu x={menu.x} y={menu.y} title={title} items={props.surfaceMenu.items(props.surface)} onAction={runMenuAction} onClose={() => setMenu(null)}/>}
+      {menu?.kind === 'surface' && props.surfaceMenu && <SurfaceContextMenu x={menu.x} y={menu.y} title={title} items={props.surfaceMenu.items(props.surface)} onAction={runMenuAction} onClose={() => setMenu(null)}/>}
+      {menu?.kind === 'object' && objectMenuItems.length > 0 && <SurfaceContextMenu x={menu.x} y={menu.y} title={objectMenuNodes.length > 1 ? `${objectMenuNodes.length} 项选择` : (objectMenuNodes[0]?.title ?? '对象')} contextLabel={objectMenuNodes.length > 1 ? 'Selection' : '对象'} items={objectMenuItems} onAction={runObjectMenuAction} onClose={() => setMenu(null)}/>}
       {agentNode && capabilityKind !== 'arrange' && props.surfaceExecution && <UnifiedExecutionComposer
         nodes={props.surfaceExecution.command.nodes}
         selectedIds={props.surfaceExecution.command.selectionIds}
@@ -344,7 +460,7 @@ export function CanvasSceneHost(props: CanvasSceneHostProps) {
     {idleHintVisible && props.idleHint && <ProjectResumeHint eyebrow="刚才这段" title={props.idleHint.title} subtitle={props.idleHint.subtitle} onDismiss={() => setIdleEpisodeHintShown(true)}/>}
     {contextHintVisible && capabilityKind === 'context' && contextItems.length > 0 && <SurfaceDepositHint kind="context" items={contextItems} reflection={contextEvaluatorReason ?? props.depositHints?.contextReflection} onOrganize={() => { setContextHintVisible(false); props.depositHints?.onOrganize('context'); openSurfaceExecution({ x: 180, y: 120, seedPrompt: contextSeed, contextLabel: `上下文 · ${props.projection.selectedIds?.length ?? 0} 项选择` }) }} onDismiss={() => setContextHintVisible(false)}/>}
     {workflowHintVisible && capabilityKind === 'workflow' && workflowItems.length > 0 && <SurfaceDepositHint kind="workflow" items={workflowItems} reflection={workflowEvaluatorReason ?? props.depositHints?.workflowReflection} onOrganize={() => { setWorkflowHintVisible(false); props.depositHints?.onOrganize('workflow'); openSurfaceExecution({ x: 180, y: 120, seedPrompt: workflowSeed, contextLabel: `工作流 · ${props.projection.selectedIds?.length ?? 0} 项选择` }) }} onDismiss={() => setWorkflowHintVisible(false)}/>}
-    {/* B-2：节点已被选中时 selection-toolbar 正在显示，详情 Popover 与其互斥（同节点不叠两个浮层）。 */}
+    {/* A10：节点已被选中时 object-local / Selection Field controls 拥有交互焦点，详情 Popover 与其互斥。 */}
     {props.nodeInfo && !selectedNodeIds.has(props.nodeInfo.node.id) && <NodeInfoPopover {...props.nodeInfo}/>}
     {props.layoutPreview && <div className="layout-preview-banner lcos-layout-preview"><span>预览布局</span><button onClick={props.layoutPreview.onApply}>应用</button><button onClick={props.layoutPreview.onCancel}>取消</button></div>}
   </section>

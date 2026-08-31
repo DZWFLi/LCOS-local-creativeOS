@@ -106,7 +106,7 @@ export function WorkRail(props: Props) {
       {mode === 'waiting-input' && props.activeRun
         ? <WaitingState run={props.activeRun} onSync={props.onSyncRun} onAnswer={props.onAnswerInput} runActions={props.runActions} />
         : mode === 'review' && props.activeRun && primary
-          ? <ReviewState node={primary} run={props.activeRun} onAccept={props.onAccept} onReject={props.onReject} onRetry={props.onRetry} onContinueModify={props.onContinueModify} />
+          ? <ReviewState node={primary} run={props.activeRun} onAccept={props.onAccept} onReject={props.onReject} onRetry={props.onRetry} onContinueModify={props.onContinueModify} runActions={props.runActions} />
           : mode === 'run' && props.activeRun
             ? <RunState run={props.activeRun} nodes={props.nodes} outline={runOutline} onRetry={props.onRetry} onSync={props.onSyncRun} onCancel={props.onCancelRun} onRecover={props.onRecoverRun} recovering={props.runtimeRecovering} runActions={props.runActions} />
             : mode === 'completed' && props.activeRun
@@ -239,7 +239,7 @@ function WaitingState({ run, onSync, onAnswer, runActions }: {
   </div>
 }
 
-function ReviewState({ node, run, onAccept, onReject, onRetry, onContinueModify }: { node: CanvasNode; run: ActiveRun; onAccept: () => void; onReject: () => void; onRetry: () => void; onContinueModify: () => void }) {
+function ReviewState({ node, run, onAccept, onReject, onRetry, onContinueModify, runActions }: { node: CanvasNode; run: ActiveRun; onAccept: () => void; onReject: () => void; onRetry: () => void; onContinueModify: () => void; runActions?: readonly ExecutionItemAction[] }) {
   return <div className="rail-section review-state" data-testid="rail-review">
     <div className="review-heading"><GitCompareArrows size={18} /><div><small>Agent 结果已返回</small><h3>确认这次修改</h3><p>新的待确认版本已经准备好，当前版本尚未改变。</p></div></div>
     <div className="review-previews"><PreviewSurface node={{ ...node, kind: 'working', title: '当前版本', draft: false }} variant="before" /><PreviewSurface node={node} variant="after" /></div>
@@ -247,7 +247,7 @@ function ReviewState({ node, run, onAccept, onReject, onRetry, onContinueModify 
     <section className="changed-files"><h4>文件变化</h4>{run.changedFiles.map((file) => <b key={file}>{file}</b>)}</section>
     <button className="rail-primary pressable" data-testid="accept-current" onClick={onAccept}><Check size={15} />使用这个版本</button>
     <button className="rail-secondary pressable" data-testid="continue-modify" onClick={onContinueModify}>补充修改要求</button>
-    <button className="rail-secondary pressable" data-testid="retry-runtime" onClick={onRetry}><RotateCcw size={14} />重新执行</button>
+    {canAct(runActions, 'retry') && <button className="rail-secondary pressable" data-testid="retry-runtime" onClick={onRetry}><RotateCcw size={14} />重新执行</button>}
     <button className="rail-secondary danger pressable" data-testid="reject-runtime" onClick={onReject}>放弃这个结果</button>
   </div>
 }
@@ -293,7 +293,7 @@ function RunActivity({ events, error }: { events: readonly RunEvent[]; error: st
 }
 
 function canAct(runActions: readonly ExecutionItemAction[] | undefined, action: ExecutionItemAction): boolean {
-  return runActions === undefined || runActions.includes(action)
+  return runActions?.includes(action) === true
 }
 
 function humanizeRunError(message: string): string {

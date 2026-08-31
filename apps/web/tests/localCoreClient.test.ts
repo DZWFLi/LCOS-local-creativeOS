@@ -154,6 +154,69 @@ describe('Local Core browser client', () => {
     })
   })
 
+  it('reads the canonical current text body before editing', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({
+      ok: true,
+      value: {
+        query: 'view-read',
+        nodes: [{
+          stableRef: 'artifact:artifact-1',
+          viewId: 'view-1',
+          title: 'Brief',
+          contentKind: 'markdown',
+          boundedText: 'current body',
+          sourceRefs: [],
+          currentRevisionId: 'revision-current',
+          truncated: false,
+        }],
+        totalMatches: 1,
+        truncated: false,
+        generatedAt: '2026-08-31T00:00:00.000Z',
+      },
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await createLocalCoreClient().readCurationViews('project-1', {
+      viewIds: ['view-1'],
+      budget: { maxItems: 1, maxCharsPerItem: 30_000, maxTotalChars: 30_000 },
+    })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/local-core/v1/projects/project-1/curation/read',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          viewIds: ['view-1'],
+          budget: { maxItems: 1, maxCharsPerItem: 30_000, maxTotalChars: 30_000 },
+        }),
+      }),
+    )
+    expect(result.result).toMatchObject({ ok: true, value: { nodes: [{ boundedText: 'current body', currentRevisionId: 'revision-current' }] } })
+  })
+
+  it('writes ordinary text edits through the canonical curation revision route', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({
+      ok: true,
+      value: { artifactId: 'artifact-1', viewId: 'view-1', revisionId: 'revision-2', legacyMigrated: false },
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await createLocalCoreClient().updateTextArtifact('project-1', {
+      viewId: 'view-1',
+      artifactId: 'artifact-1',
+      body: 'edited body',
+    })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/local-core/v1/projects/project-1/curation/text',
+      expect.objectContaining({
+        method: 'PUT',
+        body: JSON.stringify({ viewId: 'view-1', artifactId: 'artifact-1', body: 'edited body' }),
+      }),
+    )
+    expect(result.result).toMatchObject({ ok: true, value: { revisionId: 'revision-2' } })
+  })
+
   it('requests preview generation with revision id and profile only', async () => {
     const fetchMock = vi.fn(async () => jsonResponse({
       ok: true,

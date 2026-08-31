@@ -7,7 +7,7 @@ import { SpatialCanvas } from '../spatial/SpatialCanvas'
 import { LcosButton } from '../ui/LcosButton'
 import { UnifiedExecutionComposer } from '../execution/UnifiedExecutionComposer'
 import { register as registerOverlay } from '../ui/overlayStack'
-import { mergeExecutionReferenceIds, proposalCompatibilityBlockReason, referenceCandidates } from '../execution/commandDraft'
+import { explicitExecutionReferenceIds, proposalCompatibilityBlockReason, referenceCandidates } from '../execution/commandDraft'
 import type { SharedComposerCommandState, SurfaceExecutionSubmission, SurfaceExecutionSubmissionResult } from '../execution/surfaceExecution'
 
 interface Props {
@@ -141,7 +141,7 @@ export function ConversationSpaceSurface({ projectId, conversationId, onExit, ex
   })
 
   const executionReferenceIds = execution
-    ? mergeExecutionReferenceIds(execution.command.selectionIds, execution.command.referenceIds)
+    ? explicitExecutionReferenceIds(execution.command.referenceIds)
     : []
   const executionReferences = execution
     ? referenceCandidates(executionReferenceIds, execution.command.nodes, receiverId, execution.receivers)

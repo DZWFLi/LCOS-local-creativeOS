@@ -90,7 +90,12 @@ export class CurationQueryService {
     if (view === undefined) return undefined
     const artifact = repository.getArtifact(String(view.artifactId))
     if (artifact === undefined || String(artifact.projectId) !== projectId) return undefined
-    const revisionId = view.revisionId ?? artifact.currentRevisionId
+    // Primary Views are live projections of Artifact truth and must follow the
+    // Artifact current revision. Explicit additional Views may intentionally pin
+    // a historical revision. Keep this aligned with the Web runtime projection.
+    const revisionId = view.referenceKind === 'primary'
+      ? artifact.currentRevisionId ?? view.revisionId
+      : view.revisionId ?? artifact.currentRevisionId
     const revision = revisionId === undefined ? undefined : repository.getArtifactRevision(revisionId)
     const fileRecord = revision?.fileRecordId === undefined ? undefined : repository.getFileRecord(String(revision.fileRecordId))
     const mimeType = fileRecord?.mimeType ?? ''
