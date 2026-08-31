@@ -3,7 +3,7 @@ import type { CSSProperties, MouseEvent as ReactMouseEvent, PointerEvent as Reac
 import { GripVertical } from 'lucide-react'
 import type { CanvasNode, NodeDisplayMode } from '../../model'
 import { CanvasNodeVisual, detectFileIdentity, displayNodeTitle } from '../canvas/CanvasNodeVisual'
-import { beginSemanticDrop } from '../spatial/semanticDrop'
+import { beginSemanticDrop, semanticDropTriggerFromPointer } from '../spatial/semanticDrop'
 import { additiveSelectionModifier } from '../spatial/pointerInteractionLanguage'
 import { DropFeedbackLayer } from '../drop/dropFeedbackLayer'
 import { useSemanticDropFeedback } from '../drop/useSemanticDropFeedback'
@@ -113,19 +113,24 @@ export function SurfaceObject({
     if (!selected || !orbitEligible) setOrbitOpen(false)
   }, [orbitEligible, selected])
 
-  const selectAndMaybeOpenOrbit = (event: ReactMouseEvent<HTMLButtonElement>) => {
+  const maybeOpenOrbit = (event: ReactMouseEvent<HTMLButtonElement>) => {
     if (relationPointerConsumed.current) {
       relationPointerConsumed.current = false
       event.preventDefault()
       event.stopPropagation()
       return
     }
+    // Selection is committed on pointerdown so outer spatial drag capture cannot
+    // swallow point-selection. Shift remains the only additive Selection modifier.
     const additive = additiveSelectionModifier(event)
-    onSelect(node.id, additive)
     if (additive) {
       setOrbitOpen(false)
       return
     }
+    // Match Main's group-drag grammar: pressing a member of an existing multi-
+    // selection preserves the group during drag; a real click collapses to that
+    // member only after pointer capture releases and click is delivered.
+    if (selected && !orbitEligible) onSelect(node.id, false)
     setOrbitOpen(true)
   }
 
@@ -149,7 +154,17 @@ export function SurfaceObject({
       event.stopPropagation()
       return
     }
+    const semanticTrigger = semanticDropTriggerFromPointer(event)
     beginSemanticDrop(event, semanticDropIds, onDirectProjectViewDrop, dropFeedback.onPhase)
+    // Main commits Selection on pointerdown. Context/Workflow must do the same:
+    // their outer drag layer takes pointer capture and can otherwise retarget the
+    // later click, which made Shift+Click point multi-selection unreliable.
+    if (event.button === 0 && semanticTrigger === null) {
+      const additive = additiveSelectionModifier(event)
+      const preserveExistingMultiSelection = !additive && selected && !orbitEligible
+      if (!preserveExistingMultiSelection) onSelect(node.id, additive)
+      if (additive) setOrbitOpen(false)
+    }
   }
 
   if (glyph) {
@@ -164,7 +179,7 @@ export function SurfaceObject({
         className={`lcos-surface-glyph role-${role} ${selected ? 'selected' : ''} ${relationSource ? 'is-relation-source' : ''} ${relationTarget ? 'is-relation-target' : ''} ${attentionBucket ? `attention-${attentionBucket}` : ''} ${dim ? 'dim' : ''}`}
         aria-label={displayNodeTitle(node)}
         onPointerDown={onPointerDown}
-        onClick={selectAndMaybeOpenOrbit}
+        onClick={maybeOpenOrbit}
         onDoubleClick={openDeeper}
       >
         <span className="lcos-semantic-drop-handle" data-semantic-drop-handle aria-hidden="true" onClick={(event)=>event.stopPropagation()} title="Semantic Drop：拖到上下文或工作流（右键拖 / Alt+左拖）"><GripVertical size={11}/></span>
@@ -189,7 +204,7 @@ export function SurfaceObject({
       className={`lcos-surface-object lcos-surface-material role-${role} ${selected ? 'selected' : ''} ${relationSource ? 'is-relation-source' : ''} ${relationTarget ? 'is-relation-target' : ''} ${attentionBucket ? `attention-${attentionBucket}` : ''} ${compact ? 'compact' : ''} ${dim ? 'dim' : ''}`}
       aria-label={displayNodeTitle(node)}
       onPointerDown={onPointerDown}
-      onClick={selectAndMaybeOpenOrbit}
+      onClick={maybeOpenOrbit}
       onDoubleClick={openDeeper}
     >
       <span className="lcos-semantic-drop-handle" data-semantic-drop-handle aria-hidden="true" onClick={(event)=>event.stopPropagation()} title="Semantic Drop：拖到上下文或工作流（右键拖 / Alt+左拖）"><GripVertical size={11}/></span>

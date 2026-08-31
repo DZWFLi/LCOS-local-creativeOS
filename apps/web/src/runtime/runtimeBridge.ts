@@ -425,7 +425,6 @@ export function mapGraphToState(
       createdAt: revision?.createdAt ?? artifact?.createdAt,
       sourceRunId: revision?.runId === undefined ? undefined : String(revision.runId),
       ...(conversation ? {
-        entityKind: 'conversation' as const,
         conversation: {
           id: String(conversation.id),
           title: conversation.title,
@@ -468,6 +467,7 @@ export function mapGraphToState(
       scopeId: normalizeScopeId(view.scopeId),
       opensScopeId: childScopeByContainerViewId.get(String(view.id)),
       entityKind: (() => {
+        if (conversation) return 'conversation' as const
         const kind = childScopeKindByContainerViewId.get(String(view.id))
         return kind === 'workflow' ? 'workflow' : kind === 'context' ? 'context' : kind === 'collection' ? 'collection' : undefined
       })(),

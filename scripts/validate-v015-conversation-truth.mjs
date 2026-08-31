@@ -31,7 +31,7 @@ const dock = readRequired('apps/web/src/features/shell/SurfaceDock.tsx')
 const viewer = readRequired('apps/web/src/features/viewer/artifactViewerRegistry.tsx')
 
 check('Conversation physical identity is the Core conversationViewId',
-  bridge.includes('conversationByViewId') && bridge.includes("entityKind: 'conversation'") &&
+  bridge.includes('conversationByViewId') && bridge.includes("if (conversation) return 'conversation' as const") &&
   projection.includes('canonical Core-backed conversationViewId') && projection.includes("ref.type === 'conversation'") &&
   !projection.includes('frontendConversationPosition'))
 

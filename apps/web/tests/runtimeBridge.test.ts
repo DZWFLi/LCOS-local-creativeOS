@@ -305,6 +305,33 @@ describe('RuntimeBridge mutation serialization', () => {
     })
   })
 
+  it('preserves canonical Conversation entityKind even when the backing Artifact is text', () => {
+    const graph = snapshot('Glyth · 会话投影')
+    const state = mapGraphToState(graph, 'disposable-portasplit', [], new Map(), [], [{
+      schemaVersion: 1,
+      id: 'conversation-session-1',
+      projectId: 'disposable-portasplit',
+      provider: 'chatgpt',
+      sourceKind: 'chatgpt',
+      title: 'Glyth · 会话投影',
+      messageCount: 12,
+      sectionCount: 3,
+      status: 'ready',
+      originMeta: {},
+      conversationArtifactId: 'brief',
+      conversationViewId: 'brief',
+      createdAt: NOW,
+      updatedAt: NOW,
+    }])
+
+    expect(state.nodes[0]).toMatchObject({
+      id: 'brief',
+      artifactId: 'brief',
+      entityKind: 'conversation',
+      conversation: { id: 'conversation-session-1', conversationArtifactId: 'brief' },
+    })
+  })
+
   it('projects legacy orphan scope IDs onto the canonical Runtime root', () => {
     const graph = snapshot()
     const rootId = 'scope-mvp-root' as ProjectGraphSnapshot['scopes'][number]['id']

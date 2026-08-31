@@ -2105,7 +2105,8 @@ export function App() {
     // Context/Workflow buttons open their free worksite. Graph renderers remain
     // explicit lenses/compatibility surfaces and never become a forced homepage.
     if (normalized === 'context-graph') { setActiveContextId(null); setActiveWorkflowId(null) }
-    if (normalized === 'workflow') { setActiveContextId(null); setActiveWorkflowId(null) }
+    else if (normalized === 'context-space' || normalized === 'context-flow' || normalized === 'context-tree' || normalized === 'outline') setActiveWorkflowId(null)
+    else if (normalized === 'workflow') setActiveContextId(null)
     setActiveSurface(normalized)
     if (!workspaceId) return
     const now = new Date().toISOString()
@@ -3661,11 +3662,54 @@ export function App() {
       return
     }
 
-    if (targetViewId === 'capability:context' || targetViewId === 'generate:context') {
+    if (targetViewId === 'capability:context') {
+      // The Context dock button is one worksite whether clicked or used as a Drop
+      // receptor. From Main this is the project-level Context Graph owner; from a
+      // concrete Context it is that exact Context. Creation is explicit elsewhere.
+      const ownerId = activeContextId ?? rootScope.id
+      const currentMembers = ownerId === rootScope.id ? contextGraphPresentationIds : (contextMembersById[ownerId] ?? [])
+      const currentRefs = ownerId === rootScope.id ? contextGraphEntityRefs : (contextEntityRefsById[ownerId] ?? [])
+      void Promise.all([
+        appendExactPresentationMembers('context', ownerId, viewIds, currentMembers),
+        appendExactPresentationEntityRefs('context', ownerId, entityRefs, ownerId === rootScope.id ? 'context-graph' : 'context', currentRefs),
+      ]).then(([members, refs]) => {
+        if (members === null || refs === null) return
+        if (ownerId === rootScope.id) { setContextGraphPresentationIds(members); setContextGraphEntityRefs(refs) }
+        else {
+          setContextMembersById((current) => ({ ...current, [ownerId]: members }))
+          setContextEntityRefsById((current) => ({ ...current, [ownerId]: refs }))
+          if (activeContextId === ownerId) { setContextPresentationIds(members); setContextPresentationEntityRefs(refs) }
+        }
+        setNotice(`已用于${ownerId === rootScope.id ? '项目 Context' : '当前 Context'} · ${viewIds.length + entityRefs.length} 项`)
+      })
+      return
+    }
+    if (targetViewId === 'capability:workflow') {
+      // Same rule as Context: Drop uses the exact Workflow worksite that the
+      // capability represents. It must never manufacture a second Workflow.
+      const ownerId = activeWorkflowId ?? rootScope.id
+      const currentMembers = ownerId === rootScope.id ? workflowPresentationIds : (workflowMembersById[ownerId] ?? [])
+      const currentRefs = ownerId === rootScope.id ? workflowPresentationEntityRefs : (workflowEntityRefsById[ownerId] ?? [])
+      void Promise.all([
+        appendExactPresentationMembers('workflow', ownerId, viewIds, currentMembers),
+        appendExactPresentationEntityRefs('workflow', ownerId, entityRefs, 'workflow', currentRefs),
+      ]).then(([members, refs]) => {
+        if (members === null || refs === null) return
+        setWorkflowPresentationIds(members)
+        setWorkflowPresentationEntityRefs(refs)
+        if (ownerId !== rootScope.id) {
+          setWorkflowMembersById((current) => ({ ...current, [ownerId]: members }))
+          setWorkflowEntityRefsById((current) => ({ ...current, [ownerId]: refs }))
+        }
+        setNotice(`已用于${ownerId === rootScope.id ? '项目 Workflow' : '当前 Workflow'} · ${viewIds.length + entityRefs.length} 项`)
+      })
+      return
+    }
+    if (targetViewId === 'generate:context') {
       createContextFromMembersDirect(viewIds, undefined, entityRefs)
       return
     }
-    if (targetViewId === 'capability:workflow' || targetViewId === 'generate:workflow') {
+    if (targetViewId === 'generate:workflow') {
       createWorkflowFromMembersDirect(viewIds, undefined, entityRefs)
       return
     }

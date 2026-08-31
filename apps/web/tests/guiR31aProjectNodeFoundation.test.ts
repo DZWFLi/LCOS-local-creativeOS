@@ -50,10 +50,16 @@ describe('R3.1-A Project-node presentation foundation', () => {
     expect(contextHome).toContain('onOpenContextView')
   })
 
-  it('makes bottom Context / Workflow capability buttons generative Drop targets', () => {
+  it('makes bottom Context / Workflow Drop use the same canonical worksite as click navigation', () => {
     expect(app).toContain("targetViewId === 'capability:context'")
-    expect(app).toContain('createContextFromMembersDirect(viewIds, undefined, entityRefs)')
+    expect(app).toContain('const ownerId = activeContextId ?? rootScope.id')
+    expect(app).toContain("appendExactPresentationMembers('context', ownerId")
     expect(app).toContain("targetViewId === 'capability:workflow'")
+    expect(app).toContain('const ownerId = activeWorkflowId ?? rootScope.id')
+    expect(app).toContain("appendExactPresentationMembers('workflow', ownerId")
+    expect(app).toContain("targetViewId === 'generate:context'")
+    expect(app).toContain('createContextFromMembersDirect(viewIds, undefined, entityRefs)')
+    expect(app).toContain("targetViewId === 'generate:workflow'")
     expect(app).toContain('createWorkflowFromMembersDirect(viewIds, undefined, entityRefs)')
     expect(dock).toContain("'data-project-view-drop-target':`capability:${id}`")
     expect(dock).toContain("onProjectViewDrop?.(id as Extract<CapabilityId, 'context' | 'workflow'>, members)")
