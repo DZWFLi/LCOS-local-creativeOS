@@ -32,9 +32,10 @@ check('Conversation artifact Reader is fail-closed rather than primary', viewer.
 check('Birth source cannot be inferred from provider/title/time',
   !/\.provider\b|\.title\b|lastRunAt/.test(birth) &&
   !/\.provider\b|\.title\b|lastRunAt/.test(birthBadge))
-check('Birth/Conversation Where cannot reuse mutating generic locate callback',
-  canvas.includes('onLocateConversationSource?.(conversationOrbit.nodeId)') &&
-  !canvas.includes('onLocate?.(conversationOrbit.nodeId)'))
+check('Birth/Conversation source navigation cannot reuse mutating generic locate callback',
+  canvas.includes('onLocateConversationView={onLocateConversationSource}') &&
+  !canvas.includes('onLocate?.(conversationOrbit.nodeId)') &&
+  !canvas.includes('onLocateConversationSource?.(conversationOrbit.nodeId)'))
 
 const allowedGlyth = new Set([
   'apps/web/src/features/capture/CaptureFloatApp.tsx',

@@ -754,6 +754,21 @@ export function App() {
   }, [activeReceiverIdentity?.activeReceiverId, bootMode, effectiveSelectionReceiverId, selectionReceiverChoices, selectionReferenceCandidates, selectionResultSlotNodes.length])
   const runBusy = Boolean(activeRun && ['queued', 'running'].includes(activeRun.status))
   useEffect(() => {
+    if (!selectionComposerOpen || bootMode !== 'runtime') return
+    let disposed = false
+    void bridgeRef.current.client.listConnectedConversations(activeProjectId).then((call) => {
+      if (disposed) return
+      if (!call.result.ok) { setSelectionReceiverChoices([]); return }
+      const conversations = call.result.value
+      setSelectionReceiverChoices(conversations)
+      const resolved = resolveComposerReceiver(selectedNodes, conversations, activeReceiverIdentity?.activeReceiverId ?? null)
+      const receiverId = resolved.receiver?.connectedConversationId ?? null
+      setSelectionReceiverId((current) => current && conversations.some((item) => item.id === current) ? current : receiverId)
+    }).catch(() => { if (!disposed) setSelectionReceiverChoices([]) })
+    return () => { disposed = true }
+  }, [activeProjectId, activeReceiverIdentity?.activeReceiverId, bootMode, selectedNodes, selectionComposerOpen])
+
+  useEffect(() => {
     if (!selectionComposerOpen || bootMode !== 'runtime' || !effectiveSelectionReceiverId) { setSelectionReachCount(0); return }
     const controller = new AbortController()
     void bridgeRef.current.client.conversationReach(activeProjectId, effectiveSelectionReceiverId, controller.signal).then((call) => {
@@ -1990,8 +2005,8 @@ export function App() {
     selectionContextIntentRef.current.touched = true
     selectionIntentVersionRef.current += 1
     setSelectedEdgeId(null)
-    // Click owns Selection only. An already-open explicit Composer may survive only
-    // when the same single target is reselected; ordinary selection can never summon it.
+    // Pointerdown owns Selection; A22 stable click may summon the local Composer later.
+    // Additive/multi-selection closes the single-target Composer so group actions can own that state.
     setSelectionComposerOpen((current) => current && !additive && selectedIds.includes(id))
     setSelectedIds((current) => additive ? current.includes(id) ? current.filter((item) => item !== id) : [...current, id] : [id])
     if (!additive) setNodeInfoId(null)
@@ -7439,6 +7454,11 @@ export function App() {
         onMapToConversation: mapCanvasObjectsToConversation,
         activeConversationId: activeReceiverIdentity?.chain?.conversationSession?.id ?? null,
         onFocusSelection: selectedIds.length > 0 ? () => openProjectFocus() : undefined,
+        onRequestSelectionComposer: () => {
+          setNodeInfoId(null)
+          setReferencePickActive(false)
+          setSelectionComposerOpen(true)
+        },
         onFocusNode: (id) => openProjectFocus([id]),
         onRenameSelection: selectedIds.length === 1 && selectedNodes.length === 1 ? () => setRenameNodeId(selectedNodes[0]!.id) : undefined,
         onToggleNoteLayout: toggleNoteLayout,

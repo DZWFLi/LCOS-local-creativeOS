@@ -61,6 +61,25 @@ export function SelectionGroupActions({ x, y, count, selectionKey, actions }: Pr
 
   if (count < 2 || actions.length === 0) return null
 
+  const quickIds = new Set(['selection-focus', 'selection-reorganize', 'selection-colony'])
+  const quickActions = actions.filter((action) => quickIds.has(action.id))
+  const layoutActions = actions.filter((action) => action.id.startsWith('selection-align-') || action.id.startsWith('selection-distribute-'))
+  const managementActions = actions.filter((action) => !quickIds.has(action.id) && !action.id.startsWith('selection-align-') && !action.id.startsWith('selection-distribute-'))
+
+  const renderItem = (action: SelectionGroupAction, compact = false) => {
+    const Icon = action.icon
+    return <Menu.Item
+      key={action.id}
+      className={`${compact ? 'is-compact ' : ''}${action.dividerBefore && !compact ? 'with-divider ' : ''}${action.danger ? 'danger' : ''}`.trim() || undefined}
+      disabled={action.disabled}
+      data-selection-group-action={action.id}
+      onClick={action.onClick}
+    >
+      {Icon ? <Icon size={compact ? 13 : 14} aria-hidden="true" /> : <span className="lcos-selection-group-menu-dot" aria-hidden="true" />}
+      <span><strong>{action.label}</strong>{!compact && action.hint ? <small>{action.hint}</small> : null}</span>
+    </Menu.Item>
+  }
+
   const triggerStyle = { left: x, top: y } as CSSProperties
   return <div
     className="lcos-selection-group-actions"
@@ -88,19 +107,9 @@ export function SelectionGroupActions({ x, y, count, selectionKey, actions }: Pr
             aria-label={`${count} 项选择的操作`}
           >
             <header><strong>{count} 项选择</strong><small>当前 Selection</small></header>
-            {actions.map((action) => {
-              const Icon = action.icon
-              return <Menu.Item
-                key={action.id}
-                className={`${action.dividerBefore ? 'with-divider ' : ''}${action.danger ? 'danger' : ''}`.trim() || undefined}
-                disabled={action.disabled}
-                data-selection-group-action={action.id}
-                onClick={action.onClick}
-              >
-                {Icon ? <Icon size={14} aria-hidden="true" /> : <span className="lcos-selection-group-menu-dot" aria-hidden="true" />}
-                <span><strong>{action.label}</strong>{action.hint ? <small>{action.hint}</small> : null}</span>
-              </Menu.Item>
-            })}
+            {quickActions.length > 0 && <div className="lcos-selection-group-quick" aria-label="Selection 快捷动作">{quickActions.map((action) => renderItem(action, true))}</div>}
+            {layoutActions.length > 0 && <section className="lcos-selection-layout-section" aria-label="Selection 对齐与分布"><small>对齐与分布</small><div className="lcos-selection-layout-grid">{layoutActions.map((action) => renderItem(action, true))}</div></section>}
+            {managementActions.length > 0 && <div className="lcos-selection-management-list">{managementActions.map((action) => renderItem(action))}</div>}
           </Menu.Popup>
         </Menu.Positioner>
       </Menu.Portal>

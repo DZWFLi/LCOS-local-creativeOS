@@ -519,3 +519,33 @@ Primary files:
 - `docs/v015/convergence/A20_SPATIAL_OVERLAY_PLACEMENT_OWNER_CLOSEOUT_20260831.md`
 
 A20 does not close visual placement QA, all portal ownership, or Phase A.
+
+---
+
+# A22 context/owner index update
+
+Provenance: real local `4c90d4d`; A21 exact-cold validated but not yet returned as a real-local merged HEAD.
+
+A22 owner split:
+
+```text
+Selection feedback → persistent member + aggregate spatial feedback
+ObjectOrbit semantics → top-right Action Arc presentation
+Compact Composer → local AI Work, may coexist above Arc
+Right-click / More → management only
+Surface Component → Spatial Instrument; collapse → Map Locator
+```
+
+Primary implementation:
+
+- `apps/web/src/features/ui/ObjectOrbit.tsx`
+- `apps/web/src/features/ui/ProjectObjectOrbit.tsx`
+- `apps/web/src/features/canvas/ProjectCanvas.tsx`
+- `apps/web/src/features/shell/CanvasSceneHost.tsx`
+- `apps/web/src/features/shell/SurfaceContextMenu.tsx`
+- `apps/web/src/features/spatial/components/SurfaceFrame.tsx`
+- `scripts/validate-v015-a22-object-local-interaction-grammar.mjs`
+- `docs/v015/convergence/PHASE_A_STACKED_CENSUS_AFTER_A21_20260831.md`
+- `docs/v015/convergence/A22_OBJECT_LOCAL_INTERACTION_GRAMMAR_CLOSEOUT_20260831.md`
+
+A23/A24 remain separate Compact Composer / Voice propositions. Centered Spatial Index and Assembly category UX are frozen but not implemented by A22.

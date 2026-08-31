@@ -54,6 +54,8 @@ interface Props {
   camera: Camera; setCamera: (camera: Camera | ((current: Camera) => Camera)) => void
   selectedId: string | null; selectedIds: string[]; selectedEdgeId: string | null; setSelectedEdgeId: (id: string | null) => void; pendingId: string | null; runId: string; runStatus: RunStatus | null; spaceHeld: boolean; locked?: boolean
   onSelect: (id: string, additive?: boolean) => void; onClearSelection: () => void; onMarqueeSelect: (ids: string[], additive: boolean) => void; onSelectEdge: (id: string | null) => void; onDoubleClick: (id: string) => void; onDetails: (id: string) => void; onFocusSelection?: () => void; onRenameSelection?: () => void
+  /** A22: stable single-click on a content-like Project Object may reveal the local Compact Composer without stealing focus. */
+  onRequestSelectionComposer?: (id: string) => void
   layoutPreview?: LayoutPreviewItem[] | null
   workspaceFrames?: WorkspaceFrameVM[]
   workspaceMemberNodes?: CanvasNode[]
@@ -151,7 +153,15 @@ function additiveSelection(event: { shiftKey: boolean; ctrlKey: boolean; metaKey
   return additiveSelectionModifier(event)
 }
 
-export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-space', surfaceMode = 'project', nodes, setNodes, edges, setEdges, camera, setCamera, selectedId, selectedIds, selectedEdgeId, setSelectedEdgeId, pendingId, runId, runStatus, spaceHeld, locked = false, layoutPreview, workspaceFrames = [], workspaceMemberNodes = nodes, activeWorkspaceId = null, onWorkspaceActivate, onWorkspaceProjectionMove, onPresentationInteractionChange, onPresentationCommit, onFrameBoundsChange, selectionComposer, referencePick, onSelect, onClearSelection, onMarqueeSelect, onSelectEdge, onDoubleClick, onDetails, onFocusSelection, onFocusNode, onCreateNodeFromAnchor, onFilesDropped, onExternalTextDrop, onMaterialTransferDrop, onMindmapBranchDrop, onArrangeSelection, gridSnapEnabled = true, onSetSelectionDisplayMode, onCopySelection, onDuplicateSelection, onCreateScopeFromSelection, onDeleteSelection, onReorganize, onDirectProjectViewDrop, onMapToConversation, onPointerWorldChange, onSpaceCreate, onLocateNode, focusRequest, onLocateConversationSource, locatePulseId, onOpenConversation, onSetActiveConversation, activeConversationId = null, pendingReviewIds = [], attentionBucketsByViewId = {}, collectionMembersByNodeId = {}, expandedCollectionScopeIds = [], openingCollectionScopeIds = [], closingCollectionScopeIds = [], onToggleCollection, onOpenContextLens, colonies = [], surfaceElements = [], onSurfaceElementsChange, portalTargets = [], onOpenPortalTarget, onCreateColonyFromSelection, onCreateColonyFromLasso, onAddToColony, onRescopeColony, onDissolveColony, onColonyMemberMoveSettled }: Props) {
+
+export function projectNodeSupportsInlineComposer(node: CanvasNode): boolean {
+  if (node.entityKind === 'conversation') return true
+  if (node.entityKind === 'collection' || node.entityKind === 'context' || node.entityKind === 'workflow') return false
+  if (node.id.startsWith('workspace:') || node.id.startsWith('scope:')) return false
+  return Boolean(node.artifactId || node.kind === 'note' || node.fileType || node.previewText)
+}
+
+export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-space', surfaceMode = 'project', nodes, setNodes, edges, setEdges, camera, setCamera, selectedId, selectedIds, selectedEdgeId, setSelectedEdgeId, pendingId, runId, runStatus, spaceHeld, locked = false, layoutPreview, workspaceFrames = [], workspaceMemberNodes = nodes, activeWorkspaceId = null, onWorkspaceActivate, onWorkspaceProjectionMove, onPresentationInteractionChange, onPresentationCommit, onFrameBoundsChange, selectionComposer, referencePick, onSelect, onClearSelection, onMarqueeSelect, onSelectEdge, onDoubleClick, onDetails, onFocusSelection, onRequestSelectionComposer, onFocusNode, onCreateNodeFromAnchor, onFilesDropped, onExternalTextDrop, onMaterialTransferDrop, onMindmapBranchDrop, onArrangeSelection, gridSnapEnabled = true, onSetSelectionDisplayMode, onCopySelection, onDuplicateSelection, onCreateScopeFromSelection, onDeleteSelection, onReorganize, onDirectProjectViewDrop, onMapToConversation, onPointerWorldChange, onSpaceCreate, onLocateNode, focusRequest, onLocateConversationSource, locatePulseId, onOpenConversation, onSetActiveConversation, activeConversationId = null, pendingReviewIds = [], attentionBucketsByViewId = {}, collectionMembersByNodeId = {}, expandedCollectionScopeIds = [], openingCollectionScopeIds = [], closingCollectionScopeIds = [], onToggleCollection, onOpenContextLens, colonies = [], surfaceElements = [], onSurfaceElementsChange, portalTargets = [], onOpenPortalTarget, onCreateColonyFromSelection, onCreateColonyFromLasso, onAddToColony, onRescopeColony, onDissolveColony, onColonyMemberMoveSettled }: Props) {
   const canvasRef = useRef<HTMLDivElement | null>(null)
   const dragCandidate = useRef<DragCandidate | null>(null)
   const resizeCandidate = useRef<ResizeCandidate | null>(null)
@@ -284,19 +294,15 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
   }, [colonyLassoMode])
   const localNavigationNonce = useRef(1_000_000)
   const [localNavigationRequest, setLocalNavigationRequest] = useState<SpatialFocusRequest | undefined>()
-  const selectionComposerVisible = Boolean(selectionComposer)
   // §13「只对 single active object 出现」：换选/清选/框选后当前对象不再是唯一 Selection 即收起。
   // （空白点击与 Esc / outside click 由 ObjectOrbit 行为层统一收口，不在此重复）。
   useEffect(() => {
     if (conversationOrbit !== null && (selectedIds.length !== 1 || selectedIds[0] !== conversationOrbit.nodeId)) setConversationOrbit(null)
     if (projectObjectOrbit !== null && (selectedIds.length !== 1 || selectedIds[0] !== projectObjectOrbit.nodeId)) setProjectObjectOrbit(null)
   }, [conversationOrbit, projectObjectOrbit, selectedIds])
-  useEffect(() => {
-    if (!selectionComposerVisible) return
-    setConversationOrbit(null)
-    setProjectObjectOrbit(null)
-    setWorkspaceOrbit(null)
-  }, [selectionComposerVisible])
+  // A22: Compact Composer and the selected object's Action Arc may coexist.
+  // Selection changes still retire stale object-local actions through the effect above;
+  // Composer is no longer allowed to erase the direct-action layer merely by opening.
   const toWorld = (clientX: number, clientY: number, rect: DOMRect) => spatialScreenToWorld(clientX, clientY, rect, camera)
   const colonyCandidatesForPoints = (points: readonly { x: number; y: number }[]) => points.length < 3 ? [] : nodes
     .filter((node) => pointInPolygon({ x: node.x + node.width / 2, y: node.y + node.height / 2 }, points))
@@ -1498,6 +1504,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
         // C-3 Grammar §11：单击 conversation = Select + Orbit 并存（Select 已在 pointerdown 落位）；
         // 追加选/多选不出 Orbit（§13 只对 single active object 出现）。
         const preservingExistingMultiSelection = selectedIds.length > 1 && selectedIds.includes(node.id)
+        if (!additive && !preservingExistingMultiSelection) setWorkspaceOrbit(null)
         if (node.entityKind === 'conversation' && node.conversation !== undefined && !additive && !preservingExistingMultiSelection) {
           setProjectObjectOrbit(null)
           setConversationOrbit({ anchor: anchor.querySelector('.lcos-conversation-glyth') ?? anchor, nodeId: node.id, conversationId: node.conversation.id, title: node.conversation.title })
@@ -1508,6 +1515,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
           setConversationOrbit(null)
           setProjectObjectOrbit(null)
         }
+        if (!additive && !preservingExistingMultiSelection && projectNodeSupportsInlineComposer(node)) onRequestSelectionComposer?.(node.id)
         if (collectionScopeId) onToggleCollection?.(collectionScopeId)
       }} onResizeStart={(event) => {
         if (locked || selectedIds.length !== 1) return
@@ -1568,7 +1576,6 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
         activeConversationId === conversationOrbit.conversationId
           ? { id: 'conversation-active', label: '当前承接', icon: CheckCircle2, readOnly: true }
           : { id: 'conversation-activate', label: '设为当前', icon: Radio, onClick: () => onSetActiveConversation?.(conversationOrbit.conversationId) },
-        { id: 'conversation-locate', label: '在哪', icon: Crosshair, onClick: () => onLocateConversationSource?.(conversationOrbit.nodeId) },
       ]}
     />
   )}

@@ -244,46 +244,39 @@
   box-shadow:none !important;
 }
 
-/* Multi Selection = one shared field. Individual selected objects recede so
-   the group reads as a single temporary spatial object rather than N rims. */
-.lcos-reconstructed .canvas-node.multi-selected { border-color:transparent !important; box-shadow:none !important; }
-.lcos-reconstructed .canvas-node.multi-selected.selected .lcos-object::before { opacity:.26; }
-.lcos-reconstructed .canvas-node.multi-selected.selected .lcos-object::after { opacity:.18; }
+/* A22 · Multi Selection keeps BOTH levels of spatial feedback.
+   Each selected object remains visibly selected, while the aggregate bounds explain
+   the temporary group. Transient menus/composers may yield; Selection feedback never does. */
+.lcos-reconstructed .canvas-node.multi-selected {
+  outline:1px solid color-mix(in srgb, var(--lcos-ui-active) 46%, transparent) !important;
+  outline-offset:3px;
+  border-radius:inherit;
+}
+.lcos-reconstructed .canvas-node.multi-selected.selected .lcos-object::before { opacity:.52; }
+.lcos-reconstructed .canvas-node.multi-selected.selected .lcos-object::after { opacity:.38; }
+.lcos-reconstructed .lcos-surface-object.selected,
+.lcos-reconstructed .lcos-surface-glyph.selected {
+  outline:1.25px solid color-mix(in srgb, var(--lcos-ui-active) 52%, transparent);
+  outline-offset:3px;
+}
 .lcos-reconstructed .selection-bounds {
   overflow:visible;
-  border:0;
+  border:1.25px solid color-mix(in srgb, var(--lcos-ui-active) 58%, transparent);
   border-radius:18px;
   background:transparent;
-  box-shadow:none;
+  box-shadow:0 0 0 4px color-mix(in srgb, var(--lcos-ui-active) 5%, transparent);
   isolation:isolate;
 }
 .lcos-reconstructed .selection-bounds::before {
   content:"";
   position:absolute;
-  inset:-14px;
+  inset:-7px;
   z-index:-1;
-  border-radius:26px;
-  background:
-    radial-gradient(48% 72% at 12% 24%, color-mix(in srgb, var(--lcos-ui-active) 7%, transparent), transparent 76%),
-    radial-gradient(54% 68% at 86% 76%, color-mix(in srgb, var(--lcos-ui-active) 5%, transparent), transparent 78%);
-  filter:blur(8px);
-  opacity:.82;
+  border-radius:24px;
+  background:color-mix(in srgb, var(--lcos-ui-active) 2.8%, transparent);
   pointer-events:none;
 }
-.lcos-reconstructed .selection-bounds::after {
-  content:"";
-  position:absolute;
-  inset:-5px;
-  padding:1px;
-  border-radius:22px;
-  background:conic-gradient(from 26deg, transparent 0 12%, color-mix(in srgb, var(--lcos-ui-active) 24%, transparent) 24%, transparent 40% 66%, color-mix(in srgb, var(--lcos-ui-active) 18%, transparent) 79%, transparent 94% 100%);
-  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
-  -webkit-mask-composite:xor;
-  mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
-  mask-composite:exclude;
-  opacity:.58;
-  pointer-events:none;
-}
+.lcos-reconstructed .selection-bounds::after { content:none; }
 /* Marquee remains a tool gesture, not persistent Selection chrome. */
 .lcos-reconstructed .marquee {
   border:1px solid color-mix(in srgb, var(--lcos-ui-active) 18%, transparent) !important;
@@ -5031,3 +5024,26 @@
   .lcos-selection-group-menu[data-starting-style],
   .lcos-selection-group-menu[data-ending-style] { transform: none; }
 }
+
+/* A22 · Selection actions stay compact: spatial quick actions, layout matrix,
+   then low-frequency management. The menu is not an Inspector panel. */
+.lcos-selection-group-menu { width:min(238px,calc(100vw - 16px)); max-height:min(420px,calc(100dvh - 16px)); }
+.lcos-selection-group-quick { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:4px; padding:2px 4px 6px; }
+.lcos-selection-group-quick > [role='menuitem'],
+.lcos-selection-layout-grid > [role='menuitem'] {
+  min-width:0; min-height:48px; display:grid; grid-template-columns:1fr; place-items:center; align-content:center; gap:4px;
+  padding:6px 4px; border:0; border-radius:9px; color:color-mix(in srgb,var(--lcos-ui-ink) 72%,transparent); background:rgba(78,69,105,.035); text-align:center; cursor:pointer;
+}
+.lcos-selection-group-quick > [role='menuitem']:hover,
+.lcos-selection-layout-grid > [role='menuitem']:hover,
+.lcos-selection-group-quick > [role='menuitem'][data-highlighted],
+.lcos-selection-layout-grid > [role='menuitem'][data-highlighted] { color:var(--lcos-ui-ink); background:rgba(78,69,105,.075); }
+.lcos-selection-group-quick > [role='menuitem'] span:last-child,
+.lcos-selection-layout-grid > [role='menuitem'] span:last-child { min-width:0; }
+.lcos-selection-group-quick > [role='menuitem'] strong,
+.lcos-selection-layout-grid > [role='menuitem'] strong { display:block; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:10.5px; font-weight:620; }
+.lcos-selection-layout-section { display:grid; gap:4px; margin:0 4px; padding:7px 0; border-top:1px solid rgba(54,48,72,.07); border-bottom:1px solid rgba(54,48,72,.07); }
+.lcos-selection-layout-section > small { padding:0 3px; font-size:9px; font-weight:650; letter-spacing:.02em; color:color-mix(in srgb,var(--lcos-ui-ink) 40%,transparent); }
+.lcos-selection-layout-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:4px; }
+.lcos-selection-layout-grid > [role='menuitem'] { min-height:34px; background:transparent; }
+.lcos-selection-management-list { display:grid; gap:2px; padding-top:4px; }

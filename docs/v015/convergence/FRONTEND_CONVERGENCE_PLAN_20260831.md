@@ -987,3 +987,27 @@ visual target bounds
 First migrated call sites are Main Unified Composer and NodeInfoPopover. Mature ObjectOrbit/Base UI menu positioners are intentionally not rewritten.
 
 A20 architecture/source-static completion does **not** equal visual acceptance. Four-corner, Dock/Rail/Minimap, zoom/DPI and motion-direction QA remain runtime/Human debt. Phase A remains OPEN.
+
+---
+
+# 31. Phase A candidate · A22 Object-local Interaction Grammar
+
+Human GUI review after A21 exposes a final class of shared interaction-language defects rather than Phase B morphology work:
+
+- multi-selection lost normal individual + aggregate selection readability;
+- full radial Orbit visually over-occupied the canvas;
+- Composer and direct actions were forced to be mutually exclusive;
+- right-click duplicated Focus/Pin direct actions;
+- Surface Component collapse produced an empty mini-bar with permanent generic chrome.
+
+A22 restores the frozen hierarchy:
+
+```text
+Selection / Locator = persistent spatial state
+Action Arc = compact direct actions
+Compact Composer = AI Work
+Right-click / More = management
+Component Functional Face = intrinsic instrument work
+```
+
+A22 does not implement A23 Compact Composer internals, A24 Voice, Centered Spatial Index navigation, or Phase C Assembly taxonomy. Phase A remains OPEN until local runtime/human gates are satisfied.

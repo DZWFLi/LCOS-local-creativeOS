@@ -24,6 +24,7 @@ const check = (name, ok) => { results.push([name, Boolean(ok)]); console.log(`${
 const reconstructionSelection = /\.canvas-node\.selected \.lcos-object::(?:before|after)/.test(reconstruction)
 const spatialSelection = /\.canvas-node\.selected \.lcos-object::(?:before|after)/.test(spatialCss)
 const interactionSelection = /\.canvas-node\.selected \.lcos-object::after \{[\s\S]*?border:\s*0;[\s\S]*?background:\s*conic-gradient\(from 26deg/.test(interaction)
+const multiSelectionFeedback = interaction.includes('.canvas-node.multi-selected {') && interaction.includes('outline:1px solid') && /\.selection-bounds \{[\s\S]*?border:1\.25px solid[\s\S]*?background:transparent;/.test(interaction)
 const hostMotionBlock = interaction.match(/\.lcos-reconstructed \.canvas-node:not\(\.dragging\):not\(\.resizing\):not\(\[data-entity-kind="collection"\]\) \{([\s\S]*?)\n\}/)?.[1] ?? ''
 const reconstructedHost = reconstruction.match(/\.lcos-reconstructed \.canvas-node \{[\s\S]*?\n\}/)?.[0] ?? ''
 
@@ -39,20 +40,20 @@ check('Link body retires the mini SaaS card shell',
   /\.lcos-reconstructed \.lcos-link-object \{[\s\S]*?border:\s*0;[\s\S]*?background:\s*transparent;[\s\S]*?box-shadow:\s*none;/.test(spatialCss))
 check('Image remains the image body and media keeps media-native silhouettes',
   canvasVisual.includes("if (kind === 'image') return <ImageObject") && spatialCss.includes('.media-video .lcos-media-stage') && spatialCss.includes('.media-audio .lcos-media-stage::before'))
-check('F4 Selection world-field remains the single CanvasNode visual owner',
-  interactionSelection && !reconstructionSelection && !spatialSelection && !interaction.includes('animation:lcos-ring-travel'))
+check('Single Selection keeps the native world-field while A22 restores individual + aggregate Multi Selection feedback',
+  interactionSelection && multiSelectionFeedback && !reconstructionSelection && !spatialSelection && !interaction.includes('animation:lcos-ring-travel'))
 check('F4 Relation interaction ownership survives the F5 rebase',
   projectCanvas.includes('relationTargetId') && projectCanvas.includes('edge-terminal-hit') && projectCanvas.includes('edge-terminal-mark') && !projectCanvas.includes('edge-runner') && interaction.includes('@keyframes lcos-relation-flow'))
 check('CanvasNode host motion does not animate morphology properties',
   hostMotionBlock.includes('left var(--lcos-dur-normal)') && hostMotionBlock.includes('top var(--lcos-dur-normal)')
   && hostMotionBlock.includes('opacity var(--lcos-dur-fast)') && hostMotionBlock.includes('transform var(--lcos-dur-fast)')
   && !/(?:box-shadow|background-color|border-color)/.test(hostMotionBlock))
-check('ObjectOrbit lays satellites around a full 360 degree circle',
-  orbit.includes('index * (360 / total)') && orbit.includes('lcos-orbit-track'))
-check('Orbit is anchored to the Conversation Glyth body and stays in the compact ring range',
-  projectCanvas.includes("anchor.querySelector('.lcos-conversation-glyth') ?? anchor") && orbit.includes('const SATELLITE_RING_GAP = 23'))
-check('Orbit satellites are 36px icon instruments with labels only on hover/focus',
-  orbitCss.includes('width: 36px;') && orbitCss.includes('.lcos-orbit-satellite-label') && orbitCss.includes('.lcos-orbit-satellite:hover .lcos-orbit-satellite-label'))
+check('A22 ObjectOrbit presentation is a top-right short Action Arc, never a visible full ring',
+  orbit.includes('const cornerX = anchor.x + anchor.width') && orbit.includes('const cornerY = anchor.y') && orbit.includes('const templates: Record<number') && !orbit.includes('360 / total') && !orbit.includes('lcos-orbit-track'))
+check('Action Arc stays anchored to the Conversation Glyth body and uses the compact corner gap',
+  projectCanvas.includes("anchor.querySelector('.lcos-conversation-glyth') ?? anchor") && orbit.includes('const ACTION_ARC_GAP = 18'))
+check('Action Arc controls use compact 38px hit bodies with labels only on hover/focus',
+  orbitCss.includes('width: 38px;') && orbitCss.includes('height: 38px;') && orbitCss.includes('.lcos-orbit-satellite-label') && orbitCss.includes('.lcos-orbit-satellite:hover .lcos-orbit-satellite-label'))
 check('Current receiver stays read-only while latest L0 gives the freed Glyth satellite to Relation, not Lifecycle status',
   projectCanvas.includes("id: 'conversation-active'") && projectCanvas.includes("id: 'conversation-relation'")
   && !projectCanvas.includes("id: 'conversation-status'") && projectCanvas.includes('readOnly: true')

@@ -1453,3 +1453,36 @@ Main keeps physical CanvasEdge ownership and uses the Conversation ArtifactView 
 The old Main pointer block that deliberately rejected Conversation during Relation is now retired only for conversationArtifact-backed Glyths. Missing-artifact Conversation remains fail-close.
 
 No receiver identity, generic `connect()` ontology, or Workflow Step-link ownership is introduced.
+
+---
+
+# A22 production-owner update · Object-local Interaction Grammar
+
+A22 does not create a new interaction system. It narrows presentation ownership around already canonical shared owners:
+
+```text
+ObjectOrbit
+→ direct-action semantic owner
+→ short top-right Action Arc only
+
+Unified Composer
+→ local AI Work owner
+→ allowed to coexist as the top transient above Arc
+
+SurfaceContextMenu
+→ low-frequency management owner
+
+SurfaceFrame
+→ Surface Component spatial host
+→ persistent Locator / move / resize / lifecycle shell
+```
+
+Selection remains canonical project/surface selection truth. A22 changes only the visual feedback contract for multi-selection: selected members stay readable and aggregate bounds return.
+
+The following are explicitly rejected:
+
+- full-ring Orbit as a product requirement;
+- right-click as a textual duplicate of Action Arc;
+- Component generic window chrome;
+- collapse-to-empty-bar;
+- Composer-open as a reason to erase all direct-action context.

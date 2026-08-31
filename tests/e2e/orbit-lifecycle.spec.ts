@@ -90,7 +90,7 @@ async function closeContinuationPanel(page: Page) {
   if (await close.count()) await close.click().catch(() => undefined)
 }
 
-test('click-open Orbit survives pointer leave and Esc closes it', async ({ page }) => {
+test('click-open Action Arc survives pointer leave and layered Esc closes Composer before the Arc', async ({ page }) => {
   await openCanvas(page)
   await closeContinuationPanel(page)
 
@@ -99,12 +99,17 @@ test('click-open Orbit survives pointer leave and Esc closes it', async ({ page 
 
   await glyph.first().click()
   const orbitLayer = page.locator('.lcos-orbit-layer')
+  const composer = page.getByTestId('selection-composer')
   await expect(orbitLayer).toBeVisible({ timeout: 5_000 })
+  await expect(composer).toBeVisible({ timeout: 5_000 })
 
   await page.mouse.move(640, 20)
   await page.waitForTimeout(1200)
   await expect(orbitLayer).toBeVisible({ timeout: 2_000 })
 
+  await page.keyboard.press('Escape')
+  await expect(composer).toHaveCount(0, { timeout: 2_000 })
+  await expect(orbitLayer).toBeVisible({ timeout: 2_000 })
   await page.keyboard.press('Escape')
   await expect(orbitLayer).toHaveCount(0, { timeout: 2_000 })
 })
@@ -119,11 +124,17 @@ test('outside press and satellite action close Orbit', async ({ page }) => {
   const orbitLayer = page.locator('.lcos-orbit-layer')
   await expect(orbitLayer).toBeVisible({ timeout: 5_000 })
 
+  const composer = page.getByTestId('selection-composer')
+  await expect(composer).toBeVisible({ timeout: 2_000 })
+  await page.mouse.click(900, 620)
+  await expect(composer).toHaveCount(0, { timeout: 2_000 })
+  await expect(orbitLayer).toBeVisible({ timeout: 2_000 })
   await page.mouse.click(900, 620)
   await expect(orbitLayer).toHaveCount(0, { timeout: 2_000 })
 
   await glyph.first().click()
   await expect(orbitLayer).toBeVisible({ timeout: 5_000 })
+  if (await page.getByTestId('selection-composer').count()) await page.keyboard.press('Escape')
   const satellite = page.locator('.lcos-orbit-satellite:not(.is-readonly)').first()
   await expect(satellite).toBeVisible({ timeout: 3_000 })
   await satellite.click()

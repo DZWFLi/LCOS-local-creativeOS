@@ -10,7 +10,9 @@ const checks = [
     orbit.includes('const anchorNodeRef = useRef<Element | null>(null)')
       && orbit.includes('anchorNodeRef.current = anchorRef?.current ?? null')
       && orbit.includes('anchorNodeRef.current?.contains(target) === true')
-      && orbit.includes('}, [open, close])')
+      && orbit.includes('const stack = queryStack()')
+      && orbit.includes('stack[stack.length - 1]?.id !== orbitId')
+      && (orbit.includes('}, [open, close])') || orbit.includes('}, [open, close, orbitId])'))
       && !orbit.includes('}, [open, close, anchorRef])'),
   ],
   [

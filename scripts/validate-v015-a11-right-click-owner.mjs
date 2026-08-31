@@ -14,14 +14,17 @@ const checks = [
     host.includes("target.closest<HTMLElement>('[data-node-id]')")
       && host.includes("kind: 'object'")
       && host.includes("props.surface === 'arrange'")
-      && host.includes('props.projection.onFocusSelection?.(ids)')],
-  ['Object menu exposes only real low-frequency capabilities and no fake Assembly/Relation entries',
-    host.includes("action: 'focus'")
-      && host.includes("action: allMenuPinned ? 'unpin' as const : 'pin' as const")
+      && host.includes("const sceneSelect = props.surface === 'arrange' ? props.canvas.onSelect : props.projection.onSelect")
+      && host.includes('sceneSelect(anchorId, false)')],
+  ['A22 object menu is management-only and no longer duplicates Action Arc Open/Focus/Pin/Relation',
+    host.includes("action: 'rename' as const")
+      && host.includes("action: 'copy' as const")
       && host.includes("'remove-reference' as const : 'add-reference' as const")
-      && host.includes("action: 'remove-projection'")
-      && !host.includes("action: 'assembly'")
-      && !host.includes("action: 'relation'")],
+      && host.includes("action: 'remove-projection' as const")
+      && !host.includes("action: 'focus' as const")
+      && !host.includes("'unpin' as const : 'pin' as const")
+      && !host.includes("action: 'assembly' as const")
+      && !host.includes("action: 'relation' as const")],
   ['Conversation remains receiver identity and is not silently treated as explicit Reference',
     host.includes("filter((node) => node.entityKind !== 'conversation')")],
   ['Right-clicking an already-selected member preserves the multi-selection; another object becomes sole selection',
@@ -35,7 +38,7 @@ const checks = [
     canvas.includes('onContextMenu={(event) => event.preventDefault()} onPointerDown=')
       && !canvas.includes('onContextMenu={(event) => { event.preventDefault(); event.stopPropagation() }} onPointerDown={(event) => { if (!node.disabled) onPointerDown(event) }}')],
   ['A09 ordinary-object Focus callback is actually destructured by ProjectCanvas instead of existing only in Props/call-sites',
-    canvas.includes('onDoubleClick, onDetails, onFocusSelection, onFocusNode, onCreateNodeFromAnchor')],
+    canvas.includes('onDoubleClick, onDetails, onFocusSelection, onRequestSelectionComposer, onFocusNode, onCreateNodeFromAnchor')],
   ['Simple secondary click is not stolen by Semantic Drop; native menu guard starts only after movement threshold',
     canvas.includes("if (trigger !== 'secondary-pointer') event.preventDefault()")
       && canvas.includes("Math.hypot(event.clientX - item.startX, event.clientY - item.startY) > 4")
@@ -53,6 +56,8 @@ const checks = [
   ['Browser regression encodes simple right-click vs right-drag and three-surface object ownership',
     browser.includes("button: 'right'")
       && browser.includes("data-context-menu-scope=\"对象\"")
+      && browser.includes("menu.locator('[data-context-menu-action=\"focus\"]')).toHaveCount(0)")
+      && browser.includes("menu.locator('[data-context-menu-action=\"pin\"], [data-context-menu-action=\"unpin\"]')).toHaveCount(0)")
       && browser.includes('lcos-semantic-drop-ghost')
       && browser.includes("name: '上下文'")
       && browser.includes("name: '工作流'")],

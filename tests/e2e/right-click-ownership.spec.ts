@@ -37,10 +37,11 @@ async function openProject(page: Page) {
 async function expectObjectMenu(page: Page) {
   const menu = page.locator('[data-context-menu-scope="对象"]')
   await expect(menu).toBeVisible({ timeout: 3000 })
-  await expect(menu.locator('[data-context-menu-action="focus"]')).toHaveCount(1)
-  await expect(menu.locator('[data-context-menu-action="pin"], [data-context-menu-action="unpin"]')).toHaveCount(1)
-  await expect(menu.locator('[data-context-menu-action="assembly"]')).toHaveCount(0)
+  await expect(menu.locator('[data-context-menu-action="focus"]')).toHaveCount(0)
+  await expect(menu.locator('[data-context-menu-action="pin"], [data-context-menu-action="unpin"]')).toHaveCount(0)
   await expect(menu.locator('[data-context-menu-action="relation"]')).toHaveCount(0)
+  await expect(menu.locator('[data-context-menu-action="assembly"]')).toHaveCount(0)
+  await expect(menu.locator('[data-context-menu-action="copy"], [data-context-menu-action="add-reference"], [data-context-menu-action="remove-reference"], [data-context-menu-action="duplicate-view"], [data-context-menu-action="remove-projection"]')).not.toHaveCount(0)
 }
 
 test('simple right-click opens management menu while right-drag remains Semantic Drop', async ({ page }) => {

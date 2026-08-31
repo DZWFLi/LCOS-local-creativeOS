@@ -56,13 +56,13 @@ export function ProjectObjectOrbit({ open, node, anchorRef, onClose, onOpen, onL
     ...(onOpen && projectObjectCanOpen(node)
       ? [{ id: 'object-open', label: '打开', icon: Eye, primary: true, onClick: onOpen } satisfies ObjectOrbitAction]
       : []),
-    ...(onLocate ? [{ id: 'object-locate', label: '在哪', icon: Crosshair, onClick: onLocate } satisfies ObjectOrbitAction] : []),
     ...(onRelation ? [{ id: 'object-relation', label: '关系', icon: GitBranch, onClick: onRelation } satisfies ObjectOrbitAction] : []),
     ...(markerRuntime && targetRef
       ? [marker
         ? { id: 'object-pin', label: '取消 Pin', icon: MapPin, onClick: () => { void markerRuntime.deleteMarker(marker.id) } }
         : { id: 'object-pin', label: 'Pin', icon: MapPin, onClick: () => { void markerRuntime.createMarker({ targetRef, scope: 'cross-surface' }) } }]
       : []),
+    ...(onLocate ? [{ id: 'object-locate', label: '在哪', icon: Crosshair, onClick: onLocate } satisfies ObjectOrbitAction] : []),
   ]
 
   return <ObjectOrbit

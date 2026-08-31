@@ -13,6 +13,7 @@ const interaction = read('apps/web/src/interaction-system.css')
 const spatial = read('apps/web/src/spatial-components.css')
 const reconstruction = read('apps/web/src/reconstruction.css')
 const interactionSelection = /\.canvas-node\.selected \.lcos-object::after \{[\s\S]*?border:0;[\s\S]*?background:conic-gradient\(from 26deg/.test(interaction)
+const multiSelectionFeedback = interaction.includes('.canvas-node.multi-selected {') && /\.selection-bounds \{[\s\S]*?border:1\.25px solid/.test(interaction)
 
 const checks = [
   ['Rail small seed is a native species object, not RealMemberPreview', rail.includes('function RailMicroObject') && rail.includes('if (!large) return <RailMicroObject view={view}/>')],
@@ -28,7 +29,7 @@ const checks = [
   ['Direct-reading text has explicit curtain rail + sheet', canvasVisual.includes('lcos-text-curtain-rail') && canvasVisual.includes('lcos-text-curtain-sheet')],
   ['Text curtain sheet is not a bordered glass card', interaction.includes('.lcos-text-curtain-rail') && /\.lcos-readable-document\s*\{[\s\S]*?border:\s*0;[\s\S]*?clip-path:/.test(interaction)],
   ['Direct-reading note outer shell is transparent', /\.lcos-note-object\.is-direct-reading\s*\{[^}]*border:\s*0;[^}]*background:\s*transparent;[^}]*box-shadow:\s*none;/.test(interaction)],
-  ['Selection uses the native world-field owner rather than the retired rim', interactionSelection && !reconstruction.includes('.canvas-node.selected .lcos-object::after')],
+  ['Selection keeps one native owner: local single field plus A22 multi member + aggregate bounds', interactionSelection && multiSelectionFeedback && !reconstruction.includes('.canvas-node.selected .lcos-object::after')],
 ]
 
 let passed = 0

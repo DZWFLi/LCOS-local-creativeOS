@@ -408,11 +408,9 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
- * Wave B-6/C-3 · ObjectOrbit —— Native Visual full ring
- * ───────────────────────────────────────────────────────────────────────────
- * Orbit is world-adjacent chrome: a quiet complete ring around the selected
- * Conversation Glyth body. Satellites are compact instruments; their labels
- * remain latent until hover/focus. No card head/body/footer is allowed here.
+ * A22 · ObjectOrbit semantic owner / top-right Action Arc presentation
+ * Orbit keeps lifecycle/ownership semantics but no longer draws a full ring.
+ * The visible controls hug the target's top-right corner as a short bracket arc.
  * ═══════════════════════════════════════════════════════════════════════════ */
 .lcos-orbit-layer {
   position: fixed;
@@ -421,19 +419,6 @@
   pointer-events: none;
 }
 
-/* The track closes the spatial relationship without becoming a glowing dial. */
-.lcos-orbit-track {
-  position: absolute;
-  transform: translate(-50%, -50%);
-  border: 1px solid color-mix(in srgb, var(--lcos-ui-accent) 20%, transparent);
-  border-radius: 50%;
-  box-shadow: inset 0 0 0 5px color-mix(in srgb, var(--lcos-ui-accent) 1.8%, transparent);
-  pointer-events: none;
-  transform-origin: center;
-}
-
-/* Position pad: inline left/top is the full-ring landing point. Motion owns only
-   transform/opacity on this wrapper, never object morphology. */
 .lcos-orbit-sat {
   position: absolute;
   width: 0;
@@ -441,60 +426,61 @@
   pointer-events: none;
 }
 
-/* 36px control instrument, not a persistent text capsule. */
+/* 32px visual body / 38px actual hit body: toolbar-like weight, not a radial dial. */
 .lcos-orbit-sat .lcos-orbit-satellite {
   position: absolute;
   left: 0;
   top: 0;
-  width: 36px;
-  height: 36px;
-  min-width: 36px;
-  min-height: 36px;
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  min-height: 38px;
   transform: translate(-50%, -50%);
   pointer-events: auto;
   display: grid;
   place-items: center;
   padding: 0;
-  border: 1px solid rgba(72, 65, 84, .10);
+  border: 1px solid rgba(72, 65, 84, .09);
   border-radius: 50%;
   color: rgba(70, 64, 82, .76);
-  background: rgba(252, 251, 253, .78);
-  box-shadow: 0 6px 18px rgba(46, 39, 61, .10), inset 0 1px 0 rgba(255, 255, 255, .82);
-  backdrop-filter: blur(16px) saturate(1.08);
+  background: rgba(252, 251, 253, .84);
+  box-shadow: 0 5px 14px rgba(46, 39, 61, .085), inset 0 1px 0 rgba(255, 255, 255, .82);
+  backdrop-filter: blur(14px) saturate(1.06);
   cursor: pointer;
   user-select: none;
   -webkit-app-region: no-drag;
-  transition: background 120ms ease-out, border-color 120ms ease-out, color 120ms ease-out;
+  transition: background 120ms ease-out, border-color 120ms ease-out, color 120ms ease-out, transform 140ms ease-out;
 }
+.lcos-orbit-sat .lcos-orbit-satellite svg { width:15px; height:15px; }
 .lcos-orbit-sat .lcos-orbit-satellite:hover {
   border-color: color-mix(in srgb, var(--lcos-ui-accent) 18%, transparent);
-  background: color-mix(in srgb, var(--lcos-ui-accent) 5%, rgba(252, 251, 253, .84));
+  background: color-mix(in srgb, var(--lcos-ui-accent) 5%, rgba(252, 251, 253, .90));
 }
-.lcos-orbit-sat .lcos-orbit-satellite:active { opacity: .48; }
+.lcos-orbit-sat .lcos-orbit-satellite:active { opacity: .52; }
 .lcos-orbit-sat .lcos-orbit-satellite:focus-visible { outline: 2px solid var(--lcos-ui-accent); outline-offset: 3px; }
 .lcos-orbit-sat .lcos-orbit-satellite[data-lcos-primary='true'] {
   color: var(--lcos-ui-accent);
-  border-color: color-mix(in srgb, var(--lcos-ui-accent) 30%, transparent);
-  background: color-mix(in srgb, var(--lcos-ui-accent) 10%, rgba(252, 251, 253, .90));
+  border-color: color-mix(in srgb, var(--lcos-ui-accent) 25%, transparent);
+  background: color-mix(in srgb, var(--lcos-ui-accent) 8%, rgba(252, 251, 253, .92));
 }
 .lcos-orbit-sat .lcos-orbit-satellite.is-readonly {
   cursor: default;
   color: rgba(72, 116, 88, .86);
-  background: rgba(248, 251, 249, .82);
+  background: rgba(248, 251, 249, .86);
 }
 
 .lcos-orbit-satellite-label {
   position: absolute;
   left: 50%;
-  top: calc(100% + 7px);
+  top: calc(100% + 6px);
   transform: translate(-50%, -3px);
   width: max-content;
   max-width: 128px;
   padding: 4px 7px;
   border-radius: 7px;
-  color: rgba(255, 255, 255, .94);
-  background: rgba(39, 35, 46, .82);
-  box-shadow: 0 5px 16px rgba(28, 24, 34, .12);
+  color: rgba(255,255,255,.94);
+  background: rgba(39,35,46,.82);
+  box-shadow: 0 5px 16px rgba(28,24,34,.12);
   font: 560 10px/1.2 var(--lcos-font-ui, sans-serif);
   white-space: nowrap;
   opacity: 0;
@@ -502,23 +488,12 @@
   transition: opacity 120ms ease-out, transform 140ms ease-out;
 }
 .lcos-orbit-satellite:hover .lcos-orbit-satellite-label,
-.lcos-orbit-satellite:focus-visible .lcos-orbit-satellite-label {
-  opacity: 1;
-  transform: translate(-50%, 0);
-}
+.lcos-orbit-satellite:focus-visible .lcos-orbit-satellite-label { opacity:1; transform:translate(-50%,0); }
 
 @media (prefers-reduced-motion: reduce) {
-  .lcos-orbit-sat {
-    opacity: 1 !important;
-    transform: none !important;
-    transition: none !important;
-  }
-  .lcos-orbit-track { transition: none !important; }
-  .lcos-orbit-sat .lcos-orbit-satellite {
-    opacity: 1 !important;
-    transition: none !important;
-  }
-  .lcos-orbit-satellite-label { transition: none !important; }
+  .lcos-orbit-sat { opacity:1 !important; transform:none !important; transition:none !important; }
+  .lcos-orbit-sat .lcos-orbit-satellite { opacity:1 !important; transition:none !important; }
+  .lcos-orbit-satellite-label { transition:none !important; }
 }
 /* ═══════════════════════════════════════════════════════════════════════════
  * Wave D-2 · Semantic Drop 五阶段反馈层（dropFeedbackLayer.tsx / dropPhases.ts）

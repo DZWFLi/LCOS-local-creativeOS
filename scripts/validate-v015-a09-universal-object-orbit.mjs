@@ -47,10 +47,11 @@ const checks = [
       && canvas.includes('setProjectObjectOrbit(null)'),
   ],
   [
-    'Explicit Composer becomes the dominant transient layer and dismisses both object Orbit projections',
-    canvas.includes('if (!selectionComposerVisible) return')
-      && canvas.includes('setConversationOrbit(null)')
-      && canvas.includes('setProjectObjectOrbit(null)'),
+    'A22 allows the single-object Action Arc to coexist under Compact Composer while selection changes still retire stale Orbit',
+    canvas.includes('Compact Composer and the selected object\'s Action Arc may coexist')
+      && !canvas.includes('if (!selectionComposerVisible) return')
+      && canvas.includes('selectedIds.length !== 1 || selectedIds[0] !== projectObjectOrbit.nodeId')
+      && canvas.includes('selectedIds.length !== 1 || selectedIds[0] !== conversationOrbit.nodeId'),
   ],
   [
     'Shared SurfaceObject provides the same click-open Orbit shell and closes it for multi-selection',
@@ -72,8 +73,9 @@ const checks = [
       && app.includes('onFocusObject: (id) => openProjectFocus([id])'),
   ],
   [
-    'Browser regression covers ordinary Artifact Orbit, explicit actions, no single Selection Strip, and additive-selection dismissal',
+    'Browser regression covers ordinary Artifact Action Arc, explicit actions, layered Composer coexistence, and additive-selection dismissal',
     browser.includes("ordinary Artifact gets Universal ObjectOrbit and single Selection Strip stays retired")
+      && browser.includes('layered Esc closes Composer before the Arc')
       && browser.includes('data-lcos-orbit-action="object-open"')
       && browser.includes('data-lcos-orbit-action="object-locate"')
       && browser.includes('data-lcos-orbit-action="object-pin"')

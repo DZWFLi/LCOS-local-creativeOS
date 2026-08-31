@@ -649,3 +649,20 @@ A19 closes contextual Composer lifecycle ownership only. Placement remains separ
 | overlay size | real `getBoundingClientRect` / ResizeObserver for migrated overlays | all portal overlays measured |
 
 A20 is architecture/source-static closure only. Runtime/Human visual acceptance remains mandatory.
+
+---
+
+## A22 Object-local Interaction Grammar
+
+| Domain | Canonical owner after A22 candidate | Forbidden regression | Status |
+|---|---|---|---|
+| single-object direct actions | `ObjectOrbit` semantics → top-right Action Arc | visible full 360° track / large equal radial dial | SOURCE/STATIC PASS |
+| multi-selection feedback | individual selected member + aggregate bounds | members recede until Selection is visually ambiguous | SOURCE/STATIC PASS |
+| object-local AI Work invocation | stable click → existing Unified Composer | pointerdown steals drag / hidden invocation-only path | SOURCE/STATIC PASS |
+| Arc + Composer transient hierarchy | overlayStack layered owner | Composer opening erases Arc; one outside press closes both | SOURCE/STATIC PASS |
+| object right-click | management commands | duplicate Focus/Pin/Relation direct actions | SOURCE/STATIC PASS |
+| Component persistent identity | top-center Map Locator + functional face | permanent generic `○/−/×` chrome | SOURCE/STATIC PASS |
+| Component collapse | same-anchor Locator-only projection | empty 34px mini-bar | SOURCE/STATIC PASS |
+| Compact Composer internals | A23 | claiming A22 already closes prompt/ref/layout UX | OPEN |
+| Voice input | A24 | bespoke per-surface ASR UI | OPEN |
+| Centered Spatial Index / Focus / Color Pin | later Phase A proposition | reusing old large Focus list | FROZEN / NOT IMPLEMENTED |

@@ -122,8 +122,6 @@
   outline-offset: -1px;
 }
 .lcos-surface-component-frame.is-pinned { outline-style: dashed; cursor: default; }
-.lcos-surface-component-frame.is-collapsed .lcos-surface-component-content { display: none; }
-.lcos-surface-component-frame.is-collapsed { height: 34px !important; min-height: 34px; }
 
 .lcos-surface-component-content { width: 100%; height: 100%; min-width: 0; min-height: 0; }
 
@@ -150,46 +148,51 @@
 .lcos-surface-component-edge:hover::after,
 .lcos-surface-component-edge:focus-visible::after { background: rgba(103,78,177,.55); }
 
-/* Controls float in only on hover/selection — no permanent title bar.
-   质感（Brief D）：去白色胶囊底与毛玻璃，按钮改为 20×20 深色方钮，hover 边框亮起。 */
-.lcos-surface-component-controls {
-  position: absolute;
-  right: 7px;
-  top: 7px;
-  z-index: var(--lcos-z-content-guide); /* z-tier: canvas-content */
-  display: flex;
-  align-items: center;
-  gap: 1px;
-  padding: 2px;
-  opacity: 0;
-  transform: translateY(2px);
-  transition: opacity 120ms ease, transform 140ms ease;
-  pointer-events: none;
-}
-.lcos-surface-component-frame:hover > .lcos-surface-component-controls,
-.lcos-surface-component-frame.is-selected > .lcos-surface-component-controls,
-.lcos-surface-component-frame.is-pinned > .lcos-surface-component-controls,
-.lcos-surface-component-frame.is-collapsed > .lcos-surface-component-controls { opacity: 1; transform: none; pointer-events: auto; }
-.lcos-surface-component-controls button {
-  box-sizing: border-box;
-  width: 20px;
-  height: 20px;
-  min-width: 20px;
-  display: grid;
-  place-items: center;
-  padding: 0;
-  border: 1px solid transparent;
-  border-radius: 3px;
-  background: rgba(30, 27, 40, .85);
-  color: rgba(233, 229, 244, .75);
-  font: inherit;
-  cursor: pointer;
-}
-[data-lcos-theme='dark'] .lcos-surface-component-controls button { background: rgba(64, 58, 84, .9); color: rgba(228, 222, 244, .82); }
-.lcos-surface-component-controls button:hover { border-color: var(--lcos-signal); color: #fff; }
+/* A22: generic permanent ○/−/× Component chrome is retired.
+   Component lifecycle now lives in the top-right Action Arc / management menu;
+   collapse becomes the persistent Map Locator projection. */
 
-/* G-1 组件卡「最大化」入口：与 .lcos-surface-component-controls button 同款 20×20 深色方钮，
-   出现在结构/演进/关系/Pack/来源链各组件 Header 右端（hover 边框亮起）。 */
+.lcos-component-locator-anchor {
+  position:absolute; width:0; height:0; pointer-events:none;
+}
+.lcos-component-locator-anchor.in-frame { left:50%; top:0; z-index:var(--lcos-z-content-guide); }
+.lcos-component-map-locator {
+  position:absolute; left:0; top:-8px;
+  transform:translate(-50%,-100%) scale(var(--component-ui-scale,1));
+  transform-origin:50% 100%;
+  width:46px; height:54px; min-width:46px;
+  display:grid; place-items:center; padding:0;
+  border:0; background:transparent; box-shadow:none;
+  color:var(--lcos-signal);
+  pointer-events:auto; cursor:pointer;
+}
+.lcos-component-map-locator svg {
+  width:42px; height:42px;
+  filter:drop-shadow(0 7px 10px rgba(46,39,61,.18));
+}
+.lcos-component-map-locator:hover, .lcos-component-map-locator.is-selected {
+  color:color-mix(in srgb,var(--lcos-signal) 88%,#fff 12%);
+}
+.lcos-component-map-locator:hover svg, .lcos-component-map-locator.is-selected svg {
+  filter:drop-shadow(0 8px 12px rgba(46,39,61,.24)) drop-shadow(0 0 6px color-mix(in srgb,var(--lcos-signal) 24%,transparent));
+}
+.lcos-component-map-locator.is-collapsed { width:54px; height:62px; min-width:54px; }
+.lcos-component-map-locator.is-collapsed svg { width:48px; height:48px; }
+.lcos-component-management-menu {
+  position:fixed; z-index:var(--lcos-z-overlay-ui-high); width:220px; padding:7px;
+  border:1px solid rgba(72,65,84,.10); border-radius:12px;
+  background:rgba(252,251,253,.96); box-shadow:0 16px 42px rgba(34,29,46,.16);
+  backdrop-filter:blur(18px) saturate(1.05);
+}
+.lcos-component-management-menu header { display:flex; justify-content:space-between; align-items:center; padding:5px 7px 8px; color:var(--lcos-ink-soft); }
+.lcos-component-management-menu header strong { font-size:11px; }
+.lcos-component-management-menu header small { font-size:10px; opacity:.58; }
+.lcos-component-management-menu button { width:100%; min-height:34px; display:flex; align-items:center; gap:8px; padding:6px 8px; border:0; border-radius:9px; background:transparent; color:var(--lcos-ink); text-align:left; cursor:pointer; }
+.lcos-component-management-menu button:hover { background:rgba(92,75,170,.07); }
+.lcos-component-management-menu button.with-divider { margin-top:4px; padding-top:9px; border-top:1px solid rgba(79,72,104,.09); border-radius:0 0 9px 9px; }
+.lcos-component-management-menu button.danger { color:var(--lcos-danger,#a33f4b); }
+
+/* Legacy component-specific maximize affordances remain species-local; they are not the retired universal Component chrome. */
 button.lcos-context-maximize {
   box-sizing: border-box;
   width: 20px;
@@ -719,7 +722,7 @@ button.lcos-context-expand:hover { background: rgba(111,87,177,.07); }
 .lcos-surface-component-drag-ghost.is-valid { border-color: rgba(94, 73, 150, .24); box-shadow: 0 14px 38px rgba(67, 50, 109, .15), inset 0 0 0 1px rgba(108, 86, 168, .06); }
 
 .lcos-surface-component-frame.is-reduced-motion,
-.lcos-surface-component-frame.is-reduced-motion > .lcos-surface-component-controls,
+.lcos-component-map-locator,
 .lcos-surface-component-edge.is-reduced-motion,
 .lcos-light-segment.is-reduced-motion,
 .lcos-light-segment.is-reduced-motion i,
@@ -878,7 +881,6 @@ button.lcos-context-expand:hover { background: rgba(111,87,177,.07); }
 [data-lcos-theme='dark'] .lcos-compare-hint { color: rgba(206, 214, 232, .44); }
 @media (prefers-reduced-motion: reduce) {
   .lcos-surface-component-frame,
-  .lcos-surface-component-controls,
   .lcos-light-segment i,
   .lcos-glyth,
   .lcos-matrix-activity i { transition: none !important; animation: none !important; }

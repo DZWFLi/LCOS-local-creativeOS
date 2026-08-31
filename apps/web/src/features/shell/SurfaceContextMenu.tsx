@@ -1,4 +1,4 @@
-import { Bot, CopyPlus, Crosshair, Eye, FilePlus2, FolderInput, Layers3, LayoutGrid, MapPin, Network, Paperclip, Sparkles, SquarePlus, Trash2 } from 'lucide-react'
+import { Bot, Copy, CopyPlus, FilePlus2, FolderInput, Layers3, LayoutGrid, Network, Paperclip, Pencil, Sparkles, SquarePlus, Trash2 } from 'lucide-react'
 import type { ComponentType } from 'react'
 import { useEffect, useId, useRef } from 'react'
 import { register as registerOverlay } from '../ui/overlayStack'
@@ -12,10 +12,8 @@ export type SurfaceContextMenuAction =
   | 'review-deposits'
   | 'create-context'
   | 'create-workflow'
-  | 'open'
-  | 'focus'
-  | 'pin'
-  | 'unpin'
+  | 'rename'
+  | 'copy'
   | 'add-reference'
   | 'remove-reference'
   | 'duplicate-view'
@@ -39,10 +37,8 @@ const ICONS: Record<SurfaceContextMenuAction, ComponentType<{ size?: number }>> 
   'review-deposits': Sparkles,
   'create-context': Layers3,
   'create-workflow': Network,
-  open: Eye,
-  focus: Crosshair,
-  pin: MapPin,
-  unpin: MapPin,
+  rename: Pencil,
+  copy: Copy,
   'add-reference': Paperclip,
   'remove-reference': Paperclip,
   'duplicate-view': CopyPlus,

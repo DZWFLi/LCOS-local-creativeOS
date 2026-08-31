@@ -18,9 +18,6 @@ import type { ConnectedConversationV1, RuntimeProviderStatus } from '@local-crea
 import { ProjectResumeHint, SurfaceDepositHint, type DepositHintItem } from './BoundaryHints'
 import { CANVAS_IDLE_HINT_MS, loadBoundaryHintMemory, recordDepositHint, saveBoundaryHintMemory, shouldShowDepositHint, type BoundaryHintMemory } from '../../runtime/boundaryHintState'
 import { referencePickModifier } from '../spatial/pointerInteractionLanguage'
-import { useProjectSpatialMarkersOrNull } from '../spatial/ProjectSpatialMarkerContext'
-import { markerForNavigationTarget } from '../spatial/spatialNavigationFamily'
-import { projectObjectCanOpen } from '../ui/ProjectObjectOrbit'
 import { dismissTop, queryStack } from '../ui/overlayStack'
 
 type SceneContextMenuState =
@@ -76,7 +73,6 @@ export interface CanvasSceneHostProps {
 /** Persistent shell. Project/Scope/Selection persist while each Lens owns its renderer. */
 export function CanvasSceneHost(props: CanvasSceneHostProps) {
   const [menu, setMenu] = useState<SceneContextMenuState | null>(null)
-  const markerRuntime = useProjectSpatialMarkersOrNull()
   const [agentNode, setAgentNode] = useState<{ x: number; y: number; seedPrompt?: string; contextLabel?: string } | null>(null)
   const readReachRef = useRef(props.surfaceExecution?.onReadReach ?? null)
   const [surfaceReachCount, setSurfaceReachCount] = useState(0)
@@ -265,26 +261,16 @@ export function CanvasSceneHost(props: CanvasSceneHostProps) {
     : []
   const referenceableMenuIds = objectMenuNodes.filter((node) => node.entityKind !== 'conversation').map((node) => node.id)
   const allMenuReferences = referenceableMenuIds.length > 0 && referenceableMenuIds.every((id) => command?.referenceIds.includes(id))
-  const markerTargets = markerRuntime && menu?.kind === 'object'
-    ? menu.ids.map((id) => ({ id, targetRef: { projectId: markerRuntime.projectId, kind: 'view' as const, id }, marker: markerForNavigationTarget(markerRuntime.records, { projectId: markerRuntime.projectId, kind: 'view' as const, id }) }))
-    : []
-  const allMenuPinned = markerTargets.length > 0 && markerTargets.every((item) => item.marker !== null)
-  const canFocusMenu = menu?.kind === 'object' && (props.surface === 'arrange'
-    ? (menu.ids.length > 1 ? Boolean(props.canvas.onFocusSelection) : Boolean(props.canvas.onFocusNode))
-    : (menu.ids.length > 1 ? Boolean(props.projection.onFocusSelection) : Boolean(props.projection.onFocusObject)))
+  const canRenameObject = menu?.kind === 'object' && props.surface === 'arrange' && menu.ids.length === 1 && Boolean(props.canvas.onRenameSelection)
+  const canCopyObject = menu?.kind === 'object' && props.surface === 'arrange' && Boolean(props.canvas.onCopySelection)
   const removableProjectionSurface = props.surface === 'workflow' || props.surface === 'context-graph' || props.surface === 'context-space' || props.surface === 'context-flow' || props.surface === 'context-tree' || props.surface === 'outline'
   const canRemoveProjection = menu?.kind === 'object' && (props.surface === 'arrange' ? Boolean(props.canvas.onDeleteSelection) : removableProjectionSurface && Boolean(props.projection.onRemoveProjection))
   const canDuplicateView = menu?.kind === 'object' && props.surface === 'arrange' && Boolean(props.canvas.onDuplicateSelection)
   const objectMenuItems: readonly SurfaceContextMenuItem[] = menu?.kind === 'object' ? [
-    ...(objectMenuNodes.length === 1 && (objectMenuNodes[0]?.entityKind === 'conversation' || (objectMenuNodes[0] ? projectObjectCanOpen(objectMenuNodes[0]) : false))
-      ? [{ action: 'open' as const, label: objectMenuNodes[0]?.entityKind === 'conversation' ? '进入现场' : '打开' }]
-      : []),
-    ...(canFocusMenu ? [{ action: 'focus' as const, label: menu.ids.length > 1 ? '这些对象在哪' : '在哪' }] : []),
-    ...(markerRuntime && markerTargets.length > 0
-      ? [{ action: allMenuPinned ? 'unpin' as const : 'pin' as const, label: allMenuPinned ? (menu.ids.length > 1 ? '取消这些 Pin' : '取消 Pin') : (menu.ids.length > 1 ? 'Pin 这些对象' : 'Pin') }]
-      : []),
+    ...(canRenameObject ? [{ action: 'rename' as const, label: '重命名' }] : []),
+    ...(canCopyObject ? [{ action: 'copy' as const, label: menu.ids.length > 1 ? '复制这些对象' : '复制' }] : []),
     ...(command && referenceableMenuIds.length > 0
-      ? [{ action: allMenuReferences ? 'remove-reference' as const : 'add-reference' as const, label: allMenuReferences ? (referenceableMenuIds.length > 1 ? '从参考移除这些对象' : '从参考移除') : '加入这次参考', dividerBefore: true }]
+      ? [{ action: allMenuReferences ? 'remove-reference' as const : 'add-reference' as const, label: allMenuReferences ? (referenceableMenuIds.length > 1 ? '从参考移除这些对象' : '从参考移除') : '加入这次参考', dividerBefore: canRenameObject || canCopyObject }]
       : []),
     ...(canDuplicateView ? [{ action: 'duplicate-view' as const, label: menu.ids.length > 1 ? '额外 View' : '创建额外 View', dividerBefore: true }] : []),
     ...(canRemoveProjection ? [{ action: 'remove-projection' as const, label: menu.ids.length > 1 ? '移出这些投影' : '移出当前投影', dividerBefore: !canDuplicateView, danger: true }] : []),
@@ -293,30 +279,8 @@ export function CanvasSceneHost(props: CanvasSceneHostProps) {
   const runObjectMenuAction = (action: SurfaceContextMenuAction) => {
     if (menu?.kind !== 'object') return
     const ids = [...menu.ids]
-    const node = objectMenuNodes.length === 1 ? objectMenuNodes[0] ?? null : null
-    if (action === 'open' && node) {
-      if (props.surface === 'arrange') props.canvas.onDoubleClick(node.id)
-      else props.projection.onDoubleClick(node.id)
-      return
-    }
-    if (action === 'focus') {
-      if (props.surface === 'arrange') {
-        if (ids.length > 1) props.canvas.onFocusSelection?.()
-        else if (ids[0]) props.canvas.onFocusNode?.(ids[0])
-      } else {
-        if (ids.length > 1) props.projection.onFocusSelection?.(ids)
-        else if (ids[0]) props.projection.onFocusObject?.(ids[0])
-      }
-      return
-    }
-    if ((action === 'pin' || action === 'unpin') && markerRuntime) {
-      if (action === 'unpin') {
-        for (const item of markerTargets) if (item.marker) void markerRuntime.deleteMarker(item.marker.id)
-      } else {
-        for (const item of markerTargets) if (!item.marker) void markerRuntime.createMarker({ targetRef: item.targetRef, scope: 'cross-surface' })
-      }
-      return
-    }
+    if (action === 'rename' && props.surface === 'arrange') { props.canvas.onRenameSelection?.(); return }
+    if (action === 'copy' && props.surface === 'arrange') { props.canvas.onCopySelection?.(); return }
     if ((action === 'add-reference' || action === 'remove-reference') && command) {
       const removing = action === 'remove-reference'
       for (const id of referenceableMenuIds) {
