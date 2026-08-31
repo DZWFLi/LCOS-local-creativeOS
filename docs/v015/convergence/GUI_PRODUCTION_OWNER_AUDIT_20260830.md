@@ -1430,3 +1430,26 @@ Important cases:
 The A13 gesture adapter remains persistence-agnostic. A14 Workspace launch remains Main-local. A15 hit halo remains physical-only. Workflow Step/action links remain a separate truth.
 
 This explicitly rejects a generic `connect()` owner and the stale assumption that every visible node id is a View id.
+
+---
+
+# A17 production-owner update · Conversation Project Semantic Relation
+
+Fresh census after real local `0691812` distinguishes the two Conversation relationship languages at production-owner level:
+
+```text
+ordinary Project Semantic Relation
+→ conversationArtifact-backed Glyth
+→ canonical Domain endpoint = artifact:<conversationArtifactId>
+
+Conversation Context Mapping
+→ Semantic Drop / Context Field
+→ conversation_context
+→ separate durable meaning
+```
+
+Main keeps physical CanvasEdge ownership and uses the Conversation ArtifactView node id for geometry. Context/Workflow keep A13 gesture ownership and A16 resolves the physical node to the Conversation Artifact before Domain persistence.
+
+The old Main pointer block that deliberately rejected Conversation during Relation is now retired only for conversationArtifact-backed Glyths. Missing-artifact Conversation remains fail-close.
+
+No receiver identity, generic `connect()` ontology, or Workflow Step-link ownership is introduced.

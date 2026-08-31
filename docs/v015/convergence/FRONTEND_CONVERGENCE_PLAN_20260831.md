@@ -891,3 +891,32 @@ A13 physical gesture
 No generic `connect()` is introduced. Main relation persistence, A14 Workspace source owner, Conversation Context Mapping, and Workflow Step/action linking remain separate truths.
 
 After A16 source/static, Phase A remains OPEN for Conversation semantic adjudication plus real local Browser/Human proof. Phase B remains NOT ADMITTED.
+
+---
+
+# 27. Phase A micro-patch · A17 Conversation Semantic Relation
+
+Real local baseline: `0691812`.
+
+Fresh post-A16 census resolves the last known Conversation ordinary-Relation semantic ambiguity:
+
+```text
+Conversation Project Semantic Relation
+→ canonical Domain endpoint = artifact:<conversationArtifactId>
+
+Conversation Context Mapping
+→ Semantic Drop / conversation_context
+→ separate truth
+```
+
+A17 therefore:
+
+- adds `artifact` to the visible-node canonical Relation endpoint resolver;
+- admits Conversation only when the real CanvasNode has canonical `conversationArtifactId`;
+- keeps missing-conversationArtifactId Conversation fail-close;
+- replaces the obsolete read-only Glyth Orbit status satellite with explicit Relation;
+- gives Main conversationArtifact-backed Glyth an explicit 16px screen-space Relation receptor;
+- reuses existing Main relation session and A13/A16 Context/Workflow persistence owners;
+- does not introduce generic `connect()` or merge Conversation Context Mapping.
+
+After A17 source/static, Phase A remains OPEN pending real browser/human/save→reload evidence and a fresh runtime census. Phase B remains NOT ADMITTED.

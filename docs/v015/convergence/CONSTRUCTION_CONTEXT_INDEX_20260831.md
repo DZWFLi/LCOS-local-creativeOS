@@ -402,3 +402,31 @@ Primary current files:
 - `docs/v015/convergence/LCOS_v015_A16_CanonicalRelationEndpointAdapter_CLOSEOUT_20260831.md`
 
 Conversation ordinary Relation remains the unresolved semantic debt; A16 does not infer it.
+
+---
+
+# A17 context/owner index update
+
+Real local authority: `0691812`.
+
+Fresh A16 census proves Conversation ordinary Project Semantic Relation semantics:
+
+```text
+conversationArtifact-backed Conversation Glyth
+→ ordinary Relation endpoint = artifact:<conversationArtifactId>
+
+Conversation without conversationArtifactId
+→ fail-close
+```
+
+This supersedes the earlier `SEMANTIC_OWNER_UNPROVEN` state without rewriting its historical correctness.
+
+Conversation Context Mapping remains a separate Semantic Drop / `conversation_context` truth.
+
+Primary A17 evidence:
+
+- `docs/v015/convergence/PHASE_A_FRESH_PARITY_CENSUS_AFTER_A16_20260831.md`
+- `docs/v015/convergence/A17_CONVERSATION_SEMANTIC_RELATION_CLOSEOUT_20260831.md`
+- `apps/web/src/features/spatial/projectRelationEndpoint.ts`
+- `apps/web/src/features/canvas/ProjectCanvas.tsx`
+- `scripts/validate-v015-a17-conversation-semantic-relation.mjs`

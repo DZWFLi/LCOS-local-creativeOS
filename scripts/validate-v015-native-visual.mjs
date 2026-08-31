@@ -53,9 +53,10 @@ check('Orbit is anchored to the Conversation Glyth body and stays in the compact
   projectCanvas.includes("anchor.querySelector('.lcos-conversation-glyth') ?? anchor") && orbit.includes('const SATELLITE_RING_GAP = 23'))
 check('Orbit satellites are 36px icon instruments with labels only on hover/focus',
   orbitCss.includes('width: 36px;') && orbitCss.includes('.lcos-orbit-satellite-label') && orbitCss.includes('.lcos-orbit-satellite:hover .lcos-orbit-satellite-label'))
-check('Current receiver and Lifecycle are real read-only satellites, not fake no-op actions',
-  projectCanvas.includes("id: 'conversation-active'") && projectCanvas.includes("id: 'conversation-status'")
-  && projectCanvas.includes('readOnly: true') && !projectCanvas.includes("id: 'conversation-active', label: '当前承接', icon: CheckCircle2, onClick"))
+check('Current receiver stays read-only while latest L0 gives the freed Glyth satellite to Relation, not Lifecycle status',
+  projectCanvas.includes("id: 'conversation-active'") && projectCanvas.includes("id: 'conversation-relation'")
+  && !projectCanvas.includes("id: 'conversation-status'") && projectCanvas.includes('readOnly: true')
+  && !projectCanvas.includes("id: 'conversation-active', label: '当前承接', icon: CheckCircle2, onClick"))
 check('Ordinary artifacts and surfaces do not borrow Conversation Glyth',
   !production.includes('GlythAvatar') && !production.includes('<LcosGlyth'))
 

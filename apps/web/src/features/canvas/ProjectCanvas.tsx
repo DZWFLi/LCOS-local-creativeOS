@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import type { AttentionBucketV0, ConnectedConversationV1, RuntimeProviderStatus } from '@local-creative-os/contracts'
-import { CheckCircle2, CircleDot, Copy, CopyPlus, Crosshair, FolderTree, GitBranch, GripVertical, LayoutGrid, LassoSelect, MapPin, MessageSquare, Radio, RotateCcw, Trash2, X } from 'lucide-react'
+import { CheckCircle2, Copy, CopyPlus, Crosshair, FolderTree, GitBranch, GripVertical, LayoutGrid, LassoSelect, MapPin, MessageSquare, Radio, RotateCcw, Trash2, X } from 'lucide-react'
 import type { Camera, CanvasEdge, CanvasNode, NodeDisplayMode, RunStatus, WorkspaceFrameVM } from '../../model'
 import { getSelectionBounds, nodeDensity } from './canvasGeometry'
 import { getVisualSelectionBounds, MAIN_CANVAS_GRID_STEP, nodeVisualBounds, nodeVisualInsets } from './canvasVisualGeometry'
@@ -43,7 +43,6 @@ import { ObjectOrbit } from '../ui/ObjectOrbit'
 import { ProjectObjectOrbit } from '../ui/ProjectObjectOrbit'
 import { SelectionGroupActions, type SelectionGroupAction } from '../ui/SelectionGroupActions'
 import { BirthProvenanceBadge } from '../provenance/BirthProvenanceBadge'
-import { sessionPhaseLabel } from '../conversations/conversationLifecycle'
 import { projectMaterialRelationTargetAt, relationTargetWithinScreenHaloAt } from '../spatial/projectMaterialRelationGesture'
 
 interface Props {
@@ -246,7 +245,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
   // C-3 Glyth Orbit（Grammar §11 单击 = Select + Orbit 并存）：只对 single active 的
   // conversation 实体出现。anchor 存被点对象 DOM；conversationId 是 canonical ConversationSession id。
   // 物理对象 id 始终是 Core conversationViewId，不再派生第二套会话节点。
-  const [conversationOrbit, setConversationOrbit] = useState<{ anchor: Element; nodeId: string; conversationId: string; title: string; statusLabel: string } | null>(null)
+  const [conversationOrbit, setConversationOrbit] = useState<{ anchor: Element; nodeId: string; conversationId: string; title: string } | null>(null)
   // A09: ordinary Project objects now share the same ObjectOrbit behavior shell.
   // This state is Presentation-only; the Project object remains canonical truth.
   const [projectObjectOrbit, setProjectObjectOrbit] = useState<{ anchor: Element; nodeId: string } | null>(null)
@@ -705,9 +704,17 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
   const relationTargetAt = (clientX: number, clientY: number) => {
     const projectMaterial = projectMaterialRelationTargetAt(clientX, clientY, link.current?.from)
     if (projectMaterial) return projectMaterial
+    // Glyth keeps a dedicated Main receptor because its physical id is the
+    // Conversation ArtifactView while semantic persistence resolves to artifactId.
+    // Require that canonical artifact identity before admitting the receptor.
+    const conversation = relationTargetWithinScreenHaloAt(
+      clientX, clientY,
+      '[data-node-id][data-entity-kind="conversation"][data-conversation-artifact-id]',
+      'data-node-id',
+      link.current?.from,
+    )
+    if (conversation) return conversation
     // Workspace keeps its explicit aggregate endpoint semantics after A14.
-    // A15 only adds the same screen-space receptor tolerance; it does not restore
-    // generic data-node-id fallback or make Conversation Glyth an accidental endpoint.
     return relationTargetWithinScreenHaloAt(clientX, clientY, '[data-relation-target]', 'data-relation-target', link.current?.from)
   }
   const alignmentGuideFor = (node: CanvasNode, x: number, y: number, excludedIds: readonly string[]) => {
@@ -1445,13 +1452,6 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
         const semanticIds = selectedIds.includes(node.id) && selectedIds.length > 1 ? selectedIds : [node.id]
         if (beginCanvasSemanticDrop(semanticIds, event)) return
         if (event.button !== 0) return
-        // Conversation binding/body-drop is not ordinary Relation truth. While
-        // Relation intent is active, Conversation Glyth therefore remains a
-        // deliberate non-target instead of accepting an accidental node-id edge.
-        if (link.current && node.entityKind === 'conversation') {
-          event.preventDefault(); event.stopPropagation(); suppressClick.current = node.id
-          return
-        }
         event.stopPropagation()
         const now = performance.now()
         const previous = lastNodePress.current
@@ -1482,7 +1482,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
         const preservingExistingMultiSelection = selectedIds.length > 1 && selectedIds.includes(node.id)
         if (node.entityKind === 'conversation' && node.conversation !== undefined && !additive && !preservingExistingMultiSelection) {
           setProjectObjectOrbit(null)
-          setConversationOrbit({ anchor: anchor.querySelector('.lcos-conversation-glyth') ?? anchor, nodeId: node.id, conversationId: node.conversation.id, title: node.conversation.title, statusLabel: sessionPhaseLabel(node.conversation.lifecyclePhase) })
+          setConversationOrbit({ anchor: anchor.querySelector('.lcos-conversation-glyth') ?? anchor, nodeId: node.id, conversationId: node.conversation.id, title: node.conversation.title })
         } else if (node.entityKind !== 'conversation' && !additive && !preservingExistingMultiSelection) {
           setConversationOrbit(null)
           setProjectObjectOrbit({ anchor, nodeId: node.id })
@@ -1533,10 +1533,13 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
       ariaLabel={`会话「${conversationOrbit.title}」的动作`}
       actions={[
         { id: 'conversation-open', label: '进入现场', icon: MessageSquare, primary: true, onClick: () => onOpenConversation?.(conversationOrbit.conversationId) },
-        { id: 'conversation-locate', label: '在哪', icon: Crosshair, onClick: () => onLocateConversationSource?.(conversationOrbit.nodeId) },
-        activeConversationId === conversationOrbit.conversationId
-          ? { id: 'conversation-active', label: '当前承接', icon: CheckCircle2, readOnly: true }
-          : { id: 'conversation-activate', label: '设为当前', icon: Radio, onClick: () => onSetActiveConversation?.(conversationOrbit.conversationId) },
+        ...(byId.get(conversationOrbit.nodeId)?.conversation?.conversationArtifactId ? [{
+          id: 'conversation-relation', label: '关系', icon: GitBranch, onClick: () => {
+            const source = byId.get(conversationOrbit.nodeId)
+            if (!source?.conversation?.conversationArtifactId) return
+            beginRelationIntent(source.id, { x: source.x + source.width, y: source.y + source.height / 2 })
+          },
+        }] : []),
         markerRuntime ? (() => {
           const targetRef = { projectId: markerRuntime.projectId, kind: 'view' as const, id: conversationOrbit.nodeId }
           const marker = markerForNavigationTarget(markerRuntime.records, targetRef)
@@ -1544,7 +1547,10 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
             ? { id: 'conversation-marker', label: '取消导航地标', icon: MapPin, onClick: () => { void markerRuntime.deleteMarker(marker.id) } }
             : { id: 'conversation-marker', label: '固定到导航', icon: MapPin, onClick: () => { void markerRuntime.createMarker({ targetRef, scope: 'cross-surface' }) } }
         })() : { id: 'conversation-marker', label: '固定到导航', icon: MapPin, readOnly: true },
-        { id: 'conversation-status', label: conversationOrbit.statusLabel, icon: CircleDot, readOnly: true },
+        activeConversationId === conversationOrbit.conversationId
+          ? { id: 'conversation-active', label: '当前承接', icon: CheckCircle2, readOnly: true }
+          : { id: 'conversation-activate', label: '设为当前', icon: Radio, onClick: () => onSetActiveConversation?.(conversationOrbit.conversationId) },
+        { id: 'conversation-locate', label: '在哪', icon: Crosshair, onClick: () => onLocateConversationSource?.(conversationOrbit.nodeId) },
       ]}
     />
   )}
@@ -1607,7 +1613,7 @@ function CanvasCard({ projectId, node, density, zoom, showDetails, performancePr
     runtime: runtimeSignal,
     semantic: reviewPending ? 'waiting review' : pending || node.draft ? 'candidate draft' : undefined,
   })
-  return <div data-node-id={node.id} data-project-relation-target={node.entityKind !== 'conversation' ? node.id : undefined} data-project-view-drop-target={node.entityKind === 'conversation' && node.conversation ? conversationGlythDropTarget(node.conversation.id) : undefined} data-project-view-drop-label={node.entityKind === 'conversation' ? '给这段对话' : undefined} data-node-kind={node.kind} data-entity-kind={node.entityKind} data-node-visual-family={visualFamily} data-node-current={node.current || undefined} data-node-draft={node.draft || undefined} data-node-historical={node.historical || undefined} data-revision-count={node.revisionCount} data-result-group={node.resultGroupId} data-node-runtime={node.runtimeState} data-run-status={node.runStatus} data-artifact-id={node.artifactId} data-revision-id={node.revisionId} data-file-record-id={node.fileRecordId} data-current-revision={node.followsCurrentRevision || undefined} data-preview-status={node.previewStatus} data-view-of={node.viewOf} data-scope-id={node.scopeId} data-position-locked={node.positionLocked || undefined} data-context-only={node.contextOnly || undefined} data-attention-bucket={attentionBucket} data-reference-order={referenceOrder || undefined} data-collection-motion={collectionMotion?.phase} data-testid={`canvas-node-${node.id}`} role="button" tabIndex={0} aria-disabled={node.disabled || undefined} className={`canvas-node node-family-${node.kind} visual-family-${visualFamily} density-${density} ${node.kind} ${revisionStack ? 'revision-stack' : ''} ${selected ? 'selected' : ''} ${multiSelected ? 'multi-selected' : ''} ${pending ? 'pending' : ''} ${reviewPending ? 'review-pending' : ''} ${referenceOrder > 0 ? 'reference-picked' : ''} ${referenceReceptive ? 'is-reference-receptive' : ''} ${colonyCandidate ? 'is-colony-candidate' : ''} ${dragging ? 'dragging' : ''} ${resizing ? 'resizing' : ''} ${relationTarget ? 'is-relation-target' : ''} ${workspaceMember ? 'workspace-active-member' : ''} ${locatePulse ? 'locate-pulse' : ''} ${attentionBucket ? `attention-${attentionBucket}` : ''} ${collectionMotion ? `collection-${collectionMotion.phase}` : ''} ${node.error ? 'error' : ''} ${node.disabled ? 'disabled' : ''} ${node.positionLocked ? 'position-locked' : ''}`} style={{ left: node.x, top: node.y, width: node.width, height: node.height, '--node-ui-scale': String(1 / Math.max(.2, zoom)), '--glyth-ui-scale': String(1 / Math.max(.02, zoom)), '--canvas-zoom': String(zoom), '--lcos-drag-x': String(dragSignal?.x ?? 0), '--lcos-drag-y': String(dragSignal?.y ?? 0), '--lcos-collection-fold-x': `${collectionMotion?.dx ?? 0}px`, '--lcos-collection-fold-y': `${collectionMotion?.dy ?? 0}px` } as React.CSSProperties} onDragStart={(event) => event.preventDefault()} onContextMenu={(event) => event.preventDefault()} onPointerDown={(event) => { if (!node.disabled) onPointerDown(event) }} onClick={(event) => { event.stopPropagation(); if (!node.disabled) onClick(additiveSelection(event), event.currentTarget) }}>
+  return <div data-node-id={node.id} data-project-relation-target={node.entityKind !== 'conversation' ? node.id : undefined} data-project-view-drop-target={node.entityKind === 'conversation' && node.conversation ? conversationGlythDropTarget(node.conversation.id) : undefined} data-project-view-drop-label={node.entityKind === 'conversation' ? '给这段对话' : undefined} data-node-kind={node.kind} data-entity-kind={node.entityKind} data-node-visual-family={visualFamily} data-node-current={node.current || undefined} data-node-draft={node.draft || undefined} data-node-historical={node.historical || undefined} data-revision-count={node.revisionCount} data-result-group={node.resultGroupId} data-node-runtime={node.runtimeState} data-run-status={node.runStatus} data-artifact-id={node.artifactId} data-conversation-artifact-id={node.entityKind === 'conversation' ? node.conversation?.conversationArtifactId : undefined} data-revision-id={node.revisionId} data-file-record-id={node.fileRecordId} data-current-revision={node.followsCurrentRevision || undefined} data-preview-status={node.previewStatus} data-view-of={node.viewOf} data-scope-id={node.scopeId} data-position-locked={node.positionLocked || undefined} data-context-only={node.contextOnly || undefined} data-attention-bucket={attentionBucket} data-reference-order={referenceOrder || undefined} data-collection-motion={collectionMotion?.phase} data-testid={`canvas-node-${node.id}`} role="button" tabIndex={0} aria-disabled={node.disabled || undefined} className={`canvas-node node-family-${node.kind} visual-family-${visualFamily} density-${density} ${node.kind} ${revisionStack ? 'revision-stack' : ''} ${selected ? 'selected' : ''} ${multiSelected ? 'multi-selected' : ''} ${pending ? 'pending' : ''} ${reviewPending ? 'review-pending' : ''} ${referenceOrder > 0 ? 'reference-picked' : ''} ${referenceReceptive ? 'is-reference-receptive' : ''} ${colonyCandidate ? 'is-colony-candidate' : ''} ${dragging ? 'dragging' : ''} ${resizing ? 'resizing' : ''} ${relationTarget ? 'is-relation-target' : ''} ${workspaceMember ? 'workspace-active-member' : ''} ${locatePulse ? 'locate-pulse' : ''} ${attentionBucket ? `attention-${attentionBucket}` : ''} ${collectionMotion ? `collection-${collectionMotion.phase}` : ''} ${node.error ? 'error' : ''} ${node.disabled ? 'disabled' : ''} ${node.positionLocked ? 'position-locked' : ''}`} style={{ left: node.x, top: node.y, width: node.width, height: node.height, '--node-ui-scale': String(1 / Math.max(.2, zoom)), '--glyth-ui-scale': String(1 / Math.max(.02, zoom)), '--canvas-zoom': String(zoom), '--lcos-drag-x': String(dragSignal?.x ?? 0), '--lcos-drag-y': String(dragSignal?.y ?? 0), '--lcos-collection-fold-x': `${collectionMotion?.dx ?? 0}px`, '--lcos-collection-fold-y': `${collectionMotion?.dy ?? 0}px` } as React.CSSProperties} onDragStart={(event) => event.preventDefault()} onContextMenu={(event) => event.preventDefault()} onPointerDown={(event) => { if (!node.disabled) onPointerDown(event) }} onClick={(event) => { event.stopPropagation(); if (!node.disabled) onClick(additiveSelection(event), event.currentTarget) }}>
     {referenceOrder > 0 && <span className="lcos-reference-pick-badge" aria-label={`引用顺序 ${referenceOrder}`}>{referenceOrder}</span>}
     <span className="lcos-semantic-drop-handle" data-semantic-drop-handle aria-hidden="true" onClick={(event)=>event.stopPropagation()} title="Semantic Drop：拖到上下文或工作流（右键拖 / Alt+左拖）"><GripVertical size={11}/></span>
     {relationSource && <button data-testid={`relation-source-port-${node.id}`} className="lcos-relation-port" aria-label={`从 ${node.title} 建立关系`} title="关系已激活 · 拖动可精确连接，Esc 取消" onPointerDown={onLinkStart} onClick={(event) => event.stopPropagation()}><span aria-hidden="true" /></button>}

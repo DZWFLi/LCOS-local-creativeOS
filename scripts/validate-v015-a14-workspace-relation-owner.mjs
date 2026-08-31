@@ -44,9 +44,12 @@ const checks = [
     endpoints.includes("node.id.startsWith('workspace:')")
       && canvas.includes("id: 'workspace-relation'")
       && !canvas.includes('workspace-relation-notch')],
-  ['Conversation Glyth ordinary Relation endpoint is still not guessed after later A16 endpoint canonicalization',
-    endpoints.includes("if (node.entityKind === 'conversation') return null")
-      && !canvas.includes("id: 'conversation-relation'")],
+  ['A17 may admit artifact-backed Conversation without changing A14 Workspace ownership',
+    endpoints.includes("node.entityKind === 'conversation'")
+      && endpoints.includes('node.conversation?.conversationArtifactId?.trim()')
+      && endpoints.includes("entityType: 'artifact'")
+      && canvas.includes("id: 'conversation-relation'")
+      && canvas.includes("id: 'workspace-relation'")],
   ['A14 construction records Workspace WRONG_OWNER as closed while keeping semantic/hit-halo debts open',
     matrix.includes('A14 Workspace Relation Intent Ownership')
       && plan.includes('A14 Workspace Relation Intent Ownership')

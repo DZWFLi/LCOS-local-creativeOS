@@ -122,7 +122,7 @@ export function SurfaceObject({
     }
     const additive = additiveSelectionModifier(event)
     onSelect(node.id, additive)
-    if (node.entityKind === 'conversation' || additive) {
+    if (additive) {
       setOrbitOpen(false)
       return
     }
@@ -172,7 +172,7 @@ export function SurfaceObject({
         <span className="lcos-glyph-label">{displayNodeTitle(node)}</span>
       </button>
       {relationSource && <span data-testid={`relation-source-port-${node.id}`} className="lcos-relation-port lcos-surface-relation-port" style={{ '--canvas-zoom': String(zoom) } as CSSProperties} aria-hidden="true"><span/></span>}
-      {node.entityKind !== 'conversation' && <ProjectObjectOrbit open={orbitOpen} node={node} anchorRef={orbitAnchorRef} onClose={() => setOrbitOpen(false)} onOpen={openDeeper} {...(onRelation ? { onRelation } : {})} {...(onLocate ? { onLocate: () => onLocate(node.id) } : {})}/>}
+      <ProjectObjectOrbit open={orbitOpen} node={node} anchorRef={orbitAnchorRef} onClose={() => setOrbitOpen(false)} onOpen={openDeeper} {...(onRelation ? { onRelation } : {})} {...(onLocate ? { onLocate: () => onLocate(node.id) } : {})}/>
       <DropFeedbackLayer phase={dropFeedback.phase} hitElement={dropFeedback.hitElement} />
     </>
   }
@@ -209,7 +209,7 @@ export function SurfaceObject({
       {(selected || signal.state !== 'stable') && <span className="lcos-surface-system-signal" data-spatial-signal={selected && signal.state === 'stable' ? 'focus' : signal.state} aria-hidden="true"><LcosSignalGlyph state={selected && signal.state === 'stable' ? 'focus' : signal.state}/></span>}
     </button>
     {relationSource && <span data-testid={`relation-source-port-${node.id}`} className="lcos-relation-port lcos-surface-relation-port" style={{ '--canvas-zoom': String(zoom) } as CSSProperties} aria-hidden="true"><span/></span>}
-    {node.entityKind !== 'conversation' && <ProjectObjectOrbit open={orbitOpen} node={node} anchorRef={orbitAnchorRef} onClose={() => setOrbitOpen(false)} onOpen={openDeeper} {...(onRelation ? { onRelation } : {})} {...(onLocate ? { onLocate: () => onLocate(node.id) } : {})}/>}
+    <ProjectObjectOrbit open={orbitOpen} node={node} anchorRef={orbitAnchorRef} onClose={() => setOrbitOpen(false)} onOpen={openDeeper} {...(onRelation ? { onRelation } : {})} {...(onLocate ? { onLocate: () => onLocate(node.id) } : {})}/>
     <DropFeedbackLayer phase={dropFeedback.phase} hitElement={dropFeedback.hitElement} />
   </>
 }

@@ -1,6 +1,6 @@
 import type { CanvasNode } from '../../model'
 
-export type ProjectRelationEndpointType = 'view' | 'note' | 'scope' | 'workspace'
+export type ProjectRelationEndpointType = 'artifact' | 'view' | 'note' | 'scope' | 'workspace'
 
 export interface ProjectRelationEndpoint {
   readonly entityType: ProjectRelationEndpointType
@@ -15,10 +15,14 @@ const AGGREGATE_SCOPE_ENTITY_KINDS = new Set<CanvasNode['entityKind']>(['collect
  * Physical node identity and persisted Relation identity are deliberately not
  * assumed to be the same: a Collection/Context/Workflow container can be
  * rendered through an ArtifactView body while canonically representing Scope.
- * Conversation remains fail-close until ordinary Relation semantics are ruled.
+ * Conversation is admitted only through its canonical Artifact identity; receiver/context
+ * mapping identities remain separate and are never inferred here.
  */
 export function projectRelationEndpointForNode(node: CanvasNode): ProjectRelationEndpoint | null {
-  if (node.entityKind === 'conversation') return null
+  if (node.entityKind === 'conversation') {
+    const conversationArtifactId = node.conversation?.conversationArtifactId?.trim()
+    return conversationArtifactId ? { entityType: 'artifact', entityId: conversationArtifactId } : null
+  }
   if (node.kind === 'note' && !node.artifactId) {
     return node.anchors?.length ? { entityType: 'note', entityId: node.id } : null
   }

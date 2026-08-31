@@ -60,21 +60,24 @@ const checks = [
       && app.includes('targetEntityType: targetEndpoint.entityType, targetEntityId: targetEndpoint.entityId')
       && app.includes("origin: 'user', createdBy, confidence: 1")
       && app.includes('client.saveRelation(activeProjectId, relation)')],
-  ['Conversation ordinary Relation remains fail-close while aggregate endpoint semantics are owned by A16 rather than the transient gesture adapter',
-    endpoints.includes("if (node.entityKind === 'conversation') return null")
+  ['A17 supersedes Conversation fail-close only through a proven artifact endpoint while A13 remains physical-only',
+    endpoints.includes("node.entityKind === 'conversation'")
+      && endpoints.includes('node.conversation?.conversationArtifactId?.trim()')
+      && endpoints.includes("entityType: 'artifact'")
       && endpoints.includes("entityType: 'scope'")
       && endpoints.includes("entityType: 'workspace'")
-      && main.includes("if (link.current && node.entityKind === 'conversation')")],
+      && !main.includes("if (link.current && node.entityKind === 'conversation')")],
   ['A13 visual layer keeps source/target controls screen-space local and suppresses competing transient controls during Relation intent',
     css.includes('.lcos-surface-relation-port { pointer-events:none; }')
       && css.includes('.lcos-project-material-relation-live')
       && css.includes('vector-effect:non-scaling-stroke;')
       && css.includes('.is-project-relation-intent :is(.lcos-semantic-drop-handle,.lcos-workflow-port,.lcos-workflow-bypass)')],
-  ['A13 shared adapter remains persistence-agnostic after A16; Workspace Main source ownership stays A14 and Conversation ordinary Relation stays outside it',
+  ['A13 shared adapter remains persistence-agnostic after A17; Workspace and Conversation semantics stay outside the adapter',
     adapter.includes('This adapter owns only transient pointer/target state')
       && main.includes("id: 'workspace-relation'")
+      && main.includes("id: 'conversation-relation'")
       && !main.includes('workspace-relation-notch')
-      && endpoints.includes("if (node.entityKind === 'conversation') return null")
+      && endpoints.includes("entityType: 'artifact'")
       && !adapter.includes('saveRelation')
       && !adapter.includes('genericConnect')],
 ]

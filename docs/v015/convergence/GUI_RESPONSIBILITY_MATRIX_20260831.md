@@ -586,3 +586,19 @@ Fresh stacked census after A15 finds that the remaining Context/Workflow endpoin
 | Core persistence | existing App/LocalCore `saveRelation` after endpoint resolution | second Relation store / generic `connect()` | KEEP |
 
 A16 is endpoint canonicalization, not a universal Relation ontology. Main persistence and Workflow action-link truth remain separate.
+
+---
+
+# A17 Conversation Semantic Relation
+
+| Domain | Canonical owner after A17 | Forbidden regression | Status |
+|---|---|---|---|
+| Conversation ordinary Project Semantic Relation endpoint | Conversation Artifact identity (`artifact:<conversationArtifactId>`) | receiver id / connectedConversationId / conversationViewId as Domain truth | SOURCE/STATIC TARGET |
+| Main Glyth Relation launch | specialized Conversation `ObjectOrbit → Relation` | read-only status satellite occupying the Relation slot | SOURCE/STATIC TARGET |
+| Main Glyth receptor | explicit conversationArtifact-backed Conversation receptor + A15 16px halo | generic `[data-node-id]` fallback | SOURCE/STATIC TARGET |
+| Context/Workflow Glyth physical gesture | existing A13 shared gesture + A16 eligibility resolver | per-Surface duplicate gesture machinery | KEEP |
+| Context/Workflow Conversation persistence | A16 physical-node resolver → artifact endpoint → existing saveRelation | persisting physical conversationViewId as view truth | SOURCE/STATIC TARGET |
+| Conversation Context Mapping | Semantic Drop / `conversation_context` / Context Field | ordinary Relation pretending to be context binding | KEEP / SEPARATE |
+| Conversation without artifact identity | fail-close | guessing any receiver/view identity | KEEP |
+
+A17 resolves the previous `SEMANTIC_OWNER_UNPROVEN` state through later L0 + structural Core evidence; the earlier fail-close remains valid historical protection, not an error to erase.

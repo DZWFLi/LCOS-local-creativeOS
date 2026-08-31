@@ -34,8 +34,9 @@ describe('projectRelationEndpointForNode', () => {
     expect(projectRelationEndpointForNode(node({ id: 'workspace:ws-1', entityKind: 'workspace' }))).toEqual({ entityType: 'workspace', entityId: 'ws-1' })
   })
 
-  it('keeps Conversation ordinary Relation fail-close', () => {
-    expect(projectRelationEndpointForNode(node({ id: 'conversation-view', entityKind: 'conversation' }))).toBeNull()
+  it('uses the Conversation Artifact as ordinary semantic Relation truth and fails closed without canonical artifact identity', () => {
+    expect(projectRelationEndpointForNode(node({ id: 'conversation-view', entityKind: 'conversation', conversation: { id: 'session-1', title: 'Session', conversationArtifactId: 'artifact-conversation' } }))).toEqual({ entityType: 'artifact', entityId: 'artifact-conversation' })
+    expect(projectRelationEndpointForNode(node({ id: 'conversation-without-artifact', entityKind: 'conversation', artifactId: 'presentation-artifact-only', conversation: { id: 'session-2', title: 'Unready Session' } }))).toBeNull()
   })
 
   it('fails closed for an id that is not one of the actual projected nodes', () => {

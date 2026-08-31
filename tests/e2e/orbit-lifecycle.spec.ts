@@ -130,6 +130,47 @@ test('outside press and satellite action close Orbit', async ({ page }) => {
   await expect(orbitLayer).toHaveCount(0, { timeout: 2_000 })
 })
 
+test('conversationArtifact-backed Glyth is an ordinary Relation source and 16px-halo target without becoming Conversation Context Mapping', async ({ page }) => {
+  const canvas = await openCanvas(page)
+  await closeContinuationPanel(page)
+
+  const conversationNode = page.locator('[data-node-id][data-entity-kind="conversation"][data-conversation-artifact-id]').first()
+  const targetNode = page.locator('[data-node-id][data-artifact-id]:not([data-entity-kind="conversation"])').first()
+  await expect(conversationNode).toBeVisible({ timeout: 15_000 })
+  await expect(targetNode).toBeVisible({ timeout: 15_000 })
+
+  const conversationNodeId = await conversationNode.getAttribute('data-node-id')
+  const targetNodeId = await targetNode.getAttribute('data-node-id')
+  expect(conversationNodeId).toBeTruthy()
+  expect(targetNodeId).toBeTruthy()
+  const edgeCountBefore = Number(await canvas.getAttribute('data-edge-count'))
+
+  await conversationNode.locator('.lcos-conversation-glyth').click()
+  await expect(page.locator('[data-lcos-orbit-action="conversation-relation"]')).toHaveCount(1)
+  await expect(page.locator('[data-lcos-orbit-action="conversation-status"]')).toHaveCount(0)
+  await page.locator('[data-lcos-orbit-action="conversation-relation"]').click()
+  await expect(page.getByTestId(`relation-source-port-${conversationNodeId}`)).toBeVisible()
+
+  const targetBounds = await targetNode.boundingBox()
+  expect(targetBounds).not.toBeNull()
+  const targetHalo = { x: targetBounds!.x - 14, y: targetBounds!.y + targetBounds!.height / 2 }
+  await page.mouse.move(targetHalo.x, targetHalo.y, { steps: 6 })
+  await expect(targetNode).toHaveClass(/is-relation-target/)
+  await page.mouse.click(targetHalo.x, targetHalo.y)
+  await expect.poll(async () => Number(await canvas.getAttribute('data-edge-count'))).toBe(edgeCountBefore + 1)
+
+  await targetNode.click()
+  await page.locator('[data-lcos-orbit-action="object-relation"]').click()
+  await expect(page.getByTestId(`relation-source-port-${targetNodeId}`)).toBeVisible()
+  const conversationBounds = await conversationNode.boundingBox()
+  expect(conversationBounds).not.toBeNull()
+  const conversationHalo = { x: conversationBounds!.x - 14, y: conversationBounds!.y + conversationBounds!.height / 2 }
+  await page.mouse.move(conversationHalo.x, conversationHalo.y, { steps: 6 })
+  await expect(conversationNode).toHaveClass(/is-relation-target/)
+  await page.mouse.click(conversationHalo.x, conversationHalo.y)
+  await expect.poll(async () => Number(await canvas.getAttribute('data-edge-count'))).toBe(edgeCountBefore + 2)
+})
+
 test('ordinary Artifact gets Universal ObjectOrbit and single Selection Strip stays retired', async ({ page }) => {
   await openCanvas(page)
   await closeContinuationPanel(page)
