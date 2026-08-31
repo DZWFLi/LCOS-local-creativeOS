@@ -329,3 +329,76 @@ Phase B admission          = NO
 ```
 
 Remaining Relation debt is deliberately not hidden: Workspace legacy source owner, Conversation Glyth endpoint semantics, aggregate endpoint semantics, final receptor motor-tolerance/hit-halo, and real browser/manual save→reload proof.
+
+---
+
+# A14 context/owner index update
+
+Fresh parity census after merged A13 (`6312ace`) reorders remaining Relation debt by type:
+
+1. Workspace permanent/hover source notch = `WRONG_OWNER` → A14 now owns retirement.
+2. Conversation ordinary Relation = semantic endpoint unresolved; Conversation Context Mapping is already a separate canonical Semantic Drop/Assembly path.
+3. Context/Workflow aggregate scope/workspace relation = endpoint-adapter debt, not a reason to lie to the view-only A13 adapter.
+4. final Relation receptor = explicit extra 12–18px screen-space halo acceptance remains open.
+
+A14 production owner:
+`Workspace header activation → local ObjectOrbit → Relation → temporary source port → existing Main relation session`.
+
+---
+
+# A15 context/owner index update
+
+User explicitly instructed continuation before a returned A14 local merged HEAD. Provenance is therefore recorded as a stacked source series:
+
+```text
+real RC: 6312ace
+stack: A14 → A15
+```
+
+A15 source of truth:
+
+- `MANDATORY_PRECONSTRUCTION_CONTEXT_20260831.md`: Relation receptive edge requires extra 12–18px halo;
+- `projectMaterialRelationGesture.tsx`: 16px screen-space resolver, explicit receptor selectors only;
+- Main Workspace keeps `workspace:<id>` endpoint;
+- Context / Workflow keep A13 canonical persistence callbacks;
+- Relation active temporarily outranks Marquee / outer material Drag for halo click commitment.
+
+Conversation ordinary Relation and aggregate scope/workspace endpoint semantics remain fail-close.
+
+Post-A15 next pointer is deliberately **not named** until real local A14+A15 merge validation and fresh parity census return.
+
+
+---
+
+# A16 context/owner index update
+
+User explicitly continued before a returned A14+A15 local merged HEAD, so authoritative real RC remains `6312ace` and A16 is stacked source/static provenance.
+
+Fresh endpoint census corrects the earlier narrow debt label:
+
+```text
+not only scope:/workspace: projection support
+but physical node id → canonical Relation endpoint identity
+```
+
+Canonical mapping now targeted by A16:
+
+- ordinary View → `view`;
+- anchored Core Note → `note`;
+- aggregate container + `opensScopeId` → `scope`;
+- `scope:*` → `scope`;
+- `workspace:*` → `workspace`;
+- Conversation / unresolved local-only shell → fail-close.
+
+Primary current files:
+
+- `apps/web/src/features/spatial/projectRelationEndpoint.ts`
+- `apps/web/src/features/spatial/projectMaterialRelationGesture.tsx`
+- `apps/web/src/features/surfaces/ContextSpaceSurface.tsx`
+- `apps/web/src/features/surfaces/WorkflowSurface.tsx`
+- `apps/web/src/App.tsx`
+- `scripts/validate-v015-a16-canonical-relation-endpoint.mjs`
+- `docs/v015/convergence/PHASE_A_STACKED_PARITY_CENSUS_AFTER_A15_20260831.md`
+- `docs/v015/convergence/LCOS_v015_A16_CanonicalRelationEndpointAdapter_CLOSEOUT_20260831.md`
+
+Conversation ordinary Relation remains the unresolved semantic debt; A16 does not infer it.

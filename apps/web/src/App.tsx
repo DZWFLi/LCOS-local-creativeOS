@@ -95,6 +95,7 @@ import { setOcrClient } from './features/ocr/ocrRuntime'
 import { orderProjectRailViews } from './features/shell/workspaceRailOrder'
 import { deriveContextGraphAutoNodeIds, mergeContextGraphNodeIds } from './features/context/contextGraphPopulation'
 import { materializeProjectEntityNodes, projectEntityNodeIds, semanticRefsForSourceIds } from './features/entities/projectEntityProjection'
+import { projectRelationEndpointForNodeId } from './features/spatial/projectRelationEndpoint'
 import { ARRANGE_SURFACE_DROP_TARGET_ID, CONTEXT_GRAPH_SURFACE_DROP_TARGET_ID, CONTEXT_SURFACE_DROP_TARGET_ID, NEW_SCENE_DROP_TARGET_ID, WORKFLOW_GRAPH_SURFACE_DROP_TARGET_ID, WORKFLOW_SURFACE_DROP_TARGET_ID } from './features/spatial/semanticDrop'
 import { ProjectFocusNavigator } from './features/focus/ProjectFocusNavigator'
 import { ArtifactLocationOrbit } from './features/focus/ArtifactLocationOrbit'
@@ -7614,14 +7615,20 @@ export function App() {
           return [...semantic.viewIds, ...projectEntityNodeIds(semantic.entityRefs, projectPresentationNodes)]
         },
         onCreateWorkflowOperatorNode: createWorkflowOperatorNode,
-        onCreateDomainRelation: async (fromViewId, toViewId, kind, createdBy = 'workflow-canvas') => {
+        onCreateDomainRelation: async (fromNodeId, toNodeId, kind, createdBy = 'workflow-canvas') => {
           if (bootMode !== 'runtime') { setNotice('原型模式不写入项目关系'); return }
+          const sourceEndpoint = projectRelationEndpointForNodeId(fromNodeId, projectPresentationNodes)
+          const targetEndpoint = projectRelationEndpointForNodeId(toNodeId, projectPresentationNodes)
+          if (!sourceEndpoint || !targetEndpoint) {
+            setNotice('关系端点语义尚未确认；已停止写入')
+            throw new Error('RELATION_ENDPOINT_UNPROVEN')
+          }
           const now = new Date().toISOString()
           const relation = {
             id: createId('relation'),
             projectId: activeProjectId,
-            sourceEntityType: 'view', sourceEntityId: fromViewId,
-            targetEntityType: 'view', targetEntityId: toViewId,
+            sourceEntityType: sourceEndpoint.entityType, sourceEntityId: sourceEndpoint.entityId,
+            targetEntityType: targetEndpoint.entityType, targetEntityId: targetEndpoint.entityId,
             kind: kind.trim() || 'reference',
             origin: 'user', createdBy, confidence: 1,
             createdAt: now, updatedAt: now,

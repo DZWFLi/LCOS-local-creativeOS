@@ -4818,37 +4818,12 @@
 .lcos-reconstructed .lcos-relation-port:hover { opacity:1; transform:scale(calc(1 / var(--canvas-zoom, 1))); }
 .lcos-reconstructed .canvas.is-reference-pick .lcos-relation-port { opacity:0 !important; pointer-events:none; }
 
-/* Legacy Workspace relation source remains temporarily until Workspace receives the same object-local intent owner.
-   Do not reuse this notch for ordinary canvas objects. */
-.lcos-reconstructed .lcos-relation-notch {
-  position:absolute;
-  z-index:var(--lcos-z-content-control);
-  right:-7px;
-  top:calc(50% - 13px);
-  width:12px;
-  height:26px;
-  padding:0;
-  border:0;
-  background:transparent;
-  opacity:0;
-  cursor:crosshair;
-  transform:scale(calc(.86 / var(--canvas-zoom, 1)));
-  transform-origin:center;
-  transition:opacity 120ms ease, transform 150ms cubic-bezier(.22,1,.36,1);
+/* A14 · Workspace retires the last permanent/hover Relation notch.
+   Workspace now wakes the same temporary source port only after its local Orbit Relation intent. */
+.lcos-reconstructed .workspace-relation-port {
+  right:-12px;
+  top:calc(50% - 18px);
 }
-.lcos-reconstructed .lcos-relation-notch > span {
-  display:block;
-  width:3px;
-  height:18px;
-  margin:auto;
-  border-radius:999px;
-  background:rgba(var(--lcos-ui-signal-rgb), .48);
-  box-shadow:0 0 10px rgba(var(--lcos-ui-signal-rgb), .18);
-}
-.lcos-reconstructed .workspace-frame:hover > .lcos-relation-notch,
-.lcos-reconstructed .canvas.is-relation-dragging .workspace-frame > .lcos-relation-notch { opacity:.72; }
-.lcos-reconstructed .lcos-relation-notch:hover { opacity:1 !important; transform:scale(calc(1 / var(--canvas-zoom, 1))); }
-.lcos-reconstructed .canvas.is-reference-pick .lcos-relation-notch { opacity:0 !important; pointer-events:none; }
 .lcos-reconstructed .canvas.is-relation-dragging,
 .lcos-reconstructed .canvas.is-relation-intent { cursor:crosshair; }
 .lcos-reconstructed .canvas-node.is-relation-target::after,

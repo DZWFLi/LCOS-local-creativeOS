@@ -785,3 +785,109 @@ Phase A Relation: OPEN (Workspace / Conversation / hit-halo/runtime debts remain
 Phase A overall: OPEN
 Phase B admission: NO
 ```
+
+---
+
+# 24. Phase A micro-patch · A14 Workspace Relation Intent Ownership
+
+Fresh parity census after the real local A13 merge chooses Workspace source ownership as the next proposition because it is the remaining explicit Relation `WRONG_OWNER`.
+
+A14 target:
+
+```text
+Workspace activate/header click
+→ local Orbit
+→ Relation
+→ temporary source port
+→ existing Main Relation commit
+```
+
+Retire:
+- `workspace-relation-notch-*`;
+- `.lcos-relation-notch` hover source CSS.
+
+Preserve:
+- canonical `workspace:<workspaceId>` aggregate endpoint;
+- Main relation persistence;
+- Workspace move/resize/activation;
+- A13 Context/Workflow view-material adapter;
+- Conversation Context Mapping as a separate Semantic Drop/Glyth language.
+
+Still open after A14:
+- Conversation ordinary Relation canonical endpoint semantics;
+- Context/Workflow aggregate `scope:*` / `workspace:*` relation endpoint adapter;
+- final receptor screen-space hit-slop / 12–18px edge-halo motor-tolerance acceptance;
+- real Browser E2E and three-Surface/Workspace Human Product Smoke.
+
+Therefore A14 does not authorize Phase B.
+
+---
+
+# 25. Phase A stacked micro-patch · A15 Relation Receptor Screen-space Halo
+
+The user explicitly requested continuation before returning a real local A14 merged HEAD. This section therefore records a **stacked source/static continuation**, not fabricated runtime proof.
+
+Authoritative real local RC remains `6312ace`; source stack is `6312ace → A14 → A15`.
+
+Fresh stacked census reclassifies the remaining items:
+
+- Conversation ordinary Relation = `SEMANTIC_OWNER_UNPROVEN`, remain fail-close;
+- Context/Workflow aggregate `scope:*` / `workspace:*` = endpoint-adapter debt, not next owner cleanup;
+- receptor motor tolerance = explicit L0 acceptance gap, therefore A15.
+
+A15 target:
+
+```text
+explicit Relation receptor body
++ invisible 16px screen-space radial halo
+→ receptive target
+→ existing canonical commit
+```
+
+The halo does not alter visual bounds / Selection bounds / layout geometry. Context and Workflow also yield Marquee/material Drag pointer ownership while Relation is active so a halo click can actually commit.
+
+A15 does not widen Conversation or aggregate endpoint semantics.
+
+After A15 source/static, Phase A remains OPEN for semantic endpoint debt plus real local Browser/Human proof. Phase B remains NOT ADMITTED.
+
+
+---
+
+# 26. Phase A stacked micro-patch · A16 Canonical Relation Endpoint Adapter
+
+The user explicitly requested continuation before returning a real local A14+A15 merged HEAD. Provenance therefore remains:
+
+```text
+real RC 6312ace
+→ A14
+→ A15
+→ A16 source/static
+```
+
+Fresh source census finds that the old Context/Workflow direct Relation save path still assumes:
+
+```text
+physical node id == canonical view id
+```
+
+That is false for already-proven Project object species:
+
+- anchored Core Note → `note`;
+- Collection/Context/Workflow container View with `opensScopeId` → `scope`;
+- explicit `scope:*` projection → `scope`;
+- explicit `workspace:*` projection → `workspace`.
+
+A16 adds a shared canonical endpoint resolver and keeps Conversation ordinary Relation fail-close.
+
+Target:
+
+```text
+A13 physical gesture
+→ A15 receptor tolerance
+→ A16 physical-id → canonical endpoint resolution
+→ existing Surface-provenance saveRelation
+```
+
+No generic `connect()` is introduced. Main relation persistence, A14 Workspace source owner, Conversation Context Mapping, and Workflow Step/action linking remain separate truths.
+
+After A16 source/static, Phase A remains OPEN for Conversation semantic adjudication plus real local Browser/Human proof. Phase B remains NOT ADMITTED.

@@ -25,11 +25,12 @@ const checks = [
       && css.includes('width:24px;')
       && css.includes('height:36px;')
       && css.includes('scale(calc(.92 / var(--canvas-zoom, 1)))')],
-  ['Legacy workspace notch is explicitly isolated as debt instead of leaking back onto ordinary nodes',
-    css.includes('Legacy Workspace relation source remains temporarily')
-      && css.includes('.workspace-frame:hover > .lcos-relation-notch')
+  ['A12 ordinary-object notch retirement remains valid after the later Workspace owner migration',
+    !canvas.includes('relation-notch-${node.id}')
       && !css.includes('.canvas-node:hover > .lcos-relation-notch')
-      && !css.includes('.canvas-node.selected > .lcos-relation-notch')],
+      && !css.includes('.canvas-node.selected > .lcos-relation-notch')
+      && !canvas.includes('workspace-relation-notch')
+      && !css.includes('.workspace-frame:hover > .lcos-relation-notch')],
   ['Relation intent follows pointer and target click commits through existing canonical relation path',
     canvas.includes('if (link.current && link.current.from !== node.id)')
       && canvas.includes('connect(link.current.from, node.id)')
@@ -46,10 +47,10 @@ const checks = [
     browser.includes('data-lcos-orbit-action="object-relation"')
       && browser.includes('relation-source-port-')
       && !browser.includes('anchor-out-')],
-  ['A12 does not pretend Conversation/Workspace/cross-surface Relation parity is complete',
+  ['A12 still does not invent Conversation Relation semantics; Workspace source migration is owned by later A14',
     !orbit.includes('conversation-relation')
-      && canvas.includes('workspace-relation-notch')
-      && css.includes('Legacy Workspace relation source remains temporarily')],
+      && canvas.includes("id: 'workspace-relation'")
+      && canvas.includes('workspace-relation-source-port-')],
 ]
 
 let passed = 0

@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import type { AttentionBucketV0, ConnectedConversationV1, RuntimeProviderStatus } from '@local-creative-os/contracts'
-import { CheckCircle2, CircleDot, Copy, CopyPlus, Crosshair, FolderTree, GripVertical, LayoutGrid, LassoSelect, MapPin, MessageSquare, Radio, RotateCcw, Trash2, X } from 'lucide-react'
+import { CheckCircle2, CircleDot, Copy, CopyPlus, Crosshair, FolderTree, GitBranch, GripVertical, LayoutGrid, LassoSelect, MapPin, MessageSquare, Radio, RotateCcw, Trash2, X } from 'lucide-react'
 import type { Camera, CanvasEdge, CanvasNode, NodeDisplayMode, RunStatus, WorkspaceFrameVM } from '../../model'
 import { getSelectionBounds, nodeDensity } from './canvasGeometry'
 import { getVisualSelectionBounds, MAIN_CANVAS_GRID_STEP, nodeVisualBounds, nodeVisualInsets } from './canvasVisualGeometry'
@@ -44,7 +44,7 @@ import { ProjectObjectOrbit } from '../ui/ProjectObjectOrbit'
 import { SelectionGroupActions, type SelectionGroupAction } from '../ui/SelectionGroupActions'
 import { BirthProvenanceBadge } from '../provenance/BirthProvenanceBadge'
 import { sessionPhaseLabel } from '../conversations/conversationLifecycle'
-import { projectMaterialRelationTargetAt } from '../spatial/projectMaterialRelationGesture'
+import { projectMaterialRelationTargetAt, relationTargetWithinScreenHaloAt } from '../spatial/projectMaterialRelationGesture'
 
 interface Props {
   projectId?: string
@@ -250,13 +250,20 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
   // A09: ordinary Project objects now share the same ObjectOrbit behavior shell.
   // This state is Presentation-only; the Project object remains canonical truth.
   const [projectObjectOrbit, setProjectObjectOrbit] = useState<{ anchor: Element; nodeId: string } | null>(null)
+  // A14: Workspace is a recoverable working-set projection, not an ordinary CanvasCard,
+  // but its explicit Relation source still follows the same local Orbit intent grammar.
+  // This is Presentation-only and does not invent a second Workspace selection truth.
+  const [workspaceOrbit, setWorkspaceOrbit] = useState<{ anchor: Element; workspaceId: string; label: string } | null>(null)
+  const suppressWorkspaceOrbitClick = useRef<string | null>(null)
   const conversationOrbitAnchor = conversationOrbit?.anchor ?? null
   const projectObjectOrbitAnchor = projectObjectOrbit?.anchor ?? null
+  const workspaceOrbitAnchor = workspaceOrbit?.anchor ?? null
   // Orbit owns a stable anchor ref object. Recreating `{ current: anchor }` inline on every
   // ProjectCanvas render reattaches ObjectOrbit's outside-pointer listener even when the
   // actual anchor element has not changed.
   const conversationOrbitAnchorRef = useMemo(() => ({ current: conversationOrbitAnchor }), [conversationOrbitAnchor])
   const projectObjectOrbitAnchorRef = useMemo(() => ({ current: projectObjectOrbitAnchor }), [projectObjectOrbitAnchor])
+  const workspaceOrbitAnchorRef = useMemo(() => ({ current: workspaceOrbitAnchor }), [workspaceOrbitAnchor])
   const projectObjectOrbitNode = useMemo(() => projectObjectOrbit === null ? null : nodes.find((node) => node.id === projectObjectOrbit.nodeId) ?? null, [nodes, projectObjectOrbit])
   const markerRuntime = useProjectSpatialMarkersOrNull()
   const clearColonyLasso = () => {
@@ -288,6 +295,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
     if (!selectionComposerVisible) return
     setConversationOrbit(null)
     setProjectObjectOrbit(null)
+    setWorkspaceOrbit(null)
   }, [selectionComposerVisible])
   const toWorld = (clientX: number, clientY: number, rect: DOMRect) => spatialScreenToWorld(clientX, clientY, rect, camera)
   const colonyCandidatesForPoints = (points: readonly { x: number; y: number }[]) => points.length < 3 ? [] : nodes
@@ -315,6 +323,8 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
     padding: 92,
   })
   const effectiveWorkspaceFrames = workspaceFrames
+  const workspaceOrbitFrame = workspaceOrbit === null ? null : effectiveWorkspaceFrames.find((frame) => frame.workspaceId === workspaceOrbit.workspaceId) ?? null
+  useEffect(() => { if (workspaceOrbit !== null && workspaceOrbitFrame === null) setWorkspaceOrbit(null) }, [workspaceOrbit, workspaceOrbitFrame])
   const lod = spatialLodForCount(spatialNodes.length)
   const renderNodes = useMemo(() => {
     const keep = new Set([...selectedIds, ...(pendingId ? [pendingId] : [])])
@@ -695,11 +705,10 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
   const relationTargetAt = (clientX: number, clientY: number) => {
     const projectMaterial = projectMaterialRelationTargetAt(clientX, clientY, link.current?.from)
     if (projectMaterial) return projectMaterial
-    // Workspace still owns its legacy endpoint semantics in Phase A; keep that
-    // receptor explicit rather than falling back to every data-node-id (which
-    // previously made Conversation Glyth an accidental Relation endpoint).
-    const workspace = document.elementFromPoint(clientX, clientY)?.closest<HTMLElement>('[data-relation-target]')
-    return workspace?.dataset.relationTarget ?? null
+    // Workspace keeps its explicit aggregate endpoint semantics after A14.
+    // A15 only adds the same screen-space receptor tolerance; it does not restore
+    // generic data-node-id fallback or make Conversation Glyth an accidental endpoint.
+    return relationTargetWithinScreenHaloAt(clientX, clientY, '[data-relation-target]', 'data-relation-target', link.current?.from)
   }
   const alignmentGuideFor = (node: CanvasNode, x: number, y: number, excludedIds: readonly string[]) => {
     if (!gridSnapEnabled) return null
@@ -1230,6 +1239,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
     if (workspaceDrag.current) {
       const item = workspaceDrag.current
       item.moved = item.moved || Math.hypot(event.clientX - item.startX, event.clientY - item.startY) > 2
+      if (item.moved) suppressWorkspaceOrbitClick.current = item.workspaceId
       autoPanPointer.current = { x: event.clientX, y: event.clientY }
       updateWorkspaceDragMembers(item)
       scheduleAutoPan({ x: event.clientX, y: event.clientY })
@@ -1363,9 +1373,31 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
       })}
       {colonyLassoPoints.length > 1 && <svg className="lcos-colony-lasso-svg" width="1" height="1" aria-hidden="true"><path d={`M ${colonyLassoPoints.map((point) => `${point.x} ${point.y}`).join(' L ')}${colonyLassoPoints.length > 2 ? ' Z' : ''}`}/></svg>}
       {effectiveWorkspaceFrames.map((frame) => <div key={frame.workspaceId} data-testid={`workspace-frame-${frame.workspaceId}`} data-workspace-frame={frame.workspaceId} data-relation-target={`workspace:${frame.workspaceId}`} data-member-count={frame.memberViewIds.length} className={`workspace-frame ${frame.active ? 'active' : ''} ${draggingWorkspaceId === frame.workspaceId ? 'dragging' : ''} ${relationTargetId === `workspace:${frame.workspaceId}` ? 'is-relation-target' : ''}`} style={{ left: frame.bounds.x, top: frame.bounds.y, width: frame.bounds.width, height: frame.bounds.height }}>
-        <button data-testid={`workspace-frame-header-${frame.workspaceId}`} className="workspace-frame-header" type="button" onClick={(event) => { event.stopPropagation(); onWorkspaceActivate?.(frame.workspaceId) }} onPointerDown={(event) => {
+        <button data-testid={`workspace-frame-header-${frame.workspaceId}`} className="workspace-frame-header" type="button" onClick={(event) => {
+          event.stopPropagation()
+          onWorkspaceActivate?.(frame.workspaceId)
+          if (surfaceMode !== 'project') return
+          if (suppressWorkspaceOrbitClick.current === frame.workspaceId) { suppressWorkspaceOrbitClick.current = null; return }
+          setConversationOrbit(null)
+          setProjectObjectOrbit(null)
+          setWorkspaceOrbit({ anchor: event.currentTarget, workspaceId: frame.workspaceId, label: frame.label })
+        }} onPointerDown={(event) => {
           if (locked || event.button !== 0) return
+          if (link.current) {
+            event.preventDefault(); event.stopPropagation(); suppressWorkspaceOrbitClick.current = frame.workspaceId
+            const target = `workspace:${frame.workspaceId}`
+            if (link.current.from !== target) connect(link.current.from, target)
+            link.current = null
+            linkTarget.current = null
+            setRelationTargetId(null)
+            setRelationSourceId(null)
+            linkStart.current = null
+            linkMoved.current = false
+            setLinkPoint(null)
+            return
+          }
           event.preventDefault(); event.stopPropagation()
+          suppressWorkspaceOrbitClick.current = null
           const members = frame.memberViewIds.map((id) => workspaceMemberNodes.find((node) => node.id === id)).filter((node): node is CanvasNode => Boolean(node)).map((node) => ({ id: node.id, x: node.x, y: node.y }))
           if (!members.length) return
           workspaceDrag.current = { workspaceId: frame.workspaceId, startX: event.clientX, startY: event.clientY, members, moved: false, frameBounds: frame.bounds, currentBounds: frame.bounds }
@@ -1376,7 +1408,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
         }}>
           <span>{frame.label}</span><b>{frame.active ? '当前 · ' : ''}{frame.memberViewIds.length} 项</b>
         </button>
-        {surfaceMode === 'project' && <button data-testid={`workspace-relation-notch-${frame.workspaceId}`} className="lcos-relation-notch workspace-relation-notch" type="button" aria-label={`从 Workspace ${frame.label} 建立明确关系`} title="拖动边缘建立关系" onPointerDown={(event) => beginRelation(`workspace:${frame.workspaceId}`, event, { x: frame.bounds.x + frame.bounds.width, y: frame.bounds.y + frame.bounds.height / 2 })}><span aria-hidden="true" /></button>}
+        {surfaceMode === 'project' && relationSourceId === `workspace:${frame.workspaceId}` && <button data-testid={`workspace-relation-source-port-${frame.workspaceId}`} className="lcos-relation-port workspace-relation-port" type="button" aria-label={`从 Workspace ${frame.label} 建立关系`} title="关系已激活 · 拖动可精确连接，Esc 取消" onPointerDown={(event) => beginRelation(`workspace:${frame.workspaceId}`, event, { x: frame.bounds.x + frame.bounds.width, y: frame.bounds.y + frame.bounds.height / 2 })} onClick={(event) => event.stopPropagation()}><span aria-hidden="true" /></button>}
         <button data-testid={`workspace-frame-resize-${frame.workspaceId}`} className="workspace-frame-resize" type="button" aria-label={`调整 ${frame.label} 框体大小`} title="拖动调整框体范围（不影响成员位置）" onPointerDown={(event) => {
           if (locked || event.button !== 0) return
           event.preventDefault(); event.stopPropagation()
@@ -1480,6 +1512,17 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
       onOpen={() => { setProjectObjectOrbit(null); onDoubleClick(projectObjectOrbitNode.id) }}
       onRelation={() => beginRelationIntent(projectObjectOrbitNode.id, { x: projectObjectOrbitNode.x + projectObjectOrbitNode.width, y: projectObjectOrbitNode.y + projectObjectOrbitNode.height / 2 })}
       {...(onFocusNode ? { onLocate: () => onFocusNode(projectObjectOrbitNode.id) } : {})}
+    />
+  )}
+  {workspaceOrbit !== null && workspaceOrbitFrame !== null && surfaceMode === 'project' && (
+    <ObjectOrbit
+      open
+      onClose={() => setWorkspaceOrbit(null)}
+      anchorRef={workspaceOrbitAnchorRef}
+      ariaLabel={`工作现场「${workspaceOrbit.label}」的动作`}
+      actions={[
+        { id: 'workspace-relation', label: '关系', icon: GitBranch, primary: true, onClick: () => beginRelationIntent(`workspace:${workspaceOrbit.workspaceId}`, { x: workspaceOrbitFrame.bounds.x + workspaceOrbitFrame.bounds.width, y: workspaceOrbitFrame.bounds.y + workspaceOrbitFrame.bounds.height / 2 }) },
+      ]}
     />
   )}
   {conversationOrbit !== null && (

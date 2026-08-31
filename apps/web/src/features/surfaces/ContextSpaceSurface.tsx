@@ -34,7 +34,8 @@ import { resolveSurfaceIntent, type SurfaceIntent } from '../spatial/model/surfa
 import { AgentSurfaceComposer } from './AgentSurfaceComposer'
 import type { SurfaceElement } from '../spatial/model/surfaceElementTypes'
 import { LCOS_MINDMAP_BRANCH_EXTRACT_EVENT } from '../canvas/MindMapNoteVisual'
-import { isProjectViewRelationEligible, ProjectMaterialRelationLiveEdge, useProjectMaterialRelationGesture } from '../spatial/projectMaterialRelationGesture'
+import { projectMaterialRelationTargetAt, ProjectMaterialRelationLiveEdge, useProjectMaterialRelationGesture } from '../spatial/projectMaterialRelationGesture'
+import { isProjectRelationEligible } from '../spatial/projectRelationEndpoint'
 
 interface Props {
   projectId: string
@@ -53,7 +54,7 @@ interface Props {
   /** G-4 导图分支摘取/外部文本 → 在当前 Context scope 落一个新文本节点（复用主画布 pasteTextAsNode 链路）。 */
   onExternalTextDrop?: (text: string, x: number, y: number) => void
   onDirectProjectViewDrop?: (targetViewId: string, sourceIds: readonly string[]) => void
-  onCreateDomainRelation?: (fromViewId: string, toViewId: string, kind: string, createdBy?: 'context-canvas' | 'workflow-canvas') => Promise<void>
+  onCreateDomainRelation?: (fromNodeId: string, toNodeId: string, kind: string, createdBy?: 'context-canvas' | 'workflow-canvas') => Promise<void>
   onSurfaceChange?: (surface: SurfaceId) => void
   focusRequest?: SpatialFocusRequest
 }
@@ -160,9 +161,9 @@ export function ContextSpaceSurface(props: Props) {
   const lod = spatialLodForCount(items.length)
   const byId = useMemo(() => new Map(items.map((item) => [item.node.id, item])), [items])
   const projectRelation = useProjectMaterialRelationGesture({
-    onCommit: async (fromViewId, toViewId) => {
+    onCommit: async (fromNodeId, toNodeId) => {
       if (!props.onCreateDomainRelation) return
-      await props.onCreateDomainRelation(fromViewId, toViewId, 'reference', 'context-canvas')
+      await props.onCreateDomainRelation(fromNodeId, toNodeId, 'reference', 'context-canvas')
     },
   })
   const projectRelationEnd = projectRelation.targetId
@@ -226,7 +227,7 @@ export function ContextSpaceSurface(props: Props) {
   }, [props.nodes, props.projectId, props.runtime?.history.length, props.source?.label, setSurfaceElements, surfaceBootstrapped, surfaceElements.length, visibleEdges.length])
 
   const beginDrag = (event: ReactPointerEvent<HTMLDivElement>, id: string) => {
-    if (event.button !== 0) return
+    if (projectRelation.active || event.button !== 0) return
     const item = byId.get(id)
     if (!item) return
     // G-2 整组拖动:按住的是多选成员之一时全组跟手,否则维持单节点(主画布同款语义)。
@@ -356,7 +357,14 @@ export function ContextSpaceSurface(props: Props) {
       <div><strong>上下文</strong><span>理解现场</span></div>
       <div className="lcos-context-heading-actions"><small>{items.length} 项 · 同一份 Context · 三键在桌上定位/创建组件</small><ContextLensSwitch active="context-space" onSelect={(surface) => { if (surface === 'context-space' || surface === 'context-tree' || surface === 'context-flow') focusLens(surface) }}/></div>
     </header>
-    <SpatialCanvas surfaceRef={`scope:${props.scopeId}`} camera={camera} setCamera={setCamera} marqueeItems={marqueeItems} minimapItems={spatialItems} minimapLabel="Context" beacon={spatialFocus.beacon} onBeaconArrivalEnd={spatialFocus.clearBeacon} onMarqueeSelect={handleMarqueeSelect} className={`lcos-context-space-stage lcos-presentation-spatial ${projectRelation.active ? 'is-project-relation-intent' : ''}`} worldClassName="lcos-presentation-world lcos-context-space-world" testId="context-space-spatial" overlays={overlay} edgePinItems={edgePinItems} onEdgePinLocate={locateEdgePin} onPointerMove={projectRelation.onPointerMove} onPointerCancel={() => { projectRelation.cancel(); drag.current = endSpatialPointer(); groupDrag.current = null; setDraggingId(null) }} onExternalDrop={(kind, raw, _screen, point) => {
+    <SpatialCanvas surfaceRef={`scope:${props.scopeId}`} camera={camera} setCamera={setCamera} marqueeItems={projectRelation.active ? undefined : marqueeItems} minimapItems={spatialItems} minimapLabel="Context" beacon={spatialFocus.beacon} onBeaconArrivalEnd={spatialFocus.clearBeacon} onMarqueeSelect={handleMarqueeSelect} className={`lcos-context-space-stage lcos-presentation-spatial ${projectRelation.active ? 'is-project-relation-intent' : ''}`} worldClassName="lcos-presentation-world lcos-context-space-world" testId="context-space-spatial" overlays={overlay} edgePinItems={edgePinItems} onEdgePinLocate={locateEdgePin} onPointerDown={({ event }) => {
+      if (!projectRelation.active || event.button !== 0) return
+      const targetId = projectMaterialRelationTargetAt(event.clientX, event.clientY, projectRelation.sourceId)
+      if (!targetId) return
+      event.preventDefault()
+      event.stopPropagation()
+      projectRelation.commitTarget(targetId)
+    }} onPointerMove={projectRelation.onPointerMove} onPointerCancel={() => { projectRelation.cancel(); drag.current = endSpatialPointer(); groupDrag.current = null; setDraggingId(null) }} onExternalDrop={(kind, raw, _screen, point) => {
       if (kind !== 'project-view' || !props.onImportProjectView) return
       try {
         const payload = JSON.parse(raw) as { memberViewIds?: unknown }
@@ -388,7 +396,7 @@ export function ContextSpaceSurface(props: Props) {
         <ProjectMaterialRelationLiveEdge start={projectRelation.sourcePoint} end={projectRelationEnd}/>
       </SpatialEdgeLayer>
       <SpatialNodeLayer>
-        {renderItems.map((item, index) => { const relationEligible = Boolean(props.onCreateDomainRelation) && isProjectViewRelationEligible(item.node); return <div key={item.node.id} className={`lcos-context-space-node lcos-spatial-placement ${props.selectedIds.includes(item.node.id) ? 'selected' : ''} ${draggingId === item.node.id ? 'is-dragging' : ''} ${pinnedIds.includes(item.node.id) ? 'is-manual-anchor' : ''}`} data-attention-bucket={props.attentionBucketsByViewId?.[item.node.id]} style={{ left: item.x, top: item.y, width: item.width, '--i': index } as CSSProperties} onPointerDown={(event) => beginDrag(event, item.node.id)} onPointerMove={moveDrag} onPointerUp={endDrag}>
+        {renderItems.map((item, index) => { const relationEligible = Boolean(props.onCreateDomainRelation) && isProjectRelationEligible(item.node); return <div key={item.node.id} className={`lcos-context-space-node lcos-spatial-placement ${props.selectedIds.includes(item.node.id) ? 'selected' : ''} ${draggingId === item.node.id ? 'is-dragging' : ''} ${pinnedIds.includes(item.node.id) ? 'is-manual-anchor' : ''}`} data-attention-bucket={props.attentionBucketsByViewId?.[item.node.id]} style={{ left: item.x, top: item.y, width: item.width, '--i': index } as CSSProperties} onPointerDown={(event) => beginDrag(event, item.node.id)} onPointerMove={moveDrag} onPointerUp={endDrag}>
           <SurfaceObject node={item.node} zoom={camera.zoom} compact={lod !== 'full'} performanceProxy={(lod === 'aggregate' || lod === 'overview') && !props.selectedIds.includes(item.node.id)} selected={props.selectedIds.includes(item.node.id)} spatialSemantic={boundRegionSemanticForView(surfaceElements, item.node.id)} usageHint={item.node.anchors?.length ? '来源锚点' : undefined} attentionBucket={props.attentionBucketsByViewId?.[item.node.id] === 'pinned' ? 'pinned' : props.attentionBucketsByViewId?.[item.node.id] === 'related' ? 'related' : props.attentionBucketsByViewId?.[item.node.id] === 'retrieved' ? 'retrieved' : undefined} dropIds={props.selectedIds.includes(item.node.id) && props.selectedIds.length ? props.selectedIds : [item.node.id]} onDirectProjectViewDrop={props.onDirectProjectViewDrop} onSelect={props.onSelect} onDoubleClick={props.onDoubleClick} onLocate={props.onFocusObject} orbitEligible={props.selectedIds.length <= 1} relationActive={projectRelation.active} relationEligible={relationEligible} relationSource={projectRelation.sourceId === item.node.id} relationTarget={projectRelation.targetId === item.node.id} {...(relationEligible ? { onRelation: () => projectRelation.beginIntent(item.node.id, { x: item.x + item.width, y: item.y + item.height / 2 }) } : {})} {...(relationEligible && projectRelation.active && projectRelation.sourceId !== item.node.id ? { onRelationCommit: () => projectRelation.commitTarget(item.node.id) } : {})}/>
           {pinnedIds.includes(item.node.id) && <i className="lcos-manual-anchor-mark" title="手工位置锚点"/>}
         </div>})}

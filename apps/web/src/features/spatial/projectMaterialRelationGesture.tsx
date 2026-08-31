@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { CanvasNode } from '../../model'
 import type { SpatialPointerContext } from './SpatialCanvas'
 import type { SpatialPoint } from './spatialTypes'
 
@@ -25,22 +24,63 @@ const EMPTY_RELATION_GESTURE: ProjectMaterialRelationGestureState = {
 }
 
 /**
- * Context/Workflow currently persist this A13 path through the existing
- * view-endpoint Relation contract. Aggregate scope/workspace projections and
- * Conversation Glyth therefore fail closed until their endpoint semantics are
- * explicitly owned instead of being guessed from presentation ids.
+ * A13 owns only transient gesture state. A16 separately resolves visible
+ * Project-object ids to canonical view/note/scope/workspace persistence endpoints.
+ * Conversation ordinary Relation remains fail-close.
  */
-export function isProjectViewRelationEligible(node: CanvasNode): boolean {
-  return node.entityKind !== 'conversation'
-    && !node.id.startsWith('scope:')
-    && !node.id.startsWith('workspace:')
+
+/** Latest L0 motor-tolerance truth: Relation receptors keep a 12–18px screen-space halo. */
+export const RELATION_RECEPTOR_SCREEN_HALO_PX = 16
+
+export interface RelationReceptorScreenRect {
+  readonly left: number
+  readonly top: number
+  readonly right: number
+  readonly bottom: number
+  readonly width: number
+  readonly height: number
 }
 
-/** Explicit physical receptor lookup. Never fall back to generic data-node-id. */
+/** Distance from a screen pointer to the visible receptor body. Inside = 0. */
+export function relationReceptorScreenDistance(rect: RelationReceptorScreenRect, clientX: number, clientY: number): number {
+  const dx = clientX < rect.left ? rect.left - clientX : clientX > rect.right ? clientX - rect.right : 0
+  const dy = clientY < rect.top ? rect.top - clientY : clientY > rect.bottom ? clientY - rect.bottom : 0
+  return Math.hypot(dx, dy)
+}
+
+/**
+ * Screen-space receptor lookup used only while Relation intent is active.
+ * The invisible halo never changes visual/selection/layout bounds and therefore
+ * remains stable across canvas zoom. Direct body hits still win first.
+ */
+export function relationTargetWithinScreenHaloAt(
+  clientX: number,
+  clientY: number,
+  selector: string,
+  targetAttribute: string,
+  sourceId?: string | null,
+  haloPx = RELATION_RECEPTOR_SCREEN_HALO_PX,
+): string | null {
+  const direct = document.elementFromPoint(clientX, clientY)?.closest<HTMLElement>(selector)
+  const directId = direct?.getAttribute(targetAttribute)?.trim()
+  if (directId && directId !== sourceId) return directId
+
+  let best: { readonly id: string; readonly distance: number } | null = null
+  for (const element of document.querySelectorAll<HTMLElement>(selector)) {
+    const id = element.getAttribute(targetAttribute)?.trim()
+    if (!id || id === sourceId) continue
+    const rect = element.getBoundingClientRect()
+    if (rect.width <= 0 || rect.height <= 0) continue
+    const distance = relationReceptorScreenDistance(rect, clientX, clientY)
+    if (distance > haloPx) continue
+    if (!best || distance < best.distance) best = { id, distance }
+  }
+  return best?.id ?? null
+}
+
+/** Explicit Project-material receptor lookup. Never fall back to generic data-node-id. */
 export function projectMaterialRelationTargetAt(clientX: number, clientY: number, sourceId?: string | null): string | null {
-  const element = document.elementFromPoint(clientX, clientY)?.closest<HTMLElement>('[data-project-relation-target]')
-  const targetId = element?.dataset.projectRelationTarget?.trim()
-  return targetId && targetId !== sourceId ? targetId : null
+  return relationTargetWithinScreenHaloAt(clientX, clientY, '[data-project-relation-target]', 'data-project-relation-target', sourceId)
 }
 
 interface RelationGestureOptions {

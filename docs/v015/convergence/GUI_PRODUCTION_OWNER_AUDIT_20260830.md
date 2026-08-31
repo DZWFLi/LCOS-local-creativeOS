@@ -1353,3 +1353,80 @@ MERGE-AUTHORIZED
 ```
 
 The missing 8/21 v0.3 raw source is now governed by SOP-R1 and recorded as `RAW_SOURCE_LOST / RECONSTRUCTED_AUTHORITY PASS`; it is not a permanent A13 blocker. This addendum still must not be cited as runtime/browser/manual proof, which remains pending in the real local environment.
+
+---
+
+# A14 production-owner update · Workspace Relation source
+
+Fresh census on merged RC `6312ace` confirms that the last explicit legacy Relation launch owner is the Main Workspace frame notch. A14 retires it.
+
+Production shape after A14:
+
+```text
+Workspace header activate
+→ local ObjectOrbit
+→ Relation
+→ Orbit yields
+→ temporary workspace relation source port
+→ existing Main relation session
+→ canonical workspace aggregate endpoint
+```
+
+Important boundary:
+- Workspace remains a recoverable working-set/aggregate endpoint, not an ordinary Project View;
+- no new Workspace selection store is created;
+- A13 `projectMaterialRelationGesture` remains view-material-only;
+- Conversation and Context/Workflow aggregate endpoint semantics remain fail-close;
+- Relation-active pointer targeting a Workspace commits before Workspace drag can claim the pointer.
+
+---
+
+# A15 production-owner update · Relation receptive motor tolerance
+
+Post-A14 source census finds no new launch `WRONG_OWNER`. The next proven defect is physical acceptance: target discovery is explicit but body-only, while latest L0 requires an additional 12–18px receptive edge halo.
+
+A15 keeps ownership unchanged and expands only physical hit tolerance:
+
+```text
+Relation intent active
+→ direct explicit receptor body hit wins
+→ otherwise measure screen-space distance to explicit receptor rect
+→ <=16px becomes receptive
+→ existing target id / canonical persistence commits
+```
+
+This is an interaction hit-slop owner, not presentation geometry. Selection bounds, visual morphology, saved layout geometry and endpoint identity do not change.
+
+Context / Workflow Marquee and material Drag yield only while Relation is active so the newly valid halo area can commit rather than being intercepted.
+
+Conversation ordinary Relation and aggregate endpoint semantics remain outside A15.
+
+---
+
+# A16 production-owner update · canonical Relation endpoint identity
+
+Post-A15 source census finds a persistence-owner mismatch rather than another physical gesture gap.
+
+The UI carries **physical node ids**, but canonical Relation endpoints are typed domain identities. Existing Core/runtime source already proves that those identities can be `view`, `note`, `scope`, or `workspace`.
+
+A16 therefore adds one canonical endpoint resolver before the existing `saveRelation` owner:
+
+```text
+visible node id
+→ current Project projection lookup
+→ canonical endpoint type/id
+→ existing saveRelation
+```
+
+Important cases:
+
+- ordinary ArtifactView → `view`;
+- anchored Core Note → `note`;
+- Collection/Context/Workflow container with `opensScopeId` → `scope`;
+- `scope:*` projection → `scope`;
+- `workspace:*` projection → `workspace`;
+- Conversation / local-only unresolved shell → fail-close.
+
+The A13 gesture adapter remains persistence-agnostic. A14 Workspace launch remains Main-local. A15 hit halo remains physical-only. Workflow Step/action links remain a separate truth.
+
+This explicitly rejects a generic `connect()` owner and the stale assumption that every visible node id is a View id.

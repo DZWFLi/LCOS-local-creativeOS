@@ -259,10 +259,14 @@ test.describe('LCOS Interaction Foundation', () => {
     await sourceNode.click()
     await page.locator('[data-lcos-orbit-action="object-relation"]').click()
     await expect(page.getByTestId(`relation-source-port-${source.id}`)).toBeVisible()
-    const targetPoint = await center(targetNode)
-    await page.mouse.move(targetPoint.x, targetPoint.y, { steps: 8 })
+    // A15: receptor motor tolerance is screen-space, not world-space. Commit from
+    // 14px outside the visible body, inside the frozen 12–18px receptive halo.
+    const targetBounds = await targetNode.boundingBox()
+    expect(targetBounds).not.toBeNull()
+    const targetHaloPoint = { x: targetBounds!.x - 14, y: targetBounds!.y + targetBounds!.height / 2 }
+    await page.mouse.move(targetHaloPoint.x, targetHaloPoint.y, { steps: 8 })
     await expect(targetNode).toHaveClass(/is-relation-target/)
-    await page.mouse.click(targetPoint.x, targetPoint.y)
+    await page.mouse.click(targetHaloPoint.x, targetHaloPoint.y)
     await expect.poll(async () => Number(await canvas.getAttribute('data-edge-count'))).toBe(countBefore + 1)
     await expect(page.getByTestId(`relation-source-port-${source.id}`)).toHaveCount(0)
     const createdId = await page.locator('.edge.selected').getAttribute('data-edge-id')

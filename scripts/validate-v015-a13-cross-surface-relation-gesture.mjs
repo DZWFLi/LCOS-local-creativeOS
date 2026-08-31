@@ -8,6 +8,7 @@ const workflow = read('apps/web/src/features/surfaces/WorkflowSurface.tsx')
 const projections = read('apps/web/src/features/surfaces/ProjectionSurfaces.tsx')
 const main = read('apps/web/src/features/canvas/ProjectCanvas.tsx')
 const app = read('apps/web/src/App.tsx')
+const endpoints = read('apps/web/src/features/spatial/projectRelationEndpoint.ts')
 const css = read('apps/web/src/interaction-system.css')
 
 const checks = [
@@ -17,7 +18,7 @@ const checks = [
       && adapter.includes('onCommit: (sourceId: string, targetId: string)')
       && !/saveRelation|setEdges|usePresentationDraftEdges|bridgeRef|workflowActionState/.test(adapter)],
   ['Physical receptor lookup is explicit and no longer treats every generic data-node-id as a Relation target',
-    adapter.includes("closest<HTMLElement>('[data-project-relation-target]')")
+    adapter.includes("relationTargetWithinScreenHaloAt(clientX, clientY, '[data-project-relation-target]', 'data-project-relation-target', sourceId)")
       && main.includes('projectMaterialRelationTargetAt(clientX, clientY, link.current?.from)')
       && main.includes("data-project-relation-target={node.entityKind !== 'conversation' ? node.id : undefined}")
       && !main.includes("closest<HTMLElement>('[data-relation-target], [data-node-id]')")],
@@ -32,13 +33,13 @@ const checks = [
       && surfaceObject.includes('if (relationActive && relationSource)')],
   ['Context Project-view materials now use shared Orbit -> Relation physical grammar and commit canonical domain Relation truth',
     context.includes('useProjectMaterialRelationGesture')
-      && context.includes("await props.onCreateDomainRelation(fromViewId, toViewId, 'reference', 'context-canvas')")
+      && context.includes("await props.onCreateDomainRelation(fromNodeId, toNodeId, 'reference', 'context-canvas')")
       && context.includes('onRelation: () => projectRelation.beginIntent')
       && context.includes('onRelationCommit: () => projectRelation.commitTarget')
       && context.includes('<ProjectMaterialRelationLiveEdge')],
   ['Workflow Project-view materials use the same physical grammar while preserving workflow-canvas provenance',
     workflow.includes('useProjectMaterialRelationGesture')
-      && workflow.includes("await props.onCreateDomainRelation(fromViewId, toViewId, 'reference', 'workflow-canvas')")
+      && workflow.includes("await props.onCreateDomainRelation(fromNodeId, toNodeId, 'reference', 'workflow-canvas')")
       && workflow.includes('onRelation: () => projectRelation.beginIntent')
       && workflow.includes('onRelationCommit: () => projectRelation.commitTarget')
       && workflow.includes('<ProjectMaterialRelationLiveEdge')],
@@ -51,26 +52,30 @@ const checks = [
     projections.includes("props.surface==='context-space'?<ContextSpaceSurface")
       && projections.includes('onCreateDomainRelation={props.onCreateDomainRelation}')
       && projections.includes("props.surface==='workflow'?<WorkflowSurface")],
-  ['Canonical save path records explicit Surface provenance without changing Relation business truth into a presentation edge',
-    app.includes("onCreateDomainRelation: async (fromViewId, toViewId, kind, createdBy = 'workflow-canvas')")
-      && app.includes("sourceEntityType: 'view', sourceEntityId: fromViewId")
-      && app.includes("targetEntityType: 'view', targetEntityId: toViewId")
+  ['Canonical save path records explicit Surface provenance while A16 canonicalizes view/scope/workspace endpoints outside the transient adapter',
+    app.includes("onCreateDomainRelation: async (fromNodeId, toNodeId, kind, createdBy = 'workflow-canvas')")
+      && app.includes('projectRelationEndpointForNodeId(fromNodeId, projectPresentationNodes)')
+      && app.includes('projectRelationEndpointForNodeId(toNodeId, projectPresentationNodes)')
+      && app.includes('sourceEntityType: sourceEndpoint.entityType, sourceEntityId: sourceEndpoint.entityId')
+      && app.includes('targetEntityType: targetEndpoint.entityType, targetEntityId: targetEndpoint.entityId')
       && app.includes("origin: 'user', createdBy, confidence: 1")
       && app.includes('client.saveRelation(activeProjectId, relation)')],
-  ['Unowned endpoint semantics fail closed: Conversation, aggregate scope and workspace projections do not receive this view-endpoint Relation capability',
-    adapter.includes("node.entityKind !== 'conversation'")
-      && adapter.includes("!node.id.startsWith('scope:')")
-      && adapter.includes("!node.id.startsWith('workspace:')")
+  ['Conversation ordinary Relation remains fail-close while aggregate endpoint semantics are owned by A16 rather than the transient gesture adapter',
+    endpoints.includes("if (node.entityKind === 'conversation') return null")
+      && endpoints.includes("entityType: 'scope'")
+      && endpoints.includes("entityType: 'workspace'")
       && main.includes("if (link.current && node.entityKind === 'conversation')")],
   ['A13 visual layer keeps source/target controls screen-space local and suppresses competing transient controls during Relation intent',
     css.includes('.lcos-surface-relation-port { pointer-events:none; }')
       && css.includes('.lcos-project-material-relation-live')
       && css.includes('vector-effect:non-scaling-stroke;')
       && css.includes('.is-project-relation-intent :is(.lcos-semantic-drop-handle,.lcos-workflow-port,.lcos-workflow-bypass)')],
-  ['A13 does not falsely retire Workspace legacy ownership or invent Conversation Relation semantics',
-    css.includes('Legacy Workspace relation source remains temporarily')
-      && main.includes('workspace-relation-notch')
-      && !adapter.includes('conversation-relation')
+  ['A13 shared adapter remains persistence-agnostic after A16; Workspace Main source ownership stays A14 and Conversation ordinary Relation stays outside it',
+    adapter.includes('This adapter owns only transient pointer/target state')
+      && main.includes("id: 'workspace-relation'")
+      && !main.includes('workspace-relation-notch')
+      && endpoints.includes("if (node.entityKind === 'conversation') return null")
+      && !adapter.includes('saveRelation')
       && !adapter.includes('genericConnect')],
 ]
 

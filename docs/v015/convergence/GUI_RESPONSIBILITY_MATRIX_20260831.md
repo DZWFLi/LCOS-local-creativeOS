@@ -530,3 +530,59 @@ A12 updates the stale R2-D Light-Notch gate because that assertion represented a
 SOP note:
 
 > The missing 8/21 v0.3 raw source is registered as `RAW_SOURCE_LOST / RECONSTRUCTED_AUTHORITY PASS` in the provenance ledger under SOP-R1. A13 is source/static closed and merge-authorized. Runtime/browser/manual proof remains pending in the real local dependency environment; Phase A Relation remains open for Workspace / Conversation / final hit-halo debts.
+
+---
+
+# A14 Workspace Relation Intent Ownership
+
+Fresh Phase A census after real local A13 merge `6312ace` identifies Workspace Relation launch as the remaining explicit `WRONG_OWNER` item.
+
+| Domain | Canonical owner after A14 | Retired / forbidden owner | Status |
+|---|---|---|---|
+| Workspace Relation launch | Workspace header activation → local `ObjectOrbit` → Relation → temporary Workspace source port | permanent/hover `workspace-relation-notch` | SOURCE/STATIC PASS |
+| Workspace endpoint identity | existing `workspace:<workspaceId>` aggregate endpoint in Main relation graph | converting Workspace into a fake view endpoint | KEEP |
+| Workspace target commit | existing Main `connect()` / relation session | Workspace drag stealing relation-target pointer | SOURCE/STATIC PASS |
+| Conversation Context Mapping | Glyth Semantic Drop / Context Field → canonical Assembly path | ordinary Relation pretending to be mapping | KEEP / SEPARATE |
+| Conversation ordinary Relation | fail-close until canonical endpoint is explicitly proven | guessing conversationViewId/artifact endpoint in GUI | OPEN SEMANTIC DEBT |
+| Context/Workflow aggregate endpoints | fail-close in A13 view-only adapter | passing `scope:*` / `workspace:*` as view IDs | OPEN SEMANTIC DEBT |
+| final receptor halo | extra 12–18px screen-space motor-tolerance acceptance | treating current target body/marker as final QA | OPEN |
+
+A14 closes Workspace **source owner** only. Phase A remains open.
+
+---
+
+# A15 Relation Receptor Screen-space Halo
+
+| Domain | Canonical owner after A15 source/static | Forbidden regression | Status |
+|---|---|---|---|
+| Relation motor tolerance | explicit receptor body + 16px screen-space radial hit halo | body-only `elementFromPoint` acceptance | SOURCE/STATIC PASS |
+| Main ordinary target | `[data-project-relation-target]` + shared halo resolver | generic `[data-node-id]` target fallback | KEEP / PASS |
+| Workspace target | `[data-relation-target="workspace:..."]` + same halo resolver | changing Workspace into fake view endpoint | KEEP / PASS |
+| Context Relation pointer priority | A13 Relation session while active | Marquee / outer drag stealing halo click | SOURCE/STATIC PASS |
+| Workflow Relation pointer priority | A13 Relation session while active | material drag / Step-link owner swallowing Project-material halo click | SOURCE/STATIC PASS |
+| Conversation ordinary Relation | fail-close | guessing conversation view/artifact endpoint | OPEN SEMANTIC DEBT |
+| Context/Workflow aggregate endpoints | fail-close in view-only adapter | passing `scope:*` / `workspace:*` as fake view IDs | OPEN ADAPTER DEBT |
+| Runtime proof | real local dependency/browser/manual environment | claiming static halo gate as human PASS | OPEN |
+
+A15 closes the source/static 12–18px motor-tolerance gap only. Phase A remains open.
+
+---
+
+# A16 Canonical Relation Endpoint Adapter
+
+Fresh stacked census after A15 finds that the remaining Context/Workflow endpoint debt is broader than prefixed aggregate projections: the old direct save callback assumes `physical node id == canonical view id`.
+
+| Domain | Canonical owner after A16 | Forbidden regression | Status |
+|---|---|---|---|
+| Physical Relation gesture | A13 `projectMaterialRelationGesture` | persistence logic inside gesture adapter | KEEP |
+| Relation receptor tolerance | A15 16px screen-space halo | world-space / visual-bound inflation | KEEP |
+| ordinary Artifact/View material endpoint | `view:<node.id>` | converting visible View relation into artifact ontology without ruling | KEEP |
+| anchored Core Note endpoint | `note:<node.id>` | persisting Note id as fake View id | SOURCE/STATIC TARGET |
+| aggregate container endpoint | `scope:<opensScopeId>` | persisting container ArtifactView id as View truth | SOURCE/STATIC TARGET |
+| explicit `scope:*` projection | canonical Scope endpoint | presentation id as fake View id | SOURCE/STATIC TARGET |
+| explicit `workspace:*` projection | canonical Workspace endpoint | presentation id as fake View id | SOURCE/STATIC TARGET |
+| unknown/local-only endpoint | fail-close | fallback-to-view guessing | SOURCE/STATIC TARGET |
+| Conversation ordinary Relation | fail-close | guessing Conversation view/artifact semantics | OPEN SEMANTIC DEBT |
+| Core persistence | existing App/LocalCore `saveRelation` after endpoint resolution | second Relation store / generic `connect()` | KEEP |
+
+A16 is endpoint canonicalization, not a universal Relation ontology. Main persistence and Workflow action-link truth remain separate.
