@@ -508,3 +508,25 @@ A09 historical source correction: `onFocusNode` was missing from `ProjectCanvas`
 | Conversation Glyth Relation | fail-close / no Relation satellite yet | guessing receiver binding/body-drop mapping is ordinary Relation | SEMANTIC OWNER UNPROVEN |
 
 A12 updates the stale R2-D Light-Notch gate because that assertion represented a superseded implementation owner, not current product truth. Historical R2-D evidence remains history-only provenance.
+
+
+---
+
+# 15. A13 owner update · Cross-surface Relation physical grammar
+
+| Domain | Canonical owner | Forbidden / retired direction | Status |
+|---|---|---|---|
+| Cross-surface ordinary Project-material physical Relation gesture | shared `projectMaterialRelationGesture` transient adapter | per-Surface duplicate gesture state machines | SOURCE/STATIC PASS |
+| Main persistence | existing `ProjectCanvas` edge/connect path | moving Main persistence into shared adapter | KEEP |
+| Context eligible Project-view persistence | existing canonical `onCreateDomainRelation(..., 'context-canvas')` path | Context-local second Relation store | SOURCE/STATIC PASS |
+| Workflow eligible Project-view persistence | existing canonical `onCreateDomainRelation(..., 'workflow-canvas')` path | treating workflow action edges as generic material Relation | SOURCE/STATIC PASS |
+| Workflow Step→Step action linking | `workflowActionState.edges` + `[data-workflow-action-id]` | generic Project-material adapter swallowing action truth | KEEP / SEPARATE |
+| Main physical target discovery | explicit `[data-project-relation-target]` plus isolated Workspace legacy target | generic `[data-node-id]` fallback | RETIRED |
+| Conversation Glyth endpoint | fail-close | guessing receiver/body-drop mapping as ordinary Relation | OPEN SEMANTIC DEBT |
+| Context/Workflow `scope:*` / `workspace:*` endpoint | fail-close | persisting presentation aggregate IDs as canonical view IDs | OPEN SEMANTIC DEBT |
+| Workspace source owner | existing legacy Workspace notch | claiming A13 already migrated Workspace | OPEN WRONG_OWNER DEBT |
+| final Relation target interaction halo | unresolved final motor-tolerance acceptance | claiming whole-body receptor equals final 12–18px edge-halo QA | OPEN |
+
+SOP note:
+
+> The missing 8/21 v0.3 raw source is registered as `RAW_SOURCE_LOST / RECONSTRUCTED_AUTHORITY PASS` in the provenance ledger under SOP-R1. A13 is source/static closed and merge-authorized. Runtime/browser/manual proof remains pending in the real local dependency environment; Phase A Relation remains open for Workspace / Conversation / final hit-halo debts.

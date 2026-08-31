@@ -733,3 +733,55 @@ Not claimed:
 - runtime/browser/manual PASS while dependencies are absent.
 
 Therefore Phase A `Relation` remains **OPEN**, despite A12 being source/static closed as one micro-patch.
+
+
+---
+
+# 23. Phase A completed micro-patch · A13 Cross-surface Relation Gesture Adapter
+
+A13 closes the A12 cross-surface ordinary Project-material physical-gesture gap without flattening Surface semantics:
+
+```text
+Main / Context / Workflow ordinary eligible Project material
+→ ProjectObjectOrbit
+→ Relation
+→ Orbit yields
+→ shared transient physical gesture
+→ Surface-owned canonical persistence
+```
+
+Canonical owner split:
+
+- physical source/pointer/receptor state → shared `projectMaterialRelationGesture` adapter;
+- Main persistence → existing `ProjectCanvas` edge/connect truth;
+- Context persistence → canonical domain Relation callback;
+- Workflow Project-material persistence → canonical domain Relation callback;
+- Workflow Step→Step action path → remains separate `workflowActionState.edges` truth.
+
+Fail-close remains intentional for:
+
+- Conversation Glyth;
+- `scope:*` aggregate projection;
+- `workspace:*` aggregate projection.
+
+Source/static evidence:
+
+```text
+A13: 12/12 PASS
+all runnable validate-v015-* gates: 41 PASS / 0 FAIL / 2 S9/S10 external skips
+```
+
+The 8/21 v0.3 raw source is now explicitly adjudicated under SOP-R1 as `RAW_SOURCE_LOST / RECONSTRUCTED_AUTHORITY PASS`, based on surviving upstream/peer originals, later explicit Freeze/L0, delta audit, current source/test evidence, and the 2026-08-31 user adjudication. It is no longer an A13 blocker.
+
+Post-A13 semantic typecheck / runtime / browser / manual proof is still not available in the extracted archive environment and remains follow-up evidence for the real local merge.
+
+Therefore:
+
+```text
+A13 source/static closeout: PASS
+A13 merge authorization: YES
+A13 runtime/manual evidence: BLOCKED_ENV / PENDING LOCAL MERGE
+Phase A Relation: OPEN (Workspace / Conversation / hit-halo/runtime debts remain)
+Phase A overall: OPEN
+Phase B admission: NO
+```

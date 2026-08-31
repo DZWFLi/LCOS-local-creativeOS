@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react'
+import type { CSSProperties, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react'
 import { GripVertical } from 'lucide-react'
 import type { CanvasNode, NodeDisplayMode } from '../../model'
 import { CanvasNodeVisual, detectFileIdentity, displayNodeTitle } from '../canvas/CanvasNodeVisual'
@@ -54,6 +54,14 @@ interface Props {
   onLocate?: (id: string) => void
   /** Parent selection truth decides whether a single-object Orbit is admissible. */
   orbitEligible?: boolean
+  /** A13: ordinary Project material can expose Relation from Object Orbit. */
+  onRelation?: () => void
+  /** A13 physical gesture state. Persistence stays owned by the parent Surface. */
+  relationActive?: boolean
+  relationEligible?: boolean
+  relationSource?: boolean
+  relationTarget?: boolean
+  onRelationCommit?: (event: ReactPointerEvent<HTMLButtonElement>) => void
   dropIds?: readonly string[]
   onDirectProjectViewDrop?: (targetViewId: string, sourceIds: readonly string[]) => void
 }
@@ -73,6 +81,12 @@ export function SurfaceObject({
   onDoubleClick,
   onLocate,
   orbitEligible = true,
+  onRelation,
+  relationActive = false,
+  relationEligible = false,
+  relationSource = false,
+  relationTarget = false,
+  onRelationCommit,
   dropIds,
   onDirectProjectViewDrop,
 }: Props) {
@@ -90,6 +104,7 @@ export function SurfaceObject({
   const semanticDropIds = dropIds?.length ? dropIds : [node.id]
   const dropFeedback = useSemanticDropFeedback()
   const orbitAnchorRef = useRef<HTMLButtonElement | null>(null)
+  const relationPointerConsumed = useRef(false)
   const [orbitOpen, setOrbitOpen] = useState(false)
 
   // Selection owns Orbit lifetime. An unselected object or a multi-selection
@@ -99,6 +114,12 @@ export function SurfaceObject({
   }, [orbitEligible, selected])
 
   const selectAndMaybeOpenOrbit = (event: ReactMouseEvent<HTMLButtonElement>) => {
+    if (relationPointerConsumed.current) {
+      relationPointerConsumed.current = false
+      event.preventDefault()
+      event.stopPropagation()
+      return
+    }
     const additive = additiveSelectionModifier(event)
     onSelect(node.id, additive)
     if (node.entityKind === 'conversation' || additive) {
@@ -113,6 +134,21 @@ export function SurfaceObject({
     onDoubleClick(node.id)
   }
   const onPointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (onRelationCommit) {
+      relationPointerConsumed.current = true
+      event.preventDefault()
+      event.stopPropagation()
+      onRelationCommit(event)
+      return
+    }
+    // While the source intent is live, the material body must not accidentally
+    // become a Semantic Drop source. The temporary Relation layer owns pointer intent.
+    if (relationActive && relationSource) {
+      relationPointerConsumed.current = true
+      event.preventDefault()
+      event.stopPropagation()
+      return
+    }
     beginSemanticDrop(event, semanticDropIds, onDirectProjectViewDrop, dropFeedback.onPhase)
   }
 
@@ -122,9 +158,10 @@ export function SurfaceObject({
         ref={orbitAnchorRef}
         type="button"
         data-node-id={node.id}
+        data-project-relation-target={relationEligible ? node.id : undefined}
         data-surface-role={role}
         data-attention={attentionBucket}
-        className={`lcos-surface-glyph role-${role} ${selected ? 'selected' : ''} ${attentionBucket ? `attention-${attentionBucket}` : ''} ${dim ? 'dim' : ''}`}
+        className={`lcos-surface-glyph role-${role} ${selected ? 'selected' : ''} ${relationSource ? 'is-relation-source' : ''} ${relationTarget ? 'is-relation-target' : ''} ${attentionBucket ? `attention-${attentionBucket}` : ''} ${dim ? 'dim' : ''}`}
         aria-label={displayNodeTitle(node)}
         onPointerDown={onPointerDown}
         onClick={selectAndMaybeOpenOrbit}
@@ -134,7 +171,8 @@ export function SurfaceObject({
         <span className="lcos-surface-identity-glyph" aria-hidden="true"><SurfaceIdentityGlyph node={node}/></span>
         <span className="lcos-glyph-label">{displayNodeTitle(node)}</span>
       </button>
-      {node.entityKind !== 'conversation' && <ProjectObjectOrbit open={orbitOpen} node={node} anchorRef={orbitAnchorRef} onClose={() => setOrbitOpen(false)} onOpen={openDeeper} {...(onLocate ? { onLocate: () => onLocate(node.id) } : {})}/>}
+      {relationSource && <span data-testid={`relation-source-port-${node.id}`} className="lcos-relation-port lcos-surface-relation-port" style={{ '--canvas-zoom': String(zoom) } as CSSProperties} aria-hidden="true"><span/></span>}
+      {node.entityKind !== 'conversation' && <ProjectObjectOrbit open={orbitOpen} node={node} anchorRef={orbitAnchorRef} onClose={() => setOrbitOpen(false)} onOpen={openDeeper} {...(onRelation ? { onRelation } : {})} {...(onLocate ? { onLocate: () => onLocate(node.id) } : {})}/>}
       <DropFeedbackLayer phase={dropFeedback.phase} hitElement={dropFeedback.hitElement} />
     </>
   }
@@ -145,9 +183,10 @@ export function SurfaceObject({
       ref={orbitAnchorRef}
       type="button"
       data-node-id={node.id}
+      data-project-relation-target={relationEligible ? node.id : undefined}
       data-surface-role={role}
       data-attention={attentionBucket}
-      className={`lcos-surface-object lcos-surface-material role-${role} ${selected ? 'selected' : ''} ${attentionBucket ? `attention-${attentionBucket}` : ''} ${compact ? 'compact' : ''} ${dim ? 'dim' : ''}`}
+      className={`lcos-surface-object lcos-surface-material role-${role} ${selected ? 'selected' : ''} ${relationSource ? 'is-relation-source' : ''} ${relationTarget ? 'is-relation-target' : ''} ${attentionBucket ? `attention-${attentionBucket}` : ''} ${compact ? 'compact' : ''} ${dim ? 'dim' : ''}`}
       aria-label={displayNodeTitle(node)}
       onPointerDown={onPointerDown}
       onClick={selectAndMaybeOpenOrbit}
@@ -169,7 +208,8 @@ export function SurfaceObject({
       {usageHint && <span className="lcos-surface-usage-hint">{usageHint}</span>}
       {(selected || signal.state !== 'stable') && <span className="lcos-surface-system-signal" data-spatial-signal={selected && signal.state === 'stable' ? 'focus' : signal.state} aria-hidden="true"><LcosSignalGlyph state={selected && signal.state === 'stable' ? 'focus' : signal.state}/></span>}
     </button>
-    {node.entityKind !== 'conversation' && <ProjectObjectOrbit open={orbitOpen} node={node} anchorRef={orbitAnchorRef} onClose={() => setOrbitOpen(false)} onOpen={openDeeper} {...(onLocate ? { onLocate: () => onLocate(node.id) } : {})}/>}
+    {relationSource && <span data-testid={`relation-source-port-${node.id}`} className="lcos-relation-port lcos-surface-relation-port" style={{ '--canvas-zoom': String(zoom) } as CSSProperties} aria-hidden="true"><span/></span>}
+    {node.entityKind !== 'conversation' && <ProjectObjectOrbit open={orbitOpen} node={node} anchorRef={orbitAnchorRef} onClose={() => setOrbitOpen(false)} onOpen={openDeeper} {...(onRelation ? { onRelation } : {})} {...(onLocate ? { onLocate: () => onLocate(node.id) } : {})}/>}
     <DropFeedbackLayer phase={dropFeedback.phase} hitElement={dropFeedback.hitElement} />
   </>
 }

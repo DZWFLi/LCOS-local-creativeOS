@@ -7614,7 +7614,7 @@ export function App() {
           return [...semantic.viewIds, ...projectEntityNodeIds(semantic.entityRefs, projectPresentationNodes)]
         },
         onCreateWorkflowOperatorNode: createWorkflowOperatorNode,
-        onCreateDomainRelation: async (fromViewId, toViewId, kind) => {
+        onCreateDomainRelation: async (fromViewId, toViewId, kind, createdBy = 'workflow-canvas') => {
           if (bootMode !== 'runtime') { setNotice('原型模式不写入项目关系'); return }
           const now = new Date().toISOString()
           const relation = {
@@ -7623,7 +7623,7 @@ export function App() {
             sourceEntityType: 'view', sourceEntityId: fromViewId,
             targetEntityType: 'view', targetEntityId: toViewId,
             kind: kind.trim() || 'reference',
-            origin: 'user', createdBy: 'workflow-canvas', confidence: 1,
+            origin: 'user', createdBy, confidence: 1,
             createdAt: now, updatedAt: now,
           } as Relation
           const call = await bridgeRef.current.client.saveRelation(activeProjectId, relation)

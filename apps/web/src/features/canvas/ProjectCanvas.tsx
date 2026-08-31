@@ -44,6 +44,7 @@ import { ProjectObjectOrbit } from '../ui/ProjectObjectOrbit'
 import { SelectionGroupActions, type SelectionGroupAction } from '../ui/SelectionGroupActions'
 import { BirthProvenanceBadge } from '../provenance/BirthProvenanceBadge'
 import { sessionPhaseLabel } from '../conversations/conversationLifecycle'
+import { projectMaterialRelationTargetAt } from '../spatial/projectMaterialRelationGesture'
 
 interface Props {
   projectId?: string
@@ -692,8 +693,13 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
     setEdges((current) => [...current, { id: nextId, from, to, kind: 'reference' }])
   }
   const relationTargetAt = (clientX: number, clientY: number) => {
-    const element = document.elementFromPoint(clientX, clientY)?.closest<HTMLElement>('[data-relation-target], [data-node-id]')
-    return element?.dataset.relationTarget ?? element?.dataset.nodeId ?? null
+    const projectMaterial = projectMaterialRelationTargetAt(clientX, clientY, link.current?.from)
+    if (projectMaterial) return projectMaterial
+    // Workspace still owns its legacy endpoint semantics in Phase A; keep that
+    // receptor explicit rather than falling back to every data-node-id (which
+    // previously made Conversation Glyth an accidental Relation endpoint).
+    const workspace = document.elementFromPoint(clientX, clientY)?.closest<HTMLElement>('[data-relation-target]')
+    return workspace?.dataset.relationTarget ?? null
   }
   const alignmentGuideFor = (node: CanvasNode, x: number, y: number, excludedIds: readonly string[]) => {
     if (!gridSnapEnabled) return null
@@ -1407,6 +1413,13 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
         const semanticIds = selectedIds.includes(node.id) && selectedIds.length > 1 ? selectedIds : [node.id]
         if (beginCanvasSemanticDrop(semanticIds, event)) return
         if (event.button !== 0) return
+        // Conversation binding/body-drop is not ordinary Relation truth. While
+        // Relation intent is active, Conversation Glyth therefore remains a
+        // deliberate non-target instead of accepting an accidental node-id edge.
+        if (link.current && node.entityKind === 'conversation') {
+          event.preventDefault(); event.stopPropagation(); suppressClick.current = node.id
+          return
+        }
         event.stopPropagation()
         const now = performance.now()
         const previous = lastNodePress.current
@@ -1551,7 +1564,7 @@ function CanvasCard({ projectId, node, density, zoom, showDetails, performancePr
     runtime: runtimeSignal,
     semantic: reviewPending ? 'waiting review' : pending || node.draft ? 'candidate draft' : undefined,
   })
-  return <div data-node-id={node.id} data-project-view-drop-target={node.entityKind === 'conversation' && node.conversation ? conversationGlythDropTarget(node.conversation.id) : undefined} data-project-view-drop-label={node.entityKind === 'conversation' ? '给这段对话' : undefined} data-node-kind={node.kind} data-entity-kind={node.entityKind} data-node-visual-family={visualFamily} data-node-current={node.current || undefined} data-node-draft={node.draft || undefined} data-node-historical={node.historical || undefined} data-revision-count={node.revisionCount} data-result-group={node.resultGroupId} data-node-runtime={node.runtimeState} data-run-status={node.runStatus} data-artifact-id={node.artifactId} data-revision-id={node.revisionId} data-file-record-id={node.fileRecordId} data-current-revision={node.followsCurrentRevision || undefined} data-preview-status={node.previewStatus} data-view-of={node.viewOf} data-scope-id={node.scopeId} data-position-locked={node.positionLocked || undefined} data-context-only={node.contextOnly || undefined} data-attention-bucket={attentionBucket} data-reference-order={referenceOrder || undefined} data-collection-motion={collectionMotion?.phase} data-testid={`canvas-node-${node.id}`} role="button" tabIndex={0} aria-disabled={node.disabled || undefined} className={`canvas-node node-family-${node.kind} visual-family-${visualFamily} density-${density} ${node.kind} ${revisionStack ? 'revision-stack' : ''} ${selected ? 'selected' : ''} ${multiSelected ? 'multi-selected' : ''} ${pending ? 'pending' : ''} ${reviewPending ? 'review-pending' : ''} ${referenceOrder > 0 ? 'reference-picked' : ''} ${referenceReceptive ? 'is-reference-receptive' : ''} ${colonyCandidate ? 'is-colony-candidate' : ''} ${dragging ? 'dragging' : ''} ${resizing ? 'resizing' : ''} ${relationTarget ? 'is-relation-target' : ''} ${workspaceMember ? 'workspace-active-member' : ''} ${locatePulse ? 'locate-pulse' : ''} ${attentionBucket ? `attention-${attentionBucket}` : ''} ${collectionMotion ? `collection-${collectionMotion.phase}` : ''} ${node.error ? 'error' : ''} ${node.disabled ? 'disabled' : ''} ${node.positionLocked ? 'position-locked' : ''}`} style={{ left: node.x, top: node.y, width: node.width, height: node.height, '--node-ui-scale': String(1 / Math.max(.2, zoom)), '--glyth-ui-scale': String(1 / Math.max(.02, zoom)), '--canvas-zoom': String(zoom), '--lcos-drag-x': String(dragSignal?.x ?? 0), '--lcos-drag-y': String(dragSignal?.y ?? 0), '--lcos-collection-fold-x': `${collectionMotion?.dx ?? 0}px`, '--lcos-collection-fold-y': `${collectionMotion?.dy ?? 0}px` } as React.CSSProperties} onDragStart={(event) => event.preventDefault()} onContextMenu={(event) => event.preventDefault()} onPointerDown={(event) => { if (!node.disabled) onPointerDown(event) }} onClick={(event) => { event.stopPropagation(); if (!node.disabled) onClick(additiveSelection(event), event.currentTarget) }}>
+  return <div data-node-id={node.id} data-project-relation-target={node.entityKind !== 'conversation' ? node.id : undefined} data-project-view-drop-target={node.entityKind === 'conversation' && node.conversation ? conversationGlythDropTarget(node.conversation.id) : undefined} data-project-view-drop-label={node.entityKind === 'conversation' ? '给这段对话' : undefined} data-node-kind={node.kind} data-entity-kind={node.entityKind} data-node-visual-family={visualFamily} data-node-current={node.current || undefined} data-node-draft={node.draft || undefined} data-node-historical={node.historical || undefined} data-revision-count={node.revisionCount} data-result-group={node.resultGroupId} data-node-runtime={node.runtimeState} data-run-status={node.runStatus} data-artifact-id={node.artifactId} data-revision-id={node.revisionId} data-file-record-id={node.fileRecordId} data-current-revision={node.followsCurrentRevision || undefined} data-preview-status={node.previewStatus} data-view-of={node.viewOf} data-scope-id={node.scopeId} data-position-locked={node.positionLocked || undefined} data-context-only={node.contextOnly || undefined} data-attention-bucket={attentionBucket} data-reference-order={referenceOrder || undefined} data-collection-motion={collectionMotion?.phase} data-testid={`canvas-node-${node.id}`} role="button" tabIndex={0} aria-disabled={node.disabled || undefined} className={`canvas-node node-family-${node.kind} visual-family-${visualFamily} density-${density} ${node.kind} ${revisionStack ? 'revision-stack' : ''} ${selected ? 'selected' : ''} ${multiSelected ? 'multi-selected' : ''} ${pending ? 'pending' : ''} ${reviewPending ? 'review-pending' : ''} ${referenceOrder > 0 ? 'reference-picked' : ''} ${referenceReceptive ? 'is-reference-receptive' : ''} ${colonyCandidate ? 'is-colony-candidate' : ''} ${dragging ? 'dragging' : ''} ${resizing ? 'resizing' : ''} ${relationTarget ? 'is-relation-target' : ''} ${workspaceMember ? 'workspace-active-member' : ''} ${locatePulse ? 'locate-pulse' : ''} ${attentionBucket ? `attention-${attentionBucket}` : ''} ${collectionMotion ? `collection-${collectionMotion.phase}` : ''} ${node.error ? 'error' : ''} ${node.disabled ? 'disabled' : ''} ${node.positionLocked ? 'position-locked' : ''}`} style={{ left: node.x, top: node.y, width: node.width, height: node.height, '--node-ui-scale': String(1 / Math.max(.2, zoom)), '--glyth-ui-scale': String(1 / Math.max(.02, zoom)), '--canvas-zoom': String(zoom), '--lcos-drag-x': String(dragSignal?.x ?? 0), '--lcos-drag-y': String(dragSignal?.y ?? 0), '--lcos-collection-fold-x': `${collectionMotion?.dx ?? 0}px`, '--lcos-collection-fold-y': `${collectionMotion?.dy ?? 0}px` } as React.CSSProperties} onDragStart={(event) => event.preventDefault()} onContextMenu={(event) => event.preventDefault()} onPointerDown={(event) => { if (!node.disabled) onPointerDown(event) }} onClick={(event) => { event.stopPropagation(); if (!node.disabled) onClick(additiveSelection(event), event.currentTarget) }}>
     {referenceOrder > 0 && <span className="lcos-reference-pick-badge" aria-label={`引用顺序 ${referenceOrder}`}>{referenceOrder}</span>}
     <span className="lcos-semantic-drop-handle" data-semantic-drop-handle aria-hidden="true" onClick={(event)=>event.stopPropagation()} title="Semantic Drop：拖到上下文或工作流（右键拖 / Alt+左拖）"><GripVertical size={11}/></span>
     {relationSource && <button data-testid={`relation-source-port-${node.id}`} className="lcos-relation-port" aria-label={`从 ${node.title} 建立关系`} title="关系已激活 · 拖动可精确连接，Esc 取消" onPointerDown={onLinkStart} onClick={(event) => event.stopPropagation()}><span aria-hidden="true" /></button>}

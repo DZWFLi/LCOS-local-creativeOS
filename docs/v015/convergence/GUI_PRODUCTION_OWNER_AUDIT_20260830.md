@@ -1293,3 +1293,63 @@ Still active debt, deliberately not hidden:
 - final target receptor hit area remains a later Phase A hit-testing acceptance item.
 
 A12 is therefore **not** Phase A Relation completion. It is a WRONG_OWNER retirement on one production species.
+
+
+---
+
+# 22. 2026-08-31 A13 closeout addendum · Cross-surface Relation physical owner
+
+A13 isolates Relation's shared **physical** interaction from each Surface's canonical persistence truth.
+
+Production shape:
+
+```text
+eligible ordinary Project material
+→ ProjectObjectOrbit Relation
+→ shared transient source / pointer / receptor adapter
+→ Surface-owned persistence callback
+```
+
+This explicitly avoids a false universal semantic `connect()`.
+
+Owner split:
+
+```text
+Main
+physical entry: ProjectObjectOrbit + existing Main session
+persistence:    ProjectCanvas CanvasEdge/connect truth
+
+Context
+physical entry: shared A13 adapter
+persistence:    canonical domain Relation callback with context-canvas provenance
+
+Workflow material
+physical entry: shared A13 adapter
+persistence:    canonical domain Relation callback with workflow-canvas provenance
+
+Workflow Step/action
+physical + truth: existing workflowActionState action-link machinery
+                 remains separate
+```
+
+The shared adapter contains no `saveRelation`, presentation edge store, workflow action store, bridge access, or relation ontology.
+
+Endpoint admission is capability-driven. Context/Workflow A13 only enables current view-endpoint materials; Conversation, `scope:*`, and `workspace:*` projections fail-close instead of guessing canonical endpoint identity.
+
+Main also stops using generic `[data-node-id]` as a Relation target fallback. Ordinary targets expose explicit `[data-project-relation-target]`; Workspace's legacy relation target remains isolated debt.
+
+Static evidence in the extracted candidate tree:
+
+```text
+A13 validator: 12/12 PASS
+all runnable v0.15 static validators: 41 PASS / 0 FAIL / 2 S9/S10 external skips
+```
+
+Formal source-owner closeout status:
+
+```text
+SOURCE / STATIC PASS
+MERGE-AUTHORIZED
+```
+
+The missing 8/21 v0.3 raw source is now governed by SOP-R1 and recorded as `RAW_SOURCE_LOST / RECONSTRUCTED_AUTHORITY PASS`; it is not a permanent A13 blocker. This addendum still must not be cited as runtime/browser/manual proof, which remains pending in the real local environment.

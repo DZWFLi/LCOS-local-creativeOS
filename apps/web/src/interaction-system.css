@@ -4865,6 +4865,36 @@
   pointer-events:none;
 }
 
+
+/* A13 · Context/Workflow Project materials share the same Orbit -> Relation physical layer.
+   Persistence remains surface/domain-owned; this CSS only expresses the transient gesture. */
+.lcos-reconstructed :is(.lcos-context-space-stage,.lcos-workflow-stage).is-project-relation-intent { cursor:crosshair; }
+.lcos-reconstructed .lcos-surface-relation-port { pointer-events:none; }
+.lcos-reconstructed .lcos-project-material-relation-live {
+  fill:none;
+  stroke:rgba(var(--lcos-ui-active-rgb, 92, 75, 155), .72);
+  stroke-width:1.6;
+  vector-effect:non-scaling-stroke;
+  filter:drop-shadow(0 0 4px rgba(var(--lcos-ui-active-rgb, 92, 75, 155), .18));
+  pointer-events:none;
+}
+.lcos-reconstructed :is(.lcos-surface-object,.lcos-surface-glyph).is-relation-target::after {
+  content:"";
+  position:absolute;
+  left:-4px;
+  top:calc(50% - 10px);
+  width:3px;
+  height:20px;
+  border-radius:999px;
+  background:rgba(var(--lcos-ui-active-rgb, 92, 75, 155), .72);
+  box-shadow:0 0 14px rgba(var(--lcos-ui-active-rgb, 92, 75, 155), .26);
+  pointer-events:none;
+}
+.lcos-reconstructed .is-project-relation-intent :is(.lcos-semantic-drop-handle,.lcos-workflow-port,.lcos-workflow-bypass) {
+  opacity:0 !important;
+  pointer-events:none !important;
+}
+
 /* Empty spatial background reads as Camera territory; nodes keep object semantics. */
 .lcos-reconstructed .lcos-spatial-canvas[data-pointer-state="pan-open-hand"] { cursor:grab; }
 .lcos-reconstructed .lcos-spatial-canvas[data-pointer-state="pan-closed-hand"],

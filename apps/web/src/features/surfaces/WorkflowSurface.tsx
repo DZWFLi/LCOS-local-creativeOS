@@ -52,6 +52,7 @@ import { applySurfaceOps, type SurfaceOp, validateSurfaceOps } from '../spatial/
 import { resolveSurfaceIntent, type SurfaceIntent } from '../spatial/model/surfaceIntent'
 import { AgentSurfaceComposer } from './AgentSurfaceComposer'
 import type { SurfaceBinding, SurfaceComponentType } from '../spatial/model/surfaceElementTypes'
+import { isProjectViewRelationEligible, ProjectMaterialRelationLiveEdge, useProjectMaterialRelationGesture } from '../spatial/projectMaterialRelationGesture'
 
 interface Props {
   projectId: string
@@ -84,7 +85,7 @@ interface Props {
   onFocusObject?: (id: string) => void
   onStart?: (kind: 'selection' | 'skill' | 'agent') => void
   onDirectProjectViewDrop?: (targetViewId: string, sourceIds: readonly string[]) => void
-  onCreateDomainRelation?: (fromViewId: string, toViewId: string, kind: string) => Promise<void>
+  onCreateDomainRelation?: (fromViewId: string, toViewId: string, kind: string, createdBy?: 'context-canvas' | 'workflow-canvas') => Promise<void>
   onUpdateDomainRelation?: (relationId: string, kind: string) => Promise<void>
   onDeleteDomainRelation?: (relationId: string) => Promise<void>
   focusRequest?: SpatialFocusRequest
@@ -219,6 +220,15 @@ export function WorkflowSurface(props: Props) {
   }, [camera, items, props.selectedIds])
   const renderIds = useMemo(() => new Set(renderItems.map((item) => item.node.id)), [renderItems])
   const byId = useMemo(() => new Map(items.map((item) => [item.node.id, item])), [items])
+  const projectRelation = useProjectMaterialRelationGesture({
+    onCommit: async (fromViewId, toViewId) => {
+      if (!props.onCreateDomainRelation) return
+      await props.onCreateDomainRelation(fromViewId, toViewId, 'reference', 'workflow-canvas')
+    },
+  })
+  const projectRelationEnd = projectRelation.targetId
+    ? (() => { const target = byId.get(projectRelation.targetId!); return target ? { x: target.x, y: target.y + target.height / 2 } : projectRelation.pointerPoint })()
+    : projectRelation.pointerPoint
   const materialEdgePlacements = useMemo(() => visibleEdges.flatMap((edge) => {
     if (!renderIds.has(edge.from) || !renderIds.has(edge.to)) return []
     const from = byId.get(edge.from)
@@ -500,7 +510,7 @@ export function WorkflowSurface(props: Props) {
     return rect ? spatialScreenToWorld(clientX, clientY, rect, camera) : { x: 0, y: 0 }
   }
   const beginLink = (event: ReactPointerEvent<HTMLButtonElement>, from: string) => {
-    if (event.button !== 0) return
+    if (projectRelation.active || event.button !== 0) return
     event.preventDefault()
     event.stopPropagation()
     const world = toWorld(event.clientX, event.clientY)
@@ -574,7 +584,7 @@ export function WorkflowSurface(props: Props) {
     if (!selectedEdgeRecord || !editableSelectedEdge || !props.onCreateDomainRelation) return
     setEdgeBusy(true)
     try {
-      await props.onCreateDomainRelation(selectedEdgeRecord.from, selectedEdgeRecord.to, (edgeLabelDraft || 'reference').trim())
+      await props.onCreateDomainRelation(selectedEdgeRecord.from, selectedEdgeRecord.to, (edgeLabelDraft || 'reference').trim(), 'workflow-canvas')
       setPresentationEdges((current) => current.filter((edge) => edge.id !== selectedEdgeRecord.id))
       setSelectedEdge(null)
     } finally { setEdgeBusy(false) }
@@ -730,13 +740,13 @@ export function WorkflowSurface(props: Props) {
       beacon={spatialFocus.beacon}
       onBeaconArrivalEnd={spatialFocus.clearBeacon}
       onMarqueeSelect={handleMarqueeSelect}
-      className={`lcos-workflow-stage lcos-presentation-spatial ${layoutPreview ? 'has-layout-preview' : ''}`}
+      className={`lcos-workflow-stage lcos-presentation-spatial ${layoutPreview ? 'has-layout-preview' : ''} ${projectRelation.active ? 'is-project-relation-intent' : ''}`}
       worldClassName="lcos-presentation-world"
       testId="workflow-spatial"
       overlays={overlay}
-      onPointerMove={moveLink}
+      onPointerMove={(context) => { projectRelation.onPointerMove(context); moveLink(context) }}
       onPointerUp={({ event }) => { drag.current = endSpatialPointer(); groupDrag.current = null; setDraggingId(null); endLink(event.clientX, event.clientY) }}
-      onPointerCancel={() => { drag.current = endSpatialPointer(); groupDrag.current = null; setDraggingId(null); setLink(null); setLinkTargetId(null) }}
+      onPointerCancel={() => { projectRelation.cancel(); drag.current = endSpatialPointer(); groupDrag.current = null; setDraggingId(null); setLink(null); setLinkTargetId(null) }}
       onExternalDrop={(kind, raw, _screen, point) => {
         if (kind !== 'project-view' || !props.onImportProjectView) return
         try {
@@ -761,6 +771,7 @@ export function WorkflowSurface(props: Props) {
           return <g key={edge.id} className={`lcos-workflow-edge-group material-relation ${selectedEdge === edge.id ? 'selected' : ''}`}><path d={`M${x1} ${y1} C${m} ${y1},${m} ${y2},${x2} ${y2}`} className={`${edge.active ? 'active' : ''} ${selectedEdge === edge.id ? 'selected' : ''} ${edge.scope === 'presentation' ? 'presentation' : ''}`} onClick={(event) => { event.stopPropagation(); setSelectedEdge(edge.id); setSelectedActionEdge(null) }}/>{edge.label && <text x={m} y={(y1 + y2) / 2 - 8} textAnchor="middle">{edge.label}</text>}</g>
         })}
         {link && actionById.get(link.from) && (() => { const from = actionById.get(link.from)!; const startX = from.x + ACTION_WIDTH; const startY = from.y + ACTION_HEIGHT / 2; const m = startX + (link.x - startX) * .5; return <path key="workflow-action-link" className="edge temporary workflow-link" d={`M${startX} ${startY} C${m} ${startY},${m} ${link.y},${link.x} ${link.y}`}/> })()}
+        <ProjectMaterialRelationLiveEdge start={projectRelation.sourcePoint} end={projectRelationEnd}/>
         {layoutPreview?.routes.map((route) => route.points.length > 1 ? <path key={`preview:${route.id}`} className="layout-preview-edge" d={route.points.map((point, index) => `${index ? 'L' : 'M'}${point.x} ${point.y}`).join(' ')}/> : null)}
       </SpatialEdgeLayer>
 
@@ -805,13 +816,14 @@ export function WorkflowSurface(props: Props) {
           </div>
         })}
 
-        {renderItems.map(({ node, x, y, width }, index) => {
+        {renderItems.map(({ node, x, y, width, height }, index) => {
           const owner = firstActionForView.get(node.id)
           const usageCount = usageCountByView.get(node.id) ?? 0
           const usageHint = owner ? (usageCount > 1 ? `用于 ${usageCount} 步 · 首先：${owner.label}` : `用于：${owner.label}`) : (node.kind === 'process' ? '运行记录 · 不是 Step' : '待挂接材料')
           const runClass = props.runOverlay ? props.runOverlay.activeNodeIds.includes(node.id) ? 'run-active' : props.runOverlay.failedNodeIds.includes(node.id) ? 'run-failed' : props.runOverlay.completedNodeIds.includes(node.id) ? 'run-completed' : '' : ''
+          const relationEligible = Boolean(props.onCreateDomainRelation) && isProjectViewRelationEligible(node)
           return <div key={node.id} data-workflow-material-id={node.id} className={`lcos-workflow-node lcos-workflow-material lcos-spatial-placement ${owner ? 'is-attached' : 'is-unassigned'} ${props.selectedIds.includes(node.id) ? 'selected' : ''} ${draggingId === node.id ? 'is-dragging' : ''} ${pinnedIds.includes(node.id) ? 'is-manual-anchor' : ''} ${props.attentionBucketsByViewId?.[node.id] ? `attention-${props.attentionBucketsByViewId[node.id]}` : ''} ${runClass}`} data-attention-bucket={props.attentionBucketsByViewId?.[node.id]} style={{ left: x, top: y, width, '--i': index } as CSSProperties} onPointerDown={(event) => beginMaterialDrag(event, node.id)} onPointerMove={moveMaterialDrag} onPointerUp={endMaterialDrag} onPointerCancel={cancelMaterialDrag}>
-            <SurfaceObject node={node} zoom={camera.zoom} compact performanceProxy={(materialLod === 'aggregate' || materialLod === 'overview') && !props.selectedIds.includes(node.id)} usageHint={usageHint} spatialSemantic={boundRegionSemanticForView(surfaceElements, node.id)} selected={props.selectedIds.includes(node.id)} dropIds={props.selectedIds.includes(node.id) && props.selectedIds.length ? props.selectedIds : [node.id]} onDirectProjectViewDrop={props.onDirectProjectViewDrop} onSelect={props.onSelect} onDoubleClick={props.onDoubleClick} onLocate={props.onFocusObject} orbitEligible={props.selectedIds.length <= 1}/>
+            <SurfaceObject node={node} zoom={camera.zoom} compact performanceProxy={(materialLod === 'aggregate' || materialLod === 'overview') && !props.selectedIds.includes(node.id)} usageHint={usageHint} spatialSemantic={boundRegionSemanticForView(surfaceElements, node.id)} selected={props.selectedIds.includes(node.id)} dropIds={props.selectedIds.includes(node.id) && props.selectedIds.length ? props.selectedIds : [node.id]} onDirectProjectViewDrop={props.onDirectProjectViewDrop} onSelect={props.onSelect} onDoubleClick={props.onDoubleClick} onLocate={props.onFocusObject} orbitEligible={props.selectedIds.length <= 1} relationActive={projectRelation.active} relationEligible={relationEligible} relationSource={projectRelation.sourceId === node.id} relationTarget={projectRelation.targetId === node.id} {...(relationEligible ? { onRelation: () => projectRelation.beginIntent(node.id, { x: x + width, y: y + height / 2 }) } : {})} {...(relationEligible && projectRelation.active && projectRelation.sourceId !== node.id ? { onRelationCommit: () => projectRelation.commitTarget(node.id) } : {})}/>
             <button type="button" className="lcos-workflow-bypass" title="从当前 Workflow 移除；原材料保持不变" aria-label={`从工作流移除 ${node.title}`} onPointerDown={(event) => event.stopPropagation()} onClick={() => removeMaterial(node.id)}><Unplug size={10}/></button>
             {pinnedIds.includes(node.id) && <i className="lcos-manual-anchor-mark" title="手工位置锚点"/>}
           </div>

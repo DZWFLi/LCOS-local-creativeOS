@@ -284,3 +284,48 @@ Current LS-001:
 `LCOS_0.1_三大独立视图组件化详细施工总稿_v03_对话选择与承接全链补齐_20260821.md`
 
 is `RAW_SOURCE_LOST / RECONSTRUCTED_AUTHORITY PASS` and is **not a permanent A13 blocker** after the 2026-08-31 user adjudication.
+---
+
+# 16. A13 formal closeout pointer · Cross-surface Relation Gesture Adapter
+
+Latest:
+
+- `docs/v015/convergence/A13_CROSS_SURFACE_RELATION_GESTURE_CLOSEOUT_20260831.md`
+
+Current source truth after A13:
+
+- eligible ordinary Project-view materials on Context / Workflow receive the same explicit `ProjectObjectOrbit → Relation` physical grammar as Main;
+- shared `projectMaterialRelationGesture` owns transient source / pointer / receptor state only;
+- Context and Workflow persistence stays on existing canonical domain Relation callbacks;
+- Workflow Step→Step action-link truth remains separate;
+- Conversation / `scope:*` / `workspace:*` endpoints fail-close where current canonical view-endpoint semantics are unproven;
+- Main generic `[data-node-id]` fallback is no longer an ordinary Relation receptor.
+
+SOP-R1 adjudication:
+
+```text
+8/21 v0.3 raw source = RAW_SOURCE_LOST
+RECONSTRUCTED_AUTHORITY = PASS
+A13 blocker = NO
+```
+
+Validation in the extracted construction tree:
+
+```text
+SOP-R1 dedicated static: 8/8 PASS
+A13 dedicated static: 12/12 PASS
+all runnable validate-v015-* gates: 41 PASS / 0 FAIL / 2 external S9/S10 SKIP
+post-A13 semantic typecheck: BLOCKED_ENV (archive has no node_modules)
+```
+
+Formal status:
+
+```text
+A13 source/static closeout = PASS
+A13 merge authorization   = YES
+runtime/manual            = PENDING LOCAL MERGE / BLOCKED_ENV HERE
+Phase A                    = OPEN
+Phase B admission          = NO
+```
+
+Remaining Relation debt is deliberately not hidden: Workspace legacy source owner, Conversation Glyth endpoint semantics, aggregate endpoint semantics, final receptor motor-tolerance/hit-halo, and real browser/manual save→reload proof.
