@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { CSSProperties } from 'react'
 import type { Camera } from '../../model'
+import type { SpatialInsets } from './spatialTypes'
 import {
   projectSpatialMarkers,
   spatialMarkerFanGroups,
@@ -13,6 +14,7 @@ import {
 interface Props {
   readonly camera: Camera
   readonly viewportSize: Readonly<{ width: number; height: number }>
+  readonly safeInsets?: SpatialInsets | undefined
   readonly items: readonly SpatialMarkerItem[]
   readonly currentSurfaceRef?: string
   readonly interactive?: boolean
@@ -181,6 +183,7 @@ function ClusterBody({ cluster, interactive, expanded, onExpandedChange, onLocat
 export function SpatialMarkerLayer({
   camera,
   viewportSize,
+  safeInsets,
   items,
   currentSurfaceRef,
   interactive = true,
@@ -195,8 +198,9 @@ export function SpatialMarkerLayer({
     items,
     camera,
     viewportSize,
+    safeInsets,
     currentSurfaceRef,
-  }), [camera, currentSurfaceRef, items, viewportSize])
+  }), [camera, currentSurfaceRef, items, safeInsets, viewportSize])
 
   if (!projections.length) return null
   return <div className={`lcos-spatial-marker-layer ${className}`.trim()} data-testid="spatial-marker-layer">

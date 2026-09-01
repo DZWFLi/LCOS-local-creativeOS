@@ -42,7 +42,7 @@ import type {
   WorkspaceEntityMembership,
 } from '@local-creative-os/domain'
 import { assertContainmentWrite } from '@local-creative-os/domain'
-import type { SpatialMarkerIntentV0 } from '@local-creative-os/contracts'
+import type { ColorPinDefinitionV0, ColorPinMembershipV0, SpatialMarkerIntentV0 } from '@local-creative-os/contracts'
 import type {
   AcceptArtifactReturnResult,
   ActiveContextV2,
@@ -286,7 +286,8 @@ export class SqliteMetadataRepository {
     if (current === 47) { this.#migrate_048_from_v47(); current = 48 }
     if (current === 48) { this.#migrate_049_from_v48(); current = 49 }
     if (current === 49) { this.#migrate_050_from_v49(); current = 50 }
-    if (current !== 50) throw new Error(`Unsupported metadata schema version ${current}.`)
+    if (current === 50) { this.#migrate_051_from_v50(); current = 51 }
+    if (current !== 51) throw new Error(`Unsupported metadata schema version ${current}.`)
   }
 
   #migrate_037_from_v36(): void {
@@ -517,6 +518,39 @@ export class SqliteMetadataRepository {
       CREATE INDEX IF NOT EXISTS idx_skill_proposals_project_status
         ON skill_proposals(project_id, status, created_at);
       PRAGMA user_version = 50;
+      COMMIT;
+    `)
+  }
+
+  #migrate_051_from_v50(): void {
+    // A25-6: Color Pin is an independent many-to-many Project index relationship.
+    // Definitions own color identity; memberships bind canonical targets. No screen/world coordinates.
+    this.#database.exec(`
+      BEGIN;
+      CREATE TABLE IF NOT EXISTS color_pin_definitions (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        color_value TEXT NOT NULL,
+        label TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(project_id, color_value)
+      );
+      CREATE TABLE IF NOT EXISTS color_pin_memberships (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        color_pin_id TEXT NOT NULL REFERENCES color_pin_definitions(id) ON DELETE CASCADE,
+        target_kind TEXT NOT NULL CHECK(target_kind IN ('view','entity','surface')),
+        target_id TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(project_id, color_pin_id, target_kind, target_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_color_pin_memberships_project_color
+        ON color_pin_memberships(project_id, color_pin_id, created_at);
+      CREATE INDEX IF NOT EXISTS idx_color_pin_memberships_project_target
+        ON color_pin_memberships(project_id, target_kind, target_id);
+      PRAGMA user_version = 51;
       COMMIT;
     `)
   }
@@ -2557,6 +2591,11 @@ export class SqliteMetadataRepository {
     /** F6A2：Spatial Marker 意图增删（与 changeSet 同事务）。 */
     readonly spatialMarkerAdds?: readonly SpatialMarkerIntentV0[]
     readonly spatialMarkerDeletes?: readonly string[]
+    /** A25-6: Color Pin identity + membership changes share the same semantic ChangeSet transaction. */
+    readonly colorPinDefinitionAdds?: readonly ColorPinDefinitionV0[]
+    readonly colorPinDefinitionDeletes?: readonly string[]
+    readonly colorPinMembershipAdds?: readonly ColorPinMembershipV0[]
+    readonly colorPinMembershipDeletes?: readonly string[]
     readonly artifactViewDeletes?: readonly ArtifactViewId[]
     readonly noteDeletes?: readonly NoteId[]
     readonly changeSet?: MutationChangeSetV1
@@ -2621,6 +2660,10 @@ export class SqliteMetadataRepository {
       }
       for (const marker of plan.spatialMarkerAdds ?? []) this.#insertSpatialMarkerIntent(marker)
       for (const markerId of plan.spatialMarkerDeletes ?? []) this.#database.prepare('DELETE FROM spatial_marker_intents WHERE id = ?').run(markerId as SQLInputValue)
+      for (const definition of plan.colorPinDefinitionAdds ?? []) this.#insertColorPinDefinition(definition)
+      for (const membership of plan.colorPinMembershipAdds ?? []) this.#insertColorPinMembership(membership)
+      for (const membershipId of plan.colorPinMembershipDeletes ?? []) this.#database.prepare('DELETE FROM color_pin_memberships WHERE id = ?').run(membershipId as SQLInputValue)
+      for (const colorPinId of plan.colorPinDefinitionDeletes ?? []) this.#database.prepare('DELETE FROM color_pin_definitions WHERE id = ?').run(colorPinId as SQLInputValue)
       for (const viewId of plan.artifactViewDeletes ?? []) this.#database.prepare('DELETE FROM artifact_views WHERE id = ?').run(viewId as SQLInputValue)
       for (const noteId of plan.noteDeletes ?? []) this.#database.prepare('DELETE FROM notes WHERE id = ?').run(noteId as SQLInputValue)
       if (plan.changeSet !== undefined) this.createMutationChangeSet(plan.changeSet)
@@ -4614,6 +4657,72 @@ export class SqliteMetadataRepository {
       ...(row.source_surface_ref === null || row.source_surface_ref === undefined ? {} : { sourceSurfaceRef: String(row.source_surface_ref) as NonNullable<SpatialMarkerIntentV0['sourceSurfaceRef']> }),
       createdAt: String(row.created_at),
       updatedAt: String(row.updated_at),
+    }
+  }
+
+  // ==================== A25-6: Color Pin truth (schema 51) ====================
+
+  listColorPinDefinitions(projectId: ProjectId): readonly ColorPinDefinitionV0[] {
+    const rows = this.#database.prepare('SELECT * FROM color_pin_definitions WHERE project_id = ? ORDER BY created_at, id')
+      .all(projectId as SQLInputValue) as Row[]
+    return rows.map((row) => this.#colorPinDefinition(row))
+  }
+
+  listColorPinMemberships(projectId: ProjectId): readonly ColorPinMembershipV0[] {
+    const rows = this.#database.prepare('SELECT * FROM color_pin_memberships WHERE project_id = ? ORDER BY created_at, id')
+      .all(projectId as SQLInputValue) as Row[]
+    return rows.map((row) => this.#colorPinMembership(row))
+  }
+
+  getColorPinDefinition(colorPinId: string): ColorPinDefinitionV0 | undefined {
+    const row = this.#database.prepare('SELECT * FROM color_pin_definitions WHERE id = ?').get(colorPinId as SQLInputValue) as Row | undefined
+    return row === undefined ? undefined : this.#colorPinDefinition(row)
+  }
+
+  getColorPinDefinitionByColor(projectId: ProjectId, color: string): ColorPinDefinitionV0 | undefined {
+    const row = this.#database.prepare('SELECT * FROM color_pin_definitions WHERE project_id = ? AND color_value = ?')
+      .get(projectId as SQLInputValue, color) as Row | undefined
+    return row === undefined ? undefined : this.#colorPinDefinition(row)
+  }
+
+  getColorPinMembership(membershipId: string): ColorPinMembershipV0 | undefined {
+    const row = this.#database.prepare('SELECT * FROM color_pin_memberships WHERE id = ?').get(membershipId as SQLInputValue) as Row | undefined
+    return row === undefined ? undefined : this.#colorPinMembership(row)
+  }
+
+  findColorPinMembership(projectId: ProjectId, colorPinId: string, targetRef: ColorPinMembershipV0['targetRef']): ColorPinMembershipV0 | undefined {
+    const row = this.#database.prepare('SELECT * FROM color_pin_memberships WHERE project_id = ? AND color_pin_id = ? AND target_kind = ? AND target_id = ?')
+      .get(projectId as SQLInputValue, colorPinId, targetRef.kind, targetRef.id) as Row | undefined
+    return row === undefined ? undefined : this.#colorPinMembership(row)
+  }
+
+  #insertColorPinDefinition(value: ColorPinDefinitionV0): void {
+    this.#database.prepare(`
+      INSERT INTO color_pin_definitions (id, project_id, color_value, label, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(value.id, value.projectId, value.color, value.label ?? null, value.createdAt, value.updatedAt)
+  }
+
+  #insertColorPinMembership(value: ColorPinMembershipV0): void {
+    this.#database.prepare(`
+      INSERT INTO color_pin_memberships (id, project_id, color_pin_id, target_kind, target_id, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(value.id, value.projectId, value.colorPinId, value.targetRef.kind, value.targetRef.id, value.createdAt, value.updatedAt)
+  }
+
+  #colorPinDefinition(row: Row): ColorPinDefinitionV0 {
+    return {
+      id: String(row.id), projectId: String(row.project_id), color: String(row.color_value),
+      ...(row.label === null || row.label === undefined ? {} : { label: String(row.label) }),
+      createdAt: String(row.created_at), updatedAt: String(row.updated_at),
+    }
+  }
+
+  #colorPinMembership(row: Row): ColorPinMembershipV0 {
+    return {
+      id: String(row.id), projectId: String(row.project_id), colorPinId: String(row.color_pin_id),
+      targetRef: { projectId: String(row.project_id), kind: String(row.target_kind) as ColorPinMembershipV0['targetRef']['kind'], id: String(row.target_id) },
+      createdAt: String(row.created_at), updatedAt: String(row.updated_at),
     }
   }
 

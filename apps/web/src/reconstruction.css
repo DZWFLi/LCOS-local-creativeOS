@@ -1742,6 +1742,100 @@
   line-height:17px;
   scrollbar-width:thin;
 }
+.lcos-reconstructed .lcos-voice-input-stage {
+  min-height:38px;
+  display:grid;
+  grid-template-columns:28px minmax(0,1fr) auto;
+  align-items:center;
+  gap:6px;
+  padding:4px 4px 4px 6px;
+  border:1px solid rgba(92,84,112,.10);
+  border-radius:10px;
+  background:rgba(250,250,252,.72);
+}
+.lcos-reconstructed .lcos-voice-state-mark {
+  width:26px;
+  height:26px;
+  display:grid;
+  place-items:center;
+  border-radius:999px;
+  background:rgba(82,75,102,.07);
+  color:#625d6b;
+}
+.lcos-reconstructed .lcos-voice-input-stage.is-recording .lcos-voice-state-mark {
+  background:rgba(150,76,84,.09);
+  color:#9c555d;
+}
+.lcos-reconstructed .lcos-voice-input-stage.is-transcribing .lcos-voice-state-mark svg { animation:lcos-voice-spin 1s linear infinite; }
+.lcos-reconstructed .lcos-voice-state-copy {
+  min-width:0;
+  display:flex;
+  align-items:center;
+  gap:7px;
+  color:#6f6a77;
+}
+.lcos-reconstructed .lcos-voice-state-copy b {
+  flex:none;
+  font-size:10.5px;
+  font-weight:610;
+  color:#57525f;
+}
+.lcos-reconstructed .lcos-voice-state-copy > span {
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  color:#a19ca7;
+  font-size:9.5px;
+}
+.lcos-reconstructed .lcos-voice-waveform {
+  width:86px;
+  height:20px;
+  display:flex;
+  align-items:center;
+  gap:3px;
+}
+.lcos-reconstructed .lcos-voice-waveform i {
+  width:2px;
+  height:12px;
+  border-radius:999px;
+  background:rgba(129,80,91,.55);
+  transform-origin:center;
+  animation:lcos-voice-wave .84s ease-in-out infinite alternate;
+}
+.lcos-reconstructed .lcos-voice-waveform i:nth-child(2n) { animation-delay:-.28s; }
+.lcos-reconstructed .lcos-voice-waveform i:nth-child(3n) { animation-delay:-.48s; }
+.lcos-reconstructed .lcos-voice-waveform i:nth-child(4n) { animation-delay:-.12s; }
+.lcos-reconstructed .lcos-voice-state-actions { display:flex; align-items:center; gap:3px; }
+.lcos-reconstructed .lcos-voice-action,
+.lcos-reconstructed .lcos-voice-trigger {
+  height:24px;
+  min-height:24px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:4px;
+  padding:0 6px;
+  border:0;
+  border-radius:7px;
+  background:transparent;
+  color:#797582;
+  font-size:10px;
+}
+.lcos-reconstructed .lcos-voice-action { width:26px; padding:0; }
+.lcos-reconstructed .lcos-voice-action:hover,
+.lcos-reconstructed .lcos-voice-trigger:hover { background:rgba(80,72,104,.06); color:#4f4a58; }
+.lcos-reconstructed .lcos-voice-action.is-stop {
+  background:rgba(148,72,82,.08);
+  color:#98515a;
+}
+.lcos-reconstructed .lcos-voice-trigger:disabled { opacity:.3; cursor:not-allowed; }
+@keyframes lcos-voice-wave { from { transform:scaleY(.34); opacity:.42; } to { transform:scaleY(1); opacity:.9; } }
+@keyframes lcos-voice-spin { to { transform:rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .lcos-reconstructed .lcos-voice-waveform i,
+  .lcos-reconstructed .lcos-voice-input-stage.is-transcribing .lcos-voice-state-mark svg { animation:none; }
+}
 .lcos-reconstructed .lcos-composer-footer-compact {
   min-height:25px;
   gap:3px;

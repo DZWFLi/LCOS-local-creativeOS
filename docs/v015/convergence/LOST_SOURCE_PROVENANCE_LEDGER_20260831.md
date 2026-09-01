@@ -144,3 +144,79 @@ CONFLICT_ON_FUTURE_DOMAIN = USER_ARBITRATION_REQUIRED
 3. 与 reconstructed authority 做 diff；
 4. 有冲突则按 Truth Priority 裁决；
 5. 保留本 Ledger 的历史记录，不删除曾经发生过的 provenance gap。
+
+---
+
+# 2026-09-01 Recovery Update · W0-2
+
+The historical loss event above remains preserved. Current recoverability has changed.
+
+## LS-001 current source state
+
+`LCOS_0.1_三大独立视图组件化详细施工总稿_v03_对话选择与承接全链补齐_20260821.md`
+
+```text
+HISTORICAL_2026-08-31 = RAW_SOURCE_LOST / CACHE EVICTED
+CURRENT_2026-09-01 = RAW_SOURCE_RECOVERED_EXTERNAL
+REPO_LOCAL_EXACT_BYTES = NO
+LOCAL_VENDOR_PENDING = YES
+RECONSTRUCTED_AUTHORITY = PASS / remains active until exact repo-local vendoring + FULL READ
+```
+
+Evidence on 2026-09-01:
+
+- the full file object is again discoverable in the user's File Library under the exact original filename;
+- the file can be opened through the File Library retrieval path;
+- the current construction runtime cannot export that File Library object as exact bytes into this extracted RC;
+- therefore **no excerpt/snippet was fabricated into `convergence/original/`**.
+
+This changes the provenance classification from “permanently lost” to “externally recovered, local vendoring pending”.
+
+## Exact repo-local raw sources recovered from existing context-library bytes
+
+The following sources were already present byte-for-byte inside `docs/v015/context-library/`, although some filenames were mojibake/duplicated. W0-2 copied the exact bytes into canonical `docs/v015/convergence/original/` paths and verified SHA-256 against `context-library/MANIFEST.md`:
+
+```text
+E31CC1D56A3DFBF76A42FF9E589C8156A18D2D1B3D11CAEB60000418EA71653C
+→ LCOS v0.15 GUI 感知层重构与前端施工规划.md
+
+64A2320FA7E8B19DDD770515D773254418E6FEB61850AABEA950B1FA1D6FF8FC
+→ LCOS v0.15 UX 架构第二轮收口与施工清单.md
+
+2D7C9E50F30E341E285FFFC9F79FAFB790D41512AAB6DB32BD2EE7B70DD119E6
+→ LCOS_v0.15_UX冻结_同一套物理三个语义现场与Assembly_20260829.md
+
+C94F852BAAACD40205FBB48440EAE496469F867A645C51F0A4089CE2A3F98A69
+→ LCOS_v0.15_R3D_SkillArtifact_SkillBuilder_CrossSurface_Freeze_20260830.md
+```
+
+## Additional 8/21 external recovery evidence
+
+The following original file objects are also discoverable in File Library and must no longer be described as certainly lost:
+
+```text
+LCOS_三工作现场_通用Glyph_项目承接_Git协作_基于最新仓库实施规划_20260821.md
+LCOS_Malleable_Spatial_Surface_Glyph_AgentComposer_大范围参考研究_20260821.md
+```
+
+Their exact repo-local bytes remain pending.
+
+`LCOS_三大视图组件体系筛选表_v01_20260821.md` is still **NOT RECOVERED AS AN EXACT LOCAL FILE** in W0-2; do not fabricate it.
+
+## Updated rule
+
+```text
+raw source exact local bytes available
+→ FULL READ local original
+
+raw source externally recovered but exact local bytes unavailable
+→ RAW_SOURCE_RECOVERED_EXTERNAL
+→ record provenance
+→ keep reconstructed-authority safety net
+→ vendor exact file when available
+→ FULL READ + diff immediately after vendoring
+
+raw source actually lost
+→ RAW_SOURCE_LOST
+→ reconstructed-authority gate
+```

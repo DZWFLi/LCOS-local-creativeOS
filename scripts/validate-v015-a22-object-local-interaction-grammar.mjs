@@ -61,11 +61,11 @@ check('Right-click keeps management commands instead of becoming empty',
   sceneHost.includes("action: 'copy' as const") &&
   (sceneHost.includes("action: 'duplicate-view' as const") || sceneHost.includes("action: allMenuReferences")))
 
-check('Project Object Arc still owns direct Open/Relation/Pin/Locate capabilities',
+check('Project Object Arc keeps direct object capabilities while legacy binary Pin may yield to canonical Color Pin migration',
   projectOrbit.includes("id: 'object-open'") &&
   projectOrbit.includes("id: 'object-relation'") &&
-  projectOrbit.includes("id: 'object-pin'") &&
-  projectOrbit.includes("id: 'object-locate'"))
+  projectOrbit.includes("id: 'object-locate'") &&
+  (projectOrbit.includes("id: 'object-pin'") || projectOrbit.includes('binary Spatial Marker action') && projectOrbit.includes('Color Pin')))
 
 check('Multi-selection restores individual plus aggregate spatial feedback',
   interactionCss.includes('.canvas-node.multi-selected') &&

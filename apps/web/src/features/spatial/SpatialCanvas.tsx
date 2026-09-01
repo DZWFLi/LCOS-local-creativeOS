@@ -3,17 +3,19 @@ import { Maximize2, Minimize2 } from 'lucide-react'
 import type { CSSProperties, DragEvent, PointerEvent as ReactPointerEvent, ReactNode, WheelEvent } from 'react'
 import type { StableSurfaceRefV0 } from '@local-creative-os/contracts'
 import type { Camera } from '../../model'
-import { applySpatialWheelGesture, spatialScreenToWorld } from './spatialCamera'
+import { applySpatialWheelGesture, spatialSafeViewportWorldBounds, spatialScreenToWorld } from './spatialCamera'
 import { spatialDensityForSize } from './spatialLod'
 import { advanceSpatialPan, beginSpatialPan, endSpatialPointer } from './spatialInteractionMachine'
 import { CanvasEdgePinLayer, type CanvasEdgePinItem } from './CanvasEdgePinLayer'
 import { SpatialBeaconLayer } from './SpatialBeaconLayer'
+import { useActiveSpatialViewport } from './ActiveSpatialViewportContext'
+import { spatialInsetsWithinRect } from './activeSpatialViewport'
 import { spatialMarkerSurfaceForCanvas, type SpatialMarkerItem } from './spatialMarkerSystem'
 import { SpatialMarkerLayer } from './SpatialMarkerLayer'
 import { useProjectSpatialMarkersOrNull } from './ProjectSpatialMarkerContext'
 import { SpatialOverlayLayer } from './SpatialOverlayLayer'
 import { SpatialViewport } from './SpatialViewport'
-import { IDLE_SPATIAL_POINTER, type SpatialCameraSetter, type SpatialPoint, type SpatialPointerSession } from './spatialTypes'
+import { IDLE_SPATIAL_POINTER, type SpatialCameraSetter, type SpatialInsets, type SpatialPoint, type SpatialPointerSession } from './spatialTypes'
 import { LCOS_MATERIAL_TRANSFER_MIME } from '../../state/materialTransfer'
 import type { MiniMapVisualKind } from './minimapSemantics'
 import type { SpatialBeaconState } from './useSpatialFocusRequest'
@@ -144,6 +146,16 @@ export const SpatialCanvas = forwardRef<HTMLDivElement, Props>(function SpatialC
   const [marqueeRect, setMarqueeRect] = useState<{ left: number; top: number; width: number; height: number } | null>(null)
   const [materialReceiving, setMaterialReceiving] = useState(false)
   const markerRuntime = useProjectSpatialMarkersOrNull()
+  const activeSpatialViewport = useActiveSpatialViewport()
+  const localSafeInsets = useMemo<SpatialInsets>(() => {
+    const root = rootRef.current
+    if (!activeSpatialViewport || !root) return { left: 0, right: 0, top: 0, bottom: 0 }
+    return spatialInsetsWithinRect(activeSpatialViewport, root.getBoundingClientRect())
+  }, [activeSpatialViewport, size.height, size.width])
+  const localActiveCenter = useMemo(() => ({
+    x: localSafeInsets.left + Math.max(0, size.width - localSafeInsets.left - localSafeInsets.right) / 2,
+    y: localSafeInsets.top + Math.max(0, size.height - localSafeInsets.top - localSafeInsets.bottom) / 2,
+  }), [localSafeInsets, size.height, size.width])
   const effectiveSurfaceRef: StableSurfaceRefV0 | undefined = surfaceRef ?? (testId === 'canvas' ? 'main' : undefined)
   const markerSourceItems = markerAnchorItems ?? marqueeItems ?? minimapItems ?? []
   const durableMarkerItems = useMemo<readonly SpatialMarkerItem[]>(() => {
@@ -180,7 +192,7 @@ export const SpatialCanvas = forwardRef<HTMLDivElement, Props>(function SpatialC
         ? { x: local.x + local.width / 2, y: local.y + local.height / 2 }
         : resolution.target.worldPosition
       if (!point) return
-      setCamera((current) => ({ ...current, x: size.width / 2 - point.x * current.zoom, y: size.height / 2 - point.y * current.zoom }))
+      setCamera((current) => ({ ...current, x: localActiveCenter.x - point.x * current.zoom, y: localActiveCenter.y - point.y * current.zoom }))
     })
   }
 
@@ -434,16 +446,16 @@ export const SpatialCanvas = forwardRef<HTMLDivElement, Props>(function SpatialC
     {(overlays !== undefined || marqueeRect || beacon || unifiedMarkerItems.length > 0 || (minimapItems && minimapItems.length > 0) || (edgePinItems && edgePinItems.length > 0 && onEdgePinLocate)) && <SpatialOverlayLayer>
       {overlays}
       {marqueeRect && <div className="lcos-spatial-marquee" style={{ left: marqueeRect.left, top: marqueeRect.top, width: marqueeRect.width, height: marqueeRect.height }} />}
-      {minimapItems && minimapItems.length > 0 && <SpatialMiniMap items={minimapItems} camera={camera} setCamera={setCamera} viewportSize={size} label={minimapLabel} beacon={beacon}/>}
-      {beacon && <SpatialBeaconLayer beacon={beacon} camera={camera} onArrivalEnd={onBeaconArrivalEnd} surface={spatialMarkerSurfaceForCanvas(testId)} sourceSurfaceRef={effectiveSurfaceRef}/>}
+      {minimapItems && minimapItems.length > 0 && <SpatialMiniMap items={minimapItems} camera={camera} setCamera={setCamera} viewportSize={size} safeInsets={localSafeInsets} label={minimapLabel} beacon={beacon}/>}
+      {beacon && <SpatialBeaconLayer beacon={beacon} camera={camera} safeInsets={localSafeInsets} onArrivalEnd={onBeaconArrivalEnd} surface={spatialMarkerSurfaceForCanvas(testId)} sourceSurfaceRef={effectiveSurfaceRef}/>}
       {/* §4.13 边缘气泡标点:不跟随相机 transform 的固定屏幕层(minimap 同层),viewportSize 复用容器 ResizeObserver 实测值 */}
-      {unifiedMarkerItems.length > 0 && <SpatialMarkerLayer items={unifiedMarkerItems} camera={camera} viewportSize={size} currentSurfaceRef={effectiveSurfaceRef} onLocate={locateUnifiedMarker}/>}
-      {edgePinItems && edgePinItems.length > 0 && onEdgePinLocate && <CanvasEdgePinLayer camera={camera} viewportSize={size} items={edgePinItems} currentSurfaceRef={effectiveSurfaceRef} defaultSurface={spatialMarkerSurfaceForCanvas(testId)} onLocate={onEdgePinLocate}/>}
+      {unifiedMarkerItems.length > 0 && <SpatialMarkerLayer items={unifiedMarkerItems} camera={camera} viewportSize={size} safeInsets={localSafeInsets} currentSurfaceRef={effectiveSurfaceRef} onLocate={locateUnifiedMarker}/>}
+      {edgePinItems && edgePinItems.length > 0 && onEdgePinLocate && <CanvasEdgePinLayer camera={camera} viewportSize={size} safeInsets={localSafeInsets} items={edgePinItems} currentSurfaceRef={effectiveSurfaceRef} defaultSurface={spatialMarkerSurfaceForCanvas(testId)} onLocate={onEdgePinLocate}/>}
     </SpatialOverlayLayer>}
   </div>
 })
 
-function SpatialMiniMap({ items, camera, setCamera, viewportSize, label, beacon }: { items: readonly SpatialCanvasItem[]; camera: Camera; setCamera: SpatialCameraSetter; viewportSize: { width: number; height: number }; label: string; beacon?: SpatialBeaconState | null }) {
+function SpatialMiniMap({ items, camera, setCamera, viewportSize, safeInsets, label, beacon }: { items: readonly SpatialCanvasItem[]; camera: Camera; setCamera: SpatialCameraSetter; viewportSize: { width: number; height: number }; safeInsets: SpatialInsets; label: string; beacon?: SpatialBeaconState | null }) {
   const [collapsed, setCollapsed] = useState(false)
   const bounds = spatialItemBounds(items)
   const width = 152, height = 76, padding = 7
@@ -452,16 +464,24 @@ function SpatialMiniMap({ items, camera, setCamera, viewportSize, label, beacon 
   const offsetY = padding + (height - padding * 2 - bounds.height * scale) / 2
   const worldToMapX = (x: number) => offsetX + (x - bounds.x) * scale
   const worldToMapY = (y: number) => offsetY + (y - bounds.y) * scale
-  const viewWorld = { x: -camera.x / camera.zoom, y: -camera.y / camera.zoom, width: viewportSize.width / camera.zoom, height: viewportSize.height / camera.zoom }
-  if (collapsed) return <section className="lcos-spatial-minimap is-collapsed" data-testid="spatial-surface-minimap" aria-label={label}><button type="button" className="lcos-spatial-minimap-expand" aria-label={`展开${label}小地图`} title={`展开${label}小地图`} onClick={() => setCollapsed(false)}><Maximize2 size={13}/></button></section>
-  return <section className="lcos-spatial-minimap" data-testid="spatial-surface-minimap" aria-label={label}>
+  const viewWorld = spatialSafeViewportWorldBounds(camera, viewportSize, safeInsets)
+  const viewportCenter = {
+    x: safeInsets.left + Math.max(0, viewportSize.width - safeInsets.left - safeInsets.right) / 2,
+    y: safeInsets.top + Math.max(0, viewportSize.height - safeInsets.top - safeInsets.bottom) / 2,
+  }
+  const safeStyle = {
+    '--lcos-minimap-safe-right': `${safeInsets.right}px`,
+    '--lcos-minimap-safe-bottom': `${safeInsets.bottom}px`,
+  } as CSSProperties
+  if (collapsed) return <section className="lcos-spatial-minimap is-collapsed" style={safeStyle} data-testid="spatial-surface-minimap" aria-label={label}><button type="button" className="lcos-spatial-minimap-expand" aria-label={`展开${label}小地图`} title={`展开${label}小地图`} onClick={() => setCollapsed(false)}><Maximize2 size={13}/></button></section>
+  return <section className="lcos-spatial-minimap" style={safeStyle} data-testid="spatial-surface-minimap" aria-label={label}>
     <header><span>{label}</span><span className="lcos-spatial-minimap-meta"><small>{items.length}</small><button type="button" aria-label={`收起${label}小地图`} title="收起小地图" onClick={() => setCollapsed(true)}><Minimize2 size={12}/></button></span></header>
     <button type="button" className="lcos-spatial-minimap-map" aria-label={`在${label}中定位`} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => {
       const rect = event.currentTarget.getBoundingClientRect()
       const localX = event.clientX - rect.left, localY = event.clientY - rect.top
       const worldX = bounds.x + (localX - offsetX) / scale
       const worldY = bounds.y + (localY - offsetY) / scale
-      setCamera((current) => ({ ...current, x: viewportSize.width / 2 - worldX * current.zoom, y: viewportSize.height / 2 - worldY * current.zoom }))
+      setCamera((current) => ({ ...current, x: viewportCenter.x - worldX * current.zoom, y: viewportCenter.y - worldY * current.zoom }))
     }}>
       {items.map((item) => <i key={item.id} data-minimap-kind={item.visualKind ?? 'generic'} data-minimap-beacon={beacon?.target.id === item.id || undefined} title={item.label} style={{ left: worldToMapX(item.x), top: worldToMapY(item.y), width: Math.max(2, item.width * scale), height: Math.max(2, item.height * scale) }} />)}
       <b style={{ left: worldToMapX(viewWorld.x), top: worldToMapY(viewWorld.y), width: Math.max(4, viewWorld.width * scale), height: Math.max(4, viewWorld.height * scale) }} />

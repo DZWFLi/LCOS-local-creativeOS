@@ -1,6 +1,7 @@
 import type { Camera } from '../../model'
 import { SpatialMarkerLayer } from './SpatialMarkerLayer'
 import type { SpatialMarkerAttention, SpatialMarkerScope, SpatialMarkerSurfaceKind } from './spatialMarkerSystem'
+import type { SpatialInsets } from './spatialTypes'
 
 /**
  * Compatibility input for existing pinned-attention callers. The item is now a
@@ -24,6 +25,7 @@ export interface CanvasEdgePinItem {
 interface Props {
   readonly camera: Camera
   readonly viewportSize: Readonly<{ width: number; height: number }>
+  readonly safeInsets?: SpatialInsets | undefined
   readonly items: readonly CanvasEdgePinItem[]
   readonly currentSurfaceRef?: string
   readonly defaultSurface?: SpatialMarkerSurfaceKind
@@ -36,12 +38,13 @@ interface Props {
  * Rendering ownership belongs to SpatialMarkerLayer. There is no second edge
  * navigation system anymore.
  */
-export function CanvasEdgePinLayer({ camera, viewportSize, items, currentSurfaceRef, defaultSurface = 'main', onLocate, onLocateCluster }: Props) {
+export function CanvasEdgePinLayer({ camera, viewportSize, safeInsets, items, currentSurfaceRef, defaultSurface = 'main', onLocate, onLocateCluster }: Props) {
   if (!items.length) return null
   return <div className="lcos-edge-pin-layer" data-testid="spatial-edge-pin-layer">
     <SpatialMarkerLayer
       camera={camera}
       viewportSize={viewportSize}
+      safeInsets={safeInsets}
       currentSurfaceRef={currentSurfaceRef}
       onLocate={onLocate}
       onLocateCluster={onLocateCluster}

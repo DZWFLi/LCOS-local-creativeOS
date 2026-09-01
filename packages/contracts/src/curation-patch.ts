@@ -1,5 +1,6 @@
 import type { PresentationEntityRefV0 } from './presentations.js'
 import type { SpatialMarkerIntentV0 } from './navigation-marker.js'
+import type { ColorPinDefinitionV0, ColorPinMembershipV0 } from './color-pin.js'
 
 /**
  * CurationPatch V0 — Phase E. A minimal batch write for the Curator skill:
@@ -225,6 +226,31 @@ export type MutationChangeItemV1 =
       readonly marker: SpatialMarkerIntentV0
       readonly inverse: { readonly type: 'spatial_marker_add'; readonly markerId: string }
       readonly forward?: { readonly type: 'spatial_marker_remove'; readonly markerId: string }
+      readonly appliedFingerprint: string
+    }
+  | {
+      /** A25-6: user-authored Color Pin identity creation. */
+      readonly type: 'color_pin_definition_add'
+      readonly colorPinId: string
+      readonly definition: ColorPinDefinitionV0
+      readonly inverse: { readonly type: 'color_pin_definition_remove'; readonly colorPinId: string }
+      readonly forward?: { readonly type: 'color_pin_definition_add'; readonly colorPinId: string }
+      readonly appliedFingerprint: string
+    }
+  | {
+      readonly type: 'color_pin_membership_add'
+      readonly membershipId: string
+      readonly membership: ColorPinMembershipV0
+      readonly inverse: { readonly type: 'color_pin_membership_remove'; readonly membershipId: string }
+      readonly forward?: { readonly type: 'color_pin_membership_add'; readonly membershipId: string }
+      readonly appliedFingerprint: string
+    }
+  | {
+      readonly type: 'color_pin_membership_remove'
+      readonly membershipId: string
+      readonly membership: ColorPinMembershipV0
+      readonly inverse: { readonly type: 'color_pin_membership_add'; readonly membershipId: string }
+      readonly forward?: { readonly type: 'color_pin_membership_remove'; readonly membershipId: string }
       readonly appliedFingerprint: string
     }
   | {

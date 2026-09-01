@@ -54,6 +54,26 @@ export function spatialViewportWorldBounds(camera: Camera, size: SpatialSize, ov
   }
 }
 
+/** Active safe-region world bounds without mutating Camera. */
+export function spatialSafeViewportWorldBounds(
+  camera: Camera,
+  size: SpatialSize,
+  insets: SpatialInsets = EMPTY_INSETS,
+  overscanPx = 0,
+): SpatialBounds {
+  const left = Math.max(0, Math.min(size.width, insets.left))
+  const right = Math.max(left, Math.min(size.width, size.width - insets.right))
+  const top = Math.max(0, Math.min(size.height, insets.top))
+  const bottom = Math.max(top, Math.min(size.height, size.height - insets.bottom))
+  const overscan = overscanPx / Math.max(.2, camera.zoom)
+  return {
+    x: (left - camera.x) / camera.zoom - overscan,
+    y: (top - camera.y) / camera.zoom - overscan,
+    width: (right - left) / camera.zoom + overscan * 2,
+    height: (bottom - top) / camera.zoom + overscan * 2,
+  }
+}
+
 export function spatialBoundsForPlacements(placements: readonly SpatialBounds[], padding = 0): SpatialBounds {
   if (!placements.length) return { x: -padding, y: -padding, width: padding * 2 + 1, height: padding * 2 + 1 }
   const left = Math.min(...placements.map((item) => item.x)) - padding

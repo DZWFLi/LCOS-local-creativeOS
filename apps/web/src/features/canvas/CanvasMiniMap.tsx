@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import type { CSSProperties } from 'react'
 import type { Camera, CanvasNode, WorkspaceFrameVM } from '../../model'
 import { Grid3X3, Maximize2, Minus, Plus } from 'lucide-react'
-import { cameraSafeViewportBounds, CANVAS_ZOOM_STEP, fitBoundsForReading, getSelectionBounds, restorationFocusBounds, type SafeInsets, zoomCameraAt } from './canvasGeometry'
+import { cameraSafeViewportBounds, CANVAS_ZOOM_STEP, fitBoundsForReading, getSelectionBounds, restorationFocusBounds, zoomCameraAt } from './canvasGeometry'
+import { useActiveSpatialViewport } from '../spatial/ActiveSpatialViewportContext'
+import { spatialInsetsWithinRect } from '../spatial/activeSpatialViewport'
 import { miniMapVisualKindForNode } from '../spatial/minimapSemantics'
 import type { SpatialFocusRequest } from '../spatial/useSpatialFocusRequest'
 
@@ -12,7 +15,6 @@ interface Props {
   setCamera: (camera: Camera | ((current: Camera) => Camera)) => void
   collapsed: boolean
   onCollapsedChange: (collapsed: boolean) => void
-  safeInsets: SafeInsets
   onLocateContent?: () => void
   gridSnapEnabled?: boolean
   onGridSnapChange?: (enabled: boolean) => void
@@ -58,13 +60,17 @@ function makeTransform(bounds: ReturnType<typeof projectBounds>, mapWidth: numbe
   }
 }
 
-export function CanvasMiniMap({ nodes, workspaceFrames, camera, setCamera, collapsed, onCollapsedChange, safeInsets, onLocateContent, gridSnapEnabled = true, onGridSnapChange, navigationRequest }: Props) {
+export function CanvasMiniMap({ nodes, workspaceFrames, camera, setCamera, collapsed, onCollapsedChange, onLocateContent, gridSnapEnabled = true, onGridSnapChange, navigationRequest }: Props) {
   const mapRef = useRef<HTMLDivElement | null>(null)
   const drag = useRef<{ x: number; y: number; camera: Camera; scale: number } | null>(null)
   const [beaconNonce, setBeaconNonce] = useState<number | null>(null)
+  const activeViewport = useActiveSpatialViewport()
   const viewport = typeof document !== 'undefined' ? document.querySelector<HTMLElement>('[data-testid="canvas"]')?.getBoundingClientRect() : undefined
   const viewportWidth = viewport?.width ?? 1400
   const viewportHeight = viewport?.height ?? 900
+  const safeInsets = activeViewport && viewport
+    ? spatialInsetsWithinRect(activeViewport, viewport)
+    : { left: 0, right: 0, top: 0, bottom: 0 }
   const bounds = useMemo(() => projectBounds(nodes, workspaceFrames), [nodes, workspaceFrames])
   const mapWidth = 152
   const mapHeight = 76
@@ -96,10 +102,14 @@ export function CanvasMiniMap({ nodes, workspaceFrames, camera, setCamera, colla
   }, [navigationRequest?.nonce])
 
   const activeBeaconIds = beaconNonce === navigationRequest?.nonce ? new Set(navigationRequest?.ids ?? []) : new Set<string>()
+  const safeStyle = {
+    '--lcos-minimap-safe-right': `${safeInsets.right}px`,
+    '--lcos-minimap-safe-bottom': `${safeInsets.bottom}px`,
+  } as CSSProperties
 
-  if (collapsed) return <section className="minimap minimap-collapsed"><button aria-label="展开小地图" onClick={() => onCollapsedChange(false)}><Maximize2 size={13} /></button></section>
+  if (collapsed) return <section className="minimap minimap-collapsed" style={safeStyle}><button aria-label="展开小地图" onClick={() => onCollapsedChange(false)}><Maximize2 size={13} /></button></section>
 
-  return <section className="minimap" data-testid="project-minimap" data-node-count={nodes.length} data-frame-count={workspaceFrames.length}>
+  return <section className="minimap" style={safeStyle} data-testid="project-minimap" data-node-count={nodes.length} data-frame-count={workspaceFrames.length}>
     <div className="map-label">当前画布地图 <span>{nodes.length} 个视图 <button className="map-collapse" aria-label="收起小地图" onClick={() => onCollapsedChange(true)}>−</button></span></div>
     <div ref={mapRef} className="map" data-testid="minimap-map"
       onPointerDown={(event) => {

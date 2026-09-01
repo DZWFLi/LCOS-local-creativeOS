@@ -1,0 +1,13 @@
+{
+  "name": "@lcos-vendor/xstate-core-5.32.6",
+  "private": true,
+  "version": "5.32.6",
+  "type": "module",
+  "license": "MIT",
+  "imports": {
+    "#is-development": {
+      "development": "./src/true.ts",
+      "default": "./src/false.ts"
+    }
+  }
+}

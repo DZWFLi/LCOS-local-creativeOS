@@ -48,7 +48,7 @@ export function WorkspaceDock({ workspaces, activeId, collapsed, onCollapsedChan
     return () => window.removeEventListener('pointerdown', close)
   }, [])
 
-  if (collapsed) return <aside ref={dockRef} data-testid="workspace-dock" className="workspace-dock collapsed compact-workspace-rail" aria-label="工作空间栏">
+  if (collapsed) return <aside ref={dockRef} data-testid="workspace-dock" data-spatial-viewport-occupant="left" className="workspace-dock collapsed compact-workspace-rail" aria-label="工作空间栏">
     <button className={capabilitiesOpen ? 'capability-launcher active pressable' : 'capability-launcher pressable'} aria-label="打开快捷能力" title="添加与工作流" onClick={onOpenCapabilities}><Sparkles size={14} /></button>
     <button className="dock-expand pressable" aria-label="展开工作空间栏" title="展开工作空间栏" onClick={() => onCollapsedChange(false)}><ChevronRight size={14} /></button>
     <button className={activeId === null ? 'collapsed-overview active pressable' : 'collapsed-overview pressable'} aria-label="当前画布总览" title="当前画布总览" onClick={onOverview}><LayoutPanelLeft size={14} /></button>
@@ -59,7 +59,7 @@ export function WorkspaceDock({ workspaces, activeId, collapsed, onCollapsedChan
     })}</div>
   </aside>
 
-  return <aside ref={dockRef} data-testid="workspace-dock" className="workspace-dock">
+  return <aside ref={dockRef} data-testid="workspace-dock" data-spatial-viewport-occupant="left" className="workspace-dock">
     <button className="capability-launcher-wide pressable" onClick={onOpenCapabilities}><Sparkles size={13} />添加与工作流</button>
     <div className="dock-label"><LayoutPanelLeft size={12} /> 工作空间 <span className="dock-label-actions"><button className="dock-inline-add pressable" aria-label="新建工作空间" title="新建工作空间" onClick={onAddWorkspace}><Plus size={12} /></button><button className="dock-collapse pressable" aria-label="收起工作空间栏" onClick={() => { setMenuId(null); onCollapsedChange(true) }}><ChevronLeft size={12} /></button></span></div>
     <button data-testid="project-overview" className={activeId === null ? 'workspace overview active pressable' : 'workspace overview pressable'} onClick={onOverview}><i />当前画布总览 <small>{workspaces.length}</small></button>

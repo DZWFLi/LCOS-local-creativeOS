@@ -1,10 +1,11 @@
 import { Crosshair, Eye, GitBranch, MapPin } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import type { RefObject } from 'react'
 import type { CanvasNode } from '../../model'
 import { displayNodeTitle } from '../canvas/CanvasNodeVisual'
-import { useProjectSpatialMarkersOrNull } from '../spatial/ProjectSpatialMarkerContext'
-import { markerForNavigationTarget } from '../spatial/spatialNavigationFamily'
 import { ObjectOrbit, type ObjectOrbitAction } from './ObjectOrbit'
+import { ColorPinAuthoringPopover } from '../spatial/ColorPinAuthoringPopover'
+import { colorPinRecordsForTarget, colorPinTargetRef, useProjectColorPinRuntime } from '../spatial/ProjectColorPinContext'
 
 interface Props {
   readonly open: boolean
@@ -21,10 +22,10 @@ interface Props {
  *
  * This component owns no Project truth. It only projects capabilities that are
  * actually available for the current object: Open is emitted only when the object
- * has a real deeper destination, Locate is optional, and Pin is exposed only when
- * the canonical Spatial Marker runtime is
- * present. Relation is emitted only when the caller wires the canonical spatial
- * relation intent owner. Assembly / More remain absent until their real owners are
+ * has a real deeper destination and Locate is optional. Relation is emitted only
+ * when the caller wires the canonical spatial relation intent owner. The legacy
+ * binary Spatial Marker action is intentionally not presented as Color Pin; A25-7
+ * wires the real many-to-many Color Pin authoring capability. Assembly / More remain absent until their real owners are
  * wired; capability gaps must fail-close rather than become fake UI.
  */
 
@@ -46,30 +47,30 @@ export function projectObjectCanOpen(node: CanvasNode): boolean {
 }
 
 export function ProjectObjectOrbit({ open, node, anchorRef, onClose, onOpen, onLocate, onRelation }: Props) {
-  const markerRuntime = useProjectSpatialMarkersOrNull()
-  const targetRef = markerRuntime
-    ? { projectId: markerRuntime.projectId, kind: 'view' as const, id: node.id }
-    : null
-  const marker = markerRuntime && targetRef ? markerForNavigationTarget(markerRuntime.records, targetRef) : null
+  const colorPins = useProjectColorPinRuntime()
+  const [pinAuthoringOpen, setPinAuthoringOpen] = useState(false)
+  useEffect(() => { if (!open) setPinAuthoringOpen(false) }, [open])
+  const colorPinTarget = colorPins ? colorPinTargetRef(colorPins.projectId, node.id) : null
+  const assignedPins = colorPins && colorPinTarget ? colorPinRecordsForTarget(colorPins.records, colorPinTarget) : []
+  const closeAll = () => { setPinAuthoringOpen(false); onClose() }
 
   const actions: ObjectOrbitAction[] = [
     ...(onOpen && projectObjectCanOpen(node)
       ? [{ id: 'object-open', label: '打开', icon: Eye, primary: true, onClick: onOpen } satisfies ObjectOrbitAction]
       : []),
     ...(onRelation ? [{ id: 'object-relation', label: '关系', icon: GitBranch, onClick: onRelation } satisfies ObjectOrbitAction] : []),
-    ...(markerRuntime && targetRef
-      ? [marker
-        ? { id: 'object-pin', label: '取消 Pin', icon: MapPin, onClick: () => { void markerRuntime.deleteMarker(marker.id) } }
-        : { id: 'object-pin', label: 'Pin', icon: MapPin, onClick: () => { void markerRuntime.createMarker({ targetRef, scope: 'cross-surface' }) } }]
-      : []),
+    ...(colorPins && colorPinTarget ? [{ id: 'object-color-pin', label: assignedPins.length > 0 ? `Pin · ${assignedPins.length}` : 'Pin', icon: MapPin, keepOpen: true, onClick: () => setPinAuthoringOpen((current) => !current) } satisfies ObjectOrbitAction] : []),
     ...(onLocate ? [{ id: 'object-locate', label: '在哪', icon: Crosshair, onClick: onLocate } satisfies ObjectOrbitAction] : []),
   ]
 
-  return <ObjectOrbit
+  return <>
+  <ObjectOrbit
     open={open}
-    onClose={onClose}
+    onClose={closeAll}
     anchorRef={anchorRef}
     ariaLabel={`「${displayNodeTitle(node)}」的动作`}
     actions={actions}
   />
+  {colorPinTarget ? <ColorPinAuthoringPopover open={pinAuthoringOpen} targetRef={colorPinTarget} anchorRef={anchorRef} onClose={() => setPinAuthoringOpen(false)} /> : null}
+  </>
 }

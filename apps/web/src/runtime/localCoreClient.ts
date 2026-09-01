@@ -108,13 +108,19 @@ import type {
   WarehouseQueryV1,
   WarehouseSnapshotV1,
   NavigationResolutionV0,
+  ColorPinDefinitionV0,
+  ColorPinMembershipV0,
+  ColorPinSnapshotV0,
   SpatialMarkerIntentV0,
   SpatialMarkerScopeV0,
   SpatialMarkerTargetRefV0,
   StableSurfaceRefV0,
+  VoiceTranscriptionResponseV1,
 } from '@local-creative-os/contracts'
 import { nextMutationOrigin } from './mutationIdentity'
 import { getDesktopPort } from './desktopPort'
+import { buildVoiceTranscriptionFormData, type VoiceTranscriptionUploadInput } from '../features/execution/voiceTranscriptionTransport'
+export type { VoiceTranscriptionUploadInput } from '../features/execution/voiceTranscriptionTransport'
 
 export const LOCAL_CORE_API_PREFIX = '/api/local-core/v1'
 export const LOCAL_CORE_REQUEST_TIMEOUT_MS = 2_500
@@ -269,6 +275,7 @@ export interface SessionLifecycleRecordProjectionV1 {
 
 export interface LocalCoreClient {
   health(signal?: AbortSignal): Promise<RuntimeCall<HealthStatus>>
+  transcribeVoice(input: VoiceTranscriptionUploadInput, signal?: AbortSignal): Promise<RuntimeCall<VoiceTranscriptionResponseV1>>
   catalog(signal?: AbortSignal): Promise<RuntimeCall<readonly ProjectCatalogEntry[]>>
   runtimeRegistry(signal?: AbortSignal): Promise<RuntimeCall<{ readonly schemaVersion: 0; readonly recentProjects: readonly { readonly projectId: string; readonly rootPath?: string; readonly displayTitle?: string; readonly lastOpenedAt?: string; readonly lastFocusedAt?: string }[]; readonly lastFocusedProjectId?: string; readonly pinnedCaptureProjectId?: string }>>
   runtimeFocusProject(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<unknown>>
@@ -345,6 +352,9 @@ export interface LocalCoreClient {
     readonly format: string
     readonly data: string
   }>>
+  listColorPins(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<ColorPinSnapshotV0>>
+  assignColorPin(projectId: string, input: { readonly targetRef: SpatialMarkerTargetRefV0; readonly colorPinId?: string; readonly color?: string; readonly label?: string }, signal?: AbortSignal): Promise<RuntimeCall<{ readonly definition: ColorPinDefinitionV0; readonly membership: ColorPinMembershipV0 }>>
+  removeColorPinMembership(projectId: string, membershipId: string, signal?: AbortSignal): Promise<RuntimeCall<{ readonly deleted: true; readonly membershipId: string }>>
   listSpatialMarkers(projectId: string, signal?: AbortSignal): Promise<RuntimeCall<readonly SpatialMarkerIntentV0[]>>
   createSpatialMarker(projectId: string, input: { readonly targetRef: SpatialMarkerTargetRefV0; readonly scope: SpatialMarkerScopeV0; readonly sourceSurfaceRef?: StableSurfaceRefV0 }, signal?: AbortSignal): Promise<RuntimeCall<SpatialMarkerIntentV0>>
   deleteSpatialMarker(projectId: string, markerId: string, signal?: AbortSignal): Promise<RuntimeCall<{ readonly deleted: true; readonly markerId: string }>>
@@ -887,6 +897,14 @@ export function createLocalCoreClient(): LocalCoreClient {
     health(signal) {
       return request('/health', { signal, decode: decodeHealth })
     },
+    transcribeVoice(input, signal) {
+      return request('/runtime/voice/transcriptions', {
+        signal,
+        timeoutMs: 120_000,
+        init: { method: 'POST', body: buildVoiceTranscriptionFormData(input) },
+        decode: decodeResult<VoiceTranscriptionResponseV1>,
+      })
+    },
     catalog(signal) {
       return request('/projects', {
         signal,
@@ -1424,6 +1442,15 @@ export function createLocalCoreClient(): LocalCoreClient {
           readonly data: string
         }>,
       })
+    },
+    listColorPins(projectId, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/color-pins`, { signal, decode: decodeResult<ColorPinSnapshotV0> })
+    },
+    assignColorPin(projectId, input, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/color-pins/memberships`, { signal, timeoutMs: LOCAL_CORE_WRITE_TIMEOUT_MS, init: { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) }, decode: decodeResult<{ readonly definition: ColorPinDefinitionV0; readonly membership: ColorPinMembershipV0 }> })
+    },
+    removeColorPinMembership(projectId, membershipId, signal) {
+      return request(`/projects/${encodeURIComponent(projectId)}/color-pins/memberships/${encodeURIComponent(membershipId)}`, { signal, timeoutMs: LOCAL_CORE_WRITE_TIMEOUT_MS, init: { method: 'DELETE' }, decode: decodeResult<{ readonly deleted: true; readonly membershipId: string }> })
     },
     listSpatialMarkers(projectId, signal) {
       return request(`/projects/${encodeURIComponent(projectId)}/spatial-markers`, {

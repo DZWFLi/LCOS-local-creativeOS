@@ -8,6 +8,10 @@ const flow = read('apps/web/src/features/capture/CaptureMaterialFlow.tsx')
 const projectMark = read('apps/web/src/features/project/ProjectGlyphMark.tsx')
 const searchLens = read('apps/web/src/features/project/ProjectSearchLens.tsx')
 const tools = read('apps/web/src/features/project/ProjectToolsDialog.tsx')
+const app = read('apps/web/src/App.tsx')
+const searchIndex = read('apps/web/src/features/project/projectSearchIndex.ts')
+const searchInput = read('apps/web/src/features/project/ProjectSearchIndexInput.tsx')
+const searchMigrated = fs.existsSync('docs/v015/convergence/A25_5_SEARCH_RESULT_INDEX_MIGRATION_CLOSEOUT_20260901.md')
 
 const checks = []
 const check = (name, ok) => checks.push({ name, ok: Boolean(ok) })
@@ -33,10 +37,14 @@ check('Project identity mark does not borrow Conversation Glyth runtime',
   !projectMark.includes('LcosGlyth') && !projectMark.includes('ConversationGlyth') && projectMark.includes('iconShapes'))
 check('Capture Inbox is lightweight launcher status, not a Capture project card',
   drive.includes('project-capture-inbox') && !drive.includes('project-drive-capture-card'))
-check('Ctrl/Cmd+F Search uses dedicated Search Lens instead of legacy ProjectTools list',
-  tools.includes('<ProjectSearchLens') && searchLens.includes('project-search-lens'))
+check('Ctrl/Cmd+F Search uses the admitted dedicated presentation owner',
+  searchMigrated
+    ? app.includes('<ProjectSearchIndexInput') && app.includes("projectTools: projectToolsMode === 'full' ?") && !app.includes('<ProjectSearchLens')
+    : tools.includes('<ProjectSearchLens') && searchLens.includes('project-search-lens'))
 check('Search is query-as-you-type and requests all current Core entity types',
-  searchLens.includes('window.setTimeout') && searchLens.includes("types: ['artifact', 'resource', 'note', 'conversation', 'file']"))
+  searchMigrated
+    ? searchIndex.includes('window.setTimeout') && searchIndex.includes("types: ['artifact', 'resource', 'note', 'conversation', 'file']") && searchInput.includes('onQueryChange')
+    : searchLens.includes('window.setTimeout') && searchLens.includes("types: ['artifact', 'resource', 'note', 'conversation', 'file']"))
 check('Project Tools no longer renders a duplicate search field',
   !tools.includes('project-tools-search'))
 

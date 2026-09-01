@@ -3,6 +3,7 @@ import type { Camera } from '../../model'
 import { SpatialMarkerLayer } from './SpatialMarkerLayer'
 import { SPATIAL_LABEL_PRIORITY } from './SpatialLabelSystem'
 import type { SpatialMarkerScope, SpatialMarkerSurfaceKind } from './spatialMarkerSystem'
+import type { SpatialInsets } from './spatialTypes'
 import type { SpatialBeaconState } from './useSpatialFocusRequest'
 
 /**
@@ -17,6 +18,7 @@ export function SpatialBeaconLayer({
   surface = 'main',
   scope = 'local',
   sourceSurfaceRef,
+  safeInsets,
 }: {
   readonly beacon: SpatialBeaconState | null
   readonly camera: Camera
@@ -24,6 +26,7 @@ export function SpatialBeaconLayer({
   readonly surface?: SpatialMarkerSurfaceKind
   readonly scope?: SpatialMarkerScope
   readonly sourceSurfaceRef?: string
+  readonly safeInsets?: SpatialInsets | undefined
 }) {
   const layerRef = useRef<HTMLDivElement | null>(null)
   const [viewport, setViewport] = useState({ width: 1000, height: 760 })
@@ -70,6 +73,7 @@ export function SpatialBeaconLayer({
     {beacon && markerItem ? <SpatialMarkerLayer
       camera={camera}
       viewportSize={viewport}
+      safeInsets={safeInsets}
       interactive={false}
       markerPhase={beacon.phase}
       onMarkerAnimationEnd={onArrivalEnd}

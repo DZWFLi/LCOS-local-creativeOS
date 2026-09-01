@@ -105,6 +105,10 @@ import { handleContinuityRoute } from './routes/continuity.js'
 import { handleReceiverRoute } from './routes/receiver.js'
 import { handleWorkspaceStatesRoute } from './routes/workspace-states.js'
 import { handleNavigationMarkersRoute } from './routes/navigation-markers.js'
+import { handleColorPinsRoute } from './routes/color-pins.js'
+import { handleVoiceTranscriptionRoute } from './routes/voice-transcription.js'
+import type { VoiceTranscriptionService } from './voice-transcription-service.js'
+import { createDefaultVoiceTranscriptionService } from './voice-transcription-defaults.js'
 import { FORBIDDEN_BROWSER_PATH_FIELDS, isRecord, isStringArray, routeRequireMetadata, routeRequireProject } from './routes/route-context.js'
 import { ContextProposalStore } from './context-proposal-store.js'
 import { RuntimeRegistryService } from './runtime-registry-service.js'
@@ -124,6 +128,8 @@ const MAX_BODY_BYTES = 1 * 1024 * 1024 // 1 MiB
 const MAX_IMPORT_BODY_BYTES = 130 * 1024 * 1024 // 128 MiB file + multipart overhead
 const MAX_DOCUMENT_PREVIEW_BYTES = 128 * 1024 * 1024
 const MAX_LCOSPROJ_BODY_BYTES = 128 * 1024 * 1024
+const MAX_VOICE_TRANSCRIPTION_BODY_BYTES = 32 * 1024 * 1024
+const VOICE_TRANSCRIPTION_REQUEST_TIMEOUT_MS = 130_000
 function isAbsolutePath(value: string): boolean {
   return isAbsolute(value)
 }
@@ -212,6 +218,7 @@ export interface LocalCoreServerOptions {
   readonly sessionReadSet?: import('./session-read-set.js').SessionReadSet
   /** 任务四 P3：agentlet 包根目录（缺省 packages/agentlets）。 */
   readonly agentletsRoot?: string
+  readonly voiceTranscriptionService?: VoiceTranscriptionService
 }
 
 export interface LocalCoreAddress {
@@ -336,6 +343,7 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
     ...(process.env.LCOS_OCR_PYTHON === undefined ? {} : { pythonCommand: process.env.LCOS_OCR_PYTHON }),
   })
   const allowedOrigins = new Set(options.allowedOrigins ?? ['http://127.0.0.1:5173', 'http://localhost:5173'])
+  const voiceTranscription = options.voiceTranscriptionService ?? createDefaultVoiceTranscriptionService()
   if (!Number.isFinite(requestTimeoutMs) || requestTimeoutMs <= 0) {
     throw new Error('Local Core requestTimeoutMs must be a positive finite number.')
   }
@@ -372,10 +380,13 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
   const handleRequest = async (request: IncomingMessage, response: ServerResponse): Promise<void> => {
     const controller = new AbortController()
     let timedOut = false
+    const effectiveRequestTimeoutMs = request.url?.startsWith('/runtime/voice/transcriptions')
+      ? Math.max(requestTimeoutMs, VOICE_TRANSCRIPTION_REQUEST_TIMEOUT_MS)
+      : requestTimeoutMs
     const timeout = setTimeout(() => {
       timedOut = true
       controller.abort()
-    }, requestTimeoutMs)
+    }, effectiveRequestTimeoutMs)
     const abort = () => controller.abort()
     request.once('aborted', abort)
     response.once('close', () => {
@@ -461,6 +472,19 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
         sendJson(response, 401, failure('VALIDATION', 'Local Core authorization is required.'))
         return
       }
+
+      if (await handleVoiceTranscriptionRoute({
+        method,
+        pathname,
+        url,
+        request,
+        response,
+        controller,
+        metadata,
+        helpers: routeHelpers,
+        voiceTranscription,
+        maxBodyBytes: MAX_VOICE_TRANSCRIPTION_BODY_BYTES,
+      })) return
 
       if (await handleConnectorsRoute({
         method,
@@ -1246,6 +1270,9 @@ export function createLocalCoreServer(options: LocalCoreServerOptions = {}): Loc
         mutationSafety,
 
         helpers: routeHelpers,
+      })) return
+      if (await handleColorPinsRoute({
+        method, pathname, url, request, response, controller, metadata, mutationSafety, helpers: routeHelpers,
       })) return
       if (await handleNavigationMarkersRoute({
         method,

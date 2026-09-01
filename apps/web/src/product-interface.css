@@ -385,15 +385,6 @@
   border-radius: var(--lcos-radius-panel) !important;
 }
 
-/* When the on-demand Agent is open, secondary navigation remains reachable
-   instead of sitting underneath the drawer. */
-.lcos-reconstructed:has(.work-rail:not(.collapsed)) .minimap,
-.lcos-reconstructed:has(.work-rail:not(.collapsed)) .canvas-minimap {
-  right: calc(var(--work-rail-width) + 18px) !important;
-  transform: scale(.82);
-  transform-origin: right bottom;
-}
-
 /* Drop Destination Sheet states the consequence before the destination list. */
 .lcos-reconstructed .vnext-drop-shelf {
   width: 300px;
@@ -2961,8 +2952,8 @@
 .lcos-reconstructed:not([data-layout-mode="sidecar"]) .canvas-minimap,
 .lcos-reconstructed:not([data-layout-mode="sidecar"]) .lcos-spatial-minimap {
   left: auto !important;
-  right: 14px !important;
-  bottom: 78px !important;
+  right: calc(var(--lcos-minimap-safe-right, 0px) + 14px) !important;
+  bottom: calc(var(--lcos-minimap-safe-bottom, 72px) + 6px) !important;
   width: 166px !important;
   padding: 6px !important;
   border: 1px solid rgba(65,58,80,.085) !important;
@@ -3054,15 +3045,6 @@
 .lcos-reconstructed:not([data-layout-mode="sidecar"]) .lcos-spatial-minimap.is-collapsed:hover,
 .lcos-reconstructed:not([data-layout-mode="sidecar"]) .minimap.minimap-collapsed:hover {
   transform: translateY(-2px) scale(1.02) !important;
-}
-
-/* When the runtime rail opens, keep the minimap island beside it without
-   shrinking it into another scale system. */
-.lcos-reconstructed:not([data-layout-mode="sidecar"]):has(.work-rail:not(.collapsed)) .minimap,
-.lcos-reconstructed:not([data-layout-mode="sidecar"]):has(.work-rail:not(.collapsed)) .canvas-minimap,
-.lcos-reconstructed:not([data-layout-mode="sidecar"]):has(.work-rail:not(.collapsed)) .lcos-spatial-minimap {
-  right: calc(var(--work-rail-width) + 18px) !important;
-  transform: none !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -3264,3 +3246,256 @@
   .lcos-reconstructed .map i[data-minimap-beacon="true"],
   .lcos-reconstructed .lcos-spatial-minimap-map i[data-minimap-beacon="true"] { animation: none; }
 }
+
+/* A25-3 · one viewport-fixed Top Spatial Index Slot. Canonical Search/Focus/Pin
+   state stays outside; this shell only renders the current presentation owner. */
+.lcos-reconstructed .lcos-centered-spatial-index {
+  position: fixed;
+  left: var(--lcos-spatial-index-anchor-x, 50%);
+  top: calc(var(--lcos-spatial-index-anchor-y, 0px) + 13px);
+  z-index: var(--lcos-z-overlay-ui-top);
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.lcos-reconstructed .lcos-centered-spatial-index.is-empty { visibility: hidden; }
+.lcos-reconstructed .lcos-centered-spatial-index-item,
+.lcos-reconstructed .lcos-centered-spatial-index-overflow {
+  position: absolute;
+  pointer-events: auto;
+  border: 0;
+  font: inherit;
+}
+.lcos-reconstructed .lcos-centered-spatial-index-item {
+  left: var(--lcos-index-x, 0px);
+  top: var(--lcos-index-y, 0px);
+  display: inline-flex;
+  min-width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0;
+  transform: translate(-50%, 0);
+  border-radius: 999px;
+  color: rgba(47,43,57,.72);
+  background: transparent;
+  cursor: pointer;
+  transition: left .22s cubic-bezier(.22,1,.36,1), top .22s cubic-bezier(.22,1,.36,1), transform .16s cubic-bezier(.22,1,.36,1), opacity .16s ease;
+}
+.lcos-reconstructed .lcos-centered-spatial-index-glyph {
+  display: block;
+  width: 9px;
+  height: 9px;
+  border: 1px solid color-mix(in srgb, var(--lcos-index-tone, #7565a8) 58%, rgba(255,255,255,.9));
+  border-radius: 50%;
+  background: var(--lcos-index-tone, #7565a8);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--lcos-index-tone, #7565a8) 10%, transparent), 0 3px 9px rgba(43,37,59,.10);
+}
+.lcos-reconstructed .lcos-centered-spatial-index-item:hover,
+.lcos-reconstructed .lcos-centered-spatial-index-item:focus-visible,
+.lcos-reconstructed .lcos-centered-spatial-index-item.is-active { transform: translate(-50%, -1px) scale(1.08); }
+.lcos-reconstructed .lcos-centered-spatial-index-short-label {
+  max-width: 86px;
+  overflow: hidden;
+  color: rgba(54,49,66,.72);
+  font-size: 10px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lcos-reconstructed .lcos-centered-spatial-index-overflow {
+  left: var(--lcos-index-x, 0px);
+  top: var(--lcos-index-y, 0px);
+  min-width: 24px;
+  height: 19px;
+  padding: 0 6px;
+  transform: translate(-50%, 0);
+  border: 1px solid rgba(76,67,102,.10);
+  border-radius: 999px;
+  color: rgba(65,57,84,.58);
+  background: rgba(255,255,255,.82);
+  box-shadow: 0 5px 14px rgba(43,37,59,.07);
+  font-size: 9px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.lcos-reconstructed .lcos-centered-spatial-index-overflow-fan {
+  position: absolute;
+  left: 0;
+  top: 58px;
+  display: flex;
+  width: min(300px, max(180px, calc(var(--lcos-spatial-index-active-width, 324px) - 24px)));
+  max-height: 132px;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 7px;
+  overflow: auto;
+  transform: translateX(-50%);
+  border: 1px solid rgba(76,67,102,.08);
+  border-radius: 14px;
+  background: rgba(255,255,255,.86);
+  box-shadow: 0 10px 28px rgba(43,37,59,.10);
+  backdrop-filter: blur(16px);
+  pointer-events: auto;
+}
+.lcos-reconstructed .lcos-centered-spatial-index-overflow-item {
+  display: inline-flex;
+  max-width: 136px;
+  height: 25px;
+  align-items: center;
+  gap: 5px;
+  padding: 0 8px;
+  border: 1px solid rgba(76,67,102,.08);
+  border-radius: 999px;
+  color: rgba(54,49,66,.74);
+  background: rgba(250,249,252,.88);
+  cursor: pointer;
+}
+.lcos-reconstructed .lcos-centered-spatial-index-overflow-item:hover,
+.lcos-reconstructed .lcos-centered-spatial-index-overflow-item:focus-visible,
+.lcos-reconstructed .lcos-centered-spatial-index-overflow-item.is-active {
+  border-color: rgba(111,86,219,.18);
+  background: rgba(111,86,219,.07);
+}
+@media (prefers-reduced-motion: reduce) {
+  .lcos-reconstructed .lcos-centered-spatial-index-item { transition: none; }
+}
+
+/* A25-5 · Search reuses the one Top Spatial Index slot: compact input + readable labeled results. */
+.lcos-reconstructed .lcos-centered-spatial-index.is-empty.has-control { visibility: visible; }
+.lcos-reconstructed .lcos-centered-spatial-index-control {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: min(420px, max(220px, calc(var(--lcos-spatial-index-active-width, 440px) - 36px)));
+  transform: translateX(-50%);
+  pointer-events: auto;
+}
+.lcos-reconstructed .lcos-centered-search-control {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  height: 34px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 9px 0 11px;
+  border: 1px solid rgba(76,67,102,.10);
+  border-radius: 13px;
+  color: rgba(57,51,70,.68);
+  background: rgba(255,255,255,.91);
+  box-shadow: 0 9px 26px rgba(43,37,59,.10);
+  backdrop-filter: blur(18px);
+}
+.lcos-reconstructed .lcos-centered-search-control:focus-within {
+  border-color: rgba(111,86,219,.20);
+  box-shadow: 0 9px 26px rgba(43,37,59,.10), 0 0 0 3px rgba(111,86,219,.055);
+}
+.lcos-reconstructed .lcos-centered-search-control.has-error { border-color: rgba(170,77,77,.18); }
+.lcos-reconstructed .lcos-centered-search-control input {
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  color: rgba(45,40,55,.88);
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+}
+.lcos-reconstructed .lcos-centered-search-control button {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  color: rgba(58,51,72,.56);
+  background: transparent;
+  cursor: pointer;
+}
+.lcos-reconstructed .lcos-centered-search-control button:hover { background: rgba(75,63,101,.06); }
+.lcos-reconstructed .lcos-centered-search-control kbd {
+  border: 0;
+  color: rgba(65,58,82,.42);
+  background: transparent;
+  font: inherit;
+  font-size: 9px;
+}
+.lcos-reconstructed .lcos-centered-search-spinner { animation: lcos-spin .85s linear infinite; }
+.lcos-reconstructed .lcos-centered-spatial-index.is-search .lcos-centered-spatial-index-item {
+  top: calc(var(--lcos-index-y, 0px) + 43px);
+}
+.lcos-reconstructed .lcos-centered-spatial-index.is-search .lcos-centered-spatial-index-overflow {
+  top: calc(var(--lcos-index-y, 0px) + 43px);
+}
+.lcos-reconstructed .lcos-centered-spatial-index-item.is-result {
+  min-width: 68px;
+  max-width: 122px;
+  height: 25px;
+  gap: 5px;
+  padding: 0 7px;
+  border: 1px solid rgba(76,67,102,.075);
+  background: rgba(252,251,253,.88);
+  box-shadow: 0 5px 15px rgba(43,37,59,.065);
+}
+.lcos-reconstructed .lcos-centered-spatial-index-item.is-result .lcos-centered-spatial-index-glyph,
+.lcos-reconstructed .lcos-centered-spatial-index-overflow-item.is-result .lcos-centered-spatial-index-glyph {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 3px;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--lcos-index-tone, #7565a8) 8%, transparent);
+}
+.lcos-reconstructed .lcos-centered-spatial-index-item.is-result:hover,
+.lcos-reconstructed .lcos-centered-spatial-index-item.is-result:focus-visible,
+.lcos-reconstructed .lcos-centered-spatial-index-item.is-result.is-active {
+  transform: translate(-50%, -1px) scale(1.025);
+  border-color: color-mix(in srgb, var(--lcos-index-tone, #7565a8) 22%, transparent);
+  background: rgba(255,255,255,.96);
+}
+.lcos-reconstructed .lcos-centered-spatial-index-item.is-result .lcos-centered-spatial-index-short-label {
+  max-width: 78px;
+  font-size: 10px;
+}
+.lcos-reconstructed .lcos-centered-spatial-index-hint {
+  flex: 0 0 auto;
+  color: rgba(69,62,86,.38);
+  font-size: 8px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.lcos-reconstructed .lcos-centered-spatial-index.is-search .lcos-centered-spatial-index-overflow-fan {
+  top: 80px;
+  width: min(480px, max(210px, calc(var(--lcos-spatial-index-active-width, 520px) - 30px)));
+}
+@media (prefers-reduced-motion: reduce) {
+  .lcos-reconstructed .lcos-centered-search-spinner { animation: none; }
+}
+
+
+/* A25-7 · Color Pin authoring / local identity / compact member view */
+.lcos-color-pin-local-dots {
+  position: absolute; left: 50%; top: -7px; z-index: 8; display: inline-flex; align-items: center; gap: 4px; min-height: 8px;
+  transform: translate(-50%, -100%) scale(var(--node-ui-scale, 1)); transform-origin: center bottom; pointer-events: none;
+}
+.lcos-color-pin-local-dots.is-surface { transform: translate(-50%, -100%); }
+.lcos-color-pin-local-dot, .lcos-color-pin-members-tone { display:block; width:8px; height:8px; border-radius:999px; background:var(--lcos-color-pin-tone); box-shadow:0 0 0 1px rgba(255,255,255,.92),0 1px 5px rgba(32,30,40,.16); }
+.lcos-color-pin-authoring-popover, .lcos-color-pin-members-popover { position:fixed; z-index:980; box-sizing:border-box; width:220px; padding:9px; border:1px solid rgba(76,69,91,.12); border-radius:13px; background:rgba(250,250,252,.94); box-shadow:0 14px 38px rgba(40,35,53,.16); backdrop-filter:blur(18px) saturate(1.08); color:rgba(35,32,42,.92); }
+.lcos-color-pin-authoring-popover>header, .lcos-color-pin-members-popover>header { display:flex; align-items:center; gap:7px; min-height:24px; }
+.lcos-color-pin-authoring-popover>header strong, .lcos-color-pin-members-popover>header strong { font-size:12px; font-weight:650; }
+.lcos-color-pin-authoring-popover>header button, .lcos-color-pin-members-popover>header button { margin-left:auto; display:grid; place-items:center; width:24px; height:24px; padding:0; border:0; border-radius:8px; background:transparent; color:rgba(55,50,66,.62); }
+.lcos-color-pin-authoring-popover>header button:hover, .lcos-color-pin-members-popover>header button:hover { background:rgba(77,68,96,.07); color:rgba(35,31,43,.92); }
+.lcos-color-pin-authoring-section { display:grid; gap:5px; margin-top:8px; }
+.lcos-color-pin-authoring-section>small { font-size:10px; color:rgba(68,62,79,.54); }
+.lcos-color-pin-authoring-row { display:flex; flex-wrap:wrap; gap:7px; align-items:center; min-height:24px; }
+.lcos-color-pin-swatch { width:20px; height:20px; padding:0; border:0; border-radius:999px; background:var(--lcos-color-pin-tone); box-shadow:0 0 0 1px rgba(54,48,66,.12),0 2px 7px rgba(42,37,53,.10); cursor:pointer; }
+.lcos-color-pin-swatch:hover { transform:scale(1.12); }
+.lcos-color-pin-swatch.is-active { box-shadow:0 0 0 2px rgba(255,255,255,.96),0 0 0 3px var(--lcos-color-pin-tone); }
+.lcos-color-pin-members-popover { width:min(260px, calc(var(--lcos-spatial-index-active-width, 420px) - 24px)); transform:translateX(-50%); }
+.lcos-color-pin-members-popover>header small { color:rgba(74,67,86,.48); font-size:10px; }
+.lcos-color-pin-members-list { display:grid; gap:3px; margin-top:7px; max-height:252px; overflow:auto; }
+.lcos-color-pin-members-list>button { display:grid; grid-template-columns:15px minmax(0,1fr); align-items:center; gap:7px; min-height:30px; padding:5px 7px; border:0; border-radius:8px; background:transparent; color:rgba(44,39,53,.82); text-align:left; }
+.lcos-color-pin-members-list>button:hover { background:rgba(74,66,91,.065); }
+.lcos-color-pin-members-list>button:disabled { opacity:.42; }
+.lcos-color-pin-members-list>button span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11px; }
+@media (prefers-reduced-motion: no-preference) { .lcos-color-pin-swatch { transition:transform 120ms ease,box-shadow 120ms ease; } }

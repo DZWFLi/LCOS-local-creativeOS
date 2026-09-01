@@ -4,6 +4,8 @@ import type {
   MutationChangeSetV1,
   MutationRelationSnapshotV1,
   ProjectEventOrigin,
+  ColorPinDefinitionV0,
+  ColorPinMembershipV0,
   SpatialMarkerIntentV0,
 } from '@local-creative-os/contracts'
 import type { Relation } from '@local-creative-os/domain'
@@ -89,6 +91,71 @@ export class MutationSafetyService {
 
   list(projectId: string, limit = 50): readonly MutationChangeSetV1[] {
     return this.#metadata.listMutationChangeSets(projectId, limit)
+  }
+
+
+  /** A25-6: assign one Color Pin identity to one canonical target. */
+  assignColorPin(input: {
+    readonly projectId: string
+    readonly targetRef: ColorPinMembershipV0['targetRef']
+    readonly colorPinId?: string
+    readonly color?: string
+    readonly label?: string
+    readonly actorKind?: MutationChangeSetV1['actorKind']
+    readonly origin?: ProjectEventOrigin
+  }): { readonly definition: ColorPinDefinitionV0; readonly membership: ColorPinMembershipV0; readonly changeSet?: MutationChangeSetV1 } {
+    if (String(input.targetRef.projectId) !== String(input.projectId)) throw new Error('Cross-project Color Pin target is forbidden.')
+    const projectId = input.projectId as never
+    let definition = input.colorPinId ? this.#metadata.getColorPinDefinition(input.colorPinId) : undefined
+    if (definition !== undefined && String(definition.projectId) !== String(input.projectId)) throw new Error('Cross-project Color Pin identity is forbidden.')
+    if (definition === undefined && input.color !== undefined) definition = this.#metadata.getColorPinDefinitionByColor(projectId, input.color)
+    const now = new Date().toISOString()
+    const createdDefinition = definition === undefined
+    if (definition === undefined) {
+      if (!input.color) throw new Error('Color Pin assignment requires an existing colorPinId or a color value.')
+      definition = { id: `color-pin-${randomUUID()}`, projectId: input.projectId, color: input.color, ...(input.label?.trim() ? { label: input.label.trim() } : {}), createdAt: now, updatedAt: now }
+    }
+    const existing = this.#metadata.findColorPinMembership(projectId, definition.id, input.targetRef)
+    if (existing !== undefined) return { definition, membership: existing }
+    const membership: ColorPinMembershipV0 = {
+      id: `color-pin-membership-${randomUUID()}`, projectId: input.projectId, colorPinId: definition.id, targetRef: input.targetRef, createdAt: now, updatedAt: now,
+    }
+    const changes: MutationChangeItemV1[] = []
+    if (createdDefinition) changes.push({
+      type: 'color_pin_definition_add', colorPinId: definition.id, definition,
+      inverse: { type: 'color_pin_definition_remove', colorPinId: definition.id },
+      forward: { type: 'color_pin_definition_add', colorPinId: definition.id },
+      appliedFingerprint: `color-pin-definition:${definition.id}:present`,
+    })
+    changes.push({
+      type: 'color_pin_membership_add', membershipId: membership.id, membership,
+      inverse: { type: 'color_pin_membership_remove', membershipId: membership.id },
+      forward: { type: 'color_pin_membership_add', membershipId: membership.id },
+      appliedFingerprint: `color-pin-membership:${membership.id}:present`,
+    })
+    const changeSet = this.#buildChangeSet({ projectId: input.projectId, operationId: `color-pin-assign-${randomUUID()}`, actorKind: input.actorKind ?? 'web', changes })
+    this.#metadata.runCurationMutation({
+      projectId: input.projectId,
+      ...(createdDefinition ? { colorPinDefinitionAdds: [definition] } : {}),
+      colorPinMembershipAdds: [membership], changeSet,
+    })
+    this.#publishChangeSet(changeSet, input.origin)
+    return { definition, membership, changeSet }
+  }
+
+  removeColorPinMembership(input: { readonly projectId: string; readonly membershipId: string; readonly actorKind?: MutationChangeSetV1['actorKind']; readonly origin?: ProjectEventOrigin }): MutationChangeSetV1 | undefined {
+    const membership = this.#metadata.getColorPinMembership(input.membershipId)
+    if (membership === undefined || String(membership.projectId) !== String(input.projectId)) return undefined
+    const change: MutationChangeItemV1 = {
+      type: 'color_pin_membership_remove', membershipId: membership.id, membership,
+      inverse: { type: 'color_pin_membership_add', membershipId: membership.id },
+      forward: { type: 'color_pin_membership_remove', membershipId: membership.id },
+      appliedFingerprint: `color-pin-membership:${membership.id}:absent`,
+    }
+    const changeSet = this.#buildChangeSet({ projectId: input.projectId, operationId: `color-pin-remove-${randomUUID()}`, actorKind: input.actorKind ?? 'web', changes: [change] })
+    this.#metadata.runCurationMutation({ projectId: input.projectId, colorPinMembershipDeletes: [membership.id], changeSet })
+    this.#publishChangeSet(changeSet, input.origin)
+    return changeSet
   }
 
   /** Direct Relation create/update. Produces one atomic ChangeSet. */
@@ -520,6 +587,13 @@ export class MutationSafetyService {
           return { revertable: false, reason: 'TOUCHED_STATE_CHANGED_AFTER_APPLY', changeSetId }
         }
       }
+      else if (change.type === 'color_pin_definition_add') {
+        if (this.#metadata.getColorPinDefinition(change.colorPinId) === undefined) return { revertable: false, reason: 'TOUCHED_STATE_CHANGED_AFTER_APPLY', changeSetId }
+      } else if (change.type === 'color_pin_membership_add') {
+        if (this.#metadata.getColorPinMembership(change.membershipId) === undefined) return { revertable: false, reason: 'TOUCHED_STATE_CHANGED_AFTER_APPLY', changeSetId }
+      } else if (change.type === 'color_pin_membership_remove') {
+        if (this.#metadata.getColorPinMembership(change.membershipId) !== undefined) return { revertable: false, reason: 'TOUCHED_STATE_CHANGED_AFTER_APPLY', changeSetId }
+      }
     }
 
     // 2. 全部安全后才执行 inverse。
@@ -583,6 +657,13 @@ export class MutationSafetyService {
         this.#metadata.runCurationMutation({ projectId: changeSet.projectId, spatialMarkerDeletes: [change.markerId] })
       } else if (change.type === 'spatial_marker_remove') {
         this.#metadata.runCurationMutation({ projectId: changeSet.projectId, spatialMarkerAdds: [change.marker] })
+      }
+      else if (change.type === 'color_pin_definition_add') {
+        this.#metadata.runCurationMutation({ projectId: changeSet.projectId, colorPinDefinitionDeletes: [change.colorPinId] })
+      } else if (change.type === 'color_pin_membership_add') {
+        this.#metadata.runCurationMutation({ projectId: changeSet.projectId, colorPinMembershipDeletes: [change.membershipId] })
+      } else if (change.type === 'color_pin_membership_remove') {
+        this.#metadata.runCurationMutation({ projectId: changeSet.projectId, colorPinMembershipAdds: [change.membership] })
       }
     }
 
@@ -665,6 +746,13 @@ export class MutationSafetyService {
           return { revertable: false, reason: 'TOUCHED_STATE_CHANGED_AFTER_APPLY', changeSetId }
         }
       }
+      else if (change.type === 'color_pin_definition_add') {
+        if (this.#metadata.getColorPinDefinition(change.colorPinId) !== undefined) return { revertable: false, reason: 'TOUCHED_STATE_CHANGED_AFTER_APPLY', changeSetId }
+      } else if (change.type === 'color_pin_membership_add') {
+        if (this.#metadata.getColorPinMembership(change.membershipId) !== undefined) return { revertable: false, reason: 'TOUCHED_STATE_CHANGED_AFTER_APPLY', changeSetId }
+      } else if (change.type === 'color_pin_membership_remove') {
+        if (this.#metadata.getColorPinMembership(change.membershipId) === undefined) return { revertable: false, reason: 'TOUCHED_STATE_CHANGED_AFTER_APPLY', changeSetId }
+      }
     }
 
     for (const change of changeSet.changes) {
@@ -730,6 +818,13 @@ export class MutationSafetyService {
         this.#metadata.runCurationMutation({ projectId: changeSet.projectId, spatialMarkerAdds: [change.marker] })
       } else if (change.type === 'spatial_marker_remove') {
         this.#metadata.runCurationMutation({ projectId: changeSet.projectId, spatialMarkerDeletes: [change.markerId] })
+      }
+      else if (change.type === 'color_pin_definition_add') {
+        this.#metadata.runCurationMutation({ projectId: changeSet.projectId, colorPinDefinitionAdds: [change.definition] })
+      } else if (change.type === 'color_pin_membership_add') {
+        this.#metadata.runCurationMutation({ projectId: changeSet.projectId, colorPinMembershipAdds: [change.membership] })
+      } else if (change.type === 'color_pin_membership_remove') {
+        this.#metadata.runCurationMutation({ projectId: changeSet.projectId, colorPinMembershipDeletes: [change.membershipId] })
       }
     }
 

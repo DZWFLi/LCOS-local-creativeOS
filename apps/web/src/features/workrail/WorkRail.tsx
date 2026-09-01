@@ -99,7 +99,7 @@ export function WorkRail(props: Props) {
   const runOutline: readonly RunOutlineItem[] = props.activeRun ? buildRunOutline(props.activeRun, props.runSteps ?? [], props.runEvents) : []
 
 
-  return <aside className="work-rail" data-testid="work-rail" data-mode={mode} style={{ width: props.width, '--lcos-runtime-rail-width': `${props.width}px` } as CSSProperties} onContextMenu={(event) => event.preventDefault()}>
+  return <aside className="work-rail" data-testid="work-rail" data-spatial-viewport-occupant="right" data-mode={mode} style={{ width: props.width, '--lcos-runtime-rail-width': `${props.width}px` } as CSSProperties} onContextMenu={(event) => event.preventDefault()}>
     <WorkRailHeader mode={mode} activeRun={props.activeRun} contextLabel={props.contextLabel} contextCount={props.contextCount} contextScope={props.contextScope} onContextScope={props.onContextScope} onCollapse={props.onCollapse} />
     <div className="work-rail-body" data-testid="work-rail-body">
       <RunList activeRun={props.activeRun} reviews={props.runReviews} onOpen={props.onOpenRunReview} />

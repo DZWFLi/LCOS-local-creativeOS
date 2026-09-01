@@ -79,6 +79,8 @@ export type { SpaceListNodeV0, SpaceListResultV0, SpaceReadResultV0, SpaceSearch
 export type { ConversationIdentityChainV1, ActiveReceiverIdentityV1, ArtifactBirthProvenanceV1 } from './conversation-identity.js'
 export type { SessionPhase, SessionTrackPhase, SessionLifecycleStateV1 } from './session-lifecycle.js'
 export type { SpatialMarkerIntentV0, SpatialMarkerTargetRefV0, SpatialMarkerScopeV0, NavigationSurfaceKindV0, StableSurfaceRefV0, ResolvedNavigationTargetV0, NavigationResolutionReasonV0, NavigationResolutionV0 } from './navigation-marker.js'
+export type { ColorPinDefinitionV0, ColorPinMembershipV0, ColorPinSnapshotV0 } from './color-pin.js'
+export type { VoiceTranscriptionSegmentTransportV1, VoiceTranscriptionResponseV1 } from './voice-transcription.js'
 export { SESSION_PHASE_TRANSITIONS, RUN_STATUS_TO_SESSION_PHASE, isSessionTransitionAllowed, markSessionStale, markSessionFresh } from './session-lifecycle.js'
 export type { MutationRisk, PermissionScope, GateActorRole, OperationScope, ExecutionGateInput, GateDecision } from './execution-gate.js'
 export { evaluateExecutionGate, OPERATION_RISK, riskOfOperation } from './execution-gate.js'

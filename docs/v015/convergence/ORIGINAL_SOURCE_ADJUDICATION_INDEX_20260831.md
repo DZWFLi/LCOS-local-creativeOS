@@ -128,9 +128,16 @@ Handoff 隐藏未完成
 
 ## `LCOS_0.1_三大独立视图组件化详细施工总稿_v03_对话选择与承接全链补齐_20260821.md`
 
-状态：`RAW_SOURCE_LOST / CACHE EVICTED`。
+状态更新（2026-09-01 W0-2）：
 
-它是 8/21 当时的重要**施工汇总主稿**，但不是三 Surface 产品定义的唯一创世来源，也不是后续 Freeze 的唯一 authority。当前不得再把它作为永久施工 blocker；其权威内容按 `LOST_SOURCE_PROVENANCE_LEDGER_20260831.md` 由上游专题稿、后续 explicit Freeze、差分审计、当前源码/测试与最新用户裁决交叉重建。
+```text
+历史状态 = RAW_SOURCE_LOST / CACHE EVICTED
+当前状态 = RAW_SOURCE_RECOVERED_EXTERNAL / LOCAL_VENDOR_PENDING
+```
+
+File Library 已重新定位到 exact-name file object，因此不得继续把它描述成“永久丢失”。但当前施工 runtime 不能把 File Library object 的 exact bytes 直接挂载进本 RC；在 repo-local exact vendoring + FULL READ 完成以前，`RECONSTRUCTED_AUTHORITY` safety net 继续有效，且禁止用 excerpt/snippet 拼出伪原稿。
+
+它是 8/21 当时的重要**施工汇总主稿**，但不是三 Surface 产品定义的唯一创世来源，也不是后续 Freeze 的唯一 authority。当前不得把它作为永久施工 blocker；其权威内容仍按 `LOST_SOURCE_PROVENANCE_LEDGER_20260831.md` 由上游专题稿、后续 explicit Freeze、差分审计、当前源码/测试与最新用户裁决交叉验证。
 
 历史上它曾是 Context / Workflow GUI 修复的**第一施工回源入口之一**。
 

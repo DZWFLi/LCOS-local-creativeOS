@@ -15,6 +15,8 @@ import { RevisionUpgradeDialog, type RevisionUpgradeInput } from './features/wor
 import { ProjectDrive } from './features/project/ProjectDrive'
 import { ReorganizePanel } from './features/reorganize/ReorganizePanel'
 import { ProjectToolsDialog } from './features/project/ProjectToolsDialog'
+import { ProjectSearchIndexInput } from './features/project/ProjectSearchIndexInput'
+import { projectSearchAnchorLabel, projectSearchResultForIndexId, useProjectSearchIndex, type ProjectSearchIndexResult } from './features/project/projectSearchIndex'
 import { WorkspaceDock } from './features/workspace/WorkspaceDock'
 import { WorkspaceDialog } from './features/workspace/WorkspaceDialog'
 import { ConfirmDialog } from './features/ui/ConfirmDialog'
@@ -70,6 +72,14 @@ import { buildScopePath, createId, decodeTextBuffer, fileNameFromPath, inferFile
 import { AppShellView } from './features/shell/AppShellView'
 import { LocalCoreClientProvider } from './runtime/LocalCoreClientContext'
 import { ProjectSpatialMarkerProvider } from './features/spatial/ProjectSpatialMarkerContext'
+import { CenteredSpatialIndex } from './features/spatial/CenteredSpatialIndex.tsx'
+import { CENTERED_SPATIAL_INDEX_PRIMARY_CAP, resolveTopSpatialIndexOwner } from './features/spatial/centeredSpatialIndex'
+import { ActiveSpatialViewportProvider } from './features/spatial/ActiveSpatialViewportContext'
+import { useObservedActiveSpatialViewport } from './features/spatial/useObservedActiveSpatialViewport'
+import { useProjectColorPins } from './features/spatial/useProjectColorPins'
+import { ProjectColorPinProvider } from './features/spatial/ProjectColorPinContext'
+import { ColorPinMembersPopover } from './features/spatial/ColorPinMembersPopover'
+import { projectColorPinDirectViewId, projectColorPinGroupForIndexId, projectColorPinGroups, projectColorPinIndexItems } from './features/spatial/projectColorPinIndex'
 import type { SurfaceContextMenuAction, SurfaceContextMenuItem } from './features/shell/SurfaceContextMenu'
 import type { SharedComposerCommandState, SurfaceExecutionSubmission, SurfaceExecutionSubmissionResult } from './features/execution/surfaceExecution'
 import type { DepositHintItem } from './features/shell/BoundaryHints'
@@ -97,8 +107,7 @@ import { deriveContextGraphAutoNodeIds, mergeContextGraphNodeIds } from './featu
 import { materializeProjectEntityNodes, projectEntityNodeIds, semanticRefsForSourceIds } from './features/entities/projectEntityProjection'
 import { projectRelationEndpointForNodeId } from './features/spatial/projectRelationEndpoint'
 import { ARRANGE_SURFACE_DROP_TARGET_ID, CONTEXT_GRAPH_SURFACE_DROP_TARGET_ID, CONTEXT_SURFACE_DROP_TARGET_ID, NEW_SCENE_DROP_TARGET_ID, WORKFLOW_GRAPH_SURFACE_DROP_TARGET_ID, WORKFLOW_SURFACE_DROP_TARGET_ID } from './features/spatial/semanticDrop'
-import { ProjectFocusNavigator } from './features/focus/ProjectFocusNavigator'
-import { ArtifactLocationOrbit } from './features/focus/ArtifactLocationOrbit'
+import { projectFocusLocationForIndexId, projectFocusLocationIndexItems } from './features/focus/projectFocusIndex'
 import { resolveProjectFocusLocations, type ProjectFocusLocation, type ProjectFocusLocationCandidate, type ProjectFocusSearchEntry } from './state/projectFocus'
 import type { SpatialFocusRequest } from './features/spatial/useSpatialFocusRequest'
 import { subscribeProjectRealtime } from './runtime/projectRealtime'
@@ -124,20 +133,6 @@ function shellLayoutDensity(viewport: number): ShellLayoutDensity {
 
 function shellLayoutMode(width: number, height: number): ShellLayoutMode {
   return width <= 960 && width / Math.max(height, 1) < 1.35 ? 'sidecar' : 'desktop'
-}
-
-function shellWorkingCenter(width: number, height: number, mode: ShellLayoutMode, railOpen: boolean, railWidth: number) {
-  if (mode === 'sidecar') {
-    const sceneHeight = Math.max(320, height - 44)
-    const top = 42
-    const bottom = 54
-    return { x: width / 2, y: top + Math.max(80, sceneHeight - top - bottom) / 2 }
-  }
-  const left = 56
-  const right = railOpen ? railWidth + 20 : 0
-  const top = 48
-  const bottom = 72
-  return { x: left + Math.max(160, width - left - right) / 2, y: top + Math.max(160, height - top - bottom) / 2 }
 }
 
 function responsiveRailWidth(viewport: number, compareExpanded: boolean): number {
@@ -385,11 +380,13 @@ export function App() {
   const [controllerError, setControllerError] = useState<string | null>(null)
   const [projectToolsMode, setProjectToolsMode] = useState<'search' | 'full' | null>(null)
   const [projectSearchInitialQuery, setProjectSearchInitialQuery] = useState('')
+  const [projectSearchOverflowOpen, setProjectSearchOverflowOpen] = useState(false)
+  const [projectColorPinOverflowOpen, setProjectColorPinOverflowOpen] = useState(false)
+  const [projectColorPinMembersId, setProjectColorPinMembersId] = useState<string | null>(null)
   const [projectFocusOpen, setProjectFocusOpen] = useState(false)
   const [projectFocusSourceIds, setProjectFocusSourceIds] = useState<string[]>([])
   const [projectFocusSourceLabel, setProjectFocusSourceLabel] = useState('')
-  const [projectFocusAnchor, setProjectFocusAnchor] = useState<Element | null>(null)
-  const [projectFocusListMode, setProjectFocusListMode] = useState(false)
+  const [projectFocusOverflowOpen, setProjectFocusOverflowOpen] = useState(false)
   const [projectFocusRequest, setProjectFocusRequest] = useState<SpatialFocusRequest | undefined>(undefined)
   const [resourceDetailArtifactId, setResourceDetailArtifactId] = useState<string | null>(null)
   const [obsidianScan, setObsidianScan] = useState<ObsidianVaultScanV1 | null>(null)
@@ -871,12 +868,14 @@ export function App() {
   const sceneStyle = useMemo(() => ({
     '--work-rail-width': `${effectiveRailWidth}px`,
   } as CSSProperties), [effectiveRailWidth])
-  const safeInsets = useMemo(() => ({
+  const staticSpatialInsets = useMemo(() => ({
     left: layoutMode === 'sidecar' ? 18 : 76,
     right: layoutMode === 'sidecar' ? 18 : 28,
     top: layoutMode === 'sidecar' ? 46 : 24,
     bottom: layoutMode === 'sidecar' ? 60 : 72,
   }), [layoutMode])
+  const activeSpatialViewport = useObservedActiveSpatialViewport({ viewportWidth, viewportHeight, staticInsets: staticSpatialInsets })
+  const safeInsets = activeSpatialViewport.activeInsets
   useEffect(() => {
     const preventBrowserZoom = (event: WheelEvent) => {
       if (!event.ctrlKey && !event.metaKey) return
@@ -1635,24 +1634,9 @@ export function App() {
     }
   }, [])
 
-  const shellCenterRef = useRef<ReturnType<typeof shellWorkingCenter> | null>(null)
   const sidecarContentBoundsRef = useRef(restorationFocusBounds(scopeNodes.filter((node) => node.kind !== 'process')))
   sidecarContentBoundsRef.current = restorationFocusBounds(scopeNodes.filter((node) => node.kind !== 'process'))
   const previousLayoutModeRef = useRef<ShellLayoutMode | null>(null)
-  useLayoutEffect(() => {
-    const next = shellWorkingCenter(viewportWidth, viewportHeight, layoutMode, layoutMode === 'desktop' && !workRail.collapsed, effectiveRailWidth)
-    const previous = shellCenterRef.current
-    shellCenterRef.current = next
-    if (!previous) return
-    const deltaX = next.x - previous.x
-    const deltaY = next.y - previous.y
-    if (Math.abs(deltaX) < .5 && Math.abs(deltaY) < .5) return
-    // Resize only moves the camera projection so the current world focus stays
-    // inside the newly available Sidecar/Desktop working region. Node anchors
-    // and Project Truth never change.
-    setCamera((current) => ({ ...current, x: current.x + deltaX, y: current.y + deltaY }))
-  }, [effectiveRailWidth, layoutMode, viewportHeight, viewportWidth, workRail.collapsed])
-
   useLayoutEffect(() => {
     const previousMode = previousLayoutModeRef.current
     previousLayoutModeRef.current = layoutMode
@@ -2947,13 +2931,47 @@ export function App() {
     return entries
   }, [nodes, scopes, workspaces])
 
+  const projectSearchIndex = useProjectSearchIndex({
+    open: projectToolsMode === 'search',
+    initialQuery: projectSearchInitialQuery,
+    projectId: activeProjectId,
+    client: bridgeRef.current.client,
+    searchEntries: projectFocusSearchEntries,
+  })
+  const projectSearchActiveId = projectSearchIndex.activeResult?.key
+
   const projectFocusSemantic = useMemo(() => semanticRefsForSourceIds(projectFocusSourceIds, projectPresentationNodes), [projectFocusSourceIds, projectPresentationNodes])
   const projectFocusLocations = useMemo(() => resolveProjectFocusLocations({
     focusViewIds: projectFocusSemantic.viewIds,
     focusEntityRefs: projectFocusSemantic.entityRefs,
     candidates: projectFocusCandidates,
   }), [projectFocusCandidates, projectFocusSemantic.entityRefs, projectFocusSemantic.viewIds])
-  const projectFocusCount = projectFocusSemantic.viewIds.length + projectFocusSemantic.entityRefs.length
+  const projectFocusIndexItems = useMemo(() => projectFocusLocationIndexItems(projectFocusLocations), [projectFocusLocations])
+  const projectFocusActiveLocationId = projectFocusLocations.find((location) => location.active)?.key
+  const projectColorPins = useProjectColorPins(bridgeRef.current.client, activeProjectId)
+  const projectColorPinGroupsValue = useMemo(() => projectColorPinGroups(projectColorPins.records), [projectColorPins.records])
+  const projectColorPinIndexItemsValue = useMemo(() => projectColorPinIndexItems(projectColorPinGroupsValue), [projectColorPinGroupsValue])
+  const topSpatialIndexOwner = resolveTopSpatialIndexOwner({
+    searchActive: projectToolsMode === 'search',
+    focusActive: projectFocusOpen,
+    colorPinCount: projectColorPinGroupsValue.length,
+  })
+  useEffect(() => {
+    if (topSpatialIndexOwner !== 'focus' || projectFocusLocations.length <= CENTERED_SPATIAL_INDEX_PRIMARY_CAP) {
+      setProjectFocusOverflowOpen(false)
+    }
+  }, [projectFocusLocations.length, topSpatialIndexOwner])
+  useEffect(() => {
+    if (topSpatialIndexOwner !== 'search' || projectSearchIndex.results.length <= CENTERED_SPATIAL_INDEX_PRIMARY_CAP) {
+      setProjectSearchOverflowOpen(false)
+    }
+  }, [projectSearchIndex.results.length, topSpatialIndexOwner])
+  useEffect(() => {
+    if (topSpatialIndexOwner !== 'color-pin' || projectColorPinGroupsValue.length <= CENTERED_SPATIAL_INDEX_PRIMARY_CAP) {
+      setProjectColorPinOverflowOpen(false)
+    }
+    if (topSpatialIndexOwner !== 'color-pin') setProjectColorPinMembersId(null)
+  }, [projectColorPinGroupsValue.length, topSpatialIndexOwner])
 
   const acceptContextMerge = useCallback((sourceContextId: string, targetContextId: string, additions: readonly string[]) => {
     const target = scopes.find((scope) => scope.id === targetContextId)
@@ -3075,11 +3093,7 @@ export function App() {
     setProjectFocusSourceIds(unique)
     const titles = unique.map((id) => projectPresentationNodes.find((node) => node.id === id)?.title).filter((title): title is string => Boolean(title))
     setProjectFocusSourceLabel(label?.trim() || (titles.length <= 2 ? titles.join(' + ') : `${titles.slice(0, 2).join(' + ')} 等 ${unique.length} 项`))
-    const anchor = unique.length === 1 && typeof document !== 'undefined'
-      ? document.querySelector(`[data-node-id="${typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(unique[0]!) : unique[0]!.replace(/["\\]/g, '\\$&')}"]`)
-      : null
-    setProjectFocusAnchor(anchor)
-    setProjectFocusListMode(false)
+    setProjectFocusOverflowOpen(false)
     setProjectFocusOpen(true)
   }, [projectPresentationNodes, selectedIds])
 
@@ -3091,6 +3105,30 @@ export function App() {
     }
     openProjectFocus(sourceIds, title)
   }, [nodes, openProjectFocus])
+
+  const closeProjectSearch = useCallback(() => {
+    setProjectSearchOverflowOpen(false)
+    setProjectToolsMode((current) => current === 'search' ? null : current)
+    setProjectSearchInitialQuery('')
+  }, [])
+
+  const activateProjectSearchResult = useCallback((item: ProjectSearchIndexResult) => {
+    if (item.sourceIds?.length) {
+      closeProjectSearch()
+      openProjectFocus(item.sourceIds, item.title)
+      if (item.chunkAnchor) setNotice(`已定位「${item.title}」· ${projectSearchAnchorLabel(item.chunkAnchor)}`)
+      return
+    }
+    if (item.artifactId) {
+      closeProjectSearch()
+      focusArtifactFromSearch(item.artifactId, item.title)
+      if (item.chunkAnchor) setNotice(`已定位「${item.title}」· ${projectSearchAnchorLabel(item.chunkAnchor)}`)
+      return
+    }
+    setNotice(item.chunkAnchor
+      ? `找到了「${item.title}」· ${projectSearchAnchorLabel(item.chunkAnchor)}，它现在还没放在画布上。`
+      : `找到了「${item.title}」，它现在还没放在画布上。`)
+  }, [closeProjectSearch, focusArtifactFromSearch, openProjectFocus])
 
   const navigateProjectFocus = useCallback((location: ProjectFocusLocation) => {
     const focusIds = [...new Set([...location.matchedViewIds, ...projectEntityNodeIds(location.matchedEntityRefs, projectPresentationNodes)])]
@@ -3143,8 +3181,7 @@ export function App() {
       setProjectFocusRequest({ nonce: Date.now(), ids: focusIds, targetTestId: 'workflow-spatial' })
     }
     setProjectFocusOpen(false)
-    setProjectFocusAnchor(null)
-    setProjectFocusListMode(false)
+    setProjectFocusOverflowOpen(false)
     setNotice(`已定位到「${location.label}」· ${location.matchedCount}/${location.totalCount} 项`)
   }, [activateOverview, nodes, openCollectionWithMotion, openSavedContextView, openSavedWorkflowView, openWorkspaceScene, projectPresentationNodes, rootScope.id, safeInsets, scopes])
 
@@ -7036,8 +7073,8 @@ export function App() {
       if (modifier && event.shiftKey && key === 'l') { event.preventDefault(); if (bootMode === 'runtime') setReorganizeOpen(true); else setNotice('智能体整理只在真实项目中可用'); return }
       if (modifier && key === 'o' && selectedNodes.length === 1) { event.preventDefault(); openNative(selectedNodes[0]); return }
       if (event.code === 'Space') { event.preventDefault(); setSpaceHeld(true); return }
-      if (event.key === 'Escape') { if (paletteOpen) { setPaletteOpen(false); return } if (projectFocusOpen) setProjectFocusOpen(false); else if (confirmProjectDelete) setConfirmProjectDelete(null); else if (confirmWorkspaceId) setConfirmWorkspaceId(null); else if (conversationSpaceId) setConversationSpaceId(null); else if (immersiveNodeId) closeImmersive(); else if (workbench) setWorkbench(null); else if (capabilityOpen) setCapabilityOpen(false); else if (nodeInfoId) setNodeInfoId(null); else if (layoutPreview) { setLayoutPreview(null); setLayoutPreviewFocusIds(null) } else clearSelection(); return }
-      if (key === 'f' && selectedIds.length > 0) { event.preventDefault(); openProjectFocus(); return }
+      if (event.key === 'Escape') { if (paletteOpen) { setPaletteOpen(false); return } if (projectSearchOverflowOpen) setProjectSearchOverflowOpen(false); else if (projectToolsMode === 'search') { setProjectToolsMode(null); setProjectSearchInitialQuery('') } else if (projectFocusOverflowOpen) setProjectFocusOverflowOpen(false); else if (projectFocusOpen) setProjectFocusOpen(false); else if (projectColorPinOverflowOpen) setProjectColorPinOverflowOpen(false); else if (confirmProjectDelete) setConfirmProjectDelete(null); else if (confirmWorkspaceId) setConfirmWorkspaceId(null); else if (conversationSpaceId) setConversationSpaceId(null); else if (immersiveNodeId) closeImmersive(); else if (workbench) setWorkbench(null); else if (capabilityOpen) setCapabilityOpen(false); else if (nodeInfoId) setNodeInfoId(null); else if (layoutPreview) { setLayoutPreview(null); setLayoutPreviewFocusIds(null) } else clearSelection(); return }
+      if (key === 'f' && selectedIds.length > 0) { event.preventDefault(); if (projectFocusOpen) { setProjectFocusOverflowOpen(false); setProjectFocusOpen(false) } else openProjectFocus(); return }
       if (key === 'c') { event.preventDefault(); if (layoutMode === 'sidecar') { setNotice('侧边协作模式不提供 LCOS 输入框'); return } requestComposerFocus(); return }
       if (event.key === 'F2' && selectedIds.length === 1 && selectedNodes.length === 1) { event.preventDefault(); setRenameNodeId(selectedNodes[0]!.id); return }
       if (event.key === 'Delete' || event.key === 'Backspace') {
@@ -7048,7 +7085,7 @@ export function App() {
     const release = (event: KeyboardEvent) => { if (event.code === 'Space') setSpaceHeld(false) }
     window.addEventListener('keydown', handler); window.addEventListener('keyup', release)
     return () => { window.removeEventListener('keydown', handler); window.removeEventListener('keyup', release) }
-  }, [bootMode, clearSelection, closeImmersive, confirmProjectDelete, confirmWorkspaceId, conversationSpaceId, copySelection, createDialogOpen, deleteNodes, duplicateSelection, capabilityOpen, immersiveNodeId, layoutMode, nodeInfoId, paletteOpen, referencePickActive, workbench, layoutPreview, openNative, openProjectFocus, pasteClipboard, projectCreateOpen, projectFocusOpen, redo, requestComposerFocus, requestGlobalRun, requestSelectionRun, scopeCreateOpen, selectMarquee, selectedEdgeId, selectedId, selectedIds, selectedNodes, setEdges, undo, visibleNodes])
+  }, [bootMode, clearSelection, closeImmersive, confirmProjectDelete, confirmWorkspaceId, conversationSpaceId, copySelection, createDialogOpen, deleteNodes, duplicateSelection, capabilityOpen, immersiveNodeId, layoutMode, nodeInfoId, paletteOpen, referencePickActive, workbench, layoutPreview, openNative, openProjectFocus, pasteClipboard, projectCreateOpen, projectColorPinOverflowOpen, projectFocusOpen, projectFocusOverflowOpen, projectSearchOverflowOpen, projectToolsMode, redo, requestComposerFocus, requestGlobalRun, requestSelectionRun, scopeCreateOpen, selectMarquee, selectedEdgeId, selectedId, selectedIds, selectedNodes, setEdges, undo, visibleNodes])
 
 
   const refreshProjectCatalog = useCallback(() => {
@@ -7253,7 +7290,9 @@ export function App() {
   const noteToEdit = noteEditorId ? nodes.find((node) => node.id === noteEditorId) : undefined
   const scopePath = buildScopePath(scopes, activeScope)
   return <LocalCoreClientProvider value={bridgeRef.current.client}>
+    <ActiveSpatialViewportProvider value={activeSpatialViewport}>
     <ProjectSpatialMarkerProvider key={activeProjectId} projectId={activeProjectId}>
+    <ProjectColorPinProvider value={{ projectId: activeProjectId, ...projectColorPins }}>
     <AppShellView
     layoutDensity={layoutDensity}
     layoutMode={layoutMode}
@@ -7813,7 +7852,6 @@ export function App() {
         setCamera,
         collapsed: miniMapCollapsed,
         onCollapsedChange: setMiniMapCollapsed,
-        safeInsets,
         onLocateContent: locateAndPreviewIslands,
         gridSnapEnabled,
         onGridSnapChange: setGridSnapEnabled,
@@ -7941,9 +7979,9 @@ export function App() {
         onInspectDirectory: inspectProjectDirectory,
         onCreate: createProject,
       } : null,
-      projectTools: projectToolsMode ? {
+      projectTools: projectToolsMode === 'full' ? {
         open: true,
-        searchOnly: projectToolsMode === 'search',
+        searchOnly: false,
         initialSearchQuery: projectSearchInitialQuery,
         project: activeProject,
         projects,
@@ -8109,25 +8147,6 @@ export function App() {
             onClose={() => { if (!controllerBusy) { setControllerTargetSessionId(null); setControllerChoices([]); setControllerError(null) } }}
           />,
         } : null,
-        projectFocusOpen ? {
-          id: 'project-focus', tier: 'child' as const,
-          node: projectFocusSourceIds.length === 1 && projectFocusAnchor !== null && projectFocusLocations.length > 0 && !projectFocusListMode ? <ArtifactLocationOrbit
-            open
-            anchor={projectFocusAnchor}
-            sourceLabel={projectFocusSourceLabel || '当前对象'}
-            locations={projectFocusLocations}
-            onClose={() => { setProjectFocusOpen(false); setProjectFocusAnchor(null) }}
-            onNavigate={navigateProjectFocus}
-            onMore={() => setProjectFocusListMode(true)}
-          /> : <ProjectFocusNavigator
-            open
-            sourceLabel={projectFocusSourceLabel || (projectFocusCount ? `已选 ${projectFocusCount} 项` : '')}
-            sourceCount={projectFocusCount}
-            locations={projectFocusLocations}
-            onClose={() => { setProjectFocusOpen(false); setProjectFocusAnchor(null); setProjectFocusListMode(false) }}
-            onNavigate={navigateProjectFocus}
-          />,
-        } : null,
         reorganizeOpen && bootMode === 'runtime' ? {
           id: 'reorganize', tier: 'child' as const,
           node: <ReorganizePanel
@@ -8158,7 +8177,52 @@ export function App() {
       return immersiveNode ? { node: immersiveNode, projectId: activeProjectId, ...(immersiveSourceAnchor ? { sourceAnchor: immersiveSourceAnchor } : {}), ...(immersiveRevisionId ? { sourceRevisionId: immersiveRevisionId } : {}), onClose: closeImmersive, onOpenSource: openNative, onRevealSource: revealSource, onRelinkSource: relinkSource, onOpenMaterialSource: openMaterialSource } : null
     })() : null}
     />
+    <CenteredSpatialIndex
+      owner={topSpatialIndexOwner}
+      items={topSpatialIndexOwner === 'search' ? projectSearchIndex.indexItems : topSpatialIndexOwner === 'focus' ? projectFocusIndexItems : topSpatialIndexOwner === 'color-pin' ? projectColorPinIndexItemsValue : []}
+      activeId={topSpatialIndexOwner === 'search' ? projectSearchActiveId : topSpatialIndexOwner === 'focus' ? projectFocusActiveLocationId : undefined}
+      ariaLabel={topSpatialIndexOwner === 'search' ? '项目搜索结果' : topSpatialIndexOwner === 'focus' ? `「${projectFocusSourceLabel || '当前对象'}」出现位置` : topSpatialIndexOwner === 'color-pin' ? '项目 Color Pin 索引' : '顶部空间索引'}
+      overflowExpanded={topSpatialIndexOwner === 'search' ? projectSearchOverflowOpen : topSpatialIndexOwner === 'focus' ? projectFocusOverflowOpen : topSpatialIndexOwner === 'color-pin' && projectColorPinOverflowOpen}
+      control={topSpatialIndexOwner === 'search' ? <ProjectSearchIndexInput
+        query={projectSearchIndex.query}
+        loading={projectSearchIndex.loading}
+        error={projectSearchIndex.error}
+        resultCount={projectSearchIndex.results.length}
+        activeIndex={projectSearchIndex.activeIndex}
+        overflowExpanded={projectSearchOverflowOpen}
+        onQueryChange={(query) => { projectSearchIndex.setQuery(query); projectSearchIndex.setActiveIndex(0) }}
+        onActiveIndexChange={projectSearchIndex.setActiveIndex}
+        onSubmitActive={() => { if (projectSearchIndex.activeResult) activateProjectSearchResult(projectSearchIndex.activeResult) }}
+        onCloseOverflow={() => setProjectSearchOverflowOpen(false)}
+        onClose={closeProjectSearch}
+      /> : undefined}
+      onActivate={topSpatialIndexOwner === 'search' ? (id: string) => {
+        const result = projectSearchResultForIndexId(projectSearchIndex.results, id)
+        if (result) activateProjectSearchResult(result)
+      } : topSpatialIndexOwner === 'focus' ? (id: string) => {
+        const location = projectFocusLocationForIndexId(projectFocusLocations, id)
+        if (location) navigateProjectFocus(location)
+      } : topSpatialIndexOwner === 'color-pin' ? (id: string) => {
+        const group = projectColorPinGroupForIndexId(projectColorPinGroupsValue, id)
+        if (!group) return
+        const directViewId = projectColorPinDirectViewId(group)
+        if (directViewId) { openProjectFocus([directViewId]); return }
+        setProjectColorPinMembersId(id)
+      } : undefined}
+      onHover={topSpatialIndexOwner === 'search' ? (id: string | null) => {
+        if (!id) return
+        const index = projectSearchIndex.results.findIndex((item) => item.key === id)
+        if (index >= 0) projectSearchIndex.setActiveIndex(index)
+      } : undefined}
+      onOverflow={topSpatialIndexOwner === 'search' ? () => setProjectSearchOverflowOpen((current) => !current) : topSpatialIndexOwner === 'focus' ? () => setProjectFocusOverflowOpen((current) => !current) : topSpatialIndexOwner === 'color-pin' ? () => setProjectColorPinOverflowOpen((current) => !current) : undefined}
+    />
     {/* ⌘K 命令面板：portal 到 body 的全局顶层浮层；providers 纯查询、actions 全部为现有函数。 */}
+    <ColorPinMembersPopover
+      group={projectColorPinMembersId ? projectColorPinGroupForIndexId(projectColorPinGroupsValue, projectColorPinMembersId) ?? null : null}
+      onClose={() => setProjectColorPinMembersId(null)}
+      memberLabel={(viewId) => projectPresentationNodes.find((node) => node.id === viewId)?.title ?? viewId}
+      onActivateMember={(viewId) => { setProjectColorPinMembersId(null); openProjectFocus([viewId]) }}
+    />
     <CommandPalette
       open={paletteOpen}
       onClose={() => setPaletteOpen(false)}
@@ -8166,6 +8230,8 @@ export function App() {
       actions={paletteAssembly.actions}
       onSearchProject={(query) => { setPaletteOpen(false); setProjectSearchInitialQuery(query); setProjectToolsMode('search') }}
     />
+    </ProjectColorPinProvider>
     </ProjectSpatialMarkerProvider>
+    </ActiveSpatialViewportProvider>
     </LocalCoreClientProvider>
   }

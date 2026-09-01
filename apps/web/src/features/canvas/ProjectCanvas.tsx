@@ -20,8 +20,12 @@ import { edgeScrollDelta, spatialBoundsForPlacements, spatialScreenToWorld, spat
 import { spatialIdsIntersectingScreenRect } from '../spatial/spatialHitTest'
 import { spatialLodForCount, spatialOverviewProjection } from '../spatial/spatialLod'
 import { clusterExtremeFarGlyths, glythSemanticLodForZoom, isCriticalGlyth } from '../spatial/glythSemanticLod'
-import { useProjectSpatialMarkersOrNull } from '../spatial/ProjectSpatialMarkerContext'
-import { markerForNavigationTarget, semanticNavigationRegionOverviews } from '../spatial/spatialNavigationFamily'
+import { useActiveSpatialViewport } from '../spatial/ActiveSpatialViewportContext'
+import { ColorPinLocalDots } from '../spatial/ColorPinLocalDots'
+import { ColorPinAuthoringPopover } from '../spatial/ColorPinAuthoringPopover'
+import { colorPinRecordsForTarget, colorPinTargetRef, useProjectColorPinRuntime } from '../spatial/ProjectColorPinContext'
+import { spatialEdgeBoundsWithinRect } from '../spatial/activeSpatialViewport'
+import { semanticNavigationRegionOverviews } from '../spatial/spatialNavigationFamily'
 import { additiveSelectionModifier, conversationGlythDropTarget, conversationSessionFromDropTarget, referencePickModifier } from '../spatial/pointerInteractionLanguage'
 import type { SpatialMarkerItem } from '../spatial/spatialMarkerSystem'
 import { advanceSpatialMarquee, beginSpatialMarquee, endSpatialPointer, spatialMarqueeRect } from '../spatial/spatialInteractionMachine'
@@ -162,6 +166,7 @@ export function projectNodeSupportsInlineComposer(node: CanvasNode): boolean {
 }
 
 export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-space', surfaceMode = 'project', nodes, setNodes, edges, setEdges, camera, setCamera, selectedId, selectedIds, selectedEdgeId, setSelectedEdgeId, pendingId, runId, runStatus, spaceHeld, locked = false, layoutPreview, workspaceFrames = [], workspaceMemberNodes = nodes, activeWorkspaceId = null, onWorkspaceActivate, onWorkspaceProjectionMove, onPresentationInteractionChange, onPresentationCommit, onFrameBoundsChange, selectionComposer, referencePick, onSelect, onClearSelection, onMarqueeSelect, onSelectEdge, onDoubleClick, onDetails, onFocusSelection, onRequestSelectionComposer, onFocusNode, onCreateNodeFromAnchor, onFilesDropped, onExternalTextDrop, onMaterialTransferDrop, onMindmapBranchDrop, onArrangeSelection, gridSnapEnabled = true, onSetSelectionDisplayMode, onCopySelection, onDuplicateSelection, onCreateScopeFromSelection, onDeleteSelection, onReorganize, onDirectProjectViewDrop, onMapToConversation, onPointerWorldChange, onSpaceCreate, onLocateNode, focusRequest, onLocateConversationSource, locatePulseId, onOpenConversation, onSetActiveConversation, activeConversationId = null, pendingReviewIds = [], attentionBucketsByViewId = {}, collectionMembersByNodeId = {}, expandedCollectionScopeIds = [], openingCollectionScopeIds = [], closingCollectionScopeIds = [], onToggleCollection, onOpenContextLens, colonies = [], surfaceElements = [], onSurfaceElementsChange, portalTargets = [], onOpenPortalTarget, onCreateColonyFromSelection, onCreateColonyFromLasso, onAddToColony, onRescopeColony, onDissolveColony, onColonyMemberMoveSettled }: Props) {
+  const activeSpatialViewport = useActiveSpatialViewport()
   const canvasRef = useRef<HTMLDivElement | null>(null)
   const dragCandidate = useRef<DragCandidate | null>(null)
   const resizeCandidate = useRef<ResizeCandidate | null>(null)
@@ -257,6 +262,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
   // conversation 实体出现。anchor 存被点对象 DOM；conversationId 是 canonical ConversationSession id。
   // 物理对象 id 始终是 Core conversationViewId，不再派生第二套会话节点。
   const [conversationOrbit, setConversationOrbit] = useState<{ anchor: Element; nodeId: string; conversationId: string; title: string } | null>(null)
+  const [conversationColorPinOpen, setConversationColorPinOpen] = useState(false)
   // A09: ordinary Project objects now share the same ObjectOrbit behavior shell.
   // This state is Presentation-only; the Project object remains canonical truth.
   const [projectObjectOrbit, setProjectObjectOrbit] = useState<{ anchor: Element; nodeId: string } | null>(null)
@@ -275,7 +281,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
   const projectObjectOrbitAnchorRef = useMemo(() => ({ current: projectObjectOrbitAnchor }), [projectObjectOrbitAnchor])
   const workspaceOrbitAnchorRef = useMemo(() => ({ current: workspaceOrbitAnchor }), [workspaceOrbitAnchor])
   const projectObjectOrbitNode = useMemo(() => projectObjectOrbit === null ? null : nodes.find((node) => node.id === projectObjectOrbit.nodeId) ?? null, [nodes, projectObjectOrbit])
-  const markerRuntime = useProjectSpatialMarkersOrNull()
+  const colorPinRuntime = useProjectColorPinRuntime()
   const clearColonyLasso = () => {
     const active = colonyLassoSession.current
     if (active && canvasRef.current?.hasPointerCapture(active.pointerId)) {
@@ -297,7 +303,7 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
   // §13「只对 single active object 出现」：换选/清选/框选后当前对象不再是唯一 Selection 即收起。
   // （空白点击与 Esc / outside click 由 ObjectOrbit 行为层统一收口，不在此重复）。
   useEffect(() => {
-    if (conversationOrbit !== null && (selectedIds.length !== 1 || selectedIds[0] !== conversationOrbit.nodeId)) setConversationOrbit(null)
+    if (conversationOrbit !== null && (selectedIds.length !== 1 || selectedIds[0] !== conversationOrbit.nodeId)) { setConversationOrbit(null); setConversationColorPinOpen(false) }
     if (projectObjectOrbit !== null && (selectedIds.length !== 1 || selectedIds[0] !== projectObjectOrbit.nodeId)) setProjectObjectOrbit(null)
   }, [conversationOrbit, projectObjectOrbit, selectedIds])
   // A22: Compact Composer and the selected object's Action Arc may coexist.
@@ -656,18 +662,9 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
       setDragPreviewPositions(preview)
     })
   }
-  const autoPanBounds = (rect: DOMRect) => {
-    const dock = document.querySelector<HTMLElement>('[data-testid="workspace-dock"]')?.getBoundingClientRect()
-    const rail = document.querySelector<HTMLElement>('[data-testid="work-rail"]')?.getBoundingClientRect()
-    const dockOccludesLeft = Boolean(dock && dock.left <= rect.left + 1 && dock.right > rect.left)
-    const railOccludesRight = Boolean(rail && rail.right >= rect.right - 1 && rail.left < rect.right)
-    return {
-      left: dockOccludesLeft && dock ? Math.min(rect.right, dock.right + 10) : rect.left,
-      right: railOccludesRight && rail ? Math.max(rect.left, rail.left - 10) : rect.right,
-      top: rect.top,
-      bottom: rect.bottom,
-    }
-  }
+  const autoPanBounds = (rect: DOMRect) => activeSpatialViewport
+    ? spatialEdgeBoundsWithinRect(activeSpatialViewport, rect)
+    : { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom }
   const stopAutoPan = () => {
     autoPanPointer.current = null
     if (autoPanFrame.current !== null) {
@@ -1540,6 +1537,12 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
       {...(onFocusNode ? { onLocate: () => onFocusNode(projectObjectOrbitNode.id) } : {})}
     />
   )}
+  {conversationOrbit !== null && colorPinRuntime ? <ColorPinAuthoringPopover
+    open={conversationColorPinOpen}
+    targetRef={colorPinTargetRef(colorPinRuntime.projectId, conversationOrbit.nodeId)}
+    anchorRef={conversationOrbitAnchorRef}
+    onClose={() => setConversationColorPinOpen(false)}
+  /> : null}
   {workspaceOrbit !== null && workspaceOrbitFrame !== null && surfaceMode === 'project' && (
     <ObjectOrbit
       open
@@ -1566,13 +1569,11 @@ export const ProjectCanvas = memo(function ProjectCanvas({ projectId = 'capture-
             beginRelationIntent(source.id, { x: source.x + source.width, y: source.y + source.height / 2 })
           },
         }] : []),
-        markerRuntime ? (() => {
-          const targetRef = { projectId: markerRuntime.projectId, kind: 'view' as const, id: conversationOrbit.nodeId }
-          const marker = markerForNavigationTarget(markerRuntime.records, targetRef)
-          return marker
-            ? { id: 'conversation-marker', label: '取消导航地标', icon: MapPin, onClick: () => { void markerRuntime.deleteMarker(marker.id) } }
-            : { id: 'conversation-marker', label: '固定到导航', icon: MapPin, onClick: () => { void markerRuntime.createMarker({ targetRef, scope: 'cross-surface' }) } }
-        })() : { id: 'conversation-marker', label: '固定到导航', icon: MapPin, readOnly: true },
+        colorPinRuntime ? (() => {
+          const targetRef = colorPinTargetRef(colorPinRuntime.projectId, conversationOrbit.nodeId)
+          const count = colorPinRecordsForTarget(colorPinRuntime.records, targetRef).length
+          return { id: 'conversation-color-pin', label: count > 0 ? `Pin · ${count}` : 'Pin', icon: MapPin, keepOpen: true, onClick: () => setConversationColorPinOpen((current) => !current) }
+        })() : { id: 'conversation-color-pin', label: 'Pin', icon: MapPin, readOnly: true },
         activeConversationId === conversationOrbit.conversationId
           ? { id: 'conversation-active', label: '当前承接', icon: CheckCircle2, readOnly: true }
           : { id: 'conversation-activate', label: '设为当前', icon: Radio, onClick: () => onSetActiveConversation?.(conversationOrbit.conversationId) },
@@ -1639,6 +1640,7 @@ function CanvasCard({ projectId, node, density, zoom, showDetails, performancePr
     semantic: reviewPending ? 'waiting review' : pending || node.draft ? 'candidate draft' : undefined,
   })
   return <div data-node-id={node.id} data-project-relation-target={node.entityKind !== 'conversation' ? node.id : undefined} data-project-view-drop-target={node.entityKind === 'conversation' && node.conversation ? conversationGlythDropTarget(node.conversation.id) : undefined} data-project-view-drop-label={node.entityKind === 'conversation' ? '给这段对话' : undefined} data-node-kind={node.kind} data-entity-kind={node.entityKind} data-node-visual-family={visualFamily} data-node-current={node.current || undefined} data-node-draft={node.draft || undefined} data-node-historical={node.historical || undefined} data-revision-count={node.revisionCount} data-result-group={node.resultGroupId} data-node-runtime={node.runtimeState} data-run-status={node.runStatus} data-artifact-id={node.artifactId} data-conversation-artifact-id={node.entityKind === 'conversation' ? node.conversation?.conversationArtifactId : undefined} data-revision-id={node.revisionId} data-file-record-id={node.fileRecordId} data-current-revision={node.followsCurrentRevision || undefined} data-preview-status={node.previewStatus} data-view-of={node.viewOf} data-scope-id={node.scopeId} data-position-locked={node.positionLocked || undefined} data-context-only={node.contextOnly || undefined} data-attention-bucket={attentionBucket} data-reference-order={referenceOrder || undefined} data-collection-motion={collectionMotion?.phase} data-testid={`canvas-node-${node.id}`} role="button" tabIndex={0} aria-disabled={node.disabled || undefined} className={`canvas-node node-family-${node.kind} visual-family-${visualFamily} density-${density} ${node.kind} ${revisionStack ? 'revision-stack' : ''} ${selected ? 'selected' : ''} ${multiSelected ? 'multi-selected' : ''} ${pending ? 'pending' : ''} ${reviewPending ? 'review-pending' : ''} ${referenceOrder > 0 ? 'reference-picked' : ''} ${referenceReceptive ? 'is-reference-receptive' : ''} ${colonyCandidate ? 'is-colony-candidate' : ''} ${dragging ? 'dragging' : ''} ${resizing ? 'resizing' : ''} ${relationTarget ? 'is-relation-target' : ''} ${workspaceMember ? 'workspace-active-member' : ''} ${locatePulse ? 'locate-pulse' : ''} ${attentionBucket ? `attention-${attentionBucket}` : ''} ${collectionMotion ? `collection-${collectionMotion.phase}` : ''} ${node.error ? 'error' : ''} ${node.disabled ? 'disabled' : ''} ${node.positionLocked ? 'position-locked' : ''}`} style={{ left: node.x, top: node.y, width: node.width, height: node.height, '--node-ui-scale': String(1 / Math.max(.2, zoom)), '--glyth-ui-scale': String(1 / Math.max(.02, zoom)), '--canvas-zoom': String(zoom), '--lcos-drag-x': String(dragSignal?.x ?? 0), '--lcos-drag-y': String(dragSignal?.y ?? 0), '--lcos-collection-fold-x': `${collectionMotion?.dx ?? 0}px`, '--lcos-collection-fold-y': `${collectionMotion?.dy ?? 0}px` } as React.CSSProperties} onDragStart={(event) => event.preventDefault()} onContextMenu={(event) => event.preventDefault()} onPointerDown={(event) => { if (!node.disabled) onPointerDown(event) }} onClick={(event) => { event.stopPropagation(); if (!node.disabled) onClick(additiveSelection(event), event.currentTarget) }}>
+    <ColorPinLocalDots targetId={node.id} />
     {referenceOrder > 0 && <span className="lcos-reference-pick-badge" aria-label={`引用顺序 ${referenceOrder}`}>{referenceOrder}</span>}
     <span className="lcos-semantic-drop-handle" data-semantic-drop-handle aria-hidden="true" onClick={(event)=>event.stopPropagation()} title="Semantic Drop：拖到上下文或工作流（右键拖 / Alt+左拖）"><GripVertical size={11}/></span>
     {relationSource && <button data-testid={`relation-source-port-${node.id}`} className="lcos-relation-port" aria-label={`从 ${node.title} 建立关系`} title="关系已激活 · 拖动可精确连接，Esc 取消" onPointerDown={onLinkStart} onClick={(event) => event.stopPropagation()}><span aria-hidden="true" /></button>}

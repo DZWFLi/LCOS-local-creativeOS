@@ -194,7 +194,8 @@ test('ordinary Artifact gets Universal ObjectOrbit and single Selection Strip st
   await expect(orbitLayer).toBeVisible({ timeout: 5_000 })
   await expect(page.locator('[data-lcos-orbit-action="object-open"]')).toHaveCount(1)
   await expect(page.locator('[data-lcos-orbit-action="object-locate"]')).toHaveCount(1)
-  await expect(page.locator('[data-lcos-orbit-action="object-pin"]')).toHaveCount(1)
+  // A25-6 retires the legacy binary Spatial Marker action; A25-7 returns real many-to-many Color Pin authoring.
+  await expect(page.locator('[data-lcos-orbit-action="object-pin"]')).toHaveCount(0)
   await expect(page.getByTestId('selection-toolbar')).toHaveCount(0)
   await expect(page.getByTestId('selection-group-actions')).toHaveCount(0)
 

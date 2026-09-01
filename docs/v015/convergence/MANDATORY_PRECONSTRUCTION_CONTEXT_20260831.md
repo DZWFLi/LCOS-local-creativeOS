@@ -1365,11 +1365,13 @@ RAW_SOURCE_LOST
 多源冲突：`USER_ARBITRATION_REQUIRED / STOP`。
 证据不足：`RECONSTRUCTION_INSUFFICIENT / STOP`。
 
-当前 2026-08-21 v0.3 三 Surface 施工总稿已经按 2026-08-31 用户最新裁决登记为：
+当前 2026-08-21 v0.3 三 Surface 施工总稿的 provenance 已在 2026-09-01 W0-2 更新为：
 
 ```text
-RAW_SOURCE_LOST / RECONSTRUCTED_AUTHORITY
-NON-BLOCKING for A13
+HISTORICAL = RAW_SOURCE_LOST / CACHE EVICTED
+CURRENT = RAW_SOURCE_RECOVERED_EXTERNAL / LOCAL_VENDOR_PENDING
+RECONSTRUCTED_AUTHORITY = PASS until exact repo-local vendoring + FULL READ
+NON-BLOCKING for A13 and already-adjudicated Phase-A domains
 ```
 
 详见：
@@ -1591,4 +1593,497 @@ Parsed Source
 Borrowed Behavior
 LCOS Truth Preserved
 Explicitly Not Copied
+```
+
+---
+
+# 49. 2026-09-01 Latest L0 · Work View / Dynamic Spatial Region / Direct Manipulation
+
+New mandatory authority:
+
+`docs/v015/convergence/LATEST_L0_WORKVIEW_HUD_DIRECT_MANIPULATION_ADDENDUM_20260901.md`
+
+Read it FULL whenever touching:
+- Centered Spatial Index / Pin / Focus / Search / Map Locator / Minimap / edge navigation;
+- Preview / Reader / Immersive / WorkRail replacement;
+- Context / Workflow Component presentation;
+- Assembly;
+- Skill Builder;
+- Runtime/Harness Run/Result GUI.
+
+Latest hard rules:
+
+```text
+Assembly target entry = Action Arc
+Right-click/More = management
+no permanent node Christmas-tree controls
+Preview/Docked/Immersive = one Unified Work View lifecycle
+Work View state = project/session viewport presentation, not Surface-local
+Work View open/resize = NO automatic Camera mutation
+HUD/navigation = reflow around activeSpatialViewport
+explicit Focus = respect activeSpatialViewport
+Context/Workflow/Assembly/Skill large views = direct manipulation first
+Skill != Harness Run
+Workflow != FaaS / low-code DAG builder
+```
+
+Current rolling construction plan:
+
+`docs/v015/convergence/NIGHT_SHIFT_46_ROUND_CONSTRUCTION_PLAN_20260901.md`
+
+This section supersedes older conflicting clauses in this file, including:
+- direct Assembly in Right-click as a primary route;
+- 3–5 visible Orbit actions (A22 uses 3 normal / 4 max);
+- fixed right Preview/independent immersive shells as final product owners;
+- automatic camera re-centering merely because a persistent Work View changes width.
+
+
+---
+
+# 50. W0-2 · Recoverable Raw Source Ledger Repair
+
+Repo-local exact raw mirrors now available:
+
+```text
+docs/v015/convergence/original/LCOS v0.15 GUI 感知层重构与前端施工规划.md
+docs/v015/convergence/original/LCOS v0.15 UX 架构第二轮收口与施工清单.md
+docs/v015/convergence/original/LCOS_v0.15_UX冻结_同一套物理三个语义现场与Assembly_20260829.md
+docs/v015/convergence/original/LCOS_v0.15_R3D_SkillArtifact_SkillBuilder_CrossSurface_Freeze_20260830.md
+```
+
+These files were recovered byte-for-byte from the existing Context Library and SHA-256 verified against `docs/v015/context-library/MANIFEST.md`.
+
+Recovery/provenance authority:
+
+`docs/v015/convergence/RECOVERED_SOURCE_PROVENANCE_20260901.md`
+
+Important current distinction:
+
+```text
+8/26 / 8/29 / 8/30 sources above
+= REPO_LOCAL_EXACT / FULL READ REQUIRED when touched
+
+8/21 v0.3 + Malleable + Three-worksite originals
+= RAW_SOURCE_RECOVERED_EXTERNAL / exact local vendoring pending
+
+8/21 Component Screening Table
+= exact file still not recovered locally in W0-2
+```
+
+Never convert an externally recovered source into a fake local original from snippets.
+
+---
+
+# 51. W0-3 · Current A-stage implementation census
+
+Before any A24/A25 construction, FULL READ:
+
+`docs/v015/convergence/W0_3_A23_LINE_FRESH_SOURCE_RUNTIME_CENSUS_20260901.md`
+
+Current hard reality:
+
+```text
+Voice/ASR production owner = absent
+Centered Spatial Index = absent
+current durable Pin = navigation marker foundation, not many-to-many Color Pin
+Focus large-list owner = still present
+Search modal/list shell = still present
+usable viewport geometry = split across multiple owners
+```
+
+A25 is formally named:
+
+```text
+Active Spatial Viewport / Centered Spatial Index
+```
+
+Do not build Work View-aware HUD by adding one-off offsets to each component.
+First converge the shared screen-space usable-region owner.
+
+A24 Voice first proposition is strictly:
+
+```text
+A24-1 Voice Lifecycle Owner
+```
+
+XState may own transient Voice lifecycle only. It must not become LCOS canonical runtime/store. VAD is optional later and must not block manual Start/Stop Voice.
+
+---
+
+# 52. A24-2 · Native Voice Capture owner
+
+Current implementation pointer:
+
+`docs/v015/convergence/A24_2_NATIVE_CAPTURE_ADAPTER_CLOSEOUT_20260901.md`
+
+Hard owner split:
+
+```text
+A24-1 XState = transient Voice lifecycle
+A24-2 NativeVoiceCaptureAdapter = browser microphone/MediaRecorder mechanics
+A24-3+ = transcription + Composer integration
+Unified Composer Send/Run = explicit execution truth
+```
+
+Never let MediaRecorder callbacks directly execute a Run or mutate canonical Project truth. Capture errors must release MediaStream tracks.
+
+---
+
+# 53. A24-3 · Transcription Provider Seam
+
+Current implementation pointer:
+
+`docs/v015/convergence/A24_3_TRANSCRIPTION_PROVIDER_SEAM_CLOSEOUT_20260901.md`
+
+Donor/provider authority:
+
+`docs/v015/convergence/A24_3_STT_DONOR_PROVIDER_CENSUS_20260901.md`
+
+Hard owner split:
+
+```text
+A24-1 XState = Voice transient lifecycle
+A24-2 Capture = microphone / MediaRecorder mechanics
+A24-3 Local Core = provider-neutral STT registry + normalized transcript evidence
+A24-4+ = transport + concrete provider + orchestration + GUI
+```
+
+Do not couple STT provider choice to Runtime Agent provider (`Codex` / `WorkBuddy`) and do not name the canonical seam after Whisper. Provider success can only return transcript evidence; it cannot Send/Run or mutate Composer state directly.
+
+---
+
+# 54. A24-4 · Transcription Transport
+
+Current implementation pointer:
+
+`docs/v015/convergence/A24_4_TRANSCRIPTION_TRANSPORT_CLOSEOUT_20260901.md`
+
+Hard owner split:
+
+```text
+A24-1 = Voice transient lifecycle
+A24-2 = microphone / MediaRecorder capture mechanics
+A24-3 = provider-neutral Local Core transcription capability
+A24-4 = authenticated bounded Web ↔ Local Core multipart transport
+A24-5+ = concrete provider + orchestration + Composer GUI
+```
+
+Canonical transport:
+
+```text
+Web Blob
+→ FormData
+→ POST /runtime/voice/transcriptions
+→ VoiceTranscriptionService
+→ normalized transcript evidence
+```
+
+Do not use base64 JSON audio, do not couple STT choice to Runtime Agent provider, and do not let the route mutate Composer or Send/Run. The default server intentionally has an empty transcription provider registry until a concrete provider is separately admitted.
+
+
+---
+
+# 55. A24-5 · Concrete STT Provider
+
+Current implementation pointer:
+
+`docs/v015/convergence/A24_5_WHISPER_CPP_PROVIDER_CLOSEOUT_20260901.md`
+
+Donor / packaging authority:
+
+`docs/v015/convergence/A24_5_CONCRETE_STT_PROVIDER_DECISION_20260901.md`
+
+Hard owner split:
+
+```text
+A24-1 = transient Voice lifecycle
+A24-2 = microphone / MediaRecorder capture
+A24-3 = provider-neutral Local Core transcription capability
+A24-4 = authenticated Web ↔ Local Core transport
+A24-5 = concrete whisper.cpp-cli provider adapter
+A24-6 = orchestration only
+Composer Send/Run = explicit execution truth
+```
+
+`whisper.cpp-cli` is a replaceable packaging/runtime adapter, not canonical Voice product truth. It is registered only when exact local `LCOS_WHISPER_CPP_BIN` + `LCOS_WHISPER_CPP_MODEL` assets exist. FFmpeg conversion, model file format and CLI JSON belong behind the provider seam.
+
+Do not auto-download model weights in Voice execution, do not expose Whisper model names as required Composer concepts, and do not let provider success mutate Composer or Send/Run directly.
+
+---
+
+# 56. A24-6 · Voice Orchestration
+
+Current implementation pointer:
+
+`docs/v015/convergence/A24_6_VOICE_ORCHESTRATION_CLOSEOUT_20260901.md`
+
+Hard owner split:
+
+```text
+A24-1 = XState Voice lifecycle
+A24-2 = capture mechanics
+A24-3 = provider-neutral STT seam
+A24-4 = Web ↔ Local Core transport
+A24-5 = replaceable concrete provider
+A24-6 = operation ordering / cancellation / retry / transcript handoff
+A24-7 = Composer Voice GUI only
+```
+
+`DefaultVoiceOrchestrator` is the only Web-side owner allowed to connect capture and transcription lifecycle. It may return/emit transcript evidence, but it does not own Composer prompt state and cannot Send/Run.
+
+Permission-prompt cancellation must fail-close: if `getUserMedia()` resolves after the user cancelled, the late capture is immediately cleaned instead of entering Recording. Transcribing cancellation must abort the transport. Transcript observer/presentation failure must never alter canonical Voice lifecycle.
+
+---
+
+# 57. A24-7 · Unified Composer Voice GUI
+
+Current implementation pointer:
+
+`docs/v015/convergence/A24_7_COMPOSER_VOICE_GUI_CLOSEOUT_20260901.md`
+
+Hard GUI rule:
+
+```text
+Voice is one Unified Composer input modality.
+No Voice panel / drawer / modal / per-Surface implementation.
+```
+
+Allowed owner split:
+
+```text
+UnifiedExecutionComposer
+→ consumes DefaultVoiceOrchestrator
+→ renders compact Voice states
+→ writes successful transcript through existing onPromptChange
+→ retains explicit Send/Run ownership
+
+UnifiedExecutionComposer MUST NOT
+→ import/define voiceLifecycleMachine
+→ call getUserMedia / MediaRecorder directly
+→ choose/execute STT backend directly
+→ auto-send transcript
+```
+
+During Recording/Transcribing, ordinary footer controls yield and the same input region morphs in place. Esc/outside first cancels the active Voice substate while keeping Composer alive. Browser/Human Voice acceptance remains a mandatory Phase A gate.
+
+
+---
+
+# 58. A24-8 · Voice Browser/Human acceptance remains open
+
+Current status pointer:
+
+`docs/v015/convergence/A24_8_VOICE_BROWSER_HUMAN_ACCEPTANCE_STATUS_20260901.md`
+
+The extracted construction environment has Chromium but no local dependency install. A bounded dependency restoration attempt remained blocked, so Browser microphone / real whisper.cpp model / Windows DPI / Human Voice acceptance MUST remain OPEN.
+
+A24-1…A24-7 source/static evidence may stand, and A25 source work may continue, but Phase A admission still requires returning to A24-8.
+
+---
+
+# 59. A25-1 · Active Spatial Viewport geometry owner
+
+Current implementation pointer:
+
+`docs/v015/convergence/A25_1_ACTIVE_SPATIAL_VIEWPORT_GEOMETRY_OWNER_CLOSEOUT_20260901.md`
+
+Canonical owner:
+
+`apps/web/src/features/spatial/activeSpatialViewport.ts`
+
+Mandatory geometry rule:
+
+```text
+physical viewport
+- static shell insets
+- persistent edge-attached occupied UI
+= activeSpatialViewport
+```
+
+The pure resolver publishes `activeSpatialRect`, `activeInsets`, `topCenterAnchor` and `edgeBounds`. It MUST NOT own or mutate Camera state.
+
+Persistent Work View should later publish an explicit occupied edge. A floating center popover may obstruct A20 overlay placement but MUST NOT redefine Canvas center/edge.
+
+A25-2 must migrate existing consumers onto this owner instead of creating another safe-area implementation.
+
+
+---
+
+# 60. A25-2 · Active Spatial Viewport consumer migration
+
+Current implementation pointer:
+
+`docs/v015/convergence/A25_2_ACTIVE_SPATIAL_VIEWPORT_CONSUMER_MIGRATION_CLOSEOUT_20260901.md`
+
+Mandatory owner rule:
+
+```text
+persistent edge occupancy
+→ generic data-spatial-viewport-occupant contract
+→ ActiveSpatialViewportProvider
+→ consumer-local inset/edge projection
+```
+
+App safe-area fitting, Minimap, shared Focus and ProjectCanvas edge auto-pan MUST consume this owner. A consumer MUST NOT query WorkRail/WorkspaceDock/UnifiedWorkView by component name to build a second safe-area truth.
+
+Changing a persistent edge occupant width/visibility does not automatically translate Camera. Camera movement remains an explicit Focus/pan/zoom/navigation action.
+
+Future Unified Work View must plug into this same occupancy contract.
+
+# 61. A25-3 · one Centered Spatial Index presentation owner
+
+Current implementation pointer:
+
+`docs/v015/convergence/A25_3_CENTERED_SPATIAL_INDEX_PRESENTATION_OWNER_CLOSEOUT_20260901.md`
+
+Normal Main / Context / Workflow arbitration is:
+
+```text
+Search > Focus > Color Pin > none
+```
+
+There is one top slot centered on `activeSpatialViewport.topCenterAnchor`. The layout is quantity-driven and center-symmetric, not a left-origin toolbar.
+
+Mandatory separation:
+
+```text
+shared visual grammar != shared canonical truth
+```
+
+Search, Focus, Color Pin and Assembly taxonomy MUST NOT share persistence/state merely because they use the same renderer. No Color Pin placeholder colors may be rendered before real user-authored Pin truth exists.
+
+A25-3 is presentation foundation only. Existing Focus/Search GUI remains until its explicit migration package; do not claim the old large Focus list is retired before A25-4.
+
+
+# 62. A25-4 · Focus Location Index migration
+
+Current implementation pointer:
+
+`docs/v015/convergence/A25_4_FOCUS_LOCATION_INDEX_MIGRATION_CLOSEOUT_20260901.md`
+
+Mandatory Focus presentation rule:
+
+```text
+known object Focus truth
+→ projectFocusLocations
+→ one Centered Spatial Index slot
+→ existing navigateProjectFocus() handoff
+```
+
+`ProjectFocusNavigator` and `ArtifactLocationOrbit` are no longer normal primary Focus presentations in App. A `+N` overflow MUST stay compact/transient within the spatial-index family and MUST NOT reopen the retired large Focus list.
+
+Focus remains non-persistent navigation truth. Search may visually preempt Focus but must not overwrite Focus state; Color Pin remains a separate durable user-authored relationship.
+
+
+# 63. A25-5 · Search Result Index migration
+
+Current implementation pointer:
+
+`docs/v015/convergence/A25_5_SEARCH_RESULT_INDEX_MIGRATION_CLOSEOUT_20260901.md`
+
+Mandatory Search presentation rule:
+
+```text
+Search query/retrieval truth
+→ compact Top Spatial Index input
+→ labeled Search result constellation
+→ existing Focus/Fly-to handoff when locatable
+```
+
+Normal Search MUST NOT reopen the retired modal/list Search presentation. `ProjectToolsDialog` remains management-only/full-project tools; Search is a transient spatial retrieval presentation.
+
+Search result morphology MUST remain readable and distinct from Color Pin dots. Search MUST NOT silently create Pin, Relation, Selection or new project truth.
+
+Search and Focus remain separate truths:
+
+```text
+Search result → known target / “在哪”
+→ Search yields
+→ Focus Location Index owns the slot
+```
+
+A25-6 may render idle Color Pin markers only after real user-authored many-to-many Color Pin truth exists.
+
+# 64. A25-6 · Color Pin canonical split
+
+Current Color Pin truth is normalized and many-to-many:
+
+```text
+ColorPinDefinition
++ ColorPinMembership(targetRef)
+```
+
+It is **not** `SpatialMarkerIntentV0.color`, `node.pinColor`, Focus state, Search state, or Assembly taxonomy. Coordinates remain owned by navigation resolution / current projection.
+
+Only colors with live resolved memberships may appear in the Top Spatial Index. A25-6 intentionally removes the legacy binary object `Pin` direct action until A25-7 wires real Color Pin authoring; do not restore the old action to make the UI look complete.
+
+
+# 65. A25-7 · Color Pin direct authoring and local identity
+
+Current direct manipulation rule:
+
+```text
+selected object
+→ Action Arc / Orbit
+→ Pin
+→ compact transient color chooser
+→ canonical ColorPinMembership
+```
+
+Do not put permanent Pin buttons/toolbars on the node. Persistent node-local Color Pin identity is dots above the object body only. The same canonical memberships project on Main / Context / Workflow; they are not per-Surface state.
+
+Top Color Pin activation:
+
+```text
+one member  → existing Focus/Fly-to owner
+many members → compact members popover → existing Focus/Fly-to owner
+```
+
+The member popover is not an Inspector or side list. Search/Focus remain higher-priority transient owners. Exact colors/material/motion remain D polish. The legacy binary Spatial Marker remains a separate navigation-intent subsystem and MUST NOT be relabeled as Color Pin.
+
+# 66. A25-8 · Navigation consumers must use the active viewport
+
+Any screen-edge navigation/HUD consumer added or touched after A25-8 MUST consume the shared `activeSpatialViewport` (or a Surface-local projection of it). It MUST NOT rediscover WorkRail, WorkspaceDock or future Unified Work View by component name.
+
+This includes Map Locator / Spatial Marker, Beacon, Minimap, Focus fitting, edge-scroll and future Work View-aware HUD placement. Persistent occupied UI changes usable screen geometry but MUST NOT automatically mutate Camera. Explicit Focus/Fly-to/minimap navigation may move Camera and must target the active usable region.
+
+A25 source/static construction is closed after A25-8. Phase A itself is still not admitted until the Browser/Human Product Smoke authority is satisfied.
+
+# 67. Phase A Human Product Smoke is an explicit admission gate
+
+Current admission authority:
+
+`docs/v015/convergence/PHASE_A_HUMAN_PRODUCT_SMOKE_ADMISSION_STATUS_20260901.md`
+
+Operator runbook:
+
+`docs/v015/convergence/PHASE_A_HUMAN_PRODUCT_SMOKE_RUNBOOK_20260901.md`
+
+Harness package closeout:
+
+`docs/v015/convergence/PHASE_A_HUMAN_SMOKE_ADMISSION_PACK_CLOSEOUT_20260901.md`
+
+Before any B0 implementation, the preflight and real-App smoke must be runnable in an eligible environment:
+
+```text
+npm run preflight:phase-a -- --strict
+npm run test:e2e:phase-a
+```
+
+Automated fake-media Voice is presentation/orchestration evidence only:
+
+```text
+fake MediaRecorder + mocked transcription
+≠ real microphone
+≠ real whisper.cpp model
+≠ Human acceptance
+```
+
+Windows 125% / 150% display-scale review and the real Voice device/provider chain remain mandatory. No agent may convert `ENVIRONMENT_BLOCKED`, screenshot-only evidence or source/static PASS into Phase A admission.
+
+Hard gate:
+
+```text
+explicit Phase A Closeout / Phase B Admission document absent
+→ B0 MUST NOT START
 ```

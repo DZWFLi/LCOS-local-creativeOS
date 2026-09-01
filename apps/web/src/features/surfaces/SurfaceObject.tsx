@@ -13,6 +13,7 @@ import { resolveSpatialSignal, type SpatialRuntimeSignal } from '../spatial/visu
 import { nodeRole } from './surfaceModel'
 import type { SurfaceAttentionBucket } from './surfaceContracts'
 import { ProjectObjectOrbit } from '../ui/ProjectObjectOrbit'
+import { ColorPinLocalDots } from '../spatial/ColorPinLocalDots'
 
 export function SurfaceIdentityGlyph({ node }: { node: CanvasNode }) {
   if (node.entityKind === 'collection') return <CollectionGlyph/>
@@ -183,6 +184,7 @@ export function SurfaceObject({
         onDoubleClick={openDeeper}
       >
         <span className="lcos-semantic-drop-handle" data-semantic-drop-handle aria-hidden="true" onClick={(event)=>event.stopPropagation()} title="Semantic Drop：拖到上下文或工作流（右键拖 / Alt+左拖）"><GripVertical size={11}/></span>
+        <ColorPinLocalDots targetId={node.id} className="is-surface" />
         <span className="lcos-surface-identity-glyph" aria-hidden="true"><SurfaceIdentityGlyph node={node}/></span>
         <span className="lcos-glyph-label">{displayNodeTitle(node)}</span>
       </button>
@@ -208,6 +210,7 @@ export function SurfaceObject({
       onDoubleClick={openDeeper}
     >
       <span className="lcos-semantic-drop-handle" data-semantic-drop-handle aria-hidden="true" onClick={(event)=>event.stopPropagation()} title="Semantic Drop：拖到上下文或工作流（右键拖 / Alt+左拖）"><GripVertical size={11}/></span>
+      <ColorPinLocalDots targetId={node.id} className="is-surface" />
       {performanceProxy && node.entityKind !== 'conversation'
         ? <div className={`lcos-overview-node-proxy proxy-${detectFileIdentity(node)}`} aria-label={displayNodeTitle(node)}><span>{detectFileIdentity(node).toUpperCase()}</span><strong>{displayNodeTitle(node)}</strong></div>
         : <CanvasNodeVisual

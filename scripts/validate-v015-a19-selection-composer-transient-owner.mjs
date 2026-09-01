@@ -11,8 +11,8 @@ const orbitE2e = read('tests/e2e/orbit-lifecycle.spec.ts')
 const checks = [
   ['Unified Composer registers one overlayStack owner', composer.includes('registerOverlay(overlayId') && composer.includes("kind: 'popover'")],
   ['Composer overlay exposes its real DOM root', composer.includes('element: () => rootRef.current') && composer.includes('ref={rootRef}')],
-  ['Esc delegates through the registered owner callback', composer.includes('onEsc: () => onCloseRef.current()')],
-  ['outside press only dismisses Composer when it is stack top', composer.includes("stack[stack.length - 1]?.id === overlayId") && composer.includes('dismissTop()')],
+  ['Esc remains owned by the registered Composer overlay while later transient substates may yield first', composer.includes('onEsc: () => {') && composer.includes('onCloseRef.current()')],
+  ['outside press still checks Composer is stack top before any dismiss/cancel decision', composer.includes("stack[stack.length - 1]?.id !== overlayId) return") && composer.includes('dismissTop()')],
   ['outside listener is capture-phase and cleaned up', composer.includes("addEventListener('pointerdown', onOutsidePointerDown, true)") && composer.includes("removeEventListener('pointerdown', onOutsidePointerDown, true)")],
   ['Main multi-selection group actions yield while Composer is dominant', canvas.includes('{!selectionComposer && selectedIds.length > 1 && selectionGroupActionPosition && <SelectionGroupActions')],
   ['opening selection Composer retires NodeInfo first', app.includes('setNodeInfoId(null)\n      setReferencePickActive(false)\n      setSelectionComposerOpen(true)')],

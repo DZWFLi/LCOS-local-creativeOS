@@ -480,7 +480,7 @@ Codex：
 | Blank surface right-click | existing `SurfaceContextMenu` blank actions | object menu pretending to be blank menu | KEEP |
 | Single object high-frequency actions | `ProjectObjectOrbit` / `ObjectOrbit` | moving all management into Orbit | KEEP |
 | Explicit Reference | `SharedComposerCommandState.referenceIds` | Selection auto-reference / Conversation receiver as ordinary ref | KEEP |
-| Pin | canonical Spatial Marker provider | local Pin store | KEEP |
+| Navigation Marker | canonical Spatial Marker provider | local marker/projection store | KEEP · separate from Color Pin |
 | Context/Workflow remove projection | exact Presentation member/entity-ref removal | Project Entity delete | SOURCE/STATIC PASS |
 | Secondary click | right-click management candidate | immediate Semantic Drop contextmenu guard | RETIRED |
 | Secondary drag >4px | Semantic Drop | normal management context menu after drag | KEEP |
@@ -664,8 +664,8 @@ A20 is architecture/source-static closure only. Runtime/Human visual acceptance 
 | Component persistent identity | top-center Map Locator + functional face | permanent generic `○/−/×` chrome | SOURCE/STATIC PASS |
 | Component collapse | same-anchor Locator-only projection | empty 34px mini-bar | SOURCE/STATIC PASS |
 | Compact Composer internals | A23 | claiming A22 already closes prompt/ref/layout UX | OPEN |
-| Voice input | A24 | bespoke per-surface ASR UI | OPEN |
-| Centered Spatial Index / Focus / Color Pin | later Phase A proposition | reusing old large Focus list | FROZEN / NOT IMPLEMENTED |
+| Voice input | A24 shared Voice primitive | bespoke per-surface ASR UI | IN PROGRESS · A24-1…A24-7 source/static PASS incl. concrete provider PASS + A24-6 orchestration PASS + A24-7 GUI source/static PASS; A24-8 Browser/Human ENVIRONMENT_BLOCKED / HUMAN OPEN |
+| Centered Spatial Index / Focus / Color Pin | A25 shared active spatial viewport + distinct Pin/Focus/Search truths | reusing old large Focus list / separate safe-area math / node.pinColor | A25-1…A25-8 PACKAGE PASS · source/static chain closed; Browser/Human zoom/DPI/occupied-region acceptance OPEN |
 
 ---
 
@@ -680,3 +680,20 @@ A20 is architecture/source-static closure only. Runtime/Human visual acceptance 
 | Receiver | canonical connected Conversation choice | compact footer selector |
 | Provider / intent / result policy | UnifiedExecutionComposer advanced disclosure | anchored popover, not first-screen chrome |
 | Voice | future shared input primitive | not implemented in A23 |
+
+---
+
+## Phase A Human Product Smoke / Admission
+
+| Domain | Evidence owner | Forbidden shortcut | Status |
+|---|---|---|---|
+| Phase A environment readiness | `phase-a-admission-preflight.mjs` | assuming Chromium alone means the App is runnable | HARNESS PACKAGE PASS · CURRENT HOST BLOCKED |
+| real-App Search / Focus / Color Pin browser smoke | `v015-phase-a-admission.spec.ts` | counting source/static owner checks as Browser PASS | PACK READY · NOT RUN IN CURRENT HOST |
+| automated Voice morphology | Playwright fake-media fixture + mocked transcription | relabeling fake media as real Voice provider evidence | PACK READY · STRUCTURAL ONLY |
+| real Voice device/provider | physical microphone + `whisper.cpp` configured assets | mock MediaRecorder / mock transcript | OPEN |
+| zoom sanity | 25/35/60/100/150% Canvas zoom attachments | checking only 100% | PACK READY · HUMAN REVIEW OPEN |
+| DPI sanity | automated DPR 1/1.25/1.5 + Windows 125%/150% human pass | treating Linux DPR as Windows display-scale acceptance | HUMAN OPEN |
+| occupied viewport invariant | real App + canonical `data-spatial-viewport-occupant` protocol | Camera translation merely because edge UI changes width | PACK READY · HUMAN OPEN |
+| Phase A Admission | explicit closeout after all required evidence | admitting B0 from static gates or blocked environment | NOT GRANTED |
+
+B0 remains gated until an explicit Phase A Closeout / Phase B Admission artifact exists.

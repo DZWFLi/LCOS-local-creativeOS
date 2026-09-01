@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Camera } from '../../model'
 import { fitSpatialBounds, spatialBoundsForPlacements } from './spatialCamera'
 import type { MiniMapVisualKind } from './minimapSemantics'
+import { useActiveSpatialViewport } from './ActiveSpatialViewportContext'
+import { spatialInsetsWithinRect } from './activeSpatialViewport'
 
 export interface SpatialFocusRequest {
   readonly nonce: number
@@ -37,6 +39,9 @@ export function useSpatialFocusRequest(input: {
   readonly setCamera: (camera: Camera | ((current: Camera) => Camera)) => void
   readonly padding?: number
 }): { readonly beacon: SpatialBeaconState | null; readonly clearBeacon: () => void } {
+  const activeSpatialViewport = useActiveSpatialViewport()
+  const activeSpatialViewportRef = useRef(activeSpatialViewport)
+  activeSpatialViewportRef.current = activeSpatialViewport
   const handledNonce = useRef<number>(-1)
   const raf = useRef<number | null>(null)
   const cameraRef = useRef<Camera | undefined>(input.camera)
@@ -63,10 +68,14 @@ export function useSpatialFocusRequest(input: {
     handledNonce.current = request.nonce
     if (!targets.length) return
     const root = document.querySelector<HTMLElement>(`[data-testid="${input.testId}"]`)
-    const width = root?.clientWidth ?? 1000
-    const height = root?.clientHeight ?? 760
+    const rootRect = root?.getBoundingClientRect()
+    const width = root?.clientWidth ?? rootRect?.width ?? 1000
+    const height = root?.clientHeight ?? rootRect?.height ?? 760
+    const insets = activeSpatialViewportRef.current && rootRect
+      ? spatialInsetsWithinRect(activeSpatialViewportRef.current, rootRect)
+      : undefined
     const bounds = spatialBoundsForPlacements(targets, 28)
-    const destination = fitSpatialBounds(bounds, width, height, paddingRef.current ?? 90)
+    const destination = fitSpatialBounds(bounds, width, height, paddingRef.current ?? 90, insets)
     const target = targets[0]!
     setBeacon({ nonce: request.nonce, phase: 'approach', target })
 

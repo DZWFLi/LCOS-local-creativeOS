@@ -8,7 +8,7 @@ import type {
 } from '@local-creative-os/contracts'
 import { SPATIAL_LABEL_PRIORITY } from './SpatialLabelSystem'
 import { EDGE_PIN_EDGE_INSET, edgePinEdgeForPlacement, edgePinForWorldBounds, type EdgePinEdge } from './edgePinGeometry'
-import type { SpatialBounds, SpatialSize } from './spatialTypes'
+import type { SpatialBounds, SpatialInsets, SpatialSize } from './spatialTypes'
 
 /**
  * Spatial Marker is the single navigation intent presented as a world pin,
@@ -134,15 +134,16 @@ export function projectSpatialMarker(
   item: SpatialMarkerItem,
   camera: Camera,
   viewportSize: SpatialSize,
+  safeInsets?: SpatialInsets,
 ): ProjectedSpatialMarker {
-  const placement = edgePinForWorldBounds(item.bounds, camera, viewportSize, EDGE_PIN_EDGE_INSET)
+  const placement = edgePinForWorldBounds(item.bounds, camera, viewportSize, EDGE_PIN_EDGE_INSET, safeInsets)
   return {
     item,
     kind: placement.isOnscreen ? 'world-pin' : 'edge-cursor',
     x: placement.screenX,
     y: placement.screenY,
     angleRad: placement.angle,
-    edge: placement.isOnscreen ? undefined : edgePinEdgeForPlacement(placement, viewportSize, EDGE_PIN_EDGE_INSET),
+    edge: placement.isOnscreen ? undefined : edgePinEdgeForPlacement(placement, viewportSize, EDGE_PIN_EDGE_INSET, safeInsets),
     morphology: spatialMarkerMorphology(item.surface),
     priority: spatialMarkerPriority(item),
   }
@@ -195,12 +196,13 @@ export function projectSpatialMarkers(input: {
   readonly items: readonly SpatialMarkerItem[]
   readonly camera: Camera
   readonly viewportSize: SpatialSize
+  readonly safeInsets?: SpatialInsets | undefined
   readonly currentSurfaceRef?: string
 }): readonly SpatialMarkerProjection[] {
   const radius = markerClusterRadius(input.camera.zoom)
   const markers = input.items
     .filter((item) => spatialMarkerVisibleOnSurface(item, input.currentSurfaceRef))
-    .map((item) => projectSpatialMarker(item, input.camera, input.viewportSize))
+    .map((item) => projectSpatialMarker(item, input.camera, input.viewportSize, input.safeInsets))
     .sort((a, b) => b.priority - a.priority || a.item.id.localeCompare(b.item.id))
 
   const projections: SpatialMarkerProjection[] = []

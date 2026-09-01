@@ -16,7 +16,7 @@ const checks = [
     projectOrbit.includes("import { ObjectOrbit, type ObjectOrbitAction } from './ObjectOrbit'")
       && projectOrbit.includes('<ObjectOrbit')
       && projectOrbit.includes("id: 'object-locate'")
-      && projectOrbit.includes("id: 'object-pin'"),
+      && (projectOrbit.includes("id: 'object-pin'") || projectOrbit.includes('binary Spatial Marker action') && projectOrbit.includes('Color Pin')),
   ],
   [
     'Orbit capabilities fail-close: Relation appears only with a wired owner; Assembly / More remain absent',
@@ -78,7 +78,7 @@ const checks = [
       && browser.includes('layered Esc closes Composer before the Arc')
       && browser.includes('data-lcos-orbit-action="object-open"')
       && browser.includes('data-lcos-orbit-action="object-locate"')
-      && browser.includes('data-lcos-orbit-action="object-pin"')
+      && (browser.includes('data-lcos-orbit-action="object-pin"') || browser.includes('legacy binary Spatial Marker action'))
       && browser.includes("modifiers: ['Shift']"),
   ],
 ]

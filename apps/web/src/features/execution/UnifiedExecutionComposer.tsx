@@ -1,14 +1,17 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
-import { ArrowDown, ArrowUp, ChevronDown, Crosshair, History, Plus, Settings2, Sparkles, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, ChevronDown, Crosshair, History, LoaderCircle, Mic, RotateCcw, Settings2, Sparkles, Square, X } from 'lucide-react'
 import type { ConnectedConversationV1, RuntimeProviderStatus } from '@local-creative-os/contracts'
 import type { CanvasNode } from '../../model'
 import type { ArtifactRevisionProvenance } from '../../runtime/projectionAdapters'
+import { useLocalCoreClientOrNull } from '../../runtime/LocalCoreClientContext'
 import type { ComposerIntent, ComposerResultPolicy } from '../canvas/SelectionComposer'
 import { detectFileIdentity } from '../canvas/CanvasNodeVisual'
 import { dismissTop, queryStack, register as registerOverlay } from '../ui/overlayStack'
 import { resolveSpatialOverlayPlacement, type SpatialOverlayPlacementInput } from '../ui/spatialOverlayPlacement'
 import { referenceCandidates } from './commandDraft'
+import { appendVoiceTranscript, voiceErrorLabel, voiceErrorState, voiceModeActive } from './voiceComposerInput'
+import { createLocalCoreVoiceTranscribePort, DefaultVoiceOrchestrator, type VoiceOrchestrationSnapshot, type VoiceOrchestrator } from './voiceOrchestration'
 
 interface Props {
   nodes: readonly CanvasNode[]
@@ -64,13 +67,46 @@ function referenceKindLabel(node: CanvasNode): string {
   return detectFileIdentity(node).toUpperCase()
 }
 
+const IDLE_VOICE_SNAPSHOT: VoiceOrchestrationSnapshot = { state: 'idle', transcript: null, error: null }
+
 export function UnifiedExecutionComposer(props: Props) {
   const rootRef = useRef<HTMLElement | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const localCoreClient = useLocalCoreClientOrNull()
+  const voiceOrchestratorRef = useRef<VoiceOrchestrator | null>(null)
+  const voiceStateRef = useRef(IDLE_VOICE_SNAPSHOT.state)
+  const promptRef = useRef(props.prompt)
+  const onPromptChangeRef = useRef(props.onPromptChange)
+  const [voiceSnapshot, setVoiceSnapshot] = useState<VoiceOrchestrationSnapshot>(IDLE_VOICE_SNAPSHOT)
   const [measuredOverlaySize, setMeasuredOverlaySize] = useState({ width: 380, height: 132 })
   const overlayId = useId()
   const onCloseRef = useRef(props.onClose)
   useEffect(() => { onCloseRef.current = props.onClose }, [props.onClose])
+  useEffect(() => { promptRef.current = props.prompt }, [props.prompt])
+  useEffect(() => { onPromptChangeRef.current = props.onPromptChange }, [props.onPromptChange])
+  useEffect(() => { voiceStateRef.current = voiceSnapshot.state }, [voiceSnapshot.state])
+  useEffect(() => {
+    if (!localCoreClient) {
+      voiceOrchestratorRef.current = null
+      setVoiceSnapshot(IDLE_VOICE_SNAPSHOT)
+      return
+    }
+    const orchestrator = new DefaultVoiceOrchestrator({ transcribe: createLocalCoreVoiceTranscribePort(localCoreClient) })
+    voiceOrchestratorRef.current = orchestrator
+    const unsubscribe = orchestrator.subscribe(setVoiceSnapshot)
+    const unsubscribeTranscript = orchestrator.onTranscript((transcript) => {
+      const nextPrompt = appendVoiceTranscript(promptRef.current, transcript.text)
+      promptRef.current = nextPrompt
+      onPromptChangeRef.current(nextPrompt)
+      if (typeof requestAnimationFrame !== 'undefined') requestAnimationFrame(() => textareaRef.current?.focus({ preventScroll: true }))
+    })
+    return () => {
+      unsubscribe()
+      unsubscribeTranscript()
+      if (voiceOrchestratorRef.current === orchestrator) voiceOrchestratorRef.current = null
+      void orchestrator.dispose()
+    }
+  }, [localCoreClient])
   useLayoutEffect(() => {
     const element = rootRef.current
     if (!element) return
@@ -107,14 +143,27 @@ export function UnifiedExecutionComposer(props: Props) {
     const unregister = registerOverlay(overlayId, {
       kind: 'popover',
       element: () => rootRef.current,
-      onEsc: () => onCloseRef.current(),
+      onEsc: () => {
+        const voiceState = voiceStateRef.current
+        if (voiceState !== 'idle' && voiceState !== 'editable') {
+          void voiceOrchestratorRef.current?.cancel()
+          return
+        }
+        onCloseRef.current()
+      },
       dismissOnOutside: true,
     })
     const onOutsidePointerDown = (event: PointerEvent) => {
       const target = event.target as Node | null
       if (target !== null && rootRef.current?.contains(target)) return
       const stack = queryStack()
-      if (stack[stack.length - 1]?.id === overlayId) dismissTop()
+      if (stack[stack.length - 1]?.id !== overlayId) return
+      const voiceState = voiceStateRef.current
+      if (voiceState !== 'idle' && voiceState !== 'editable') {
+        void voiceOrchestratorRef.current?.cancel()
+        return
+      }
+      dismissTop()
     }
     window.addEventListener('pointerdown', onOutsidePointerDown, true)
     return () => {
@@ -150,8 +199,26 @@ export function UnifiedExecutionComposer(props: Props) {
     props.onCreateAsNewNodeChange(next === 'create')
     props.onResultPolicyChange?.(next === 'analyze' ? 'reply_only' : next === 'revise' ? 'draft_revision_per_target' : 'create_artifact')
   }
+  const changePrompt = (next: string) => {
+    promptRef.current = next
+    props.onPromptChange(next)
+  }
+  const voiceState = voiceSnapshot.state
+  const voiceMode = voiceModeActive(voiceState)
+  const voiceHasError = voiceErrorState(voiceState)
+  const voiceAvailable = localCoreClient !== null && !props.busy
+  const startVoice = () => {
+    const orchestrator = voiceOrchestratorRef.current
+    if (!orchestrator || !voiceAvailable) return
+    if (props.referencePickActive) props.onFinishReferencePick()
+    void orchestrator.start().catch(() => undefined)
+  }
+  const stopVoice = () => { void voiceOrchestratorRef.current?.stop({ timestamps: false }).catch(() => undefined) }
+  const cancelVoice = () => { void voiceOrchestratorRef.current?.cancel() }
+  const retryVoice = () => { void voiceOrchestratorRef.current?.retry().catch(() => undefined) }
+  const resetVoice = () => { void voiceOrchestratorRef.current?.reset() }
 
-  return <section ref={rootRef} className="selection-composer lcos-nearfield-composer lcos-unified-execution-composer" data-lcos-transient-owner="selection-composer" data-testid="selection-composer" data-composer-density="compact" data-reference-pick={props.referencePickActive || undefined} data-spatial-placement-side={spatialPlacement?.side} data-spatial-placement-free={spatialPlacement?.free || undefined} style={{ left: composerLeft, top: composerTop } as CSSProperties} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()} onContextMenu={(event) => event.preventDefault()}>
+  return <section ref={rootRef} className="selection-composer lcos-nearfield-composer lcos-unified-execution-composer" data-lcos-transient-owner="selection-composer" data-testid="selection-composer" data-composer-density="compact" data-reference-pick={props.referencePickActive || undefined} data-voice-state={voiceState} data-spatial-placement-side={spatialPlacement?.side} data-spatial-placement-free={spatialPlacement?.free || undefined} style={{ left: composerLeft, top: composerTop } as CSSProperties} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()} onContextMenu={(event) => event.preventDefault()}>
     <div className="lcos-command-draft-head lcos-command-draft-head-compact">
       {selected.length > 0
         ? <span className="lcos-selection-summary" title={`${selectionReferenceSeparationHint} 额外参考 ${references.length} 项。`}>当前选择 {selected.length}</span>
@@ -178,33 +245,53 @@ export function UnifiedExecutionComposer(props: Props) {
       </div>
     </div>}
 
-    <div className="lcos-composer-input-row">
-      <textarea ref={textareaRef} rows={1} data-testid="selection-composer-input" value={props.prompt} onChange={(event) => props.onPromptChange(event.target.value)} placeholder={selected.length ? `对「${targetLabel}」说要做什么…` : receiver ? `对「${receiverLabel(receiver)}」说要做什么…` : '先选择一段对话…'} onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === 'Enter' && !disabled) { event.preventDefault(); props.onSend() } }}/>
-      <button type="button" className="lcos-composer-send" disabled={disabled} onClick={props.onSend} title={blockedReason ?? (providerBlocked ? '本地 Agent 暂不可用' : '发送 · Ctrl/Cmd+Enter')}><ArrowUp size={15}/></button>
-    </div>
+    {voiceMode ? <div className={`lcos-voice-input-stage is-${voiceState}`} role="status" aria-live="polite">
+      <div className="lcos-voice-state-mark">{voiceState === 'transcribing' ? <LoaderCircle size={14}/> : <Mic size={14}/>}</div>
+      <div className="lcos-voice-state-copy">
+        {voiceState === 'requestingPermission' && <><b>正在连接麦克风</b><span>允许访问后即可开始</span></>}
+        {voiceState === 'recording' && <><b>正在听你说</b><div className="lcos-voice-waveform" aria-hidden="true">{Array.from({ length: 9 }, (_, index) => <i key={index}/>)}</div></>}
+        {voiceState === 'transcribing' && <><b>正在转成文字</b><span>完成后会回到可编辑输入</span></>}
+        {voiceHasError && <><b>{voiceErrorLabel(voiceSnapshot)}</b><span title={voiceSnapshot.error?.message}>不会自动发送，可以重试或返回输入</span></>}
+      </div>
+      <div className="lcos-voice-state-actions">
+        {voiceHasError ? <>
+          <button type="button" className="lcos-voice-action" onClick={retryVoice} title={voiceState === 'transcriptionError' ? '重试转写' : '重试录音'} aria-label={voiceState === 'transcriptionError' ? '重试转写' : '重试录音'}><RotateCcw size={13}/></button>
+          <button type="button" className="lcos-voice-action" onClick={resetVoice} title="返回文字输入" aria-label="返回文字输入"><X size={13}/></button>
+        </> : <>
+          <button type="button" className="lcos-voice-action" onClick={cancelVoice} title="取消语音输入" aria-label="取消语音输入"><X size={13}/></button>
+          {voiceState === 'recording' && <button type="button" className="lcos-voice-action is-stop" onClick={stopVoice} title="停止并转成文字" aria-label="停止并转成文字"><Square size={11}/></button>}
+        </>}
+      </div>
+    </div> : <>
+      <div className="lcos-composer-input-row">
+        <textarea ref={textareaRef} rows={1} data-testid="selection-composer-input" value={props.prompt} onChange={(event) => changePrompt(event.target.value)} placeholder={selected.length ? `对「${targetLabel}」说要做什么…` : receiver ? `对「${receiverLabel(receiver)}」说要做什么…` : '先选择一段对话…'} onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === 'Enter' && !disabled) { event.preventDefault(); props.onSend() } }}/>
+        <button type="button" className="lcos-composer-send" disabled={disabled} onClick={props.onSend} title={blockedReason ?? (providerBlocked ? '本地 Agent 暂不可用' : '发送 · Ctrl/Cmd+Enter')}><ArrowUp size={15}/></button>
+      </div>
 
-    <div className="lcos-composer-controls lcos-composer-controls-quiet lcos-composer-footer-compact">
-      <button type="button" className={`lcos-reference-pick ${props.referencePickActive ? 'is-active' : ''}`} disabled={props.referencePickAvailable === false} title={props.referencePickAvailable === false ? props.referencePickUnavailableReason : '参考 · Ctrl/Cmd + 点击画布对象；不会改变当前选择'} onClick={props.referencePickActive ? props.onFinishReferencePick : props.onStartReferencePick}><Crosshair size={11}/><span>{props.referencePickActive ? '完成参考' : '参考'}</span>{references.length > 0 && <b>{references.length}</b>}</button>
-      <label className="lcos-receiver-select lcos-receiver-select-compact" title={`这次交给哪段对话；长期材料 ${props.reachCount ?? 0} 项，不等于你这次明确选中的参考`}>
-        <Sparkles size={11}/>
-        <select value={props.receiverId ?? ''} onChange={(event) => props.onReceiverChange(event.target.value)} aria-label="交给哪段对话">
-          <option value="" disabled>选择承接对话</option>
-          {props.receivers.map((item) => <option key={item.id} value={item.id}>{receiverLabel(item)}{item.id === props.activeReceiverId ? ' · 当前' : ''}{item.conversationSessionId ? '' : ' · 未链接'}</option>)}
-        </select>
-        <ChevronDown size={9}/>
-      </label>
-      <span className="lcos-command-scope-note" title={`${receiver ? receiverLabel(receiver) : '还没选择承接对话'} · ${selected.length} 项选择 · ${references.length} 项额外参考 · 长期材料 ${props.reachCount ?? 0}；长期材料不等于你这次明确选中的参考`}>{references.length ? `${references.length} 参考` : `${props.reachCount ?? 0} 长期材料`}</span>
-      <details className="lcos-composer-advanced">
-        <summary title="本次设置"><Settings2 size={12}/><span>设置</span></summary>
-        <div className="lcos-composer-advanced-popover">
-          <small>通常不需要设置这些，系统会优先选择可用的执行工具</small>
-          <label><span>处理方式</span><select value={inferredIntent} onChange={(event) => changeIntent(event.target.value as ComposerIntent)}><option value="analyze">只回答</option><option value="create">创建新内容</option><option value="revise">修改现有内容</option></select></label>
-          <label><span>执行器</span><select disabled={automaticProviders.length === 0} value={automaticProviders.length === 0 ? 'unavailable' : automaticProviders.some((item) => item.provider === props.provider) ? props.provider : 'auto'} onChange={(event) => props.onProviderChange(event.target.value)}>{automaticProviders.length === 0 ? <option value="unavailable">暂无可用 Agent</option> : <><option value="auto">自动选择</option>{automaticProviders.map((item) => <option key={item.provider} value={item.provider}>{item.provider === 'workbuddy' ? 'WorkBuddy' : item.provider === 'codex' ? 'Codex' : item.provider}</option>)}</>}</select></label>
-          {inferredIntent === 'create' && <label><span>结果</span><select value={inferredResult === 'create_collection' ? 'create_collection' : 'create_artifact'} onChange={(event) => props.onResultPolicyChange?.(event.target.value as ComposerResultPolicy)}><option value="create_artifact">新内容</option><option value="create_collection">Collection</option></select></label>}
-          <small className="lcos-composer-advanced-note">这里只影响这一次处理，不会改变项目默认承接对话。</small>
-        </div>
-      </details>
-    </div>
+      <div className="lcos-composer-controls lcos-composer-controls-quiet lcos-composer-footer-compact">
+        <button type="button" className="lcos-voice-trigger" disabled={!voiceAvailable} title={localCoreClient === null ? 'Local Core 未连接，语音输入暂不可用' : props.busy ? '当前任务运行中' : '语音输入'} aria-label="语音输入" onClick={startVoice}><Mic size={11}/><span>语音</span></button>
+        <button type="button" className={`lcos-reference-pick ${props.referencePickActive ? 'is-active' : ''}`} disabled={props.referencePickAvailable === false} title={props.referencePickAvailable === false ? props.referencePickUnavailableReason : '参考 · Ctrl/Cmd + 点击画布对象；不会改变当前选择'} onClick={props.referencePickActive ? props.onFinishReferencePick : props.onStartReferencePick}><Crosshair size={11}/><span>{props.referencePickActive ? '完成参考' : '参考'}</span>{references.length > 0 && <b>{references.length}</b>}</button>
+        <label className="lcos-receiver-select lcos-receiver-select-compact" title={`这次交给哪段对话；长期材料 ${props.reachCount ?? 0} 项，不等于你这次明确选中的参考`}>
+          <Sparkles size={11}/>
+          <select value={props.receiverId ?? ''} onChange={(event) => props.onReceiverChange(event.target.value)} aria-label="交给哪段对话">
+            <option value="" disabled>选择承接对话</option>
+            {props.receivers.map((item) => <option key={item.id} value={item.id}>{receiverLabel(item)}{item.id === props.activeReceiverId ? ' · 当前' : ''}{item.conversationSessionId ? '' : ' · 未链接'}</option>)}
+          </select>
+          <ChevronDown size={9}/>
+        </label>
+        <span className="lcos-command-scope-note" title={`${receiver ? receiverLabel(receiver) : '还没选择承接对话'} · ${selected.length} 项选择 · ${references.length} 项额外参考 · 长期材料 ${props.reachCount ?? 0}；长期材料不等于你这次明确选中的参考`}>{references.length ? `${references.length} 参考` : `${props.reachCount ?? 0} 长期材料`}</span>
+        <details className="lcos-composer-advanced">
+          <summary title="本次设置"><Settings2 size={12}/><span>设置</span></summary>
+          <div className="lcos-composer-advanced-popover">
+            <small>通常不需要设置这些，系统会优先选择可用的执行工具</small>
+            <label><span>处理方式</span><select value={inferredIntent} onChange={(event) => changeIntent(event.target.value as ComposerIntent)}><option value="analyze">只回答</option><option value="create">创建新内容</option><option value="revise">修改现有内容</option></select></label>
+            <label><span>执行器</span><select disabled={automaticProviders.length === 0} value={automaticProviders.length === 0 ? 'unavailable' : automaticProviders.some((item) => item.provider === props.provider) ? props.provider : 'auto'} onChange={(event) => props.onProviderChange(event.target.value)}>{automaticProviders.length === 0 ? <option value="unavailable">暂无可用 Agent</option> : <><option value="auto">自动选择</option>{automaticProviders.map((item) => <option key={item.provider} value={item.provider}>{item.provider === 'workbuddy' ? 'WorkBuddy' : item.provider === 'codex' ? 'Codex' : item.provider}</option>)}</>}</select></label>
+            {inferredIntent === 'create' && <label><span>结果</span><select value={inferredResult === 'create_collection' ? 'create_collection' : 'create_artifact'} onChange={(event) => props.onResultPolicyChange?.(event.target.value as ComposerResultPolicy)}><option value="create_artifact">新内容</option><option value="create_collection">Collection</option></select></label>}
+            <small className="lcos-composer-advanced-note">这里只影响这一次处理，不会改变项目默认承接对话。</small>
+          </div>
+        </details>
+      </div>
+    </>}
 
     {blockedReason && <div className="lcos-composer-ambiguity"><Crosshair size={11}/><span>{blockedReason}</span></div>}
     {provenance && <div className="lcos-composer-provenance"><History size={11}/><span>{provenance.label}{provenance.provider ? ` · ${provenance.provider}` : ''}</span>{provenance.createdAt && <small>{new Date(provenance.createdAt).toLocaleString()}</small>}</div>}

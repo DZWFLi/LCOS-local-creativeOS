@@ -24,7 +24,7 @@ const checks = [
   ['Composer footer is compact and no disabled fake more-sources control remains', composer.includes('lcos-composer-footer-compact') && !composer.includes('更多来源') && !composer.includes('lcos-reference-add')],
   ['Ctrl/Cmd+Enter remains the explicit send shortcut', composer.includes("(event.metaKey || event.ctrlKey) && event.key === 'Enter'") && composer.includes('props.onSend()')],
   ['Main, Context/Workflow and Conversation all reuse UnifiedExecutionComposer shell', canvas.includes('<UnifiedExecutionComposer') && host.includes('<UnifiedExecutionComposer') && conversation.includes('<UnifiedExecutionComposer')],
-  ['A23 does not smuggle Voice implementation into the compact-shell proposition', !composer.includes('MediaRecorder') && !composer.includes('SpeechRecognition') && !composer.includes('waveform')],
+  ['Unified Composer never owns browser ASR/capture APIs directly; later A24 presentation is allowed', !composer.includes('MediaRecorder') && !composer.includes('SpeechRecognition') && !composer.includes('getUserMedia')],
 ]
 let passed=0
 for (const [label, ok] of checks) { if(ok){passed++; console.log(`PASS ${label}`)} else console.error(`FAIL ${label}`) }

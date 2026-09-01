@@ -16,10 +16,16 @@
     "types": [
       "vite/client",
       "node"
-    ]
+    ],
+    "allowImportingTsExtensions": true
   },
   "include": [
     "src",
     "tests"
+  ],
+  "exclude": [
+    "src/vendor",
+    "**/vendor/**",
+    "**/xstate-5.32.6/**"
   ]
 }

@@ -601,7 +601,7 @@ export function WorkspaceRailVNext({ views, runStatus, onOverview, onActivateVie
 
   const preview = useMemo(() => previewId ? views.find((view) => view.id === previewId) ?? null : null, [previewId, views])
 
-  return <aside ref={railRef} className={`vnext-workspace-rail lcos-workspace-rail lcos-project-view-rail ${effectiveTwoColumn ? 'is-two-column' : ''} ${columnDrag ? 'is-resizing' : ''}`} data-testid="workspace-dock" aria-label="项目视图" onContextMenu={(event) => event.preventDefault()}>
+  return <aside ref={railRef} className={`vnext-workspace-rail lcos-workspace-rail lcos-project-view-rail ${effectiveTwoColumn ? 'is-two-column' : ''} ${columnDrag ? 'is-resizing' : ''}`} data-testid="workspace-dock" data-spatial-viewport-occupant="left" aria-label="项目视图" onContextMenu={(event) => event.preventDefault()}>
     <div className="lcos-rail-primary">
       <button type="button" data-rail-kind="main" className={views.every((view) => !view.active) ? 'vnext-rail-button active' : 'vnext-rail-button'} title={mainMarkerCount ? `主画布 · ${mainMarkerCount} 个导航重点` : '主画布（固定入口）'} aria-label={mainMarkerCount ? `主画布，${mainMarkerCount} 个导航重点` : '主画布'} onClick={() => { setPreviewId(null); onOverview() }}><RootGlyph/>{mainMarkerCount > 0 && <span className="lcos-rail-landmark is-count" aria-hidden="true"><MapPin size={9}/><b>{mainMarkerCount}</b></span>}</button>
       <div className="vnext-rail-divider"/>

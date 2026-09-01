@@ -1,6 +1,6 @@
 import type { Camera } from '../../model'
-import type { SpatialBounds, SpatialSize } from './spatialTypes'
-import { spatialViewportWorldBounds, spatialWorldToScreen } from './spatialCamera'
+import type { SpatialBounds, SpatialInsets, SpatialSize } from './spatialTypes'
+import { spatialSafeViewportWorldBounds, spatialWorldToScreen } from './spatialCamera'
 import { spatialBoundsIntersect } from './spatialHitTest'
 
 /**
@@ -24,30 +24,41 @@ export type EdgePinEdge = 'left' | 'right' | 'top' | 'bottom'
 
 /** 边缘气泡贴边内缩(px),气泡壳半宽 14px + 呼吸位 4px */
 export const EDGE_PIN_EDGE_INSET = 18
+const ZERO_INSETS: SpatialInsets = { left: 0, right: 0, top: 0, bottom: 0 }
+
+function activeScreenRect(viewportSize: SpatialSize, insets: SpatialInsets) {
+  const left = Math.max(0, Math.min(viewportSize.width, insets.left))
+  const right = Math.max(left, Math.min(viewportSize.width, viewportSize.width - insets.right))
+  const top = Math.max(0, Math.min(viewportSize.height, insets.top))
+  const bottom = Math.max(top, Math.min(viewportSize.height, viewportSize.height - insets.bottom))
+  return { left, right, top, bottom, width: right - left, height: bottom - top }
+}
 
 export function edgePinForWorldBounds(
   worldBounds: SpatialBounds,
   camera: Camera,
   viewportSize: SpatialSize,
   edgeInset: number = EDGE_PIN_EDGE_INSET,
+  safeInsets: SpatialInsets = ZERO_INSETS,
 ): EdgePinPlacement {
   // 世界 bounds 中心 → 屏幕坐标(与 spatialWorldToScreen 同一坐标系,不跟随相机 transform)
   const center = { x: worldBounds.x + worldBounds.width / 2, y: worldBounds.y + worldBounds.height / 2 }
   const projected = spatialWorldToScreen(center, camera)
   // 视口判断:世界 bounds 与视口世界范围相交(无 overscan,贴边即算在屏)
-  if (spatialBoundsIntersect(worldBounds, spatialViewportWorldBounds(camera, viewportSize))) {
+  if (spatialBoundsIntersect(worldBounds, spatialSafeViewportWorldBounds(camera, viewportSize, safeInsets))) {
     return { screenX: projected.x, screenY: projected.y, angle: 0, isOnscreen: true }
   }
   // 视口外:从视口中心向对象中心发射线,与边缘内缩矩形求交——先碰到的边即锚点所在边
-  const centerX = viewportSize.width / 2
-  const centerY = viewportSize.height / 2
+  const active = activeScreenRect(viewportSize, safeInsets)
+  const centerX = active.left + active.width / 2
+  const centerY = active.top + active.height / 2
   const dx = projected.x - centerX
   const dy = projected.y - centerY
   const angle = Math.atan2(dy, dx)
-  const minX = edgeInset
-  const maxX = Math.max(edgeInset, viewportSize.width - edgeInset)
-  const minY = edgeInset
-  const maxY = Math.max(edgeInset, viewportSize.height - edgeInset)
+  const minX = Math.min(active.right, active.left + edgeInset)
+  const maxX = Math.max(minX, active.right - edgeInset)
+  const minY = Math.min(active.bottom, active.top + edgeInset)
+  const maxY = Math.max(minY, active.bottom - edgeInset)
   // 射线参数化:对可行轴取最小缩放倍数(先碰到的边胜出);视口极小时退化为中心点
   let scale = Infinity
   if (dx > 0) scale = Math.min(scale, (maxX - centerX) / dx)
@@ -66,11 +77,13 @@ export function edgePinEdgeForPlacement(
   placement: Pick<EdgePinPlacement, 'screenX' | 'screenY'>,
   viewportSize: SpatialSize,
   edgeInset: number = EDGE_PIN_EDGE_INSET,
+  safeInsets: SpatialInsets = ZERO_INSETS,
 ): EdgePinEdge {
-  const minX = edgeInset
-  const maxX = Math.max(edgeInset, viewportSize.width - edgeInset)
-  const minY = edgeInset
-  const maxY = Math.max(edgeInset, viewportSize.height - edgeInset)
+  const active = activeScreenRect(viewportSize, safeInsets)
+  const minX = Math.min(active.right, active.left + edgeInset)
+  const maxX = Math.max(minX, active.right - edgeInset)
+  const minY = Math.min(active.bottom, active.top + edgeInset)
+  const maxY = Math.max(minY, active.bottom - edgeInset)
   if (placement.screenX <= minX + .5) return 'left'
   if (placement.screenX >= maxX - .5) return 'right'
   if (placement.screenY <= minY + .5) return 'top'
